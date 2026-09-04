@@ -34,7 +34,6 @@ import { type SaveMyahInboxDraftInput } from 'src/engine/core-modules/myah-inbox
 import { type MyahInboxThreadSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
 import { type UpdateMyahInboxThreadInput } from 'src/engine/core-modules/myah-inbox/dtos/update-myah-inbox-thread.input';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
-import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
@@ -45,7 +44,7 @@ import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve
 export type MyahInboxMutationRequest = {
   authContext: WorkspaceAuthContext;
   user: AuthContextUser | undefined;
-  workspace: WorkspaceEntity;
+  workspace: { id: string };
   workspaceMemberId: string;
 };
 

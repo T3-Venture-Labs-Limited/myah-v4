@@ -52,6 +52,8 @@ const serverDerivedProposal = {
   body: 'Server-derived reply body',
   recipientLabel: '@recipient',
   sendingAccountLabel: '@myah_business',
+  subject: null,
+  draftRevision: null,
   state: binding.state,
   expiresAt: binding.expiresAt,
   occurredAt: binding.decidedAt,
@@ -126,14 +128,29 @@ const createResolver = ({
       return resolvedProposal;
     }),
   };
+  const outreachActionDefinition = { getProposal: jest.fn() };
+  const inboxActionDefinition = {
+    getProposal: jest.fn().mockResolvedValue({
+      ...serverDerivedProposal,
+      action: 'send_inbox_reply',
+    }),
+  };
   const Resolver = ActionApprovalResolver as unknown as new (
     ...args: unknown[]
   ) => ActionApprovalResolver;
 
   return {
-    resolver: new Resolver(dataSource, actionApprovalService, actionDefinition),
+    resolver: new Resolver(
+      dataSource,
+      actionApprovalService,
+      actionDefinition,
+      outreachActionDefinition,
+      inboxActionDefinition,
+    ),
     actionApprovalService,
     actionDefinition,
+    outreachActionDefinition,
+    inboxActionDefinition,
     bindingRepository,
     threadRepository,
     receiptRepository,
@@ -145,6 +162,56 @@ describe('ActionApprovalResolver', () => {
     const imports = Reflect.getMetadata('imports', MetadataGraphQLApiModule);
 
     expect(imports).toContain(ActionApprovalModule);
+  });
+  it('dispatches an Inbox reply proposal only to its definition', async () => {
+    const { resolver, actionDefinition, inboxActionDefinition } =
+      createResolver({
+        resolvedBinding: {
+          ...binding,
+          actionName: 'send_inbox_reply',
+        },
+      });
+
+    await expect(
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
+    ).resolves.toMatchObject({ action: 'send_inbox_reply' });
+
+    expect(inboxActionDefinition.getProposal).toHaveBeenCalledWith({
+      workspaceId,
+      binding: expect.objectContaining({ actionName: 'send_inbox_reply' }),
+    });
+    expect(actionDefinition.getProposal).not.toHaveBeenCalled();
+  });
+
+  it('shows the immutable outreach recipient address in the approval projection', async () => {
+    const { resolver, outreachActionDefinition } = createResolver({
+      resolvedBinding: {
+        ...binding,
+        actionName: 'send_outreach_email',
+      },
+    });
+
+    outreachActionDefinition.getProposal.mockResolvedValue({
+      ...serverDerivedProposal,
+      action: 'send_outreach_email',
+      recipientLabel: 'Creator',
+      recipientEmail: 'creator@example.com',
+      senderEmail: 'brand@example.com',
+    });
+
+    await expect(
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
+    ).resolves.toMatchObject({
+      recipientLabel: 'Creator <creator@example.com>',
+    });
   });
   it('rejects a foreign workspace member before loading a proposal graph', async () => {
     const { resolver, actionApprovalService, threadRepository } =
@@ -280,6 +347,8 @@ describe('ActionApprovalResolver', () => {
       body: null,
       recipientLabel: null,
       sendingAccountLabel: null,
+      subject: null,
+      draftRevision: null,
       state: 'CONSUMED',
       expiresAt: binding.expiresAt,
       occurredAt: binding.decidedAt,

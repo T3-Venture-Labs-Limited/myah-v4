@@ -7,6 +7,22 @@ import { CampaignOutreachWorkflowService } from 'src/modules/myah-outreach/servi
 const rolePermissionConfig = { unionOf: ['role-id'] };
 
 jest.mock(
+  'twenty-shared/utils',
+  () => ({
+    isDefined: (value: unknown) => value !== null && value !== undefined,
+  }),
+  { virtual: true },
+);
+jest.mock(
+  'src/engine/core-modules/record-position/services/record-position.service',
+  () => ({ RecordPositionService: class {} }),
+);
+jest.mock(
+  'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager',
+  () => ({ GlobalWorkspaceOrmManager: class {} }),
+);
+
+jest.mock(
   'src/engine/twenty-orm/storage/orm-workspace-context.storage',
   () => ({
     getWorkspaceContext: jest.fn(() => ({
@@ -227,5 +243,17 @@ describe('CampaignOutreachWorkflowService', () => {
       'campaign',
       rolePermissionConfig,
     );
+  });
+
+  it('uses explicit caller auth context outside HTTP storage', async () => {
+    const { globalWorkspaceOrmManager, service } = createServiceContext();
+
+    await expect(
+      service.find({ authContext, campaignId, workspaceId }),
+    ).resolves.toBeNull();
+
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).toHaveBeenCalledWith(expect.any(Function), authContext);
   });
 });

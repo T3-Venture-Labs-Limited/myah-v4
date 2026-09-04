@@ -1,39 +1,63 @@
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
+import {
+  MYAH_CAMPAIGN_OUTREACH_READ_TOOL_NAMES,
+  MYAH_CREATOR_OPS_READ_TOOL_NAMES,
+  MYAH_INBOX_READ_TOOL_NAMES,
+  MYAH_INBOX_REPLY_SEND_STATUS_TOOL_NAMES,
+  REGISTERED_ACTION_TOOL_NAMES,
+} from 'src/engine/core-modules/tool-provider/constants/myah-assistant-tool-names.constant';
 import { isValidUuid } from 'twenty-shared/utils';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 
-const READ_ONLY_DATABASE_OPERATIONS = new Set([
-  'find_many',
-  'find_one',
-  'group_by',
-]);
+const READ_ONLY_DATABASE_OPERATIONS: Readonly<Record<string, true>> = {
+  find_many: true,
+  find_one: true,
+  group_by: true,
+};
 
 // These Composio functions are bounded, read-only calls. They remain
 // executable before approval so the agent can discover current Instagram
 // state. The application runtime can materialize these as static or logic
 // function entries, so the source-controlled generated tool name is the gate.
-export const PRE_APPROVAL_READ_ONLY_TOOL_NAMES = new Set([
-  'app_myah_list_instagram_conversations',
-  'app_myah_list_instagram_messages',
-]);
+export const PRE_APPROVAL_READ_ONLY_TOOL_NAMES: Readonly<Record<string, true>> =
+  {
+    app_myah_list_instagram_conversations: true,
+    app_myah_list_instagram_messages: true,
+  };
 
-// These narrow native actions prepare reviewable content without sending it;
-// every external-write action remains excluded until approval.
-export const PRE_APPROVAL_SAFE_TOOL_NAMES = new Set([
-  ...PRE_APPROVAL_READ_ONLY_TOOL_NAMES,
-  'prepare_instagram_reply_draft',
-  'prepare_outreach_email_draft',
-]);
+// Read, proposal, and status tools are safe before generic approval. Every
+// mutation remains excluded until generic or registered approval enables it.
+export const PRE_APPROVAL_SAFE_TOOL_NAMES: Readonly<Record<string, true>> =
+  Object.freeze(
+    Object.fromEntries(
+      [
+        ...Object.keys(PRE_APPROVAL_READ_ONLY_TOOL_NAMES),
+        ...MYAH_CREATOR_OPS_READ_TOOL_NAMES,
+        ...MYAH_CAMPAIGN_OUTREACH_READ_TOOL_NAMES,
+        ...MYAH_INBOX_READ_TOOL_NAMES,
+        ...MYAH_INBOX_REPLY_SEND_STATUS_TOOL_NAMES,
+        'prepare_instagram_reply_draft',
+        'prepare_outreach_email_draft',
+      ].map((toolName): [string, true] => [toolName, true]),
+    ),
+  );
 
-export const MYAH_INBOX_SELECTION_TOOL_NAMES = [
-  'get_myah_inbox_thread_context',
-  'generate_myah_inbox_reply_proposal',
-] as const;
+const REGISTERED_ACTION_TOOL_NAMES_BY_NAME: Readonly<Record<string, true>> =
+  Object.freeze(
+    Object.fromEntries(
+      REGISTERED_ACTION_TOOL_NAMES.map((toolName): [string, true] => [
+        toolName,
+        true,
+      ]),
+    ),
+  );
+
 export const allowRegisteredActionSenders = (
   excludedToolNames: Set<string>,
 ): void => {
-  excludedToolNames.delete('send_instagram_reply');
-  excludedToolNames.delete('send_outreach_email');
+  for (const toolName of REGISTERED_ACTION_TOOL_NAMES) {
+    excludedToolNames.delete(toolName);
+  }
 };
 
 export const getPreApprovalExcludedToolNames = (
@@ -43,12 +67,10 @@ export const getPreApprovalExcludedToolNames = (
     toolCatalog
       .filter((entry) => {
         if (entry.executionRef.kind === 'database_crud') {
-          return !READ_ONLY_DATABASE_OPERATIONS.has(
-            entry.executionRef.operation,
-          );
+          return !READ_ONLY_DATABASE_OPERATIONS[entry.executionRef.operation];
         }
 
-        return !PRE_APPROVAL_SAFE_TOOL_NAMES.has(entry.name);
+        return !PRE_APPROVAL_SAFE_TOOL_NAMES[entry.name];
       })
       .map((entry) => entry.name),
   );
@@ -58,6 +80,7 @@ export const getGenericApprovedResumeActiveToolNames = (toolNames: string[]) =>
 
 type MessagePartLike = {
   type?: string;
+  input?: unknown;
   output?: unknown;
   toolOutput?: unknown;
 };
@@ -77,29 +100,43 @@ type ApprovalToolOutput = {
   result: ApprovalToolResult;
 };
 
-export const hasLatestMessageApprovedGenericApproval = (
+export const getLatestApprovedGenericToolName = (
   messages: MessageLike[],
-) => {
+): string | null => {
   const latestMessage = messages[messages.length - 1];
 
   if (latestMessage?.role !== 'assistant') {
-    return false;
+    return null;
   }
 
-  return (latestMessage.parts ?? []).some((part) => {
+  for (const part of latestMessage.parts ?? []) {
     const output = part.output ?? part.toolOutput;
 
-    if (!isApprovalToolOutput(output)) {
-      return false;
+    if (
+      part.type !== `tool-${REQUEST_APPROVAL_TOOL_NAME}` ||
+      !isApprovalToolOutput(output) ||
+      output.result.status !== 'resolved' ||
+      output.result.decision !== 'approved' ||
+      isRegisteredActionApprovalOutput(output) ||
+      !part.input ||
+      typeof part.input !== 'object' ||
+      !('toolName' in part.input)
+    ) {
+      continue;
     }
 
-    return (
-      part.type === `tool-${REQUEST_APPROVAL_TOOL_NAME}` &&
-      output.result.status === 'resolved' &&
-      output.result.decision === 'approved' &&
-      !isRegisteredActionApprovalOutput(output)
-    );
-  });
+    const toolName = part.input.toolName;
+
+    if (
+      typeof toolName === 'string' &&
+      toolName.length > 0 &&
+      REGISTERED_ACTION_TOOL_NAMES_BY_NAME[toolName] !== true
+    ) {
+      return toolName;
+    }
+  }
+
+  return null;
 };
 
 // A registered approval exposes the registered senders without adding action

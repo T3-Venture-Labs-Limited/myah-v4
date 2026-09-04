@@ -3,6 +3,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { MYAH_INBOX_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-tool-service.token';
+import { MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-reply-execution-service.token';
 import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-provider.module';
 import { MyahInboxResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox.resolver';
 import { MyahInboxReplySendResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-reply-send.resolver';
@@ -11,6 +12,7 @@ import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/servic
 import { MyahInboxReplyBriefingService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service';
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxReplySendService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-send.service';
+import { MyahInboxReplyApprovedExecutionService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-approved-execution.service';
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
 import { AiAgentExecutionModule } from 'src/engine/metadata-modules/ai/ai-agent-execution/ai-agent-execution.module';
 import { AiBillingModule } from 'src/engine/metadata-modules/ai/ai-billing/ai-billing.module';
@@ -38,11 +40,16 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
     MyahInboxReplyBriefingService,
     MyahInboxReplyProposalService,
     MyahInboxReplySendService,
+    MyahInboxReplyApprovedExecutionService,
     MyahInboxToolWorkspaceService,
     BrandBrainPreflightService,
     {
       provide: MYAH_INBOX_TOOL_SERVICE_TOKEN,
       useExisting: MyahInboxToolWorkspaceService,
+    },
+    {
+      provide: MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN,
+      useExisting: MyahInboxReplyApprovedExecutionService,
     },
     MyahInboxResolver,
     MyahInboxReplySendResolver,
@@ -51,6 +58,7 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
     MyahInboxMutationService,
     MyahInboxQueryService,
     MYAH_INBOX_TOOL_SERVICE_TOKEN,
+    MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN,
   ],
 })
 export class MyahInboxModule {}

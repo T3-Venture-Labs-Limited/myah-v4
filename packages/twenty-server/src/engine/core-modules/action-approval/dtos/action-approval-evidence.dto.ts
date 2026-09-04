@@ -32,6 +32,12 @@ export class ActionApprovalProposalDTO {
   @Field(() => String, { nullable: true })
   sendingAccountLabel: string | null;
 
+  @Field(() => String, { nullable: true })
+  subject: string | null;
+
+  @Field(() => Int, { nullable: true })
+  draftRevision: number | null;
+
   @Field(() => String)
   state: string;
 

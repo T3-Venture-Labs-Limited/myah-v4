@@ -1,6 +1,9 @@
 import { type ObjectRecord } from 'twenty-shared/types';
 
-import { type MyahInboxReplyExpectedActionBinding } from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import {
+  type ActionEvidenceLinkInput,
+  type MyahInboxReplyExpectedActionBinding,
+} from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
 import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
@@ -79,4 +82,25 @@ export type CanonicalMyahInboxReplyGraph = {
 export type MyahInboxReplyActionAuthority = {
   expectedActionBinding: MyahInboxReplyExpectedActionBindingWithWorkspace;
   canonicalGraph: CanonicalMyahInboxReplyGraph;
+};
+export type MyahInboxReplyActionProposal = MyahInboxReplyActionAuthority & {
+  proposal: {
+    title: string;
+    preview: { format: 'text'; content: string };
+    targetLabel: string;
+  };
+};
+
+export type MyahInboxReplyActionApprovalProposal = {
+  action: 'send_inbox_reply';
+  actionVersion: 1;
+  body: string;
+  recipientLabel: string;
+  sendingAccountLabel: string;
+  subject: string;
+  draftRevision: number;
+  state: string;
+  expiresAt: Date;
+  occurredAt: Date;
+  evidenceLinks: ActionEvidenceLinkInput[];
 };

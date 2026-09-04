@@ -1982,6 +1982,8 @@ type ActionApprovalProposal {
   body: String
   recipientLabel: String
   sendingAccountLabel: String
+  subject: String
+  draftRevision: Int
   state: String!
   expiresAt: DateTime!
   occurredAt: DateTime!

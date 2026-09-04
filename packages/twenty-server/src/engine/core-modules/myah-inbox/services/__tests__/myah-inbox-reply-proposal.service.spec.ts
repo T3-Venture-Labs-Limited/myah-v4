@@ -417,7 +417,10 @@ describe('MyahInboxReplyProposalService', () => {
       operatorInstructions,
     });
     const sidebarTools = new MyahInboxToolWorkspaceService(
+      {} as never,
       setup.service,
+      {} as never,
+      {} as never,
     ).generateMyahInboxTools({
       workspaceId,
       roleId,
@@ -826,7 +829,10 @@ describe('MyahInboxReplyProposalService', () => {
       workspaceMemberId,
     );
     const toolSet = new MyahInboxToolWorkspaceService(
+      {} as never,
       setup.service,
+      {} as never,
+      {} as never,
     ).generateMyahInboxTools({
       workspaceId,
       roleId,

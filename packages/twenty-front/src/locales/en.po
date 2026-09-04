@@ -1488,6 +1488,11 @@ msgstr "Action on click"
 msgid "Action required"
 msgstr "Action required"
 
+#. js-lingui-id: a+rqJV
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Action unavailable"
+msgstr "Action unavailable"
+
 #. js-lingui-id: 7L01XJ
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableHeader.tsx
 #: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsTableHeader.tsx
@@ -11612,11 +11617,6 @@ msgstr "Instagram authorization opened in a new tab."
 msgid "Instagram messaging"
 msgstr "Instagram messaging"
 
-#. js-lingui-id: mopxc6
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "Instagram reply unavailable"
-msgstr "Instagram reply unavailable"
-
 #. js-lingui-id: TKQ7K+
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -18557,6 +18557,11 @@ msgstr "Review charge for {0}"
 msgid "Review charges"
 msgstr "Review charges"
 
+#. js-lingui-id: IbDUDL
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review Inbox reply"
+msgstr "Review Inbox reply"
+
 #. js-lingui-id: BXm/6/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review Instagram reply"
@@ -18582,6 +18587,11 @@ msgstr "Review managed mailbox"
 msgid "Review managed mailboxes"
 msgstr "Review managed mailboxes"
 
+#. js-lingui-id: +5UXOF
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review outreach email"
+msgstr "Review outreach email"
+
 #. js-lingui-id: RXKPQv
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "Review prewarmed bundle"
@@ -18602,10 +18612,20 @@ msgstr "Review recovered mailbox capacity"
 msgid "Review selected bundle"
 msgstr "Review selected bundle"
 
+#. js-lingui-id: PBtpKR
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived Inbox reply before it is sent."
+msgstr "Review the exact server-derived Inbox reply before it is sent."
+
 #. js-lingui-id: EIzxzn
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review the exact server-derived Instagram reply before it is sent."
 msgstr "Review the exact server-derived Instagram reply before it is sent."
+
+#. js-lingui-id: MoNVPS
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived outreach email before it is sent."
+msgstr "Review the exact server-derived outreach email before it is sent."
 
 #. js-lingui-id: bkU8ZB
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -18626,6 +18646,11 @@ msgstr "Review warmup capacity"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Review warmup capacity purchase"
 msgstr "Review warmup capacity purchase"
+
+#. js-lingui-id: 6LTyxl
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Revision"
+msgstr "Revision"
 
 #. js-lingui-id: GXsAby
 #: src/modules/settings/admin-panel/signing-keys/components/SettingsAdminRevokeSigningKeyConfirmationModal.tsx
@@ -20928,6 +20953,7 @@ msgstr "subheading"
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "Subject"
 msgstr "Subject"
@@ -21446,6 +21472,11 @@ msgstr "Text Editor"
 msgid "That mailbox already exists in this local inventory."
 msgstr "That mailbox already exists in this local inventory."
 
+#. js-lingui-id: ss995V
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The action cannot be approved until its source is available."
+msgstr "The action cannot be approved until its source is available."
+
 #. js-lingui-id: KJjmr/
 #: src/pages/settings/email/SettingsWorkspaceEmailGroupChannelDetail.tsx
 msgid "The address your workspace sends and receives email from."
@@ -21582,10 +21613,15 @@ msgstr "The email associated to this account"
 msgid "The email associated to your account"
 msgstr "The email associated to your account"
 
-#. js-lingui-id: 2iMFiI
+#. js-lingui-id: QzI/32
 #: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The exact server-derived Instagram reply is unavailable."
-msgstr "The exact server-derived Instagram reply is unavailable."
+msgid "The email will be sent to the selected recipient."
+msgstr "The email will be sent to the selected recipient."
+
+#. js-lingui-id: f1P1mM
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The exact server-derived action is unavailable."
+msgstr "The exact server-derived action is unavailable."
 
 #. js-lingui-id: diO3fm
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx
@@ -21772,12 +21808,8 @@ msgstr "The prewarmed review no longer matches local inventory."
 msgid "The provider did not respond."
 msgstr "The provider did not respond."
 
-#. js-lingui-id: JAbrJR
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The reply cannot be approved until its source is available."
-msgstr "The reply cannot be approved until its source is available."
-
 #. js-lingui-id: c82Ji/
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "The reply will be sent to the existing conversation."
 msgstr "The reply will be sent to the existing conversation."

@@ -27,6 +27,7 @@ import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { DashboardToolsModule } from 'src/modules/dashboard/tools/dashboard-tools.module';
 import { MyahBrandBrainModule } from 'src/modules/myah-brand-brain/myah-brand-brain.module';
+import { CampaignOutreachToolsModule } from 'src/modules/myah-outreach/campaign-outreach-tools.module';
 import { WorkflowToolsModule } from 'src/modules/workflow/workflow-tools/workflow-tools.module';
 
 import { AgentChatThreadEntity } from './entities/agent-chat-thread.entity';
@@ -71,6 +72,7 @@ import { SystemPromptBuilderService } from './services/system-prompt-builder.ser
     DashboardToolsModule,
     MyahBrandBrainModule,
     WorkflowToolsModule,
+    CampaignOutreachToolsModule,
   ],
   providers: [
     AgentChatCancelSubscriberService,

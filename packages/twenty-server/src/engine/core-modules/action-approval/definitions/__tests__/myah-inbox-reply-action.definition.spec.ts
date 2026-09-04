@@ -1,5 +1,6 @@
 import {
   MyahInboxReplyActionDefinition,
+  MyahInboxReplyActionProposalInputZodSchema,
   MyahInboxReplyUnavailableCode,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import {
@@ -944,5 +945,110 @@ describe('MyahInboxReplyActionDefinition', () => {
         binding: authority.expectedActionBinding,
       }),
     ).resolves.toMatchObject({ canonicalGraph: expectedGraph });
+  });
+  it('proposes an exact immutable Inbox reply authority bound to its agent chat', async () => {
+    const { definition } = createDefinition();
+    const agentChatThreadId = '00000000-0000-4000-8000-000000000077';
+
+    expect(
+      MyahInboxReplyActionProposalInputZodSchema.safeParse({
+        messageThreadId,
+        expectedDraftRevision: 4,
+      }).success,
+    ).toBe(true);
+    expect(
+      MyahInboxReplyActionProposalInputZodSchema.safeParse({
+        messageThreadId,
+        expectedDraftRevision: 4,
+        recipientEmail: 'edited@example.com',
+      }).success,
+    ).toBe(false);
+
+    await expect(
+      definition.propose({
+        workspaceId,
+        initiatorUserWorkspaceId,
+        agentChatThreadId,
+        input: { messageThreadId, expectedDraftRevision: 4 },
+      }),
+    ).resolves.toMatchObject({
+      expectedActionBinding: {
+        workspaceId,
+        initiatorUserWorkspaceId,
+        actionName: 'send_inbox_reply',
+        draftId: messageThreadId,
+        threadId: agentChatThreadId,
+      },
+      canonicalGraph: {
+        draftBody: { markdown: 'Thanks for the update', blocknote: null },
+        recipientEmail: 'creator@example.com',
+        senderEmail: 'team@brand.com',
+        subject: 'Re: Partnership',
+        draftRevision: 4,
+      },
+      proposal: {
+        title: 'Re: Partnership',
+        targetLabel: 'Creator <creator@example.com>',
+      },
+    });
+  });
+
+  it('rebuilds a chat-bound approval from its distinct Inbox draft', async () => {
+    const { definition } = createDefinition();
+    const agentChatThreadId = '00000000-0000-4000-8000-000000000077';
+    const proposal = await definition.propose({
+      workspaceId,
+      initiatorUserWorkspaceId,
+      agentChatThreadId,
+      input: { messageThreadId, expectedDraftRevision: 4 },
+    });
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).resolves.toMatchObject({
+      expectedActionBinding: {
+        draftId: messageThreadId,
+        threadId: agentChatThreadId,
+      },
+      canonicalGraph: { messageThreadId },
+    });
+  });
+
+  it('rebuilds a pending proposal from its binding and rejects source drift', async () => {
+    const setup = createDefinition();
+    const authority = await buildAuthority(setup.definition);
+    const binding = {
+      id: '00000000-0000-4000-8000-000000000011',
+      ...authority.expectedActionBinding,
+      state: 'PENDING',
+      expiresAt: new Date('2026-09-03T00:00:00.000Z'),
+      createdAt: new Date('2026-09-02T00:00:00.000Z'),
+      decidedAt: null,
+    };
+
+    await expect(
+      setup.definition.getProposal({ workspaceId, binding: binding as never }),
+    ).resolves.toEqual({
+      action: 'send_inbox_reply',
+      actionVersion: 1,
+      body: 'Thanks for the update',
+      recipientLabel: 'Creator <creator@example.com>',
+      sendingAccountLabel: 'Brand <team@brand.com>',
+      subject: 'Re: Partnership',
+      draftRevision: 4,
+      state: 'PENDING',
+      expiresAt: binding.expiresAt,
+      occurredAt: binding.createdAt,
+      evidenceLinks: authority.expectedActionBinding.evidenceLinks,
+    });
+
+    setup.parent.headerMessageId = '<changed@example.com>';
+
+    await expect(
+      setup.definition.getProposal({ workspaceId, binding: binding as never }),
+    ).rejects.toThrow(MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE);
   });
 });
