@@ -12,4 +12,4 @@ These are independent, project-local copies. Their canonical personal-library so
 - `sentry-sdk-setup`
 - `stripe-best-practices`
 - `stripe-docs`
-- `use-railway`
+- `use-railway` — local copy includes input-validation and restart-helper fixes identified during review.

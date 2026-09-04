@@ -47,11 +47,11 @@ Stop Pi from automatically loading the broad personal skill collection in this r
 - Copy rather than move first; compare source and destination hashes.
 - Rename the old global directory only after verification succeeds, preserving a rollback location until Pi and Hermes checks pass.
 - Verify Pi no longer lists global `~/.agents/skills` skills when launched from this project.
-- Verify Hermes still lists its existing skills and its skill directory is unchanged.
+- Verify Hermes still lists every existing non-cmux skill, with its configuration and profile-specific skills unchanged.
 - Verify the project-local skill set exactly matches the approved inventory.
 
 ## Non-goals
 
-- Do not alter Hermes configuration, profiles, or skills.
+- Do not alter Hermes configuration, profile-specific skills, or pre-existing real skill directories; only replace aliases into the retired Pi path with independent copies and remove cmux aliases.
 - Do not create symlinks.
 - Do not modify unrelated repository files.

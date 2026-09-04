@@ -393,14 +393,18 @@ for skill in \
   sentry-workflow \
   sentry-sdk-setup \
   stripe-best-practices \
-  stripe-docs \
-  use-railway
+  stripe-docs
 do
   diff -qr "$HOME/.skills/$skill" ".agents/skills/$skill"
 done
+(
+  cd .agents/skills/use-railway/scripts
+  python -m unittest -v test_skill_scripts.py
+  python -m py_compile pg-extensions.py enable-pg-stats.py
+)
 ```
 
-Expected: no output and exit status `0`.
+Expected: the unchanged copied skills match their source, and the locally reviewed Railway script fixes pass both regression tests and compilation.
 
 - [ ] **Step 3: Verify normal Pi discovery is project-local via RPC metadata**
 
