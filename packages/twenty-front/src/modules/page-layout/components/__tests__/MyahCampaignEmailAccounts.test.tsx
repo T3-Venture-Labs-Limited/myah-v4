@@ -8,58 +8,111 @@ const mockUseMutation = jest.fn();
 const mockNavigateSettings = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockEnqueueSuccessSnackBar = jest.fn();
+const mockCloseDropdown = jest.fn((dropdownId: string) => {
+  document.dispatchEvent(new CustomEvent(`close-dropdown-${dropdownId}`));
+});
 
 jest.mock('@apollo/client/react', () => ({
   useMutation: (...args: unknown[]) => mockUseMutation(...args),
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
 }));
 
-jest.mock(
-  '@/object-record/record-field-list/record-detail-section/components/RecordDetailSectionContainer',
-  () => ({
-    RecordDetailSectionContainer: ({
-      children,
-      rightAdornment,
-      title,
-    }: {
-      children: React.ReactNode;
-      rightAdornment?: React.ReactNode;
-      title: string;
-    }) => (
-      <section aria-label={title}>
-        <h2>{title}</h2>
-        {rightAdornment}
-        {children}
-      </section>
-    ),
-  }),
-);
+jest.mock('@/ui/layout/dropdown/components/Dropdown', () => {
+  const React = require('react');
 
-jest.mock('@/ui/layout/dropdown/components/Dropdown', () => ({
-  Dropdown: ({
-    clickableComponent,
-    dropdownAriaLabel,
-    dropdownComponents,
-    dropdownRole,
-  }: {
-    clickableComponent: React.ReactNode;
-    dropdownAriaLabel?: string;
-    dropdownComponents: React.ReactNode;
-    dropdownRole?: string;
-  }) => (
-    <>
-      {clickableComponent}
-      <div aria-label={dropdownAriaLabel} role={dropdownRole}>
-        {dropdownComponents}
-      </div>
-    </>
-  ),
+  return {
+    Dropdown: ({
+      clickableComponent,
+      dropdownAriaLabel,
+      dropdownComponents,
+      dropdownId,
+      dropdownRole,
+      onClose,
+      onOpen,
+    }: {
+      clickableComponent: React.ReactElement<{
+        onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+      }>;
+      dropdownAriaLabel?: string;
+      dropdownComponents: React.ReactNode;
+      dropdownId: string;
+      dropdownRole?: string;
+      onClose?: () => void;
+      onOpen?: () => void;
+    }) => {
+      const [isOpen, setIsOpen] = React.useState(false);
+
+      React.useEffect(() => {
+        const close = () => {
+          setIsOpen(false);
+          onClose?.();
+        };
+        const closeEventName = `close-dropdown-${dropdownId}`;
+
+        document.addEventListener(closeEventName, close);
+
+        return () => document.removeEventListener(closeEventName, close);
+      }, [dropdownId, onClose]);
+
+      return (
+        <>
+          {React.cloneElement(clickableComponent, {
+            'aria-expanded': isOpen,
+            onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+              clickableComponent.props.onClick?.(event);
+              setIsOpen(true);
+              onOpen?.();
+            },
+          })}
+          {isOpen ? (
+            <div aria-label={dropdownAriaLabel} role={dropdownRole}>
+              {dropdownComponents}
+            </div>
+          ) : null}
+        </>
+      );
+    },
+  };
+});
+
+jest.mock('@/ui/layout/dropdown/hooks/useCloseDropdown', () => ({
+  useCloseDropdown: () => ({ closeDropdown: mockCloseDropdown }),
 }));
 
-jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
-  ModalStatefulWrapper: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
+jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
+  ConfirmationModal: ({
+    confirmButtonText,
+    onClose,
+    onConfirmClick,
+    subtitle,
+    title,
+  }: {
+    confirmButtonText: string;
+    onClose: () => void;
+    onConfirmClick: () => void;
+    subtitle: React.ReactNode;
+    title: string;
+  }) => {
+    const titleId = 'confirmation-title';
+    const descriptionId = 'confirmation-description';
+
+    return (
+      <div
+        aria-describedby={descriptionId}
+        aria-labelledby={titleId}
+        role="dialog"
+      >
+        <h2 id={titleId}>{title}</h2>
+        <p id={descriptionId}>{subtitle}</p>
+        <button onClick={onClose} type="button">
+          Cancel
+        </button>
+        <button onClick={onConfirmClick} type="button">
+          {confirmButtonText}
+        </button>
+      </div>
+    );
+  },
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
@@ -104,44 +157,60 @@ jest.mock('twenty-ui/icon', () => ({
   IconX: () => null,
 }));
 
-jest.mock('twenty-ui/input', () => ({
-  Button: ({
-    title,
-    ariaLabel,
-    onClick,
-    disabled,
-  }: {
-    title: string;
-    ariaLabel?: string;
-    onClick?: () => void;
-    disabled?: boolean;
-  }) => (
-    <button
-      aria-label={ariaLabel}
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
-      {title}
-    </button>
-  ),
-  LightIconButton: ({
-    'aria-label': ariaLabel,
-    onClick,
-    disabled,
-  }: {
-    'aria-label': string;
-    onClick?: () => void;
-    disabled?: boolean;
-  }) => (
-    <button
-      aria-label={ariaLabel}
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    />
-  ),
-}));
+jest.mock('twenty-ui/input', () => {
+  const React = require('react');
+
+  return {
+    Button: React.forwardRef(
+      (
+        {
+          title,
+          ariaLabel,
+          onClick,
+          disabled,
+        }: {
+          title: string;
+          ariaLabel?: string;
+          onClick?: () => void;
+          disabled?: boolean;
+        },
+        ref: React.ForwardedRef<HTMLButtonElement>,
+      ) => (
+        <button
+          aria-label={ariaLabel}
+          disabled={disabled}
+          onClick={onClick}
+          ref={ref}
+          type="button"
+        >
+          {title}
+        </button>
+      ),
+    ),
+    LightIconButton: React.forwardRef(
+      (
+        {
+          'aria-label': ariaLabel,
+          onClick,
+          disabled,
+        }: {
+          'aria-label': string;
+          onClick?: () => void;
+          disabled?: boolean;
+        },
+        ref: React.ForwardedRef<HTMLButtonElement>,
+      ) => (
+        <button
+          aria-label={ariaLabel}
+          disabled={disabled}
+          onClick={onClick}
+          ref={ref}
+          type="button"
+        />
+      ),
+    ),
+  };
+});
 
 const linkedAccount = {
   id: 'campaign-account-1',
@@ -236,9 +305,21 @@ const renderWithAccounts = (options = {}) => {
   };
 };
 
+const openAccountPicker = () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Add email account' }));
+};
+
 describe('MyahCampaignEmailAccounts', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('exposes Email Accounts as a real level-two heading', () => {
+    renderWithAccounts();
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Email Accounts' }),
+    ).toBeVisible();
   });
 
   it('uses sender addresses for compact account and action names', () => {
@@ -257,6 +338,7 @@ describe('MyahCampaignEmailAccounts', () => {
 
   it('announces account loading independently from candidate loading', () => {
     renderWithAccounts({ accountLoading: true, candidateLoading: true });
+    openAccountPicker();
 
     expect(screen.getByText('Loading email accounts…')).toHaveAttribute(
       'aria-live',
@@ -284,6 +366,7 @@ describe('MyahCampaignEmailAccounts', () => {
 
   it('renders candidate query failures independently from linked account results', () => {
     renderWithAccounts({ candidateError: new Error('candidate failed') });
+    openAccountPicker();
 
     expect(screen.getByText('sender@example.com')).toBeVisible();
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -295,6 +378,7 @@ describe('MyahCampaignEmailAccounts', () => {
     renderWithAccounts({
       candidates: [{ ...candidate, health: 'UNAVAILABLE' }],
     });
+    openAccountPicker();
 
     expect(
       screen.getByRole('button', { name: 'Add team@example.com' }),
@@ -307,6 +391,7 @@ describe('MyahCampaignEmailAccounts', () => {
 
   it('opens the existing account connection settings seam', () => {
     renderWithAccounts();
+    openAccountPicker();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Connect email account' }),
@@ -315,14 +400,27 @@ describe('MyahCampaignEmailAccounts', () => {
     expect(mockNavigateSettings).toHaveBeenCalled();
   });
 
-  it('links candidates with the keyboard and refetches both account queries', async () => {
+  it('opens, activates, and closes the account picker with the keyboard', async () => {
     const user = userEvent.setup();
     const link = jest.fn().mockResolvedValue({
       data: { linkCampaignEmailAccount: [linkedAccount, candidate] },
     });
     const { accountRefetch, candidateRefetch } = renderWithAccounts({ link });
+    const addEmailAccountButton = screen.getByRole('button', {
+      name: 'Add email account',
+    });
 
-    screen.getByRole('button', { name: 'Add team@example.com' }).focus();
+    expect(
+      screen.queryByRole('button', { name: 'Add team@example.com' }),
+    ).not.toBeInTheDocument();
+
+    addEmailAccountButton.focus();
+    await user.keyboard('{Enter}');
+
+    const candidateButton = await screen.findByRole('button', {
+      name: 'Add team@example.com',
+    });
+    await waitFor(() => expect(candidateButton).toHaveFocus());
     await user.keyboard('{Enter}');
 
     await waitFor(() =>
@@ -338,6 +436,10 @@ describe('MyahCampaignEmailAccounts', () => {
     await waitFor(() => {
       expect(accountRefetch).toHaveBeenCalled();
       expect(candidateRefetch).toHaveBeenCalled();
+      expect(
+        screen.queryByRole('dialog', { name: 'Email account candidates' }),
+      ).not.toBeInTheDocument();
+      expect(addEmailAccountButton).toHaveFocus();
     });
   });
 
@@ -358,18 +460,26 @@ describe('MyahCampaignEmailAccounts', () => {
       name: 'Remove team@example.com',
     });
     fireEvent.click(nonDefaultRemove);
-    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+    const removalDialog = screen.getByRole('dialog', {
+      name: 'Remove team@example.com?',
+    });
+    expect(removalDialog).toHaveAttribute(
+      'aria-describedby',
+      'confirmation-description',
+    );
+    expect(removalDialog).toHaveTextContent(
       'Removing this email account does not change the default email account.',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel removal' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(nonDefaultRemove).toHaveFocus();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Remove sender@example.com' }),
     );
-    expect(screen.getByRole('alertdialog')).toHaveTextContent(
-      'Removing the default account pauses email drafting.',
-    );
+    expect(
+      screen.getByRole('dialog', { name: 'Remove sender@example.com?' }),
+    ).toHaveTextContent('Removing the default account pauses email drafting.');
   });
 
   it('warns that an unhealthy default pauses drafting', () => {
@@ -389,7 +499,7 @@ describe('MyahCampaignEmailAccounts', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Remove sender@example.com' }),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove account' }));
 
     await waitFor(() => expect(mockEnqueueErrorSnackBar).toHaveBeenCalled());
     expect(screen.getByText('sender@example.com')).toBeVisible();
