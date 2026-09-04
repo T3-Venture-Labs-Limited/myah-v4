@@ -1,4 +1,10 @@
-import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
+import {
+  Field,
+  InputType,
+  ObjectType,
+  registerEnumType,
+} from '@nestjs/graphql';
+import { IsUUID } from 'class-validator';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
@@ -12,6 +18,27 @@ export enum CampaignEmailAccountHealth {
 registerEnumType(CampaignEmailAccountHealth, {
   name: 'CampaignEmailAccountHealth',
 });
+
+@InputType()
+export class CampaignEmailAccountCampaignInput {
+  @Field(() => UUIDScalarType)
+  @IsUUID()
+  campaignId!: string;
+}
+
+@InputType()
+export class LinkCampaignEmailAccountInput extends CampaignEmailAccountCampaignInput {
+  @Field(() => UUIDScalarType)
+  @IsUUID()
+  connectedAccountId!: string;
+}
+
+@InputType()
+export class CampaignEmailAccountLinkInput extends CampaignEmailAccountCampaignInput {
+  @Field(() => UUIDScalarType)
+  @IsUUID()
+  campaignAccountId!: string;
+}
 
 @ObjectType()
 export class CampaignEmailAccountDTO {
