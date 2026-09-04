@@ -6,11 +6,9 @@ import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
 import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
-import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
-import { PageFocusId } from '@/types/PageFocusId';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { t } from '@lingui/core/macro';
@@ -77,7 +75,6 @@ export const CreatorListScopedCreatorIndex = ({
     selectedCreatorView?.creatorListId === creatorListId
       ? selectedCreatorView.viewId
       : (defaultCreatorView?.id ?? firstCreatorTableView?.id);
-  const { resetFocusStackToRecordIndex } = useResetFocusStackToRecordIndex();
   const { applyCreatorBulkRelationship } = useApplyCreatorBulkRelationship();
   const createdCreatorKeys = useMemo(() => new Set<string>(), []);
 
@@ -163,22 +160,18 @@ export const CreatorListScopedCreatorIndex = ({
       creatorListId,
     ],
   );
-  const handleClose = useCallback(() => {
-    resetFocusStackToRecordIndex(PageFocusId.RecordIndex);
-    onClose();
-  }, [onClose, resetFocusStackToRecordIndex]);
-  const closeAction = (
+  const mobileBackAction = isMobile ? (
     <IconButton
       Icon={IconArrowLeft}
       ariaLabel={t`Back to Creator Lists`}
       dataTestId="creator-list-pane-back"
-      onClick={handleClose}
+      onClick={onClose}
     />
-  );
+  ) : undefined;
 
   const renderScopeState = (content: ReactNode) => (
     <StyledScopeState>
-      {closeAction}
+      {mobileBackAction}
       {content}
     </StyledScopeState>
   );
@@ -241,7 +234,7 @@ export const CreatorListScopedCreatorIndex = ({
         shouldPreserveParentViewStateOnOpen={isMobile}
         initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
         headerTitle={creatorListContext.target.label}
-        headerActionButton={closeAction}
+        headerLeadingAction={mobileBackAction}
       />
     </CreatorListBulkActionsContext.Provider>
   );
