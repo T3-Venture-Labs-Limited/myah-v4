@@ -6,7 +6,7 @@ export default defineApplication({
   universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER,
   displayName: 'Myah Instagram Messaging',
   description:
-    'Read existing Instagram conversations and messages through a narrow Composio adapter with reply polling disabled for the initial MVP.',
+    'Read existing Instagram conversations and messages through manual synchronization with automatic reply polling disabled.',
   logoUrl: undefined,
   applicationVariables: undefined,
   author: 'T3 Venture Labs',

@@ -26,6 +26,31 @@ export type WorkspaceInstagramAccountStatus = {
   lastCheckedAt: string | null;
   lastError: string | null;
 };
+export type UnipileInstagramWebhookAccountStatus =
+  | 'OK'
+  | 'ERROR'
+  | 'STOPPED'
+  | 'CREDENTIALS'
+  | 'PERMISSIONS'
+  | 'CONNECTING'
+  | 'DELETED'
+  | 'CREATION_SUCCESS'
+  | 'RECONNECTED'
+  | 'SYNC_SUCCESS';
+
+export const isUnipileInstagramWebhookAccountStatus = (
+  status: string,
+): status is UnipileInstagramWebhookAccountStatus =>
+  status === 'OK' ||
+  status === 'ERROR' ||
+  status === 'STOPPED' ||
+  status === 'CREDENTIALS' ||
+  status === 'PERMISSIONS' ||
+  status === 'CONNECTING' ||
+  status === 'DELETED' ||
+  status === 'CREATION_SUCCESS' ||
+  status === 'RECONNECTED' ||
+  status === 'SYNC_SUCCESS';
 
 @Injectable()
 export class UnipileInstagramAccountService {
@@ -415,6 +440,175 @@ export class UnipileInstagramAccountService {
         );
 
         throw new ConflictException('Unable to disconnect Instagram account');
+      },
+    );
+  }
+
+  async reconcileWebhookAccountStatus(input: {
+    bindingId: string;
+    status: string;
+  }): Promise<UnipileInstagramAccountBindingStatus | null> {
+    this.availabilityService.assertEnabled();
+
+    if (!isUnipileInstagramWebhookAccountStatus(input.status)) {
+      throw new ConflictException(
+        'Unable to reconcile Instagram account status',
+      );
+    }
+
+    if (input.status !== 'DELETED') {
+      return this.reconcileBoundAccountStatus(input.bindingId);
+    }
+
+    const binding = await this.bindingRepository.findOne({
+      where: { id: input.bindingId, deactivatedAt: IsNull() },
+    });
+    if (
+      !binding ||
+      binding.status === UnipileInstagramAccountBindingStatus.DELETE_UNKNOWN
+    ) {
+      return binding?.status ?? null;
+    }
+
+    return this.finalizationLockService.withLock(
+      {
+        workspaceId: binding.workspaceId,
+        unipileAccountId: binding.unipileAccountId,
+        instagramUserId: binding.instagramUserId,
+      },
+      async (manager) => {
+        const workspaceRepository = manager.getRepository(WorkspaceEntity);
+        const bindingRepository = manager.getRepository(
+          UnipileInstagramAccountBindingEntity,
+        );
+        const currentBinding = await bindingRepository.findOne({
+          where: { id: input.bindingId, deactivatedAt: IsNull() },
+        });
+
+        if (
+          !currentBinding ||
+          currentBinding.workspaceId !== binding.workspaceId ||
+          currentBinding.unipileAccountId !== binding.unipileAccountId ||
+          currentBinding.instagramUserId !== binding.instagramUserId ||
+          currentBinding.status ===
+            UnipileInstagramAccountBindingStatus.DELETE_UNKNOWN
+        ) {
+          return currentBinding?.status ?? null;
+        }
+
+        const workspace = await workspaceRepository.findOne({
+          where: { id: currentBinding.workspaceId },
+        });
+        if (!workspace) {
+          return currentBinding.status;
+        }
+
+        await this.markDisconnectStatus({
+          bindingRepository,
+          binding: currentBinding,
+          workspace,
+          status: UnipileInstagramAccountBindingStatus.INACTIVE,
+          projectionStatus: UnipileInstagramAccountBindingStatus.INACTIVE,
+          deactivatedAt: new Date(),
+          lastError: null,
+        });
+
+        return currentBinding.status;
+      },
+    );
+  }
+
+  async reconcileBoundAccountStatus(
+    bindingId: string,
+  ): Promise<UnipileInstagramAccountBindingStatus | null> {
+    this.availabilityService.assertEnabled();
+
+    const binding = await this.bindingRepository.findOne({
+      where: { id: bindingId, deactivatedAt: IsNull() },
+    });
+
+    if (
+      !binding ||
+      binding.status === UnipileInstagramAccountBindingStatus.DELETE_UNKNOWN
+    ) {
+      return binding?.status ?? null;
+    }
+
+    let account: UnipileInstagramAccount | null = null;
+    try {
+      account = await this.accountClient.getAccount(binding.unipileAccountId);
+    } catch (error) {
+      if (!(error instanceof UnipileReadError) || error.retryable) {
+        throw error;
+      }
+    }
+
+    return this.finalizationLockService.withLock(
+      {
+        workspaceId: binding.workspaceId,
+        unipileAccountId: binding.unipileAccountId,
+        instagramUserId: binding.instagramUserId,
+      },
+      async (manager) => {
+        const workspaceRepository = manager.getRepository(WorkspaceEntity);
+        const bindingRepository = manager.getRepository(
+          UnipileInstagramAccountBindingEntity,
+        );
+        const currentBinding = await bindingRepository.findOne({
+          where: { id: bindingId, deactivatedAt: IsNull() },
+        });
+
+        if (!currentBinding) {
+          return null;
+        }
+
+        if (
+          currentBinding.workspaceId !== binding.workspaceId ||
+          currentBinding.unipileAccountId !== binding.unipileAccountId ||
+          currentBinding.instagramUserId !== binding.instagramUserId ||
+          currentBinding.status ===
+            UnipileInstagramAccountBindingStatus.DELETE_UNKNOWN
+        ) {
+          return currentBinding.status;
+        }
+
+        const workspace = await workspaceRepository.findOne({
+          where: { id: currentBinding.workspaceId },
+        });
+
+        if (!workspace) {
+          return currentBinding.status;
+        }
+
+        if (
+          !account ||
+          account.accountId !== currentBinding.unipileAccountId ||
+          account.instagramUserId !== currentBinding.instagramUserId
+        ) {
+          await this.markDisconnectStatus({
+            bindingRepository,
+            binding: currentBinding,
+            workspace,
+            status: UnipileInstagramAccountBindingStatus.ERROR,
+            projectionStatus: UnipileInstagramAccountBindingStatus.ERROR,
+            deactivatedAt: null,
+            lastError: 'Unable to verify Instagram account connection',
+          });
+
+          return currentBinding.status;
+        }
+
+        const status = mapUnipileAccountStatus(account.sourceStatus);
+        await this.projectionService.upsertVerifiedAccount({
+          workspace,
+          account,
+          status,
+        });
+
+        currentBinding.status = status;
+        await bindingRepository.save(currentBinding);
+
+        return currentBinding.status;
       },
     );
   }

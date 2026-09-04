@@ -57,6 +57,9 @@ export class UnipileInstagramAccountBindingEntity {
   @Column({ type: 'timestamptz', nullable: true })
   deactivatedAt: Date | null;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  lastSyncScheduledAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

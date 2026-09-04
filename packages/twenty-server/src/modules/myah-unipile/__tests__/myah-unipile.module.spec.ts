@@ -12,6 +12,9 @@ import {
 } from 'src/modules/myah-unipile/controllers/myah-unipile-instagram.controller';
 import { UnipileHostedAuthAttemptEntity } from 'src/modules/myah-unipile/entities/unipile-hosted-auth-attempt.entity';
 import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
+import { UnipileInstagramChatCheckpointEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-chat-checkpoint.entity';
+import { UnipileInstagramSyncRunEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-sync-run.entity';
+import { UnipileInstagramWebhookEventEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-webhook-event.entity';
 import { UnipileInstagramAccountRecoveryCronCommand } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.cron-command';
 import { UnipileInstagramAccountRecoveryJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.job';
 import {
@@ -22,6 +25,9 @@ import { UnipileInstagramAccountProjectionService } from 'src/modules/myah-unipi
 import { UnipileInstagramAccountRecoveryService } from 'src/modules/myah-unipile/services/unipile-instagram-account-recovery.service';
 import { UnipileInstagramAccountService } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
 import { UnipileInstagramAvailabilityService } from 'src/modules/myah-unipile/services/unipile-instagram-availability.service';
+import { UnipileInstagramAccountFinalizationLockService } from 'src/modules/myah-unipile/services/unipile-instagram-account-finalization-lock.service';
+import { UnipileInstagramProjectionService } from 'src/modules/myah-unipile/services/unipile-instagram-projection.service';
+import { UnipileInstagramSyncService } from 'src/modules/myah-unipile/services/unipile-instagram-sync.service';
 import {
   UNIPILE_FETCH,
   UnipileV1ClientService,
@@ -39,6 +45,83 @@ type Provider =
 
 type MyahUnipileModuleModule = {
   MyahUnipileModule: ModuleConstructor;
+};
+
+type WebhookComponents = {
+  MyahUnipileInstagramWebhookController: ModuleConstructor;
+  UnipileInstagramWebhookIntakeService: ModuleConstructor;
+  UnipileInstagramWebhookJob: ModuleConstructor;
+  UnipileInstagramWebhookQueue: ModuleConstructor;
+  UnipileInstagramWebhookReconciliationJob: ModuleConstructor;
+};
+
+type SyncComponents = {
+  UnipileInstagramSyncJob: ModuleConstructor;
+  UnipileInstagramSyncQueue: ModuleConstructor;
+};
+
+const loadSyncComponents = (): SyncComponents | undefined => {
+  try {
+    const { UnipileInstagramSyncQueue } =
+      require('src/modules/myah-unipile/services/unipile-instagram-sync.queue') as SyncComponents;
+    const { UnipileInstagramSyncJob } =
+      require('src/modules/myah-unipile/jobs/unipile-instagram-sync.job') as SyncComponents;
+
+    return { UnipileInstagramSyncJob, UnipileInstagramSyncQueue };
+  } catch {
+    return undefined;
+  }
+};
+
+const requireSyncComponents = () => {
+  const syncComponents = loadSyncComponents();
+
+  expect(syncComponents).toBeDefined();
+
+  if (!syncComponents) {
+    throw new Error(
+      'Unipile Instagram synchronization queue components are not implemented',
+    );
+  }
+
+  return syncComponents;
+};
+
+const loadWebhookComponents = (): WebhookComponents | undefined => {
+  try {
+    const { MyahUnipileInstagramWebhookController } =
+      require('src/modules/myah-unipile/controllers/myah-unipile-instagram-webhook.controller') as WebhookComponents;
+    const { UnipileInstagramWebhookIntakeService } =
+      require('src/modules/myah-unipile/services/unipile-instagram-webhook-intake.service') as WebhookComponents;
+    const { UnipileInstagramWebhookQueue } =
+      require('src/modules/myah-unipile/services/unipile-instagram-webhook.queue') as WebhookComponents;
+    const { UnipileInstagramWebhookJob } =
+      require('src/modules/myah-unipile/jobs/unipile-instagram-webhook.job') as WebhookComponents;
+    const { UnipileInstagramWebhookReconciliationJob } =
+      require('src/modules/myah-unipile/jobs/unipile-instagram-webhook-reconciliation.job') as WebhookComponents;
+
+    return {
+      MyahUnipileInstagramWebhookController,
+      UnipileInstagramWebhookIntakeService,
+      UnipileInstagramWebhookJob,
+      UnipileInstagramWebhookQueue,
+      UnipileInstagramWebhookReconciliationJob,
+    };
+  } catch {
+    return undefined;
+  }
+};
+
+const requireWebhookComponents = () => {
+  const webhookComponents = loadWebhookComponents();
+
+  expect(webhookComponents).toBeDefined();
+
+  if (!webhookComponents) {
+    throw new Error('Unipile Instagram webhook components are not implemented');
+  }
+
+  return webhookComponents;
 };
 
 const loadMyahUnipileModule = (): MyahUnipileModuleModule | undefined => {
@@ -110,18 +193,24 @@ describe('MyahUnipileModule', () => {
         getRepositoryToken(WorkspaceEntity),
         getRepositoryToken(UnipileInstagramAccountBindingEntity),
         getRepositoryToken(UnipileHostedAuthAttemptEntity),
+        getRepositoryToken(UnipileInstagramWebhookEventEntity),
+        getRepositoryToken(UnipileInstagramChatCheckpointEntity),
+        getRepositoryToken(UnipileInstagramSyncRunEntity),
       ]),
     );
   });
 
   it('registers its controllers and providers exactly once', () => {
     const MyahUnipileModule = requireMyahUnipileModule();
+    const webhookComponents = requireWebhookComponents();
+    const syncComponents = requireSyncComponents();
     const providers = providersFor(MyahUnipileModule);
 
     expect(moduleMetadata('controllers', MyahUnipileModule)).toEqual(
       expect.arrayContaining([
         MyahUnipileInstagramController,
         MyahUnipileInstagramPublicController,
+        webhookComponents.MyahUnipileInstagramWebhookController,
       ]),
     );
     expect(providers.map(providerToken)).toEqual(
@@ -129,11 +218,20 @@ describe('MyahUnipileModule', () => {
         UnipileInstagramAvailabilityService,
         UnipileV1ClientService,
         UnipileInstagramAccountProjectionService,
+        UnipileInstagramProjectionService,
+        UnipileInstagramAccountFinalizationLockService,
+        UnipileInstagramSyncService,
         UnipileInstagramAccountService,
         UnipileHostedAuthService,
         UnipileInstagramAccountRecoveryService,
         UnipileInstagramAccountRecoveryJob,
         UnipileInstagramAccountRecoveryCronCommand,
+        webhookComponents.UnipileInstagramWebhookIntakeService,
+        webhookComponents.UnipileInstagramWebhookQueue,
+        webhookComponents.UnipileInstagramWebhookJob,
+        webhookComponents.UnipileInstagramWebhookReconciliationJob,
+        syncComponents.UnipileInstagramSyncQueue,
+        syncComponents.UnipileInstagramSyncJob,
         UNIPILE_FETCH,
         UNIPILE_HOSTED_AUTH_ACCOUNT_FINALIZER,
       ]),
@@ -164,6 +262,8 @@ describe('MyahUnipileModule', () => {
         UnipileInstagramAccountService,
         UnipileInstagramAccountProjectionService,
         UnipileInstagramAvailabilityService,
+        UnipileInstagramProjectionService,
+        UnipileInstagramSyncService,
         UnipileInstagramAccountRecoveryCronCommand,
       ]),
     );

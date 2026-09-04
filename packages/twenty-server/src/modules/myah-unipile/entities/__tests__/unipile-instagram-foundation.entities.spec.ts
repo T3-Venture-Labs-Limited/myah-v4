@@ -134,6 +134,7 @@ describe('Unipile Instagram foundation entities', () => {
     expectNullableColumns(UnipileInstagramAccountBindingEntity, [
       'connectedByUserWorkspaceId',
       'deactivatedAt',
+      'lastSyncScheduledAt',
     ]);
     expect(
       columnOptions(UnipileInstagramAccountBindingEntity, 'workspaceId'),
@@ -166,6 +167,12 @@ describe('Unipile Instagram foundation entities', () => {
     });
     expect(
       columnOptions(UnipileInstagramAccountBindingEntity, 'deactivatedAt'),
+    ).toMatchObject({ nullable: true, type: 'timestamptz' });
+    expect(
+      columnOptions(
+        UnipileInstagramAccountBindingEntity,
+        'lastSyncScheduledAt',
+      ),
     ).toMatchObject({ nullable: true, type: 'timestamptz' });
     expect(metadata.uniques).toEqual(
       expect.arrayContaining([

@@ -3,6 +3,7 @@ import { defineObject, FieldType, RelationType } from 'twenty-sdk/define';
 import {
   INSTAGRAM_ACCOUNT_AFTER_CURSOR_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_AUTH_CONFIG_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_ACCOUNT_COMPLETED_CHAT_SYNC_AT_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_COMPOSIO_USER_ID_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_CONNECTED_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_CONVERSATIONS_FIELD_UNIVERSAL_IDENTIFIER,
@@ -14,9 +15,9 @@ import {
   INSTAGRAM_ACCOUNT_OBJECT_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_STATUS_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_UNIPILE_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_ACCOUNT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_ACCOUNT_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
-  INSTAGRAM_ACCOUNT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
 enum InstagramAccountStatus {
@@ -174,6 +175,16 @@ export default defineObject({
       defaultValue: null,
       description:
         'Most recent manual conversation sync time. Polling is disabled.',
+    },
+    {
+      universalIdentifier:
+        INSTAGRAM_ACCOUNT_COMPLETED_CHAT_SYNC_AT_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.DATE_TIME,
+      label: 'Completed chat sync at',
+      name: 'completedChatSyncAt',
+      isNullable: true,
+      defaultValue: null,
+      description: 'When the initial chat synchronization completed.',
     },
     {
       universalIdentifier:

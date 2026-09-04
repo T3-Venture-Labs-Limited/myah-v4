@@ -123,6 +123,7 @@ import { AddManagedEmailPaymentReceiptsColumnFastInstanceCommand } from 'src/dat
 import { MigrateManagedEmailPaymentReceiptsSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1786000004001-migrate-managed-email-payment-receipts';
 import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1788163457871-extend-managed-provider-funding-action';
 import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201000000-create-unipile-instagram-foundation';
+import { AddUnipileInstagramSyncStateFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201001000-add-unipile-instagram-sync-state';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -247,4 +248,5 @@ export const INSTANCE_COMMANDS = [
   MigrateManagedEmailPaymentReceiptsSlowInstanceCommand,
   ExtendManagedProviderFundingActionFastInstanceCommand,
   CreateUnipileInstagramFoundationFastInstanceCommand,
+  AddUnipileInstagramSyncStateFastInstanceCommand,
 ];

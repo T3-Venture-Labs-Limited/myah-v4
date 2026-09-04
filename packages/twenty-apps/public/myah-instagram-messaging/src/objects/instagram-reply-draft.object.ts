@@ -6,13 +6,20 @@ import {
 } from 'twenty-sdk/define';
 
 import {
+  CREATOR_DRAFTS_FIELD_UNIVERSAL_IDENTIFIER,
+  CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_APPROVED_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_BODY_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_CREATOR_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_GENERATED_AT_FIELD_UNIVERSAL_IDENTIFIER,
-  REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_INBOUND_MESSAGE_RECORD_ID_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_INBOUND_PROVIDER_MESSAGE_ID_FIELD_UNIVERSAL_IDENTIFIER,
-  REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_KIND_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_RECIPIENT_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_RECIPIENT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_REVISION_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SEND_BLOCKED_REASON_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SENT_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SOURCE_FIELD_UNIVERSAL_IDENTIFIER,
@@ -36,14 +43,19 @@ enum ReplyDraftSource {
   TEMPLATE = 'TEMPLATE',
 }
 
+enum ReplyDraftKind {
+  FIRST_MESSAGE = 'FIRST_MESSAGE',
+  REPLY = 'REPLY',
+}
+
 export default defineObject({
   universalIdentifier: REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
   nameSingular: 'myahInstagramReplyDraft',
   namePlural: 'myahInstagramReplyDrafts',
-  labelSingular: 'Myah Instagram reply draft',
-  labelPlural: 'Myah Instagram reply drafts',
+  labelSingular: 'Myah Instagram message draft',
+  labelPlural: 'Myah Instagram message drafts',
   description:
-    'Drafted Instagram reply awaiting human review. Approval never auto-sends; a separate explicit send action is required.',
+    'Instagram message draft awaiting human review. Approval never auto-sends; a separate explicit send action is required.',
   icon: 'IconMessagePlus',
   labelIdentifierFieldMetadataUniversalIdentifier:
     REPLY_DRAFT_TITLE_FIELD_UNIVERSAL_IDENTIFIER,
@@ -61,6 +73,29 @@ export default defineObject({
       label: 'Body',
       name: 'body',
       description: 'Reply text to review before explicit send.',
+    },
+    {
+      universalIdentifier: REPLY_DRAFT_KIND_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.SELECT,
+      label: 'Kind',
+      name: 'kind',
+      defaultValue: `'${ReplyDraftKind.REPLY}'`,
+      options: [
+        {
+          id: '391098f4-d2a7-4969-9352-9f24103dd12c',
+          value: ReplyDraftKind.FIRST_MESSAGE,
+          label: 'First message',
+          position: 0,
+          color: 'blue',
+        },
+        {
+          id: '560e4db8-2875-432c-8131-f14cf59395df',
+          value: ReplyDraftKind.REPLY,
+          label: 'Reply',
+          position: 1,
+          color: 'gray',
+        },
+      ],
     },
     {
       universalIdentifier: REPLY_DRAFT_STATUS_FIELD_UNIVERSAL_IDENTIFIER,
@@ -196,8 +231,48 @@ export default defineObject({
         'Reason a draft cannot be sent, such as a closed Instagram reply window.',
     },
     {
+      universalIdentifier: REPLY_DRAFT_CREATOR_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RELATION,
+      label: 'Creator',
+      name: 'creator',
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        CREATOR_DRAFTS_FIELD_UNIVERSAL_IDENTIFIER,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'creatorId',
+      },
+    },
+    {
       universalIdentifier:
-        REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+        REPLY_DRAFT_RECIPIENT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      label: 'Recipient username',
+      name: 'recipientUsername',
+      isNullable: true,
+      defaultValue: null,
+    },
+    {
+      universalIdentifier:
+        REPLY_DRAFT_RECIPIENT_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      label: 'Recipient provider ID',
+      name: 'recipientProviderId',
+      isNullable: true,
+      defaultValue: null,
+    },
+    {
+      universalIdentifier: REPLY_DRAFT_REVISION_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.NUMBER,
+      label: 'Revision',
+      name: 'revision',
+      defaultValue: 1,
+    },
+    {
+      universalIdentifier: REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.RELATION,
       label: 'Conversation',
       name: 'conversation',

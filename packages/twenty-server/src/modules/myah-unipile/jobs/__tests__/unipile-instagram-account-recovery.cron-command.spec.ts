@@ -1,5 +1,11 @@
+import {
+  MessageQueue,
+  PROCESSOR_METADATA,
+} from 'src/engine/core-modules/message-queue/message-queue.constants';
+
 import { UNIPILE_INSTAGRAM_ACCOUNT_RECOVERY_CRON_PATTERN } from 'src/modules/myah-unipile/constants/unipile-instagram-account-recovery-cron-pattern.constant';
 import { UnipileInstagramAccountRecoveryJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.job';
+import { UnipileInstagramWebhookReconciliationJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-webhook-reconciliation.job';
 
 type UnipileInstagramAccountRecoveryCronCommand = {
   run: () => Promise<void>;
@@ -40,7 +46,7 @@ describe('UnipileInstagramAccountRecoveryCronCommand', () => {
     ).toMatchObject({ name: 'cron:unipile-instagram-account-recovery' });
   });
 
-  it('registers exactly one five-minute recovery cron job', async () => {
+  it('registers five-minute account recovery and webhook reconciliation on its cron queue', async () => {
     const recoveryCronCommandModule = loadRecoveryCronCommandModule();
 
     expect(recoveryCronCommandModule).toBeDefined();
@@ -67,8 +73,8 @@ describe('UnipileInstagramAccountRecoveryCronCommand', () => {
       messageQueueService.addCron.mock.invocationCallOrder[0],
     );
 
-    expect(messageQueueService.addCron).toHaveBeenCalledTimes(1);
-    expect(messageQueueService.addCron).toHaveBeenCalledWith({
+    expect(messageQueueService.addCron).toHaveBeenCalledTimes(2);
+    expect(messageQueueService.addCron).toHaveBeenNthCalledWith(1, {
       jobName: UnipileInstagramAccountRecoveryJob.name,
       data: undefined,
       options: {
@@ -77,6 +83,21 @@ describe('UnipileInstagramAccountRecoveryCronCommand', () => {
         },
       },
     });
+    expect(messageQueueService.addCron).toHaveBeenNthCalledWith(2, {
+      jobName: UnipileInstagramWebhookReconciliationJob.name,
+      data: undefined,
+      options: {
+        repeat: {
+          pattern: UNIPILE_INSTAGRAM_ACCOUNT_RECOVERY_CRON_PATTERN,
+        },
+      },
+    });
+    expect(
+      Reflect.getMetadata(
+        PROCESSOR_METADATA,
+        UnipileInstagramWebhookReconciliationJob,
+      ),
+    ).toMatchObject({ queueName: MessageQueue.cronQueue });
   });
 
   it('does not add the recovery cron while Unipile Instagram is disabled', async () => {

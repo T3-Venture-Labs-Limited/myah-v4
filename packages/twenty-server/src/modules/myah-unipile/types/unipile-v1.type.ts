@@ -137,6 +137,11 @@ export type UnipileInstagramMessage = {
   senderId: string;
   text: string | null;
   timestamp: string | null;
+  seen: boolean;
+  delivered: boolean;
+  hidden: boolean;
+  deleted: boolean;
+  isEvent: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
 };

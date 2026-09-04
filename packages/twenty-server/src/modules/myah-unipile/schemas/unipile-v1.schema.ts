@@ -67,6 +67,11 @@ export const unipileChatListSchema = z.object({
   cursor: z.string().nullable(),
 });
 
+const unipileBinaryBooleanSchema = z
+  .union([z.boolean(), z.literal(0), z.literal(1)])
+  .nullish()
+  .transform((value) => value === true || value === 1);
+
 export const unipileInstagramMessageSchema = z.object({
   object: z.literal('Message'),
   id: z.string(),
@@ -76,6 +81,11 @@ export const unipileInstagramMessageSchema = z.object({
   text: z.string().nullable(),
   attachments: z.array(z.unknown()),
   timestamp: z.string().nullable(),
+  seen: unipileBinaryBooleanSchema,
+  delivered: unipileBinaryBooleanSchema,
+  hidden: unipileBinaryBooleanSchema,
+  deleted: unipileBinaryBooleanSchema,
+  is_event: unipileBinaryBooleanSchema,
 });
 
 export const unipileMessageListSchema = z.object({

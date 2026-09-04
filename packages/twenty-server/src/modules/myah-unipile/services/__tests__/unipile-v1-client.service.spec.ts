@@ -92,6 +92,11 @@ type UnipileInstagramMessage = {
   senderId: string;
   text: string | null;
   timestamp: string | null;
+  seen: boolean;
+  delivered: boolean;
+  hidden: boolean;
+  deleted: boolean;
+  isEvent: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
 };
@@ -993,6 +998,11 @@ describe('UnipileV1ClientService', () => {
                   },
                 ],
                 timestamp: '2026-09-03T12:15:00.000Z',
+                seen: 1,
+                delivered: 1,
+                hidden: 0,
+                deleted: 0,
+                is_event: 0,
               },
               {
                 object: 'Message',
@@ -1032,6 +1042,11 @@ describe('UnipileV1ClientService', () => {
           senderId: 'instagram-user-456',
           text: null,
           timestamp: '2026-09-03T12:15:00.000Z',
+          seen: true,
+          delivered: true,
+          hidden: false,
+          deleted: false,
+          isEvent: false,
           hasAttachments: true,
           attachmentCount: 1,
         },
@@ -1042,6 +1057,11 @@ describe('UnipileV1ClientService', () => {
           senderId: 'instagram-user-789',
           text: 'Synthetic Instagram reply',
           timestamp: null,
+          seen: false,
+          delivered: false,
+          hidden: false,
+          deleted: false,
+          isEvent: false,
           hasAttachments: false,
           attachmentCount: 0,
         },
@@ -1179,6 +1199,11 @@ describe('UnipileV1ClientService', () => {
               },
             ],
             timestamp: '2026-09-03T12:15:00.000Z',
+            seen: 0,
+            delivered: 1,
+            hidden: 1,
+            deleted: 0,
+            is_event: 0,
           }),
       });
     });
@@ -1208,6 +1233,11 @@ describe('UnipileV1ClientService', () => {
       senderId: 'instagram-user-456',
       text: null,
       timestamp: '2026-09-03T12:15:00.000Z',
+      seen: false,
+      delivered: true,
+      hidden: true,
+      deleted: false,
+      isEvent: false,
       hasAttachments: true,
       attachmentCount: 1,
     });
