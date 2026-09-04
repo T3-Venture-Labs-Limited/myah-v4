@@ -4,6 +4,7 @@ import {
   buildMyahBrandBrainLinkStandardFlatObjectMetadata,
   buildMyahBrandBrainPageStandardFlatObjectMetadata,
   buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata,
+  buildMyahCampaignAccountStandardFlatObjectMetadata,
   buildMyahCampaignCreatorListStandardFlatObjectMetadata,
   buildMyahCampaignCreatorListSourceStandardFlatObjectMetadata,
   buildMyahCreatorListStandardFlatObjectMetadata,
@@ -875,6 +876,7 @@ export const STANDARD_FLAT_OBJECT_METADATA_BUILDERS_BY_OBJECT_NAME = {
   outreachSequence: buildMyahOutreachSequenceStandardFlatObjectMetadata,
   outreachStep: buildMyahOutreachStepStandardFlatObjectMetadata,
   promotedAsset: buildMyahPromotedAssetStandardFlatObjectMetadata,
+  campaignAccount: buildMyahCampaignAccountStandardFlatObjectMetadata,
   campaignCreator: buildMyahCampaignCreatorStandardFlatObjectMetadata,
   campaignCreatorList: buildMyahCampaignCreatorListStandardFlatObjectMetadata,
   campaignCreatorListSource:

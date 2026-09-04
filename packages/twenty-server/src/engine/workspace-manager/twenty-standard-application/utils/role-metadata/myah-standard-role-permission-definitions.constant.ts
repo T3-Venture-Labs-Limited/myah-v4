@@ -96,6 +96,11 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
   buildReadOnlyObjectPermissionDefinition({
     roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
     objectMetadataUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.campaignAccount.universalIdentifier,
+  }),
+  buildReadOnlyObjectPermissionDefinition({
+    roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+    objectMetadataUniversalIdentifier:
       MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
   }),
   buildReadOnlyObjectPermissionDefinition({

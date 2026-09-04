@@ -406,6 +406,25 @@ export const buildMyahCampaignCreatorStandardFlatObjectMetadata = (
     },
   });
 
+export const buildMyahCampaignAccountStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'campaignAccount',
+    context: {
+      universalIdentifier: '5999e4dd-01a4-5ef5-8c95-754bf079defb',
+      nameSingular: 'campaignAccount',
+      namePlural: 'campaignAccounts',
+      labelSingular: 'Campaign Account',
+      labelPlural: 'Campaign Accounts',
+      description: 'A workspace email account linked to a campaign',
+      icon: 'IconMail',
+      isSearchable: false,
+      labelIdentifierFieldMetadataName: 'id',
+    },
+  });
+
 export const buildMyahCampaignStandardFlatObjectMetadata = (
   args: ObjectArgs,
 ): FlatObjectMetadata =>
@@ -1777,6 +1796,23 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        campaignAccountId: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'campaignAccountId',
+            type: FieldMetadataType.TEXT,
+            label: 'Campaign account ID',
+            description: 'Campaign account ID',
+            icon: 'IconMail',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         senderEmail: createMyahStandardFieldFlatMetadata({
           objectName: 'outreachAction',
           workspaceId: args.workspaceId,
@@ -2334,6 +2370,115 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             targetFieldName: 'promotedAsset',
             morphId: null,
             settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'campaignAccount':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        campaign: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignAccount',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaign',
+            label: 'Campaign',
+            description: 'Campaign',
+            icon: 'IconTargetArrow',
+            targetObjectName: 'campaign',
+            targetFieldName: 'campaignAccounts',
+            morphId: null,
+            isNullable: false,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.CASCADE,
+              joinColumnName: 'campaignId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        channel: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignAccount',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'channel',
+            type: FieldMetadataType.SELECT,
+            label: 'Channel',
+            description: 'Channel',
+            icon: 'IconMail',
+            isNullable: false,
+            defaultValue: "'EMAIL'",
+            options: [
+              {
+                id: '09ea1008-3c89-5d22-a546-35944756caeb',
+                value: 'EMAIL',
+                label: 'Email',
+                color: 'blue',
+                position: 0,
+              },
+            ],
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        connectedAccountId: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignAccount',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'connectedAccountId',
+            type: FieldMetadataType.TEXT,
+            label: 'Connected account ID',
+            description: 'Connected account ID',
+            icon: 'IconMail',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        messageChannelId: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignAccount',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'messageChannelId',
+            type: FieldMetadataType.TEXT,
+            label: 'Message channel ID',
+            description: 'Message channel ID',
+            icon: 'IconMail',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        isDefault: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignAccount',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'isDefault',
+            type: FieldMetadataType.BOOLEAN,
+            label: 'Default',
+            description: 'Whether this linked account is the campaign default',
+            icon: 'IconCircleCheck',
+            isNullable: false,
+            defaultValue: false,
           },
           standardObjectMetadataRelatedEntityIds:
             args.standardObjectMetadataRelatedEntityIds,
@@ -3091,6 +3236,26 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             description: 'Creator Lists attached to this Campaign',
             icon: 'IconList',
             targetObjectName: 'campaignCreatorList',
+            targetFieldName: 'campaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignAccounts: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignAccounts',
+            label: 'Campaign accounts',
+            description: 'Workspace accounts linked to this Campaign',
+            icon: 'IconMail',
+            targetObjectName: 'campaignAccount',
             targetFieldName: 'campaign',
             morphId: null,
             settings: { relationType: RelationType.ONE_TO_MANY },

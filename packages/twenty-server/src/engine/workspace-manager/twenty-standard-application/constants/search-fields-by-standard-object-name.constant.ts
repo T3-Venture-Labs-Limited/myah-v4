@@ -10,6 +10,7 @@ export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
   brandBrainPage: [],
   brandBrainUpdateProposal: [],
   campaign: [{ name: 'name', type: FieldMetadataType.TEXT }],
+  campaignAccount: [],
   campaignCreator: [],
   campaignCreatorList: [],
   campaignCreatorListSource: [],

@@ -81,6 +81,7 @@ const STANDARD_FLAT_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   outreachSequence: buildMyahStandardFlatFieldMetadatas,
   outreachStep: buildMyahStandardFlatFieldMetadatas,
   promotedAsset: buildMyahStandardFlatFieldMetadatas,
+  campaignAccount: buildMyahStandardFlatFieldMetadatas,
   campaignCreator: buildMyahStandardFlatFieldMetadatas,
   campaignCreatorList: buildMyahStandardFlatFieldMetadatas,
   campaignCreatorListSource: buildMyahStandardFlatFieldMetadatas,
