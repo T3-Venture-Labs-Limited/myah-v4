@@ -197,10 +197,9 @@ describe('CampaignAccountService', () => {
     );
   });
 
-  it('rejects foreign, private, archived, unsupported, ambiguous, invalid-address, and duplicate account links', async () => {
+  it('rejects foreign, archived, unsupported, ambiguous, invalid-address, and duplicate account links', async () => {
     const scenarios: Array<{ account: Row; channels?: Row[] }> = [
       { account: connectedAccount({ workspaceId: otherWorkspaceId }) },
-      { account: connectedAccount({ visibility: 'user' }) },
       { account: connectedAccount({ archivedAt: new Date() }) },
       {
         account: connectedAccount({
@@ -349,16 +348,121 @@ describe('CampaignAccountService', () => {
     expect(await harness.service.list(campaignId, authContext)).toEqual([
       expect.objectContaining({ id: 'first', isDefault: false }),
     ]);
+
+    await harness.service.link(
+      { campaignId, connectedAccountId: secondAccountId },
+      authContext,
+    );
+    expect(await harness.service.list(campaignId, authContext)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'first', isDefault: false }),
+        expect.objectContaining({
+          connectedAccountId: secondAccountId,
+          isDefault: false,
+        }),
+      ]),
+    );
   });
 
-  it('does not expose private accounts as candidates', async () => {
-    const harness = createHarness({
+  it('allows every workspace account regardless of visibility for Campaign candidates, links, and defaults', async () => {
+    const candidateHarness = createHarness({
       connectedAccounts: [connectedAccount({ visibility: 'user' })],
     });
-
     await expect(
-      harness.service.candidates(campaignId, authContext),
-    ).resolves.toEqual([]);
+      candidateHarness.service.candidates(campaignId, authContext),
+    ).resolves.toEqual([
+      expect.objectContaining({ connectedAccountId: accountId }),
+    ]);
+
+    const linkHarness = createHarness({
+      connectedAccounts: [connectedAccount({ visibility: 'user' })],
+    });
+    await expect(
+      linkHarness.service.link(
+        { campaignId, connectedAccountId: accountId },
+        authContext,
+      ),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        connectedAccountId: accountId,
+        isDefault: true,
+      }),
+    ]);
+
+    const defaultHarness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'default',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+      ],
+      connectedAccounts: [connectedAccount({ visibility: 'user' })],
+    });
+    await expect(
+      defaultHarness.service.resolveDefaultEmailAccount(
+        campaignId,
+        workspaceId,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ id: 'default' }));
+  });
+
+  it('does not default a newly linked account when an active non-default link exists', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'existing',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: false,
+        },
+      ],
+      connectedAccounts: [
+        connectedAccount(),
+        connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+    });
+
+    await harness.service.link(
+      { campaignId, connectedAccountId: secondAccountId },
+      authContext,
+    );
+
+    expect(
+      harness.workspaceRepositories.campaignAccount.findOne,
+    ).toHaveBeenNthCalledWith(
+      2,
+      {
+        where: {
+          campaignId,
+          channel: 'EMAIL',
+          deletedAt: IsNull(),
+        },
+      },
+      expect.anything(),
+    );
+    expect(harness.rows.campaignAccount).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'existing', isDefault: false }),
+        expect.objectContaining({
+          connectedAccountId: secondAccountId,
+          isDefault: false,
+        }),
+      ]),
+    );
   });
 
   it('fails closed without a single active linked default and requires transport sendability', async () => {
@@ -426,26 +530,6 @@ describe('CampaignAccountService', () => {
     expect(
       authFailed.messageOutboundService.assertConnectedAccountSendable,
     ).not.toHaveBeenCalled();
-
-    const privateAccount = createHarness({
-      campaignAccounts: [
-        {
-          id: 'default',
-          campaignId,
-          connectedAccountId: accountId,
-          messageChannelId: channelId,
-          channel: 'EMAIL',
-          isDefault: true,
-        },
-      ],
-      connectedAccounts: [connectedAccount({ visibility: 'user' })],
-    });
-    await expect(
-      privateAccount.service.resolveDefaultEmailAccount(
-        campaignId,
-        workspaceId,
-      ),
-    ).rejects.toThrow('unavailable');
 
     const transportRejected = createHarness({
       campaignAccounts: [

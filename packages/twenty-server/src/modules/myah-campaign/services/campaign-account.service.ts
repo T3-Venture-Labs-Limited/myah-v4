@@ -78,10 +78,7 @@ export class CampaignAccountService {
       await this.assertCampaign(campaignId, authContext);
       const [accounts, links] = await Promise.all([
         this.connectedAccountRepository.find({
-          where: {
-            workspaceId: authContext.workspace.id,
-            visibility: 'workspace',
-          },
+          where: { workspaceId: authContext.workspace.id },
         }),
         this.campaignAccountRepository(authContext).then((repository) =>
           repository.find({ where: { campaignId, channel: 'EMAIL' } }),
@@ -127,7 +124,6 @@ export class CampaignAccountService {
         where: {
           id: input.connectedAccountId,
           workspaceId: authContext.workspace.id,
-          visibility: 'workspace',
         },
       });
       if (
@@ -158,12 +154,12 @@ export class CampaignAccountService {
         )
       )
         throw new Error('Connected email account is already linked');
-      const hasDefault = await campaignAccounts.findOne(
+      const hasActiveEmailLink = await campaignAccounts.findOne(
         {
           where: {
             campaignId: input.campaignId,
             channel: 'EMAIL',
-            isDefault: true,
+            deletedAt: IsNull(),
           },
         },
         manager,
@@ -174,7 +170,7 @@ export class CampaignAccountService {
           connectedAccountId: account.id,
           messageChannelId: channel.id,
           channel: 'EMAIL',
-          isDefault: !hasDefault,
+          isDefault: !hasActiveEmailLink,
         }),
         undefined,
         manager,
@@ -287,7 +283,6 @@ export class CampaignAccountService {
         where: {
           id: link.connectedAccountId,
           workspaceId,
-          visibility: 'workspace',
         },
       });
       if (
