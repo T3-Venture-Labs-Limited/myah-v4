@@ -13,16 +13,22 @@ describe('AdminPanelManagedProviderBillingService', () => {
   const workspaceId = '11111111-1111-4111-8111-111111111111';
   const operatorId = '22222222-2222-4222-8222-222222222222';
 
-  const createConfig = (fundingWorkspaceIds = [workspaceId]) => ({
+  const createConfig = (
+    fundingWorkspaceIds = [workspaceId],
+    managedOpenRouterEnabled = true,
+    metronomeEnabled = true,
+  ) => ({
     get: jest.fn((key: string) => {
       const values: Record<string, unknown> = {
         MANAGED_OPENROUTER_CREDIT_PRODUCT_ID: 'credit-product-id',
         MANAGED_OPENROUTER_CHARGE_PRODUCT_ID: 'charge-product-id',
         MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: fundingWorkspaceIds,
+        MANAGED_OPENROUTER_ENABLED: managedOpenRouterEnabled,
         MANAGED_OPENROUTER_GRANT_DAILY_ACTION_LIMIT: 20,
         MANAGED_OPENROUTER_GRANT_OPERATOR_USER_IDS: [operatorId],
         MANAGED_OPENROUTER_MAX_GRANT_CENTS: 1_000_000,
         MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS: 30 * 24 * 60 * 60 * 1000,
+        METRONOME_ENABLED: metronomeEnabled,
       };
 
       return values[key];
@@ -190,6 +196,65 @@ describe('AdminPanelManagedProviderBillingService', () => {
       metronomeWorkspaceCustomerService.ensureWorkspaceCustomer,
     ).toHaveBeenCalledWith(wildcardWorkspaceId);
   });
+
+  it.each([
+    {
+      disabledDependency: 'managed OpenRouter',
+      managedOpenRouterEnabled: false,
+      metronomeEnabled: true,
+    },
+    {
+      disabledDependency: 'Metronome',
+      managedOpenRouterEnabled: true,
+      metronomeEnabled: false,
+    },
+  ])(
+    'rejects the wildcard allowlist when $disabledDependency is disabled',
+    async ({ managedOpenRouterEnabled, metronomeEnabled }) => {
+      const metronomeClientService = { createCustomerCredit: jest.fn() };
+      const metronomeWorkspaceCustomerService = {
+        ensureWorkspaceContract: jest.fn(),
+        ensureWorkspaceCustomer: jest.fn(),
+      };
+      const fundingJournalService = {
+        createPendingRateLimited: jest.fn(),
+      };
+      const service = new AdminPanelManagedProviderBillingService(
+        metronomeClientService as unknown as MetronomeClientService,
+        metronomeWorkspaceCustomerService as unknown as MetronomeWorkspaceCustomerService,
+        createConfig(
+          ['*'],
+          managedOpenRouterEnabled,
+          metronomeEnabled,
+        ) as unknown as TwentyConfigService,
+        fundingJournalService as unknown as ManagedProviderFundingJournalService,
+      );
+
+      await expect(
+        service.grantCredit(
+          {
+            amountCents: 5_000,
+            endingBefore: new Date('2026-08-01T00:00:00.000Z'),
+            idempotencyKey: 'disabled-wildcard-grant',
+            reason: 'wildcard eligibility',
+            workspaceId: '33333333-3333-4333-8333-333333333333',
+          },
+          operatorId,
+        ),
+      ).rejects.toThrow(
+        'Workspace is not eligible for managed provider funding',
+      );
+      expect(
+        fundingJournalService.createPendingRateLimited,
+      ).not.toHaveBeenCalled();
+      expect(
+        metronomeWorkspaceCustomerService.ensureWorkspaceCustomer,
+      ).not.toHaveBeenCalled();
+      expect(
+        metronomeClientService.createCustomerCredit,
+      ).not.toHaveBeenCalled();
+    },
+  );
 
   it('returns immutable journal facts on an exact replay', async () => {
     const replayedAt = new Date('2026-07-19T10:00:00.000Z');

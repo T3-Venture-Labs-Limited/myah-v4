@@ -385,6 +385,8 @@ export class AdminPanelManagedProviderBillingService {
     );
 
     if (
+      this.twentyConfigService.get('METRONOME_ENABLED') !== true ||
+      this.twentyConfigService.get('MANAGED_OPENROUTER_ENABLED') !== true ||
       !isManagedProviderWorkspaceAllowed({
         allowedWorkspaceIds,
         workspaceId,
