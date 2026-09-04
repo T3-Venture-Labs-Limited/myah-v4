@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `~/.skills/` the non-discovered personal skill library, give this repository an explicit local skill set, and leave Hermes skills unchanged.
+**Goal:** Make `~/.skills/` the non-discovered personal skill library, give this repository an explicit local skill set, retain Hermes’s non-cmux skills independently, and remove cmux skills everywhere.
 
 **Architecture:** Preserve the complete Pi global library by copying it to `~/.skills/` and validating every file hash before retiring `~/.agents/skills/`. Maintain this repository’s independently editable skill copies in `.agents/skills/`, and record the approved local inventory in `.agents/SKILLS.md`. Hermes remains isolated because it loads from `~/.hermes/skills/` and `~/.hermes/profiles/*/skills/`.
 
@@ -49,7 +49,7 @@ Run:
 set -euo pipefail
 (
   cd "$HOME/.agents/skills"
-  find . -type f -print0 | sort -z | xargs -0 sha256sum
+  find . -type f ! -path './cmux*' -print0 | sort -z | xargs -0 sha256sum
 ) > /tmp/project-skill-scoping-before.sha256
 wc -l /tmp/project-skill-scoping-before.sha256
 ```
@@ -61,7 +61,7 @@ Expected: a non-zero file count, including one `SKILL.md` entry per global skill
 Run:
 ```bash
 set -euo pipefail
-find "$HOME/.agents/skills" -name SKILL.md -type f | sort > /tmp/project-skill-scoping-before-skill-paths.txt
+find "$HOME/.agents/skills" -name SKILL.md -type f ! -path "$HOME/.agents/skills/cmux*" | sort > /tmp/project-skill-scoping-before-skill-paths.txt
 wc -l /tmp/project-skill-scoping-before-skill-paths.txt
 ```
 
@@ -75,12 +75,17 @@ set -euo pipefail
 hermes skills list > /tmp/project-skill-scoping-hermes-before.txt
 (
   cd "$HOME/.hermes"
-  { printf '%s  %s\n' "$(sha256sum config.yaml | cut -d' ' -f1)" config.yaml; find skills profiles -type f -print0 | sort -z | xargs -0 sha256sum; }
+  {
+    test -f config.yaml && printf '%s\0' config.yaml
+    find skills -type f -print0
+    find profiles -mindepth 2 -maxdepth 2 -type f -name config.yaml -print0
+    find profiles -type d -name sandboxes -prune -o -path '*/skills/*' -type f -print0
+  } | sort -z | xargs -0 sha256sum
 ) > /tmp/project-skill-scoping-hermes-before.sha256
 wc -l /tmp/project-skill-scoping-hermes-before.txt /tmp/project-skill-scoping-hermes-before.sha256
 ```
 
-Expected: both files are non-empty. The hash snapshot covers Hermes’s active `config.yaml`, default skill tree, and every profile-specific skill tree.
+Expected: both files are non-empty. The hash snapshot covers Hermes’s active `config.yaml`, default skill tree, and each profile’s `config.yaml` and `skills/` tree. It intentionally excludes `profiles/*/sandboxes/` and other mutable runtime data.
 
 ### Task 2: Migrate Pi’s global library without losing content
 
@@ -110,7 +115,7 @@ Run:
 ```bash
 set -euo pipefail
 mkdir -p "$HOME/.skills"
-rsync -a --checksum "$HOME/.agents/skills/" "$HOME/.skills/"
+rsync -a --checksum --exclude='cmux*' "$HOME/.agents/skills/" "$HOME/.skills/"
 ```
 
 Expected: `~/.skills/` contains the complete skill directory tree while `~/.agents/skills/` remains unchanged.
@@ -134,12 +139,44 @@ Expected: every line ends in `OK`; the two counts match exactly.
 Run:
 ```bash
 set -euo pipefail
-diff -qr "$HOME/.agents/skills" "$HOME/.skills"
+rsync -nrc --delete --exclude='cmux*' "$HOME/.agents/skills/" "$HOME/.skills/"
 ```
 
-Expected: no output and exit status `0`. This compares the post-copy source and destination trees, including files, directories, and any entries created while the copy was running.
+Expected: no output and exit status `0`. This compares the post-copy source and destination trees while excluding intentionally deleted `cmux*` skills.
 
-- [ ] **Step 4: Preserve a rollback copy and retire the Pi global discovery directory**
+- [ ] **Step 4: Preserve real secondary Pi skills, delete cmux, and clear secondary discovery**
+
+Run:
+```bash
+set -euo pipefail
+for skill_dir in "$HOME/.pi/agent/skills"/*; do
+  test -e "$skill_dir" || test -L "$skill_dir" || continue
+  skill_name="$(basename "$skill_dir")"
+  case "$skill_name" in
+    cmux*) ;;
+    *)
+      if test -d "$skill_dir" && test ! -L "$skill_dir"; then
+        test ! -e "$HOME/.skills/$skill_name"
+        cp -a "$skill_dir" "$HOME/.skills/"
+      fi
+      ;;
+  esac
+done
+find "$HOME/.agents/skills" -mindepth 1 -maxdepth 1 -type d -name 'cmux*' -exec rm -rf {} +
+find "$HOME/.pi/agent/skills" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+test -z "$(find "$HOME/.agents/skills" -mindepth 1 -maxdepth 1 -type d -name 'cmux*' -print -quit)"
+test -z "$(find "$HOME/.pi/agent/skills" -mindepth 1 -maxdepth 1 -print -quit)"
+```
+
+Expected: real non-cmux secondary skills are preserved in `~/.skills/`, no `cmux*` directory is archived, and `~/.pi/agent/skills/` is empty.
+
+- [ ] **Step 5: Materialize Hermes aliases and disable package-supplied Pi skills**
+
+Before retiring `~/.agents/skills`, replace each non-cmux symlink in `~/.hermes/skills/` with an independent copy from the source library. Leave an existing real Hermes directory unchanged when its name collides. Remove `cmux*` aliases. Preserve package-only skills in `~/.skills/`, then convert the `npm:@dietrichgebert/ponytail` entry in `~/.pi/agent/settings.json` to object form with `"skills": []`; omitted resource keys keep its extensions enabled. Back up the settings file before editing it.
+
+Expected: Hermes no longer depends on `~/.agents/skills/`, cmux aliases are absent, and Pi packages expose no global skills.
+
+- [ ] **Step 6: Preserve a rollback copy and retire the Pi global discovery directory**
 
 Run:
 ```bash
@@ -153,7 +190,7 @@ test -d "$HOME/.skills"
 
 Expected: Pi can no longer auto-discover the former global path, while the rollback copy and non-discovered source library both remain available.
 
-- [ ] **Step 5: Verify the rollback copy has the original hashes**
+- [ ] **Step 7: Verify the rollback copy has the original non-cmux hashes**
 
 Run:
 ```bash
@@ -374,6 +411,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 test ! -e "$HOME/.agents/skills"
 test -d "$HOME/.skills"
+test -z "$(find "$HOME/.pi/agent/skills" -mindepth 1 -maxdepth 1 -print -quit)"
 printf '%s\n' '{"id":"skills","type":"get_commands"}' \
   | pi --mode rpc --approve --no-session \
   > /tmp/project-skill-scoping-pi-commands.jsonl
@@ -414,28 +452,27 @@ NODE
 
 Expected: Pi’s machine-readable command metadata contains exactly the eleven approved skills, each loaded from this repository’s `.agents/skills/` path. This detects all automatic Pi discovery sources, not only `~/.agents/skills`.
 
-- [ ] **Step 4: Verify Hermes is unchanged at both the CLI and filesystem layers**
+- [ ] **Step 4: Verify Hermes retained every non-cmux skill independently**
 
 Run:
 ```bash
 set -euo pipefail
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT"
-hermes skills list > /tmp/project-skill-scoping-hermes-after.txt
-diff -u \
-  /tmp/project-skill-scoping-hermes-before.txt \
-  /tmp/project-skill-scoping-hermes-after.txt
 (
   cd "$HOME/.hermes"
-  { printf '%s  %s\n' "$(sha256sum config.yaml | cut -d' ' -f1)" config.yaml; find skills profiles -type f -print0 | sort -z | xargs -0 sha256sum; }
-) > /tmp/project-skill-scoping-hermes-after.sha256
-diff -u \
-  /tmp/project-skill-scoping-hermes-before.sha256 \
-  /tmp/project-skill-scoping-hermes-after.sha256
-test -d "$HOME/.hermes/skills"
+  sha256sum -c /tmp/project-skill-scoping-hermes-before.sha256
+) > /tmp/project-skill-scoping-hermes-protected-check.txt
+COLUMNS=300 hermes skills list > /tmp/project-skill-scoping-hermes-after.txt
+for source in "$HOME/.agents/skills.pre-project-scoping"/*/SKILL.md; do
+  name="$(basename "$(dirname "$source")")"
+  target="$HOME/.hermes/skills/$name"
+  test -d "$target"
+  test ! -L "$target"
+  grep -q "│ $name " /tmp/project-skill-scoping-hermes-after.txt
+done
+test -z "$(find "$HOME/.hermes/skills" -mindepth 1 -maxdepth 1 -name 'cmux*' -print -quit)"
 ```
 
-Expected: no diff and exit status `0`. If either the inventory or hash snapshot changes, restore `~/.agents/skills` from `~/.agents/skills.pre-project-scoping/` and investigate before continuing.
+Expected: Hermes config, profile skills, and pre-existing real files pass their original hashes; every retired non-cmux global skill remains listed through an ordinary directory in `~/.hermes/skills/`; cmux is absent.
 
 - [ ] **Step 5: Commit only the local project-skill changes**
 

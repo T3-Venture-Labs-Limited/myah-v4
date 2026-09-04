@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "metronome-best-practices": {
+      "source": "metronome-industries/ai",
+      "sourceType": "github",
+      "skillPath": "skills/metronome-best-practices/SKILL.md",
+      "computedHash": "effb8a4ec38802f0c49d502907b9e51b288db1b4810bff11ff95c6162f10d670"
+    },
+    "metronome-create-contract": {
+      "source": "metronome-industries/ai",
+      "sourceType": "github",
+      "skillPath": "skills/metronome-create-contract/SKILL.md",
+      "computedHash": "47cc02653ce2551b3caef3e999e9cce2a1c510fc60f9d820eb061609920ce1c1"
+    }
+  }
+}

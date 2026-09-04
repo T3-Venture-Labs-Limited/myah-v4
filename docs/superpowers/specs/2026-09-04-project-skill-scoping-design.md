@@ -2,17 +2,23 @@
 
 ## Goal
 
-Stop Pi from automatically loading the broad personal skill collection in this repository while preserving those skills for selective, visible, project-local use. Hermes must retain its existing default skills.
+Stop Pi from automatically loading the broad personal skill collection in this repository while preserving those skills for selective, visible, project-local use. Hermes must retain its existing non-cmux default skills; cmux skills are intentionally removed everywhere.
 
 ## Design
 
-1. Move the Pi global skill source from `~/.agents/skills/` to `~/.skills/`.
+1. Move the non-cmux Pi global skill source from `~/.agents/skills/` to `~/.skills/`.
    - `~/.skills/` is a source library, not a Pi discovery location.
-   - Preserve the full directory tree and file contents.
-   - Verify every migrated `SKILL.md` against the source before removing the old location.
+   - Preserve the full directory tree and file contents except `cmux*` skills, which are intentionally deleted.
+   - Verify every migrated non-cmux file against the source before removing the old location.
+   - Delete every `cmux*` skill from both `~/.agents/skills/` and `~/.pi/agent/skills/`; do not archive or copy those skills.
+   - Preserve any real non-symlink skill directory found in `~/.pi/agent/skills/` in `~/.skills/`, then empty `~/.pi/agent/skills/` so Pi has no global filesystem skill discovery source.
+   - Preserve skills supplied by global Pi packages in `~/.skills/`, then apply package resource filters (`"skills": []`) so those packages retain extensions but do not expose global skills.
 
-2. Do not modify `~/.hermes/skills/` or `~/.hermes/profiles/*/skills/`.
-   - Hermes loads its skills from those directories, independently of Pi's `~/.agents/skills/` discovery location.
+2. Preserve Hermes independently of Pi’s global discovery paths.
+   - Replace Hermes symlinks into `~/.agents/skills/` with independent copies under `~/.hermes/skills/` before retiring the source path.
+   - Keep existing real Hermes-specific skills when names collide.
+   - Do not modify profile-specific skills or Hermes configuration.
+   - Remove Hermes `cmux*` aliases intentionally.
 
 3. Keep independent copies—not symlinks—of selected skills under this repository's `.agents/skills/` directory. The local set is:
    - `metronome-best-practices`
