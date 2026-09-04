@@ -4,6 +4,8 @@ import {
   MessageChannelType,
 } from 'twenty-shared/types';
 
+import { IsNull } from 'typeorm';
+
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import {
   type ORMWorkspaceContext,
@@ -41,7 +43,14 @@ type Repository = {
 };
 
 const matches = (row: Row, where: Record<string, unknown>) =>
-  Object.entries(where).every(([key, value]) => row[key] === value);
+  Object.entries(where).every(([key, value]) =>
+    value &&
+    typeof value === 'object' &&
+    '_type' in value &&
+    value._type === 'isNull'
+      ? row[key] == null
+      : row[key] === value,
+  );
 
 const createRepository = (rows: Row[]): Repository => ({
   find: jest.fn(async ({ where }: { where?: Record<string, unknown> } = {}) =>
@@ -61,17 +70,13 @@ const createRepository = (rows: Row[]): Repository => ({
   }),
   update: jest.fn(
     async (where: Record<string, unknown>, patch: Record<string, unknown>) => {
-      const affected = rows.filter(
-        (row) => !row.deletedAt && matches(row, where),
-      );
+      const affected = rows.filter((row) => matches(row, where));
       affected.forEach((row) => Object.assign(row, patch));
       return { affected: affected.length };
     },
   ),
   softDelete: jest.fn(async (where: Record<string, unknown>) => {
-    const affected = rows.filter(
-      (row) => !row.deletedAt && matches(row, where),
-    );
+    const affected = rows.filter((row) => matches(row, where));
     affected.forEach((row) => {
       row.deletedAt = 'deleted';
     });
@@ -86,6 +91,8 @@ const connectedAccount = (overrides: Partial<Row> = {}): Row => ({
   handle: 'hello@brand.test',
   name: 'Brand sender',
   archivedAt: null,
+  authFailedAt: null,
+  visibility: 'workspace',
   accessToken: 'secret-token',
   refreshToken: 'secret-refresh-token',
   ...overrides,
@@ -190,9 +197,10 @@ describe('CampaignAccountService', () => {
     );
   });
 
-  it('rejects foreign, archived, unsupported, ambiguous, invalid-address, and duplicate account links', async () => {
+  it('rejects foreign, private, archived, unsupported, ambiguous, invalid-address, and duplicate account links', async () => {
     const scenarios: Array<{ account: Row; channels?: Row[] }> = [
       { account: connectedAccount({ workspaceId: otherWorkspaceId }) },
+      { account: connectedAccount({ visibility: 'user' }) },
       { account: connectedAccount({ archivedAt: new Date() }) },
       {
         account: connectedAccount({
@@ -320,7 +328,7 @@ describe('CampaignAccountService', () => {
       harness.workspaceRepositories.campaignAccount.update,
     ).toHaveBeenNthCalledWith(
       1,
-      { campaignId, channel: 'EMAIL', isDefault: true },
+      { campaignId, channel: 'EMAIL', isDefault: true, deletedAt: IsNull() },
       { isDefault: false },
       undefined,
       expect.anything(),
@@ -329,7 +337,7 @@ describe('CampaignAccountService', () => {
       harness.workspaceRepositories.campaignAccount.update,
     ).toHaveBeenNthCalledWith(
       2,
-      { id: 'second', campaignId, channel: 'EMAIL' },
+      { id: 'second', campaignId, channel: 'EMAIL', deletedAt: IsNull() },
       { isDefault: true },
       undefined,
       expect.anything(),
@@ -341,6 +349,16 @@ describe('CampaignAccountService', () => {
     expect(await harness.service.list(campaignId, authContext)).toEqual([
       expect.objectContaining({ id: 'first', isDefault: false }),
     ]);
+  });
+
+  it('does not expose private accounts as candidates', async () => {
+    const harness = createHarness({
+      connectedAccounts: [connectedAccount({ visibility: 'user' })],
+    });
+
+    await expect(
+      harness.service.candidates(campaignId, authContext),
+    ).resolves.toEqual([]);
   });
 
   it('fails closed without a single active linked default and requires transport sendability', async () => {
@@ -369,7 +387,7 @@ describe('CampaignAccountService', () => {
     await expect(
       noDefault.service.resolveDefaultEmailAccount(campaignId, workspaceId),
     ).rejects.toThrow();
-    const unhealthy = createHarness({
+    const unavailableChannel = createHarness({
       campaignAccounts: [
         {
           id: 'default',
@@ -383,8 +401,116 @@ describe('CampaignAccountService', () => {
       messageChannels: [messageChannel({ isSyncEnabled: false })],
     });
     await expect(
-      unhealthy.service.resolveDefaultEmailAccount(campaignId, workspaceId),
+      unavailableChannel.service.resolveDefaultEmailAccount(
+        campaignId,
+        workspaceId,
+      ),
     ).rejects.toThrow();
+
+    const authFailed = createHarness({
+      campaignAccounts: [
+        {
+          id: 'default',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+      ],
+      connectedAccounts: [connectedAccount({ authFailedAt: new Date() })],
+    });
+    await expect(
+      authFailed.service.resolveDefaultEmailAccount(campaignId, workspaceId),
+    ).rejects.toThrow('unavailable');
+    expect(
+      authFailed.messageOutboundService.assertConnectedAccountSendable,
+    ).not.toHaveBeenCalled();
+
+    const privateAccount = createHarness({
+      campaignAccounts: [
+        {
+          id: 'default',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+      ],
+      connectedAccounts: [connectedAccount({ visibility: 'user' })],
+    });
+    await expect(
+      privateAccount.service.resolveDefaultEmailAccount(
+        campaignId,
+        workspaceId,
+      ),
+    ).rejects.toThrow('unavailable');
+
+    const transportRejected = createHarness({
+      campaignAccounts: [
+        {
+          id: 'default',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+      ],
+    });
+    transportRejected.messageOutboundService.assertConnectedAccountSendable.mockRejectedValueOnce(
+      new Error('Transport sendability rejected'),
+    );
+    await expect(
+      transportRejected.service.resolveDefaultEmailAccount(
+        campaignId,
+        workspaceId,
+      ),
+    ).rejects.toThrow('Transport sendability rejected');
+  });
+
+  it('does not clear the active default when a stale request selects a removed account', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'active',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'removed',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+          deletedAt: 'deleted',
+        },
+      ],
+    });
+
+    await expect(
+      harness.service.setDefault(
+        { campaignId, campaignAccountId: 'removed' },
+        authContext,
+      ),
+    ).rejects.toThrow('not found');
+    expect(harness.rows.campaignAccount).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'active', isDefault: true }),
+        expect.objectContaining({ id: 'removed', isDefault: false }),
+      ]),
+    );
+    await expect(
+      harness.service.remove(
+        { campaignId, campaignAccountId: 'removed' },
+        authContext,
+      ),
+    ).rejects.toThrow('not found');
   });
 
   it('does not cross workspace boundaries', async () => {

@@ -7,7 +7,7 @@ import {
   MessageChannelType,
 } from 'twenty-shared/types';
 import { emailSchema } from 'twenty-shared/utils';
-import { type Repository } from 'typeorm';
+import { IsNull, type Repository } from 'typeorm';
 
 import {
   CampaignEmailAccountHealth,
@@ -42,6 +42,7 @@ type CampaignAccountRecord = {
   messageChannelId: string;
   channel: 'EMAIL';
   isDefault: boolean;
+  deletedAt: Date | null;
 };
 
 @Injectable()
@@ -77,7 +78,10 @@ export class CampaignAccountService {
       await this.assertCampaign(campaignId, authContext);
       const [accounts, links] = await Promise.all([
         this.connectedAccountRepository.find({
-          where: { workspaceId: authContext.workspace.id },
+          where: {
+            workspaceId: authContext.workspace.id,
+            visibility: 'workspace',
+          },
         }),
         this.campaignAccountRepository(authContext).then((repository) =>
           repository.find({ where: { campaignId, channel: 'EMAIL' } }),
@@ -123,6 +127,7 @@ export class CampaignAccountService {
         where: {
           id: input.connectedAccountId,
           workspaceId: authContext.workspace.id,
+          visibility: 'workspace',
         },
       });
       if (
@@ -191,8 +196,25 @@ export class CampaignAccountService {
       await this.assertCampaign(input.campaignId, authContext, manager);
       const campaignAccounts =
         await this.campaignAccountRepository(authContext);
+      const target = await campaignAccounts.findOne(
+        {
+          where: {
+            id: input.campaignAccountId,
+            campaignId: input.campaignId,
+            channel: 'EMAIL',
+            deletedAt: IsNull(),
+          },
+        },
+        manager,
+      );
+      if (!target) throw new Error('Campaign email account not found');
       await campaignAccounts.update(
-        { campaignId: input.campaignId, channel: 'EMAIL', isDefault: true },
+        {
+          campaignId: input.campaignId,
+          channel: 'EMAIL',
+          isDefault: true,
+          deletedAt: IsNull(),
+        },
         { isDefault: false },
         undefined,
         manager,
@@ -202,6 +224,7 @@ export class CampaignAccountService {
           id: input.campaignAccountId,
           campaignId: input.campaignId,
           channel: 'EMAIL',
+          deletedAt: IsNull(),
         },
         { isDefault: true },
         undefined,
@@ -231,6 +254,7 @@ export class CampaignAccountService {
           id: input.campaignAccountId,
           campaignId: input.campaignId,
           channel: 'EMAIL',
+          deletedAt: IsNull(),
         },
         manager,
       );
@@ -260,11 +284,16 @@ export class CampaignAccountService {
         throw new Error('Campaign has no unambiguous default email account');
       const link = defaults[0];
       const account = await this.connectedAccountRepository.findOne({
-        where: { id: link.connectedAccountId, workspaceId },
+        where: {
+          id: link.connectedAccountId,
+          workspaceId,
+          visibility: 'workspace',
+        },
       });
       if (
         !account ||
         account.archivedAt !== null ||
+        account.authFailedAt !== null ||
         !SUPPORTED_PROVIDERS.has(account.provider) ||
         !this.isEmail(account.handle)
       )
