@@ -128,8 +128,8 @@ const providerIconByName: Record<string, IconComponent> = {
 const providerIcon = (provider: string) =>
   providerIconByName[provider] ?? IconMail;
 
-const accountSummary = (account: CampaignEmailAccount) =>
-  `${account.label} (${account.senderEmail})`;
+const accountIdentifier = (account: CampaignEmailAccount) =>
+  account.senderEmail;
 
 export const MyahCampaignEmailAccounts = ({
   campaignId,
@@ -139,6 +139,8 @@ export const MyahCampaignEmailAccounts = ({
   const [accounts, setAccounts] = useState<CampaignEmailAccount[] | null>(null);
   const [removingAccount, setRemovingAccount] =
     useState<CampaignEmailAccount | null>(null);
+  const [removalTrigger, setRemovalTrigger] =
+    useState<HTMLButtonElement | null>(null);
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
   const { openModal, closeModal } = useModal();
   const navigateSettings = useNavigateSettings();
@@ -165,12 +167,18 @@ export const MyahCampaignEmailAccounts = ({
   const displayedAccounts =
     accounts ?? accountQuery.data?.campaignEmailAccounts ?? [];
   const candidates = candidatesQuery.data?.campaignEmailAccountCandidates ?? [];
-  const isLoading = accountQuery.loading || candidatesQuery.loading;
+  const isLoading = accountQuery.loading;
   const hasDefault = displayedAccounts.some((account) => account.isDefault);
   const defaultAccount = displayedAccounts.find((account) => account.isDefault);
 
   const applyResult = (result?: CampaignEmailAccount[]) => {
     if (result) setAccounts(result);
+  };
+
+  const refreshAccountQueries = () => {
+    void Promise.all([accountQuery.refetch(), candidatesQuery.refetch()]).catch(
+      () => undefined,
+    );
   };
 
   const handleLink = async (candidate: CampaignEmailAccount) => {
@@ -184,6 +192,7 @@ export const MyahCampaignEmailAccounts = ({
         },
       });
       applyResult(result.data?.linkCampaignEmailAccount);
+      refreshAccountQueries();
       enqueueSuccessSnackBar({ message: 'Email account linked.' });
     } catch {
       enqueueErrorSnackBar({ message: 'Email account could not be linked.' });
@@ -196,6 +205,7 @@ export const MyahCampaignEmailAccounts = ({
         variables: { input: { campaignId, campaignAccountId: account.id } },
       });
       applyResult(result.data?.setDefaultCampaignEmailAccount);
+      refreshAccountQueries();
       enqueueSuccessSnackBar({ message: 'Default email account updated.' });
     } catch {
       enqueueErrorSnackBar({
@@ -209,6 +219,13 @@ export const MyahCampaignEmailAccounts = ({
     openModal(removeModalId);
   };
 
+  const closeRemoval = () => {
+    setRemovingAccount(null);
+    closeModal(removeModalId);
+    removalTrigger?.focus();
+    setRemovalTrigger(null);
+  };
+
   const handleRemove = async () => {
     if (!removingAccount) return;
 
@@ -219,9 +236,9 @@ export const MyahCampaignEmailAccounts = ({
         },
       });
       applyResult(result.data?.removeCampaignEmailAccount);
+      refreshAccountQueries();
       enqueueSuccessSnackBar({ message: 'Email account removed.' });
-      setRemovingAccount(null);
-      closeModal(removeModalId);
+      closeRemoval();
     } catch {
       enqueueErrorSnackBar({ message: 'Email account could not be removed.' });
     }
@@ -242,22 +259,50 @@ export const MyahCampaignEmailAccounts = ({
                 disabled={linking}
               />
             }
+            containerType="neutral"
+            dropdownAriaLabel="Email account candidates"
             dropdownComponents={
-              <div aria-label="Email account candidates" role="menu">
-                {candidates.length === 0 ? (
+              <div>
+                {candidatesQuery.loading ? (
+                  <p aria-live="polite">Loading available email accounts…</p>
+                ) : null}
+                {!candidatesQuery.loading && candidatesQuery.error ? (
+                  <p role="alert">
+                    Available email accounts could not be loaded.
+                  </p>
+                ) : null}
+                {!candidatesQuery.loading &&
+                !candidatesQuery.error &&
+                candidates.length === 0 ? (
                   <p>No available email accounts.</p>
-                ) : (
-                  candidates.map((candidate) => (
-                    <Button
-                      ariaLabel={`Add ${accountSummary(candidate)}`}
-                      key={candidate.id}
-                      onClick={() => void handleLink(candidate)}
-                      title={`Add ${candidate.label}`}
-                      type="button"
-                      variant="tertiary"
-                    />
-                  ))
-                )}
+                ) : null}
+                {!candidatesQuery.loading && !candidatesQuery.error
+                  ? candidates.map((candidate) => {
+                      const isAlreadyLinked = displayedAccounts.some(
+                        (account) =>
+                          account.connectedAccountId ===
+                          candidate.connectedAccountId,
+                      );
+                      const isCandidateAvailable =
+                        candidate.health === 'AVAILABLE' && !isAlreadyLinked;
+
+                      return (
+                        <Button
+                          ariaLabel={`Add ${accountIdentifier(candidate)}`}
+                          disabled={linking || !isCandidateAvailable}
+                          key={candidate.id}
+                          onClick={() => void handleLink(candidate)}
+                          title={
+                            isCandidateAvailable
+                              ? `Add ${accountIdentifier(candidate)}`
+                              : `${accountIdentifier(candidate)} is unavailable`
+                          }
+                          type="button"
+                          variant="tertiary"
+                        />
+                      );
+                    })
+                  : null}
                 <Button
                   ariaLabel="Connect email account"
                   onClick={() => navigateSettings(SettingsPath.NewAccount)}
@@ -269,6 +314,8 @@ export const MyahCampaignEmailAccounts = ({
             }
             dropdownId={pickerDropdownId}
             dropdownPlacement="left-start"
+            dropdownRole="dialog"
+            renderClickableComponentAsChild
           />
         }
       >
@@ -289,12 +336,14 @@ export const MyahCampaignEmailAccounts = ({
         ) : null}
         {defaultAccount?.health === 'RECONNECT_REQUIRED' ? (
           <p role="alert">
-            Reconnect the default email account before sending.
+            Reconnect the default email account before sending. Email drafting
+            is paused until it is available.
           </p>
         ) : null}
         {defaultAccount?.health === 'UNAVAILABLE' ? (
           <p role="alert">
-            The default email account is unavailable before sending.
+            The default email account is unavailable. Email drafting is paused
+            until it is available.
           </p>
         ) : null}
         <StyledAccountTags aria-live="polite">
@@ -304,7 +353,7 @@ export const MyahCampaignEmailAccounts = ({
             return (
               <StyledAccountTag key={account.id}>
                 <Chip
-                  label={accountSummary(account)}
+                  label={accountIdentifier(account)}
                   leftComponent={
                     <ProviderIcon aria-label={`${account.provider} provider`} />
                   }
@@ -316,7 +365,7 @@ export const MyahCampaignEmailAccounts = ({
                   variant={ChipVariant.Static}
                 />
                 {account.health !== 'AVAILABLE' ? (
-                  <span aria-label={`${accountSummary(account)} health`}>
+                  <span aria-label={`${accountIdentifier(account)} health`}>
                     {account.health === 'RECONNECT_REQUIRED'
                       ? 'Reconnect required'
                       : 'Unavailable'}
@@ -324,7 +373,7 @@ export const MyahCampaignEmailAccounts = ({
                 ) : null}
                 {!account.isDefault ? (
                   <Button
-                    ariaLabel={`Make ${accountSummary(account)} default`}
+                    ariaLabel={`Make ${accountIdentifier(account)} default`}
                     disabled={settingDefault}
                     onClick={() => void handleSetDefault(account)}
                     title="Make default"
@@ -333,9 +382,12 @@ export const MyahCampaignEmailAccounts = ({
                   />
                 ) : null}
                 <LightIconButton
-                  aria-label={`Remove ${account.label}`}
+                  aria-label={`Remove ${accountIdentifier(account)}`}
                   Icon={IconX}
-                  onClick={() => openRemoval(account)}
+                  onClick={(event) => {
+                    setRemovalTrigger(event.currentTarget);
+                    openRemoval(account);
+                  }}
                 />
               </StyledAccountTag>
             );
@@ -347,21 +399,19 @@ export const MyahCampaignEmailAccounts = ({
         isClosable
         modal
         modalInstanceId={removeModalId}
-        onClose={() => setRemovingAccount(null)}
+        onClose={closeRemoval}
       >
         {removingAccount ? (
           <div aria-label="Confirm email account removal" role="alertdialog">
-            <h2>Remove {removingAccount.label}?</h2>
+            <h2>Remove {accountIdentifier(removingAccount)}?</h2>
             <p>
-              Removing the default account pauses email drafting. No replacement
-              will be selected automatically.
+              {removingAccount.isDefault
+                ? 'Removing the default account pauses email drafting. No replacement will be selected automatically.'
+                : 'Removing this email account does not change the default email account.'}
             </p>
             <Button
               ariaLabel="Cancel removal"
-              onClick={() => {
-                setRemovingAccount(null);
-                closeModal(removeModalId);
-              }}
+              onClick={closeRemoval}
               title="Cancel"
               type="button"
               variant="secondary"
