@@ -61,7 +61,7 @@ describe('SynchronizeMyahCampaignAccountMetadataCommand', () => {
     expect(providers).toContain(SynchronizeMyahCampaignAccountMetadataCommand);
   });
 
-  it('synchronizes Campaign account metadata through the source-controlled synchronizer', async () => {
+  it('synchronizes complete Campaign account metadata through the source-controlled synchronizer', async () => {
     const { command, synchronizeWorkspace } = buildCommand();
 
     await command.runOnWorkspace(args);
@@ -79,6 +79,9 @@ describe('SynchronizeMyahCampaignAccountMetadataCommand', () => {
       index: new Set([
         MYAH_STANDARD_OBJECTS.campaignAccount.indexes.campaignAccountUniqueIndex
           .universalIdentifier,
+      ]),
+      objectPermission: new Set([
+        '9dda7955-44b7-5ea0-ab63-6dc0630626e8',
       ]),
     });
   });
@@ -103,6 +106,9 @@ describe('SynchronizeMyahCampaignAccountMetadataCommand', () => {
       index: new Set([
         MYAH_STANDARD_OBJECTS.campaignAccount.indexes.campaignAccountUniqueIndex
           .universalIdentifier,
+      ]),
+      objectPermission: new Set([
+        '9dda7955-44b7-5ea0-ab63-6dc0630626e8',
       ]),
     });
   });

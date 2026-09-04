@@ -6,6 +6,7 @@ import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
+import { MYAH_CAMPAIGN_ACCOUNT_READ_ONLY_OBJECT_PERMISSION_UNIVERSAL_IDENTIFIER } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 @RegisteredWorkspaceCommand('2.20.0', 1788537600000)
@@ -54,6 +55,9 @@ export class SynchronizeMyahCampaignAccountMetadataCommand extends ActiveOrSuspe
       index: new Set([
         MYAH_STANDARD_OBJECTS.campaignAccount.indexes.campaignAccountUniqueIndex
           .universalIdentifier,
+      ]),
+      objectPermission: new Set([
+        MYAH_CAMPAIGN_ACCOUNT_READ_ONLY_OBJECT_PERMISSION_UNIVERSAL_IDENTIFIER,
       ]),
     });
   }
