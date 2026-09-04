@@ -38,6 +38,12 @@ export class MyahInboxReplySendReadiness {
 
   @Field(() => String, { nullable: true })
   reason: string | null;
+
+  @Field(() => Int)
+  revision: number;
+
+  @Field(() => MyahInboxRichText, { nullable: true })
+  body: MyahRichText | null;
 }
 
 @ObjectType('MyahInboxReplySendResult')

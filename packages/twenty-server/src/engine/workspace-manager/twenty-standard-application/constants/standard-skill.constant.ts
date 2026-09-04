@@ -41,6 +41,18 @@ export const STANDARD_SKILL = {
   'custom-objects-cleanup': {
     universalIdentifier: '20202020-a1d3-4e5f-b6c7-8d9e0f1a2b3c',
   },
+  'myah-inbox': {
+    universalIdentifier: '20202020-1560-4001-8001-000000000001',
+  },
+  'myah-creators': {
+    universalIdentifier: '20202020-1560-4002-8002-000000000002',
+  },
+  'myah-creator-lists': {
+    universalIdentifier: '20202020-1560-4003-8003-000000000003',
+  },
+  'myah-campaigns': {
+    universalIdentifier: '20202020-1560-4004-8004-000000000004',
+  },
 } as const satisfies Record<
   string,
   {

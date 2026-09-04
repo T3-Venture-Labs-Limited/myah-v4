@@ -1645,6 +1645,8 @@ export interface ActionApprovalProposal {
     body?: Scalars['String']
     recipientLabel?: Scalars['String']
     sendingAccountLabel?: Scalars['String']
+    subject?: Scalars['String']
+    draftRevision?: Scalars['Int']
     state: Scalars['String']
     expiresAt: Scalars['DateTime']
     occurredAt: Scalars['DateTime']
@@ -5192,6 +5194,8 @@ export interface ActionApprovalProposalGenqlSelection{
     body?: boolean | number
     recipientLabel?: boolean | number
     sendingAccountLabel?: boolean | number
+    subject?: boolean | number
+    draftRevision?: boolean | number
     state?: boolean | number
     expiresAt?: boolean | number
     occurredAt?: boolean | number

@@ -17,6 +17,7 @@ const EXTERNAL_WRITE_TOOL_NAMES = [
   'draft_email',
   'send_instagram_reply',
   'send_outreach_email',
+  'send_myah_inbox_reply',
   'create_calendar_event',
 ] as const;
 
@@ -69,6 +70,7 @@ const buildProvider = () => {
       tools.send_instagram_reply as never,
       tools.prepare_outreach_email_draft as never,
       tools.send_outreach_email as never,
+      tools.send_myah_inbox_reply as never,
       permissionsService as never,
       i18nService as never,
       externalWritePolicyService,
@@ -92,6 +94,7 @@ describe('external write policy static dispatch', () => {
       'send_instagram_reply',
       'prepare_outreach_email_draft',
       'send_outreach_email',
+      'send_myah_inbox_reply',
       'create_calendar_event',
       'search_help_center',
       'code_interpreter',

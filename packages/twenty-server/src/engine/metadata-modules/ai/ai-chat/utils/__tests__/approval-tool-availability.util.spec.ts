@@ -3,9 +3,9 @@ import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-ch
 import {
   allowRegisteredActionSenders,
   getGenericApprovedResumeActiveToolNames,
+  getLatestApprovedGenericToolName,
   getPreApprovalExcludedToolNames,
   hasApprovedRegisteredActionApproval,
-  hasLatestMessageApprovedGenericApproval,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
 import { ToolCategory } from 'twenty-shared/ai';
 
@@ -112,26 +112,48 @@ describe('approval tool availability', () => {
     expect(excluded.has('app_myah_send_instagram_reply')).toBe(true);
   });
 
-  it('keeps Myah Inbox tools excluded until a trusted selection enables them', () => {
+  it.each([
+    'get_campaign_audience',
+    'get_campaign_creator_list_addition_candidates',
+    'get_campaign_outreach_workflow',
+    'get_campaign_outreach_workflow_current_version',
+    'compute_campaign_outreach_step_output_schema',
+    'validate_campaign_outreach_workflow',
+    'list_campaign_outreach_workflow_runs',
+    'get_campaign_outreach_workflow_run',
+    'list_campaign_outreach_logic_function_tools',
+    'search_myah_inbox_threads',
+    'get_myah_inbox_thread_context',
+    'generate_myah_inbox_reply_proposal',
+    'get_myah_inbox_reply_send_readiness',
+    'get_myah_inbox_reply_send_status',
+  ])('keeps %s available before approval', (toolName) => {
     const excluded = getPreApprovalExcludedToolNames([
-      logicFunctionToolEntry('get_myah_inbox_thread_context'),
-      logicFunctionToolEntry('generate_myah_inbox_reply_proposal'),
-      logicFunctionToolEntry('save_myah_inbox_draft'),
-      logicFunctionToolEntry('send_myah_inbox_reply'),
+      logicFunctionToolEntry(toolName),
     ]);
 
-    expect([...excluded].sort()).toEqual([
-      'generate_myah_inbox_reply_proposal',
-      'get_myah_inbox_thread_context',
-      'save_myah_inbox_draft',
-      'send_myah_inbox_reply',
-    ]);
+    expect(excluded.has(toolName)).toBe(false);
   });
 
-  it('unlocks exactly both registered action senders after approval', () => {
+  it.each([
+    'add_direct_campaign_creators',
+    'create_campaign_outreach_workflow',
+    'update_myah_inbox_thread',
+    'save_myah_inbox_reply_draft',
+    'send_myah_inbox_reply',
+  ])('excludes %s before approval', (toolName) => {
+    const excluded = getPreApprovalExcludedToolNames([
+      logicFunctionToolEntry(toolName),
+    ]);
+
+    expect(excluded.has(toolName)).toBe(true);
+  });
+
+  it('unlocks exactly the registered action senders after registered approval', () => {
     const excluded = new Set([
       'send_instagram_reply',
       'send_outreach_email',
+      'send_myah_inbox_reply',
       'send_email',
     ]);
 
@@ -157,28 +179,42 @@ describe('approval tool availability', () => {
     expect(excluded.has('app_myah_list_instagram_conversations')).toBe(false);
   });
 
-  it('only treats a resolved approved generic approval on the latest assistant message as a generic approval grant', () => {
-    expect(
-      hasLatestMessageApprovedGenericApproval([
+  it('returns only the exact tool named by the latest approved generic request', () => {
+    const approvedMessage = {
+      role: 'assistant',
+      parts: [
         {
-          role: 'assistant',
-          parts: [
-            {
-              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
-              output: { result: { status: 'resolved', decision: 'approved' } },
-            },
-          ],
+          type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+          input: { toolName: 'update_myah_inbox_thread' },
+          output: { result: { status: 'resolved', decision: 'approved' } },
+        },
+      ],
+    };
+
+    expect(getLatestApprovedGenericToolName([approvedMessage])).toBe(
+      'update_myah_inbox_thread',
+    );
+    expect(
+      getLatestApprovedGenericToolName([
+        {
+          ...approvedMessage,
+          parts: [{ ...approvedMessage.parts[0], input: {} }],
         },
       ]),
-    ).toBe(true);
-
+    ).toBeNull();
     expect(
-      hasLatestMessageApprovedGenericApproval([
+      getLatestApprovedGenericToolName([
+        approvedMessage,
+        { role: 'user', parts: [] },
+      ]),
+    ).toBeNull();
+    expect(
+      getLatestApprovedGenericToolName([
         {
-          role: 'assistant',
+          ...approvedMessage,
           parts: [
             {
-              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+              ...approvedMessage.parts[0],
               output: {
                 result: {
                   status: 'resolved',
@@ -191,36 +227,22 @@ describe('approval tool availability', () => {
           ],
         },
       ]),
-    ).toBe(false);
-
+    ).toBeNull();
     expect(
-      hasLatestMessageApprovedGenericApproval([
+      getLatestApprovedGenericToolName([
         {
-          role: 'assistant',
+          ...approvedMessage,
           parts: [
             {
-              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
-              output: { result: { status: 'resolved', decision: 'approved' } },
-            },
-          ],
-        },
-        { role: 'user', parts: [] },
-      ]),
-    ).toBe(false);
-
-    expect(
-      hasLatestMessageApprovedGenericApproval([
-        {
-          role: 'assistant',
-          parts: [
-            {
-              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
-              output: { result: { status: 'resolved', decision: 'rejected' } },
+              ...approvedMessage.parts[0],
+              output: {
+                result: { status: 'resolved', decision: 'rejected' },
+              },
             },
           ],
         },
       ]),
-    ).toBe(false);
+    ).toBeNull();
   });
 
   it('only exposes the sender for a resolved registered approval result with a binding UUID', () => {

@@ -3,8 +3,10 @@ import { Test } from '@nestjs/testing';
 import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
+import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
 import { MyahInboxReplyBriefingService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service';
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
+import { MyahInboxReplySendService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-send.service';
 import { MYAH_INBOX_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-tool-service.token';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
 import { MyahInboxToolProvider } from 'src/engine/core-modules/tool-provider/providers/myah-inbox-tool.provider';
@@ -17,6 +19,7 @@ import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-ch
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
 import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
+import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 describe('MyahInboxToolProvider dependency graph', () => {
@@ -40,6 +43,8 @@ describe('MyahInboxToolProvider dependency graph', () => {
         ...[
           MyahInboxQueryService,
           MyahInboxReplyBriefingService,
+          MyahInboxMutationService,
+          MyahInboxReplySendService,
           AgentActorContextService,
           AiModelRegistryService,
           BillingUsageService,
@@ -49,6 +54,7 @@ describe('MyahInboxToolProvider dependency graph', () => {
           ToolOutputSpillService,
           WorkspaceCacheService,
           WorkspaceManyOrAllFlatEntityMapsCacheService,
+          PermissionsService,
         ].map((provide) => ({ provide, useValue: {} })),
       ],
     }).compile();

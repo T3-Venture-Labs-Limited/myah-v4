@@ -785,6 +785,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       actionDefinitions: {
         send_instagram_reply: {} as never,
         send_outreach_email: actionDefinition,
+        send_myah_inbox_reply: {} as never,
       },
       actionApprovalService,
     }).execute({

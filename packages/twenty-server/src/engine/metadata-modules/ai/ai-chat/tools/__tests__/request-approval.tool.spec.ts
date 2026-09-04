@@ -75,6 +75,15 @@ describe('request_approval tool', () => {
     });
   });
 
+  it('requires the exact tool name for generic approval', () => {
+    const { toolName: _toolName, ...approvalWithoutToolName } =
+      validApprovalInput;
+
+    expect(
+      requestApprovalInputSchema.safeParse(approvalWithoutToolName).success,
+    ).toBe(false);
+  });
+
   it('dispatches Instagram only to its definition and returns only the binding UUID', async () => {
     const draftId = '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea';
     const input = {
@@ -215,6 +224,75 @@ describe('request_approval tool', () => {
     });
   });
 
+  it('dispatches an Inbox reply only to its definition and returns only the binding UUID', async () => {
+    const messageThreadId = '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea';
+    const input = {
+      toolName: 'send_myah_inbox_reply',
+      actionInput: { messageThreadId, expectedDraftRevision: 3 },
+    };
+    const expectedActionBinding = {
+      workspaceId: 'workspace-id',
+      actionName: 'send_inbox_reply',
+      actionVersion: 1,
+      draftId: messageThreadId,
+      contentDigest: 'a'.repeat(64),
+      recipientFingerprint: 'b'.repeat(64),
+      sendingAccountFingerprint: 'c'.repeat(64),
+      actionContextFingerprint: 'd'.repeat(64),
+      initiatorUserWorkspaceId: 'member-id',
+      threadId: 'thread-id',
+      evidenceLinks: [],
+    };
+    const instagramDefinition = { propose: jest.fn() };
+    const outreachDefinition = { propose: jest.fn() };
+    const inboxDefinition = {
+      propose: jest.fn().mockResolvedValue({ expectedActionBinding }),
+    };
+    const actionApprovalService = {
+      createPendingBinding: jest
+        .fn()
+        .mockResolvedValue({ id: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b' }),
+    };
+    const factory = createRequestApprovalTool as unknown as (
+      options: unknown,
+    ) => {
+      execute: (value: unknown) => Promise<unknown>;
+    };
+
+    expect(requestApprovalInputSchema.parse(input)).toEqual(input);
+    await expect(
+      factory({
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'member-id',
+        threadId: 'thread-id',
+        actionDefinitions: {
+          send_instagram_reply: instagramDefinition,
+          send_outreach_email: outreachDefinition,
+          send_myah_inbox_reply: inboxDefinition,
+        },
+        actionApprovalService,
+      }).execute(input),
+    ).resolves.toEqual({
+      success: true,
+      message: expect.any(String),
+      result: {
+        status: 'pending',
+        actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
+      },
+    });
+    expect(inboxDefinition.propose).toHaveBeenCalledWith({
+      workspaceId: 'workspace-id',
+      initiatorUserWorkspaceId: 'member-id',
+      agentChatThreadId: 'thread-id',
+      input: { messageThreadId, expectedDraftRevision: 3 },
+    });
+    expect(instagramDefinition.propose).not.toHaveBeenCalled();
+    expect(outreachDefinition.propose).not.toHaveBeenCalled();
+    expect(actionApprovalService.createPendingBinding).toHaveBeenCalledWith(
+      expectedActionBinding,
+    );
+  });
+
   it.each([
     {
       toolName: 'unknown_tool',
@@ -237,6 +315,14 @@ describe('request_approval tool', () => {
     {
       ...validApprovalInput,
       toolName: 'send_outreach_email',
+    },
+    {
+      toolName: 'send_myah_inbox_reply',
+      actionInput: {
+        messageThreadId: '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea',
+        expectedDraftRevision: 3,
+        body: 'caller supplied',
+      },
     },
   ])('rejects untrusted or mixed registered approval input', (input) => {
     expect(requestApprovalInputSchema.safeParse(input).success).toBe(false);

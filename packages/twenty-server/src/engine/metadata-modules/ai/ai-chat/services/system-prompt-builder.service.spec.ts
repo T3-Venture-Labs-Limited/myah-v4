@@ -14,4 +14,16 @@ describe('SystemPromptBuilderService', () => {
       'Brand Brain Tools (manage brand knowledge and campaign context)',
     );
   });
+
+  it('labels Campaign Outreach tools', () => {
+    const service = new SystemPromptBuilderService(
+      null as never,
+      null as never,
+      null as never,
+    );
+
+    expect(
+      service['getCategoryLabel']('MYAH_CAMPAIGN_OUTREACH' as ToolCategory),
+    ).toBe('Campaign Outreach Tools (manage Campaign-scoped workflows)');
+  });
 });

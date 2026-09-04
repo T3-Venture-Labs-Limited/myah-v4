@@ -48,30 +48,46 @@ export const createExecuteToolTool = (
   options?: {
     excludeTools?: Set<string>;
     allowedTools?: Set<string>;
+    singleUseToolName?: string;
     compactOutput?: boolean;
     spillLargeOutput?: boolean;
   },
-) => ({
-  description:
-    'Execute a tool by name with arguments. Call learn_tools first to discover the required input schema.',
-  inputSchema: executeToolInputSchema,
-  execute: async (parameters: ExecuteToolInput): Promise<ToolOutput> => {
-    const { toolName, arguments: args = {} } = parameters;
+) => {
+  let isSingleUseToolAvailable = options?.singleUseToolName !== undefined;
 
-    if (
-      options?.excludeTools?.has(toolName) &&
-      !options.allowedTools?.has(toolName)
-    ) {
-      return {
-        success: false,
-        message: `Tool "${toolName}" is not available`,
-        error: `Tool "${toolName}" is not available in this context. Use get_tool_catalog to discover available tools.`,
-      };
-    }
+  return {
+    description:
+      'Execute a tool by name with arguments. Call learn_tools first to discover the required input schema.',
+    inputSchema: executeToolInputSchema,
+    execute: async (parameters: ExecuteToolInput): Promise<ToolOutput> => {
+      const { toolName, arguments: args = {} } = parameters;
 
-    return toolRegistry.resolveAndExecute(toolName, args, context, {
-      compactOutput: options?.compactOutput,
-      spillLargeOutput: options?.spillLargeOutput,
-    });
-  },
-});
+      if (
+        options?.excludeTools?.has(toolName) &&
+        !options.allowedTools?.has(toolName)
+      ) {
+        return {
+          success: false,
+          message: `Tool "${toolName}" is not available`,
+          error: `Tool "${toolName}" is not available in this context. Use get_tool_catalog to discover available tools.`,
+        };
+      }
+      if (toolName === options?.singleUseToolName) {
+        if (!isSingleUseToolAvailable) {
+          return {
+            success: false,
+            message: `Tool "${toolName}" approval is already consumed`,
+            error: `Tool "${toolName}" requires a new approval before another execution.`,
+          };
+        }
+
+        isSingleUseToolAvailable = false;
+      }
+
+      return toolRegistry.resolveAndExecute(toolName, args, context, {
+        compactOutput: options?.compactOutput,
+        spillLargeOutput: options?.spillLargeOutput,
+      });
+    },
+  };
+};

@@ -1493,6 +1493,11 @@ msgstr "클릭 시 동작"
 msgid "Action required"
 msgstr ""
 
+#. js-lingui-id: a+rqJV
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Action unavailable"
+msgstr ""
+
 #. js-lingui-id: 7L01XJ
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableHeader.tsx
 #: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsTableHeader.tsx
@@ -11594,11 +11599,6 @@ msgstr ""
 msgid "Instagram messaging"
 msgstr ""
 
-#. js-lingui-id: mopxc6
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "Instagram reply unavailable"
-msgstr ""
-
 #. js-lingui-id: TKQ7K+
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -18539,6 +18539,11 @@ msgstr ""
 msgid "Review charges"
 msgstr ""
 
+#. js-lingui-id: IbDUDL
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review Inbox reply"
+msgstr ""
+
 #. js-lingui-id: BXm/6/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review Instagram reply"
@@ -18564,6 +18569,11 @@ msgstr ""
 msgid "Review managed mailboxes"
 msgstr ""
 
+#. js-lingui-id: +5UXOF
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review outreach email"
+msgstr ""
+
 #. js-lingui-id: RXKPQv
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "Review prewarmed bundle"
@@ -18584,9 +18594,19 @@ msgstr ""
 msgid "Review selected bundle"
 msgstr ""
 
+#. js-lingui-id: PBtpKR
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived Inbox reply before it is sent."
+msgstr ""
+
 #. js-lingui-id: EIzxzn
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review the exact server-derived Instagram reply before it is sent."
+msgstr ""
+
+#. js-lingui-id: MoNVPS
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived outreach email before it is sent."
 msgstr ""
 
 #. js-lingui-id: bkU8ZB
@@ -18607,6 +18627,11 @@ msgstr ""
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Review warmup capacity purchase"
+msgstr ""
+
+#. js-lingui-id: 6LTyxl
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Revision"
 msgstr ""
 
 #. js-lingui-id: GXsAby
@@ -20910,6 +20935,7 @@ msgstr ""
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "Subject"
 msgstr "제목"
@@ -21428,6 +21454,11 @@ msgstr "텍스트 편집기"
 msgid "That mailbox already exists in this local inventory."
 msgstr ""
 
+#. js-lingui-id: ss995V
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The action cannot be approved until its source is available."
+msgstr ""
+
 #. js-lingui-id: KJjmr/
 #: src/pages/settings/email/SettingsWorkspaceEmailGroupChannelDetail.tsx
 msgid "The address your workspace sends and receives email from."
@@ -21534,9 +21565,14 @@ msgstr ""
 msgid "The email associated to your account"
 msgstr "계정에 연결된 이메일"
 
-#. js-lingui-id: 2iMFiI
+#. js-lingui-id: QzI/32
 #: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The exact server-derived Instagram reply is unavailable."
+msgid "The email will be sent to the selected recipient."
+msgstr ""
+
+#. js-lingui-id: f1P1mM
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The exact server-derived action is unavailable."
 msgstr ""
 
 #. js-lingui-id: diO3fm
@@ -21724,12 +21760,8 @@ msgstr ""
 msgid "The provider did not respond."
 msgstr ""
 
-#. js-lingui-id: JAbrJR
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The reply cannot be approved until its source is available."
-msgstr ""
-
 #. js-lingui-id: c82Ji/
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "The reply will be sent to the existing conversation."
 msgstr ""

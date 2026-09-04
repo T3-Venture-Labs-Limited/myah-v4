@@ -78,8 +78,8 @@ export class WorkflowToolWorkspaceService {
     };
   }
 
-  // Generates static workflow tools that don't depend on workspace objects
-  generateWorkflowTools(
+  // Generates the unguarded static workflow factory set for sibling global modules.
+  buildWorkflowToolSet(
     workspaceId: string,
     rolePermissionConfig: RolePermissionConfig,
   ): ToolSet {
@@ -165,34 +165,42 @@ export class WorkflowToolWorkspaceService {
     const updateAgent = createUpdateAgentTool(this.deps, context);
     const validateWorkflow = createValidateWorkflowTool(this.deps, context);
 
+    return {
+      [createCompleteWorkflow.name]: createCompleteWorkflow,
+      [createWorkflowVersionStep.name]: createWorkflowVersionStep,
+      [updateWorkflowVersionStep.name]: updateWorkflowVersionStep,
+      [updateWorkflowVersionTrigger.name]: updateWorkflowVersionTrigger,
+      [deleteWorkflowVersionStep.name]: deleteWorkflowVersionStep,
+      [createWorkflowVersionEdge.name]: createWorkflowVersionEdge,
+      [deleteWorkflowVersionEdge.name]: deleteWorkflowVersionEdge,
+      [createDraftFromWorkflowVersion.name]: createDraftFromWorkflowVersion,
+      [updateWorkflowVersionPositions.name]: updateWorkflowVersionPositions,
+      [activateWorkflowVersion.name]: activateWorkflowVersion,
+      [deactivateWorkflowVersion.name]: deactivateWorkflowVersion,
+      [computeStepOutputSchema.name]: computeStepOutputSchema,
+      [getWorkflowCurrentVersion.name]: getWorkflowCurrentVersion,
+      [listWorkflows.name]: listWorkflows,
+      [deleteWorkflow.name]: deleteWorkflow,
+      [getWorkflowRun.name]: getWorkflowRun,
+      [listWorkflowRuns.name]: listWorkflowRuns,
+      [updateLogicFunctionSource.name]: updateLogicFunctionSource,
+      [listLogicFunctionTools.name]: listLogicFunctionTools,
+      [updateAgent.name]: updateAgent,
+      [validateWorkflow.name]: validateWorkflow,
+    };
+  }
+
+  // General Automation remains the only direct workflow tool surface.
+  generateWorkflowTools(
+    workspaceId: string,
+    rolePermissionConfig: RolePermissionConfig,
+  ): ToolSet {
     return guardWorkflowTools({
       assertTargetIsGeneralAutomation: (args) =>
         this.workflowToolOutreachAccessGuardService.assertTargetIsGeneralAutomation(
           args,
         ),
-      tools: {
-        [createCompleteWorkflow.name]: createCompleteWorkflow,
-        [createWorkflowVersionStep.name]: createWorkflowVersionStep,
-        [updateWorkflowVersionStep.name]: updateWorkflowVersionStep,
-        [updateWorkflowVersionTrigger.name]: updateWorkflowVersionTrigger,
-        [deleteWorkflowVersionStep.name]: deleteWorkflowVersionStep,
-        [createWorkflowVersionEdge.name]: createWorkflowVersionEdge,
-        [deleteWorkflowVersionEdge.name]: deleteWorkflowVersionEdge,
-        [createDraftFromWorkflowVersion.name]: createDraftFromWorkflowVersion,
-        [updateWorkflowVersionPositions.name]: updateWorkflowVersionPositions,
-        [activateWorkflowVersion.name]: activateWorkflowVersion,
-        [deactivateWorkflowVersion.name]: deactivateWorkflowVersion,
-        [computeStepOutputSchema.name]: computeStepOutputSchema,
-        [getWorkflowCurrentVersion.name]: getWorkflowCurrentVersion,
-        [listWorkflows.name]: listWorkflows,
-        [deleteWorkflow.name]: deleteWorkflow,
-        [getWorkflowRun.name]: getWorkflowRun,
-        [listWorkflowRuns.name]: listWorkflowRuns,
-        [updateLogicFunctionSource.name]: updateLogicFunctionSource,
-        [listLogicFunctionTools.name]: listLogicFunctionTools,
-        [updateAgent.name]: updateAgent,
-        [validateWorkflow.name]: validateWorkflow,
-      },
+      tools: this.buildWorkflowToolSet(workspaceId, rolePermissionConfig),
       workspaceId,
     });
   }

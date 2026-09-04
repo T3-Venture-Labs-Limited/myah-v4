@@ -23,6 +23,7 @@ import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
+import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 
 import { type CodeExecutionStreamEmitter } from 'src/engine/core-modules/tool-provider/interfaces/code-execution-stream-emitter.type';
@@ -74,12 +75,11 @@ import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-ch
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { type ExtractedFile } from 'src/engine/metadata-modules/ai/ai-chat/types/extracted-file.type';
 import {
-  MYAH_INBOX_SELECTION_TOOL_NAMES,
   allowRegisteredActionSenders,
   getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
+  getLatestApprovedGenericToolName,
   hasApprovedRegisteredActionApproval,
-  hasLatestMessageApprovedGenericApproval,
   PRE_APPROVAL_SAFE_TOOL_NAMES,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
 import { assertHumanInputToolCallIsExclusive } from 'src/engine/metadata-modules/ai/ai-chat/utils/assert-human-input-tool-call-is-exclusive.util';
@@ -142,6 +142,7 @@ export class ChatExecutionService {
     private readonly metricsService: MetricsService,
     private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
     private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
+    private readonly myahInboxReplyActionDefinition: MyahInboxReplyActionDefinition,
     private readonly actionApprovalService: ActionApprovalService,
     private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
   ) {}
@@ -268,31 +269,26 @@ export class ChatExecutionService {
       ...nativeTools,
     };
 
-    const isApprovedGenericApprovalResume =
-      hasLatestMessageApprovedGenericApproval(messages);
+    const approvedGenericToolName = getLatestApprovedGenericToolName(messages);
     const hasApprovedRegisteredAction =
       hasApprovedRegisteredActionApproval(messages);
-    const hasMyahInboxSelection = isDefined(myahInboxSelection);
     const preApprovalSafeToolNames = new Set(
-      hasMyahInboxSelection
-        ? MYAH_INBOX_SELECTION_TOOL_NAMES
-        : PRE_APPROVAL_SAFE_TOOL_NAMES,
+      Object.keys(PRE_APPROVAL_SAFE_TOOL_NAMES),
     );
 
     const preloadedToolNames = [
       ...Object.keys(preloadedTools),
       ...Object.keys(nativeTools),
       ASK_QUESTIONS_TOOL_NAME,
-      ...(isApprovedGenericApprovalResume ? [] : [REQUEST_APPROVAL_TOOL_NAME]),
+      ...(approvedGenericToolName === null ? [REQUEST_APPROVAL_TOOL_NAME] : []),
     ];
 
-    const preApprovalExcludedToolNames = new Set(
-      hasMyahInboxSelection
-        ? toolCatalog.map((tool) => tool.name)
-        : isApprovedGenericApprovalResume
-          ? []
-          : getPreApprovalExcludedToolNames(toolCatalog),
-    );
+    const preApprovalExcludedToolNames =
+      getPreApprovalExcludedToolNames(toolCatalog);
+
+    if (approvedGenericToolName !== null) {
+      preApprovalExcludedToolNames.delete(approvedGenericToolName);
+    }
 
     // Enforce the source-controlled safe-tool exception at the execution
     // boundary; catalog filtering remains only an earlier prompt guard.
@@ -301,10 +297,9 @@ export class ChatExecutionService {
     }
 
     // Chat output deliberately contains only the opaque binding ID, not its
-    // action type. Expose registered senders after approval; each sender rejects
-    // a binding for another action before provider I/O. A selected Inbox thread
-    // remains read-and-propose only, irrespective of generic approval history.
-    if (hasApprovedRegisteredAction && !hasMyahInboxSelection) {
+    // action type. Registered approval enables only registered senders; generic
+    // approval enables internal writes but never substitutes for that binding.
+    if (hasApprovedRegisteredAction) {
       allowRegisteredActionSenders(preApprovalExcludedToolNames);
     }
 
@@ -320,6 +315,7 @@ export class ChatExecutionService {
         actionDefinitions: {
           send_instagram_reply: this.instagramReplyActionDefinition,
           send_outreach_email: this.outreachEmailActionDefinition,
+          send_myah_inbox_reply: this.myahInboxReplyActionDefinition,
         },
         actionApprovalService: this.actionApprovalService,
       }),
@@ -335,6 +331,7 @@ export class ChatExecutionService {
           compactOutput: true,
           excludeTools: preApprovalExcludedToolNames,
           allowedTools: preApprovalSafeToolNames,
+          singleUseToolName: approvedGenericToolName ?? undefined,
           spillLargeOutput: true,
         },
       ),
@@ -410,7 +407,7 @@ export class ChatExecutionService {
     );
 
     const activeToolNamesForStep = (_steps: StepResult<ToolSet>[]) =>
-      isApprovedGenericApprovalResume
+      approvedGenericToolName !== null
         ? getGenericApprovedResumeActiveToolNames(Object.keys(activeTools))
         : Object.keys(activeTools);
 

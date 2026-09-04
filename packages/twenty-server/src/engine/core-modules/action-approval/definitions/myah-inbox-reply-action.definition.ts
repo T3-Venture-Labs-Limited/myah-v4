@@ -10,7 +10,8 @@ import {
 } from 'twenty-shared/types';
 import { emailSchema } from 'twenty-shared/utils';
 import { In, Repository } from 'typeorm';
-
+import { z } from 'zod';
+import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { resolveMyahInboxReplyRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-myah-inbox-reply-recipient.util';
 import {
   buildMyahInboxReplyExpectedActionBinding,
@@ -19,7 +20,9 @@ import {
 import { normalizeMyahInboxReplyDraft } from 'src/engine/core-modules/action-approval/utils/normalize-myah-inbox-reply-draft.util';
 import {
   type CanonicalMyahInboxReplyGraph,
+  type MyahInboxReplyActionApprovalProposal,
   type MyahInboxReplyActionAuthority,
+  type MyahInboxReplyActionProposal,
   type MyahInboxReplyExpectedActionBindingWithWorkspace,
   type MyahInboxReplyReadableDraftSnapshot,
   MyahInboxReplyUnavailableCode,
@@ -31,7 +34,9 @@ export {
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
 export type {
   CanonicalMyahInboxReplyGraph,
+  MyahInboxReplyActionApprovalProposal,
   MyahInboxReplyActionAuthority,
+  MyahInboxReplyActionProposal,
   MyahInboxReplyReadableDraftSnapshot,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
 import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-authority-context.service';
@@ -55,12 +60,24 @@ const isValidMessageId = (value: string): boolean => {
   );
 };
 
+export const MyahInboxReplyActionProposalInputZodSchema = z
+  .object({
+    messageThreadId: z.string().uuid(),
+    expectedDraftRevision: z.number().int().min(0),
+  })
+  .strict();
+
+export type MyahInboxReplyActionProposalInput = z.infer<
+  typeof MyahInboxReplyActionProposalInputZodSchema
+>;
+
 type LoadMode = 'execution' | 'projection';
 
 @Injectable()
 export class MyahInboxReplyActionDefinition {
   readonly actionName = 'send_inbox_reply' as const;
   readonly actionVersion = 1 as const;
+  readonly proposalInputSchema = MyahInboxReplyActionProposalInputZodSchema;
 
   constructor(
     private readonly authorityContextService: MyahInboxReplyAuthorityContextService,
@@ -77,11 +94,13 @@ export class MyahInboxReplyActionDefinition {
     initiatorUserWorkspaceId,
     messageThreadId,
     expectedDraftRevision,
+    agentChatThreadId,
   }: {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
     messageThreadId: string;
     expectedDraftRevision?: number;
+    agentChatThreadId?: string;
   }): Promise<MyahInboxReplyActionAuthority> {
     const graph = await this.loadCanonicalGraph({
       workspaceId,
@@ -95,7 +114,42 @@ export class MyahInboxReplyActionDefinition {
       workspaceId,
       initiatorUserWorkspaceId,
       graph,
+      agentChatThreadId,
     });
+  }
+
+  async propose({
+    workspaceId,
+    initiatorUserWorkspaceId,
+    agentChatThreadId,
+    input,
+  }: {
+    workspaceId: string;
+    initiatorUserWorkspaceId: string;
+    agentChatThreadId: string;
+    input: MyahInboxReplyActionProposalInput;
+  }): Promise<MyahInboxReplyActionProposal> {
+    const authority = await this.buildAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId,
+      messageThreadId: input.messageThreadId,
+      expectedDraftRevision: input.expectedDraftRevision,
+      agentChatThreadId,
+    });
+    const graph = authority.canonicalGraph;
+    const targetLabel = `${graph.recipientLabel} <${graph.recipientEmail}>`;
+
+    return {
+      ...authority,
+      proposal: {
+        title: graph.subject,
+        preview: {
+          format: 'text',
+          content: `From: ${this.toSendingAccountLabel(graph)}\nTo: ${targetLabel}\nSubject: ${graph.subject}\n\n${graph.draftBody.markdown}`,
+        },
+        targetLabel,
+      },
+    };
   }
 
   async getReadableDraftSnapshot({
@@ -112,6 +166,40 @@ export class MyahInboxReplyActionDefinition {
       initiatorUserWorkspaceId,
       messageThreadId,
     });
+  }
+
+  async getProposal({
+    workspaceId,
+    binding,
+  }: {
+    workspaceId: string;
+    binding: ActionApprovalBindingEntity;
+  }): Promise<MyahInboxReplyActionApprovalProposal> {
+    const authority = await this.rebuildProjectionAuthority({
+      workspaceId,
+      binding: this.toExpectedBinding(binding),
+    });
+    const graph = authority.canonicalGraph;
+
+    return {
+      action: 'send_inbox_reply',
+      actionVersion: 1,
+      body: graph.draftBody.markdown,
+      recipientLabel: `${graph.recipientLabel} <${graph.recipientEmail}>`,
+      sendingAccountLabel: this.toSendingAccountLabel(graph),
+      subject: graph.subject,
+      draftRevision: graph.draftRevision,
+      state: binding.state,
+      expiresAt: binding.expiresAt,
+      occurredAt: binding.decidedAt ?? binding.createdAt,
+      evidenceLinks: binding.evidenceLinks.map(
+        ({ objectMetadataId, recordId, role }) => ({
+          objectMetadataId,
+          recordId,
+          role,
+        }),
+      ),
+    };
   }
 
   async rebuildExecutionAuthority({
@@ -173,6 +261,7 @@ export class MyahInboxReplyActionDefinition {
       workspaceId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
       graph,
+      agentChatThreadId: binding.threadId,
     });
 
     const bindingForComparison =
@@ -201,10 +290,12 @@ export class MyahInboxReplyActionDefinition {
     workspaceId,
     initiatorUserWorkspaceId,
     graph,
+    agentChatThreadId,
   }: {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
     graph: CanonicalMyahInboxReplyGraph;
+    agentChatThreadId?: string;
   }): Promise<MyahInboxReplyActionAuthority> {
     const evidenceObjectMetadataIds =
       await this.authorityContextService.resolveEvidenceObjectMetadataIds(
@@ -218,6 +309,7 @@ export class MyahInboxReplyActionDefinition {
         initiatorUserWorkspaceId,
         graph,
         evidenceObjectMetadataIds,
+        agentChatThreadId,
       }),
     };
   }
@@ -457,6 +549,52 @@ export class MyahInboxReplyActionDefinition {
       managedMailboxId,
       connectedAccount: { ...account, handle: senderEmail },
     };
+  }
+
+  private toExpectedBinding(
+    binding: ActionApprovalBindingEntity,
+  ): MyahInboxReplyExpectedActionBindingWithWorkspace {
+    if (
+      binding.actionName !== this.actionName ||
+      binding.actionVersion !== this.actionVersion ||
+      binding.recipientFingerprint === null ||
+      binding.sendingAccountFingerprint === null ||
+      binding.actionContextFingerprint === null ||
+      !Array.isArray(binding.evidenceLinks)
+    ) {
+      throw new MyahInboxReplyUnavailableError(
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      );
+    }
+
+    return {
+      workspaceId: binding.workspaceId,
+      initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+      actionName: this.actionName,
+      actionVersion: this.actionVersion,
+      draftId: binding.draftId,
+      contentDigest: binding.contentDigest,
+      recipientFingerprint: binding.recipientFingerprint,
+      sendingAccountFingerprint: binding.sendingAccountFingerprint,
+      actionContextFingerprint: binding.actionContextFingerprint,
+      threadId: binding.threadId,
+      evidenceLinks: binding.evidenceLinks.map(
+        ({ objectMetadataId, recordId, role }) => ({
+          objectMetadataId,
+          recordId,
+          role,
+        }),
+      ),
+    };
+  }
+
+  private toSendingAccountLabel({
+    senderDisplayName,
+    senderEmail,
+  }: CanonicalMyahInboxReplyGraph): string {
+    return senderDisplayName === null
+      ? senderEmail
+      : `${senderDisplayName} <${senderEmail}>`;
   }
 
   private isSupportedProvider(provider: ConnectedAccountProvider): boolean {

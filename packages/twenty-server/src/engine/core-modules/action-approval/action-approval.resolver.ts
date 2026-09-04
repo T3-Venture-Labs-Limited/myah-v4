@@ -11,6 +11,8 @@ import {
   toActionExecutionReceiptDTO,
 } from 'src/engine/core-modules/action-approval/dtos/action-approval-evidence.dto';
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
+import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { ActionApprovalBindingState } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
@@ -27,6 +29,8 @@ export class ActionApprovalResolver {
     private readonly dataSource: DataSource,
     private readonly actionApprovalService: ActionApprovalService,
     private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
+    private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
+    private readonly myahInboxReplyActionDefinition: MyahInboxReplyActionDefinition,
   ) {}
 
   @Query(() => ActionApprovalProposalDTO)
@@ -41,11 +45,44 @@ export class ActionApprovalResolver {
       userWorkspaceId,
     });
 
+    const actionDefinitions = {
+      send_instagram_reply: this.instagramReplyActionDefinition,
+      send_outreach_email: this.outreachEmailActionDefinition,
+      send_inbox_reply: this.myahInboxReplyActionDefinition,
+    } as const;
+    const actionDefinition =
+      actionDefinitions[binding.actionName as keyof typeof actionDefinitions];
+
+    if (!actionDefinition) {
+      throw new Error(`Unsupported action approval "${binding.actionName}".`);
+    }
+
     try {
-      return await this.instagramReplyActionDefinition.getProposal({
+      const proposal = await actionDefinition.getProposal({
         workspaceId,
         binding,
       });
+
+      return {
+        ...proposal,
+        recipientLabel:
+          'recipientEmail' in proposal &&
+          typeof proposal.recipientEmail === 'string'
+            ? proposal.recipientLabel === proposal.recipientEmail
+              ? proposal.recipientEmail
+              : `${proposal.recipientLabel} <${proposal.recipientEmail}>`
+            : proposal.recipientLabel,
+        sendingAccountLabel:
+          'sendingAccountLabel' in proposal
+            ? proposal.sendingAccountLabel
+            : proposal.senderEmail,
+        subject: 'subject' in proposal ? proposal.subject : null,
+        draftRevision:
+          'draftRevision' in proposal &&
+          typeof proposal.draftRevision === 'number'
+            ? proposal.draftRevision
+            : null,
+      };
     } catch (error) {
       if (binding.state === ActionApprovalBindingState.PENDING) {
         throw error;
@@ -57,6 +94,8 @@ export class ActionApprovalResolver {
         body: null,
         recipientLabel: null,
         sendingAccountLabel: null,
+        subject: null,
+        draftRevision: null,
         state: binding.state,
         expiresAt: binding.expiresAt,
         occurredAt: binding.decidedAt ?? binding.createdAt,

@@ -1,5 +1,7 @@
 import { DataSource } from 'typeorm';
 
+import { type InstagramToolExecutionResult } from 'src/modules/myah-composio/services/myah-composio.service';
+
 import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963058-evolve-instagram-approval-to-action-authority';
 import {
   ActionApprovalBindingEntity,
@@ -234,10 +236,13 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         },
       }),
     };
-    const providerCalls = jest.fn(async ({ toolSlug }: { toolSlug: string }) =>
+    const providerCalls = jest.fn<
+      Promise<InstagramToolExecutionResult>,
+      [{ toolSlug: string }]
+    >(async ({ toolSlug }) =>
       toolSlug === 'INSTAGRAM_LIST_ALL_MESSAGES'
         ? {
-            kind: 'success' as const,
+            kind: 'success',
             data: {
               data: [
                 {
@@ -252,7 +257,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
             },
           }
         : {
-            kind: 'success' as const,
+            kind: 'success',
             data: { message_id: 'provider-message-id' },
           },
     );
@@ -326,6 +331,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       actionDefinitions: {
         send_instagram_reply: actionDefinition,
         send_outreach_email: {} as never,
+        send_myah_inbox_reply: {} as never,
       },
       actionApprovalService: service,
     }).execute({
@@ -982,6 +988,76 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         [prepared.conversationId],
       ),
     ).resolves.toEqual([{ text: prepared.body, direction: 'OUTBOUND' }]);
+  });
+  it('records a mocked provider rejection as FAILED without projecting a native outbound Message', async () => {
+    const { pendingBindingId, prepared, providerCalls, sender, senderPayload } =
+      await prepareApprovedSender();
+    providerCalls.mockImplementation(
+      async ({ toolSlug }: { toolSlug: string }) =>
+        toolSlug === 'INSTAGRAM_LIST_ALL_MESSAGES'
+          ? {
+              kind: 'success' as const,
+              data: {
+                data: [
+                  {
+                    id: integrationInboundMessageId,
+                    message: 'Integration inbound message',
+                    direction: 'INBOUND',
+                    from: { id: integrationRecipientIgsid },
+                    to: {
+                      data: [{ id: 'integration-sending-account-igsid' }],
+                    },
+                    created_time: integrationInboundReceivedAt.toISOString(),
+                  },
+                ],
+              },
+            }
+          : { kind: 'provider_failure' as const },
+    );
+
+    await expect(
+      sender.execute(
+        { actionApprovalBindingId: senderPayload.actionApprovalBindingId },
+        {
+          workspaceId,
+          userWorkspaceId: initiatorUserWorkspaceId,
+          threadId,
+        },
+      ),
+    ).resolves.toEqual({
+      success: false,
+      message: 'Instagram reply was not sent.',
+    });
+    expect(
+      providerCalls.mock.calls.filter(
+        ([input]) => input.toolSlug === 'INSTAGRAM_SEND_TEXT_MESSAGE',
+      ),
+    ).toHaveLength(1);
+    await expect(
+      dataSource.getRepository(ActionExecutionReceiptEntity).findOneByOrFail({
+        actionApprovalBindingId: pendingBindingId,
+      }),
+    ).resolves.toMatchObject({
+      state: ActionExecutionReceiptState.FAILED,
+      providerCode: 'failed',
+    });
+    await expect(
+      dataSource.query(
+        `SELECT "body", "status"
+        FROM "${projectionSchemaName}"."_myahInstagramReplyDraft"
+        WHERE "id" = $1`,
+        [prepared.draftId],
+      ),
+    ).resolves.toEqual([{ body: prepared.body, status: 'NEEDS_REVIEW' }]);
+    await expect(
+      dataSource.query(
+        `SELECT count(*)::int AS "count"
+        FROM "${projectionSchemaName}"."_myahSocialMessage"
+        WHERE "conversationId" = $1
+          AND "createdByContext" ->> 'actionReceiptId' IS NOT NULL`,
+        [prepared.conversationId],
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
   });
 
   it('creates one receipt and sends once when real sender executions race for one binding', async () => {

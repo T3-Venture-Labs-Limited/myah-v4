@@ -3866,6 +3866,12 @@ export default {
             "sendingAccountLabel": [
                 1
             ],
+            "subject": [
+                1
+            ],
+            "draftRevision": [
+                21
+            ],
             "state": [
                 1
             ],

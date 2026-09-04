@@ -8,6 +8,8 @@ export const GET_ACTION_APPROVAL_PROPOSAL = gql`
       body
       recipientLabel
       sendingAccountLabel
+      subject
+      draftRevision
       state
       expiresAt
       occurredAt

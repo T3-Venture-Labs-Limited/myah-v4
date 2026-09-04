@@ -1,3 +1,22 @@
+jest.mock(
+  'twenty-shared/workflow',
+  () => ({
+    WorkflowActionType: { CODE: 'CODE', LOGIC_FUNCTION: 'LOGIC_FUNCTION' },
+  }),
+  { virtual: true },
+);
+jest.mock(
+  'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager',
+  () => ({ GlobalWorkspaceOrmManager: class {} }),
+);
+jest.mock(
+  'twenty-shared/utils',
+  () => ({
+    CustomError: class extends Error {},
+    isDefined: (value: unknown) => value !== undefined && value !== null,
+  }),
+  { virtual: true },
+);
 import { WorkflowActionType } from 'twenty-shared/workflow';
 
 import { WorkflowQueryValidationException } from 'src/modules/workflow/common/exceptions/workflow-query-validation.exception';

@@ -164,14 +164,15 @@ type GetActionApprovalProposalData = {
     body: string | null;
     recipientLabel: string | null;
     sendingAccountLabel: string | null;
+    subject: string | null;
+    draftRevision: number | null;
     state: string;
     expiresAt: string;
   };
 };
 
-type ExactActionApprovalProposal =
+type ExactActionApprovalProposalBase =
   GetActionApprovalProposalData['getActionApprovalProposal'] & {
-    action: 'send_instagram_reply';
     actionVersion: 1;
     body: string;
     recipientLabel: string;
@@ -179,22 +180,79 @@ type ExactActionApprovalProposal =
     state: 'PENDING';
   };
 
+type InstagramApprovalProposal = ExactActionApprovalProposalBase & {
+  action: 'send_instagram_reply';
+};
+
+type OutreachEmailApprovalProposal = ExactActionApprovalProposalBase & {
+  action: 'send_outreach_email';
+  subject: string;
+};
+
+type MyahInboxReplyApprovalProposal = ExactActionApprovalProposalBase & {
+  action: 'send_inbox_reply';
+  subject: string;
+  draftRevision: number;
+};
+
+type ExactActionApprovalProposal =
+  | InstagramApprovalProposal
+  | OutreachEmailApprovalProposal
+  | MyahInboxReplyApprovalProposal;
+
 const isExactActionApprovalProposal = (
   proposal:
     | GetActionApprovalProposalData['getActionApprovalProposal']
     | undefined,
-): proposal is ExactActionApprovalProposal =>
-  proposal?.action === 'send_instagram_reply' &&
-  proposal.actionVersion === 1 &&
-  proposal.state === 'PENDING' &&
-  typeof proposal.body === 'string' &&
-  typeof proposal.recipientLabel === 'string' &&
-  typeof proposal.sendingAccountLabel === 'string';
+): proposal is ExactActionApprovalProposal => {
+  if (
+    !proposal ||
+    proposal.actionVersion !== 1 ||
+    proposal.state !== 'PENDING' ||
+    typeof proposal.body !== 'string' ||
+    typeof proposal.recipientLabel !== 'string' ||
+    typeof proposal.sendingAccountLabel !== 'string'
+  ) {
+    return false;
+  }
+
+  if (proposal.action === 'send_instagram_reply') {
+    return true;
+  }
+
+  return (
+    (proposal.action === 'send_outreach_email' ||
+      proposal.action === 'send_inbox_reply') &&
+    typeof proposal.subject === 'string' &&
+    (proposal.action !== 'send_inbox_reply' ||
+      typeof proposal.draftRevision === 'number')
+  );
+};
 
 export const AiChatApprovalCard = ({
   pendingApproval,
 }: AiChatApprovalCardProps) => {
   const { t } = useLingui();
+  const exactActionCopy: Record<
+    ExactActionApprovalProposal['action'],
+    Pick<RequestApprovalToolInput, 'title' | 'summary' | 'consequences'>
+  > = {
+    send_instagram_reply: {
+      title: t`Review Instagram reply`,
+      summary: t`Review the exact server-derived Instagram reply before it is sent.`,
+      consequences: [t`The reply will be sent to the existing conversation.`],
+    },
+    send_outreach_email: {
+      title: t`Review outreach email`,
+      summary: t`Review the exact server-derived outreach email before it is sent.`,
+      consequences: [t`The email will be sent to the selected recipient.`],
+    },
+    send_inbox_reply: {
+      title: t`Review Inbox reply`,
+      summary: t`Review the exact server-derived Inbox reply before it is sent.`,
+      consequences: [t`The reply will be sent to the existing conversation.`],
+    },
+  };
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitDecision } = useSubmitApprovalDecision();
@@ -235,22 +293,18 @@ export const AiChatApprovalCard = ({
       ? pendingApproval.request
       : isActionApprovalProposalDecidable && exactProposal !== undefined
         ? {
-            title: t`Review Instagram reply`,
-            summary: t`Review the exact server-derived Instagram reply before it is sent.`,
+            ...exactActionCopy[exactProposal.action],
             actionKind: 'external_write',
             riskLevel: 'medium',
-            consequences: [
-              t`The reply will be sent to the existing conversation.`,
-            ],
             preview: { format: 'text', content: exactProposal.body },
           }
         : {
-            title: t`Instagram reply unavailable`,
-            summary: t`The exact server-derived Instagram reply is unavailable.`,
+            title: t`Action unavailable`,
+            summary: t`The exact server-derived action is unavailable.`,
             actionKind: 'external_write',
             riskLevel: 'medium',
             consequences: [
-              t`The reply cannot be approved until its source is available.`,
+              t`The action cannot be approved until its source is available.`,
             ],
           };
 
@@ -311,6 +365,16 @@ export const AiChatApprovalCard = ({
           <span>
             {t`From`}: {exactProposal.sendingAccountLabel}
           </span>
+          {exactProposal.subject !== null && (
+            <span>
+              {t`Subject`}: {exactProposal.subject}
+            </span>
+          )}
+          {exactProposal.draftRevision !== null && (
+            <span>
+              {t`Revision`}: {exactProposal.draftRevision}
+            </span>
+          )}
         </StyledMeta>
       )}
 

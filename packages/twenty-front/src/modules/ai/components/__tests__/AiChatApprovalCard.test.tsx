@@ -143,6 +143,52 @@ describe('AiChatApprovalCard', () => {
     ).toBeVisible();
   });
 
+  it('reuses the approval card to review the complete Inbox reply without editable transport fields', () => {
+    const inboxProposal = {
+      ...serverDerivedProposal,
+      action: 'send_inbox_reply',
+      body: `${'Complete reply body. '.repeat(20)}\nFinal paragraph.`,
+      recipientLabel: 'creator@example.test',
+      sendingAccountLabel: 'hello@myah.test',
+      subject: 'Re: Partnership',
+      draftRevision: 3,
+    };
+    mockUseQuery.mockReturnValue({
+      data: { getActionApprovalProposal: inboxProposal },
+      loading: false,
+      error: undefined,
+    });
+
+    renderApprovalCard(boundApproval);
+
+    expect(screen.getByText('Review Inbox reply')).toBeVisible();
+    expect(
+      screen.getByText(
+        'Review the exact server-derived Inbox reply before it is sent.',
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        (_content, element) => element?.textContent === inboxProposal.body,
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(`To: ${inboxProposal.recipientLabel}`),
+    ).toBeVisible();
+    expect(
+      screen.getByText(`From: ${inboxProposal.sendingAccountLabel}`),
+    ).toBeVisible();
+    expect(screen.getByText(`Subject: ${inboxProposal.subject}`)).toBeVisible();
+    expect(
+      screen.getByText(`Revision: ${inboxProposal.draftRevision}`),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Request changes' }),
+    ).toBeEnabled();
+  });
+
   it('disables approval decisions when the guarded proposal is unavailable', () => {
     renderApprovalCard(boundApproval);
 

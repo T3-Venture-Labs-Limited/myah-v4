@@ -33,6 +33,7 @@ const buildProvider = ({ hasPermission }: { hasPermission: boolean }) => {
       sendInstagramReplyTool as never,
       createTool() as never,
       createTool() as never,
+      createTool() as never,
       permissionsService as never,
       {} as never,
       new ExternalWritePolicyService(permissionsService as never),
