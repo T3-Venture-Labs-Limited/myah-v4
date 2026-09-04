@@ -58,7 +58,7 @@ export type RecordIndexSurfaceProps = {
   hideQueryOnlyRecordFilters?: boolean;
   hideEmptyStateSubtitle?: boolean;
   headerTitle?: string;
-  headerActionButton?: ReactNode;
+  headerLeadingAction?: ReactNode;
   embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;
 };
 
@@ -106,7 +106,7 @@ const RecordIndexSurfaceInstance = ({
   hideQueryOnlyRecordFilters,
   hideEmptyStateSubtitle,
   headerTitle,
-  headerActionButton,
+  headerLeadingAction,
   embeddedSurfaceOptions,
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
@@ -220,7 +220,7 @@ const RecordIndexSurfaceInstance = ({
                       embeddedSurfaceOptions?.hidePageHeader ? undefined : (
                         <RecordIndexPageHeader
                           contextStoreInstanceId={contextStoreInstanceId}
-                          headerActionButton={headerActionButton}
+                          headerLeadingAction={headerLeadingAction}
                           headerTitle={headerTitle}
                         />
                       )
@@ -293,7 +293,7 @@ export const RecordIndexSurface = ({
   hideQueryOnlyRecordFilters,
   hideEmptyStateSubtitle,
   headerTitle,
-  headerActionButton,
+  headerLeadingAction,
   embeddedSurfaceOptions,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -326,7 +326,7 @@ export const RecordIndexSurface = ({
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
       hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
       hideEmptyStateSubtitle={hideEmptyStateSubtitle}
-      headerActionButton={headerActionButton}
+      headerLeadingAction={headerLeadingAction}
       headerTitle={headerTitle}
       embeddedSurfaceOptions={embeddedSurfaceOptions}
     />

@@ -6,13 +6,11 @@ import { useCreatorListBulkActionsContext } from '@/myah/creator-crm/contexts/Cr
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
-import { PageFocusId } from '@/types/PageFocusId';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
 import { FieldMetadataType, ViewType } from 'twenty-shared/types';
 
-const mockResetFocusStackToRecordIndex = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
 const mockNavigate = jest.fn();
 const mockUseAtomStateValue = useAtomStateValue as jest.Mock;
@@ -30,14 +28,14 @@ const ScopedBulkActionsContextValue = () => {
 const mockRecordIndexSurface = jest.fn(
   ({
     contextStoreInstanceId,
-    headerActionButton,
+    headerLeadingAction,
     indexIdentifierUrl,
     initialQueryOnlyRecordFilters,
     onViewChange,
     viewId,
   }: {
     contextStoreInstanceId: string;
-    headerActionButton?: ReactNode;
+    headerLeadingAction?: ReactNode;
     headerTitle?: string;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
@@ -52,7 +50,7 @@ const mockRecordIndexSurface = jest.fn(
       data-context-store-id={contextStoreInstanceId}
       data-testid="record-index-surface"
     >
-      {headerActionButton}
+      {headerLeadingAction}
       {`Rows for ${initialQueryOnlyRecordFilters[0]?.value} in ${viewId}`}
       <output data-testid="creator-show-url">
         {indexIdentifierUrl('creator-1')}
@@ -108,7 +106,7 @@ jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
 jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
   RecordIndexSurface: (props: {
     contextStoreInstanceId: string;
-    headerActionButton?: ReactNode;
+    headerLeadingAction?: ReactNode;
     headerTitle?: string;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
@@ -125,14 +123,6 @@ jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
     applyCreatorBulkRelationship: mockApplyCreatorBulkRelationship,
   }),
 }));
-jest.mock(
-  '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex',
-  () => ({
-    useResetFocusStackToRecordIndex: () => ({
-      resetFocusStackToRecordIndex: mockResetFocusStackToRecordIndex,
-    }),
-  }),
-);
 jest.mock('@/ui/utilities/responsive/hooks/useIsMobile', () => ({
   useIsMobile: jest.fn(),
 }));
@@ -254,7 +244,7 @@ describe('CreatorListScopedCreatorIndex', () => {
       shouldUseIndexIdentifierUrlOnFullPageOpen: true,
     });
     expect(
-      mockRecordIndexSurface.mock.calls.at(-1)?.[0].headerActionButton,
+      mockRecordIndexSurface.mock.calls.at(-1)?.[0].headerLeadingAction,
     ).toBeDefined();
     expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).not.toHaveProperty(
       'creatorListContext',
@@ -416,46 +406,23 @@ describe('CreatorListScopedCreatorIndex', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('resets the focus stack to the main index before closing the scoped pane', () => {
-    resolveCreatorList('list-a', 'List A');
-    const onClose = jest.fn();
-
-    render(
-      <CreatorListScopedCreatorIndex
-        creatorListId="list-a"
-        onClose={onClose}
-      />,
-    );
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Back to Creator Lists' }),
-    );
-
-    expect(mockResetFocusStackToRecordIndex).toHaveBeenCalledWith(
-      PageFocusId.RecordIndex,
-    );
-    expect(
-      mockResetFocusStackToRecordIndex.mock.invocationCallOrder[0],
-    ).toBeLessThan(onClose.mock.invocationCallOrder[0]);
-  });
-
-  it('provides a native close action on desktop', () => {
+  it('omits the Back control from the desktop Creator pane', () => {
     resolveCreatorList('list-a', 'List A');
     (useIsMobile as jest.Mock).mockReturnValue(false);
-    const onClose = jest.fn();
 
     render(
       <CreatorListScopedCreatorIndex
         creatorListId="list-a"
-        onClose={onClose}
+        onClose={jest.fn()}
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Back to Creator Lists' }),
-    );
-
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('button', { name: 'Back to Creator Lists' }),
+    ).not.toBeInTheDocument();
+    expect(
+      mockRecordIndexSurface.mock.calls.at(-1)?.[0].headerLeadingAction,
+    ).toBeUndefined();
     expect(
       mockRecordIndexSurface.mock.calls.at(-1)?.[0].onOpenRecordFromIndexView,
     ).toBeUndefined();
