@@ -172,9 +172,9 @@ Expected: real non-cmux secondary skills are preserved in `~/.skills/`, no `cmux
 
 - [ ] **Step 5: Materialize Hermes aliases and disable package-supplied Pi skills**
 
-Before retiring `~/.agents/skills`, replace each non-cmux symlink in `~/.hermes/skills/` with an independent copy from the source library. Leave an existing real Hermes directory unchanged when its name collides. Remove `cmux*` aliases. Preserve package-only skills in `~/.skills/`, then convert the `npm:@dietrichgebert/ponytail` entry in `~/.pi/agent/settings.json` to object form with `"skills": []`; omitted resource keys keep its extensions enabled. Back up the settings file before editing it.
+Before retiring `~/.agents/skills`, replace each non-cmux symlink in `~/.hermes/skills/` with an independent copy from the source library. Leave an existing real Hermes directory unchanged when its name collides. Remove `cmux*` aliases. Preserve package-only skills in `~/.skills/`, then convert every package entry in `~/.pi/agent/settings.json` to object form with `"skills": []`; omitted resource keys keep extensions and other package resources enabled. Back up the settings file before editing it. Copy the two retained project-only Metronome skills into `~/.skills/` so every inventory entry has a source-library copy.
 
-Expected: Hermes no longer depends on `~/.agents/skills/`, cmux aliases are absent, and Pi packages expose no global skills.
+Expected: Hermes no longer depends on `~/.agents/skills/`, cmux aliases are absent, all packages are prevented from exposing global skills, and both Metronome source copies exist.
 
 - [ ] **Step 6: Preserve a rollback copy and retire the Pi global discovery directory**
 

@@ -12,7 +12,7 @@ Stop Pi from automatically loading the broad personal skill collection in this r
    - Verify every migrated non-cmux file against the source before removing the old location.
    - Delete every `cmux*` skill from both `~/.agents/skills/` and `~/.pi/agent/skills/`; do not archive or copy those skills.
    - Preserve any real non-symlink skill directory found in `~/.pi/agent/skills/` in `~/.skills/`, then empty `~/.pi/agent/skills/` so Pi has no global filesystem skill discovery source.
-   - Preserve skills supplied by global Pi packages in `~/.skills/`, then apply package resource filters (`"skills": []`) so those packages retain extensions but do not expose global skills.
+   - Preserve skills supplied by global Pi packages in `~/.skills/`, then apply `"skills": []` to every global package entry so packages retain extensions but cannot expose global skills.
 
 2. Preserve Hermes independently of Pi’s global discovery paths.
    - Replace Hermes symlinks into `~/.agents/skills/` with independent copies under `~/.hermes/skills/` before retiring the source path.
@@ -20,7 +20,7 @@ Stop Pi from automatically loading the broad personal skill collection in this r
    - Do not modify profile-specific skills or Hermes configuration.
    - Remove Hermes `cmux*` aliases intentionally.
 
-3. Keep independent copies—not symlinks—of selected skills under this repository's `.agents/skills/` directory. The local set is:
+3. Keep independent copies—not symlinks—of selected skills under this repository's `.agents/skills/` directory, with source-library copies under `~/.skills/`. The local set is:
    - `metronome-best-practices`
    - `metronome-create-contract`
    - `systematic-debugging`
