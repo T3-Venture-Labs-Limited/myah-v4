@@ -15,10 +15,7 @@ export const appendConnectedAccountIdToRedirectLocation = (
   try {
     const url = new URL(redirectLocation, WORKSPACE_ORIGIN);
 
-    if (
-      url.origin !== WORKSPACE_ORIGIN ||
-      !/^\/object\/[^/?#]+\/[^/?#]+$/.test(url.pathname)
-    ) {
+    if (url.origin !== WORKSPACE_ORIGIN) {
       return undefined;
     }
 

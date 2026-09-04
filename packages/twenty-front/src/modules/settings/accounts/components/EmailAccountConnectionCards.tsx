@@ -21,6 +21,17 @@ const StyledCardsContainer = styled.div`
   gap: ${themeCssVariables.spacing[2]};
 `;
 
+const StyledCardButton = styled.button`
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+`;
+
 type EmailAccountConnectionCardsProps = {
   returnTo?: string;
   onImapSmtpConnect?: (returnTo?: string) => void;
@@ -57,34 +68,46 @@ export const EmailAccountConnectionCards = ({
   return (
     <StyledCardsContainer>
       {(isGoogleMessagingEnabled || isGoogleCalendarEnabled) && (
-        <SettingsCard
-          Icon={<IconGoogle size={theme.icon.size.md} />}
-          title={t`Connect with Google`}
+        <StyledCardButton
           onClick={() =>
             triggerApisOAuth(ConnectedAccountProvider.GOOGLE, {
               redirectLocation: returnTo,
             })
           }
-        />
+          type="button"
+        >
+          <SettingsCard
+            Icon={<IconGoogle size={theme.icon.size.md} />}
+            title={t`Connect with Google`}
+          />
+        </StyledCardButton>
       )}
       {(isMicrosoftMessagingEnabled || isMicrosoftCalendarEnabled) && (
-        <SettingsCard
-          Icon={<IconMicrosoft size={theme.icon.size.md} />}
-          title={t`Connect with Microsoft`}
+        <StyledCardButton
           onClick={() =>
             triggerApisOAuth(ConnectedAccountProvider.MICROSOFT, {
               redirectLocation: returnTo,
             })
           }
-        />
+          type="button"
+        >
+          <SettingsCard
+            Icon={<IconMicrosoft size={theme.icon.size.md} />}
+            title={t`Connect with Microsoft`}
+          />
+        </StyledCardButton>
       )}
       {isImapSmtpCaldavEnabled &&
         (onImapSmtpConnect ? (
-          <SettingsCard
-            Icon={<IconAt size={theme.icon.size.md} />}
-            title={t`Connect via IMAP/SMTP`}
+          <StyledCardButton
             onClick={() => onImapSmtpConnect(returnTo)}
-          />
+            type="button"
+          >
+            <SettingsCard
+              Icon={<IconAt size={theme.icon.size.md} />}
+              title={t`Connect via IMAP/SMTP`}
+            />
+          </StyledCardButton>
         ) : (
           <UndecoratedLink to={imapSmtpPath}>
             <SettingsCard

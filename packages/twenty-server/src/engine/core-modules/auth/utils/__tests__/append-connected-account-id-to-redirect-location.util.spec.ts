@@ -13,10 +13,30 @@ describe('appendConnectedAccountIdToRedirectLocation', () => {
   });
 
   it.each([
+    ['/', '/?connectedAccountId=connected-account-1'],
+    [
+      '/settings/accounts',
+      '/settings/accounts?connectedAccountId=connected-account-1',
+    ],
+    [
+      '/settings/accounts?source=reconnect#connections',
+      '/settings/accounts?source=reconnect&connectedAccountId=connected-account-1#connections',
+    ],
+  ])(
+    'preserves safe relative redirect location %s',
+    (redirectLocation, expectedRedirectLocation) => {
+      expect(
+        appendConnectedAccountIdToRedirectLocation(
+          redirectLocation,
+          'connected-account-1',
+        ),
+      ).toBe(expectedRedirectLocation);
+    },
+  );
+
+  it.each([
     'https://evil.example/object/campaign/campaign-1',
     '//evil.example/object/campaign/campaign-1',
-    '/settings/accounts',
-    '/object/campaign',
     '/object/campaign/%',
   ])('rejects unsafe redirect location %s', (redirectLocation) => {
     expect(
