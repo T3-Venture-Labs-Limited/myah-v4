@@ -272,6 +272,17 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       ],
     } as const;
 
+    expect(
+      projection.evidenceLinks.filter(
+        ({ role }) => role === 'campaign_account',
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        recordId: campaignAccountId,
+        role: 'campaign_account',
+      }),
+    ]);
+
     await writer.project(projection);
     await writer.project(projection);
 
@@ -359,130 +370,262 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
   });
 
   it.each([
-    ['changed content', true],
-    ['missing sent Message', false],
-  ])('rejects outreach projection with %s', async (_label, changedContent) => {
-    const subject = 'Approved subject';
-    const body = 'Approved body';
-    const query = jest.fn(async (sql: string) => {
-      if (sql.includes('"timelineActivity"')) {
-        return [];
-      }
-      if (
-        sql.includes('"outreachAction"') &&
-        sql.includes('"campaignCreator"')
-      ) {
-        return [
-          {
-            subject,
-            body: changedContent ? 'Changed body' : body,
-            recipientEmail: 'creator@example.com',
-            campaignCreatorId: 'campaign-creator-id',
-            creatorId: 'creator-id',
-            campaignId: 'campaign-id',
-            assignedManagedMailboxId: null,
-            campaignAccountId: null,
-            connectedAccountId: 'connected-account-id',
-            messageChannelId: 'message-channel-id',
-            senderEmail: 'sender@example.com',
-            senderDisplayName: null,
-            providerDraftExternalId: 'provider-draft-id',
-            providerThreadExternalId: null,
-            messageThreadId: null,
-            inReplyTo: null,
-            executionReceiptId: null,
-          },
-        ];
-      }
-      if (sql.includes('"message"')) {
-        return [];
-      }
+    ['Campaign link', { campaignAccountId: 'other-campaign-account-id' }],
+    ['provider draft', { providerDraftExternalId: 'other-provider-draft-id' }],
+    ['recipient', { recipientEmail: 'other@example.com' }],
+    ['subject', { subject: 'Changed subject' }],
+    ['body', { body: 'Changed body' }],
+  ])(
+    'rejects outreach projection and recovery without persistence when the approved %s drifts',
+    async (_label, actionDrift) => {
+      const subject = 'Approved subject';
+      const body = 'Approved body';
+      const query = jest.fn(async (sql: string) => {
+        if (sql.includes('"timelineActivity"')) {
+          return [];
+        }
+        if (
+          sql.includes('"outreachAction"') &&
+          sql.includes('"campaignCreator"')
+        ) {
+          return [
+            {
+              subject,
+              body,
+              recipientEmail: 'creator@example.com',
+              campaignCreatorId: 'campaign-creator-id',
+              creatorId: 'creator-id',
+              campaignId: 'campaign-id',
+              assignedManagedMailboxId: null,
+              campaignAccountId: null,
+              connectedAccountId: 'connected-account-id',
+              messageChannelId: 'message-channel-id',
+              senderEmail: 'sender@example.com',
+              senderDisplayName: null,
+              providerDraftExternalId: 'provider-draft-id',
+              providerThreadExternalId: null,
+              messageThreadId: null,
+              inReplyTo: null,
+              executionReceiptId: null,
+              ...actionDrift,
+            },
+          ];
+        }
+        if (sql.includes('"message"')) {
+          return [];
+        }
 
-      return [];
-    });
-    const execute = jest.fn();
-    const createQueryBuilder = jest.fn(() => ({
-      insert: () => ({
-        into: () => ({
-          values: () => ({ orIgnore: () => ({ execute }) }),
+        return [];
+      });
+      const execute = jest.fn();
+      const createQueryBuilder = jest.fn(() => ({
+        insert: () => ({
+          into: () => ({
+            values: () => ({ orIgnore: () => ({ execute }) }),
+          }),
         }),
-      }),
-    }));
-    const dataSource = {
-      query,
-      transaction: jest.fn(
-        async (
-          callback: (manager: {
-            query: typeof query;
-            createQueryBuilder: typeof createQueryBuilder;
-          }) => unknown,
-        ) => callback({ query, createQueryBuilder }),
-      ),
-    };
-    const writer = new ActionReceiptWorkspaceProjectionWriterService(
-      dataSource as never,
-      { findOne: jest.fn().mockResolvedValue(null) } as never,
-      { persistSentMessage: jest.fn() } as never,
-      {} as never,
-    );
+      }));
+      const dataSource = {
+        query,
+        transaction: jest.fn(
+          async (
+            callback: (manager: {
+              query: typeof query;
+              createQueryBuilder: typeof createQueryBuilder;
+            }) => unknown,
+          ) => callback({ query, createQueryBuilder }),
+        ),
+      };
+      const persistSentMessage = jest.fn();
+      const writer = new ActionReceiptWorkspaceProjectionWriterService(
+        dataSource as never,
+        { findOne: jest.fn().mockResolvedValue(null) } as never,
+        { persistSentMessage } as never,
+        {} as never,
+      );
 
-    await expect(
-      writer.project({
-        receiptId: 'receipt-id',
-        workspaceId: '00000000-0000-4000-8000-000000000020',
-        draftId: 'draft-id',
-        contentDigest: computeActionContentDigest(
-          JSON.stringify([subject, body]),
+      await expect(
+        writer.project({
+          receiptId: 'receipt-id',
+          workspaceId: '00000000-0000-4000-8000-000000000020',
+          draftId: 'draft-id',
+          contentDigest: computeActionContentDigest(
+            JSON.stringify([subject, body]),
+          ),
+          actionName: 'send_outreach_email',
+          providerMessageId: '<sent@example.com>',
+          providerExternalMessageId: null,
+          providerThreadExternalId: null,
+          recipientFingerprint: computeActionContentDigest(
+            JSON.stringify(['creator@example.com']),
+          ),
+          sendingAccountFingerprint: computeActionContentDigest(
+            JSON.stringify([
+              null,
+              null,
+              'connected-account-id',
+              'message-channel-id',
+              'sender@example.com',
+              null,
+            ]),
+          ),
+          actionContextFingerprint: computeActionContentDigest(
+            JSON.stringify(['provider-draft-id', null, null, null]),
+          ),
+          evidenceLinks: [
+            {
+              objectMetadataId: 'campaign-creator-metadata-id',
+              recordId: 'campaign-creator-id',
+              role: 'campaign_creator',
+            },
+            {
+              objectMetadataId: 'creator-metadata-id',
+              recordId: 'creator-id',
+              role: 'recipient',
+            },
+            {
+              objectMetadataId: 'campaign-metadata-id',
+              recordId: 'campaign-id',
+              role: 'campaign',
+            },
+          ],
+        } as never),
+      ).rejects.toThrow(
+        'The approved outreach action is unavailable for projection',
+      );
+      expect(persistSentMessage).not.toHaveBeenCalled();
+      expect(
+        query.mock.calls.some(([sql]) =>
+          String(sql).trimStart().startsWith('UPDATE'),
         ),
-        actionName: 'send_outreach_email',
-        providerMessageId: '<sent@example.com>',
-        providerExternalMessageId: null,
-        providerThreadExternalId: null,
-        recipientFingerprint: computeActionContentDigest(
-          JSON.stringify(['creator@example.com']),
-        ),
-        sendingAccountFingerprint: computeActionContentDigest(
-          JSON.stringify([
-            null,
-            null,
-            'connected-account-id',
-            'message-channel-id',
-            'sender@example.com',
-            null,
-          ]),
-        ),
-        actionContextFingerprint: computeActionContentDigest(
-          JSON.stringify(['provider-draft-id', null, null, null]),
-        ),
-        evidenceLinks: [
-          {
-            objectMetadataId: 'campaign-creator-metadata-id',
-            recordId: 'campaign-creator-id',
-            role: 'campaign_creator',
-          },
-          {
-            objectMetadataId: 'creator-metadata-id',
-            recordId: 'creator-id',
-            role: 'recipient',
-          },
-          {
-            objectMetadataId: 'campaign-metadata-id',
-            recordId: 'campaign-id',
-            role: 'campaign',
-          },
-        ],
-      } as never),
-    ).rejects.toThrow(
-      changedContent
-        ? 'The approved outreach action is unavailable for projection'
-        : 'The sent outreach Message is unavailable for projection',
-    );
-    expect(
-      query.mock.calls.some(([sql]) =>
-        String(sql).trimStart().startsWith('UPDATE'),
+      ).toBe(false);
+      expect(createQueryBuilder).not.toHaveBeenCalled();
+    },
+  );
+
+  it('requires exact linked or managed sender authority before projection or recovery', () => {
+    const writer = new ActionReceiptWorkspaceProjectionWriterService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    ) as unknown as {
+      isProjectableOutreachAction: (action: unknown, input: unknown) => boolean;
+    };
+    const baseAction = {
+      subject: 'Approved subject',
+      body: 'Approved body',
+      recipientEmail: 'creator@example.com',
+      campaignCreatorId: 'campaign-creator-id',
+      creatorId: 'creator-id',
+      campaignId: 'campaign-id',
+      assignedManagedMailboxId: null,
+      campaignAccountId: 'campaign-account-id',
+      connectedAccountId: 'connected-account-id',
+      messageChannelId: 'message-channel-id',
+      senderEmail: 'sender@example.com',
+      senderDisplayName: 'Sender Name',
+      providerDraftExternalId: 'provider-draft-id',
+      providerThreadExternalId: null,
+      messageThreadId: null,
+      inReplyTo: null,
+      executionReceiptId: null,
+    };
+    type ProjectableAction = Omit<
+      typeof baseAction,
+      'assignedManagedMailboxId' | 'campaignAccountId'
+    > & {
+      assignedManagedMailboxId: string | null;
+      campaignAccountId: string | null;
+    };
+    const projectionFor = (action: ProjectableAction) => ({
+      receiptId: 'receipt-id',
+      contentDigest: computeActionContentDigest(
+        JSON.stringify([action.subject, action.body]),
       ),
-    ).toBe(false);
-    expect(createQueryBuilder).not.toHaveBeenCalled();
+      recipientFingerprint: computeActionContentDigest(
+        JSON.stringify([action.recipientEmail]),
+      ),
+      sendingAccountFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          action.assignedManagedMailboxId,
+          action.campaignAccountId,
+          action.connectedAccountId,
+          action.messageChannelId,
+          action.senderEmail,
+          action.senderDisplayName,
+        ]),
+      ),
+      actionContextFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          action.providerDraftExternalId,
+          action.inReplyTo,
+          action.messageThreadId,
+          action.providerThreadExternalId,
+        ]),
+      ),
+      evidenceLinks: [
+        {
+          objectMetadataId: 'campaign-creator-metadata-id',
+          recordId: action.campaignCreatorId,
+          role: 'campaign_creator',
+        },
+        {
+          objectMetadataId: 'creator-metadata-id',
+          recordId: action.creatorId,
+          role: 'recipient',
+        },
+        {
+          objectMetadataId: 'campaign-metadata-id',
+          recordId: action.campaignId,
+          role: 'campaign',
+        },
+        ...(action.campaignAccountId === null
+          ? []
+          : [
+              {
+                objectMetadataId: 'campaign-account-metadata-id',
+                recordId: action.campaignAccountId,
+                role: 'campaign_account',
+              },
+            ]),
+      ],
+    });
+    const managedAction: ProjectableAction = {
+      ...baseAction,
+      assignedManagedMailboxId: 'managed-mailbox-id',
+      campaignAccountId: null,
+    };
+
+    expect(
+      writer.isProjectableOutreachAction(baseAction, projectionFor(baseAction)),
+    ).toBe(true);
+    expect(
+      writer.isProjectableOutreachAction(
+        managedAction,
+        projectionFor(managedAction),
+      ),
+    ).toBe(true);
+    expect(
+      projectionFor(managedAction).evidenceLinks.filter(
+        ({ role }) => role === 'campaign_account',
+      ),
+    ).toEqual([]);
+
+    for (const driftedAction of [
+      { ...baseAction, campaignAccountId: 'other-campaign-account-id' },
+      { ...baseAction, providerDraftExternalId: 'other-provider-draft-id' },
+      { ...baseAction, recipientEmail: 'other@example.com' },
+      { ...baseAction, subject: 'Changed subject' },
+      { ...baseAction, body: 'Changed body' },
+    ]) {
+      expect(
+        writer.isProjectableOutreachAction(
+          driftedAction,
+          projectionFor(baseAction),
+        ),
+      ).toBe(false);
+    }
   });
 
   it('dispatches an Inbox receipt to the Inbox projection service', async () => {
