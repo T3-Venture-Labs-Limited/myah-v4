@@ -1,0 +1,1 @@
+export const UNIPILE_INSTAGRAM_ACCOUNT_RECOVERY_CRON_PATTERN = '*/5 * * * *';

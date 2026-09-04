@@ -48,6 +48,7 @@ const MIGRATED_REST_METHODS = [
 
 const MYAH_SHOPIFY_REST_ROUTES = [
   { path: 'rest/myah/instagram/*path', method: RequestMethod.ALL },
+  { path: 'rest/myah/unipile/instagram/*path', method: RequestMethod.ALL },
   { path: 'rest/myah/shopify/oauth/start', method: RequestMethod.POST },
   { path: 'rest/myah/shopify/oauth/callback', method: RequestMethod.GET },
   { path: 'rest/myah/shopify/status', method: RequestMethod.GET },

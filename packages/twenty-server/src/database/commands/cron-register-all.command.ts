@@ -28,6 +28,7 @@ import { MessagingMessageListFetchCronCommand } from 'src/modules/messaging/mess
 import { MessagingMessagesImportCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-messages-import.cron.command';
 import { MessagingOngoingStaleCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-ongoing-stale.cron.command';
 import { MessagingRelaunchFailedMessageChannelsCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-relaunch-failed-message-channels.cron.command';
+import { UnipileInstagramAccountRecoveryCronCommand } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.cron-command';
 import { WorkflowCleanWorkflowRunsCronCommand } from 'src/modules/workflow/workflow-runner/workflow-run-queue/cron/command/workflow-clean-workflow-runs.cron.command';
 import { WorkflowHandleStaledRunsCronCommand } from 'src/modules/workflow/workflow-runner/workflow-run-queue/cron/command/workflow-handle-staled-runs.cron.command';
 import { WorkflowRunEnqueueCronCommand } from 'src/modules/workflow/workflow-runner/workflow-run-queue/cron/command/workflow-run-enqueue.cron.command';
@@ -72,6 +73,7 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly billingReminderCronCommand: BillingReminderCronCommand,
     private readonly managedProviderBillingRecoveryCronCommand: ManagedProviderBillingRecoveryCronCommand,
     private readonly managedEmailReconciliationCronCommand: ManagedEmailReconciliationCronCommand,
+    private readonly unipileInstagramAccountRecoveryCronCommand: UnipileInstagramAccountRecoveryCronCommand,
     private readonly twentyConfigService: TwentyConfigService,
   ) {
     super();
@@ -92,6 +94,10 @@ export class CronRegisterAllCommand extends CommandRunner {
 
     const isMetronomeEnabled =
       this.twentyConfigService.get('METRONOME_ENABLED');
+
+    const isUnipileInstagramEnabled = this.twentyConfigService.get(
+      'UNIPILE_INSTAGRAM_ENABLED',
+    );
 
     const allCommands = [
       {
@@ -201,6 +207,11 @@ export class CronRegisterAllCommand extends CommandRunner {
         name: 'ManagedProviderBillingRecovery',
         command: this.managedProviderBillingRecoveryCronCommand,
         isEnabled: isMetronomeEnabled,
+      },
+      {
+        name: 'UnipileInstagramAccountRecovery',
+        command: this.unipileInstagramAccountRecoveryCronCommand,
+        isEnabled: isUnipileInstagramEnabled,
       },
       {
         name: 'ManagedEmailRecovery',

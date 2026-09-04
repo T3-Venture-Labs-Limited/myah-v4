@@ -13,12 +13,14 @@ import {
   INSTAGRAM_ACCOUNT_LAST_ERROR_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_OBJECT_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_STATUS_FIELD_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_ACCOUNT_UNIPILE_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_ACCOUNT_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
 enum InstagramAccountStatus {
+  CONNECTING = 'CONNECTING',
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
   NEEDS_RECONNECT = 'NEEDS_RECONNECT',
@@ -81,9 +83,21 @@ export default defineObject({
       label: 'Instagram account ID',
       name: 'igUserId',
       isNullable: true,
+      isUnique: true,
       defaultValue: null,
       description:
         'Instagram-scoped account id when returned by provider data.',
+    },
+    {
+      universalIdentifier:
+        INSTAGRAM_ACCOUNT_UNIPILE_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      label: 'Unipile account ID',
+      name: 'unipileAccountId',
+      isNullable: true,
+      isUnique: true,
+      defaultValue: null,
+      description: 'Unipile account id for this workspace Instagram account.',
     },
     {
       universalIdentifier:
@@ -129,6 +143,13 @@ export default defineObject({
           label: 'Error',
           position: 3,
           color: 'red',
+        },
+        {
+          id: 'b14dcff4-87a7-47b4-ad0b-507f825620cb',
+          value: InstagramAccountStatus.CONNECTING,
+          label: 'Connecting',
+          position: 4,
+          color: 'blue',
         },
       ],
     },
