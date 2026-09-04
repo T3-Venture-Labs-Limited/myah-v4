@@ -1403,6 +1403,8 @@ describe('Myah standard metadata contract', () => {
       '462544a0-e6a2-5ca4-ae7b-a7acf5d26d24';
     const channelFieldUniversalIdentifier =
       '113a57a6-701b-5595-bfbf-f433a198ec5e';
+    const connectedAccountIdFieldUniversalIdentifier =
+      '6495ecde-ad97-520f-8024-4475ffdd6d17';
     const isDefaultFieldUniversalIdentifier =
       '19f14753-19a6-53fd-ae1e-45dd834b0470';
     const messageChannelFieldUniversalIdentifier =
@@ -1438,6 +1440,9 @@ describe('Myah standard metadata contract', () => {
       labelSingular: 'Campaign Account',
       labelPlural: 'Campaign Accounts',
     });
+    expect(Object.keys(MYAH_STANDARD_OBJECTS.campaignAccount.indexes)).toEqual([
+      'campaignAccountUniqueIndex',
+    ]);
     expect(fieldMetadata[campaignFieldUniversalIdentifier]).toMatchObject({
       universalIdentifier: campaignFieldUniversalIdentifier,
       objectMetadataUniversalIdentifier:
@@ -1469,6 +1474,15 @@ describe('Myah standard metadata contract', () => {
           position: 0,
         }),
       ],
+    });
+    expect(
+      fieldMetadata[connectedAccountIdFieldUniversalIdentifier],
+    ).toMatchObject({
+      universalIdentifier: connectedAccountIdFieldUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      name: 'connectedAccountId',
+      type: FieldMetadataType.TEXT,
     });
     expect(fieldMetadata[isDefaultFieldUniversalIdentifier]).toMatchObject({
       universalIdentifier: isDefaultFieldUniversalIdentifier,
@@ -1535,7 +1549,7 @@ describe('Myah standard metadata contract', () => {
         }),
         expect.objectContaining({
           fieldMetadataUniversalIdentifier:
-            '6495ecde-ad97-520f-8024-4475ffdd6d17',
+            connectedAccountIdFieldUniversalIdentifier,
         }),
       ],
     });

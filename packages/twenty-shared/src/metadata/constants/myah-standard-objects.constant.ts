@@ -705,7 +705,7 @@ export const MYAH_STANDARD_OBJECTS = {
       },
     },
     indexes: {
-      campaignChannelConnectedAccountUniqueIndex: {
+      campaignAccountUniqueIndex: {
         universalIdentifier: 'c682d674-b37b-5554-aff7-f00ed7eaa305',
       },
     },

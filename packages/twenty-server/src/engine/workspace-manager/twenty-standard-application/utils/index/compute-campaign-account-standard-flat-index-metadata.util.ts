@@ -16,11 +16,11 @@ export const buildCampaignAccountStandardFlatIndexMetadatas = ({
   AllStandardObjectIndexName<'campaignAccount'>,
   FlatIndexMetadata
 > => ({
-  campaignChannelConnectedAccountUniqueIndex: createStandardIndexFlatMetadata({
+  campaignAccountUniqueIndex: createStandardIndexFlatMetadata({
     objectName,
     workspaceId,
     context: {
-      indexName: 'campaignChannelConnectedAccountUniqueIndex',
+      indexName: 'campaignAccountUniqueIndex',
       relatedFieldNames: ['campaign', 'channel', 'connectedAccountId'],
       isUnique: true,
       indexWhereClause: '"deletedAt" IS NULL',
