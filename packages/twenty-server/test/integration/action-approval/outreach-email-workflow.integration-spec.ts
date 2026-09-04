@@ -63,6 +63,28 @@ const preMyah168FieldNames = new Set<string>([
 const outreachApprovalFieldNames = Object.keys(
   MYAH_STANDARD_OBJECTS.outreachAction.fields,
 ).filter((fieldName) => !preMyah168FieldNames.has(fieldName));
+const requiredMyah168OutreachActionFieldIdentifiers = {
+  subject: 'a3ecbb51-442c-589d-b944-4bf5f6ddc93d',
+  body: 'fe19e40a-8f51-54df-b631-390b33a72359',
+  contentDigest: 'ed7d3f38-2ebf-556a-bc7d-7507def97dab',
+  recipientEmail: '21598e0a-077c-519b-b8d4-1a1a95966d90',
+  connectedAccountId: 'df2e43ca-b6b4-50ea-a0db-6edbb46ab391',
+  messageChannelId: 'a0b2e292-21e4-5226-aa88-e732345383e5',
+  senderEmail: 'b9b351b6-7e75-52be-9eaa-21cd6f722c12',
+  senderDisplayName: 'ec41fcc7-25d9-58b6-88a1-6749306e6947',
+  approvalBindingId: '8b5bd6ca-b61f-5a0c-b225-37f515d649ba',
+  executionReceiptId: '81731a47-27a7-5227-869c-284087244fa7',
+  providerDraftExternalId: '63285ab2-bd0c-537e-999b-4e67119b3bcc',
+  sentHeaderMessageId: '31e80297-1638-53b3-a607-3125905a63aa',
+  providerMessageExternalId: '3835066d-3e92-5781-a926-54b01b73d3a2',
+  providerThreadExternalId: 'f9dea5b1-f7a2-5c30-a5fe-8fbf082c87ad',
+  messageId: '9cca420c-78b7-52b9-ac79-c1f797e47846',
+  messageThreadId: '0a05accb-b4ca-5673-87be-41ea7d50c50b',
+  inReplyTo: '8b2b7357-3662-54e7-8433-31b73899051b',
+} as const;
+const requiredMyah270OutreachActionFieldIdentifiers = {
+  campaignAccountId: '417af66e-c311-53a8-8811-4d5818e01dc2',
+} as const;
 const workspaceMetadataCacheKeyNames = [
   ...TWENTY_STANDARD_ALL_METADATA_NAME.map(getMetadataFlatEntityMapsKey),
   'featureFlagsMap',
@@ -148,9 +170,17 @@ describe('outreach email workflow migration (PostgreSQL)', () => {
 
   beforeAll(async () => {
     dataSource = global.testDataSource;
-    if (outreachApprovalFieldNames.length !== 17) {
-      throw new Error('MYAH-168 must own exactly 17 Outreach Action fields');
-    }
+    expect(MYAH_STANDARD_OBJECTS.outreachAction.fields).toMatchObject(
+      Object.fromEntries(
+        Object.entries({
+          ...requiredMyah168OutreachActionFieldIdentifiers,
+          ...requiredMyah270OutreachActionFieldIdentifiers,
+        }).map(([name, universalIdentifier]) => [
+          name,
+          { universalIdentifier },
+        ]),
+      ),
+    );
 
     const myahWorkspaces = await dataSource.query<{ id: string }[]>(
       `SELECT workspace."id"
@@ -874,7 +904,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       await dataSource.query(
         `DELETE FROM "${schemaName}"."timelineActivity"
          WHERE "createdByContext" ->> 'actionReceiptId' IN (
-           SELECT receipt."id"
+           SELECT receipt."id"::text
            FROM core."actionExecutionReceipt" receipt
            INNER JOIN core."actionApprovalBinding" binding
              ON binding."id" = receipt."actionApprovalBindingId"
@@ -1035,7 +1065,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       dataSource.query(
         `SELECT "id" FROM "${schemaName}"."timelineActivity"
          WHERE "createdByContext" ->> 'actionReceiptId' IN (
-           SELECT "id" FROM core."actionExecutionReceipt"
+           SELECT "id"::text FROM core."actionExecutionReceipt"
            WHERE "actionApprovalBindingId" = $1
          )`,
         [approvalBindingId],
@@ -1145,6 +1175,8 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       ),
       sendingAccountFingerprint: computeActionContentDigest(
         JSON.stringify([
+          managedMailboxId,
+          null,
           connectedAccountId,
           messageChannelId,
           senderEmail,
@@ -1152,7 +1184,12 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         ]),
       ),
       actionContextFingerprint: computeActionContentDigest(
-        JSON.stringify([null, null, providerThreadExternalId]),
+        JSON.stringify([
+          'provider-draft-recovery',
+          null,
+          null,
+          providerThreadExternalId,
+        ]),
       ),
       evidenceLinks: [
         {
@@ -1163,7 +1200,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         {
           objectMetadataId: randomUUID(),
           recordId: creatorId,
-          role: 'creator',
+          role: 'recipient',
         },
         {
           objectMetadataId: randomUUID(),
