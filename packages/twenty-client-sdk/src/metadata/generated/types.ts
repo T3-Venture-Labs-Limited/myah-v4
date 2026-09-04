@@ -3747,6 +3747,9 @@ export default {
             "clientSecret": [
                 1
             ],
+            "publishableKey": [
+                1
+            ],
             "__typename": [
                 1
             ]

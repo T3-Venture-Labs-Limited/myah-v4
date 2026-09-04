@@ -239,7 +239,10 @@ export class BillingResolver {
         { action, workspaceId: workspace.id },
       );
 
-    return { clientSecret: paymentAction.clientSecret };
+    return {
+      clientSecret: paymentAction.clientSecret,
+      publishableKey: paymentAction.publishableKey,
+    };
   }
 
   @Mutation(() => ManagedProviderCustomerFundingHistoryItemDTO)

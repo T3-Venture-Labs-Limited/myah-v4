@@ -103,6 +103,7 @@ const createResolver = () => {
       .mockResolvedValue(billingSummary),
     getCustomerFundingPaymentAction: jest.fn().mockResolvedValue({
       clientSecret: 'pi_secret',
+      publishableKey: 'pk_test',
       paymentIntentId: 'pi_1',
       stripeInvoiceId: 'in_1',
     }),
@@ -228,7 +229,7 @@ describe('BillingResolver customer AI funding', () => {
     ).toHaveBeenLastCalledWith(workspace.id, null, billingDetails);
   });
 
-  it('returns only the client secret for payment authentication', async () => {
+  it('returns only browser-safe Stripe fields for payment authentication', async () => {
     const { resolver } = createResolver();
 
     await expect(
@@ -236,7 +237,10 @@ describe('BillingResolver customer AI funding', () => {
         workspace as never,
         { actionId: action.id },
       ),
-    ).resolves.toEqual({ clientSecret: 'pi_secret' });
+    ).resolves.toEqual({
+      clientSecret: 'pi_secret',
+      publishableKey: 'pk_test',
+    });
   });
   it('maps a polled action through the authenticated workspace without legacy preset evidence', async () => {
     const { fundingService, resolver } = createResolver();

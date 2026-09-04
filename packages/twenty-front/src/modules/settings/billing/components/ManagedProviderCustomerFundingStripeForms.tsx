@@ -125,12 +125,14 @@ const PaymentSetupControl = ({
 export const ManagedProviderCustomerFundingPaymentForm = ({
   billingSummary,
   clientSecret,
+  publishableKey,
   onCancel,
   onComplete,
   setupIntentId,
 }: {
   billingSummary: WorkspaceBillingSafeSummary | null;
   clientSecret: string | null;
+  publishableKey: string | null;
   onCancel: () => void;
   onComplete: (
     setupIntentId: string | null,
@@ -138,7 +140,7 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
   ) => Promise<void>;
   setupIntentId: string | null;
 }) => {
-  const stripePromise = useStripePromise();
+  const stripePromise = useStripePromise(publishableKey);
   const appearance = useStripeAppearance();
   const [details, setDetails] = useState<CustomerFundingBillingDetails>({
     city: billingSummary?.address.city ?? '',
@@ -365,14 +367,16 @@ const PaymentActionControl = ({
 
 export const ManagedProviderCustomerFundingPaymentActionForm = ({
   clientSecret,
+  publishableKey,
   onCancel,
   onConfirmed,
 }: {
   clientSecret: string;
+  publishableKey: string | null;
   onCancel: () => void;
   onConfirmed: () => Promise<void>;
 }) => {
-  const stripePromise = useStripePromise();
+  const stripePromise = useStripePromise(publishableKey);
   const appearance = useStripeAppearance();
 
   return (

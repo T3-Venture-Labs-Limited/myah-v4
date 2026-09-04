@@ -20,9 +20,14 @@ const getStripePromise = (publishableKey: string): Promise<Stripe | null> => {
   return stripePromise;
 };
 
-export const useStripePromise = (): Promise<Stripe | null> | null => {
+export const useStripePromise = (
+  explicitPublishableKey?: string | null,
+): Promise<Stripe | null> | null => {
   const billing = useAtomStateValue(billingState);
-  const publishableKey = billing?.stripePublishableKey;
+  const publishableKey =
+    explicitPublishableKey === undefined
+      ? billing?.stripePublishableKey
+      : explicitPublishableKey;
 
   return isDefined(publishableKey) && publishableKey !== ''
     ? getStripePromise(publishableKey)

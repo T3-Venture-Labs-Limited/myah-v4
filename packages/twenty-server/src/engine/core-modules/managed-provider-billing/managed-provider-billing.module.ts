@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { CustomerAccountModule } from 'src/engine/core-modules/customer-account/customer-account.module';
+
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
@@ -29,6 +31,7 @@ import { ManagedProviderStripeService } from './stripe/managed-provider-stripe.s
 
 @Module({
   imports: [
+    CustomerAccountModule,
     TwentyConfigModule,
     MessageQueueModule,
     TypeOrmModule.forFeature([

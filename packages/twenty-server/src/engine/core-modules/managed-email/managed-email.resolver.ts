@@ -140,6 +140,7 @@ export class ManagedEmailResolver {
   async prepareManagedEmailPaymentMethod(
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<ManagedEmailPaymentSetupDTO> {
+    this.managedEmailCustomerService.assertAcquisitionAvailable(workspace.id);
     if (!this.managedProviderStripeService) {
       throw new Error('Managed email payment is unavailable');
     }
@@ -163,6 +164,7 @@ export class ManagedEmailResolver {
     @Args('input') input: ManagedEmailCompletePaymentMethodInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<ManagedEmailPaymentMethodStatusDTO> {
+    this.managedEmailCustomerService.assertAcquisitionAvailable(workspace.id);
     if (!this.managedProviderStripeService) {
       throw new Error('Managed email payment is unavailable');
     }

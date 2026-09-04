@@ -179,6 +179,7 @@ export const PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION = gql`
   ) {
     prepareManagedProviderCustomerFundingPaymentAction(actionId: $actionId) {
       clientSecret
+      publishableKey
     }
   }
 `;

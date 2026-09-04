@@ -493,6 +493,7 @@ export class ManagedProviderCustomerFundingService {
     workspaceId: string;
   }): Promise<{
     clientSecret: string;
+    publishableKey: string;
     paymentIntentId: string;
     stripeInvoiceId: string;
   }> {
@@ -597,6 +598,7 @@ export class ManagedProviderCustomerFundingService {
 
     return {
       clientSecret: stripeState.clientSecret,
+      publishableKey: this.stripe.getPublishableKey(),
       paymentIntentId: stripeState.paymentIntentId,
       stripeInvoiceId: stripeState.stripeInvoiceId,
     };

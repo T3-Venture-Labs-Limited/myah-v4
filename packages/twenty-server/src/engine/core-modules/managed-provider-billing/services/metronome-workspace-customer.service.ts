@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
+import { CustomerAccountService } from 'src/engine/core-modules/customer-account/services/customer-account.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
@@ -41,6 +42,7 @@ export class MetronomeWorkspaceCustomerService {
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(MyahWorkspaceInstallationEntity)
     private readonly installationRepository: InstallationRepository,
+    private readonly customerAccountService: CustomerAccountService,
     private readonly metronomeClientService: MetronomeClientService,
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
@@ -275,6 +277,8 @@ export class MetronomeWorkspaceCustomerService {
         MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
       );
     }
+
+    await this.customerAccountService.ensureWorkspaceInstallation(workspaceId);
 
     const installation = await this.installationRepository.findOneBy({
       workspaceId,

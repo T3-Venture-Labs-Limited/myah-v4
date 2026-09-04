@@ -118,6 +118,9 @@ describe('ManagedProviderStripeService', () => {
       findOneBy: jest.fn().mockResolvedValue(installation),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
+    const customerAccountService = {
+      ensureWorkspaceInstallation: jest.fn().mockResolvedValue(installation),
+    };
     const twentyConfigService = {
       get: jest.fn((key: string) => {
         if (key === 'MANAGED_EMAIL_EXECUTION_MODE')
@@ -131,19 +134,22 @@ describe('ManagedProviderStripeService', () => {
       service: new ManagedProviderStripeService(
         stripe as never,
         installationRepository as never,
+        customerAccountService as never,
         twentyConfigService as never,
       ),
       stripe,
       installationRepository,
+      customerAccountService,
       twentyConfigService,
     };
   };
 
   it('creates one exact workspace Customer and returns a SetupIntent client secret', async () => {
-    const { service, stripe, installationRepository } = createService({
-      workspaceId,
-      stripeCustomerId: null,
-    });
+    const { customerAccountService, installationRepository, service, stripe } =
+      createService({
+        workspaceId,
+        stripeCustomerId: null,
+      });
 
     await expect(
       service.prepareWorkspacePaymentMethod({
@@ -157,6 +163,9 @@ describe('ManagedProviderStripeService', () => {
       ready: false,
       stripeCustomerId,
     });
+    expect(
+      customerAccountService.ensureWorkspaceInstallation,
+    ).toHaveBeenCalledWith(workspaceId);
     expect(stripe.customers.create).toHaveBeenCalledTimes(1);
     expect(stripe.setupIntents.create).toHaveBeenCalledWith(
       expect.objectContaining({
