@@ -23,6 +23,7 @@ import { MicrosoftAPIsOauthRequestCodeGuard } from 'src/engine/core-modules/auth
 import { MicrosoftAPIsService } from 'src/engine/core-modules/auth/services/microsoft-apis.service';
 import { TransientTokenService } from 'src/engine/core-modules/auth/token/services/transient-token.service';
 import { appendConnectedAccountIdToRedirectLocation } from 'src/engine/core-modules/auth/utils/append-connected-account-id-to-redirect-location.util';
+import { buildWorkspaceUrlFromRelativeRedirectLocation } from 'src/engine/core-modules/auth/utils/build-workspace-url-from-relative-redirect-location.util';
 import { APIsOAuthRequest } from 'src/engine/core-modules/auth/types/apis-oauth-request.type';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { GuardRedirectService } from 'src/engine/core-modules/guard-redirect/services/guard-redirect.service';
@@ -133,7 +134,7 @@ export class MicrosoftAPIsAuthController {
         );
       }
 
-      const pathname =
+      const returnLocation =
         appendConnectedAccountIdToRedirectLocation(
           redirectLocation,
           connectedAccountId,
@@ -142,9 +143,12 @@ export class MicrosoftAPIsAuthController {
           connectedAccountId,
         });
 
-      const url = this.workspaceDomainsService.buildWorkspaceURL({
+      const url = buildWorkspaceUrlFromRelativeRedirectLocation({
+        buildWorkspaceURL: this.workspaceDomainsService.buildWorkspaceURL.bind(
+          this.workspaceDomainsService,
+        ),
+        redirectLocation: returnLocation,
         workspace,
-        pathname,
       });
 
       return res.redirect(url.toString());
