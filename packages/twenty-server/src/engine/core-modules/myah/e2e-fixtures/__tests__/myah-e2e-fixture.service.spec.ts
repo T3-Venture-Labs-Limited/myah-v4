@@ -23,9 +23,17 @@ describe('MyahE2eFixtureService', () => {
       transaction: jest.fn(async (operation) => operation(manager)),
       query: jest.fn().mockResolvedValue([]),
     };
+    const workspaceQueryRunner = {
+      query: manager.query,
+      connect: jest.fn().mockResolvedValue(undefined),
+      startTransaction: jest.fn().mockResolvedValue(undefined),
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined),
+    };
     const workspaceDataSource = {
       query: jest.fn().mockResolvedValue([{ id: campaignId }]),
-      transaction: jest.fn(async (operation) => operation(manager)),
+      createQueryRunner: jest.fn().mockReturnValue(workspaceQueryRunner),
     };
     const proposal = {
       expectedActionBinding: { actionName: 'send_outreach_email' },
@@ -84,6 +92,7 @@ describe('MyahE2eFixtureService', () => {
       service,
       workspaceDomainsService,
       workspaceDataSource,
+      workspaceQueryRunner,
     };
   };
 
@@ -128,8 +137,9 @@ describe('MyahE2eFixtureService', () => {
       { shouldBypassPermissionChecks: true },
     );
     expect(
-      manager.query.mock.calls.some(([sql]: [string]) =>
-        sql.includes('INSERT INTO') && sql.includes('"outreachAction"'),
+      manager.query.mock.calls.some(
+        ([sql]: [string]) =>
+          sql.includes('INSERT INTO') && sql.includes('"outreachAction"'),
       ),
     ).toBe(false);
     expect(prepareOutreachEmailDraftTool.execute).toHaveBeenCalledTimes(1);
@@ -253,7 +263,8 @@ describe('MyahE2eFixtureService', () => {
   });
 
   it('fails closed for foreign cleanup ids and retains fixtures when deletion fails', async () => {
-    const { manager, registry, service } = createService();
+    const { manager, registry, service, workspaceQueryRunner } =
+      createService();
     const connectedAccountId = 'a1a3b7a6-b1c2-4a75-9b01-100000000005';
     const fixture = registry.register(workspaceId, {
       campaignIds: [],
@@ -276,6 +287,8 @@ describe('MyahE2eFixtureService', () => {
       'delete failed',
     );
     expect(registry.get(workspaceId, fixture.id)).not.toBeNull();
+    expect(workspaceQueryRunner.startTransaction).toHaveBeenCalledTimes(1);
+    expect(workspaceQueryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
 
     await expect(service.cleanup(fixtureContext, fixture.id)).resolves.toBe(
       true,
@@ -286,6 +299,8 @@ describe('MyahE2eFixtureService', () => {
       ),
       [[connectedAccountId]],
     );
+    expect(workspaceQueryRunner.commitTransaction).toHaveBeenCalledTimes(1);
+    expect(workspaceQueryRunner.release).toHaveBeenCalledTimes(2);
     await expect(service.cleanup(fixtureContext, fixture.id)).resolves.toBe(
       false,
     );

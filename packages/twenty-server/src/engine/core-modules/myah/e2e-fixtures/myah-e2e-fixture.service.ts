@@ -232,7 +232,9 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     }
     const outreachActionId = Reflect.get(output.result, 'outreachActionId');
     if (typeof outreachActionId !== 'string') {
-      throw new Error('E2E fixture outreach draft preparation returned no action');
+      throw new Error(
+        'E2E fixture outreach draft preparation returned no action',
+      );
     }
 
     return outreachActionId;
@@ -289,7 +291,10 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
   getCampaignMailboxFixtureStatus(
     context: AuthenticatedFixtureContext,
     fixtureId: string,
-  ): { providerSendAttemptCount: number; providerDraftPreparationCount: number } {
+  ): {
+    providerSendAttemptCount: number;
+    providerDraftPreparationCount: number;
+  } {
     const fixture = this.registry.get(context.workspaceId, fixtureId);
     if (!fixture) throw new Error('E2E fixture was not found');
 
@@ -430,9 +435,13 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     const dataSource =
       await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
     const schemaName = getWorkspaceSchemaName(workspaceId);
-    await dataSource.transaction(async (manager) => {
+    const queryRunner = dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
       const query = (sql: string, parameters: unknown[]) =>
-        manager.query(sql, parameters);
+        queryRunner.query(sql, parameters);
       const remove = async (table: string, ids?: string[]) => {
         if (!ids?.length) return;
         await query(`DELETE FROM ${table} WHERE "id" = ANY($1::uuid[])`, [ids]);
@@ -477,6 +486,12 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
       await remove('core."agentChatThread"', records.agentChatThreadIds);
       await remove('core."messageChannel"', records.messageChannelIds);
       await remove('core."connectedAccount"', records.connectedAccountIds);
-    });
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

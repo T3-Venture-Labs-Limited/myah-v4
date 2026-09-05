@@ -142,7 +142,11 @@ describe('OutreachEmailDraftService', () => {
     );
     globalWorkspaceOrmManager.getGlobalWorkspaceDataSource.mockResolvedValue({
       query: async () => {
-        const latestCampaignCreator = await campaignCreatorRepository.findOne.mock.results.at(-1)?.value;
+        const latestResult =
+          campaignCreatorRepository.findOne.mock.results[
+            campaignCreatorRepository.findOne.mock.results.length - 1
+          ];
+        const latestCampaignCreator = await latestResult?.value;
         return [
           {
             assignedManagedMailboxId:
