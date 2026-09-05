@@ -248,7 +248,7 @@ jest.mock('twenty-ui/input', () => {
 const linkedAccount = {
   id: 'campaign-account-1',
   connectedAccountId: 'connected-account-1',
-  health: 'AVAILABLE' as const,
+  health: 'AVAILABLE' as 'AVAILABLE' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE',
   isDefault: true,
   label: 'Primary mailbox',
   provider: 'GOOGLE',

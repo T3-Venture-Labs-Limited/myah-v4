@@ -332,9 +332,7 @@ export class OutreachEmailDraftService {
             throw new Error('Selected outreach mailbox is unavailable');
           }
           campaignAccountId = defaultEmailAccount.id;
-        } else if (
-          !isCanonicalManagedMailboxId(assignedManagedMailboxId)
-        ) {
+        } else if (!isCanonicalManagedMailboxId(assignedManagedMailboxId)) {
           throw new Error(
             'Campaign Creator has an invalid assigned managed mailbox',
           );

@@ -1426,6 +1426,426 @@ type EnterpriseSubscriptionStatusDTO {
   isCancellationScheduled: Boolean!
 }
 
+type BillingSubscriptionSchedulePhaseItem {
+  price: String!
+  quantity: Float
+}
+
+type BillingSubscriptionSchedulePhase {
+  start_date: Float!
+  end_date: Float!
+  items: [BillingSubscriptionSchedulePhaseItem!]!
+}
+
+type BillingProductMetadata {
+  planKey: BillingPlanKey!
+  priceUsageBased: BillingUsageType!
+  productKey: BillingProductKey!
+}
+
+"""The different billing plans available"""
+enum BillingPlanKey {
+  PRO
+  ENTERPRISE
+}
+
+enum BillingUsageType {
+  METERED
+  LICENSED
+}
+
+"""The different billing products available"""
+enum BillingProductKey {
+  BASE_PRODUCT
+  RESOURCE_CREDIT
+}
+
+type BillingPriceLicensed {
+  recurringInterval: SubscriptionInterval!
+  unitAmount: Float!
+  stripePriceId: String!
+  priceUsageType: BillingUsageType!
+  creditAmount: Float
+}
+
+enum SubscriptionInterval {
+  Month
+  Year
+}
+
+type BillingPriceTier {
+  upTo: Float
+  flatAmount: Float
+  unitAmount: Float
+}
+
+type BillingPriceMetered {
+  tiers: [BillingPriceTier!]!
+  recurringInterval: SubscriptionInterval!
+  stripePriceId: String!
+  priceUsageType: BillingUsageType!
+}
+
+type BillingProduct {
+  name: String!
+  description: String!
+  images: [String!]
+  metadata: BillingProductMetadata!
+}
+
+type BillingLicensedProduct implements BillingProductDTO {
+  name: String!
+  description: String!
+  images: [String!]
+  metadata: BillingProductMetadata!
+  prices: [BillingPriceLicensed!]
+}
+
+type BillingMeteredProduct implements BillingProductDTO {
+  name: String!
+  description: String!
+  images: [String!]
+  metadata: BillingProductMetadata!
+  prices: [BillingPriceMetered!]
+}
+
+type BillingSubscriptionItem {
+  id: UUID!
+  hasReachedCurrentPeriodCap: Boolean!
+  quantity: Float
+  stripePriceId: String!
+  billingProduct: BillingProductDTO!
+}
+
+type BillingCustomer {
+  id: UUID!
+  hasPaymentMethod: Boolean
+}
+
+type BillingSubscription {
+  id: UUID!
+  status: SubscriptionStatus!
+  interval: SubscriptionInterval
+  billingSubscriptionItems: [BillingSubscriptionItem!]
+  currentPeriodEnd: DateTime
+  metadata: JSON!
+  phases: [BillingSubscriptionSchedulePhase!]!
+  cancelAt: DateTime
+}
+
+enum SubscriptionStatus {
+  Active
+  Canceled
+  Incomplete
+  IncompleteExpired
+  PastDue
+  Paused
+  Trialing
+  Unpaid
+}
+
+type BillingEndTrialPeriod {
+  """Updated subscription status"""
+  status: SubscriptionStatus
+
+  """Boolean that confirms if a payment method was found"""
+  hasPaymentMethod: Boolean!
+
+  """
+  Billing portal URL for payment method update (returned when no payment method exists)
+  """
+  billingPortalUrl: String
+}
+
+type BillingResourceCreditUsage {
+  productKey: BillingProductKey!
+  periodStart: DateTime!
+  periodEnd: DateTime!
+  usedCredits: Float!
+  grantedCredits: Float!
+  rolloverCredits: Float!
+  totalGrantedCredits: Float!
+  unitPriceCents: Float!
+}
+
+type BillingPlan {
+  planKey: BillingPlanKey!
+  baseProducts: [BillingLicensedProduct!]!
+  resourceCreditProducts: [BillingLicensedProduct!]!
+  meteredProducts: [BillingMeteredProduct!]!
+}
+
+type BillingPaymentIntent {
+  clientSecret: String!
+  paymentIntentType: String!
+}
+
+type BillingSession {
+  url: String
+}
+
+type BillingUpdate {
+  """Current billing subscription"""
+  currentBillingSubscription: BillingSubscription!
+
+  """All billing subscriptions"""
+  billingSubscriptions: [BillingSubscription!]!
+}
+
+type ManagedProviderCustomerFundingBillingAddress {
+  city: String
+  country: String
+  line1: String
+  line2: String
+  postalCode: String
+  state: String
+}
+
+type ManagedProviderCustomerFundingCardSummary {
+  brand: String!
+  expiryMonth: Float!
+  expiryYear: Float!
+  last4: String!
+}
+
+type ManagedProviderCustomerFundingTaxIdSummary {
+  country: String
+  type: String!
+}
+
+type ManagedProviderCustomerFundingBillingSummary {
+  address: ManagedProviderCustomerFundingBillingAddress!
+  card: ManagedProviderCustomerFundingCardSummary
+  name: String
+  paymentMethodReady: Boolean!
+  taxId: ManagedProviderCustomerFundingTaxIdSummary
+}
+
+type ManagedProviderAiTopUpPolicy {
+  incrementCents: Int!
+  minimumPrincipalCents: Int!
+  maximumPrincipalCents: Int!
+  suggestedPrincipalCents: [Int!]!
+}
+
+type ManagedProviderCustomerFundingHistoryItem {
+  id: String!
+  fundingType: String!
+  state: String!
+  principalCents: String!
+  taxCents: String
+  collectedTotalCents: String
+  expiresAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  invoiceUrl: String
+  actionRequired: Boolean!
+}
+
+type ManagedProviderCustomerFundingPaymentMethod {
+  ready: Boolean!
+  clientSecret: String
+  billingSummary: ManagedProviderCustomerFundingBillingSummary
+  publishableKey: String
+  setupIntentId: String
+}
+
+type ManagedProviderCustomerFundingPaymentAction {
+  clientSecret: String!
+  publishableKey: String!
+}
+
+type ManagedProviderBillingStatus {
+  available: Boolean!
+  prepaidBalanceCents: String
+  pendingOperationCount: Int!
+  reconciliationRequiredOperationCount: Int!
+  customerFundingAvailable: Boolean!
+  customerFundingPaymentMethodReady: Boolean!
+  customerFundingPolicy: ManagedProviderAiTopUpPolicy!
+  customerFundingHistory: [ManagedProviderCustomerFundingHistoryItem!]!
+  customerFundingBillingSummary: ManagedProviderCustomerFundingBillingSummary
+}
+
+type VerificationRecord {
+  type: String!
+  key: String!
+  value: String!
+  priority: Float
+}
+
+type EmailingDomain {
+  id: UUID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  domain: String!
+  status: EmailingDomainStatus!
+  verificationRecords: [VerificationRecord!]
+  verifiedAt: DateTime
+}
+
+enum EmailingDomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  TEMPORARY_FAILURE
+}
+
+type PublicConnectionParametersOutput {
+  host: String!
+  port: Float!
+  username: String
+  connectionSecurity: EmailConnectionSecurity
+}
+
+enum EmailConnectionSecurity {
+  NONE
+  STARTTLS
+  SSL_TLS
+}
+
+type PublicImapSmtpCaldavConnectionParameters {
+  IMAP: PublicConnectionParametersOutput
+  SMTP: PublicConnectionParametersOutput
+  CALDAV: PublicConnectionParametersOutput
+}
+
+type ConnectedAccountPublicDTO {
+  id: UUID!
+  handle: String!
+  provider: String!
+  lastCredentialsRefreshedAt: DateTime
+  authFailedAt: DateTime
+  archivedAt: DateTime
+  handleAliases: [String!]
+  scopes: [String!]
+  lastSignedInAt: DateTime
+  userWorkspaceId: UUID!
+  connectionProviderId: UUID
+  applicationId: UUID
+  name: String
+  visibility: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  connectionParameters: PublicImapSmtpCaldavConnectionParameters
+}
+
+type MessageChannel {
+  id: UUID!
+  visibility: MessageChannelVisibility!
+  handle: String!
+  type: MessageChannelType!
+  isContactAutoCreationEnabled: Boolean!
+  contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy!
+  messageFolderImportPolicy: MessageFolderImportPolicy!
+  excludeNonProfessionalEmails: Boolean!
+  excludeGroupEmails: Boolean!
+  pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction!
+  isSyncEnabled: Boolean!
+  syncedAt: DateTime
+  syncStatus: MessageChannelSyncStatus!
+  syncStage: MessageChannelSyncStage!
+  syncStageStartedAt: DateTime
+  throttleFailureCount: Float!
+  throttleRetryAfter: DateTime
+  connectedAccountId: UUID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  connectedAccount: ConnectedAccountPublicDTO
+}
+
+enum MessageChannelVisibility {
+  METADATA
+  SUBJECT
+  SHARE_EVERYTHING
+}
+
+enum MessageChannelType {
+  EMAIL
+  SMS
+  EMAIL_GROUP
+}
+
+enum MessageChannelContactAutoCreationPolicy {
+  SENT_AND_RECEIVED
+  SENT
+  NONE
+}
+
+enum MessageFolderImportPolicy {
+  ALL_FOLDERS
+  SELECTED_FOLDERS
+}
+
+enum MessageChannelPendingGroupEmailsAction {
+  GROUP_EMAILS_DELETION
+  GROUP_EMAILS_IMPORT
+  NONE
+}
+
+enum MessageChannelSyncStatus {
+  NOT_SYNCED
+  ONGOING
+  ACTIVE
+  FAILED_INSUFFICIENT_PERMISSIONS
+  FAILED_UNKNOWN
+}
+
+enum MessageChannelSyncStage {
+  PENDING_CONFIGURATION
+  MESSAGE_LIST_FETCH_PENDING
+  MESSAGE_LIST_FETCH_SCHEDULED
+  MESSAGE_LIST_FETCH_ONGOING
+  MESSAGES_IMPORT_PENDING
+  MESSAGES_IMPORT_SCHEDULED
+  MESSAGES_IMPORT_ONGOING
+  FAILED
+}
+
+type CreateEmailGroupChannelOutput {
+  messageChannel: MessageChannel!
+  forwardingAddress: String!
+}
+
+type CampaignAudiencePreviewDTO {
+  totalMembers: Int!
+  withoutEmail: Int!
+  duplicateEmails: Int!
+  globallyUnsubscribed: Int!
+  topicUnsubscribed: Int!
+  sendable: Int!
+}
+
+type SendEmailViaDomainOutput {
+  messageId: String!
+}
+
+type CampaignSkippedRecipientsDTO {
+  noEmail: Int!
+  deduped: Int!
+  overCap: Int!
+}
+
+type SendMessageCampaignOutputDTO {
+  campaignId: String!
+  queuedCount: Int!
+  skipped: CampaignSkippedRecipientsDTO!
+}
+
+type UnsubscribeTopic {
+  id: UUID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  name: String
+  description: String
+  visibility: UnsubscribeTopicVisibility!
+}
+
+enum UnsubscribeTopicVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 type FileWithSignedUrl {
   id: UUID!
   path: String!
@@ -1557,124 +1977,6 @@ type LogicFunctionLogs {
   logs: String!
 }
 
-type BillingSubscriptionSchedulePhaseItem {
-  price: String!
-  quantity: Float
-}
-
-type BillingSubscriptionSchedulePhase {
-  start_date: Float!
-  end_date: Float!
-  items: [BillingSubscriptionSchedulePhaseItem!]!
-}
-
-type BillingProductMetadata {
-  planKey: BillingPlanKey!
-  priceUsageBased: BillingUsageType!
-  productKey: BillingProductKey!
-}
-
-"""The different billing plans available"""
-enum BillingPlanKey {
-  PRO
-  ENTERPRISE
-}
-
-enum BillingUsageType {
-  METERED
-  LICENSED
-}
-
-"""The different billing products available"""
-enum BillingProductKey {
-  BASE_PRODUCT
-  RESOURCE_CREDIT
-}
-
-type BillingPriceLicensed {
-  recurringInterval: SubscriptionInterval!
-  unitAmount: Float!
-  stripePriceId: String!
-  priceUsageType: BillingUsageType!
-  creditAmount: Float
-}
-
-enum SubscriptionInterval {
-  Month
-  Year
-}
-
-type BillingPriceTier {
-  upTo: Float
-  flatAmount: Float
-  unitAmount: Float
-}
-
-type BillingPriceMetered {
-  tiers: [BillingPriceTier!]!
-  recurringInterval: SubscriptionInterval!
-  stripePriceId: String!
-  priceUsageType: BillingUsageType!
-}
-
-type BillingProduct {
-  name: String!
-  description: String!
-  images: [String!]
-  metadata: BillingProductMetadata!
-}
-
-type BillingLicensedProduct implements BillingProductDTO {
-  name: String!
-  description: String!
-  images: [String!]
-  metadata: BillingProductMetadata!
-  prices: [BillingPriceLicensed!]
-}
-
-type BillingMeteredProduct implements BillingProductDTO {
-  name: String!
-  description: String!
-  images: [String!]
-  metadata: BillingProductMetadata!
-  prices: [BillingPriceMetered!]
-}
-
-type BillingSubscriptionItem {
-  id: UUID!
-  hasReachedCurrentPeriodCap: Boolean!
-  quantity: Float
-  stripePriceId: String!
-  billingProduct: BillingProductDTO!
-}
-
-type BillingSubscription {
-  id: UUID!
-  status: SubscriptionStatus!
-  interval: SubscriptionInterval
-  billingSubscriptionItems: [BillingSubscriptionItem!]
-  currentPeriodEnd: DateTime
-  metadata: JSON!
-  phases: [BillingSubscriptionSchedulePhase!]!
-  cancelAt: DateTime
-}
-
-enum SubscriptionStatus {
-  Active
-  Canceled
-  Incomplete
-  IncompleteExpired
-  PastDue
-  Paused
-  Trialing
-  Unpaid
-}
-
-type BillingCustomer {
-  id: UUID!
-  hasPaymentMethod: Boolean
-}
-
 type IndexField {
   id: UUID!
   fieldMetadataId: UUID!
@@ -1776,6 +2078,23 @@ type ObjectFieldsConnection {
   edges: [FieldEdge!]!
 }
 
+type CampaignEmailAccountDTO {
+  id: UUID!
+  connectedAccountId: UUID!
+  messageChannelId: UUID!
+  provider: String
+  senderEmail: String
+  label: String!
+  isDefault: Boolean!
+  health: CampaignEmailAccountHealth!
+}
+
+enum CampaignEmailAccountHealth {
+  AVAILABLE
+  RECONNECT_REQUIRED
+  UNAVAILABLE
+}
+
 type CampaignCreatorDTO {
   id: UUID!
   campaignId: UUID!
@@ -1821,129 +2140,6 @@ type ApprovedAccessDomain {
   domain: String!
   isValidated: Boolean!
   createdAt: DateTime!
-}
-
-type BillingEndTrialPeriod {
-  """Updated subscription status"""
-  status: SubscriptionStatus
-
-  """Boolean that confirms if a payment method was found"""
-  hasPaymentMethod: Boolean!
-
-  """
-  Billing portal URL for payment method update (returned when no payment method exists)
-  """
-  billingPortalUrl: String
-}
-
-type BillingResourceCreditUsage {
-  productKey: BillingProductKey!
-  periodStart: DateTime!
-  periodEnd: DateTime!
-  usedCredits: Float!
-  grantedCredits: Float!
-  rolloverCredits: Float!
-  totalGrantedCredits: Float!
-  unitPriceCents: Float!
-}
-
-type BillingPlan {
-  planKey: BillingPlanKey!
-  baseProducts: [BillingLicensedProduct!]!
-  resourceCreditProducts: [BillingLicensedProduct!]!
-  meteredProducts: [BillingMeteredProduct!]!
-}
-
-type BillingPaymentIntent {
-  clientSecret: String!
-  paymentIntentType: String!
-}
-
-type BillingSession {
-  url: String
-}
-
-type BillingUpdate {
-  """Current billing subscription"""
-  currentBillingSubscription: BillingSubscription!
-
-  """All billing subscriptions"""
-  billingSubscriptions: [BillingSubscription!]!
-}
-
-type ManagedProviderCustomerFundingBillingAddress {
-  city: String
-  country: String
-  line1: String
-  line2: String
-  postalCode: String
-  state: String
-}
-
-type ManagedProviderCustomerFundingCardSummary {
-  brand: String!
-  expiryMonth: Float!
-  expiryYear: Float!
-  last4: String!
-}
-
-type ManagedProviderCustomerFundingTaxIdSummary {
-  country: String
-  type: String!
-}
-
-type ManagedProviderCustomerFundingBillingSummary {
-  address: ManagedProviderCustomerFundingBillingAddress!
-  card: ManagedProviderCustomerFundingCardSummary
-  name: String
-  paymentMethodReady: Boolean!
-  taxId: ManagedProviderCustomerFundingTaxIdSummary
-}
-
-type ManagedProviderAiTopUpPolicy {
-  incrementCents: Int!
-  minimumPrincipalCents: Int!
-  maximumPrincipalCents: Int!
-  suggestedPrincipalCents: [Int!]!
-}
-
-type ManagedProviderCustomerFundingHistoryItem {
-  id: String!
-  fundingType: String!
-  state: String!
-  principalCents: String!
-  taxCents: String
-  collectedTotalCents: String
-  expiresAt: DateTime
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  invoiceUrl: String
-  actionRequired: Boolean!
-}
-
-type ManagedProviderCustomerFundingPaymentMethod {
-  ready: Boolean!
-  clientSecret: String
-  billingSummary: ManagedProviderCustomerFundingBillingSummary
-  publishableKey: String
-  setupIntentId: String
-}
-
-type ManagedProviderCustomerFundingPaymentAction {
-  clientSecret: String!
-  publishableKey: String!
-}
-
-type ManagedProviderBillingStatus {
-  available: Boolean!
-  prepaidBalanceCents: String
-  pendingOperationCount: Int!
-  reconciliationRequiredOperationCount: Int!
-  customerFundingAvailable: Boolean!
-  customerFundingPaymentMethodReady: Boolean!
-  customerFundingPolicy: ManagedProviderAiTopUpPolicy!
-  customerFundingHistory: [ManagedProviderCustomerFundingHistoryItem!]!
-  customerFundingBillingSummary: ManagedProviderCustomerFundingBillingSummary
 }
 
 type InviteSuggestion {
@@ -1995,45 +2191,6 @@ type ActionExecutionReceipt {
   occurredAt: DateTime!
   outcome: String
   evidenceLinks: [ActionApprovalEvidenceLink!]!
-}
-
-type PublicConnectionParametersOutput {
-  host: String!
-  port: Float!
-  username: String
-  connectionSecurity: EmailConnectionSecurity
-}
-
-enum EmailConnectionSecurity {
-  NONE
-  STARTTLS
-  SSL_TLS
-}
-
-type PublicImapSmtpCaldavConnectionParameters {
-  IMAP: PublicConnectionParametersOutput
-  SMTP: PublicConnectionParametersOutput
-  CALDAV: PublicConnectionParametersOutput
-}
-
-type ConnectedAccountPublicDTO {
-  id: UUID!
-  handle: String!
-  provider: String!
-  lastCredentialsRefreshedAt: DateTime
-  authFailedAt: DateTime
-  archivedAt: DateTime
-  handleAliases: [String!]
-  scopes: [String!]
-  lastSignedInAt: DateTime
-  userWorkspaceId: UUID!
-  connectionProviderId: UUID
-  applicationId: UUID
-  name: String
-  visibility: String!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  connectionParameters: PublicImapSmtpCaldavConnectionParameters
 }
 
 type VersionDistributionEntry {
@@ -2636,146 +2793,6 @@ type ManagedEmailActionResult {
   operationId: String!
 }
 
-type VerificationRecord {
-  type: String!
-  key: String!
-  value: String!
-  priority: Float
-}
-
-type EmailingDomain {
-  id: UUID!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  domain: String!
-  status: EmailingDomainStatus!
-  verificationRecords: [VerificationRecord!]
-  verifiedAt: DateTime
-}
-
-enum EmailingDomainStatus {
-  PENDING
-  VERIFIED
-  FAILED
-  TEMPORARY_FAILURE
-}
-
-type MessageChannel {
-  id: UUID!
-  visibility: MessageChannelVisibility!
-  handle: String!
-  type: MessageChannelType!
-  isContactAutoCreationEnabled: Boolean!
-  contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy!
-  messageFolderImportPolicy: MessageFolderImportPolicy!
-  excludeNonProfessionalEmails: Boolean!
-  excludeGroupEmails: Boolean!
-  pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction!
-  isSyncEnabled: Boolean!
-  syncedAt: DateTime
-  syncStatus: MessageChannelSyncStatus!
-  syncStage: MessageChannelSyncStage!
-  syncStageStartedAt: DateTime
-  throttleFailureCount: Float!
-  throttleRetryAfter: DateTime
-  connectedAccountId: UUID!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  connectedAccount: ConnectedAccountPublicDTO
-}
-
-enum MessageChannelVisibility {
-  METADATA
-  SUBJECT
-  SHARE_EVERYTHING
-}
-
-enum MessageChannelType {
-  EMAIL
-  SMS
-  EMAIL_GROUP
-}
-
-enum MessageChannelContactAutoCreationPolicy {
-  SENT_AND_RECEIVED
-  SENT
-  NONE
-}
-
-enum MessageFolderImportPolicy {
-  ALL_FOLDERS
-  SELECTED_FOLDERS
-}
-
-enum MessageChannelPendingGroupEmailsAction {
-  GROUP_EMAILS_DELETION
-  GROUP_EMAILS_IMPORT
-  NONE
-}
-
-enum MessageChannelSyncStatus {
-  NOT_SYNCED
-  ONGOING
-  ACTIVE
-  FAILED_INSUFFICIENT_PERMISSIONS
-  FAILED_UNKNOWN
-}
-
-enum MessageChannelSyncStage {
-  PENDING_CONFIGURATION
-  MESSAGE_LIST_FETCH_PENDING
-  MESSAGE_LIST_FETCH_SCHEDULED
-  MESSAGE_LIST_FETCH_ONGOING
-  MESSAGES_IMPORT_PENDING
-  MESSAGES_IMPORT_SCHEDULED
-  MESSAGES_IMPORT_ONGOING
-  FAILED
-}
-
-type CreateEmailGroupChannelOutput {
-  messageChannel: MessageChannel!
-  forwardingAddress: String!
-}
-
-type CampaignAudiencePreviewDTO {
-  totalMembers: Int!
-  withoutEmail: Int!
-  duplicateEmails: Int!
-  globallyUnsubscribed: Int!
-  topicUnsubscribed: Int!
-  sendable: Int!
-}
-
-type SendEmailViaDomainOutput {
-  messageId: String!
-}
-
-type CampaignSkippedRecipientsDTO {
-  noEmail: Int!
-  deduped: Int!
-  overCap: Int!
-}
-
-type SendMessageCampaignOutputDTO {
-  campaignId: String!
-  queuedCount: Int!
-  skipped: CampaignSkippedRecipientsDTO!
-}
-
-type UnsubscribeTopic {
-  id: UUID!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  name: String
-  description: String
-  visibility: UnsubscribeTopicVisibility!
-}
-
-enum UnsubscribeTopicVisibility {
-  PUBLIC
-  PRIVATE
-}
-
 type BillingTrialPeriod {
   duration: Float!
   isCreditCardRequired: Boolean!
@@ -3033,6 +3050,29 @@ type ToolIndexEntry {
   objectName: String
   icon: String
   inputSchema: JSON
+}
+
+type MyahE2eCampaignMailboxFixtureDTO {
+  id: UUID!
+  availableAccountIds: [UUID!]!
+  unavailableAccountId: UUID!
+  approvalThreadId: UUID!
+  approvalThreadTitle: String!
+  actionApprovalBindingId: UUID!
+  expectedFrom: String!
+  expectedTo: String!
+  expectedSubject: String!
+  expectedBody: String!
+}
+
+type MyahE2eCampaignMailboxFixtureStatusDTO {
+  providerSendAttemptCount: Float!
+  providerDraftPreparationCount: Float!
+}
+
+type MyahE2eCallbackFixtureDTO {
+  connectedAccountId: UUID!
+  callbackPath: String!
 }
 
 type WorkspaceMailboxConnectionStatus {
@@ -3498,6 +3538,13 @@ type Query {
   campaignCreatorListRemovalImpact(input: CampaignCreatorListRemovalImpactInput!): CampaignCreatorListRemovalImpactDTO!
   campaignCreatorListAdditionCandidates(input: CampaignCreatorListAdditionCandidatesInput!): CampaignCreatorListAdditionCandidatesDTO!
   creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
+  campaignEmailAccounts(input: CampaignEmailAccountCampaignInput!): [CampaignEmailAccountDTO!]!
+  campaignEmailAccountCandidates(input: CampaignEmailAccountCampaignInput!): [CampaignEmailAccountDTO!]!
+  previewMessageCampaignAudience(input: PreviewMessageCampaignAudienceInput!): CampaignAudiencePreviewDTO!
+  unsubscribeTopics: [UnsubscribeTopic!]!
+  unsubscribePagePreviewUrl: String!
+  myMessageChannels(connectedAccountId: UUID): [MessageChannel!]!
+  getEmailingDomains: [EmailingDomain!]!
   commandMenuItems: [CommandMenuItem!]!
   commandMenuItem(id: UUID!): CommandMenuItem
   frontComponents: [FrontComponent!]!
@@ -3524,11 +3571,6 @@ type Query {
   getToolInputSchema(toolName: String!): JSON
   webhooks: [Webhook!]!
   webhook(id: UUID!): Webhook
-  previewMessageCampaignAudience(input: PreviewMessageCampaignAudienceInput!): CampaignAudiencePreviewDTO!
-  unsubscribeTopics: [UnsubscribeTopic!]!
-  unsubscribePagePreviewUrl: String!
-  myMessageChannels(connectedAccountId: UUID): [MessageChannel!]!
-  getEmailingDomains: [EmailingDomain!]!
   getActionApprovalProposal(bindingId: UUID!): ActionApprovalProposal!
   getActionExecutionReceipt(bindingId: UUID!): ActionExecutionReceipt
   myMessageFolders(messageChannelId: UUID): [MessageFolder!]!
@@ -3547,6 +3589,7 @@ type Query {
   pieChartData(input: PieChartDataInput!): PieChartData!
   lineChartData(input: LineChartDataInput!): LineChartData!
   barChartData(input: BarChartDataInput!): BarChartData!
+  getMyahE2eCampaignMailboxFixtureStatus(input: MyahE2eFixtureIdInput!): MyahE2eCampaignMailboxFixtureStatusDTO!
   getAutoCompleteAddress(address: String!, token: String!, country: String, isFieldCity: Boolean): [AutocompleteResult!]!
   getAddressDetails(placeId: String!, token: String!): PlaceDetailsResult!
   getUsageAnalytics(input: UsageAnalyticsInput): UsageAnalytics!
@@ -3611,6 +3654,15 @@ input CreatorListMembershipIntentInput {
   creatorId: UUID!
 }
 
+input CampaignEmailAccountCampaignInput {
+  campaignId: UUID!
+}
+
+input PreviewMessageCampaignAudienceInput {
+  listId: String!
+  unsubscribeTopicId: String
+}
+
 input LogicFunctionIdInput {
   """The id of the function."""
   id: ID!
@@ -3619,11 +3671,6 @@ input LogicFunctionIdInput {
 input AgentIdInput {
   """The id of the agent."""
   id: UUID!
-}
-
-input PreviewMessageCampaignAudienceInput {
-  listId: String!
-  unsubscribeTopicId: String
 }
 
 input EventLogQueryInput {
@@ -3667,6 +3714,10 @@ input LineChartDataInput {
 input BarChartDataInput {
   objectMetadataId: UUID!
   configuration: JSON!
+}
+
+input MyahE2eFixtureIdInput {
+  fixtureId: UUID!
 }
 
 input UsageAnalyticsInput {
@@ -3840,6 +3891,20 @@ type Mutation {
   addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
   addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
   removeCreatorListMemberIntent(input: RemoveCreatorListMemberIntentInput!): Boolean!
+  linkCampaignEmailAccount(input: LinkCampaignEmailAccountInput!): [CampaignEmailAccountDTO!]!
+  setDefaultCampaignEmailAccount(input: CampaignEmailAccountLinkInput!): [CampaignEmailAccountDTO!]!
+  removeCampaignEmailAccount(input: CampaignEmailAccountLinkInput!): [CampaignEmailAccountDTO!]!
+  sendEmailViaEmailingDomain(input: SendEmailViaDomainInput!): SendEmailViaDomainOutput!
+  sendMessageCampaign(input: SendMessageCampaignInput!): SendMessageCampaignOutputDTO!
+  createUnsubscribeTopic(input: CreateUnsubscribeTopicInput!): UnsubscribeTopic!
+  updateUnsubscribeTopic(input: UpdateUnsubscribeTopicInput!): UnsubscribeTopic!
+  deleteUnsubscribeTopic(id: String!): Boolean!
+  updateMessageChannel(input: UpdateMessageChannelInput!): MessageChannel!
+  createEmailGroupChannel(input: CreateEmailGroupChannelInput!): CreateEmailGroupChannelOutput!
+  deleteEmailGroupChannel(id: UUID!): MessageChannel!
+  createEmailingDomain(input: CreateEmailingDomainInput!): EmailingDomain!
+  deleteEmailingDomain(id: String!): Boolean!
+  verifyEmailingDomain(id: String!): EmailingDomain!
   createCommandMenuItem(input: CreateCommandMenuItemInput!): CommandMenuItem!
   updateCommandMenuItem(input: UpdateCommandMenuItemInput!): CommandMenuItem!
   resetCommandMenuItem(id: UUID!): CommandMenuItem!
@@ -3888,17 +3953,6 @@ type Mutation {
   createWebhook(input: CreateWebhookInput!): Webhook!
   updateWebhook(input: UpdateWebhookInput!): Webhook!
   deleteWebhook(id: UUID!): Webhook!
-  sendEmailViaEmailingDomain(input: SendEmailViaDomainInput!): SendEmailViaDomainOutput!
-  sendMessageCampaign(input: SendMessageCampaignInput!): SendMessageCampaignOutputDTO!
-  createUnsubscribeTopic(input: CreateUnsubscribeTopicInput!): UnsubscribeTopic!
-  updateUnsubscribeTopic(input: UpdateUnsubscribeTopicInput!): UnsubscribeTopic!
-  deleteUnsubscribeTopic(id: String!): Boolean!
-  updateMessageChannel(input: UpdateMessageChannelInput!): MessageChannel!
-  createEmailGroupChannel(input: CreateEmailGroupChannelInput!): CreateEmailGroupChannelOutput!
-  deleteEmailGroupChannel(id: UUID!): MessageChannel!
-  createEmailingDomain(input: CreateEmailingDomainInput!): EmailingDomain!
-  deleteEmailingDomain(id: String!): Boolean!
-  verifyEmailingDomain(id: String!): EmailingDomain!
   runAgent(input: RunAgentInput!): RunAgentResult!
   updateMessageFolder(input: UpdateMessageFolderInput!): MessageFolder!
   updateMessageFolders(input: UpdateMessageFoldersInput!): [MessageFolder!]!
@@ -3925,6 +3979,9 @@ type Mutation {
   trackAnalytics(type: AnalyticsType!, name: String, event: String, properties: JSON): Analytics!
   duplicateDashboard(id: UUID!): DuplicatedDashboard!
   impersonate(userId: UUID!, workspaceId: UUID!): Impersonate!
+  createMyahE2eCampaignMailboxFixture(input: CreateMyahE2eCampaignMailboxFixtureInput!): MyahE2eCampaignMailboxFixtureDTO!
+  createMyahE2eCampaignCallbackFixture(input: CreateMyahE2eCallbackFixtureInput!): MyahE2eCallbackFixtureDTO!
+  cleanupMyahE2eCampaignMailboxFixture(input: MyahE2eFixtureIdInput!): Boolean!
   createCalendarEvent(input: CreateCalendarEventInput!): CreateCalendarEventOutput!
   sendEmail(input: SendEmailInput!): SendEmailOutput!
   startChannelSync(connectedAccountId: UUID!): ChannelSyncSuccess!
@@ -4676,6 +4733,72 @@ input RemoveCreatorListMemberIntentInput {
   confirmationToken: String
 }
 
+input LinkCampaignEmailAccountInput {
+  campaignId: UUID!
+  connectedAccountId: UUID!
+}
+
+input CampaignEmailAccountLinkInput {
+  campaignId: UUID!
+  campaignAccountId: UUID!
+}
+
+input SendEmailViaDomainInput {
+  emailingDomainId: String!
+  to: [String!]!
+  cc: [String!]
+  bcc: [String!]
+  subject: String!
+  text: String!
+  html: String
+  from: String!
+  replyTo: [String!]
+}
+
+input SendMessageCampaignInput {
+  listId: String!
+  unsubscribeTopicId: String
+  subject: String!
+  body: String!
+  fromAddress: String!
+}
+
+input CreateUnsubscribeTopicInput {
+  name: String!
+  description: String
+  visibility: UnsubscribeTopicVisibility
+}
+
+input UpdateUnsubscribeTopicInput {
+  id: String!
+  name: String
+  description: String
+  visibility: UnsubscribeTopicVisibility
+}
+
+input UpdateMessageChannelInput {
+  id: UUID!
+  update: UpdateMessageChannelInputUpdates!
+}
+
+input UpdateMessageChannelInputUpdates {
+  visibility: MessageChannelVisibility
+  isContactAutoCreationEnabled: Boolean
+  contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy
+  messageFolderImportPolicy: MessageFolderImportPolicy
+  isSyncEnabled: Boolean
+  excludeNonProfessionalEmails: Boolean
+  excludeGroupEmails: Boolean
+}
+
+input CreateEmailGroupChannelInput {
+  handle: String!
+}
+
+input CreateEmailingDomainInput {
+  domain: String!
+}
+
 input CreateCommandMenuItemInput {
   workflowVersionId: UUID
   frontComponentId: UUID
@@ -5029,62 +5152,6 @@ input UpdateWebhookInputUpdates {
   secret: String
 }
 
-input SendEmailViaDomainInput {
-  emailingDomainId: String!
-  to: [String!]!
-  cc: [String!]
-  bcc: [String!]
-  subject: String!
-  text: String!
-  html: String
-  from: String!
-  replyTo: [String!]
-}
-
-input SendMessageCampaignInput {
-  listId: String!
-  unsubscribeTopicId: String
-  subject: String!
-  body: String!
-  fromAddress: String!
-}
-
-input CreateUnsubscribeTopicInput {
-  name: String!
-  description: String
-  visibility: UnsubscribeTopicVisibility
-}
-
-input UpdateUnsubscribeTopicInput {
-  id: String!
-  name: String
-  description: String
-  visibility: UnsubscribeTopicVisibility
-}
-
-input UpdateMessageChannelInput {
-  id: UUID!
-  update: UpdateMessageChannelInputUpdates!
-}
-
-input UpdateMessageChannelInputUpdates {
-  visibility: MessageChannelVisibility
-  isContactAutoCreationEnabled: Boolean
-  contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy
-  messageFolderImportPolicy: MessageFolderImportPolicy
-  isSyncEnabled: Boolean
-  excludeNonProfessionalEmails: Boolean
-  excludeGroupEmails: Boolean
-}
-
-input CreateEmailGroupChannelInput {
-  handle: String!
-}
-
-input CreateEmailingDomainInput {
-  domain: String!
-}
-
 input RunAgentInput {
   agentUniversalIdentifier: String!
   prompt: String!
@@ -5155,6 +5222,16 @@ input UpdateSkillInput {
 enum AnalyticsType {
   PAGEVIEW
   TRACK
+}
+
+input CreateMyahE2eCampaignMailboxFixtureInput {
+  campaignId: UUID!
+}
+
+input CreateMyahE2eCallbackFixtureInput {
+  fixtureId: UUID!
+  campaignId: UUID!
+  operationsTabId: UUID!
 }
 
 input CreateCalendarEventInput {

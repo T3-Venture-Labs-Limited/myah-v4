@@ -932,6 +932,33 @@ export type CampaignCreatorListRemovalImpactInput = {
   creatorListId: Scalars['UUID']['input'];
 };
 
+export type CampaignEmailAccountCampaignInput = {
+  campaignId: Scalars['UUID']['input'];
+};
+
+export type CampaignEmailAccountDto = {
+  __typename?: 'CampaignEmailAccountDTO';
+  connectedAccountId: Scalars['UUID']['output'];
+  health: CampaignEmailAccountHealth;
+  id: Scalars['UUID']['output'];
+  isDefault: Scalars['Boolean']['output'];
+  label: Scalars['String']['output'];
+  messageChannelId: Scalars['UUID']['output'];
+  provider?: Maybe<Scalars['String']['output']>;
+  senderEmail?: Maybe<Scalars['String']['output']>;
+};
+
+export enum CampaignEmailAccountHealth {
+  AVAILABLE = 'AVAILABLE',
+  RECONNECT_REQUIRED = 'RECONNECT_REQUIRED',
+  UNAVAILABLE = 'UNAVAILABLE'
+}
+
+export type CampaignEmailAccountLinkInput = {
+  campaignAccountId: Scalars['UUID']['input'];
+  campaignId: Scalars['UUID']['input'];
+};
+
 export type CampaignInfluencerCampaignInput = {
   campaignId: Scalars['UUID']['input'];
 };
@@ -1296,6 +1323,16 @@ export type CreateLogicFunctionFromSourceInput = {
   toolTriggerSettings?: InputMaybe<Scalars['JSON']['input']>;
   universalIdentifier?: InputMaybe<Scalars['UUID']['input']>;
   workflowActionTriggerSettings?: InputMaybe<Scalars['JSON']['input']>;
+};
+
+export type CreateMyahE2eCallbackFixtureInput = {
+  campaignId: Scalars['UUID']['input'];
+  fixtureId: Scalars['UUID']['input'];
+  operationsTabId: Scalars['UUID']['input'];
+};
+
+export type CreateMyahE2eCampaignMailboxFixtureInput = {
+  campaignId: Scalars['UUID']['input'];
 };
 
 export type CreateNavigationMenuItemInput = {
@@ -2348,6 +2385,11 @@ export type LineChartSeries = {
   label: Scalars['String']['output'];
 };
 
+export type LinkCampaignEmailAccountInput = {
+  campaignId: Scalars['UUID']['input'];
+  connectedAccountId: Scalars['UUID']['input'];
+};
+
 export type ListAppConnectionsInput = {
   providerName?: InputMaybe<Scalars['String']['input']>;
   userWorkspaceId?: InputMaybe<Scalars['String']['input']>;
@@ -2990,6 +3032,7 @@ export type Mutation = {
   checkCustomDomainValidRecords?: Maybe<DomainValidRecords>;
   checkPublicDomainValidRecords?: Maybe<DomainValidRecords>;
   checkoutSession: BillingSession;
+  cleanupMyahE2eCampaignMailboxFixture: Scalars['Boolean']['output'];
   completeFileUpload: FileWithSignedUrl;
   completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus;
   completeManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod;
@@ -3013,6 +3056,8 @@ export type Mutation = {
   createManyViewFieldGroups: Array<ViewFieldGroup>;
   createManyViewFields: Array<ViewField>;
   createManyViewGroups: Array<ViewGroup>;
+  createMyahE2eCampaignCallbackFixture: MyahE2eCallbackFixtureDto;
+  createMyahE2eCampaignMailboxFixture: MyahE2eCampaignMailboxFixtureDto;
   createNavigationMenuItem: NavigationMenuItem;
   createOIDCIdentityProvider: SetupSso;
   createObjectEvent: Analytics;
@@ -3106,12 +3151,14 @@ export type Mutation = {
   installApplication: Application;
   /** @deprecated Use installApplication instead */
   installMarketplaceApp: Scalars['Boolean']['output'];
+  linkCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   pauseManagedEmailWarmup: ManagedEmailActionResult;
   prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup;
   prepareManagedProviderCustomerFundingPaymentAction: ManagedProviderCustomerFundingPaymentAction;
   prepareManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod;
   reconnectWorkspaceMailbox: WorkspaceMailboxConnectionResult;
   refreshEnterpriseValidityToken: Scalars['Boolean']['output'];
+  removeCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   removeCreatorListMemberIntent: Scalars['Boolean']['output'];
   removeQueryFromEventStream: Scalars['Boolean']['output'];
   removeRoleFromAgent: Scalars['Boolean']['output'];
@@ -3140,6 +3187,7 @@ export type Mutation = {
   sendEmailViaEmailingDomain: SendEmailViaDomainOutput;
   sendInvitations: SendInvitations;
   sendMessageCampaign: SendMessageCampaignOutputDto;
+  setDefaultCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   setEnterpriseKey: EnterpriseLicenseInfoDto;
   setManagedEmailCampaignCap: ManagedEmailActionResult;
   setResourceCreditSubscriptionPrice: BillingUpdate;
@@ -3326,6 +3374,11 @@ export type MutationCheckoutSessionArgs = {
 };
 
 
+export type MutationCleanupMyahE2eCampaignMailboxFixtureArgs = {
+  input: MyahE2eFixtureIdInput;
+};
+
+
 export type MutationCompleteFileUploadArgs = {
   fileId: Scalars['String']['input'];
 };
@@ -3442,6 +3495,16 @@ export type MutationCreateManyViewFieldsArgs = {
 
 export type MutationCreateManyViewGroupsArgs = {
   inputs: Array<CreateViewGroupInput>;
+};
+
+
+export type MutationCreateMyahE2eCampaignCallbackFixtureArgs = {
+  input: CreateMyahE2eCallbackFixtureInput;
+};
+
+
+export type MutationCreateMyahE2eCampaignMailboxFixtureArgs = {
+  input: CreateMyahE2eCampaignMailboxFixtureInput;
 };
 
 
@@ -3898,6 +3961,11 @@ export type MutationInstallMarketplaceAppArgs = {
 };
 
 
+export type MutationLinkCampaignEmailAccountArgs = {
+  input: LinkCampaignEmailAccountInput;
+};
+
+
 export type MutationPauseManagedEmailWarmupArgs = {
   input: ManagedEmailMailboxActionInput;
 };
@@ -3910,6 +3978,11 @@ export type MutationPrepareManagedProviderCustomerFundingPaymentActionArgs = {
 
 export type MutationReconnectWorkspaceMailboxArgs = {
   input: ReplaceWorkspaceMailboxCredentialsInput;
+};
+
+
+export type MutationRemoveCampaignEmailAccountArgs = {
+  input: CampaignEmailAccountLinkInput;
 };
 
 
@@ -4067,6 +4140,11 @@ export type MutationSendInvitationsArgs = {
 
 export type MutationSendMessageCampaignArgs = {
   input: SendMessageCampaignInput;
+};
+
+
+export type MutationSetDefaultCampaignEmailAccountArgs = {
+  input: CampaignEmailAccountLinkInput;
 };
 
 
@@ -4491,6 +4569,36 @@ export type MutationVerifyEmailingDomainArgs = {
 
 export type MutationVerifyTwoFactorAuthenticationMethodForAuthenticatedUserArgs = {
   otp: Scalars['String']['input'];
+};
+
+export type MyahE2eCallbackFixtureDto = {
+  __typename?: 'MyahE2eCallbackFixtureDTO';
+  callbackPath: Scalars['String']['output'];
+  connectedAccountId: Scalars['UUID']['output'];
+};
+
+export type MyahE2eCampaignMailboxFixtureDto = {
+  __typename?: 'MyahE2eCampaignMailboxFixtureDTO';
+  actionApprovalBindingId: Scalars['UUID']['output'];
+  approvalThreadId: Scalars['UUID']['output'];
+  approvalThreadTitle: Scalars['String']['output'];
+  availableAccountIds: Array<Scalars['UUID']['output']>;
+  expectedBody: Scalars['String']['output'];
+  expectedFrom: Scalars['String']['output'];
+  expectedSubject: Scalars['String']['output'];
+  expectedTo: Scalars['String']['output'];
+  id: Scalars['UUID']['output'];
+  unavailableAccountId: Scalars['UUID']['output'];
+};
+
+export type MyahE2eCampaignMailboxFixtureStatusDto = {
+  __typename?: 'MyahE2eCampaignMailboxFixtureStatusDTO';
+  providerDraftPreparationCount: Scalars['Float']['output'];
+  providerSendAttemptCount: Scalars['Float']['output'];
+};
+
+export type MyahE2eFixtureIdInput = {
+  fixtureId: Scalars['UUID']['input'];
 };
 
 export type NativeModelCapabilities = {
@@ -4982,6 +5090,8 @@ export type Query = {
   billingPortalSession: BillingSession;
   campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDto;
   campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDto;
+  campaignEmailAccountCandidates: Array<CampaignEmailAccountDto>;
+  campaignEmailAccounts: Array<CampaignEmailAccountDto>;
   campaignInfluencerSnapshot: CampaignInfluencerSnapshotDto;
   chatMessages: Array<AgentMessage>;
   chatStreamCatchupChunks: ChatStreamCatchupChunks;
@@ -5032,6 +5142,7 @@ export type Query = {
   getEmailingDomains: Array<EmailingDomain>;
   getInviteSuggestions: Array<InviteSuggestion>;
   getLogicFunctionSourceCode?: Maybe<Scalars['String']['output']>;
+  getMyahE2eCampaignMailboxFixtureStatus: MyahE2eCampaignMailboxFixtureStatusDto;
   getPageLayout?: Maybe<PageLayout>;
   getPageLayoutTab: PageLayoutTab;
   getPageLayoutTabs: Array<PageLayoutTab>;
@@ -5148,6 +5259,16 @@ export type QueryCampaignCreatorListAdditionCandidatesArgs = {
 
 export type QueryCampaignCreatorListRemovalImpactArgs = {
   input: CampaignCreatorListRemovalImpactInput;
+};
+
+
+export type QueryCampaignEmailAccountCandidatesArgs = {
+  input: CampaignEmailAccountCampaignInput;
+};
+
+
+export type QueryCampaignEmailAccountsArgs = {
+  input: CampaignEmailAccountCampaignInput;
 };
 
 
@@ -5315,6 +5436,11 @@ export type QueryGetConnectedImapSmtpCaldavAccountArgs = {
 
 export type QueryGetLogicFunctionSourceCodeArgs = {
   input: LogicFunctionIdInput;
+};
+
+
+export type QueryGetMyahE2eCampaignMailboxFixtureStatusArgs = {
+  input: MyahE2eFixtureIdInput;
 };
 
 

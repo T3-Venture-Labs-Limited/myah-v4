@@ -5652,17 +5652,18 @@ msgid "Connect the Instagram account you use for your business. You can review c
 msgstr ""
 
 #. js-lingui-id: YLx3sC
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect via IMAP/SMTP"
 msgstr ""
 
 #. js-lingui-id: Zgi9Fd
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect with Google"
 msgstr "Mit Google verbinden"
 
 #. js-lingui-id: IOfqM8
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect with Microsoft"
 msgstr "Mit Microsoft verbinden"
 
