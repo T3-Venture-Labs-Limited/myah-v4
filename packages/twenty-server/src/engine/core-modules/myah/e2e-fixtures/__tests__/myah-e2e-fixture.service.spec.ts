@@ -188,7 +188,7 @@ describe('MyahE2eFixtureService', () => {
   });
 
   it('fails closed for foreign cleanup ids and retains fixtures when deletion fails', async () => {
-    const { manager, registry, service, workspaceDataSource } = createService();
+    const { registry, service, workspaceDataSource } = createService();
     const connectedAccountId = 'a1a3b7a6-b1c2-4a75-9b01-100000000005';
     const fixture = registry.register(workspaceId, {
       campaignIds: [],

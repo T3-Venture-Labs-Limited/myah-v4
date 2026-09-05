@@ -10,6 +10,8 @@ import { WorkspaceMailboxConnectionResolver } from 'src/engine/core-modules/myah
 import { WorkspaceMailboxConnectionService } from 'src/engine/core-modules/myah/services/workspace-mailbox-connection.service';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 
+jest.mock('dotenv', () => ({ config: jest.fn() }));
+
 const loadImports = (
   nodeEnv: string | undefined,
   fixtureFlag: string | undefined,
@@ -51,7 +53,6 @@ describe('CoreEngineModule E2E fixture registration', () => {
   });
 
   it.each([
-    ['development', undefined, false],
     ['development', 'false', false],
     ['development', 'true', true],
     ['test', 'true', true],

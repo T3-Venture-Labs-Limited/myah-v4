@@ -1,3 +1,5 @@
+jest.mock('dotenv', () => ({ config: jest.fn() }));
+
 const loadGmailProvider = (
   nodeEnv: string,
   fixtureFlag: string | undefined,
