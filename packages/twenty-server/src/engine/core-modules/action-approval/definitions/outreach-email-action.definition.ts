@@ -18,6 +18,7 @@ import {
   type OutreachEmailExpectedActionBinding,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { isCanonicalManagedMailboxId } from 'src/engine/core-modules/outreach-email/utils/managed-mailbox-id.util';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import {
@@ -768,10 +769,11 @@ export class OutreachEmailActionDefinition {
       graph.action.providerMessageExternalId?.trim() || null;
     const messageId = graph.action.messageId?.trim() || null;
     const isManagedSender = rawAssignedManagedMailboxId !== null;
-    const managedMailboxId =
-      typeof rawAssignedManagedMailboxId === 'string'
-        ? rawAssignedManagedMailboxId
-        : null;
+    const managedMailboxId = isCanonicalManagedMailboxId(
+      rawAssignedManagedMailboxId,
+    )
+      ? rawAssignedManagedMailboxId
+      : null;
     const expectedContentDigest =
       isNonEmptyString(subject) && isNonEmptyString(body)
         ? computeActionContentDigest(JSON.stringify([subject, body]))
@@ -793,8 +795,7 @@ export class OutreachEmailActionDefinition {
       !isNonEmptyString(recipientLabel) ||
       !isNonEmptyString(campaignLabel) ||
       (isManagedSender &&
-        (typeof managedMailboxId !== 'string' ||
-          !z.uuid().safeParse(managedMailboxId).success ||
+        (!isCanonicalManagedMailboxId(rawAssignedManagedMailboxId) ||
           campaignAccountId !== null)) ||
       (!isManagedSender &&
         (typeof campaignAccountId !== 'string' ||

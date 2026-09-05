@@ -392,8 +392,15 @@ describe('OutreachEmailDraftService', () => {
     expect(createDraft).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, '', '   '])(
-    'rejects malformed managed mailbox identifier %# without linked fallback',
+  it.each([
+    undefined,
+    '',
+    '   ',
+    'malformed',
+    ` ${MANAGED_MAILBOX_ID}`,
+    `${MANAGED_MAILBOX_ID} `,
+  ])(
+    'rejects malformed or padded managed mailbox identifier %# without linked fallback',
     async (assignedManagedMailboxId) => {
       campaignCreatorRepository.findOne.mockResolvedValueOnce({
         ...campaignCreator,
@@ -404,6 +411,7 @@ describe('OutreachEmailDraftService', () => {
         'Campaign Creator has an invalid assigned managed mailbox',
       );
       expect(resolveDefaultEmailAccount).not.toHaveBeenCalled();
+      expect(assertEligible).not.toHaveBeenCalled();
       expect(createDraft).not.toHaveBeenCalled();
     },
   );

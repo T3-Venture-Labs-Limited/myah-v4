@@ -14,6 +14,7 @@ import { emailSchema } from 'twenty-shared/utils';
 import { IsNull, type Repository } from 'typeorm';
 
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { isCanonicalManagedMailboxId } from 'src/engine/core-modules/outreach-email/utils/managed-mailbox-id.util';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import {
   type OutreachPreparationAuthority,
@@ -317,8 +318,9 @@ export class OutreachEmailDraftService {
           }
           campaignAccountId = defaultEmailAccount.id;
         } else if (
-          typeof campaignCreator.assignedManagedMailboxId !== 'string' ||
-          !isNonEmptyString(campaignCreator.assignedManagedMailboxId.trim())
+          !isCanonicalManagedMailboxId(
+            campaignCreator.assignedManagedMailboxId,
+          )
         ) {
           throw new Error(
             'Campaign Creator has an invalid assigned managed mailbox',
@@ -382,7 +384,7 @@ export class OutreachEmailDraftService {
         if (campaignCreator.assignedManagedMailboxId !== null) {
           await this.managedEmailCampaignEligibilityService.assertEligible({
             workspaceId: input.workspaceId,
-            managedMailboxId: campaignCreator.assignedManagedMailboxId.trim(),
+            managedMailboxId: campaignCreator.assignedManagedMailboxId,
             connectedAccountId: connectedAccount.id,
             messageChannelId: messageChannel.id,
             isFollowUp: threadContext.inReplyTo !== null,
