@@ -247,6 +247,8 @@ const buildDefinition = ({
         idByUserId: { 'user-id': 'workspace-member-id' },
         byId: { 'workspace-member-id': { id: 'workspace-member-id' } },
       },
+      userWorkspaceRoleMap: { [userWorkspaceId]: 'role-id' },
+      apiKeyRoleMap: {},
     }),
   };
   const connectedAccountRepository = {
@@ -407,6 +409,7 @@ describe('OutreachEmailActionDefinition', () => {
     expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
       workspaceId,
       'outreachAction',
+      { intersectionOf: ['role-id'] },
     );
     expect(objectMetadataRepository.find).toHaveBeenCalledWith(
       expect.objectContaining({

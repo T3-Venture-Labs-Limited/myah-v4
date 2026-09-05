@@ -35,6 +35,8 @@ import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channe
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
@@ -311,6 +313,7 @@ export class OutreachEmailActionDefinition {
             await this.globalWorkspaceOrmManager.getRepository<OutreachEmailActionRecord>(
               expectedActionBinding.workspaceId,
               'outreachAction',
+              { shouldBypassPermissionChecks: true },
             );
 
           return actionRepository.update(
@@ -620,6 +623,10 @@ export class OutreachEmailActionDefinition {
       workspace,
       initiatorUserWorkspaceId,
     );
+    const permissionOptions = await this.resolveUserPermissionOptions(
+      workspaceId,
+      authContext,
+    );
     const graph =
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
@@ -627,31 +634,37 @@ export class OutreachEmailActionDefinition {
             await this.globalWorkspaceOrmManager.getRepository<OutreachEmailActionRecord>(
               workspaceId,
               'outreachAction',
+              permissionOptions,
             );
           const campaignCreatorRepository =
             await this.globalWorkspaceOrmManager.getRepository<CampaignCreatorRecord>(
               workspaceId,
               'campaignCreator',
+              permissionOptions,
             );
           const creatorRepository =
             await this.globalWorkspaceOrmManager.getRepository<CreatorRecord>(
               workspaceId,
               'creator',
+              permissionOptions,
             );
           const campaignRepository =
             await this.globalWorkspaceOrmManager.getRepository<CampaignRecord>(
               workspaceId,
               'campaign',
+              permissionOptions,
             );
           const messageRepository =
             await this.globalWorkspaceOrmManager.getRepository<MessageWorkspaceEntity>(
               workspaceId,
               'message',
+              permissionOptions,
             );
           const associationRepository =
             await this.globalWorkspaceOrmManager.getRepository<MessageChannelMessageAssociationWorkspaceEntity>(
               workspaceId,
               'messageChannelMessageAssociation',
+              permissionOptions,
             );
           const action = await actionRepository.findOneBy({
             id: outreachActionId,
@@ -745,8 +758,14 @@ export class OutreachEmailActionDefinition {
     const recipientLabel = graph.creator.name?.trim();
     const campaignLabel = graph.campaign.name?.trim();
     const assignedManagedMailboxId =
-      graph.campaignCreator.assignedManagedMailboxId;
-    const campaignAccountId = graph.action.campaignAccountId;
+      graph.campaignCreator.assignedManagedMailboxId?.trim() || null;
+    const campaignAccountId = graph.action.campaignAccountId?.trim() || null;
+    const executionReceiptId = graph.action.executionReceiptId?.trim() || null;
+    const sentHeaderMessageId =
+      graph.action.sentHeaderMessageId?.trim() || null;
+    const providerMessageExternalId =
+      graph.action.providerMessageExternalId?.trim() || null;
+    const messageId = graph.action.messageId?.trim() || null;
     const isManagedSender = assignedManagedMailboxId !== null;
     const managedMailboxId = isManagedSender ? assignedManagedMailboxId : null;
     const expectedContentDigest =
@@ -776,10 +795,10 @@ export class OutreachEmailActionDefinition {
       (!isManagedSender &&
         (typeof campaignAccountId !== 'string' ||
           !z.uuid().safeParse(campaignAccountId).success)) ||
-      graph.action.executionReceiptId !== null ||
-      graph.action.sentHeaderMessageId !== null ||
-      graph.action.providerMessageExternalId !== null ||
-      graph.action.messageId !== null ||
+      executionReceiptId !== null ||
+      sentHeaderMessageId !== null ||
+      providerMessageExternalId !== null ||
+      messageId !== null ||
       graph.action.completedAt !== null ||
       graph.campaignCreator.id !== graph.action.campaignCreatorId ||
       graph.campaignCreator.creatorId !== graph.creator.id ||
@@ -981,6 +1000,28 @@ export class OutreachEmailActionDefinition {
       default:
         return false;
     }
+  }
+
+  private async resolveUserPermissionOptions(
+    workspaceId: string,
+    authContext: Awaited<ReturnType<typeof buildUserAuthContext>>,
+  ): Promise<RolePermissionConfig> {
+    const { userWorkspaceRoleMap, apiKeyRoleMap } =
+      await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'userWorkspaceRoleMap',
+        'apiKeyRoleMap',
+      ]);
+    const permissionOptions = resolveRolePermissionConfig({
+      authContext,
+      userWorkspaceRoleMap,
+      apiKeyRoleMap,
+    });
+
+    if (!permissionOptions) {
+      throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+    }
+
+    return permissionOptions;
   }
 
   private async buildInitiatorAuthContext(
