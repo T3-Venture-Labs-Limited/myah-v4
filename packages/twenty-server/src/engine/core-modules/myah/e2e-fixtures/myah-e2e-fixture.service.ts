@@ -24,6 +24,7 @@ import { E2eFixtureGmailMessageOutboundService } from 'src/modules/messaging/mes
 const EXPECTED_SUBJECT = 'MYAH-270 fixture subject';
 const EXPECTED_BODY = 'MYAH-270 fixture body';
 const EXPECTED_RECIPIENT = 'creator@myah-e2e.fixture.test';
+const E2E_FIXTURE_ACTION_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 type AuthenticatedFixtureContext = {
   workspaceId: string;
@@ -173,6 +174,12 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
         proposal.expectedActionBinding,
       );
       records.actionApprovalBindingIds.push(binding.id);
+      await this.dataSource.query(
+        `UPDATE core."actionApprovalBinding"
+         SET "expiresAt" = NOW() + ($2 * INTERVAL '1 millisecond')
+         WHERE "id" = $1 AND "workspaceId" = $3 AND "state" = 'PENDING'`,
+        [binding.id, E2E_FIXTURE_ACTION_APPROVAL_TTL_MS, context.workspaceId],
+      );
       await this.outreachEmailActionDefinition.recordApprovalBinding({
         expectedActionBinding: proposal.expectedActionBinding,
         approvalBindingId: binding.id,

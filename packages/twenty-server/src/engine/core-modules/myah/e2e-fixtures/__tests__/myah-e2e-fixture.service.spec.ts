@@ -134,6 +134,22 @@ describe('MyahE2eFixtureService', () => {
     expect(JSON.stringify(manager.query.mock.calls)).not.toContain('sendDraft');
   });
 
+  it('extends only the fixture approval to a bounded 24-hour review lifetime', async () => {
+    const { actionApprovalService, dataSource, service } = createService();
+
+    await service.createCampaignMailboxFixture(fixtureContext, campaignId);
+
+    expect(actionApprovalService.createPendingBinding).toHaveBeenCalledWith({
+      actionName: 'send_outreach_email',
+    });
+    expect(dataSource.query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /UPDATE core\."actionApprovalBinding"\s+SET "expiresAt" = NOW\(\) \+ \(\$2 \* INTERVAL '1 millisecond'\)/,
+      ),
+      [bindingId, 24 * 60 * 60 * 1000, workspaceId],
+    );
+  });
+
   it('cleans mailboxes created before a later mailbox creation fails', async () => {
     const { dataSource, manager, service, workspaceDataSource } =
       createService();
