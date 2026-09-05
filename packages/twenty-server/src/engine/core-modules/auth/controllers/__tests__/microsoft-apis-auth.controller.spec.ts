@@ -116,6 +116,29 @@ describe('MicrosoftAPIsAuthController', () => {
     );
   });
 
+  it('returns a Campaign callback failure to the safe Campaign location without linking', async () => {
+    const { controller } = createController();
+    const response = createResponse();
+    (
+      controller as unknown as {
+        microsoftAPIsService: { refreshMicrosoftRefreshToken: jest.Mock };
+      }
+    ).microsoftAPIsService.refreshMicrosoftRefreshToken.mockRejectedValueOnce(
+      new Error('provider refused'),
+    );
+
+    await controller.MicrosoftAuthGetAccessToken(
+      buildRequest(
+        '/object/campaign/campaign-1?linkConnectedAccount=1&connectedAccountId=old#operations',
+      ),
+      response,
+    );
+
+    expect(response.redirect).toHaveBeenCalledWith(
+      'https://myah.example.com/object/campaign/campaign-1?emailAccountConnectionFailed=1#operations',
+    );
+  });
+
   it.each([
     'https://evil.example/object/campaign/campaign-1',
     '//evil.example/object/campaign/campaign-1',

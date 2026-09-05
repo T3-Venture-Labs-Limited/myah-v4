@@ -151,8 +151,7 @@ describe('MyahE2eFixtureService', () => {
   });
 
   it('cleans mailboxes created before a later mailbox creation fails', async () => {
-    const { dataSource, manager, service, workspaceDataSource } =
-      createService();
+    const { dataSource, manager, service } = createService();
     dataSource.transaction
       .mockImplementationOnce(
         async (operation: (value: typeof manager) => unknown) =>
@@ -164,23 +163,18 @@ describe('MyahE2eFixtureService', () => {
       service.createCampaignMailboxFixture(fixtureContext, campaignId),
     ).rejects.toThrow('second mailbox failed');
 
-    expect(workspaceDataSource.query).toHaveBeenCalledWith(
+    expect(manager.query).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM core."messageChannel"'),
       [expect.arrayContaining([expect.any(String)])],
-      undefined,
-      { shouldBypassPermissionChecks: true },
     );
-    expect(workspaceDataSource.query).toHaveBeenCalledWith(
+    expect(manager.query).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM core."connectedAccount"'),
       [expect.arrayContaining([expect.any(String)])],
-      undefined,
-      { shouldBypassPermissionChecks: true },
     );
   });
 
   it('cleans a created approval binding after later fixture persistence fails', async () => {
-    const { outreachEmailActionDefinition, service, workspaceDataSource } =
-      createService();
+    const { manager, outreachEmailActionDefinition, service } = createService();
     outreachEmailActionDefinition.recordApprovalBinding.mockRejectedValueOnce(
       new Error('record failed'),
     );
@@ -189,22 +183,48 @@ describe('MyahE2eFixtureService', () => {
       service.createCampaignMailboxFixture(fixtureContext, campaignId),
     ).rejects.toThrow('record failed');
 
-    expect(workspaceDataSource.query).toHaveBeenCalledWith(
+    expect(manager.query).toHaveBeenCalledWith(
       expect.stringContaining('"actionApprovalBindingEvidenceLink"'),
       [[bindingId]],
-      undefined,
-      { shouldBypassPermissionChecks: true },
     );
-    expect(workspaceDataSource.query).toHaveBeenCalledWith(
+    expect(manager.query).toHaveBeenCalledWith(
       expect.stringContaining('"actionApprovalBinding"'),
       [[bindingId]],
-      undefined,
-      { shouldBypassPermissionChecks: true },
+    );
+  });
+
+  it('deletes only fixture-workspace receipts before their approval bindings and can retry cleanup', async () => {
+    const { manager, registry, service } = createService();
+    const fixture = registry.register(workspaceId, {
+      actionApprovalBindingIds: [bindingId],
+      campaignIds: [],
+      connectedAccountIds: [],
+    });
+
+    await expect(service.cleanup(fixtureContext, fixture.id)).resolves.toBe(
+      true,
+    );
+
+    const receiptCall = manager.query.mock.calls.find(([sql]: [string]) =>
+      sql.includes('core."actionExecutionReceipt"'),
+    );
+    const bindingCall = manager.query.mock.calls.find(([sql]: [string]) =>
+      sql.includes('core."actionApprovalBinding"'),
+    );
+    expect(receiptCall).toEqual([
+      expect.stringContaining('"workspaceId" = $2'),
+      [[bindingId], workspaceId],
+    ]);
+    expect(manager.query.mock.calls.indexOf(receiptCall!)).toBeLessThan(
+      manager.query.mock.calls.indexOf(bindingCall!),
+    );
+    await expect(service.cleanup(fixtureContext, fixture.id)).resolves.toBe(
+      false,
     );
   });
 
   it('fails closed for foreign cleanup ids and retains fixtures when deletion fails', async () => {
-    const { registry, service, workspaceDataSource } = createService();
+    const { manager, registry, service } = createService();
     const connectedAccountId = 'a1a3b7a6-b1c2-4a75-9b01-100000000005';
     const fixture = registry.register(workspaceId, {
       campaignIds: [],
@@ -222,7 +242,7 @@ describe('MyahE2eFixtureService', () => {
       ),
     ).resolves.toBe(false);
 
-    workspaceDataSource.query.mockRejectedValueOnce(new Error('delete failed'));
+    manager.query.mockRejectedValueOnce(new Error('delete failed'));
     await expect(service.cleanup(fixtureContext, fixture.id)).rejects.toThrow(
       'delete failed',
     );
@@ -231,13 +251,11 @@ describe('MyahE2eFixtureService', () => {
     await expect(service.cleanup(fixtureContext, fixture.id)).resolves.toBe(
       true,
     );
-    expect(workspaceDataSource.query).toHaveBeenCalledWith(
+    expect(manager.query).toHaveBeenCalledWith(
       expect.stringContaining(
         '"campaignAccount" WHERE "connectedAccountId" = ANY($1::text[])',
       ),
       [[connectedAccountId]],
-      undefined,
-      { shouldBypassPermissionChecks: true },
     );
     await expect(service.cleanup(fixtureContext, fixture.id)).resolves.toBe(
       false,

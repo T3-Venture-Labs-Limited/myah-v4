@@ -444,6 +444,30 @@ describe('MyahCampaignEmailAccounts', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
+  it('announces an OAuth connection failure once without linking an account', async () => {
+    mockLocation.search =
+      '?emailAccountConnectionFailed=1&linkConnectedAccount=1&connectedAccountId=123e4567-e89b-42d3-a456-426614174000';
+    const link = jest.fn();
+    configureHooks({ link });
+
+    render(<MyahCampaignEmailAccounts campaignId="campaign-1" />);
+
+    await waitFor(() =>
+      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
+        message: 'Email account connection failed. Try connecting it again.',
+      }),
+    );
+    expect(link).not.toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith(
+      {
+        hash: '#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+        pathname: '/object/campaign/campaign-1',
+        search: '',
+      },
+      { replace: true },
+    );
+  });
+
   it('links a returned account once in StrictMode and replaces one-shot URL parameters', async () => {
     const link = jest.fn().mockResolvedValue({
       data: { linkCampaignEmailAccount: [linkedAccount] },
@@ -598,5 +622,107 @@ describe('MyahCampaignEmailAccounts', () => {
 
     await waitFor(() => expect(mockEnqueueErrorSnackBar).toHaveBeenCalled());
     expect(screen.getByText('sender@example.com')).toBeVisible();
+  });
+
+  it('uses refreshed account query data rather than a stale mutation result', async () => {
+    const returnedStaleAccounts = [linkedAccount];
+    const refreshedAccounts = [
+      {
+        ...linkedAccount,
+        isDefault: false,
+      },
+      {
+        ...candidate,
+        health: 'RECONNECT_REQUIRED' as const,
+        id: 'campaign-account-2',
+        isDefault: true,
+      },
+    ];
+    let queryAccounts = [
+      linkedAccount,
+      { ...candidate, id: 'campaign-account-2', isDefault: false },
+    ];
+    const setDefault = jest.fn().mockImplementation(async () => {
+      queryAccounts = refreshedAccounts;
+      return {
+        data: { setDefaultCampaignEmailAccount: returnedStaleAccounts },
+      };
+    });
+    configureHooks({ accounts: queryAccounts, setDefault });
+    const { rerender } = render(
+      <MyahCampaignEmailAccounts campaignId="campaign-1" />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Make team@example.com default' }),
+    );
+    await waitFor(() => expect(setDefault).toHaveBeenCalled());
+
+    configureHooks({ accounts: queryAccounts, setDefault });
+    rerender(<MyahCampaignEmailAccounts campaignId="campaign-1" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Reconnect the default email account before sending',
+    );
+    expect(screen.getByText('team@example.com')).toBeVisible();
+    expect(screen.queryByText('Default')).toBeInTheDocument();
+  });
+
+  it('uses query data for the new Campaign after a Campaign switch', () => {
+    const campaignOneAccounts = [linkedAccount];
+    const campaignTwoAccounts = [
+      { ...candidate, id: 'campaign-account-2', isDefault: true },
+    ];
+    mockUseQuery.mockImplementation(
+      (
+        document: { definitions: { name?: { value?: string } }[] },
+        options: { variables: { input: { campaignId: string } } },
+      ) => {
+        const operationName = document.definitions[0]?.name?.value;
+        const accounts =
+          options.variables.input.campaignId === 'campaign-1'
+            ? campaignOneAccounts
+            : campaignTwoAccounts;
+        return operationName === 'CampaignEmailAccounts'
+          ? {
+              data: { campaignEmailAccounts: accounts },
+              loading: false,
+              refetch: jest.fn(),
+            }
+          : {
+              data: { campaignEmailAccountCandidates: [] },
+              loading: false,
+              refetch: jest.fn(),
+            };
+      },
+    );
+    mockUseMutation.mockImplementation(() => [jest.fn(), { loading: false }]);
+    const { rerender } = render(
+      <MyahCampaignEmailAccounts campaignId="campaign-1" />,
+    );
+
+    expect(screen.getByText('sender@example.com')).toBeVisible();
+    rerender(<MyahCampaignEmailAccounts campaignId="campaign-2" />);
+
+    expect(screen.getByText('team@example.com')).toBeVisible();
+    expect(screen.queryByText('sender@example.com')).not.toBeInTheDocument();
+  });
+
+  it('moves focus to Add email account after a successful removal', async () => {
+    const remove = jest.fn().mockResolvedValue({
+      data: { removeCampaignEmailAccount: [] },
+    });
+    renderWithAccounts({ remove });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove sender@example.com' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove account' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Add email account' }),
+      ).toHaveFocus(),
+    );
   });
 });

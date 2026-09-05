@@ -148,7 +148,6 @@ export const MyahCampaignEmailAccounts = ({
 }: {
   campaignId: string;
 }) => {
-  const [accounts, setAccounts] = useState<CampaignEmailAccount[] | null>(null);
   const [removingAccount, setRemovingAccount] =
     useState<CampaignEmailAccount | null>(null);
   const [removalTrigger, setRemovalTrigger] =
@@ -185,8 +184,7 @@ export const MyahCampaignEmailAccounts = ({
     removeCampaignEmailAccount: CampaignEmailAccount[];
   }>(REMOVE_CAMPAIGN_EMAIL_ACCOUNT);
 
-  const displayedAccounts =
-    accounts ?? accountQuery.data?.campaignEmailAccounts ?? [];
+  const displayedAccounts = accountQuery.data?.campaignEmailAccounts ?? [];
   const candidates = candidatesQuery.data?.campaignEmailAccountCandidates ?? [];
   const isLoading = accountQuery.loading;
   const hasDefault = displayedAccounts.some((account) => account.isDefault);
@@ -217,21 +215,16 @@ export const MyahCampaignEmailAccounts = ({
     }
   }, [isPickerOpen]);
 
-  const applyResult = (result?: CampaignEmailAccount[]) => {
-    if (result) setAccounts(result);
-  };
-
   const { refetch: refetchAccounts } = accountQuery;
   const { refetch: refetchCandidates } = candidatesQuery;
-  const refreshAccountQueries = useCallback(() => {
-    void Promise.all([refetchAccounts(), refetchCandidates()]).catch(
-      () => undefined,
-    );
-  }, [refetchAccounts, refetchCandidates]);
+  const refreshAccountQueries = useCallback(
+    () => Promise.all([refetchAccounts(), refetchCandidates()]),
+    [refetchAccounts, refetchCandidates],
+  );
 
   const handleLink = async (candidate: CampaignEmailAccount) => {
     try {
-      const result = await linkAccount({
+      await linkAccount({
         variables: {
           input: {
             campaignId,
@@ -239,9 +232,8 @@ export const MyahCampaignEmailAccounts = ({
           },
         },
       });
-      applyResult(result.data?.linkCampaignEmailAccount);
       closeDropdown(pickerDropdownId);
-      refreshAccountQueries();
+      await refreshAccountQueries();
       enqueueSuccessSnackBar({ message: 'Email account linked.' });
     } catch {
       enqueueErrorSnackBar({ message: 'Email account could not be linked.' });
@@ -250,11 +242,14 @@ export const MyahCampaignEmailAccounts = ({
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
+    const connectionFailed =
+      searchParams.get('emailAccountConnectionFailed') === '1';
     const shouldLink = searchParams.get('linkConnectedAccount') === '1';
     const connectedAccountId = searchParams.get('connectedAccountId');
 
-    if (!shouldLink) return;
+    if (!connectionFailed && !shouldLink) return;
 
+    searchParams.delete('emailAccountConnectionFailed');
     searchParams.delete('linkConnectedAccount');
     searchParams.delete('connectedAccountId');
     navigate(
@@ -265,6 +260,13 @@ export const MyahCampaignEmailAccounts = ({
       },
       { replace: true },
     );
+
+    if (connectionFailed) {
+      enqueueErrorSnackBar({
+        message: 'Email account connection failed. Try connecting it again.',
+      });
+      return;
+    }
 
     if (!isUuid(connectedAccountId) || autoLinkedAccountRef.current) {
       if (!isUuid(connectedAccountId)) {
@@ -277,9 +279,8 @@ export const MyahCampaignEmailAccounts = ({
     void linkAccount({
       variables: { input: { campaignId, connectedAccountId } },
     })
-      .then((result) => {
-        applyResult(result.data?.linkCampaignEmailAccount);
-        refreshAccountQueries();
+      .then(async () => {
+        await refreshAccountQueries();
         enqueueSuccessSnackBar({ message: 'Email account linked.' });
       })
       .catch(() => {
@@ -299,11 +300,10 @@ export const MyahCampaignEmailAccounts = ({
 
   const handleSetDefault = async (account: CampaignEmailAccount) => {
     try {
-      const result = await setDefaultAccount({
+      await setDefaultAccount({
         variables: { input: { campaignId, campaignAccountId: account.id } },
       });
-      applyResult(result.data?.setDefaultCampaignEmailAccount);
-      refreshAccountQueries();
+      await refreshAccountQueries();
       enqueueSuccessSnackBar({ message: 'Default email account updated.' });
     } catch {
       enqueueErrorSnackBar({
@@ -317,9 +317,13 @@ export const MyahCampaignEmailAccounts = ({
     openModal(removeModalId);
   };
 
-  const closeRemoval = () => {
+  const closeRemoval = (focusAddAccount = false) => {
     setRemovingAccount(null);
-    removalTrigger?.focus();
+    if (focusAddAccount) {
+      addEmailAccountButtonRef.current?.focus();
+    } else {
+      removalTrigger?.focus();
+    }
     setRemovalTrigger(null);
   };
 
@@ -327,15 +331,14 @@ export const MyahCampaignEmailAccounts = ({
     if (!removingAccount) return;
 
     try {
-      const result = await removeAccount({
+      await removeAccount({
         variables: {
           input: { campaignId, campaignAccountId: removingAccount.id },
         },
       });
-      applyResult(result.data?.removeCampaignEmailAccount);
-      refreshAccountQueries();
+      await refreshAccountQueries();
       enqueueSuccessSnackBar({ message: 'Email account removed.' });
-      closeRemoval();
+      closeRemoval(true);
     } catch {
       enqueueErrorSnackBar({ message: 'Email account could not be removed.' });
     }
@@ -502,7 +505,7 @@ export const MyahCampaignEmailAccounts = ({
           confirmButtonText="Remove account"
           loading={removing}
           modalInstanceId={removeModalId}
-          onClose={closeRemoval}
+          onClose={() => closeRemoval()}
           onConfirmClick={() => void handleRemove()}
           subtitle={
             removingAccount.isDefault

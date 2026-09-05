@@ -12,6 +12,10 @@ export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDri
     string,
     number
   >();
+  private static readonly draftPreparationCountByConnectedAccountId = new Map<
+    string,
+    number
+  >();
 
   static getSendAttemptCount(connectedAccountIds: string[]): number {
     return connectedAccountIds.reduce(
@@ -23,9 +27,21 @@ export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDri
     );
   }
 
+  static getDraftPreparationCount(connectedAccountIds: string[]): number {
+    return connectedAccountIds.reduce(
+      (count, connectedAccountId) =>
+        count +
+        (this.draftPreparationCountByConnectedAccountId.get(
+          connectedAccountId,
+        ) ?? 0),
+      0,
+    );
+  }
+
   static releaseSendAttemptCounts(connectedAccountIds: string[]): void {
     for (const connectedAccountId of connectedAccountIds) {
       this.sendAttemptCountByConnectedAccountId.delete(connectedAccountId);
+      this.draftPreparationCountByConnectedAccountId.delete(connectedAccountId);
     }
   }
 
@@ -54,9 +70,23 @@ export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDri
 
   async createDraft(
     _: SendMessageInput,
-    __: ConnectedAccountEntity,
+    connectedAccount: ConnectedAccountEntity,
   ): Promise<CreateDraftResult> {
-    throw new Error('E2E fixtures never create Gmail drafts');
+    const preparations =
+      E2eFixtureGmailMessageOutboundService.draftPreparationCountByConnectedAccountId.get(
+        connectedAccount.id,
+      ) ?? 0;
+    E2eFixtureGmailMessageOutboundService.draftPreparationCountByConnectedAccountId.set(
+      connectedAccount.id,
+      preparations + 1,
+    );
+    const identifier = connectedAccount.id;
+
+    return {
+      draftExternalId: `myah-e2e-local-draft-${identifier}`,
+      headerMessageId: `myah-e2e-local-message-${identifier}`,
+      threadExternalId: `myah-e2e-local-thread-${identifier}`,
+    };
   }
 
   async sendDraft(

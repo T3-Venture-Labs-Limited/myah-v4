@@ -117,6 +117,29 @@ describe('GoogleAPIsAuthController', () => {
     );
   });
 
+  it('returns a Campaign callback failure to the safe Campaign location without linking', async () => {
+    const { controller } = createController();
+    const response = createResponse();
+    (
+      controller as unknown as {
+        googleAPIsService: { refreshGoogleRefreshToken: jest.Mock };
+      }
+    ).googleAPIsService.refreshGoogleRefreshToken.mockRejectedValueOnce(
+      new Error('provider refused'),
+    );
+
+    await controller.googleAuthGetAccessToken(
+      buildRequest(
+        '/object/campaign/campaign-1?linkConnectedAccount=1&connectedAccountId=old#operations',
+      ),
+      response,
+    );
+
+    expect(response.redirect).toHaveBeenCalledWith(
+      'https://myah.example.com/object/campaign/campaign-1?emailAccountConnectionFailed=1#operations',
+    );
+  });
+
   it.each([
     'https://evil.example/object/campaign/campaign-1',
     '//evil.example/object/campaign/campaign-1',

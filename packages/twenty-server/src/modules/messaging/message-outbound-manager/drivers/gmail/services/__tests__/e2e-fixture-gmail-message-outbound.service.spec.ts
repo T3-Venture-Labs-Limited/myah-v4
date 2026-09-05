@@ -6,7 +6,7 @@ describe('E2eFixtureGmailMessageOutboundService', () => {
     id: 'fixture-account',
   } as Pick<ConnectedAccountEntity, 'id'> as ConnectedAccountEntity;
 
-  it('counts each blocked fixture provider send without contacting Gmail', async () => {
+  it('returns deterministic local drafts while counting and refusing every send', async () => {
     const service = new E2eFixtureGmailMessageOutboundService();
 
     expect(
@@ -22,7 +22,16 @@ describe('E2eFixtureGmailMessageOutboundService', () => {
     ).rejects.toThrow('E2E fixtures never send Gmail messages');
     await expect(
       service.createDraft({} as never, connectedAccount),
-    ).rejects.toThrow('E2E fixtures never create Gmail drafts');
+    ).resolves.toEqual({
+      draftExternalId: 'myah-e2e-local-draft-fixture-account',
+      headerMessageId: 'myah-e2e-local-message-fixture-account',
+      threadExternalId: 'myah-e2e-local-thread-fixture-account',
+    });
+    expect(
+      E2eFixtureGmailMessageOutboundService.getDraftPreparationCount([
+        connectedAccount.id,
+      ]),
+    ).toBe(1);
     await expect(
       service.sendDraft('fixture-draft', {} as never, connectedAccount),
     ).rejects.toThrow('E2E fixtures never send Gmail messages');

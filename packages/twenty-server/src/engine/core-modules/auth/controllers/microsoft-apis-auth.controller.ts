@@ -23,6 +23,7 @@ import { MicrosoftAPIsOauthRequestCodeGuard } from 'src/engine/core-modules/auth
 import { MicrosoftAPIsService } from 'src/engine/core-modules/auth/services/microsoft-apis.service';
 import { TransientTokenService } from 'src/engine/core-modules/auth/token/services/transient-token.service';
 import { appendConnectedAccountIdToRedirectLocation } from 'src/engine/core-modules/auth/utils/append-connected-account-id-to-redirect-location.util';
+import { buildOAuthCampaignFailureRedirectLocation } from 'src/engine/core-modules/auth/utils/build-oauth-campaign-failure-redirect-location.util';
 import { buildWorkspaceUrlFromRelativeRedirectLocation } from 'src/engine/core-modules/auth/utils/build-workspace-url-from-relative-redirect-location.util';
 import { APIsOAuthRequest } from 'src/engine/core-modules/auth/types/apis-oauth-request.type';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
@@ -69,6 +70,7 @@ export class MicrosoftAPIsAuthController {
     @Res() res: Response,
   ) {
     let workspace: WorkspaceEntity | null = null;
+    let redirectLocation: string | undefined;
 
     try {
       const { user } = req;
@@ -78,11 +80,12 @@ export class MicrosoftAPIsAuthController {
         accessToken,
         refreshToken,
         transientToken,
-        redirectLocation,
+        redirectLocation: requestedRedirectLocation,
         calendarVisibility,
         messageVisibility,
         skipMessageChannelConfiguration,
       } = user;
+      redirectLocation = requestedRedirectLocation;
 
       const { workspaceMemberId, userId, workspaceId } =
         await this.transientTokenService.verifyTransientToken(transientToken);
@@ -153,6 +156,20 @@ export class MicrosoftAPIsAuthController {
 
       return res.redirect(url.toString());
     } catch (error) {
+      const failureReturnLocation =
+        buildOAuthCampaignFailureRedirectLocation(redirectLocation);
+      if (workspace && failureReturnLocation) {
+        const url = buildWorkspaceUrlFromRelativeRedirectLocation({
+          buildWorkspaceURL:
+            this.workspaceDomainsService.buildWorkspaceURL.bind(
+              this.workspaceDomainsService,
+            ),
+          redirectLocation: failureReturnLocation,
+          workspace,
+        });
+        return res.redirect(url.toString());
+      }
+
       return res.redirect(
         this.guardRedirectService.getRedirectErrorUrlAndCaptureExceptions({
           error,

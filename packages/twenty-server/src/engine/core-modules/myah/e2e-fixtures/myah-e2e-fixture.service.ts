@@ -419,44 +419,53 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     const dataSource =
       await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
     const schemaName = getWorkspaceSchemaName(workspaceId);
-    const query = (sql: string, parameters: unknown[]) =>
-      dataSource.query(sql, parameters, undefined, {
-        shouldBypassPermissionChecks: true,
-      });
-    const remove = async (table: string, ids?: string[]) => {
-      if (!ids?.length) return;
-      await query(`DELETE FROM ${table} WHERE "id" = ANY($1::uuid[])`, [ids]);
-    };
-    await remove('core."agentMessagePart"', records.agentMessagePartIds);
-    await remove('core."agentMessage"', records.agentMessageIds);
-    if (records.actionApprovalBindingIds?.length) {
-      await query(
-        `DELETE FROM core."actionApprovalBindingEvidenceLink" WHERE "actionApprovalBindingId" = ANY($1::uuid[])`,
-        [records.actionApprovalBindingIds],
+    await dataSource.transaction(async (manager) => {
+      const query = (sql: string, parameters: unknown[]) =>
+        manager.query(sql, parameters);
+      const remove = async (table: string, ids?: string[]) => {
+        if (!ids?.length) return;
+        await query(`DELETE FROM ${table} WHERE "id" = ANY($1::uuid[])`, [ids]);
+      };
+      await remove('core."agentMessagePart"', records.agentMessagePartIds);
+      await remove('core."agentMessage"', records.agentMessageIds);
+      if (records.actionApprovalBindingIds?.length) {
+        await query(
+          `DELETE FROM core."actionExecutionReceipt"
+            WHERE "actionApprovalBindingId" = ANY($1::uuid[])
+              AND "workspaceId" = $2`,
+          [records.actionApprovalBindingIds, workspaceId],
+        );
+        await query(
+          `DELETE FROM core."actionApprovalBindingEvidenceLink" WHERE "actionApprovalBindingId" = ANY($1::uuid[])`,
+          [records.actionApprovalBindingIds],
+        );
+        await remove(
+          'core."actionApprovalBinding"',
+          records.actionApprovalBindingIds,
+        );
+      }
+      await remove(
+        `"${schemaName}"."outreachAction"`,
+        records.outreachActionIds,
       );
       await remove(
-        'core."actionApprovalBinding"',
-        records.actionApprovalBindingIds,
+        `"${schemaName}"."campaignCreator"`,
+        records.campaignCreatorIds,
       );
-    }
-    await remove(`"${schemaName}"."outreachAction"`, records.outreachActionIds);
-    await remove(
-      `"${schemaName}"."campaignCreator"`,
-      records.campaignCreatorIds,
-    );
-    await remove(`"${schemaName}"."creator"`, records.creatorIds);
-    if (records.connectedAccountIds.length) {
-      await query(
-        `DELETE FROM "${schemaName}"."campaignAccount" WHERE "connectedAccountId" = ANY($1::text[])`,
-        [records.connectedAccountIds],
+      await remove(`"${schemaName}"."creator"`, records.creatorIds);
+      if (records.connectedAccountIds.length) {
+        await query(
+          `DELETE FROM "${schemaName}"."campaignAccount" WHERE "connectedAccountId" = ANY($1::text[])`,
+          [records.connectedAccountIds],
+        );
+      }
+      await remove(
+        `"${schemaName}"."campaignAccount"`,
+        records.campaignAccountIds,
       );
-    }
-    await remove(
-      `"${schemaName}"."campaignAccount"`,
-      records.campaignAccountIds,
-    );
-    await remove('core."agentChatThread"', records.agentChatThreadIds);
-    await remove('core."messageChannel"', records.messageChannelIds);
-    await remove('core."connectedAccount"', records.connectedAccountIds);
+      await remove('core."agentChatThread"', records.agentChatThreadIds);
+      await remove('core."messageChannel"', records.messageChannelIds);
+      await remove('core."connectedAccount"', records.connectedAccountIds);
+    });
   }
 }

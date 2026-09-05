@@ -15,6 +15,7 @@ import {
 
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 
 type WorkspaceRow = { id: string };
@@ -1038,6 +1039,21 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     const dataSource =
       await workspaceOrmManager.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
     const originalTransaction = dataSource.transaction.bind(dataSource);
+    const workspaceEventEmitter = resolveProvider(WorkspaceEventEmitter);
+    const originalEmitDatabaseBatchEvent =
+      workspaceEventEmitter.emitDatabaseBatchEvent.bind(workspaceEventEmitter);
+    const campaignAccountEvents: unknown[] = [];
+    const emitDatabaseBatchEventSpy = jest
+      .spyOn(workspaceEventEmitter, 'emitDatabaseBatchEvent')
+      .mockImplementation((event) => {
+        if (
+          event?.workspaceId === workspaceId &&
+          event.objectMetadataNameSingular === 'campaignAccount'
+        ) {
+          campaignAccountEvents.push(event);
+        }
+        return originalEmitDatabaseBatchEvent(event);
+      });
     let serviceCallbackReturnedAfterInsert = false;
     let serviceRejected = false;
     dataSource.transaction = async (callback) =>
@@ -1059,9 +1075,11 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
       serviceRejected = true;
     } finally {
       dataSource.transaction = originalTransaction;
+      emitDatabaseBatchEventSpy.mockRestore();
     }
 
     expect(serviceCallbackReturnedAfterInsert).toBe(true);
+    expect(campaignAccountEvents).toEqual([]);
     expect(serviceRejected).toBe(true);
     const [{ count }] = await global.testDataSource.query<
       Array<{ count: string }>
