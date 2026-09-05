@@ -456,70 +456,14 @@ export class UnipileInstagramAccountService {
       );
     }
 
-    if (input.status !== 'DELETED') {
-      return this.reconcileBoundAccountStatus(input.bindingId);
-    }
-
-    const binding = await this.bindingRepository.findOne({
-      where: { id: input.bindingId, deactivatedAt: IsNull() },
+    return this.reconcileBoundAccountStatus(input.bindingId, {
+      deactivateWhenMissing: input.status === 'DELETED',
     });
-    if (
-      !binding ||
-      binding.status === UnipileInstagramAccountBindingStatus.DELETE_UNKNOWN
-    ) {
-      return binding?.status ?? null;
-    }
-
-    return this.finalizationLockService.withLock(
-      {
-        workspaceId: binding.workspaceId,
-        unipileAccountId: binding.unipileAccountId,
-        instagramUserId: binding.instagramUserId,
-      },
-      async (manager) => {
-        const workspaceRepository = manager.getRepository(WorkspaceEntity);
-        const bindingRepository = manager.getRepository(
-          UnipileInstagramAccountBindingEntity,
-        );
-        const currentBinding = await bindingRepository.findOne({
-          where: { id: input.bindingId, deactivatedAt: IsNull() },
-        });
-
-        if (
-          !currentBinding ||
-          currentBinding.workspaceId !== binding.workspaceId ||
-          currentBinding.unipileAccountId !== binding.unipileAccountId ||
-          currentBinding.instagramUserId !== binding.instagramUserId ||
-          currentBinding.status ===
-            UnipileInstagramAccountBindingStatus.DELETE_UNKNOWN
-        ) {
-          return currentBinding?.status ?? null;
-        }
-
-        const workspace = await workspaceRepository.findOne({
-          where: { id: currentBinding.workspaceId },
-        });
-        if (!workspace) {
-          return currentBinding.status;
-        }
-
-        await this.markDisconnectStatus({
-          bindingRepository,
-          binding: currentBinding,
-          workspace,
-          status: UnipileInstagramAccountBindingStatus.INACTIVE,
-          projectionStatus: UnipileInstagramAccountBindingStatus.INACTIVE,
-          deactivatedAt: new Date(),
-          lastError: null,
-        });
-
-        return currentBinding.status;
-      },
-    );
   }
 
   async reconcileBoundAccountStatus(
     bindingId: string,
+    options: { deactivateWhenMissing?: boolean } = {},
   ): Promise<UnipileInstagramAccountBindingStatus | null> {
     this.availabilityService.assertEnabled();
 
@@ -535,10 +479,17 @@ export class UnipileInstagramAccountService {
     }
 
     let account: UnipileInstagramAccount | null = null;
+    let verifiedDeleted = false;
     try {
       account = await this.accountClient.getAccount(binding.unipileAccountId);
     } catch (error) {
-      if (!(error instanceof UnipileReadError) || error.retryable) {
+      if (
+        error instanceof UnipileReadError &&
+        options.deactivateWhenMissing === true &&
+        error.status === 404
+      ) {
+        verifiedDeleted = true;
+      } else if (!(error instanceof UnipileReadError) || error.retryable) {
         throw error;
       }
     }
@@ -577,6 +528,20 @@ export class UnipileInstagramAccountService {
         });
 
         if (!workspace) {
+          return currentBinding.status;
+        }
+
+        if (verifiedDeleted) {
+          await this.markDisconnectStatus({
+            bindingRepository,
+            binding: currentBinding,
+            workspace,
+            status: UnipileInstagramAccountBindingStatus.INACTIVE,
+            projectionStatus: UnipileInstagramAccountBindingStatus.INACTIVE,
+            deactivatedAt: new Date(),
+            lastError: null,
+          });
+
           return currentBinding.status;
         }
 

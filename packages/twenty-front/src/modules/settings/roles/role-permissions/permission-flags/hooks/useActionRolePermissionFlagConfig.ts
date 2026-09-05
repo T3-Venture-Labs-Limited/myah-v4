@@ -17,9 +17,6 @@ import {
 } from 'twenty-ui/icon';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
 
-const sendInstagramFirstMessageToolPermissionFlag =
-  'SEND_INSTAGRAM_FIRST_MESSAGE_TOOL' as PermissionFlagType;
-
 type UseActionRolePermissionFlagConfigParams = {
   assignmentCapabilities?: {
     canBeAssignedToAgents?: boolean;
@@ -92,7 +89,7 @@ export const useActionRolePermissionFlagConfig = ({
         isRelevantForUsers: true,
       },
       {
-        key: sendInstagramFirstMessageToolPermissionFlag,
+        key: PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
         name: t`Send Instagram First Message`,
         description: t`Send approved first messages to start Instagram conversations`,
         Icon: IconMail,
@@ -194,7 +191,8 @@ export const useActionRolePermissionFlagConfig = ({
 
     return allPermissions.filter((permission) => {
       if (
-        permission.key === sendInstagramFirstMessageToolPermissionFlag &&
+        permission.key ===
+          PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL &&
         !canBeAssignedOnlyToUsers
       ) {
         return false;

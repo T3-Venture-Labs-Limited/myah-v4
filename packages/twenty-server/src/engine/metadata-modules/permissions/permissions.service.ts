@@ -32,6 +32,7 @@ import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/works
 const EXPLICIT_TOOL_PERMISSION_FLAGS: Partial<
   Record<PermissionFlagType, true>
 > = {
+  [PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL]: true,
   [PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL]: true,
   [PermissionFlagType.RESOLVE_INSTAGRAM_SEND_OUTCOME]: true,
 };

@@ -19,6 +19,7 @@ import {
 import { InstagramMessageDraftLockService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft-lock.service';
 import { InstagramMessagePermissionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
 import { InstagramMessageReceiptProjectionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-receipt-projection.service';
+import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { UnipileV1ClientService } from 'src/modules/myah-unipile/services/unipile-v1-client.service';
 
@@ -59,6 +60,7 @@ export class InstagramMessageSendService {
     private readonly projector: ActionReceiptProjectorService,
     private readonly messageProjectionWriter: InstagramMessageReceiptProjectionService,
     private readonly permissionService: InstagramMessagePermissionService,
+    private readonly recordAccessService: InstagramMessageRecordAccessService,
   ) {}
 
   async sendDirect(
@@ -142,10 +144,23 @@ export class InstagramMessageSendService {
       );
     }
 
+    const accessibleDraft =
+      await this.recordAccessService.assertCanExecuteDraft({
+        workspaceId: input.workspaceId,
+        draftId: binding.draftId,
+        rolePermissionConfig: input.rolePermissionConfig,
+      });
     const authority = await this.authorityReader.rebuildExecutionAuthority({
       workspaceId: input.workspaceId,
       binding,
     });
+
+    if (
+      accessibleDraft.instagramAccountRecordId !==
+      authority.canonicalGraph.account.workspaceInstagramAccountRecordId
+    ) {
+      throw new Error('Instagram account is unavailable');
+    }
     const executionReservation =
       await this.actionApprovalService.reserveExecutionForBinding({
         approvalBindingId: input.approvalBindingId,

@@ -457,6 +457,34 @@ describe('UnipileInstagramWebhookIntakeService', () => {
     expect(harness.webhookQueue.enqueue).toHaveBeenCalledWith('event-id');
     expect(harness.eventRepository.save).not.toHaveBeenCalled();
   });
+  it('acknowledges an exact durable duplicate after its binding deactivates', async () => {
+    const existingEvent: WebhookEvent = {
+      accountStatus: null,
+      attendeeProviderId: instagramRemoteId,
+      bindingId: activeBinding.id,
+      deliveryState: null,
+      deliveryStateUpdatedAt: null,
+      eventFingerprint: 'f'.repeat(64),
+      eventType: 'MESSAGE_RECEIVED',
+      id: 'event-id',
+      status: 'COMPLETED',
+      unipileChatId: messageReceivedBody.chat_id,
+      unipileMessageId: messageReceivedBody.message_id,
+    };
+    const harness = createHarness({ event: existingEvent });
+    harness.bindingRepository.findOne.mockResolvedValue(null);
+    const service = createService(harness);
+
+    await expect(
+      service.intake({
+        body: messageReceivedBody,
+        secret: 'shared-webhook-secret',
+      }),
+    ).resolves.toEqual({ ok: true, duplicate: true });
+
+    expect(harness.bindingRepository.findOne).not.toHaveBeenCalled();
+    expect(harness.webhookQueue.enqueue).not.toHaveBeenCalled();
+  });
 
   it('marks a received duplicate enqueued before re-enqueuing it for recovery', async () => {
     const existingEvent: WebhookEvent = {

@@ -40,9 +40,16 @@ const buildHarness = () => {
   const resolutionRepository = {
     findOne: jest.fn(async () => storedResolution),
   };
+  const receiptRepository = {
+    findOne: jest.fn().mockResolvedValue(receipt),
+  };
   const dataSource = {
     createQueryRunner: jest.fn().mockReturnValue(queryRunner),
-    getRepository: jest.fn().mockReturnValue(resolutionRepository),
+    getRepository: jest.fn((entity) =>
+      entity === ActionExecutionReceiptEntity
+        ? receiptRepository
+        : resolutionRepository,
+    ),
     transaction: jest.fn(async (callback) => callback(manager)),
   };
   const reconciliationService = {
@@ -54,6 +61,9 @@ const buildHarness = () => {
     reconcile: jest.fn(async () => {
       receipt.state = ActionExecutionReceiptState.SENT;
       return { kind: 'MATCH' };
+    }),
+    finalizeProviderAccepted: jest.fn(async () => {
+      receipt.state = ActionExecutionReceiptState.SENT;
     }),
   };
   const budgetService = {
@@ -70,6 +80,8 @@ const buildHarness = () => {
     manager,
     queryRunner,
     receipt,
+    resolutionRepository,
+    receiptRepository,
     reconciliationService,
     service,
   };
@@ -96,6 +108,9 @@ describe('InstagramSendOutcomeResolutionService', () => {
       workspaceId,
       receiptId,
     });
+    expect(harness.manager.save.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.reconciliationService.reconcile.mock.invocationCallOrder[0],
+    );
     expect(
       harness.budgetService.releaseStartTargetForReceipt,
     ).toHaveBeenCalledWith({
@@ -108,6 +123,30 @@ describe('InstagramSendOutcomeResolutionService', () => {
       'SELECT pg_advisory_lock(hashtext($1))',
       [`instagram-send-resolution:${workspaceId}:${receiptId}`],
     );
+  });
+
+  it('retries reconciliation from a persisted confirmed resolution after interruption', async () => {
+    const harness = buildHarness();
+    harness.reconciliationService.reconcile.mockRejectedValueOnce(
+      new Error('projection interrupted'),
+    );
+
+    await expect(harness.service.resolve(baseInput)).rejects.toThrow(
+      'projection interrupted',
+    );
+    await expect(harness.resolutionRepository.findOne()).resolves.toMatchObject(
+      {
+        outcome: 'CONFIRMED_SENT',
+        actionExecutionReceiptId: receiptId,
+      },
+    );
+
+    await expect(harness.service.resolve(baseInput)).resolves.toMatchObject({
+      outcome: 'CONFIRMED_SENT',
+      actionExecutionReceiptId: receiptId,
+    });
+    expect(harness.reconciliationService.reconcile).toHaveBeenCalledTimes(2);
+    expect(harness.receipt.state).toBe(ActionExecutionReceiptState.SENT);
   });
 
   it('derives safe evidence server-side when a sufficiently old complete read proves not sent', async () => {

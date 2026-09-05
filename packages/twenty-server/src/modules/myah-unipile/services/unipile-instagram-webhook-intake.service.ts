@@ -250,23 +250,6 @@ export class UnipileInstagramWebhookIntakeService {
         fingerprint,
       ]);
 
-      const binding = await bindingRepository.findOne({
-        where: {
-          unipileAccountId: payload.accountId,
-          deactivatedAt: IsNull(),
-        },
-      });
-      if (
-        !binding ||
-        (payload.eventType !==
-          UnipileInstagramWebhookEventType.ACCOUNT_STATUS &&
-          binding.status !== UnipileInstagramAccountBindingStatus.ACTIVE)
-      ) {
-        throw new BadRequestException(
-          'Unipile Instagram account is unavailable',
-        );
-      }
-
       const existing = await eventRepository.findOne({
         where: { eventFingerprint: fingerprint },
       });
@@ -282,6 +265,22 @@ export class UnipileInstagramWebhookIntakeService {
           shouldEnqueue:
             existing.status === UnipileInstagramWebhookEventStatus.ENQUEUED,
         };
+      }
+      const binding = await bindingRepository.findOne({
+        where: {
+          unipileAccountId: payload.accountId,
+          deactivatedAt: IsNull(),
+        },
+      });
+      if (
+        !binding ||
+        (payload.eventType !==
+          UnipileInstagramWebhookEventType.ACCOUNT_STATUS &&
+          binding.status !== UnipileInstagramAccountBindingStatus.ACTIVE)
+      ) {
+        throw new BadRequestException(
+          'Unipile Instagram account is unavailable',
+        );
       }
 
       const event = eventRepository.create({

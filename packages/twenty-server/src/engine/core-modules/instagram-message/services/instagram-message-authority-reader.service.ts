@@ -266,7 +266,7 @@ export class InstagramMessageAuthorityReaderService {
         throw new Error('START_CHAT draft target is stale');
       }
       if (!input.allowExistingTarget) {
-        await this.assertNoCurrentConversation(
+        await this.assertNoLocalCurrentConversation(
           input.workspace,
           input.accountBinding,
           recipient.normalizedUsername,
@@ -285,11 +285,6 @@ export class InstagramMessageAuthorityReaderService {
       ) {
         throw new Error('REPLY draft target is stale');
       }
-      await this.unipileClient.getChat({
-        accountId: input.accountBinding.unipileAccountId,
-        chatId: input.draft.providerConversationId,
-        expectedAttendeeId: recipientProviderId,
-      });
     }
 
     const evidenceLinks = await this.getEvidenceLinks(
@@ -335,7 +330,7 @@ export class InstagramMessageAuthorityReaderService {
     });
   }
 
-  private async assertNoCurrentConversation(
+  private async assertNoLocalCurrentConversation(
     workspace: FlatWorkspace,
     accountBinding: UnipileInstagramAccountBindingEntity,
     recipientUsername: string,
@@ -367,6 +362,20 @@ export class InstagramMessageAuthorityReaderService {
         'START_CHAT authority cannot target an existing conversation',
       );
     }
+  }
+
+  private async assertNoCurrentConversation(
+    workspace: FlatWorkspace,
+    accountBinding: UnipileInstagramAccountBindingEntity,
+    recipientUsername: string,
+    recipientProviderId: string,
+  ): Promise<void> {
+    await this.assertNoLocalCurrentConversation(
+      workspace,
+      accountBinding,
+      recipientUsername,
+      recipientProviderId,
+    );
 
     let cursor: string | null = null;
     const seenCursors = new Set<string>();

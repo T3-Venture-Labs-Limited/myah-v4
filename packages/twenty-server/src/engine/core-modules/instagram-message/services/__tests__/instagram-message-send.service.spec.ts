@@ -113,6 +113,13 @@ const buildHarness = () => {
   const permissionService = {
     assertCanSend: jest.fn().mockResolvedValue(undefined),
   };
+  const recordAccessService = {
+    assertCanExecuteDraft: jest.fn().mockResolvedValue({
+      draft: authority.canonicalGraph.draft,
+      instagramAccountRecordId:
+        authority.canonicalGraph.account.workspaceInstagramAccountRecordId,
+    }),
+  };
   const Service = loadService();
 
   expect(Service).toBeDefined();
@@ -126,6 +133,7 @@ const buildHarness = () => {
     projector,
     messageProjectionWriter,
     permissionService,
+    recordAccessService,
     service: new Service!(
       actionApprovalService as never,
       authorityService as never,
@@ -135,6 +143,7 @@ const buildHarness = () => {
       projector as never,
       messageProjectionWriter as never,
       permissionService as never,
+      recordAccessService as never,
     ),
   };
 };
@@ -231,6 +240,33 @@ describe('InstagramMessageSendService', () => {
     );
   });
 
+  it('rechecks exact draft and target record access immediately before execution', async () => {
+    const harness = buildHarness();
+    harness.recordAccessService.assertCanExecuteDraft.mockRejectedValue(
+      new Error('Creator is unavailable'),
+    );
+
+    await expect(harness.service.executeApproved(executeInput)).rejects.toThrow(
+      'Creator is unavailable',
+    );
+
+    expect(
+      harness.recordAccessService.assertCanExecuteDraft,
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      draftId,
+      rolePermissionConfig: executeInput.rolePermissionConfig,
+    });
+    expect(
+      harness.authorityService.rebuildExecutionAuthority,
+    ).not.toHaveBeenCalled();
+    expect(
+      harness.actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expect(harness.budgetService.reserve).not.toHaveBeenCalled();
+    expect(harness.client.startChat).not.toHaveBeenCalled();
+  });
+
   it('returns an existing terminal receipt without another budget reservation or provider call', async () => {
     const harness = buildHarness();
     harness.actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue(
@@ -267,6 +303,9 @@ describe('InstagramMessageSendService', () => {
       harness.service.executeApproved(executeInput),
     ).resolves.toEqual({ ...blocked, receiptId });
     expect(harness.client.startChat).not.toHaveBeenCalled();
+    expect(
+      harness.authorityService.assertReadyAfterReservation,
+    ).not.toHaveBeenCalled();
   });
 
   it('retains capacity but releases a START_CHAT target after a known provider rejection', async () => {

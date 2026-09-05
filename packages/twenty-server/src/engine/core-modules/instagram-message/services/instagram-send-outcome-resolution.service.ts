@@ -60,6 +60,9 @@ export class InstagramSendOutcomeResolutionService {
         ) {
           throw new Error('Instagram send outcome was already resolved');
         }
+        if (existing.outcome === 'CONFIRMED_SENT') {
+          await this.completeConfirmedResolution(input);
+        }
         await this.budgetService.releaseStartTargetForReceipt({
           workspaceId: input.workspaceId,
           actionExecutionReceiptId: input.receiptId,
@@ -73,17 +76,11 @@ export class InstagramSendOutcomeResolutionService {
         workspaceId: input.workspaceId,
         receiptId: input.receiptId,
       });
-      if (input.outcome === 'CONFIRMED_SENT') {
-        if (inspection.kind !== 'MATCH') {
-          throw new Error(
-            'Confirmed sent resolution requires one verified provider message',
-          );
-        }
-        await this.reconciliationService.reconcile({
-          workspaceId: input.workspaceId,
-          receiptId: input.receiptId,
-        });
-      } else {
+      if (input.outcome === 'CONFIRMED_SENT' && inspection.kind !== 'MATCH') {
+        throw new Error(
+          'Confirmed sent resolution requires one verified provider message',
+        );
+      } else if (input.outcome === 'CLEARED_NOT_SENT') {
         if (inspection.kind !== 'NO_MATCH_COMPLETE') {
           throw new Error(
             'Cleared not sent resolution requires complete provider reconciliation',
@@ -141,7 +138,13 @@ export class InstagramSendOutcomeResolutionService {
         if (prior) return prior;
 
         if (input.outcome === 'CONFIRMED_SENT') {
-          if (receipt.state !== ActionExecutionReceiptState.SENT) {
+          if (
+            ![
+              ActionExecutionReceiptState.UNKNOWN,
+              ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+              ActionExecutionReceiptState.SENT,
+            ].includes(receipt.state)
+          ) {
             throw new Error('Verified Instagram send projection is incomplete');
           }
         } else {
@@ -168,6 +171,10 @@ export class InstagramSendOutcomeResolutionService {
         );
       });
 
+      if (input.outcome === 'CONFIRMED_SENT') {
+        await this.completeConfirmedResolution(input);
+      }
+
       await this.budgetService.releaseStartTargetForReceipt({
         workspaceId: input.workspaceId,
         actionExecutionReceiptId: input.receiptId,
@@ -183,6 +190,38 @@ export class InstagramSendOutcomeResolutionService {
       } finally {
         await queryRunner.release();
       }
+    }
+  }
+  private async completeConfirmedResolution(
+    input: ResolveInstagramSendOutcomeInput,
+  ): Promise<void> {
+    const receipt = await this.dataSource
+      .getRepository(ActionExecutionReceiptEntity)
+      .findOne({
+        where: { id: input.receiptId, workspaceId: input.workspaceId },
+      });
+
+    if (!receipt) {
+      throw new Error('Instagram send receipt is unavailable');
+    }
+    if (receipt.state === ActionExecutionReceiptState.UNKNOWN) {
+      const inspection = await this.reconciliationService.reconcile({
+        workspaceId: input.workspaceId,
+        receiptId: input.receiptId,
+      });
+
+      if (inspection.kind !== 'MATCH') {
+        throw new Error('Verified Instagram send projection is incomplete');
+      }
+    } else if (
+      receipt.state === ActionExecutionReceiptState.PROVIDER_ACCEPTED
+    ) {
+      await this.reconciliationService.finalizeProviderAccepted({
+        workspaceId: input.workspaceId,
+        receiptId: input.receiptId,
+      });
+    } else if (receipt.state !== ActionExecutionReceiptState.SENT) {
+      throw new Error('Verified Instagram send projection is incomplete');
     }
   }
 }

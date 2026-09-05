@@ -1,11 +1,18 @@
 import { Injectable } from '@nestjs/common';
 
-import { IsNull } from 'typeorm';
+import { IsNull, Not } from 'typeorm';
 import { type ObjectRecord } from 'twenty-shared/types';
 
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
+type AccessibleInstagramDraft = ObjectRecord & {
+  id: string;
+  revision: number | string;
+  kind: 'FIRST_MESSAGE' | 'REPLY';
+  creatorId: string | null;
+  conversationId: string | null;
+};
 @Injectable()
 export class InstagramMessageRecordAccessService {
   constructor(
@@ -28,6 +35,68 @@ export class InstagramMessageRecordAccessService {
       select: { id: true },
     });
     if (!draft) throw new Error('Instagram message draft is unavailable');
+  }
+
+  async assertCanExecuteDraft(input: {
+    workspaceId: string;
+    draftId: string;
+    rolePermissionConfig: RolePermissionConfig;
+  }): Promise<{
+    draft: AccessibleInstagramDraft;
+    instagramAccountRecordId: string;
+  }> {
+    const draftRepository =
+      await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+        input.workspaceId,
+        'myahInstagramReplyDraft',
+        input.rolePermissionConfig,
+      );
+    const draft = (await draftRepository.findOne({
+      where: { id: input.draftId, deletedAt: IsNull() },
+    })) as AccessibleInstagramDraft | null;
+
+    if (
+      !draft ||
+      !Number.isSafeInteger(Number(draft.revision)) ||
+      Number(draft.revision) < 1 ||
+      (draft.kind !== 'FIRST_MESSAGE' && draft.kind !== 'REPLY')
+    ) {
+      throw new Error('Instagram message draft is unavailable');
+    }
+
+    await this.assertCanSaveDraft({
+      workspaceId: input.workspaceId,
+      draftId: draft.id,
+      expectedRevision: Number(draft.revision),
+      kind: draft.kind,
+      creatorRecordId: draft.creatorId,
+      conversationRecordId: draft.conversationId,
+      rolePermissionConfig: input.rolePermissionConfig,
+    });
+
+    const accountRepository =
+      await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+        input.workspaceId,
+        'myahInstagramAccount',
+        input.rolePermissionConfig,
+      );
+    const account = await accountRepository.findOne({
+      where: {
+        deletedAt: IsNull(),
+        status: 'ACTIVE',
+        unipileAccountId: Not(IsNull()),
+      },
+      select: { id: true },
+    });
+
+    if (!account) {
+      throw new Error('Instagram account is unavailable');
+    }
+
+    return {
+      draft,
+      instagramAccountRecordId: account.id,
+    };
   }
 
   async assertCanSaveDraft(input: {

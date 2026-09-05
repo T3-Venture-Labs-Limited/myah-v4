@@ -2389,7 +2389,16 @@ describe('UnipileInstagramAccountService', () => {
     },
   );
 
-  it('handles a DELETED webhook terminally without rereading the provider', async () => {
+  it('rereads DELETED webhooks, ignores stale replay, and deactivates only a verified 404', async () => {
+    const { UnipileReadError } =
+      require('src/modules/myah-unipile/services/unipile-v1-client.service') as {
+        UnipileReadError: new (
+          status: number,
+          code: string,
+          message: string,
+          retryable: boolean,
+        ) => Error;
+      };
     const callOrder: string[] = [];
     const binding = {
       id: reconnectBindingId,
@@ -2415,10 +2424,10 @@ describe('UnipileInstagramAccountService', () => {
       }),
     };
     const projectionService = {
-      upsertVerifiedAccount: jest.fn(),
-      markAccountStatus: jest.fn(async ({ status }) => {
+      upsertVerifiedAccount: jest.fn(async ({ status }) => {
         callOrder.push(`projection:${status}`);
       }),
+      markAccountStatus: jest.fn(),
     };
     const finalizationLockService = {
       withLock: jest.fn(
@@ -2447,7 +2456,7 @@ describe('UnipileInstagramAccountService', () => {
     };
     const accountClient = {
       deleteAccount: jest.fn(),
-      getAccount: jest.fn(),
+      getAccount: jest.fn().mockResolvedValue(account),
     };
     const service = createAccountService({
       workspaceRepository: { findOne: jest.fn().mockResolvedValue(workspace) },
@@ -2466,7 +2475,7 @@ describe('UnipileInstagramAccountService', () => {
         bindingId: reconnectBindingId,
         status: 'DELETED',
       }),
-    ).resolves.toBe('INACTIVE');
+    ).resolves.toBe('ACTIVE');
 
     expect(bindingRepository.findOne).toHaveBeenCalledWith({
       where: { id: reconnectBindingId, deactivatedAt: IsNull() },
@@ -2474,15 +2483,47 @@ describe('UnipileInstagramAccountService', () => {
     expect(coreBindingRepository.findOne).toHaveBeenCalledWith({
       where: { id: reconnectBindingId, deactivatedAt: IsNull() },
     });
-    expect(bindingRepository.save).not.toHaveBeenCalled();
-    expect(accountClient.getAccount).not.toHaveBeenCalled();
+    expect(accountClient.getAccount).toHaveBeenCalledWith(account.accountId);
+    expect(projectionService.upsertVerifiedAccount).toHaveBeenCalledWith({
+      workspace,
+      account,
+      status: 'ACTIVE',
+    });
+    expect(projectionService.markAccountStatus).not.toHaveBeenCalled();
+    expect(callOrder).toEqual(['projection:ACTIVE', 'save:ACTIVE']);
+    expect(binding).toEqual(
+      expect.objectContaining({
+        status: 'ACTIVE',
+        deactivatedAt: null,
+      }),
+    );
+
+    accountClient.getAccount.mockRejectedValue(
+      new UnipileReadError(
+        404,
+        'UNIPILE_ACCOUNT_NOT_FOUND',
+        'Unable to retrieve the requested Instagram account',
+        true,
+      ),
+    );
+
+    await expect(
+      service.reconcileWebhookAccountStatus({
+        bindingId: reconnectBindingId,
+        status: 'DELETED',
+      }),
+    ).resolves.toBe('INACTIVE');
     expect(projectionService.markAccountStatus).toHaveBeenCalledWith({
       workspace,
       workspaceInstagramAccountRecordId,
       status: 'INACTIVE',
       lastError: null,
     });
-    expect(callOrder).toEqual(['projection:INACTIVE', 'save:INACTIVE']);
+    expect(callOrder).toEqual([
+      'projection:ACTIVE',
+      'save:ACTIVE',
+      'save:INACTIVE',
+    ]);
     expect(binding).toEqual(
       expect.objectContaining({
         status: 'INACTIVE',
@@ -2519,8 +2560,41 @@ describe('UnipileInstagramAccountService', () => {
 
     expect(reconcileBoundAccountStatus).toHaveBeenCalledWith(
       reconnectBindingId,
+      { deactivateWhenMissing: false },
     );
   });
+
+  it('allows deactivation only after a DELETED webhook is verified missing', async () => {
+    const service = createAccountService({
+      workspaceRepository: { findOne: jest.fn() },
+      bindingRepository: {
+        findOne: jest.fn(),
+        create: jest.fn(),
+        save: jest.fn(),
+      },
+      projectionService: { upsertVerifiedAccount: jest.fn() },
+    });
+
+    if (!service) {
+      return;
+    }
+
+    const reconcileBoundAccountStatus = jest
+      .spyOn(service, 'reconcileBoundAccountStatus')
+      .mockResolvedValue('INACTIVE');
+
+    await expect(
+      service.reconcileWebhookAccountStatus({
+        bindingId: reconnectBindingId,
+        status: 'DELETED',
+      }),
+    ).resolves.toBe('INACTIVE');
+    expect(reconcileBoundAccountStatus).toHaveBeenCalledWith(
+      reconnectBindingId,
+      { deactivateWhenMissing: true },
+    );
+  });
+
   it('returns DELETE_UNKNOWN without reading the provider or mutating the binding', async () => {
     const binding = {
       id: reconnectBindingId,

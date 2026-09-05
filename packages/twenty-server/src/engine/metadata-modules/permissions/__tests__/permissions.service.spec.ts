@@ -161,6 +161,12 @@ describe('PermissionsService', () => {
         expect(
           service.checkRolePermissions(
             roleWithAllTools as RoleEntity,
+            PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
+          ),
+        ).toBe(false);
+        expect(
+          service.checkRolePermissions(
+            roleWithAllTools as RoleEntity,
             PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
           ),
         ).toBe(false);

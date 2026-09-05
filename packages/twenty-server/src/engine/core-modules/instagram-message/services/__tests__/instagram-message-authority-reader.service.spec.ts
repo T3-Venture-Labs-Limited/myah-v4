@@ -72,14 +72,14 @@ describe('InstagramMessageAuthorityReaderService', () => {
   it('builds direct START_CHAT authority from current Creator fields and read-only local/provider state', async () => {
     const harness = buildHarness();
 
-    await expect(
-      harness.service.createDirectAuthority({
-        workspaceId,
-        initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
-        draftId,
-        expectedRevision: 2,
-      }),
-    ).resolves.toMatchObject({
+    const authority = await harness.service.createDirectAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
+      draftId,
+      expectedRevision: 2,
+    });
+
+    expect(authority).toMatchObject({
       expectedActionBinding: {
         actionName: 'send_instagram_message',
         actionVersion: 2,
@@ -88,11 +88,12 @@ describe('InstagramMessageAuthorityReaderService', () => {
         interactionContextId: draftId,
       },
     });
+    expect(harness.client.listChats).not.toHaveBeenCalled();
+    expect(harness.client.getChat).not.toHaveBeenCalled();
+
+    await harness.service.assertReadyAfterReservation(authority);
+
     expect(harness.client.listChats).toHaveBeenCalledTimes(1);
-    expect(Object.keys(harness.client).sort()).toEqual([
-      'getChat',
-      'listChats',
-    ]);
   });
 
   it('blocks START_CHAT when a current provider chat already exists', async () => {
@@ -107,13 +108,15 @@ describe('InstagramMessageAuthorityReaderService', () => {
       nextCursor: null,
     });
 
+    const authority = await harness.service.createDirectAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
+      draftId,
+      expectedRevision: 2,
+    });
+
     await expect(
-      harness.service.createDirectAuthority({
-        workspaceId,
-        initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
-        draftId,
-        expectedRevision: 2,
-      }),
+      harness.service.assertReadyAfterReservation(authority),
     ).rejects.toThrow(
       'START_CHAT authority cannot target an existing conversation',
     );
@@ -132,19 +135,23 @@ describe('InstagramMessageAuthorityReaderService', () => {
       conversationInstagramAccountId: accountRecordId,
     });
 
-    await expect(
-      harness.service.createThreadReplyAuthority({
-        workspaceId,
-        initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
-        threadId: '00000000-0000-4000-8000-000000000006',
-        draftId,
-      }),
-    ).resolves.toMatchObject({
+    const authority = await harness.service.createThreadReplyAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
+      threadId: '00000000-0000-4000-8000-000000000006',
+      draftId,
+    });
+
+    expect(authority).toMatchObject({
       expectedActionBinding: {
         actionKind: 'REPLY',
         threadId: '00000000-0000-4000-8000-000000000006',
       },
     });
+    expect(harness.client.getChat).not.toHaveBeenCalled();
+
+    await harness.service.assertReadyAfterReservation(authority);
+
     expect(harness.client.getChat).toHaveBeenCalledWith({
       accountId: 'provider-account',
       chatId: 'provider-chat',

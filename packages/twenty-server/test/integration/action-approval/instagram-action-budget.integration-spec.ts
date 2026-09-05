@@ -746,6 +746,12 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
       } as never,
       { project: jest.fn() } as never,
       { assertCanSend: jest.fn().mockResolvedValue(undefined) } as never,
+      {
+        assertCanExecuteDraft: jest.fn().mockResolvedValue({
+          draft: authorities[0].canonicalGraph.draft,
+          instagramAccountRecordId,
+        }),
+      } as never,
     );
     const sendInput = (approvalBindingId: string) => ({
       workspaceId,
