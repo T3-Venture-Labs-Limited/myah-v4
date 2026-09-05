@@ -323,7 +323,9 @@ describe('CampaignAccountService', () => {
       messageChannels: [],
     });
 
-    await expect(harness.service.list(campaignId, authContext)).resolves.toEqual([
+    await expect(
+      harness.service.list(campaignId, authContext),
+    ).resolves.toEqual([
       {
         id: 'deleted-account-link',
         connectedAccountId: accountId,
@@ -510,17 +512,19 @@ describe('CampaignAccountService', () => {
       ),
     ).resolves.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ connectedAccountId: accountId, isDefault: false }),
+        expect.objectContaining({
+          connectedAccountId: accountId,
+          isDefault: false,
+        }),
         expect.objectContaining({
           connectedAccountId: secondAccountId,
           isDefault: true,
         }),
       ]),
     );
-    expect(harness.workspaceRepositories.campaignAccount.save).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ isDefault: false }),
-    );
+    expect(
+      harness.workspaceRepositories.campaignAccount.save,
+    ).toHaveBeenNthCalledWith(2, expect.objectContaining({ isDefault: false }));
   });
 
   it('does not default a newly linked account when an active non-default link exists', async () => {
@@ -611,10 +615,16 @@ describe('CampaignAccountService', () => {
           isDefault: true,
         },
       ],
-      messageChannels: [messageChannel(), messageChannel({ id: secondChannelId })],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({ id: secondChannelId }),
+      ],
     });
     await expect(
-      ambiguousChannel.service.resolveDefaultEmailAccount(campaignId, workspaceId),
+      ambiguousChannel.service.resolveDefaultEmailAccount(
+        campaignId,
+        workspaceId,
+      ),
     ).rejects.toThrow('unavailable');
 
     const unavailableChannel = createHarness({
@@ -753,7 +763,10 @@ describe('CampaignAccountService', () => {
       ],
     });
     harness.workspaceRepositories.campaignAccount.update.mockImplementation(
-      async (where: Record<string, unknown>, patch: Record<string, unknown>) => {
+      async (
+        where: Record<string, unknown>,
+        patch: Record<string, unknown>,
+      ) => {
         if (where.id === 'target') {
           harness.rows.campaignAccount.push({
             id: 'successor',
@@ -779,7 +792,9 @@ describe('CampaignAccountService', () => {
         authContext,
       ),
     ).rejects.toThrow('default race lost');
-    expect(harness.workspaceRepositories.campaignAccount.update).not.toHaveBeenCalledWith(
+    expect(
+      harness.workspaceRepositories.campaignAccount.update,
+    ).not.toHaveBeenCalledWith(
       { id: 'prior', deletedAt: IsNull() },
       { isDefault: true },
     );

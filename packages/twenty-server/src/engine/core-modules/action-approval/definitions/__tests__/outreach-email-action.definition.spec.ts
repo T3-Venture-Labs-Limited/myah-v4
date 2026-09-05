@@ -488,8 +488,11 @@ describe('OutreachEmailActionDefinition', () => {
     const state = createFixtureState();
     state.campaignCreator.assignedManagedMailboxId = null;
     state.action.campaignAccountId = campaignAccountId;
-    const { definition, messageChannelRepository, assertConnectedAccountSendable } =
-      buildDefinition({ state });
+    const {
+      definition,
+      messageChannelRepository,
+      assertConnectedAccountSendable,
+    } = buildDefinition({ state });
     const proposal = await propose(definition);
     messageChannelRepository.find.mockResolvedValue([
       state.messageChannel,

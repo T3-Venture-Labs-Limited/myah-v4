@@ -758,8 +758,8 @@ export class OutreachEmailActionDefinition {
     const inReplyTo = graph.action.inReplyTo?.trim() || null;
     const recipientLabel = graph.creator.name?.trim();
     const campaignLabel = graph.campaign.name?.trim();
-    const rawAssignedManagedMailboxId =
-      graph.campaignCreator.assignedManagedMailboxId as unknown;
+    const rawAssignedManagedMailboxId = graph.campaignCreator
+      .assignedManagedMailboxId as unknown;
     const campaignAccountId = graph.action.campaignAccountId?.trim() || null;
     const executionReceiptId = graph.action.executionReceiptId?.trim() || null;
     const sentHeaderMessageId =
