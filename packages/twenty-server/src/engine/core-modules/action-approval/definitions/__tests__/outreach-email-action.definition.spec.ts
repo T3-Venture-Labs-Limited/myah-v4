@@ -1,4 +1,7 @@
-import { ConnectedAccountProvider } from 'twenty-shared/types';
+import {
+  ConnectedAccountProvider,
+  MessageChannelType,
+} from 'twenty-shared/types';
 
 import {
   OutreachEmailActionDefinition,
@@ -481,6 +484,40 @@ describe('OutreachEmailActionDefinition', () => {
     );
   });
 
+  it('rejects execution when a second matching EMAIL channel appears after approval', async () => {
+    const state = createFixtureState();
+    state.campaignCreator.assignedManagedMailboxId = null;
+    state.action.campaignAccountId = campaignAccountId;
+    const { definition, messageChannelRepository, assertConnectedAccountSendable } =
+      buildDefinition({ state });
+    const proposal = await propose(definition);
+    messageChannelRepository.find.mockResolvedValue([
+      state.messageChannel,
+      { ...state.messageChannel, id: otherWorkspaceId },
+    ]);
+    const transportCallsBeforeRebuild =
+      assertConnectedAccountSendable.mock.calls.length;
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).rejects.toThrow('Outreach email source graph is unavailable');
+    expect(assertConnectedAccountSendable).toHaveBeenCalledTimes(
+      transportCallsBeforeRebuild,
+    );
+    expect(messageChannelRepository.find).toHaveBeenLastCalledWith({
+      where: {
+        workspaceId,
+        connectedAccountId,
+        handle: 'sender@example.com',
+        type: MessageChannelType.EMAIL,
+      },
+      take: 2,
+    });
+  });
+
   it('rejects linked execution when transport sendability changes', async () => {
     const state = createFixtureState();
     state.campaignCreator.assignedManagedMailboxId = null;
@@ -550,6 +587,38 @@ describe('OutreachEmailActionDefinition', () => {
       }),
     ).rejects.toThrow('Outreach email source graph is unavailable');
   });
+
+  it.each<[string, unknown]>([
+    ['undefined', undefined],
+    ['empty', ''],
+    ['whitespace', '   '],
+    ['invalid', 'malformed'],
+  ])(
+    'rejects post-approval %s managed mailbox assignment before transport',
+    async (_label, assignedManagedMailboxId) => {
+      const state = createFixtureState();
+      state.campaignCreator.assignedManagedMailboxId = null;
+      state.action.campaignAccountId = campaignAccountId;
+      const { definition, assertConnectedAccountSendable } = buildDefinition({
+        state,
+      });
+      const proposal = await propose(definition);
+      const transportCallsBeforeMutation =
+        assertConnectedAccountSendable.mock.calls.length;
+      state.campaignCreator.assignedManagedMailboxId =
+        assignedManagedMailboxId as never;
+
+      await expect(
+        definition.rebuildExecutionAuthority({
+          workspaceId,
+          binding: proposal.expectedActionBinding,
+        }),
+      ).rejects.toThrow('Outreach email source graph is unavailable');
+      expect(assertConnectedAccountSendable).toHaveBeenCalledTimes(
+        transportCallsBeforeMutation,
+      );
+    },
+  );
 
   it.each<[string, (state: FixtureState) => void]>([
     [

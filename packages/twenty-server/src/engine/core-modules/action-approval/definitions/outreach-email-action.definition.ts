@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { isNonEmptyString } from '@sniptt/guards';
 import {
   ConnectedAccountProvider,
+  MessageChannelType,
   type ObjectRecord,
 } from 'twenty-shared/types';
 import { emailSchema } from 'twenty-shared/utils';
@@ -695,10 +696,10 @@ export class OutreachEmailActionDefinition {
               }),
               this.messageChannelRepository.find({
                 where: {
-                  id: action.messageChannelId ?? '',
                   workspaceId,
                   connectedAccountId: action.connectedAccountId ?? '',
                   handle: action.senderEmail ?? '',
+                  type: MessageChannelType.EMAIL,
                 },
                 take: 2,
               }),
@@ -757,8 +758,8 @@ export class OutreachEmailActionDefinition {
     const inReplyTo = graph.action.inReplyTo?.trim() || null;
     const recipientLabel = graph.creator.name?.trim();
     const campaignLabel = graph.campaign.name?.trim();
-    const assignedManagedMailboxId =
-      graph.campaignCreator.assignedManagedMailboxId?.trim() || null;
+    const rawAssignedManagedMailboxId =
+      graph.campaignCreator.assignedManagedMailboxId as unknown;
     const campaignAccountId = graph.action.campaignAccountId?.trim() || null;
     const executionReceiptId = graph.action.executionReceiptId?.trim() || null;
     const sentHeaderMessageId =
@@ -766,8 +767,11 @@ export class OutreachEmailActionDefinition {
     const providerMessageExternalId =
       graph.action.providerMessageExternalId?.trim() || null;
     const messageId = graph.action.messageId?.trim() || null;
-    const isManagedSender = assignedManagedMailboxId !== null;
-    const managedMailboxId = isManagedSender ? assignedManagedMailboxId : null;
+    const isManagedSender = rawAssignedManagedMailboxId !== null;
+    const managedMailboxId =
+      typeof rawAssignedManagedMailboxId === 'string'
+        ? rawAssignedManagedMailboxId
+        : null;
     const expectedContentDigest =
       isNonEmptyString(subject) && isNonEmptyString(body)
         ? computeActionContentDigest(JSON.stringify([subject, body]))
