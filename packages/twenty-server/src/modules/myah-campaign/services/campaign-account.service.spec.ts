@@ -8,10 +8,6 @@ import { IsNull } from 'typeorm';
 
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import {
-  TwentyORMException,
-  TwentyORMExceptionCode,
-} from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
-import {
   type ORMWorkspaceContext,
   withWorkspaceContext,
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
@@ -43,7 +39,6 @@ type Repository = {
   save: jest.Mock;
   update: jest.Mock;
   softDelete: jest.Mock;
-  manager?: { transaction: jest.Mock };
 };
 
 const matches = (row: Row, where: Record<string, unknown>) =>
@@ -139,7 +134,35 @@ const createHarness = (
     connectedAccount: createRepository(rows.connectedAccount),
     messageChannel: createRepository(rows.messageChannel),
   };
-  const transactionManager = {};
+  const transactionManager = {
+    queryRunner: { query: jest.fn().mockResolvedValue(undefined) },
+    getRepository: jest.fn(
+      (name: string) =>
+        workspaceRepositories[name as keyof typeof workspaceRepositories],
+    ),
+  };
+  const transaction = jest.fn(
+    async (callback: (manager: typeof transactionManager) => unknown) => {
+      const snapshot = Object.fromEntries(
+        Object.entries(rows).map(([name, values]) => [
+          name,
+          values.map((value) => ({ ...value })),
+        ]),
+      ) as typeof rows;
+      try {
+        return await callback(transactionManager);
+      } catch (error) {
+        for (const [name, values] of Object.entries(snapshot)) {
+          rows[name as keyof typeof rows].splice(
+            0,
+            rows[name as keyof typeof rows].length,
+            ...values,
+          );
+        }
+        throw error;
+      }
+    },
+  );
   const orm = {
     executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
       withWorkspaceContext(
@@ -147,11 +170,7 @@ const createHarness = (
         callback,
       ),
     ),
-    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
-      transaction: jest.fn(async (callback: (manager: unknown) => unknown) =>
-        callback(transactionManager),
-      ),
-    }),
+    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ transaction }),
     getRepository: jest.fn(
       async (_id: string, name: string) =>
         workspaceRepositories[name as keyof typeof workspaceRepositories],
@@ -160,15 +179,11 @@ const createHarness = (
   const messageOutboundService = {
     assertConnectedAccountSendable: jest.fn().mockResolvedValue(undefined),
   };
-  const cacheLockService = {
-    withLock: jest.fn(async (callback: () => unknown) => callback()),
-  };
   const service = new CampaignAccountService(
     orm,
     coreRepositories.connectedAccount as never,
     coreRepositories.messageChannel as never,
     messageOutboundService as never,
-    cacheLockService as never,
   );
   return {
     service,
@@ -177,13 +192,13 @@ const createHarness = (
     coreRepositories,
     transactionManager,
     messageOutboundService,
-    cacheLockService,
+    transaction,
     orm,
   };
 };
 
 describe('CampaignAccountService', () => {
-  it('links a supported exact email account as default with a Campaign-scoped thirty-second lock', async () => {
+  it('links a supported exact email account as default in one Campaign-scoped transaction', async () => {
     const harness = createHarness();
 
     const accounts = await harness.service.link(
@@ -207,12 +222,20 @@ describe('CampaignAccountService', () => {
     expect(harness.workspaceRepositories.campaign.findOne).toHaveBeenCalledWith(
       { where: { id: campaignId } },
     );
-    expect(harness.cacheLockService.withLock).toHaveBeenCalledWith(
-      expect.any(Function),
-      `campaign-account:${workspaceId}:${campaignId}`,
-      { ttl: 30_000 },
+    expect(harness.orm.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
+    expect(harness.transaction).toHaveBeenCalledTimes(1);
+    expect(harness.transactionManager.queryRunner.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`campaign-account:${workspaceId}:${campaignId}`],
     );
-    expect(harness.orm.getGlobalWorkspaceDataSource).not.toHaveBeenCalled();
+    expect(harness.transactionManager.getRepository).toHaveBeenCalledWith(
+      'campaign',
+      expect.anything(),
+    );
+    expect(harness.transactionManager.getRepository).toHaveBeenCalledWith(
+      'campaignAccount',
+      expect.objectContaining({ shouldBypassPermissionChecks: true }),
+    );
   });
 
   it('rejects foreign, archived, unsupported, ambiguous, invalid-address, and duplicate account links', async () => {
@@ -474,61 +497,22 @@ describe('CampaignAccountService', () => {
     ).resolves.toEqual(expect.objectContaining({ id: 'default' }));
   });
 
-  it('retries a first-link default unique-index race as non-default without swallowing other errors', async () => {
-    const harness = createHarness({
-      connectedAccounts: [
-        connectedAccount(),
-        connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
-      ],
-      messageChannels: [
-        messageChannel(),
-        messageChannel({
-          id: secondChannelId,
-          connectedAccountId: secondAccountId,
-          handle: 'team@brand.test',
-        }),
-      ],
-    });
-    harness.workspaceRepositories.campaignAccount.save
-      .mockImplementationOnce(async () => {
-        harness.rows.campaignAccount.push({
-          id: 'successor-default',
-          campaignId,
-          connectedAccountId: secondAccountId,
-          messageChannelId: secondChannelId,
-          channel: 'EMAIL',
-          isDefault: true,
-        });
-        throw new TwentyORMException(
-          'A duplicate entry was detected',
-          TwentyORMExceptionCode.DUPLICATE_ENTRY_DETECTED,
-        );
-      })
-      .mockImplementationOnce(async (row: Row) => {
-        harness.rows.campaignAccount.push(row);
-        return row;
-      });
+  it('fails closed on an out-of-band first-link default conflict without retrying', async () => {
+    const harness = createHarness();
+    harness.workspaceRepositories.campaignAccount.save.mockRejectedValueOnce(
+      new Error('duplicate default'),
+    );
 
     await expect(
       harness.service.link(
         { campaignId, connectedAccountId: accountId },
         authContext,
       ),
-    ).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          connectedAccountId: accountId,
-          isDefault: false,
-        }),
-        expect.objectContaining({
-          connectedAccountId: secondAccountId,
-          isDefault: true,
-        }),
-      ]),
-    );
+    ).rejects.toThrow('duplicate default');
     expect(
       harness.workspaceRepositories.campaignAccount.save,
-    ).toHaveBeenNthCalledWith(2, expect.objectContaining({ isDefault: false }));
+    ).toHaveBeenCalledTimes(1);
+    expect(harness.rows.campaignAccount).toEqual([]);
   });
 
   it('does not default a newly linked account when an active non-default link exists', async () => {
@@ -694,7 +678,7 @@ describe('CampaignAccountService', () => {
     ).rejects.toThrow('Transport sendability rejected');
   });
 
-  it('restores the prior default when setting the target default fails', async () => {
+  it('rolls back the cleared default when setting the target default fails without compensation', async () => {
     const harness = createHarness({
       campaignAccounts: [
         {
@@ -742,7 +726,13 @@ describe('CampaignAccountService', () => {
         expect.objectContaining({ id: 'target', isDefault: false }),
       ]),
     );
-    expect(harness.orm.getGlobalWorkspaceDataSource).not.toHaveBeenCalled();
+    expect(harness.transaction).toHaveBeenCalledTimes(1);
+    expect(
+      harness.workspaceRepositories.campaignAccount.update,
+    ).not.toHaveBeenCalledWith(
+      { id: 'active', deletedAt: IsNull() },
+      { isDefault: true },
+    );
   });
 
   it('does not restore a prior default over a successor after a failed default transition', async () => {

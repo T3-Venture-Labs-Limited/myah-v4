@@ -3,7 +3,6 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { type Type } from '@nestjs/common';
-import { createClient } from 'redis';
 import {
   ConnectedAccountProvider,
   MessageChannelPendingGroupEmailsAction,
@@ -15,7 +14,6 @@ import {
 
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 
 type WorkspaceRow = { id: string };
@@ -76,9 +74,11 @@ const resolveProvider = <T>(type: Type<T>): T => {
   return provider.instance as T;
 };
 
-describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)', () => {
+describe('CampaignAccountService transaction serialization (PostgreSQL)', () => {
   const campaignId = randomUUID();
-  const leaseRaceCampaignId = randomUUID();
+  const transitionCampaignId = randomUUID();
+  const sameAccountCampaignId = randomUUID();
+  const rollbackCampaignId = randomUUID();
   const connectedAccountIds = [
     randomUUID(),
     randomUUID(),
@@ -98,7 +98,6 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
   let workspaceSchemaName: string;
   let userWorkspaceId: string;
   let campaignAccountService: CampaignAccountService;
-  let globalWorkspaceOrmManager: GlobalWorkspaceOrmManager;
 
   beforeAll(async () => {
     const workspaces = await global.testDataSource.query<WorkspaceRow[]>(
@@ -143,19 +142,21 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
     }
     userWorkspaceId = userWorkspace.id;
     campaignAccountService = resolveProvider(CampaignAccountService);
-    globalWorkspaceOrmManager = resolveProvider(GlobalWorkspaceOrmManager);
-
     await synchronizeCampaignAccountMetadata(workspaceId);
     await synchronizeCampaignAccountMetadata(workspaceId);
 
     await global.testDataSource.query(
       `INSERT INTO "${workspaceSchemaName}"."campaign" ("id", "name")
-       VALUES ($1, $2), ($3, $4)`,
+       VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8)`,
       [
         campaignId,
-        `MYAH-270 CacheLock ${campaignId}`,
-        leaseRaceCampaignId,
-        `MYAH-270 Lease Race ${leaseRaceCampaignId}`,
+        `MYAH-270 Transaction ${campaignId}`,
+        transitionCampaignId,
+        `MYAH-270 Transition ${transitionCampaignId}`,
+        sameAccountCampaignId,
+        `MYAH-270 Same Account ${sameAccountCampaignId}`,
+        rollbackCampaignId,
+        `MYAH-270 Rollback ${rollbackCampaignId}`,
       ],
     );
     for (const [index, connectedAccountId] of connectedAccountIds.entries()) {
@@ -197,12 +198,26 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
     await global.testDataSource.query(
       `DELETE FROM "${workspaceSchemaName}"."campaignAccount"
         WHERE "campaignId" = ANY($1::uuid[])`,
-      [[campaignId, leaseRaceCampaignId]],
+      [
+        [
+          campaignId,
+          transitionCampaignId,
+          sameAccountCampaignId,
+          rollbackCampaignId,
+        ],
+      ],
     );
     await global.testDataSource.query(
       `DELETE FROM "${workspaceSchemaName}"."campaign"
         WHERE "id" = ANY($1::uuid[])`,
-      [[campaignId, leaseRaceCampaignId]],
+      [
+        [
+          campaignId,
+          transitionCampaignId,
+          sameAccountCampaignId,
+          rollbackCampaignId,
+        ],
+      ],
     );
     await global.testDataSource.query(
       `DELETE FROM core."messageChannel" WHERE "id" = ANY($1::uuid[])`,
@@ -218,7 +233,14 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
       `SELECT COUNT(*)::int AS "count"
          FROM "${workspaceSchemaName}"."campaign"
         WHERE "id" = ANY($1::uuid[])`,
-      [[campaignId, leaseRaceCampaignId]],
+      [
+        [
+          campaignId,
+          transitionCampaignId,
+          sameAccountCampaignId,
+          rollbackCampaignId,
+        ],
+      ],
     );
     const [remainingConnectedAccounts] = await global.testDataSource.query<
       Array<{ count: number }>
@@ -276,57 +298,211 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
     });
   });
 
-  it('serializes simultaneous first links with the production PostgreSQL repositories and Redis lock', async () => {
-    const lockKey = `campaign-account:${workspaceId}:${campaignId}`;
-    const redis = createClient({ url: process.env.REDIS_URL });
-    await redis.connect();
-
-    try {
-      const links = await Promise.all(
-        connectedAccountIds
-          .slice(0, 2)
-          .map((connectedAccountId) =>
-            campaignAccountService.link(
-              { campaignId, connectedAccountId },
-              buildSystemAuthContext(workspaceId),
-            ),
+  it('serializes simultaneous first links with one PostgreSQL transaction per request', async () => {
+    const links = await Promise.all(
+      connectedAccountIds
+        .slice(0, 2)
+        .map((connectedAccountId) =>
+          campaignAccountService.link(
+            { campaignId, connectedAccountId },
+            buildSystemAuthContext(workspaceId),
           ),
-      );
-      expect(links).toHaveLength(2);
+        ),
+    );
+    expect(links).toHaveLength(2);
 
-      const persisted = await global.testDataSource.query<CampaignAccountRow[]>(
-        `SELECT "connectedAccountId", "isDefault"
-           FROM "${workspaceSchemaName}"."campaignAccount"
-          WHERE "campaignId" = $1
-            AND "channel" = 'EMAIL'
-            AND "deletedAt" IS NULL
-          ORDER BY "connectedAccountId"`,
-        [campaignId],
-      );
-      expect(persisted).toHaveLength(2);
-      expect(persisted.map((link) => link.connectedAccountId).sort()).toEqual(
-        [...connectedAccountIds.slice(0, 2)].sort(),
-      );
-      expect(persisted.filter((link) => link.isDefault)).toHaveLength(1);
-      expect(
-        await redis.get(`integration-tests:engine:lock:${lockKey}`),
-      ).toBeNull();
+    const persisted = await global.testDataSource.query<CampaignAccountRow[]>(
+      `SELECT "connectedAccountId", "isDefault"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1
+          AND "channel" = 'EMAIL'
+          AND "deletedAt" IS NULL
+        ORDER BY "connectedAccountId"`,
+      [campaignId],
+    );
+    expect(persisted).toHaveLength(2);
+    expect(persisted.map((link) => link.connectedAccountId).sort()).toEqual(
+      [...connectedAccountIds.slice(0, 2)].sort(),
+    );
+    expect(persisted.filter((link) => link.isDefault)).toHaveLength(1);
 
-      const [{ idleInTransactionCount }] = await global.testDataSource.query<
-        Array<{ idleInTransactionCount: string }>
-      >(
-        `SELECT COUNT(*)::text AS "idleInTransactionCount"
-           FROM pg_stat_activity
-          WHERE datname = current_database()
-            AND state = 'idle in transaction'
-            AND pid <> pg_backend_pid()
-            AND query LIKE $1`,
-        [`%${workspaceSchemaName}%`],
+    const [{ idleInTransactionCount }] = await global.testDataSource.query<
+      Array<{ idleInTransactionCount: string }>
+    >(
+      `SELECT COUNT(*)::text AS "idleInTransactionCount"
+         FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND state = 'idle in transaction'
+          AND pid <> pg_backend_pid()
+          AND query LIKE $1`,
+      [`%${workspaceSchemaName}%`],
+    );
+    expect(Number(idleInTransactionCount)).toBe(0);
+  });
+
+  it('serializes a default selection before the latest remove preserves an intentional pause', async () => {
+    await campaignAccountService.link(
+      {
+        campaignId: transitionCampaignId,
+        connectedAccountId: connectedAccountIds[2],
+      },
+      buildSystemAuthContext(workspaceId),
+    );
+    await campaignAccountService.link(
+      {
+        campaignId: transitionCampaignId,
+        connectedAccountId: connectedAccountIds[3],
+      },
+      buildSystemAuthContext(workspaceId),
+    );
+    const [target] = await global.testDataSource.query<Array<{ id: string }>>(
+      `SELECT id
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "connectedAccountId" = $2 AND "deletedAt" IS NULL`,
+      [transitionCampaignId, connectedAccountIds[3]],
+    );
+    await campaignAccountService.setDefault(
+      { campaignId: transitionCampaignId, campaignAccountId: target.id },
+      buildSystemAuthContext(workspaceId),
+    );
+    await campaignAccountService.remove(
+      { campaignId: transitionCampaignId, campaignAccountId: target.id },
+      buildSystemAuthContext(workspaceId),
+    );
+
+    const active = await global.testDataSource.query<CampaignAccountRow[]>(
+      `SELECT "connectedAccountId", "isDefault"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
+      [transitionCampaignId],
+    );
+    expect(active).toEqual([
+      expect.objectContaining({
+        connectedAccountId: connectedAccountIds[2],
+        isDefault: false,
+      }),
+    ]);
+    await expect(
+      campaignAccountService.setDefault(
+        { campaignId: transitionCampaignId, campaignAccountId: target.id },
+        buildSystemAuthContext(workspaceId),
+      ),
+    ).rejects.toThrow('Campaign email account not found');
+  });
+
+  it('serializes a same-account first-link race into one link and an explicit duplicate', async () => {
+    const outcomes = await Promise.allSettled([
+      campaignAccountService.link(
+        {
+          campaignId: sameAccountCampaignId,
+          connectedAccountId: connectedAccountIds[2],
+        },
+        buildSystemAuthContext(workspaceId),
+      ),
+      campaignAccountService.link(
+        {
+          campaignId: sameAccountCampaignId,
+          connectedAccountId: connectedAccountIds[2],
+        },
+        buildSystemAuthContext(workspaceId),
+      ),
+    ]);
+    expect(
+      outcomes.filter(({ status }) => status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(outcomes.filter(({ status }) => status === 'rejected')).toEqual([
+      expect.objectContaining({
+        reason: expect.objectContaining({
+          message: 'Connected email account is already linked',
+        }),
+      }),
+    ]);
+    const persisted = await global.testDataSource.query<CampaignAccountRow[]>(
+      `SELECT "connectedAccountId", "isDefault"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
+      [sameAccountCampaignId],
+    );
+    expect(persisted).toEqual([
+      expect.objectContaining({
+        connectedAccountId: connectedAccountIds[2],
+        isDefault: true,
+      }),
+    ]);
+  });
+
+  it('rolls back the previous default when the target update fails after clear', async () => {
+    await campaignAccountService.link(
+      {
+        campaignId: rollbackCampaignId,
+        connectedAccountId: connectedAccountIds[0],
+      },
+      buildSystemAuthContext(workspaceId),
+    );
+    await campaignAccountService.link(
+      {
+        campaignId: rollbackCampaignId,
+        connectedAccountId: connectedAccountIds[1],
+      },
+      buildSystemAuthContext(workspaceId),
+    );
+    const [target] = await global.testDataSource.query<Array<{ id: string }>>(
+      `SELECT id
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "connectedAccountId" = $2 AND "deletedAt" IS NULL`,
+      [rollbackCampaignId, connectedAccountIds[1]],
+    );
+    const functionName = 'myah_270_default_target_failure';
+    const triggerName = 'myah_270_default_target_failure_trigger';
+    try {
+      await global.testDataSource.query(
+        `CREATE OR REPLACE FUNCTION "${workspaceSchemaName}"."${functionName}"()
+         RETURNS trigger AS $$
+         BEGIN
+           IF NEW.id = '${target.id}'::uuid AND NEW."isDefault" = true THEN
+             RAISE EXCEPTION 'forced target default failure';
+           END IF;
+           RETURN NEW;
+         END;
+         $$ LANGUAGE plpgsql`,
       );
-      expect(Number(idleInTransactionCount)).toBe(0);
+      await global.testDataSource.query(
+        `CREATE TRIGGER "${triggerName}"
+         BEFORE UPDATE ON "${workspaceSchemaName}"."campaignAccount"
+         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
+      );
+      await expect(
+        campaignAccountService.setDefault(
+          { campaignId: rollbackCampaignId, campaignAccountId: target.id },
+          buildSystemAuthContext(workspaceId),
+        ),
+      ).rejects.toThrow();
     } finally {
-      await redis.quit();
+      await global.testDataSource.query(
+        `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
+      );
+      await global.testDataSource.query(
+        `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
+      );
     }
+    const active = await global.testDataSource.query<CampaignAccountRow[]>(
+      `SELECT "connectedAccountId", "isDefault"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
+      [rollbackCampaignId],
+    );
+    expect(active).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          connectedAccountId: connectedAccountIds[0],
+          isDefault: true,
+        }),
+        expect.objectContaining({
+          connectedAccountId: connectedAccountIds[1],
+          isDefault: false,
+        }),
+      ]),
+    );
   });
 
   it('rejects direct duplicate defaults while allowing non-default and soft-deleted rows', async () => {
@@ -383,98 +559,5 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
           SET "isDefault" = false WHERE id = $1`,
       [nonDefaultLink.id],
     );
-  });
-
-  it('persists the lease-overrun first-link loser as non-default through the real Redis lock and ORM', async () => {
-    const redis = createClient({ url: process.env.REDIS_URL });
-    await redis.connect();
-    const lockKey = `integration-tests:engine:lock:campaign-account:${workspaceId}:${leaseRaceCampaignId}`;
-    let releaseFirstRead: (() => void) | undefined;
-    let firstReadObserved: (() => void) | undefined;
-    const firstRead = new Promise<void>((resolve) => {
-      firstReadObserved = resolve;
-    });
-    const resumeFirstRead = new Promise<void>((resolve) => {
-      releaseFirstRead = resolve;
-    });
-    let interleaved = false;
-    const originalGetRepository = globalWorkspaceOrmManager.getRepository.bind(
-      globalWorkspaceOrmManager,
-    );
-    const repositorySpy = jest
-      .spyOn(globalWorkspaceOrmManager, 'getRepository')
-      .mockImplementation(async (...args) => {
-        const repository = await originalGetRepository(...args);
-        if (args[1] !== 'campaignAccount') return repository;
-        return new Proxy(repository, {
-          get(target, property, receiver) {
-            const value = Reflect.get(target, property, receiver);
-            if (property !== 'findOne' || typeof value !== 'function') {
-              return value;
-            }
-            return async (options: { where?: Record<string, unknown> }) => {
-              const result = await value.call(target, options);
-              const where = options.where;
-              if (
-                !interleaved &&
-                where?.campaignId === leaseRaceCampaignId &&
-                where.channel === 'EMAIL' &&
-                where.connectedAccountId === undefined &&
-                where.isDefault === undefined
-              ) {
-                interleaved = true;
-                await redis.del(lockKey);
-                firstReadObserved?.();
-                await resumeFirstRead;
-              }
-              return result;
-            };
-          },
-        });
-      });
-
-    try {
-      const firstLink = campaignAccountService.link(
-        {
-          campaignId: leaseRaceCampaignId,
-          connectedAccountId: connectedAccountIds[2],
-        },
-        buildSystemAuthContext(workspaceId),
-      );
-      await firstRead;
-      await campaignAccountService.link(
-        {
-          campaignId: leaseRaceCampaignId,
-          connectedAccountId: connectedAccountIds[3],
-        },
-        buildSystemAuthContext(workspaceId),
-      );
-      releaseFirstRead?.();
-      await firstLink;
-
-      const persisted = await global.testDataSource.query<CampaignAccountRow[]>(
-        `SELECT "connectedAccountId", "isDefault"
-           FROM "${workspaceSchemaName}"."campaignAccount"
-          WHERE "campaignId" = $1 AND "deletedAt" IS NULL
-          ORDER BY "connectedAccountId"`,
-        [leaseRaceCampaignId],
-      );
-      expect(persisted).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            connectedAccountId: connectedAccountIds[2],
-            isDefault: false,
-          }),
-          expect.objectContaining({
-            connectedAccountId: connectedAccountIds[3],
-            isDefault: true,
-          }),
-        ]),
-      );
-      expect(persisted.filter((link) => link.isDefault)).toHaveLength(1);
-    } finally {
-      repositorySpy.mockRestore();
-      await redis.quit();
-    }
   });
 });

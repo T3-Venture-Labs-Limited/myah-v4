@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CacheLockModule } from 'src/engine/core-modules/cache-lock/cache-lock.module';
 import { MYAH_CREATOR_OPS_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-creator-ops-tool-service.token';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
@@ -18,7 +17,6 @@ import { MyahCreatorOpsToolWorkspaceService } from 'src/modules/myah-campaign/to
 
 @Module({
   imports: [
-    CacheLockModule,
     TwentyORMModule,
     WorkflowCommonModule,
     MessagingSendManagerModule,
