@@ -4,8 +4,12 @@ import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/ac
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { MYAH_INBOX_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-tool-service.token';
 import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-provider.module';
+import { MyahInboxContactResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-contact.resolver';
 import { MyahInboxResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox.resolver';
 import { MyahInboxReplySendResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-reply-send.resolver';
+import { MyahInboxContactEmailQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-email-query.service';
+import { MyahInboxContactLinkService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-link.service';
+import { MyahInboxContactQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-query.service';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
 import { MyahInboxReplyBriefingService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service';
@@ -33,6 +37,9 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
     forwardRef(() => ToolProviderModule),
   ],
   providers: [
+    MyahInboxContactEmailQueryService,
+    MyahInboxContactLinkService,
+    MyahInboxContactQueryService,
     MyahInboxMutationService,
     MyahInboxQueryService,
     MyahInboxReplyBriefingService,
@@ -44,10 +51,14 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
       provide: MYAH_INBOX_TOOL_SERVICE_TOKEN,
       useExisting: MyahInboxToolWorkspaceService,
     },
+    MyahInboxContactResolver,
     MyahInboxResolver,
     MyahInboxReplySendResolver,
   ],
   exports: [
+    MyahInboxContactEmailQueryService,
+    MyahInboxContactLinkService,
+    MyahInboxContactQueryService,
     MyahInboxMutationService,
     MyahInboxQueryService,
     MYAH_INBOX_TOOL_SERVICE_TOKEN,
