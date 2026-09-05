@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { type Type } from '@nestjs/common';
 import { createClient } from 'redis';
@@ -20,6 +22,31 @@ type UserWorkspaceRow = { id: string };
 type CampaignAccountRow = {
   connectedAccountId: string;
   isDefault: boolean;
+};
+type PhysicalIndexRow = {
+  indexName: string;
+  isUnique: boolean;
+  isValid: boolean;
+  isReady: boolean;
+  columns: string;
+  predicate: string;
+};
+
+const execFileAsync = promisify(execFile);
+const CAMPAIGN_ACCOUNT_METADATA_COMMAND =
+  'upgrade:2-20:synchronize-myah-campaign-account-metadata';
+
+const synchronizeCampaignAccountMetadata = async (workspaceId: string) => {
+  await execFileAsync(
+    process.execPath,
+    [
+      'dist/command/command.js',
+      CAMPAIGN_ACCOUNT_METADATA_COMMAND,
+      '--workspace-id',
+      workspaceId,
+    ],
+    { cwd: process.cwd(), env: process.env },
+  );
 };
 
 const resolveProvider = <T>(type: Type<T>): T => {
@@ -105,6 +132,9 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
     userWorkspaceId = userWorkspace.id;
     campaignAccountService = resolveProvider(CampaignAccountService);
 
+    await synchronizeCampaignAccountMetadata(workspaceId);
+    await synchronizeCampaignAccountMetadata(workspaceId);
+
     await global.testDataSource.query(
       `INSERT INTO "${workspaceSchemaName}"."campaign" ("id", "name")
        VALUES ($1, $2)`,
@@ -181,6 +211,50 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
     );
     expect(remainingCampaigns.count).toBe(0);
     expect(remainingConnectedAccounts.count).toBe(0);
+  });
+
+  it('installs the Campaign default partial unique index through the idempotent workspace command', async () => {
+    const indexes = await global.testDataSource.query<PhysicalIndexRow[]>(
+      `SELECT index_class.relname AS "indexName",
+              index_row.indisunique AS "isUnique",
+              index_row.indisvalid AS "isValid",
+              index_row.indisready AS "isReady",
+              string_agg(attribute.attname, ',' ORDER BY key_columns.ordinality) AS "columns",
+              pg_get_expr(index_row.indpred, index_row.indrelid) AS "predicate"
+         FROM pg_index AS index_row
+         INNER JOIN pg_class AS table_class ON table_class.oid = index_row.indrelid
+         INNER JOIN pg_namespace AS namespace ON namespace.oid = table_class.relnamespace
+         INNER JOIN pg_class AS index_class ON index_class.oid = index_row.indexrelid
+         INNER JOIN unnest(index_row.indkey) WITH ORDINALITY AS key_columns(attnum, ordinality)
+           ON key_columns.attnum > 0
+         INNER JOIN pg_attribute AS attribute
+           ON attribute.attrelid = table_class.oid
+          AND attribute.attnum = key_columns.attnum
+        WHERE namespace.nspname = $1
+          AND table_class.relname = 'campaignAccount'
+          AND index_row.indisunique
+          AND pg_get_expr(index_row.indpred, index_row.indrelid) IS NOT NULL
+        GROUP BY index_class.relname,
+                 index_row.indisunique,
+                 index_row.indisvalid,
+                 index_row.indisready,
+                 index_row.indpred,
+                 index_row.indrelid`,
+      [workspaceSchemaName],
+    );
+    const defaultIndex = indexes.find(
+      (index) =>
+        index.columns === 'campaignId,channel' &&
+        index.predicate.includes('"deletedAt" IS NULL') &&
+        index.predicate.includes('"isDefault" = true'),
+    );
+
+    expect(defaultIndex).toMatchObject({
+      isUnique: true,
+      isValid: true,
+      isReady: true,
+      columns: 'campaignId,channel',
+    });
   });
 
   it('serializes simultaneous first links with the production PostgreSQL repositories and Redis lock', async () => {
