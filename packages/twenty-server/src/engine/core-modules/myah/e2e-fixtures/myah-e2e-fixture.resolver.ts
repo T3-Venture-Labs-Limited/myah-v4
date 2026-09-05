@@ -1,5 +1,5 @@
 import { UseGuards, UsePipes } from '@nestjs/common';
-import { Args, Mutation } from '@nestjs/graphql';
+import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
@@ -8,6 +8,7 @@ import {
   CreateMyahE2eCampaignMailboxFixtureInput,
   MyahE2eCallbackFixtureDTO,
   MyahE2eCampaignMailboxFixtureDTO,
+  MyahE2eCampaignMailboxFixtureStatusDTO,
   MyahE2eFixtureIdInput,
 } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture.dto';
 import { MyahE2eFixtureService } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture.service';
@@ -31,7 +32,7 @@ export class MyahE2eFixtureResolver {
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<MyahE2eCampaignMailboxFixtureDTO> {
     return this.service.createCampaignMailboxFixture(
-      { workspaceId: workspace.id, userWorkspaceId },
+      { workspaceId: workspace.id, userWorkspaceId, workspace },
       input.campaignId,
     );
   }
@@ -43,9 +44,22 @@ export class MyahE2eFixtureResolver {
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<MyahE2eCallbackFixtureDTO> {
     return this.service.createCallbackFixture(
-      { workspaceId: workspace.id, userWorkspaceId },
+      { workspaceId: workspace.id, userWorkspaceId, workspace },
       input.fixtureId,
       input.campaignId,
+      input.operationsTabId,
+    );
+  }
+
+  @Query(() => MyahE2eCampaignMailboxFixtureStatusDTO)
+  getMyahE2eCampaignMailboxFixtureStatus(
+    @Args('input') input: MyahE2eFixtureIdInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
+  ): MyahE2eCampaignMailboxFixtureStatusDTO {
+    return this.service.getCampaignMailboxFixtureStatus(
+      { workspaceId: workspace.id, userWorkspaceId, workspace },
+      input.fixtureId,
     );
   }
 
@@ -56,7 +70,7 @@ export class MyahE2eFixtureResolver {
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<boolean> {
     return this.service.cleanup(
-      { workspaceId: workspace.id, userWorkspaceId },
+      { workspaceId: workspace.id, userWorkspaceId, workspace },
       input.fixtureId,
     );
   }

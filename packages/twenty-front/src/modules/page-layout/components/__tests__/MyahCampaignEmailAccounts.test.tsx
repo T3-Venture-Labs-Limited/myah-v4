@@ -4,6 +4,19 @@ import userEvent from '@testing-library/user-event';
 
 import { MyahCampaignEmailAccounts } from '@/page-layout/components/MyahCampaignEmailAccounts';
 
+jest.mock('@/page-layout/hooks/useCurrentPageLayoutOrThrow', () => ({
+  useCurrentPageLayoutOrThrow: () => ({
+    currentPageLayout: {
+      tabs: [
+        {
+          id: 'runtime-operations-tab-id',
+          universalIdentifier: 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+        },
+      ],
+    },
+  }),
+}));
+
 const mockUseQuery = jest.fn();
 const mockUseMutation = jest.fn();
 const mockNavigate = jest.fn();
@@ -457,7 +470,7 @@ describe('MyahCampaignEmailAccounts', () => {
       screen.getByRole('button', { name: 'Connect email account' }),
     ).toHaveAttribute(
       'data-return-to',
-      '/object/campaign/campaign-1?linkConnectedAccount=1#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+      '/object/campaign/campaign-1?linkConnectedAccount=1#runtime-operations-tab-id',
     );
   });
 

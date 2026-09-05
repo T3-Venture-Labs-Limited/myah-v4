@@ -8,6 +8,37 @@ import { type SendMessageResult } from 'src/modules/messaging/message-outbound-m
 
 @Injectable()
 export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDriver {
+  private static readonly sendAttemptCountByConnectedAccountId = new Map<
+    string,
+    number
+  >();
+
+  static getSendAttemptCount(connectedAccountIds: string[]): number {
+    return connectedAccountIds.reduce(
+      (count, connectedAccountId) =>
+        count +
+        (this.sendAttemptCountByConnectedAccountId.get(connectedAccountId) ??
+          0),
+      0,
+    );
+  }
+
+  static releaseSendAttemptCounts(connectedAccountIds: string[]): void {
+    for (const connectedAccountId of connectedAccountIds) {
+      this.sendAttemptCountByConnectedAccountId.delete(connectedAccountId);
+    }
+  }
+
+  private recordSendAttempt(connectedAccount: ConnectedAccountEntity): void {
+    const attempts =
+      E2eFixtureGmailMessageOutboundService.sendAttemptCountByConnectedAccountId.get(
+        connectedAccount.id,
+      ) ?? 0;
+    E2eFixtureGmailMessageOutboundService.sendAttemptCountByConnectedAccountId.set(
+      connectedAccount.id,
+      attempts + 1,
+    );
+  }
   async assertSendable(_: ConnectedAccountEntity): Promise<void> {
     // The isolated E2E fixture module needs canonical authority rebuilding, but
     // no fixture can make an external provider request or send a message.
@@ -15,8 +46,9 @@ export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDri
 
   async sendMessage(
     _: SendMessageInput,
-    __: ConnectedAccountEntity,
+    connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
+    this.recordSendAttempt(connectedAccount);
     throw new Error('E2E fixtures never send Gmail messages');
   }
 
@@ -30,8 +62,9 @@ export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDri
   async sendDraft(
     _: string,
     __: SendMessageInput,
-    ___: ConnectedAccountEntity,
+    connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
+    this.recordSendAttempt(connectedAccount);
     throw new Error('E2E fixtures never send Gmail messages');
   }
 

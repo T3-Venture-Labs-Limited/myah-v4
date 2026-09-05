@@ -28,8 +28,7 @@ export type MyahE2eFixture = {
 @Injectable()
 export class MyahE2eFixtureRegistryService {
   private readonly fixtures = new Map<string, MyahE2eFixture>();
-
-  constructor(private readonly capacity = MAX_ACTIVE_FIXTURES) {}
+  private readonly capacity = MAX_ACTIVE_FIXTURES;
 
   register(workspaceId: string, records: FixtureRecords): MyahE2eFixture {
     // Ponytail: this short-lived, flag-gated registry deliberately bounds

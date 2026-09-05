@@ -1,15 +1,21 @@
 import { randomUUID } from 'node:crypto';
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import { backendGraphQLUrl } from '../lib/requests/backend';
 import { getAccessAuthToken } from '../lib/utils/getAccessAuthToken';
+
+const metadataGraphQLUrl = new URL(
+  '/metadata',
+  process.env.BACKEND_BASE_URL,
+).toString();
 
 type CampaignMailboxFixture = {
   id: string;
   availableAccountIds: [string, string];
   unavailableAccountId: string;
   approvalThreadId: string;
+  approvalThreadTitle: string;
   actionApprovalBindingId: string;
   expectedFrom: string;
   expectedTo: string;
@@ -20,6 +26,10 @@ type CampaignMailboxFixture = {
 type CampaignCallbackFixture = {
   connectedAccountId: string;
   callbackPath: string;
+};
+
+type CampaignMailboxFixtureStatus = {
+  providerSendAttemptCount: number;
 };
 
 type CampaignEmailAccount = {
@@ -49,6 +59,7 @@ const createFixtureMutation = `
       availableAccountIds
       unavailableAccountId
       approvalThreadId
+      approvalThreadTitle
       actionApprovalBindingId
       expectedFrom
       expectedTo
@@ -63,6 +74,14 @@ const createCallbackFixtureMutation = `
     createMyahE2eCampaignCallbackFixture(input: $input) {
       connectedAccountId
       callbackPath
+    }
+  }
+`;
+
+const fixtureStatusQuery = `
+  query GetMyahE2eCampaignMailboxFixtureStatus($input: MyahE2eFixtureIdInput!) {
+    getMyahE2eCampaignMailboxFixtureStatus(input: $input) {
+      providerSendAttemptCount
     }
   }
 `;
@@ -111,13 +130,14 @@ const campaignCandidatesQuery = `
   }
 `;
 
-const postGraphql = async <T>(
-  page: Parameters<typeof getAccessAuthToken>[0],
+const postGraphqlWithAuth = async <T>(
+  request: APIRequestContext,
+  authToken: string,
   query: string,
   variables: Record<string, unknown> = {},
+  url = backendGraphQLUrl,
 ): Promise<T> => {
-  const { authToken } = await getAccessAuthToken(page);
-  const response = await page.request.post(backendGraphQLUrl, {
+  const response = await request.post(url, {
     headers: { Authorization: `Bearer ${authToken}` },
     data: { query, variables },
   });
@@ -130,10 +150,70 @@ const postGraphql = async <T>(
   return body.data;
 };
 
+const postGraphql = async <T>(
+  page: Parameters<typeof getAccessAuthToken>[0],
+  query: string,
+  variables: Record<string, unknown> = {},
+  url = backendGraphQLUrl,
+): Promise<T> => {
+  const { authToken } = await getAccessAuthToken(page);
+
+  return postGraphqlWithAuth(page.request, authToken, query, variables, url);
+};
+
+const postMetadataGraphql = <T>(
+  page: Parameters<typeof getAccessAuthToken>[0],
+  query: string,
+  variables: Record<string, unknown> = {},
+) => postGraphql<T>(page, query, variables, metadataGraphQLUrl);
+
+const isUuid = (value: string): boolean =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+
 const campaignPath = (campaignId: string) => `/object/campaign/${campaignId}`;
 
-const operationsTab = (page: Parameters<typeof getAccessAuthToken>[0]) =>
-  page.getByRole('tab', { name: 'Operations', exact: true });
+const workspaceUrl = async (
+  page: Parameters<typeof getAccessAuthToken>[0],
+  path: string,
+) => {
+  const storageState = await page.context().storageState();
+  const workspaceOrigin = storageState.origins.find(
+    (origin) =>
+      new URL(origin.origin).hostname !== 'localhost' &&
+      origin.localStorage.some(
+        (item) => item.name === 'currentUserWorkspaceState',
+      ),
+  )?.origin;
+
+  if (!workspaceOrigin) {
+    throw new Error('Authenticated workspace origin was not found');
+  }
+
+  return new URL(path, workspaceOrigin).toString();
+};
+
+const campaignOperationsReturnPath = (
+  campaignId: string,
+  operationsTabId: string,
+) => `${campaignPath(campaignId)}?linkConnectedAccount=1#${operationsTabId}`;
+
+const selectOperationsTab = async (
+  page: Parameters<typeof getAccessAuthToken>[0],
+) => {
+  const visibleOperationsTab = page.getByRole('link', {
+    name: 'Operations',
+    exact: true,
+  });
+  if (await visibleOperationsTab.isVisible()) {
+    await visibleOperationsTab.click();
+    return;
+  }
+
+  await page.getByRole('button', { name: /^\+\d+ More$/ }).click();
+  await page.getByRole('option', { name: 'Operations', exact: true }).click();
+};
 
 const linkedAccount = (
   accounts: CampaignEmailAccount[],
@@ -146,27 +226,121 @@ const linkedAccount = (
   return account;
 };
 
-test('Campaign email accounts keep linked mailbox defaulting, pause without a default, and return from OAuth exactly once', async ({
-  page,
-}) => {
+const getCampaignAccounts = async (
+  page: Parameters<typeof getAccessAuthToken>[0],
+  campaignId: string,
+) =>
+  postMetadataGraphql<{ campaignEmailAccounts: CampaignEmailAccount[] }>(
+    page,
+    campaignAccountsQuery,
+    { input: { campaignId } },
+  );
+
+let cleanupState: {
+  authToken?: string;
+  campaignId?: string;
+  fixtureId?: string;
+} = {};
+
+test.afterEach(async ({ page }, testInfo) => {
+  testInfo.setTimeout(30_000);
+  const { authToken, campaignId, fixtureId } = cleanupState;
+  cleanupState = {};
+  if (!authToken) return;
+
+  try {
+    if (fixtureId) {
+      await postGraphqlWithAuth(
+        page.request,
+        authToken,
+        cleanupFixtureMutation,
+        { input: { fixtureId } },
+        metadataGraphQLUrl,
+      );
+    }
+  } finally {
+    if (campaignId) {
+      await postGraphqlWithAuth(
+        page.request,
+        authToken,
+        deleteCampaignMutation,
+        {
+          campaignId,
+        },
+      );
+    }
+  }
+});
+
+test('Campaign email accounts', async ({ page }) => {
+  test.setTimeout(90_000);
   const suffix = randomUUID();
   let campaignId: string | undefined;
   let fixture: CampaignMailboxFixture | undefined;
 
-  try {
+  {
     const campaign = await postGraphql<{ createCampaign: { id: string } }>(
       page,
       createCampaignMutation,
       { input: { name: `MYAH-270 E2E ${suffix}` } },
     );
     campaignId = campaign.createCampaign.id;
+    cleanupState = {
+      authToken: (await getAccessAuthToken(page)).authToken,
+      campaignId,
+    };
 
-    const fixtureResponse = await postGraphql<{
+    const fixtureResponse = await postMetadataGraphql<{
       createMyahE2eCampaignMailboxFixture: CampaignMailboxFixture;
     }>(page, createFixtureMutation, { input: { campaignId } });
     fixture = fixtureResponse.createMyahE2eCampaignMailboxFixture;
+    cleanupState.fixtureId = fixture.id;
 
-    const approvalProposal = await postGraphql<{
+    await page.goto(await workspaceUrl(page, campaignPath(campaignId)));
+    await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+    await page
+      .getByRole('button', {
+        name: new RegExp(`^${fixture.approvalThreadTitle}.*Chat actions$`),
+      })
+      .click();
+
+    const approvalCard = page.getByText('Review outreach email', {
+      exact: true,
+    });
+    await expect(approvalCard).toBeVisible();
+    await expect(page.getByText('Risk: High', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Action: Send email', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`From: ${fixture.expectedFrom}`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`To: ${fixture.expectedTo}`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`Subject: ${fixture.expectedSubject}`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(fixture.expectedBody, { exact: true }),
+    ).toBeVisible();
+
+    const requestChanges = page.getByRole('button', {
+      name: 'Request changes',
+      exact: true,
+    });
+    const reject = page.getByRole('button', { name: 'Reject', exact: true });
+    const approve = page.getByRole('button', {
+      name: 'Approve',
+      exact: true,
+    });
+    await expect(requestChanges).toBeEnabled();
+    await expect(reject).toBeEnabled();
+    await expect(approve).toBeEnabled();
+    await reject.click();
+    await expect(approvalCard).toBeHidden();
+
+    const approvalProposal = await postMetadataGraphql<{
       getActionApprovalProposal: {
         action: string;
         actionVersion: number;
@@ -182,34 +356,63 @@ test('Campaign email accounts keep linked mailbox defaulting, pause without a de
     expect(approvalProposal.getActionApprovalProposal).toMatchObject({
       action: 'send_outreach_email',
       actionVersion: 1,
-      state: 'PENDING',
+      state: 'REJECTED',
       sendingAccountLabel: fixture.expectedFrom,
       recipientLabel: fixture.expectedTo,
       subject: fixture.expectedSubject,
       body: fixture.expectedBody,
     });
+    const fixtureStatus = await postMetadataGraphql<{
+      getMyahE2eCampaignMailboxFixtureStatus: CampaignMailboxFixtureStatus;
+    }>(page, fixtureStatusQuery, { input: { fixtureId: fixture.id } });
+    expect(
+      fixtureStatus.getMyahE2eCampaignMailboxFixtureStatus
+        .providerSendAttemptCount,
+    ).toBe(0);
 
-    await page.goto(campaignPath(campaignId));
-    await expect(operationsTab(page)).toBeVisible();
-    await operationsTab(page).click();
-
+    await selectOperationsTab(page);
     await expect(
       page.getByRole('heading', { name: 'Email Accounts' }),
     ).toBeVisible();
     await expect(
-      page.getByText('Lifecycle status', { exact: true }),
-    ).toBeVisible();
-    await expect(
       page.getByText('Email signature', { exact: true }),
     ).toBeVisible();
+
+    const operationsTabId = new URL(page.url()).hash.slice(1);
+    if (!isUuid(operationsTabId)) {
+      throw new Error('Operations tab did not expose a runtime tab id');
+    }
+
+    let accounts = await getCampaignAccounts(page, campaignId);
+    const prelinkedDefault = accounts.campaignEmailAccounts.find(
+      (account) => account.isDefault,
+    );
+    if (!prelinkedDefault) throw new Error('Fixture default was not linked');
+
+    await page
+      .getByRole('button', {
+        name: `Remove ${prelinkedDefault.senderEmail}`,
+      })
+      .click();
+    await page
+      .getByRole('button', { name: 'Remove account', exact: true })
+      .click();
+    await expect(
+      page.getByText('Email account removed.', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('No email accounts linked.', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel('Default email account')).toHaveCount(0);
+    accounts = await getCampaignAccounts(page, campaignId);
+    expect(accounts.campaignEmailAccounts).toHaveLength(0);
 
     const addEmailAccount = page.getByRole('button', {
       name: 'Add email account',
       exact: true,
     });
     await addEmailAccount.click();
-
-    const candidates = await postGraphql<{
+    const candidates = await postMetadataGraphql<{
       campaignEmailAccountCandidates: CampaignEmailAccount[];
     }>(page, campaignCandidatesQuery, { input: { campaignId } });
     const firstCandidate = linkedAccount(
@@ -233,15 +436,17 @@ test('Campaign email accounts keep linked mailbox defaulting, pause without a de
     await page
       .getByRole('button', { name: `Add ${firstCandidate.senderEmail}` })
       .click();
-    await page
-      .getByRole('button', {
-        name: `Make ${firstCandidate.senderEmail} default`,
-      })
-      .click();
-    await expect(page.getByLabel('Default email account')).toBeVisible();
     await expect(
-      page.getByText(firstCandidate.senderEmail, { exact: true }),
+      page.getByText('Email account linked.', { exact: true }),
     ).toBeVisible();
+    await expect(page.getByLabel('Default email account')).toBeVisible();
+    accounts = await getCampaignAccounts(page, campaignId);
+    expect(
+      linkedAccount(
+        accounts.campaignEmailAccounts,
+        fixture.availableAccountIds[0],
+      ).isDefault,
+    ).toBe(true);
 
     await addEmailAccount.click();
     await page
@@ -250,10 +455,10 @@ test('Campaign email accounts keep linked mailbox defaulting, pause without a de
     await expect(
       page.getByText(secondCandidate.senderEmail, { exact: true }),
     ).toBeVisible();
-
-    let accounts = await postGraphql<{
-      campaignEmailAccounts: CampaignEmailAccount[];
-    }>(page, campaignAccountsQuery, { input: { campaignId } });
+    accounts = await getCampaignAccounts(page, campaignId);
+    expect(
+      accounts.campaignEmailAccounts.filter((account) => account.isDefault),
+    ).toHaveLength(1);
     expect(
       linkedAccount(
         accounts.campaignEmailAccounts,
@@ -275,22 +480,19 @@ test('Campaign email accounts keep linked mailbox defaulting, pause without a de
     await expect(
       page.getByText('Default email account updated.', { exact: true }),
     ).toBeVisible();
-
-    accounts = await postGraphql<{
-      campaignEmailAccounts: CampaignEmailAccount[];
-    }>(page, campaignAccountsQuery, { input: { campaignId } });
-    expect(
-      linkedAccount(
-        accounts.campaignEmailAccounts,
-        fixture.availableAccountIds[1],
-      ).isDefault,
-    ).toBe(true);
+    accounts = await getCampaignAccounts(page, campaignId);
     expect(
       linkedAccount(
         accounts.campaignEmailAccounts,
         fixture.availableAccountIds[0],
       ).isDefault,
     ).toBe(false);
+    expect(
+      linkedAccount(
+        accounts.campaignEmailAccounts,
+        fixture.availableAccountIds[1],
+      ).isDefault,
+    ).toBe(true);
     expect(
       accounts.campaignEmailAccounts.filter((account) => account.isDefault),
     ).toHaveLength(1);
@@ -311,63 +513,104 @@ test('Campaign email accounts keep linked mailbox defaulting, pause without a de
         'Email drafting is paused until a default account is selected.',
       ),
     ).toBeVisible();
+    accounts = await getCampaignAccounts(page, campaignId);
+    expect(
+      linkedAccount(
+        accounts.campaignEmailAccounts,
+        fixture.availableAccountIds[0],
+      ).isDefault,
+    ).toBe(false);
+    expect(
+      accounts.campaignEmailAccounts.filter((account) => account.isDefault),
+    ).toHaveLength(0);
 
-    const callback = await postGraphql<{
-      createMyahE2eCampaignCallbackFixture: CampaignCallbackFixture;
-    }>(page, createCallbackFixtureMutation, {
-      input: { fixtureId: fixture.id, campaignId },
+    const authRequest = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return url.pathname === '/auth/google-apis';
     });
-    const callbackFixture = callback.createMyahE2eCampaignCallbackFixture;
+    let callbackFixture: CampaignCallbackFixture | undefined;
+    let callbackOperationsTabId: string | undefined;
+    await page.route(
+      'http://localhost:3000/auth/google-apis?**',
+      async (route) => {
+        const redirectLocation = new URL(
+          route.request().url(),
+        ).searchParams.get('redirectLocation');
+        if (!redirectLocation)
+          throw new Error('Google OAuth initiation omitted redirectLocation');
+        const runtimeOperationsTabId = new URL(
+          redirectLocation,
+          'http://localhost:3001',
+        ).hash.slice(1);
+        if (!isUuid(runtimeOperationsTabId))
+          throw new Error(
+            'Google OAuth initiation omitted a runtime Operations tab',
+          );
+        callbackOperationsTabId = runtimeOperationsTabId;
+        const callback = await postMetadataGraphql<{
+          createMyahE2eCampaignCallbackFixture: CampaignCallbackFixture;
+        }>(page, createCallbackFixtureMutation, {
+          input: {
+            fixtureId: fixture.id,
+            campaignId,
+            operationsTabId: runtimeOperationsTabId,
+          },
+        });
+        callbackFixture = callback.createMyahE2eCampaignCallbackFixture;
+        const initiationResponse = await route.fetch({ maxRedirects: 0 });
+        expect(initiationResponse.status()).toBe(302);
+        expect(
+          new URL(initiationResponse.headers().location ?? '').origin,
+        ).toBe('https://accounts.google.com');
+        await route.fulfill({
+          response: initiationResponse,
+          headers: { location: callbackFixture.callbackPath },
+        });
+      },
+    );
 
-    await page.goto(callbackFixture.callbackPath);
-    await expect(page).toHaveURL(/#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba$/);
+    await addEmailAccount.click();
+    await page
+      .getByRole('button', { name: 'Connect with Google', exact: true })
+      .click();
+    const googleAuthRequest = await authRequest;
+    await expect.poll(() => callbackOperationsTabId).toBeDefined();
+    expect(
+      new URL(googleAuthRequest.url()).searchParams.get('redirectLocation'),
+    ).toBe(campaignOperationsReturnPath(campaignId, callbackOperationsTabId!));
+
+    await expect(
+      page.getByText('Email account linked.', { exact: true }),
+    ).toBeVisible();
+    if (!callbackFixture)
+      throw new Error('Google callback fixture was not used');
+    await expect(page).toHaveURL(
+      new RegExp(`${campaignPath(campaignId)}#${callbackOperationsTabId}$`),
+    );
     expect(
       new URL(page.url()).searchParams.get('linkConnectedAccount'),
     ).toBeNull();
     expect(
       new URL(page.url()).searchParams.get('connectedAccountId'),
     ).toBeNull();
-    const callbackAccounts = await postGraphql<{
-      campaignEmailAccounts: CampaignEmailAccount[];
-    }>(page, campaignAccountsQuery, { input: { campaignId } });
-    expect(
-      callbackAccounts.campaignEmailAccounts.filter(
-        (account) =>
-          account.connectedAccountId === callbackFixture.connectedAccountId,
-      ),
-    ).toHaveLength(1);
 
-    await page.reload();
-    const reloadedAccounts = await postGraphql<{
-      campaignEmailAccounts: CampaignEmailAccount[];
-    }>(page, campaignAccountsQuery, { input: { campaignId } });
-    expect(
-      reloadedAccounts.campaignEmailAccounts.filter(
-        (account) =>
-          account.connectedAccountId === callbackFixture.connectedAccountId,
-      ),
-    ).toHaveLength(1);
-
-    accounts = await postGraphql<{
-      campaignEmailAccounts: CampaignEmailAccount[];
-    }>(page, campaignAccountsQuery, { input: { campaignId } });
+    accounts = await getCampaignAccounts(page, campaignId);
     expect(
       accounts.campaignEmailAccounts.filter(
         (account) =>
           account.connectedAccountId === callbackFixture.connectedAccountId,
       ),
     ).toHaveLength(1);
-  } finally {
-    try {
-      if (fixture) {
-        await postGraphql(page, cleanupFixtureMutation, {
-          input: { fixtureId: fixture.id },
-        });
-      }
-    } finally {
-      if (campaignId) {
-        await postGraphql(page, deleteCampaignMutation, { campaignId });
-      }
-    }
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'Email Accounts' }),
+    ).toBeVisible();
+    const reloadedAccounts = await getCampaignAccounts(page, campaignId);
+    expect(
+      reloadedAccounts.campaignEmailAccounts.filter(
+        (account) =>
+          account.connectedAccountId === callbackFixture.connectedAccountId,
+      ),
+    ).toHaveLength(1);
   }
 });

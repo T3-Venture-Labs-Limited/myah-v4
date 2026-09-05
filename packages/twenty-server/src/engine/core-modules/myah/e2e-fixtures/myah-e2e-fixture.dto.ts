@@ -22,6 +22,10 @@ export class CreateMyahE2eCallbackFixtureInput extends MyahE2eFixtureIdInput {
   @Field(() => UUIDScalarType)
   @IsUUID()
   campaignId!: string;
+
+  @Field(() => UUIDScalarType)
+  @IsUUID()
+  operationsTabId!: string;
 }
 
 @ObjectType()
@@ -38,6 +42,9 @@ export class MyahE2eCampaignMailboxFixtureDTO {
   @Field(() => UUIDScalarType)
   approvalThreadId!: string;
 
+  @Field()
+  approvalThreadTitle!: string;
+
   @Field(() => UUIDScalarType)
   actionApprovalBindingId!: string;
 
@@ -52,6 +59,12 @@ export class MyahE2eCampaignMailboxFixtureDTO {
 
   @Field()
   expectedBody!: string;
+}
+
+@ObjectType()
+export class MyahE2eCampaignMailboxFixtureStatusDTO {
+  @Field()
+  providerSendAttemptCount!: number;
 }
 
 @ObjectType()

@@ -14,18 +14,21 @@ import { DataSource } from 'typeorm';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
+import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
+import { type WorkspaceDomainConfig } from 'src/engine/core-modules/domain/workspace-domains/types/workspace-domain-config.type';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { MyahE2eFixtureRegistryService } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture-registry.service';
+import { E2eFixtureGmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/e2e-fixture-gmail-message-outbound.service';
 
 const EXPECTED_SUBJECT = 'MYAH-270 fixture subject';
 const EXPECTED_BODY = 'MYAH-270 fixture body';
 const EXPECTED_RECIPIENT = 'creator@myah-e2e.fixture.test';
-const CAMPAIGN_OPERATIONS_HASH = 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba';
 
 type AuthenticatedFixtureContext = {
   workspaceId: string;
   userWorkspaceId: string;
+  workspace: WorkspaceDomainConfig;
 };
 
 type CreatedMailbox = {
@@ -42,6 +45,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     private readonly actionApprovalService: ActionApprovalService,
     private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
     private readonly registry: MyahE2eFixtureRegistryService,
+    private readonly workspaceDomainsService: WorkspaceDomainsService,
   ) {}
 
   async createCampaignMailboxFixture(
@@ -59,6 +63,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     const threadId = randomUUID();
     const messageId = randomUUID();
     const partId = randomUUID();
+    const approvalThreadTitle = `MYAH-270 E2E fixture ${fixtureNonce}`;
     const records = {
       campaignIds: [campaignId],
       connectedAccountIds: [] as string[],
@@ -145,9 +150,16 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
           ],
         );
         await manager.query(
-          `INSERT INTO core."agentChatThread" ("id", "workspaceId", "userWorkspaceId", "title")
-           VALUES ($1, $2, $3, 'MYAH-270 E2E fixture')`,
-          [threadId, context.workspaceId, context.userWorkspaceId],
+          `INSERT INTO core."agentChatThread" (
+            "id", "workspaceId", "userWorkspaceId", "title", "pendingQuestionMessageId"
+          ) VALUES ($1, $2, $3, $4, $5)`,
+          [
+            threadId,
+            context.workspaceId,
+            context.userWorkspaceId,
+            approvalThreadTitle,
+            messageId,
+          ],
         );
       });
 
@@ -197,6 +209,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
         ],
         unavailableAccountId: unavailable.connectedAccountId,
         approvalThreadId: threadId,
+        approvalThreadTitle,
         actionApprovalBindingId: binding.id,
         expectedFrom: defaultMailbox.email,
         expectedTo: `MYAH-270 fixture creator <${EXPECTED_RECIPIENT}>`,
@@ -215,6 +228,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     context: AuthenticatedFixtureContext,
     fixtureId: string,
     campaignId: string,
+    operationsTabId: string,
   ) {
     const fixture = this.registry.get(context.workspaceId, fixtureId);
     if (!fixture || !fixture.records.campaignIds.includes(campaignId)) {
@@ -226,7 +240,12 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     if (existingConnectedAccountId) {
       return {
         connectedAccountId: existingConnectedAccountId,
-        callbackPath: this.callbackPath(campaignId, existingConnectedAccountId),
+        callbackPath: this.callbackPath(
+          context.workspace,
+          campaignId,
+          existingConnectedAccountId,
+          operationsTabId,
+        ),
       };
     }
 
@@ -244,7 +263,27 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
 
     return {
       connectedAccountId: mailbox.connectedAccountId,
-      callbackPath: this.callbackPath(campaignId, mailbox.connectedAccountId),
+      callbackPath: this.callbackPath(
+        context.workspace,
+        campaignId,
+        mailbox.connectedAccountId,
+        operationsTabId,
+      ),
+    };
+  }
+
+  getCampaignMailboxFixtureStatus(
+    context: AuthenticatedFixtureContext,
+    fixtureId: string,
+  ): { providerSendAttemptCount: number } {
+    const fixture = this.registry.get(context.workspaceId, fixtureId);
+    if (!fixture) throw new Error('E2E fixture was not found');
+
+    return {
+      providerSendAttemptCount:
+        E2eFixtureGmailMessageOutboundService.getSendAttemptCount(
+          fixture.records.connectedAccountIds,
+        ),
     };
   }
 
@@ -255,6 +294,9 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     const fixture = this.registry.get(context.workspaceId, fixtureId);
     if (!fixture) return false;
     await this.deleteRecords(context.workspaceId, fixture.records);
+    E2eFixtureGmailMessageOutboundService.releaseSendAttemptCounts(
+      fixture.records.connectedAccountIds,
+    );
     this.registry.release(context.workspaceId, fixtureId);
 
     return true;
@@ -267,6 +309,9 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
       this.registry.entries().map(async (fixture) => {
         try {
           await this.deleteRecords(fixture.workspaceId, fixture.records);
+          E2eFixtureGmailMessageOutboundService.releaseSendAttemptCounts(
+            fixture.records.connectedAccountIds,
+          );
           this.registry.release(fixture.workspaceId, fixture.id);
         } catch {
           // A shutdown error must not prevent the isolated E2E process exit.
@@ -275,8 +320,23 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     );
   }
 
-  private callbackPath(campaignId: string, connectedAccountId: string): string {
-    return `/object/campaign/${campaignId}?linkConnectedAccount=1&connectedAccountId=${connectedAccountId}#${CAMPAIGN_OPERATIONS_HASH}`;
+  private callbackPath(
+    workspace: WorkspaceDomainConfig,
+    campaignId: string,
+    connectedAccountId: string,
+    operationsTabId: string,
+  ): string {
+    const url = this.workspaceDomainsService.buildWorkspaceURL({
+      workspace,
+      pathname: `/object/campaign/${campaignId}`,
+      searchParams: {
+        linkConnectedAccount: 1,
+        connectedAccountId,
+      },
+    });
+    url.hash = operationsTabId;
+
+    return url.toString();
   }
 
   private async createMailbox(
@@ -339,6 +399,8 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     const rows = await dataSource.query(
       `SELECT "id" FROM "${getWorkspaceSchemaName(workspaceId)}"."campaign" WHERE "id" = $1 LIMIT 1`,
       [campaignId],
+      undefined,
+      { shouldBypassPermissionChecks: true },
     );
     if (rows.length !== 1) throw new Error('Campaign was not found');
   }
@@ -350,48 +412,44 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     const dataSource =
       await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
     const schemaName = getWorkspaceSchemaName(workspaceId);
-    await dataSource.transaction(async (manager) => {
-      const remove = async (table: string, ids?: string[]) => {
-        if (!ids?.length) return;
-        await manager.query(
-          `DELETE FROM ${table} WHERE "id" = ANY($1::uuid[])`,
-          [ids],
-        );
-      };
-      await remove('core."agentMessagePart"', records.agentMessagePartIds);
-      await remove('core."agentMessage"', records.agentMessageIds);
-      if (records.actionApprovalBindingIds?.length) {
-        await manager.query(
-          `DELETE FROM core."actionApprovalBindingEvidenceLink" WHERE "actionApprovalBindingId" = ANY($1::uuid[])`,
-          [records.actionApprovalBindingIds],
-        );
-        await remove(
-          'core."actionApprovalBinding"',
-          records.actionApprovalBindingIds,
-        );
-      }
-      await remove(
-        `"${schemaName}"."outreachAction"`,
-        records.outreachActionIds,
+    const query = (sql: string, parameters: unknown[]) =>
+      dataSource.query(sql, parameters, undefined, {
+        shouldBypassPermissionChecks: true,
+      });
+    const remove = async (table: string, ids?: string[]) => {
+      if (!ids?.length) return;
+      await query(`DELETE FROM ${table} WHERE "id" = ANY($1::uuid[])`, [ids]);
+    };
+    await remove('core."agentMessagePart"', records.agentMessagePartIds);
+    await remove('core."agentMessage"', records.agentMessageIds);
+    if (records.actionApprovalBindingIds?.length) {
+      await query(
+        `DELETE FROM core."actionApprovalBindingEvidenceLink" WHERE "actionApprovalBindingId" = ANY($1::uuid[])`,
+        [records.actionApprovalBindingIds],
       );
       await remove(
-        `"${schemaName}"."campaignCreator"`,
-        records.campaignCreatorIds,
+        'core."actionApprovalBinding"',
+        records.actionApprovalBindingIds,
       );
-      await remove(`"${schemaName}"."creator"`, records.creatorIds);
-      if (records.connectedAccountIds.length) {
-        await manager.query(
-          `DELETE FROM "${schemaName}"."campaignAccount" WHERE "connectedAccountId" = ANY($1::uuid[])`,
-          [records.connectedAccountIds],
-        );
-      }
-      await remove(
-        `"${schemaName}"."campaignAccount"`,
-        records.campaignAccountIds,
+    }
+    await remove(`"${schemaName}"."outreachAction"`, records.outreachActionIds);
+    await remove(
+      `"${schemaName}"."campaignCreator"`,
+      records.campaignCreatorIds,
+    );
+    await remove(`"${schemaName}"."creator"`, records.creatorIds);
+    if (records.connectedAccountIds.length) {
+      await query(
+        `DELETE FROM "${schemaName}"."campaignAccount" WHERE "connectedAccountId" = ANY($1::text[])`,
+        [records.connectedAccountIds],
       );
-      await remove('core."agentChatThread"', records.agentChatThreadIds);
-      await remove('core."messageChannel"', records.messageChannelIds);
-      await remove('core."connectedAccount"', records.connectedAccountIds);
-    });
+    }
+    await remove(
+      `"${schemaName}"."campaignAccount"`,
+      records.campaignAccountIds,
+    );
+    await remove('core."agentChatThread"', records.agentChatThreadIds);
+    await remove('core."messageChannel"', records.messageChannelIds);
+    await remove('core."connectedAccount"', records.connectedAccountIds);
   }
 }
