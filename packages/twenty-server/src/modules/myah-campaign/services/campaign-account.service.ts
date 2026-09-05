@@ -244,7 +244,15 @@ export class CampaignAccountService {
         if (result.affected !== 1)
           throw new Error('Campaign email account not found');
       } catch (error) {
-        if (previousDefault) {
+        const successorDefault = await campaignAccounts.findOne({
+          where: {
+            campaignId: input.campaignId,
+            channel: 'EMAIL',
+            isDefault: true,
+            deletedAt: IsNull(),
+          },
+        });
+        if (!successorDefault && previousDefault) {
           await campaignAccounts.update(
             { id: previousDefault.id, deletedAt: IsNull() },
             { isDefault: true },

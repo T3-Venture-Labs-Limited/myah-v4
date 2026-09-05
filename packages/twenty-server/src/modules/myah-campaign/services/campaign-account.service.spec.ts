@@ -731,6 +731,60 @@ describe('CampaignAccountService', () => {
     expect(harness.orm.getGlobalWorkspaceDataSource).not.toHaveBeenCalled();
   });
 
+  it('does not restore a prior default over a successor after a failed default transition', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'prior',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'target',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+        },
+      ],
+    });
+    harness.workspaceRepositories.campaignAccount.update.mockImplementation(
+      async (where: Record<string, unknown>, patch: Record<string, unknown>) => {
+        if (where.id === 'target') {
+          harness.rows.campaignAccount.push({
+            id: 'successor',
+            campaignId,
+            connectedAccountId: secondAccountId,
+            messageChannelId: secondChannelId,
+            channel: 'EMAIL',
+            isDefault: true,
+          });
+          throw new Error('default race lost');
+        }
+        const affected = harness.rows.campaignAccount.filter((row) =>
+          matches(row, where),
+        );
+        affected.forEach((row) => Object.assign(row, patch));
+        return { affected: affected.length };
+      },
+    );
+
+    await expect(
+      harness.service.setDefault(
+        { campaignId, campaignAccountId: 'target' },
+        authContext,
+      ),
+    ).rejects.toThrow('default race lost');
+    expect(harness.workspaceRepositories.campaignAccount.update).not.toHaveBeenCalledWith(
+      { id: 'prior', deletedAt: IsNull() },
+      { isDefault: true },
+    );
+  });
+
   it('does not clear the active default when a stale request selects a removed account', async () => {
     const harness = createHarness({
       campaignAccounts: [
