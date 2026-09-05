@@ -122,6 +122,59 @@ export type GenerateMyahInboxReplyProposalInput = {
   threadId: Scalars['UUID']['input'];
 };
 
+export type InstagramActionUsage = {
+  __typename?: 'InstagramActionUsage';
+  dailyLimit: Scalars['Int']['output'];
+  dailyRemaining: Scalars['Int']['output'];
+  dailyUsed: Scalars['Int']['output'];
+  hourlyLimit: Scalars['Int']['output'];
+  hourlyRemaining: Scalars['Int']['output'];
+  hourlyUsed: Scalars['Int']['output'];
+  nextEligibleAt?: Maybe<Scalars['DateTime']['output']>;
+};
+
+export type InstagramMessageDraftResultDto = {
+  __typename?: 'InstagramMessageDraftResultDto';
+  body: Scalars['String']['output'];
+  draftId: Scalars['UUID']['output'];
+  revision: Scalars['Int']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type InstagramMessageSendResultDto = {
+  __typename?: 'InstagramMessageSendResultDto';
+  blockedWindows?: Maybe<Array<Scalars['String']['output']>>;
+  code?: Maybe<Scalars['String']['output']>;
+  dailyLimit?: Maybe<Scalars['Int']['output']>;
+  dailyRemaining?: Maybe<Scalars['Int']['output']>;
+  dailyUsed?: Maybe<Scalars['Int']['output']>;
+  hourlyLimit?: Maybe<Scalars['Int']['output']>;
+  hourlyRemaining?: Maybe<Scalars['Int']['output']>;
+  hourlyUsed?: Maybe<Scalars['Int']['output']>;
+  nextEligibleAt?: Maybe<Scalars['DateTime']['output']>;
+  receiptId: Scalars['UUID']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type InstagramMessageSendStatusDto = {
+  __typename?: 'InstagramMessageSendStatusDto';
+  outcome?: Maybe<Scalars['String']['output']>;
+  providerCode?: Maybe<Scalars['String']['output']>;
+  receiptId: Scalars['UUID']['output'];
+  state: Scalars['String']['output'];
+};
+
+export type InstagramMessageSendStatusInput = {
+  receiptId: Scalars['UUID']['input'];
+};
+
+export type InstagramSendOutcomeResolutionDto = {
+  __typename?: 'InstagramSendOutcomeResolutionDto';
+  id: Scalars['UUID']['output'];
+  outcome: Scalars['String']['output'];
+  receiptId: Scalars['UUID']['output'];
+};
+
 export type LinkMetadata = {
   __typename?: 'LinkMetadata';
   label: Scalars['String']['output'];
@@ -157,9 +210,12 @@ export type Mutation = {
   duplicateWorkflow: WorkflowVersionDto;
   duplicateWorkflowVersionStep: WorkflowVersionStepChanges;
   generateMyahInboxReplyProposal: MyahInboxReplyProposal;
+  resolveInstagramUnknownSend: InstagramSendOutcomeResolutionDto;
   retryWorkflowRun: WorkflowRun;
   runWorkflowVersion: RunWorkflowVersion;
+  saveInstagramMessageDraft: InstagramMessageDraftResultDto;
   saveMyahInboxDraft: MyahInboxDraftSaveResult;
+  sendInstagramMessage: InstagramMessageSendResultDto;
   sendMyahInboxReply: MyahInboxReplySendResult;
   stopWorkflowRun: WorkflowRun;
   submitFormStep: Scalars['Boolean']['output'];
@@ -236,6 +292,11 @@ export type MutationGenerateMyahInboxReplyProposalArgs = {
 };
 
 
+export type MutationResolveInstagramUnknownSendArgs = {
+  input: ResolveInstagramSendOutcomeInput;
+};
+
+
 export type MutationRetryWorkflowRunArgs = {
   workflowRunId: Scalars['UUID']['input'];
 };
@@ -246,8 +307,18 @@ export type MutationRunWorkflowVersionArgs = {
 };
 
 
+export type MutationSaveInstagramMessageDraftArgs = {
+  input: SaveInstagramMessageDraftInput;
+};
+
+
 export type MutationSaveMyahInboxDraftArgs = {
   input: SaveMyahInboxDraftInput;
+};
+
+
+export type MutationSendInstagramMessageArgs = {
+  input: SendInstagramMessageInput;
 };
 
 
@@ -447,6 +518,8 @@ export type Query = {
   getTimelineThreadsFromOpportunityId: TimelineThreadsWithTotal;
   /** @deprecated Use getTimelineThreadsFromObjectRecord instead */
   getTimelineThreadsFromPersonId: TimelineThreadsWithTotal;
+  instagramActionUsage: InstagramActionUsage;
+  instagramMessageSendStatus: InstagramMessageSendStatusDto;
   isMaintenanceModeBannerDismissed: Scalars['Boolean']['output'];
   myahInboxReplySendReadiness: MyahInboxReplySendReadiness;
   myahInboxReplySendStatus: MyahInboxReplySendStatus;
@@ -519,6 +592,11 @@ export type QueryGetTimelineThreadsFromPersonIdArgs = {
 };
 
 
+export type QueryInstagramMessageSendStatusArgs = {
+  input: InstagramMessageSendStatusInput;
+};
+
+
 export type QueryMyahInboxReplySendReadinessArgs = {
   threadId: Scalars['UUID']['input'];
 };
@@ -555,6 +633,14 @@ export type QueryWorkflowStepConnectedAccountHandleArgs = {
   connectedAccountId: Scalars['UUID']['input'];
 };
 
+export type ResolveInstagramSendOutcomeInput = {
+  notes?: InputMaybe<Scalars['String']['input']>;
+  outcome: Scalars['String']['input'];
+  receiptId: Scalars['UUID']['input'];
+  recipientUiReviewed?: InputMaybe<Scalars['Boolean']['input']>;
+  senderUiReviewed?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
 export type RunWorkflowVersion = {
   __typename?: 'RunWorkflowVersion';
   workflowRunId: Scalars['UUID']['output'];
@@ -567,6 +653,15 @@ export type RunWorkflowVersionInput = {
   workflowRunId?: InputMaybe<Scalars['UUID']['input']>;
   /** Workflow version ID */
   workflowVersionId: Scalars['UUID']['input'];
+};
+
+export type SaveInstagramMessageDraftInput = {
+  body: Scalars['String']['input'];
+  conversationRecordId?: InputMaybe<Scalars['UUID']['input']>;
+  creatorRecordId?: InputMaybe<Scalars['UUID']['input']>;
+  draftId: Scalars['UUID']['input'];
+  expectedRevision: Scalars['Int']['input'];
+  kind: Scalars['String']['input'];
 };
 
 export type SaveMyahInboxDraftInput = {
@@ -602,6 +697,11 @@ export type SearchResultPageInfo = {
   __typename?: 'SearchResultPageInfo';
   endCursor?: Maybe<Scalars['String']['output']>;
   hasNextPage: Scalars['Boolean']['output'];
+};
+
+export type SendInstagramMessageInput = {
+  draftId: Scalars['UUID']['input'];
+  expectedRevision: Scalars['Int']['input'];
 };
 
 export type SendMyahInboxReplyInput = {

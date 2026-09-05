@@ -171,21 +171,24 @@ type GetActionApprovalProposalData = {
 
 type ExactActionApprovalProposal =
   GetActionApprovalProposalData['getActionApprovalProposal'] & {
-    action: 'send_instagram_reply';
-    actionVersion: 1;
     body: string;
     recipientLabel: string;
     sendingAccountLabel: string;
     state: 'PENDING';
-  };
+  } & (
+      | { action: 'send_instagram_reply'; actionVersion: 1 }
+      | { action: 'send_instagram_message'; actionVersion: 2 }
+    );
 
 const isExactActionApprovalProposal = (
   proposal:
     | GetActionApprovalProposalData['getActionApprovalProposal']
     | undefined,
 ): proposal is ExactActionApprovalProposal =>
-  proposal?.action === 'send_instagram_reply' &&
-  proposal.actionVersion === 1 &&
+  ((proposal?.action === 'send_instagram_reply' &&
+    proposal.actionVersion === 1) ||
+    (proposal?.action === 'send_instagram_message' &&
+      proposal.actionVersion === 2)) &&
   proposal.state === 'PENDING' &&
   typeof proposal.body === 'string' &&
   typeof proposal.recipientLabel === 'string' &&

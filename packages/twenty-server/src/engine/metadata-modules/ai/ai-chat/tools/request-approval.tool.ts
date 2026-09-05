@@ -6,15 +6,16 @@ import {
   type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 
-import {
-  InstagramReplyActionDefinition,
-  InstagramReplyActionProposalInputZodSchema,
-} from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { InstagramReplyActionProposalInputZodSchema } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import {
   OutreachEmailActionDefinition,
   OutreachEmailActionProposalInputZodSchema,
 } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import { type InstagramMessageAuthorityReader } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.type';
+import { InstagramMessagePermissionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
+import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
 export { REQUEST_APPROVAL_TOOL_NAME };
 
@@ -164,10 +165,13 @@ type RegisteredApprovalOptions = {
   userWorkspaceId: string | undefined;
   threadId: string | undefined;
   actionDefinitions: {
-    send_instagram_reply: InstagramReplyActionDefinition;
+    send_instagram_reply: InstagramMessageAuthorityReader;
     send_outreach_email: OutreachEmailActionDefinition;
   };
   actionApprovalService: ActionApprovalService;
+  instagramMessagePermissionService?: InstagramMessagePermissionService;
+  instagramMessageRecordAccessService?: InstagramMessageRecordAccessService;
+  rolePermissionConfig?: RolePermissionConfig;
 };
 
 type RequestApprovalPendingOutput = {
@@ -188,16 +192,20 @@ export const createRequestApprovalTool = (
     ? {
         send_instagram_reply: {
           proposalInputSchema: InstagramReplyActionProposalInputZodSchema,
-          propose: (input: unknown) =>
-            registeredApprovalOptions.actionDefinitions.send_instagram_reply.propose(
+          propose: (input: unknown) => {
+            const parsedInput =
+              InstagramReplyActionProposalInputZodSchema.parse(input);
+
+            return registeredApprovalOptions.actionDefinitions.send_instagram_reply.createThreadReplyAuthority(
               {
                 workspaceId: registeredApprovalOptions.workspaceId,
                 initiatorUserWorkspaceId:
                   registeredApprovalOptions.userWorkspaceId ?? '',
                 threadId: registeredApprovalOptions.threadId ?? '',
-                input: InstagramReplyActionProposalInputZodSchema.parse(input),
+                draftId: parsedInput.draftId,
               },
-            ),
+            );
+          },
         },
         send_outreach_email: {
           proposalInputSchema: OutreachEmailActionProposalInputZodSchema,
@@ -239,6 +247,28 @@ export const createRequestApprovalTool = (
           throw new Error(
             'An authenticated chat thread is required to request registered action approval.',
           );
+        }
+        if (input.toolName === 'send_instagram_reply') {
+          if (
+            !options.instagramMessagePermissionService ||
+            !options.instagramMessageRecordAccessService ||
+            !options.rolePermissionConfig
+          ) {
+            throw new Error('Instagram reply permission context is required');
+          }
+          await options.instagramMessagePermissionService.assertCanSend({
+            actionKind: 'REPLY',
+            rolePermissionConfig: options.rolePermissionConfig,
+            workspaceId: options.workspaceId,
+          });
+          const { draftId } = InstagramReplyActionProposalInputZodSchema.parse(
+            input.actionInput,
+          );
+          await options.instagramMessageRecordAccessService.assertCanReadDraft({
+            workspaceId: options.workspaceId,
+            draftId,
+            rolePermissionConfig: options.rolePermissionConfig,
+          });
         }
 
         const proposal = await registeredActions[input.toolName].propose(

@@ -56,6 +56,31 @@ import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
+const INSTAGRAM_MESSAGE_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER =
+  '85762d24-541b-407f-9d6a-cdf89552c665';
+const PROTECTED_DRAFT_MUTATION_NAMES: Partial<Record<CommonQueryNames, true>> =
+  {
+    [CommonQueryNames.CREATE_ONE]: true,
+    [CommonQueryNames.CREATE_MANY]: true,
+    [CommonQueryNames.UPDATE_ONE]: true,
+    [CommonQueryNames.UPDATE_MANY]: true,
+    [CommonQueryNames.DELETE_ONE]: true,
+    [CommonQueryNames.DELETE_MANY]: true,
+    [CommonQueryNames.DESTROY_ONE]: true,
+    [CommonQueryNames.DESTROY_MANY]: true,
+    [CommonQueryNames.RESTORE_ONE]: true,
+    [CommonQueryNames.RESTORE_MANY]: true,
+    [CommonQueryNames.MERGE_MANY]: true,
+  };
+
+export const isProtectedInstagramDraftMutation = (
+  operationName: CommonQueryNames,
+  objectUniversalIdentifier: string,
+) =>
+  PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
+  objectUniversalIdentifier ===
+    INSTAGRAM_MESSAGE_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER;
+
 @Injectable()
 export abstract class CommonBaseQueryRunnerService<
   Args extends CommonQueryArgs,
@@ -112,6 +137,17 @@ export abstract class CommonBaseQueryRunnerService<
     await this.throttleQueryExecution(authContext);
 
     await this.validate(args, queryRunnerContext);
+    if (
+      isProtectedInstagramDraftMutation(
+        this.operationName,
+        flatObjectMetadata.universalIdentifier,
+      )
+    ) {
+      throw new PermissionsException(
+        'Instagram message drafts are writable only through the revision-protected service',
+        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
+      );
+    }
 
     if (flatObjectMetadata.isSystem === true) {
       await this.validateSettingsPermissionsOnObjectOrThrow(

@@ -34,6 +34,14 @@ import {
 } from 'src/modules/myah-unipile/types/unipile-v1.type';
 
 export const UNIPILE_FETCH = Symbol('UNIPILE_FETCH');
+const DETERMINISTIC_WRITE_REJECTION_STATUS: Record<number, true> = {
+  400: true,
+  401: true,
+  403: true,
+  404: true,
+  409: true,
+  422: true,
+};
 
 export class UnipileReadError extends Error {
   constructor(
@@ -145,7 +153,7 @@ export class UnipileV1ClientService {
 
       status = response.status;
 
-      if (status >= 400 && status < 500) {
+      if (DETERMINISTIC_WRITE_REJECTION_STATUS[status] === true) {
         return {
           kind: 'KNOWN_REJECTION',
           status,
@@ -221,7 +229,7 @@ export class UnipileV1ClientService {
 
       status = response.status;
 
-      if (status >= 400 && status < 500) {
+      if (DETERMINISTIC_WRITE_REJECTION_STATUS[status] === true) {
         return {
           kind: 'KNOWN_REJECTION',
           status,

@@ -232,6 +232,12 @@ export class InstagramReplyActionDefinition {
     workspaceId: string;
     binding: ActionApprovalBindingEntity;
   }): Promise<InstagramReplyActionApprovalProposal> {
+    const threadId = binding.threadId;
+
+    if (!threadId) {
+      throw new Error('Instagram reply source graph is unavailable');
+    }
+
     const graph = await this.loadCanonicalGraph(
       workspaceId,
       binding.draftId,
@@ -243,30 +249,31 @@ export class InstagramReplyActionDefinition {
     const expectedActionBinding = this.buildExpectedActionBinding({
       workspaceId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
-      threadId: binding.threadId,
+      threadId,
       graph,
       evidenceObjectMetadataIds,
     });
-    const actualActionBinding: ExpectedActionBindingWithWorkspace = {
-      workspaceId: binding.workspaceId,
-      actionName: binding.actionName as 'send_instagram_reply',
-      actionVersion: binding.actionVersion as 1,
-      draftId: binding.draftId,
-      contentDigest: binding.contentDigest,
-      recipientFingerprint: binding.recipientFingerprint ?? '',
-      sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
-      actionContextFingerprint: null,
-      inboundMessageId: binding.inboundMessageId ?? '',
-      inboundSenderIgsid: binding.inboundSenderIgsid ?? '',
-      inboundDirection:
-        binding.inboundDirection === 'INBOUND'
-          ? binding.inboundDirection
-          : 'INBOUND',
-      inboundReceivedAt: binding.inboundReceivedAt ?? new Date(0),
-      threadId: binding.threadId,
-      initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
-      evidenceLinks: binding.evidenceLinks,
-    };
+    const actualActionBinding: InstagramReplyExpectedActionBindingWithWorkspace =
+      {
+        workspaceId: binding.workspaceId,
+        actionName: binding.actionName as 'send_instagram_reply',
+        actionVersion: binding.actionVersion as 1,
+        draftId: binding.draftId,
+        contentDigest: binding.contentDigest,
+        recipientFingerprint: binding.recipientFingerprint ?? '',
+        sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
+        actionContextFingerprint: null,
+        inboundMessageId: binding.inboundMessageId ?? '',
+        inboundSenderIgsid: binding.inboundSenderIgsid ?? '',
+        inboundDirection:
+          binding.inboundDirection === 'INBOUND'
+            ? binding.inboundDirection
+            : 'INBOUND',
+        inboundReceivedAt: binding.inboundReceivedAt ?? new Date(0),
+        threadId,
+        initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+        evidenceLinks: binding.evidenceLinks,
+      };
     if (!this.matchesBinding(actualActionBinding, expectedActionBinding)) {
       throw new Error('Instagram reply source graph is unavailable');
     }

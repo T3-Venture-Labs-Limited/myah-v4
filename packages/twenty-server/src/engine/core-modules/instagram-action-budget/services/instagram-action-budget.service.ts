@@ -26,6 +26,7 @@ import {
   type InspectInstagramActionBudgetInput,
   type ReleasePreDispatchInput,
   type ReleaseStartTargetInput,
+  type ReleaseStartTargetForReceiptInput,
   type ReservationTransitionInput,
   type ReserveInstagramActionInput,
 } from './instagram-action-budget.types';
@@ -250,6 +251,35 @@ export class InstagramActionBudgetService {
         throw new Error('Only START_CHAT reservations hold a target lock');
       }
       if (reservation.targetLockReleasedAt) return;
+
+      reservation.targetLockReleasedAt = await this.dbNow(manager);
+      await manager.save(InstagramActionReservationEntity, reservation);
+    });
+  }
+
+  async releaseStartTargetForReceipt(
+    input: ReleaseStartTargetForReceiptInput,
+  ): Promise<void> {
+    this.assertReceiptScope(input);
+
+    await this.dataSource.transaction(async (manager) => {
+      const reservation = await manager.findOne(
+        InstagramActionReservationEntity,
+        {
+          lock: { mode: 'pessimistic_write' },
+          where: {
+            workspaceId: input.workspaceId,
+            actionExecutionReceiptId: input.actionExecutionReceiptId,
+          },
+        },
+      );
+      if (
+        !reservation ||
+        reservation.actionKind !== InstagramActionKindEntity.START_CHAT ||
+        reservation.targetLockReleasedAt
+      ) {
+        return;
+      }
 
       reservation.targetLockReleasedAt = await this.dbNow(manager);
       await manager.save(InstagramActionReservationEntity, reservation);

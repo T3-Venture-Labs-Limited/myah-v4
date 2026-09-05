@@ -3,9 +3,10 @@ import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/ac
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalResolver } from 'src/engine/core-modules/action-approval/action-approval.resolver';
+import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
 
-const workspaceId = 'workspace-id';
+const workspaceId = '00000000-0000-4000-8000-000000000001';
 const userWorkspaceId = 'user-workspace-id';
 const bindingId = 'binding-id';
 
@@ -291,5 +292,56 @@ describe('ActionApprovalResolver', () => {
         },
       ],
     });
+  });
+  it('renders a pending send_instagram_message v2 reply without invoking the legacy definition', async () => {
+    const body = 'Server-owned Unipile reply';
+    const v2Binding = {
+      ...binding,
+      actionName: 'send_instagram_message',
+      actionVersion: 2,
+      actionKind: 'REPLY',
+      state: 'PENDING',
+      contentDigest: computeActionContentDigest(body),
+    };
+    const legacyDefinition = { getProposal: jest.fn() };
+    const globalWorkspaceOrmManager = {
+      executeInWorkspaceContext: jest.fn(async (callback) => callback()),
+      getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+        query: jest.fn().mockResolvedValue([
+          {
+            body,
+            recipientUsername: '@creator',
+            accountLabel: '@brand',
+          },
+        ]),
+      }),
+    };
+    const Resolver = ActionApprovalResolver as unknown as new (
+      ...args: unknown[]
+    ) => ActionApprovalResolver;
+    const resolver = new Resolver(
+      {} as never,
+      {
+        getBindingForViewer: jest.fn().mockResolvedValue(v2Binding),
+      } as never,
+      legacyDefinition as never,
+      globalWorkspaceOrmManager as never,
+    );
+
+    await expect(
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
+    ).resolves.toMatchObject({
+      action: 'send_instagram_message',
+      actionVersion: 2,
+      body,
+      recipientLabel: '@creator',
+      sendingAccountLabel: '@brand',
+      state: 'PENDING',
+    });
+    expect(legacyDefinition.getProposal).not.toHaveBeenCalled();
   });
 });

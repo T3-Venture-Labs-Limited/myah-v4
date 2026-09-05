@@ -132,4 +132,50 @@ describe('ActionReceiptProjectorService', () => {
     expect(writer.project).not.toHaveBeenCalled();
     expect(repository.update).not.toHaveBeenCalled();
   });
+  it('projects a v2 direct Instagram receipt through an explicit module-owned writer', async () => {
+    const directWriter = { project: jest.fn().mockResolvedValue(undefined) };
+    const defaultWriter = { project: jest.fn() };
+    const repository = {
+      findOne: jest.fn(async () => ({
+        ...receipt,
+        providerExternalMessageId: 'provider-instagram-message',
+        providerThreadExternalId: 'provider-instagram-chat',
+        actionApprovalBinding: {
+          ...receipt.actionApprovalBinding,
+          actionName: 'send_instagram_message',
+          actionVersion: 2,
+          actionKind: 'START_CHAT',
+          threadId: null,
+          interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+          interactionContextId: receipt.actionApprovalBinding.draftId,
+        },
+      })),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const service = new ActionReceiptProjectorService(
+      repository as never,
+      defaultWriter,
+    );
+
+    await expect(
+      service.projectReceiptWithWriter(receipt.id, directWriter),
+    ).resolves.toEqual({ projected: true });
+    expect(defaultWriter.project).not.toHaveBeenCalled();
+    expect(directWriter.project).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionName: 'send_instagram_message',
+        actionVersion: 2,
+        actionKind: 'START_CHAT',
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+        interactionContextId: receipt.actionApprovalBinding.draftId,
+        providerExternalMessageId: 'provider-instagram-message',
+        providerThreadExternalId: 'provider-instagram-chat',
+      }),
+    );
+    expect(repository.update).toHaveBeenCalledWith(
+      { id: receipt.id, state: 'PROVIDER_ACCEPTED' },
+      { state: 'SENT' },
+    );
+  });
 });

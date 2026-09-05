@@ -1,70 +1,100 @@
 import { PrepareInstagramReplyDraftTool } from 'src/engine/core-modules/tool/tools/instagram-tool/prepare-instagram-reply-draft-tool';
 
+const draftId = '00000000-0000-4000-8000-000000000001';
+const conversationRecordId = '00000000-0000-4000-8000-000000000002';
+
 const input = {
-  connectedAccountId: 'ca_instagram_123',
-  providerConversationId: 'provider-conversation-id',
-  recipientIgsid: 'recipient-igsid',
-  inboundMessageId: 'provider-inbound-message-id',
-  recipientLabel: '@wakozaco',
+  draftId,
+  expectedRevision: 0,
+  conversationRecordId,
   body: 'Thanks for reaching out.',
 };
-
-const buildTool = () => {
-  const instagramReplyDraftService = {
-    prepare: jest.fn().mockResolvedValue({
-      connectedAccountId: input.connectedAccountId,
-      conversationId: '2370f3fb-5738-458c-ae4d-0bdb2c24611e',
-      draftId: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
-      body: input.body,
-    }),
-  };
-
-  return {
-    instagramReplyDraftService,
-    tool: new PrepareInstagramReplyDraftTool(
-      instagramReplyDraftService as never,
-    ),
-  };
+const context = {
+  workspaceId: 'workspace-id',
+  userWorkspaceId: 'user-workspace-id',
+  workspaceMemberId: 'workspace-member-id',
+  rolePermissionConfig: { shouldBypassPermissionChecks: true as const },
+  threadId: 'thread-id',
 };
 
 describe('PrepareInstagramReplyDraftTool', () => {
-  it('requires a member-bound chat thread before creating a local draft', async () => {
-    const { tool, instagramReplyDraftService } = buildTool();
-
-    await expect(
-      tool.execute(input, {
-        workspaceId: 'workspace-id',
-        userWorkspaceId: 'member-id',
+  it('saves only a local revision-protected Unipile reply draft', async () => {
+    const draftService = {
+      saveDraft: jest.fn().mockResolvedValue({
+        status: 'SAVED',
+        draftId,
+        revision: 1,
+        body: input.body,
       }),
-    ).resolves.toMatchObject({ success: false });
+    };
+    const recordAccessService = {
+      assertCanSaveDraft: jest.fn().mockResolvedValue(undefined),
+    };
+    const tool = new PrepareInstagramReplyDraftTool(
+      draftService as never,
+      recordAccessService as never,
+    );
 
-    expect(instagramReplyDraftService.prepare).not.toHaveBeenCalled();
-  });
-
-  it('prepares a draft without accepting caller-controlled workspace identity', async () => {
-    const { tool, instagramReplyDraftService } = buildTool();
-
-    await expect(
-      tool.execute(input, {
-        workspaceId: 'workspace-id',
-        userWorkspaceId: 'member-id',
-        threadId: 'thread-id',
-      }),
-    ).resolves.toEqual({
+    await expect(tool.execute(input, context)).resolves.toMatchObject({
       success: true,
       message: 'Instagram reply draft prepared for approval.',
-      result: {
-        connectedAccountId: input.connectedAccountId,
-        conversationId: '2370f3fb-5738-458c-ae4d-0bdb2c24611e',
-        draftId: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
-        body: input.body,
-      },
+      result: { status: 'SAVED', draftId, revision: 1 },
     });
+    expect(draftService.saveDraft).toHaveBeenCalledWith({
+      workspaceId: context.workspaceId,
+      workspaceMemberId: context.workspaceMemberId,
+      draftId,
+      expectedRevision: 0,
+      kind: 'REPLY',
+      body: input.body,
+      creatorRecordId: null,
+      conversationRecordId,
+    });
+    expect(Object.keys(draftService)).toEqual(['saveDraft']);
+  });
 
-    expect(instagramReplyDraftService.prepare).toHaveBeenCalledWith({
-      workspaceId: 'workspace-id',
-      userWorkspaceId: 'member-id',
-      ...input,
+  it('rejects legacy provider-controlled inputs and missing authenticated thread context', async () => {
+    const draftService = { saveDraft: jest.fn() };
+    const tool = new PrepareInstagramReplyDraftTool(
+      draftService as never,
+      { assertCanSaveDraft: jest.fn() } as never,
+    );
+
+    await expect(
+      tool.execute(
+        {
+          ...input,
+          connectedAccountId: 'caller-controlled-account',
+        } as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ success: false });
+    await expect(
+      tool.execute(input, { workspaceId: context.workspaceId }),
+    ).resolves.toMatchObject({ success: false });
+    expect(draftService.saveDraft).not.toHaveBeenCalled();
+  });
+
+  it('returns a revision conflict without claiming the draft is prepared', async () => {
+    const draftService = {
+      saveDraft: jest.fn().mockResolvedValue({
+        status: 'CONFLICT',
+        draftId,
+        revision: 3,
+        body: 'Newer copy',
+      }),
+    };
+    const tool = new PrepareInstagramReplyDraftTool(
+      draftService as never,
+      {
+        assertCanSaveDraft: jest.fn().mockResolvedValue(undefined),
+        assertCanReadDraft: jest.fn().mockResolvedValue(undefined),
+      } as never,
+    );
+
+    await expect(tool.execute(input, context)).resolves.toMatchObject({
+      success: false,
+      result: { status: 'CONFLICT', revision: 3 },
     });
   });
 });

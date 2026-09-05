@@ -7,7 +7,7 @@ import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { JwtModule } from 'src/engine/core-modules/jwt/jwt.module';
-import { InstagramReplyModule } from 'src/engine/core-modules/instagram-reply/instagram-reply.module';
+import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
 import { OutreachEmailModule } from 'src/engine/core-modules/outreach-email/outreach-email.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
@@ -42,7 +42,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     MessagingImportManagerModule,
     MessagingSendManagerModule,
     CalendarEventCreationManagerModule,
-    InstagramReplyModule,
+    InstagramMessageModule,
     OutreachEmailModule,
     TypeOrmModule.forFeature([FileEntity, ConnectedAccountEntity]),
     ApplicationModule,

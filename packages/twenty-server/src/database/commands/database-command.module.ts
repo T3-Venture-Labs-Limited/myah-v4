@@ -32,6 +32,7 @@ import { EventLogCleanupModule } from 'src/engine/core-modules/event-logs/cleanu
 import { EventLogEmitterModule } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
+import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
 import { ManagedEmailModule } from 'src/engine/core-modules/managed-email/managed-email.module';
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
@@ -76,6 +77,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     MessagingImportManagerModule,
     CalendarEventImportManagerModule,
     MyahUnipileModule,
+    InstagramMessageModule,
     AutomatedTriggerModule,
     FileModule,
     WorkspaceModule,

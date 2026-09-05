@@ -343,6 +343,12 @@ export class OutreachEmailActionDefinition {
     workspaceId: string;
     binding: ActionApprovalBindingEntity;
   }): Promise<OutreachEmailActionApprovalProposal> {
+    const threadId = binding.threadId;
+
+    if (!threadId) {
+      throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+    }
+
     const graph = await this.loadCanonicalGraph(
       workspaceId,
       binding.draftId,
@@ -353,7 +359,7 @@ export class OutreachEmailActionDefinition {
     const expectedActionBinding = this.buildExpectedActionBinding({
       workspaceId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
-      threadId: binding.threadId,
+      threadId,
       graph,
       evidenceObjectMetadataIds,
     });
@@ -367,7 +373,7 @@ export class OutreachEmailActionDefinition {
         recipientFingerprint: binding.recipientFingerprint ?? '',
         sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
         actionContextFingerprint: binding.actionContextFingerprint ?? '',
-        threadId: binding.threadId,
+        threadId,
         initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
         evidenceLinks: binding.evidenceLinks,
       };

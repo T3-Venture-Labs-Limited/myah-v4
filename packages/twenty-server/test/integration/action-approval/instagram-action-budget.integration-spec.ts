@@ -5,9 +5,11 @@ import {
   ActionExecutionReceiptEntity,
   ActionExecutionReceiptState,
 } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
+import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { InstagramActionLimitBlockEntity } from 'src/engine/core-modules/instagram-action-budget/entities/instagram-action-limit-block.entity';
 import { InstagramActionReservationEntity } from 'src/engine/core-modules/instagram-action-budget/entities/instagram-action-reservation.entity';
 import { InstagramActionBudgetService } from 'src/engine/core-modules/instagram-action-budget/services/instagram-action-budget.service';
+import { InstagramMessageSendService } from 'src/engine/core-modules/instagram-message/services/instagram-message-send.service';
 
 jest.setTimeout(90_000);
 
@@ -442,8 +444,12 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
         await setupClient.query('SET CONSTRAINTS ALL DEFERRED');
         await setupClient.query(
           `INSERT INTO core."workspace" (
-            "id", "displayName", "subdomain", "workspaceCustomApplicationId"
-          ) VALUES ($1, 'Instagram action budget integration', $2, $3)`,
+            "id", "displayName", "subdomain", "workspaceCustomApplicationId",
+            "activationStatus"
+          ) VALUES (
+            $1, 'Instagram action budget integration', $2, $3,
+            'PENDING_CREATION'
+          )`,
           [
             workspaceId,
             'instagram-action-budget-integration',
@@ -641,5 +647,127 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
       [workspaceId, instagramAccountRecordId, targetFingerprint],
     );
     expect(Number(targetCount)).toBe(1);
+  });
+
+  it('permits exactly one fake Unipile call for concurrent distinct approved START_CHAT drafts', async () => {
+    const firstReceiptId = await insertProcessingReceipt(500);
+    const secondReceiptId = await insertProcessingReceipt(501);
+    const approvalIds = [fixtureId(10_500), fixtureId(10_501)];
+    const authorities = approvalIds.map((_, index) =>
+      buildInstagramMessageActionAuthority({
+        workspaceId,
+        initiatorUserWorkspaceId: fixtureId(20_500),
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+        interactionContextId: fixtureId(30_500 + index),
+        draft: {
+          id: fixtureId(30_500 + index),
+          revision: 1,
+          body: `Distinct approved first message ${index}`,
+          kind: 'START_CHAT',
+          creatorRecordId: fixtureId(40_500),
+          recipientUsername: 'same.creator',
+          recipientSourceValues: [
+            { field: 'instagramUsername', value: 'same.creator' },
+          ],
+          conversationRecordId: null,
+          providerConversationId: null,
+          recipientProviderId: 'same-creator-provider-id',
+        },
+        account: {
+          bindingId: fixtureId(50_500),
+          workspaceInstagramAccountRecordId: instagramAccountRecordId,
+          unipileAccountId: 'provider-account',
+          instagramUserId: 'brand-user',
+        },
+        evidenceLinks: [],
+      }),
+    );
+    const receiptIdByApprovalId = new Map([
+      [approvalIds[0], firstReceiptId],
+      [approvalIds[1], secondReceiptId],
+    ]);
+    const authorityByApprovalId = new Map([
+      [approvalIds[0], authorities[0]],
+      [approvalIds[1], authorities[1]],
+    ]);
+    const actionApprovalService = {
+      getApprovedBinding: jest.fn(
+        async ({ approvalBindingId }) =>
+          authorityByApprovalId.get(approvalBindingId)!.expectedActionBinding,
+      ),
+      findExecutionReceiptForBinding: jest.fn().mockResolvedValue(null),
+      reserveExecutionForBinding: jest.fn(async ({ approvalBindingId }) => ({
+        created: true,
+        receipt: {
+          id: receiptIdByApprovalId.get(approvalBindingId)!,
+          state: ActionExecutionReceiptState.PROCESSING,
+        },
+      })),
+      recordProviderAccepted: jest.fn().mockResolvedValue(undefined),
+      recordProviderTerminalState: jest.fn().mockResolvedValue(undefined),
+    };
+    const authorityReader = {
+      rebuildExecutionAuthority: jest.fn(async ({ binding }) =>
+        authorities.find(
+          ({ expectedActionBinding }) =>
+            expectedActionBinding.draftId === binding.draftId,
+        ),
+      ),
+      assertReadyAfterReservation: jest.fn().mockResolvedValue(undefined),
+    };
+    const providerCalls = jest.fn(async (_input, options) => {
+      await options.beforeDispatch();
+      return {
+        kind: 'ACCEPTED',
+        value: { chatId: 'provider-chat', messageId: 'provider-message' },
+      };
+    });
+    const budgetForSend = {
+      reserve: service.reserve.bind(service),
+      markProviderAttempted: jest.fn().mockResolvedValue(undefined),
+      releasePreDispatch: jest.fn().mockResolvedValue(undefined),
+      releaseStartTarget: jest.fn().mockResolvedValue(undefined),
+      releaseStartTargetForReceipt: jest.fn().mockResolvedValue(undefined),
+    };
+    const sendService = new InstagramMessageSendService(
+      actionApprovalService as never,
+      authorityReader as never,
+      {
+        withLock: async (_input: unknown, operation: () => Promise<unknown>) =>
+          operation(),
+      } as never,
+      budgetForSend as never,
+      { startChat: providerCalls, sendMessage: jest.fn() } as never,
+      {
+        projectReceiptWithWriter: jest.fn().mockResolvedValue({
+          projected: true,
+        }),
+      } as never,
+      { project: jest.fn() } as never,
+      { assertCanSend: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    const sendInput = (approvalBindingId: string) => ({
+      workspaceId,
+      initiatorUserWorkspaceId: fixtureId(20_500),
+      approvalBindingId,
+      threadId: null,
+      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT' as const,
+      interactionContextId:
+        authorityByApprovalId.get(approvalBindingId)!.canonicalGraph.draft.id,
+      rolePermissionConfig: { shouldBypassPermissionChecks: true as const },
+    });
+
+    const results = await Promise.all(
+      approvalIds.map((approvalId) =>
+        sendService.executeApproved(sendInput(approvalId)),
+      ),
+    );
+
+    expect(results.map(({ status }) => status).sort()).toEqual([
+      'FAILED',
+      'SENT',
+    ]);
+    expect(providerCalls).toHaveBeenCalledTimes(1);
   });
 });

@@ -48,6 +48,12 @@ export type ReleaseStartTargetInput = ReservationTransitionInput & {
   reason: 'PROJECTED' | 'KNOWN_REJECTION' | 'RESOLVED';
 };
 
+export type ReleaseStartTargetForReceiptInput = {
+  workspaceId: string;
+  actionExecutionReceiptId: string;
+  reason: 'PROJECTED' | 'RESOLVED';
+};
+
 export type GetInstagramActionBlockedResultInput = {
   workspaceId: string;
   actionExecutionReceiptId: string;

@@ -10,6 +10,7 @@ import { InstagramActionBudgetService } from 'src/engine/core-modules/instagram-
 import { InstagramActionReceiptReconciliationService } from 'src/engine/core-modules/instagram-action-budget/services/instagram-action-receipt-reconciliation.service';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 
 @Module({
@@ -28,6 +29,7 @@ import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/e
     InstagramActionBudgetResolver,
     InstagramActionBudgetService,
     InstagramActionReceiptReconciliationService,
+    provideWorkspaceScopedRepository(UnipileInstagramAccountBindingEntity),
   ],
   exports: [
     InstagramActionBudgetService,

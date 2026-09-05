@@ -14,6 +14,7 @@ import { SynchronizeMyahCreatorCrmSearchMetadataCommand } from 'src/database/com
 import { MigrateMyahCreatorImportMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302006-migrate-myah-creator-import-metadata.command';
 import { MigrateMyahCreatorSocialLinksService } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
 import { RemoveReplacedTwentyCrmMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302002-remove-replaced-twenty-crm-metadata.command';
+import { SynchronizeInstagramMessagePermissionsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1799201011000-synchronize-instagram-message-permissions.command';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/workspace-metadata-version/workspace-metadata-version.module';
@@ -44,6 +45,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     MigrateMyahCreatorImportMetadataCommand,
     MigrateMyahCreatorSocialLinksService,
     RemoveReplacedTwentyCrmMetadataCommand,
+    SynchronizeInstagramMessagePermissionsCommand,
   ],
   exports: [
     SynchronizeMyahStandardMetadataCommand,

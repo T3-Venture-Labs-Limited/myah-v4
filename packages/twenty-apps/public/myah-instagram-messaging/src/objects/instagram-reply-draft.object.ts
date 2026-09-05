@@ -57,6 +57,8 @@ export default defineObject({
   description:
     'Instagram message draft awaiting human review. Approval never auto-sends; a separate explicit send action is required.',
   icon: 'IconMessagePlus',
+  isUIEditable: false,
+  isUICreatable: false,
   labelIdentifierFieldMetadataUniversalIdentifier:
     REPLY_DRAFT_TITLE_FIELD_UNIVERSAL_IDENTIFIER,
   fields: [

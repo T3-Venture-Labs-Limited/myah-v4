@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { InstagramActionBudgetModule } from 'src/engine/core-modules/instagram-action-budget/instagram-action-budget.module';
 import { ActionApprovalReconciliationCronCommand } from 'src/engine/core-modules/action-approval/crons/commands/action-approval-reconciliation.cron.command';
 import { ActionApprovalReconciliationCronJob } from 'src/engine/core-modules/action-approval/crons/action-approval-reconciliation.cron.job';
 import { ActionApprovalResolver } from 'src/engine/core-modules/action-approval/action-approval.resolver';
@@ -31,6 +32,7 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
 @Module({
   imports: [
     ManagedEmailModule,
+    InstagramActionBudgetModule,
     GlobalWorkspaceDataSourceModule,
     WorkspaceCacheModule,
     PermissionsModule,

@@ -46,6 +46,44 @@ describe('PermissionsService', () => {
 
     service = module.get<PermissionsService>(PermissionsService);
   });
+  describe('getDefaultUserWorkspacePermissions', () => {
+    it('returns an exhaustive disabled permission map including Instagram send controls', () => {
+      expect(service.getDefaultUserWorkspacePermissions()).toEqual({
+        permissionFlags: {
+          API_KEYS_AND_WEBHOOKS: false,
+          WORKSPACE: false,
+          WORKSPACE_MEMBERS: false,
+          ROLES: false,
+          DATA_MODEL: false,
+          SECURITY: false,
+          WORKFLOWS: false,
+          IMPERSONATE: false,
+          SSO_BYPASS: false,
+          APPLICATIONS: false,
+          MARKETPLACE_APPS: false,
+          LAYOUTS: false,
+          BILLING: false,
+          AI_SETTINGS: false,
+          AI: false,
+          VIEWS: false,
+          UPLOAD_FILE: false,
+          DOWNLOAD_FILE: false,
+          SEND_EMAIL_TOOL: false,
+          SEND_INSTAGRAM_REPLY_TOOL: false,
+          SEND_INSTAGRAM_FIRST_MESSAGE_TOOL: false,
+          RESOLVE_INSTAGRAM_SEND_OUTCOME: false,
+          CREATE_CALENDAR_EVENT_TOOL: false,
+          HTTP_REQUEST_TOOL: false,
+          CODE_INTERPRETER_TOOL: false,
+          IMPORT_CSV: false,
+          EXPORT_CSV: false,
+          CONNECTED_ACCOUNTS: false,
+          PROFILE_INFORMATION: false,
+        },
+        objectsPermissions: {},
+      });
+    });
+  });
 
   describe('checkRolePermissions', () => {
     describe('canAccessAllTools for tool permissions', () => {
@@ -120,6 +158,18 @@ describe('PermissionsService', () => {
             PermissionFlagType.CONNECTED_ACCOUNTS,
           ),
         ).toBe(true);
+        expect(
+          service.checkRolePermissions(
+            roleWithAllTools as RoleEntity,
+            PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
+          ),
+        ).toBe(false);
+        expect(
+          service.checkRolePermissions(
+            roleWithAllTools as RoleEntity,
+            PermissionFlagType.RESOLVE_INSTAGRAM_SEND_OUTCOME,
+          ),
+        ).toBe(false);
       });
 
       it('should NOT grant settings permissions when canAccessAllTools is true', () => {

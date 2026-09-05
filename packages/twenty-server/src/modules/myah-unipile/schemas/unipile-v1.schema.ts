@@ -37,13 +37,13 @@ export const unipileHostedAuthUrlSchema = z.object({
 
 export const unipileChatStartedSchema = z.object({
   object: z.literal('ChatStarted'),
-  chat_id: z.string(),
-  message_id: z.string(),
+  chat_id: z.string().trim().min(1),
+  message_id: z.string().trim().min(1),
 });
 
 export const unipileMessageSentSchema = z.object({
   object: z.literal('MessageSent'),
-  message_id: z.string(),
+  message_id: z.string().trim().min(1),
 });
 
 export const unipileAccountDeletedSchema = z.object({

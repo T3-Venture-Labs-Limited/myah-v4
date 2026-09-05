@@ -8,19 +8,9 @@ const READ_ONLY_DATABASE_OPERATIONS = new Set([
   'group_by',
 ]);
 
-// These Composio functions are bounded, read-only calls. They remain
-// executable before approval so the agent can discover current Instagram
-// state. The application runtime can materialize these as static or logic
-// function entries, so the source-controlled generated tool name is the gate.
-export const PRE_APPROVAL_READ_ONLY_TOOL_NAMES = new Set([
-  'app_myah_list_instagram_conversations',
-  'app_myah_list_instagram_messages',
-]);
-
 // These narrow native actions prepare reviewable content without sending it;
 // every external-write action remains excluded until approval.
 export const PRE_APPROVAL_SAFE_TOOL_NAMES = new Set([
-  ...PRE_APPROVAL_READ_ONLY_TOOL_NAMES,
   'prepare_instagram_reply_draft',
   'prepare_outreach_email_draft',
 ]);

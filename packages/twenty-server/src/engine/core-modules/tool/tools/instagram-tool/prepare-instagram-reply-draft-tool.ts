@@ -1,7 +1,10 @@
+import { randomUUID } from 'crypto';
+
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import { InstagramReplyDraftService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-draft.service';
+import { InstagramMessageDraftService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft.service';
+import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
 import { type ToolExecutionContext } from 'src/engine/core-modules/tool/types/tool-execution-context.type';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
@@ -9,14 +12,23 @@ import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
 export const PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME =
   'prepare_instagram_reply_draft';
 
-const PrepareInstagramReplyDraftInputZodSchema = z.object({
-  connectedAccountId: z.string().trim().min(1),
-  providerConversationId: z.string().trim().min(1),
-  recipientIgsid: z.string().trim().min(1),
-  inboundMessageId: z.string().trim().min(1),
-  recipientLabel: z.string().trim().min(1),
-  body: z.string().trim().min(1),
-});
+const PrepareInstagramReplyDraftInputZodSchema = z
+  .object({
+    draftId: z.string().uuid().optional(),
+    expectedRevision: z.number().int().nonnegative().optional(),
+    conversationRecordId: z.string().uuid(),
+    body: z.string().trim().min(1),
+  })
+  .strict()
+  .refine(
+    ({ draftId, expectedRevision }) =>
+      (draftId == null && expectedRevision == null) ||
+      (draftId != null && expectedRevision != null),
+    {
+      message:
+        'draftId and expectedRevision must be supplied together for an edit',
+    },
+  );
 
 type PrepareInstagramReplyDraftToolInput = z.infer<
   typeof PrepareInstagramReplyDraftInputZodSchema
@@ -25,38 +37,71 @@ type PrepareInstagramReplyDraftToolInput = z.infer<
 @Injectable()
 export class PrepareInstagramReplyDraftTool implements Tool {
   description =
-    'Prepare one local Instagram reply draft from an existing live-read conversation. ' +
-    'It verifies and persists the specified inbound provider message before creating the reviewable draft; it never sends a message. ' +
-    'Use the returned account, conversation, draft IDs, and exact body to request approval.';
+    'Save one revision-protected local reply draft for an exact active Unipile Instagram conversation. It performs no provider read or write and never sends a message.';
   inputSchema = PrepareInstagramReplyDraftInputZodSchema;
 
   constructor(
-    private readonly instagramReplyDraftService: InstagramReplyDraftService,
+    private readonly instagramMessageDraftService: InstagramMessageDraftService,
+    private readonly recordAccessService: InstagramMessageRecordAccessService,
   ) {}
 
   async execute(
     parameters: PrepareInstagramReplyDraftToolInput,
     context: ToolExecutionContext,
   ): Promise<ToolOutput> {
-    if (!context.userWorkspaceId || !context.threadId) {
+    const parsedInput =
+      PrepareInstagramReplyDraftInputZodSchema.safeParse(parameters);
+    if (
+      !parsedInput.success ||
+      !context.userWorkspaceId ||
+      !context.workspaceMemberId ||
+      !context.rolePermissionConfig ||
+      !context.threadId
+    ) {
       return {
         success: false,
         message: 'Instagram reply draft could not be prepared.',
         error:
-          'An authenticated chat thread is required to prepare an Instagram reply draft.',
+          'An authenticated chat thread and valid local draft target are required.',
       };
     }
+    const draftId = parsedInput.data.draftId ?? randomUUID();
+    const expectedRevision = parsedInput.data.expectedRevision ?? 0;
 
     try {
-      const result = await this.instagramReplyDraftService.prepare({
+      await this.recordAccessService.assertCanSaveDraft({
         workspaceId: context.workspaceId,
-        userWorkspaceId: context.userWorkspaceId,
-        ...parameters,
+        draftId,
+        expectedRevision,
+        kind: 'REPLY',
+        creatorRecordId: null,
+        conversationRecordId: parsedInput.data.conversationRecordId,
+        rolePermissionConfig: context.rolePermissionConfig,
       });
+      const result = await this.instagramMessageDraftService.saveDraft({
+        workspaceId: context.workspaceId,
+        workspaceMemberId: context.workspaceMemberId,
+        draftId,
+        expectedRevision,
+        kind: 'REPLY',
+        body: parsedInput.data.body,
+        creatorRecordId: null,
+        conversationRecordId: parsedInput.data.conversationRecordId,
+      });
+      if (result.status === 'CONFLICT') {
+        await this.recordAccessService.assertCanReadDraft({
+          workspaceId: context.workspaceId,
+          draftId: result.draftId,
+          rolePermissionConfig: context.rolePermissionConfig,
+        });
+      }
 
       return {
-        success: true,
-        message: 'Instagram reply draft prepared for approval.',
+        success: result.status === 'SAVED',
+        message:
+          result.status === 'SAVED'
+            ? 'Instagram reply draft prepared for approval.'
+            : 'Instagram reply draft changed; review the latest revision.',
         result,
       };
     } catch (error) {

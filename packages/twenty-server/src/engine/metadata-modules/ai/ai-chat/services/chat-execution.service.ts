@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 
 import { isNonEmptyString, isObject } from '@sniptt/guards';
 import {
@@ -18,10 +18,13 @@ import { type APP_LOCALES } from 'twenty-shared/translations';
 import { AppPath } from 'twenty-shared/types';
 import { getAppPath, isDefined, isValidUuid } from 'twenty-shared/utils';
 
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
-import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { InstagramMessageAuthorityReaderService } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.service';
+import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
+import { InstagramMessagePermissionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 
@@ -140,10 +143,14 @@ export class ChatExecutionService {
     private readonly brandBrainPreflightService: BrandBrainPreflightService,
     private readonly messagePruningService: MessagePruningService,
     private readonly metricsService: MetricsService,
-    private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
+    private readonly instagramMessageAuthorityReader: InstagramMessageAuthorityReaderService,
     private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
     private readonly actionApprovalService: ActionApprovalService,
     private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
+    @Optional()
+    private readonly instagramMessagePermissionService?: InstagramMessagePermissionService,
+    @Optional()
+    private readonly instagramMessageRecordAccessService?: InstagramMessageRecordAccessService,
   ) {}
 
   async streamChat({
@@ -182,6 +189,9 @@ export class ChatExecutionService {
       roleId,
       authContext,
       actorContext,
+      workspaceMemberId: isUserAuthContext(authContext)
+        ? authContext.workspaceMemberId
+        : undefined,
       userId,
       userWorkspaceId,
       threadId,
@@ -318,10 +328,15 @@ export class ChatExecutionService {
         userWorkspaceId,
         threadId,
         actionDefinitions: {
-          send_instagram_reply: this.instagramReplyActionDefinition,
+          send_instagram_reply: this.instagramMessageAuthorityReader,
           send_outreach_email: this.outreachEmailActionDefinition,
         },
         actionApprovalService: this.actionApprovalService,
+        instagramMessagePermissionService:
+          this.instagramMessagePermissionService!,
+        instagramMessageRecordAccessService:
+          this.instagramMessageRecordAccessService!,
+        rolePermissionConfig: { unionOf: [roleId] },
       }),
       [LEARN_TOOLS_TOOL_NAME]: createLearnToolsTool(
         this.toolRegistry,

@@ -8,6 +8,7 @@ import { MarketplaceCatalogSyncCronCommand } from 'src/engine/core-modules/appli
 import { StaleRegistrationCleanupCronCommand } from 'src/engine/core-modules/application/application-oauth/stale-registration-cleanup/commands/stale-registration-cleanup.cron.command';
 import { ApplicationVersionCheckCronCommand } from 'src/engine/core-modules/application/application-upgrade/crons/commands/application-version-check.cron.command';
 import { BillingReminderCronCommand } from 'src/engine/core-modules/billing/reminders/crons/commands/billing-reminder.cron.command';
+import { InstagramMessageReconciliationCronCommand } from 'src/engine/core-modules/instagram-message/jobs/instagram-message-reconciliation.cron.command';
 import { ManagedProviderBillingRecoveryCronCommand } from 'src/engine/core-modules/managed-provider-billing/crons/commands/managed-provider-billing-recovery.cron.command';
 import { ManagedEmailReconciliationCronCommand } from 'src/engine/core-modules/managed-email/crons/commands/managed-email-reconciliation.cron.command';
 import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
@@ -73,6 +74,7 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly billingReminderCronCommand: BillingReminderCronCommand,
     private readonly managedProviderBillingRecoveryCronCommand: ManagedProviderBillingRecoveryCronCommand,
     private readonly managedEmailReconciliationCronCommand: ManagedEmailReconciliationCronCommand,
+    private readonly instagramMessageReconciliationCronCommand: InstagramMessageReconciliationCronCommand,
     private readonly unipileInstagramAccountRecoveryCronCommand: UnipileInstagramAccountRecoveryCronCommand,
     private readonly twentyConfigService: TwentyConfigService,
   ) {
@@ -211,6 +213,11 @@ export class CronRegisterAllCommand extends CommandRunner {
       {
         name: 'UnipileInstagramAccountRecovery',
         command: this.unipileInstagramAccountRecoveryCronCommand,
+        isEnabled: isUnipileInstagramEnabled,
+      },
+      {
+        name: 'InstagramMessageReconciliation',
+        command: this.instagramMessageReconciliationCronCommand,
         isEnabled: isUnipileInstagramEnabled,
       },
       {

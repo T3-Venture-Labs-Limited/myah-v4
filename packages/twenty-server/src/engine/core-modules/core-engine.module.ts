@@ -5,6 +5,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { WorkspaceQueryRunnerModule } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-runner.module';
 import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
 import { InstagramActionBudgetModule } from 'src/engine/core-modules/instagram-action-budget/instagram-action-budget.module';
+import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
 import { ActorModule } from 'src/engine/core-modules/actor/actor.module';
 import { AdminPanelModule } from 'src/engine/core-modules/admin-panel/admin-panel.module';
 import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
@@ -126,6 +127,7 @@ import { FileModule } from './file/file.module';
     WorkspaceEventEmitterModule,
     ActionApprovalModule,
     InstagramActionBudgetModule,
+    InstagramMessageModule,
     ActorModule,
     TelemetryModule,
     AdminPanelModule,

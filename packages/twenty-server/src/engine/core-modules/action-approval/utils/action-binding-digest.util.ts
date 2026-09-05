@@ -34,6 +34,21 @@ export const computeLogicalActionKey = (
           input.inboundReceivedAt.toISOString(),
         ]),
       );
+    case 'send_instagram_message':
+      return sha256(
+        JSON.stringify([
+          'v2',
+          input.workspaceId,
+          input.actionName,
+          input.actionVersion,
+          input.actionKind,
+          input.draftId,
+          input.contentDigest,
+          input.recipientFingerprint,
+          input.sendingAccountFingerprint,
+          input.actionContextFingerprint,
+        ]),
+      );
     case 'send_outreach_email':
     case 'send_inbox_reply':
       return sha256(
