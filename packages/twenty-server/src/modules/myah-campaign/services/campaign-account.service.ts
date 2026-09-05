@@ -28,6 +28,8 @@ const INTERNAL_REPOSITORY_OPTIONS = {
   shouldBypassPermissionChecks: true,
 } as const;
 
+const CAMPAIGN_ACCOUNT_LOCK_TTL_MS = 30_000;
+
 const SUPPORTED_PROVIDERS = new Set<ConnectedAccountProvider>([
   ConnectedAccountProvider.GOOGLE,
   ConnectedAccountProvider.MICROSOFT,
@@ -330,6 +332,7 @@ export class CampaignAccountService {
       this.cacheLockService.withLock(
         callback,
         `campaign-account:${authContext.workspace.id}:${campaignId}`,
+        { ttl: CAMPAIGN_ACCOUNT_LOCK_TTL_MS },
       ),
     );
   }

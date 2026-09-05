@@ -179,7 +179,7 @@ const createHarness = (
 };
 
 describe('CampaignAccountService', () => {
-  it('links a supported exact email account as default without exposing secrets', async () => {
+  it('links a supported exact email account as default with a Campaign-scoped thirty-second lock', async () => {
     const harness = createHarness();
 
     const accounts = await harness.service.link(
@@ -206,6 +206,7 @@ describe('CampaignAccountService', () => {
     expect(harness.cacheLockService.withLock).toHaveBeenCalledWith(
       expect.any(Function),
       `campaign-account:${workspaceId}:${campaignId}`,
+      { ttl: 30_000 },
     );
     expect(harness.orm.getGlobalWorkspaceDataSource).not.toHaveBeenCalled();
   });
