@@ -14,10 +14,10 @@ import {
   type CampaignEmailAccountDTO,
 } from 'src/modules/myah-campaign/dtos/campaign-account.dto';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { CacheLockService } from 'src/engine/core-modules/cache-lock/cache-lock.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
@@ -54,6 +54,7 @@ export class CampaignAccountService {
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly messagingMessageOutboundService: MessagingMessageOutboundService,
+    private readonly cacheLockService: CacheLockService,
   ) {}
 
   async list(
@@ -118,9 +119,9 @@ export class CampaignAccountService {
     input: { campaignId: string; connectedAccountId: string },
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
-    return this.mutate(input.campaignId, authContext, async (manager) => {
+    return this.mutate(input.campaignId, authContext, async () => {
       this.assertCampaignUpdatePermission(authContext);
-      await this.assertCampaign(input.campaignId, authContext, manager);
+      await this.assertCampaign(input.campaignId, authContext);
       const account = await this.connectedAccountRepository.findOne({
         where: {
           id: input.connectedAccountId,
@@ -143,28 +144,22 @@ export class CampaignAccountService {
       const campaignAccounts =
         await this.campaignAccountRepository(authContext);
       if (
-        await campaignAccounts.findOne(
-          {
-            where: {
-              campaignId: input.campaignId,
-              connectedAccountId: input.connectedAccountId,
-              channel: 'EMAIL',
-            },
-          },
-          manager,
-        )
-      )
-        throw new Error('Connected email account is already linked');
-      const hasActiveEmailLink = await campaignAccounts.findOne(
-        {
+        await campaignAccounts.findOne({
           where: {
             campaignId: input.campaignId,
+            connectedAccountId: input.connectedAccountId,
             channel: 'EMAIL',
-            deletedAt: IsNull(),
           },
+        })
+      )
+        throw new Error('Connected email account is already linked');
+      const hasActiveEmailLink = await campaignAccounts.findOne({
+        where: {
+          campaignId: input.campaignId,
+          channel: 'EMAIL',
+          deletedAt: IsNull(),
         },
-        manager,
-      );
+      });
       await campaignAccounts.save(
         campaignAccounts.create({
           campaignId: input.campaignId,
@@ -173,14 +168,11 @@ export class CampaignAccountService {
           channel: 'EMAIL',
           isDefault: !hasActiveEmailLink,
         }),
-        undefined,
-        manager,
       );
       return this.listInWorkspace(
         input.campaignId,
         authContext.workspace.id,
         authContext,
-        manager,
       );
     });
   }
@@ -189,23 +181,28 @@ export class CampaignAccountService {
     input: { campaignId: string; campaignAccountId: string },
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
-    return this.mutate(input.campaignId, authContext, async (manager) => {
+    return this.mutate(input.campaignId, authContext, async () => {
       this.assertCampaignUpdatePermission(authContext);
-      await this.assertCampaign(input.campaignId, authContext, manager);
+      await this.assertCampaign(input.campaignId, authContext);
       const campaignAccounts =
         await this.campaignAccountRepository(authContext);
-      const target = await campaignAccounts.findOne(
-        {
-          where: {
-            id: input.campaignAccountId,
-            campaignId: input.campaignId,
-            channel: 'EMAIL',
-            deletedAt: IsNull(),
-          },
+      const target = await campaignAccounts.findOne({
+        where: {
+          id: input.campaignAccountId,
+          campaignId: input.campaignId,
+          channel: 'EMAIL',
+          deletedAt: IsNull(),
         },
-        manager,
-      );
+      });
       if (!target) throw new Error('Campaign email account not found');
+      const previousDefault = await campaignAccounts.findOne({
+        where: {
+          campaignId: input.campaignId,
+          channel: 'EMAIL',
+          isDefault: true,
+          deletedAt: IsNull(),
+        },
+      });
       await campaignAccounts.update(
         {
           campaignId: input.campaignId,
@@ -214,27 +211,32 @@ export class CampaignAccountService {
           deletedAt: IsNull(),
         },
         { isDefault: false },
-        undefined,
-        manager,
       );
-      const result = await campaignAccounts.update(
-        {
-          id: input.campaignAccountId,
-          campaignId: input.campaignId,
-          channel: 'EMAIL',
-          deletedAt: IsNull(),
-        },
-        { isDefault: true },
-        undefined,
-        manager,
-      );
-      if (result.affected !== 1)
-        throw new Error('Campaign email account not found');
+      try {
+        const result = await campaignAccounts.update(
+          {
+            id: input.campaignAccountId,
+            campaignId: input.campaignId,
+            channel: 'EMAIL',
+            deletedAt: IsNull(),
+          },
+          { isDefault: true },
+        );
+        if (result.affected !== 1)
+          throw new Error('Campaign email account not found');
+      } catch (error) {
+        if (previousDefault) {
+          await campaignAccounts.update(
+            { id: previousDefault.id, deletedAt: IsNull() },
+            { isDefault: true },
+          );
+        }
+        throw error;
+      }
       return this.listInWorkspace(
         input.campaignId,
         authContext.workspace.id,
         authContext,
-        manager,
       );
     });
   }
@@ -243,27 +245,23 @@ export class CampaignAccountService {
     input: { campaignId: string; campaignAccountId: string },
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
-    return this.mutate(input.campaignId, authContext, async (manager) => {
+    return this.mutate(input.campaignId, authContext, async () => {
       this.assertCampaignUpdatePermission(authContext);
-      await this.assertCampaign(input.campaignId, authContext, manager);
+      await this.assertCampaign(input.campaignId, authContext);
       const campaignAccounts =
         await this.campaignAccountRepository(authContext);
-      const result = await campaignAccounts.softDelete(
-        {
-          id: input.campaignAccountId,
-          campaignId: input.campaignId,
-          channel: 'EMAIL',
-          deletedAt: IsNull(),
-        },
-        manager,
-      );
+      const result = await campaignAccounts.softDelete({
+        id: input.campaignAccountId,
+        campaignId: input.campaignId,
+        channel: 'EMAIL',
+        deletedAt: IsNull(),
+      });
       if (result.affected !== 1)
         throw new Error('Campaign email account not found');
       return this.listInWorkspace(
         input.campaignId,
         authContext.workspace.id,
         authContext,
-        manager,
       );
     });
   }
@@ -326,18 +324,14 @@ export class CampaignAccountService {
   private async mutate<T>(
     campaignId: string,
     authContext: WorkspaceAuthContext,
-    callback: (manager: WorkspaceEntityManager) => Promise<T>,
+    callback: () => Promise<T>,
   ): Promise<T> {
-    return this.executeInContext(authContext, async () => {
-      const dataSource =
-        await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-      return dataSource.transaction(async (manager) => {
-        await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
-          `campaign-account:${authContext.workspace.id}:${campaignId}`,
-        ]);
-        return callback(manager as WorkspaceEntityManager);
-      });
-    });
+    return this.executeInContext(authContext, () =>
+      this.cacheLockService.withLock(
+        callback,
+        `campaign-account:${authContext.workspace.id}:${campaignId}`,
+      ),
+    );
   }
 
   private async executeInContext<T>(
@@ -398,20 +392,9 @@ export class CampaignAccountService {
   private async assertCampaign(
     campaignId: string,
     authContext: WorkspaceAuthContext,
-    manager?: WorkspaceEntityManager,
   ): Promise<void> {
     const repository = await this.campaignRepository(authContext);
-    if (
-      !(await repository.findOne(
-        manager
-          ? {
-              where: { id: campaignId },
-              lock: { mode: 'pessimistic_write' },
-            }
-          : { where: { id: campaignId } },
-        manager,
-      ))
-    )
+    if (!(await repository.findOne({ where: { id: campaignId } })))
       throw new Error('Campaign not found');
   }
 
@@ -419,13 +402,11 @@ export class CampaignAccountService {
     campaignId: string,
     workspaceId: string,
     authContext: WorkspaceAuthContext,
-    manager?: WorkspaceEntityManager,
   ): Promise<CampaignEmailAccountDTO[]> {
     const campaignAccounts = await this.campaignAccountRepository(authContext);
-    const links = await campaignAccounts.find(
-      { where: { campaignId, channel: 'EMAIL' } },
-      manager,
-    );
+    const links = await campaignAccounts.find({
+      where: { campaignId, channel: 'EMAIL' },
+    });
     const accounts = await Promise.all(
       links.map(async (link) => {
         const account = await this.connectedAccountRepository.findOne({

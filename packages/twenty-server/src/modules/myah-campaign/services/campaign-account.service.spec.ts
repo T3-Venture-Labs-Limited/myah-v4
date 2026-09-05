@@ -135,7 +135,7 @@ const createHarness = (
     connectedAccount: createRepository(rows.connectedAccount),
     messageChannel: createRepository(rows.messageChannel),
   };
-  const transactionManager = { query: jest.fn().mockResolvedValue(undefined) };
+  const transactionManager = {};
   const orm = {
     executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
       withWorkspaceContext(
@@ -156,11 +156,15 @@ const createHarness = (
   const messageOutboundService = {
     assertConnectedAccountSendable: jest.fn().mockResolvedValue(undefined),
   };
+  const cacheLockService = {
+    withLock: jest.fn(async (callback: () => unknown) => callback()),
+  };
   const service = new CampaignAccountService(
     orm,
     coreRepositories.connectedAccount as never,
     coreRepositories.messageChannel as never,
     messageOutboundService as never,
+    cacheLockService as never,
   );
   return {
     service,
@@ -169,6 +173,7 @@ const createHarness = (
     coreRepositories,
     transactionManager,
     messageOutboundService,
+    cacheLockService,
     orm,
   };
 };
@@ -195,10 +200,14 @@ describe('CampaignAccountService', () => {
       },
     ]);
     expect(JSON.stringify(accounts)).not.toContain('secret-token');
-    expect(harness.transactionManager.query).toHaveBeenCalledWith(
-      'SELECT pg_advisory_xact_lock(hashtext($1))',
-      [`campaign-account:${workspaceId}:${campaignId}`],
+    expect(harness.workspaceRepositories.campaign.findOne).toHaveBeenCalledWith(
+      { where: { id: campaignId } },
     );
+    expect(harness.cacheLockService.withLock).toHaveBeenCalledWith(
+      expect.any(Function),
+      `campaign-account:${workspaceId}:${campaignId}`,
+    );
+    expect(harness.orm.getGlobalWorkspaceDataSource).not.toHaveBeenCalled();
   });
 
   it('rejects foreign, archived, unsupported, ambiguous, invalid-address, and duplicate account links', async () => {
@@ -333,8 +342,6 @@ describe('CampaignAccountService', () => {
       1,
       { campaignId, channel: 'EMAIL', isDefault: true, deletedAt: IsNull() },
       { isDefault: false },
-      undefined,
-      expect.anything(),
     );
     expect(
       harness.workspaceRepositories.campaignAccount.update,
@@ -342,8 +349,6 @@ describe('CampaignAccountService', () => {
       2,
       { id: 'second', campaignId, channel: 'EMAIL', deletedAt: IsNull() },
       { isDefault: true },
-      undefined,
-      expect.anything(),
     );
     await harness.service.remove(
       { campaignId, campaignAccountId: 'second' },
@@ -447,17 +452,13 @@ describe('CampaignAccountService', () => {
 
     expect(
       harness.workspaceRepositories.campaignAccount.findOne,
-    ).toHaveBeenNthCalledWith(
-      2,
-      {
-        where: {
-          campaignId,
-          channel: 'EMAIL',
-          deletedAt: IsNull(),
-        },
+    ).toHaveBeenNthCalledWith(2, {
+      where: {
+        campaignId,
+        channel: 'EMAIL',
+        deletedAt: IsNull(),
       },
-      expect.anything(),
-    );
+    });
     expect(harness.rows.campaignAccount).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'existing', isDefault: false }),
@@ -556,6 +557,57 @@ describe('CampaignAccountService', () => {
         workspaceId,
       ),
     ).rejects.toThrow('Transport sendability rejected');
+  });
+
+  it('restores the prior default when setting the target default fails', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'active',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'target',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+        },
+      ],
+    });
+    harness.workspaceRepositories.campaignAccount.update.mockImplementation(
+      async (
+        where: Record<string, unknown>,
+        patch: Record<string, unknown>,
+      ) => {
+        if (where.id === 'target') return { affected: 0 };
+        const affected = harness.rows.campaignAccount.filter((row) =>
+          matches(row, where),
+        );
+        affected.forEach((row) => Object.assign(row, patch));
+        return { affected: affected.length };
+      },
+    );
+
+    await expect(
+      harness.service.setDefault(
+        { campaignId, campaignAccountId: 'target' },
+        authContext,
+      ),
+    ).rejects.toThrow('Campaign email account not found');
+
+    expect(harness.rows.campaignAccount).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'active', isDefault: true }),
+        expect.objectContaining({ id: 'target', isDefault: false }),
+      ]),
+    );
+    expect(harness.orm.getGlobalWorkspaceDataSource).not.toHaveBeenCalled();
   });
 
   it('does not clear the active default when a stale request selects a removed account', async () => {
