@@ -15,6 +15,7 @@ import {
 
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 
 type WorkspaceRow = { id: string };
@@ -77,16 +78,27 @@ const resolveProvider = <T>(type: Type<T>): T => {
 
 describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)', () => {
   const campaignId = randomUUID();
-  const connectedAccountIds = [randomUUID(), randomUUID()] as const;
-  const messageChannelIds = [randomUUID(), randomUUID()] as const;
-  const senderEmails = [
-    `myah-270-lock-${campaignId}-one@example.test`,
-    `myah-270-lock-${campaignId}-two@example.test`,
+  const leaseRaceCampaignId = randomUUID();
+  const connectedAccountIds = [
+    randomUUID(),
+    randomUUID(),
+    randomUUID(),
+    randomUUID(),
   ] as const;
+  const messageChannelIds = [
+    randomUUID(),
+    randomUUID(),
+    randomUUID(),
+    randomUUID(),
+  ] as const;
+  const senderEmails = connectedAccountIds.map(
+    (id, index) => `myah-270-lock-${id}-${index}@example.test`,
+  ) as [string, string, string, string];
   let workspaceId: string;
   let workspaceSchemaName: string;
   let userWorkspaceId: string;
   let campaignAccountService: CampaignAccountService;
+  let globalWorkspaceOrmManager: GlobalWorkspaceOrmManager;
 
   beforeAll(async () => {
     const workspaces = await global.testDataSource.query<WorkspaceRow[]>(
@@ -131,14 +143,20 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
     }
     userWorkspaceId = userWorkspace.id;
     campaignAccountService = resolveProvider(CampaignAccountService);
+    globalWorkspaceOrmManager = resolveProvider(GlobalWorkspaceOrmManager);
 
     await synchronizeCampaignAccountMetadata(workspaceId);
     await synchronizeCampaignAccountMetadata(workspaceId);
 
     await global.testDataSource.query(
       `INSERT INTO "${workspaceSchemaName}"."campaign" ("id", "name")
-       VALUES ($1, $2)`,
-      [campaignId, `MYAH-270 CacheLock ${campaignId}`],
+       VALUES ($1, $2), ($3, $4)`,
+      [
+        campaignId,
+        `MYAH-270 CacheLock ${campaignId}`,
+        leaseRaceCampaignId,
+        `MYAH-270 Lease Race ${leaseRaceCampaignId}`,
+      ],
     );
     for (const [index, connectedAccountId] of connectedAccountIds.entries()) {
       await global.testDataSource.query(
@@ -178,12 +196,13 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
     if (!workspaceId) return;
     await global.testDataSource.query(
       `DELETE FROM "${workspaceSchemaName}"."campaignAccount"
-        WHERE "campaignId" = $1`,
-      [campaignId],
+        WHERE "campaignId" = ANY($1::uuid[])`,
+      [[campaignId, leaseRaceCampaignId]],
     );
     await global.testDataSource.query(
-      `DELETE FROM "${workspaceSchemaName}"."campaign" WHERE "id" = $1`,
-      [campaignId],
+      `DELETE FROM "${workspaceSchemaName}"."campaign"
+        WHERE "id" = ANY($1::uuid[])`,
+      [[campaignId, leaseRaceCampaignId]],
     );
     await global.testDataSource.query(
       `DELETE FROM core."messageChannel" WHERE "id" = ANY($1::uuid[])`,
@@ -198,8 +217,8 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
     >(
       `SELECT COUNT(*)::int AS "count"
          FROM "${workspaceSchemaName}"."campaign"
-        WHERE "id" = $1`,
-      [campaignId],
+        WHERE "id" = ANY($1::uuid[])`,
+      [[campaignId, leaseRaceCampaignId]],
     );
     const [remainingConnectedAccounts] = await global.testDataSource.query<
       Array<{ count: number }>
@@ -264,7 +283,7 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
 
     try {
       const links = await Promise.all(
-        connectedAccountIds.map((connectedAccountId) =>
+        connectedAccountIds.slice(0, 2).map((connectedAccountId) =>
           campaignAccountService.link(
             { campaignId, connectedAccountId },
             buildSystemAuthContext(workspaceId),
@@ -284,7 +303,7 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
       );
       expect(persisted).toHaveLength(2);
       expect(persisted.map((link) => link.connectedAccountId).sort()).toEqual(
-        [...connectedAccountIds].sort(),
+        [...connectedAccountIds.slice(0, 2)].sort(),
       );
       expect(persisted.filter((link) => link.isDefault)).toHaveLength(1);
       expect(
@@ -304,6 +323,155 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
       );
       expect(Number(idleInTransactionCount)).toBe(0);
     } finally {
+      await redis.quit();
+    }
+  });
+
+  it('rejects direct duplicate defaults while allowing non-default and soft-deleted rows', async () => {
+    const links = await global.testDataSource.query<
+      Array<{ id: string; isDefault: boolean }>
+    >(
+      `SELECT id, "isDefault"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL
+        ORDER BY "isDefault" DESC`,
+      [campaignId],
+    );
+    const [defaultLink, nonDefaultLink] = links;
+    expect(defaultLink.isDefault).toBe(true);
+    expect(nonDefaultLink.isDefault).toBe(false);
+
+    await expect(
+      global.testDataSource.query(
+        `UPDATE "${workspaceSchemaName}"."campaignAccount"
+            SET "isDefault" = true WHERE id = $1`,
+        [nonDefaultLink.id],
+      ),
+    ).rejects.toThrow();
+
+    await global.testDataSource.query(
+      `UPDATE "${workspaceSchemaName}"."campaignAccount"
+          SET "deletedAt" = NOW() WHERE id = $1`,
+      [defaultLink.id],
+    );
+    const [{ defaultCount }] = await global.testDataSource.query<
+      Array<{ defaultCount: string }>
+    >(
+      `SELECT COUNT(*)::text AS "defaultCount"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL AND "isDefault" = true`,
+      [campaignId],
+    );
+    expect(defaultCount).toBe('0');
+
+    await global.testDataSource.query(
+      `UPDATE "${workspaceSchemaName}"."campaignAccount"
+          SET "isDefault" = true WHERE id = $1`,
+      [nonDefaultLink.id],
+    );
+    await expect(
+      global.testDataSource.query(
+        `UPDATE "${workspaceSchemaName}"."campaignAccount"
+            SET "deletedAt" = NULL WHERE id = $1`,
+        [defaultLink.id],
+      ),
+    ).rejects.toThrow();
+    await global.testDataSource.query(
+      `UPDATE "${workspaceSchemaName}"."campaignAccount"
+          SET "isDefault" = false WHERE id = $1`,
+      [nonDefaultLink.id],
+    );
+  });
+
+  it('persists the lease-overrun first-link loser as non-default through the real Redis lock and ORM', async () => {
+    const redis = createClient({ url: process.env.REDIS_URL });
+    await redis.connect();
+    const lockKey = `integration-tests:engine:lock:campaign-account:${workspaceId}:${leaseRaceCampaignId}`;
+    let releaseFirstRead: (() => void) | undefined;
+    let firstReadObserved: (() => void) | undefined;
+    const firstRead = new Promise<void>((resolve) => {
+      firstReadObserved = resolve;
+    });
+    const resumeFirstRead = new Promise<void>((resolve) => {
+      releaseFirstRead = resolve;
+    });
+    let interleaved = false;
+    const originalGetRepository = globalWorkspaceOrmManager.getRepository.bind(
+      globalWorkspaceOrmManager,
+    );
+    const repositorySpy = jest
+      .spyOn(globalWorkspaceOrmManager, 'getRepository')
+      .mockImplementation(async (...args) => {
+        const repository = await originalGetRepository(...args);
+        if (args[1] !== 'campaignAccount') return repository;
+        return new Proxy(repository, {
+          get(target, property, receiver) {
+            const value = Reflect.get(target, property, receiver);
+            if (property !== 'findOne' || typeof value !== 'function') {
+              return value;
+            }
+            return async (options: { where?: Record<string, unknown> }) => {
+              const result = await value.call(target, options);
+              const where = options.where;
+              if (
+                !interleaved &&
+                where?.campaignId === leaseRaceCampaignId &&
+                where.channel === 'EMAIL' &&
+                where.connectedAccountId === undefined &&
+                where.isDefault === undefined
+              ) {
+                interleaved = true;
+                await redis.del(lockKey);
+                firstReadObserved?.();
+                await resumeFirstRead;
+              }
+              return result;
+            };
+          },
+        });
+      });
+
+    try {
+      const firstLink = campaignAccountService.link(
+        {
+          campaignId: leaseRaceCampaignId,
+          connectedAccountId: connectedAccountIds[2],
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      await firstRead;
+      await campaignAccountService.link(
+        {
+          campaignId: leaseRaceCampaignId,
+          connectedAccountId: connectedAccountIds[3],
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      releaseFirstRead?.();
+      await firstLink;
+
+      const persisted = await global.testDataSource.query<CampaignAccountRow[]>(
+        `SELECT "connectedAccountId", "isDefault"
+           FROM "${workspaceSchemaName}"."campaignAccount"
+          WHERE "campaignId" = $1 AND "deletedAt" IS NULL
+          ORDER BY "connectedAccountId"`,
+        [leaseRaceCampaignId],
+      );
+      expect(persisted).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            connectedAccountId: connectedAccountIds[2],
+            isDefault: false,
+          }),
+          expect.objectContaining({
+            connectedAccountId: connectedAccountIds[3],
+            isDefault: true,
+          }),
+        ]),
+      );
+      expect(persisted.filter((link) => link.isDefault)).toHaveLength(1);
+    } finally {
+      repositorySpy.mockRestore();
       await redis.quit();
     }
   });
