@@ -3,15 +3,6 @@ import { ActionApprovalService } from 'src/engine/core-modules/action-approval/s
 
 describe('ActionApprovalService.reconcile', () => {
   it('processes ordered, fixed stale and accepted receipt batches', async () => {
-    const staleSelect = {
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      addOrderBy: jest.fn().mockReturnThis(),
-      take: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([{ id: 'stale-receipt-id' }]),
-    };
     const acceptedSelect = {
       select: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
@@ -42,10 +33,16 @@ describe('ActionApprovalService.reconcile', () => {
       {
         createQueryBuilder: jest.fn().mockReturnValue(staleUpdate),
         getRepository: jest.fn().mockReturnValue({
-          createQueryBuilder: jest
-            .fn()
-            .mockReturnValueOnce(staleSelect)
-            .mockReturnValueOnce(acceptedSelect),
+          find: jest.fn().mockResolvedValue([
+            {
+              id: 'stale-receipt-id',
+              actionApprovalBinding: {
+                actionName: 'send_outreach_email',
+                actionVersion: 1,
+              },
+            },
+          ]),
+          createQueryBuilder: jest.fn().mockReturnValue(acceptedSelect),
         }),
       } as never,
       projector as never,
@@ -55,17 +52,11 @@ describe('ActionApprovalService.reconcile', () => {
       service.reconcile({ processingBefore: new Date('2026-07-17T00:00:00Z') }),
     ).resolves.toEqual({ unknown: 1, projected: 1, failed: 1 });
 
-    expect(staleSelect.orderBy).toHaveBeenCalledWith(
-      'receipt.updatedAt',
-      'ASC',
-    );
-    expect(staleSelect.addOrderBy).toHaveBeenCalledWith('receipt.id', 'ASC');
     expect(acceptedSelect.orderBy).toHaveBeenCalledWith(
       'receipt.updatedAt',
       'ASC',
     );
     expect(acceptedSelect.addOrderBy).toHaveBeenCalledWith('receipt.id', 'ASC');
-    expect(staleSelect.take).toHaveBeenCalledWith(expect.any(Number));
     expect(acceptedSelect.take).toHaveBeenCalledWith(expect.any(Number));
     expect(staleUpdate.where).toHaveBeenCalledWith('id IN (:...ids)', {
       ids: ['stale-receipt-id'],
@@ -92,9 +83,7 @@ describe('ActionApprovalService.reconcile', () => {
       take: jest.fn().mockReturnThis(),
       getRawMany: jest
         .fn()
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce(failedIds)
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([{ id: 'later-valid-receipt' }]),
     };
     const failureUpdate = {
@@ -115,6 +104,7 @@ describe('ActionApprovalService.reconcile', () => {
       {
         createQueryBuilder: jest.fn().mockReturnValue(failureUpdate),
         getRepository: jest.fn().mockReturnValue({
+          find: jest.fn().mockResolvedValue([]),
           createQueryBuilder: jest.fn().mockReturnValue(select),
         }),
       } as never,

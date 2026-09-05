@@ -126,6 +126,7 @@ import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/databas
 import { AddUnipileInstagramSyncStateFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201001000-add-unipile-instagram-sync-state';
 import { CreateInstagramActionBudgetFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201002000-create-instagram-action-budget';
 import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201003000-add-instagram-direct-action-context';
+import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1799201004000-invalidate-composio-instagram-authorities';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -253,4 +254,5 @@ export const INSTANCE_COMMANDS = [
   AddUnipileInstagramSyncStateFastInstanceCommand,
   CreateInstagramActionBudgetFastInstanceCommand,
   AddInstagramDirectActionContextFastInstanceCommand,
+  InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
 ];

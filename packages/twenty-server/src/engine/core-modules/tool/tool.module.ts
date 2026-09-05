@@ -4,10 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
+import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { JwtModule } from 'src/engine/core-modules/jwt/jwt.module';
-import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
 import { OutreachEmailModule } from 'src/engine/core-modules/outreach-email/outreach-email.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
@@ -33,16 +33,14 @@ import { ViewModule } from 'src/engine/metadata-modules/view/view.module';
 import { CalendarEventCreationManagerModule } from 'src/modules/calendar/calendar-event-creation-manager/calendar-event-creation-manager.module';
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbound-manager/messaging-send-manager.module';
-import { MyahComposioModule } from 'src/modules/myah-composio/myah-composio.module';
 import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 @Module({
   imports: [
     ActionApprovalModule,
-    MyahComposioModule,
+    InstagramMessageModule,
     MessagingImportManagerModule,
     MessagingSendManagerModule,
     CalendarEventCreationManagerModule,
-    InstagramMessageModule,
     OutreachEmailModule,
     TypeOrmModule.forFeature([FileEntity, ConnectedAccountEntity]),
     ApplicationModule,

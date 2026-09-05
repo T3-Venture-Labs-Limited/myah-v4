@@ -1,7 +1,7 @@
 {
   "name": "@t3-venture-labs/myah-instagram-messaging",
-  "version": "0.1.1",
-  "description": "Myah Instagram messaging bridge for testing Composio DM capabilities without reply polling.",
+  "version": "0.2.0",
+  "description": "Myah Instagram metadata ownership for server-managed messaging.",
   "license": "AGPL-3.0",
   "engines": {
     "node": "^24.5.0",
@@ -11,8 +11,7 @@
   "keywords": [
     "twenty-app",
     "myah",
-    "instagram",
-    "composio"
+    "instagram"
   ],
   "packageManager": "yarn@4.13.0",
   "scripts": {
@@ -31,6 +30,7 @@
     "twenty-client-sdk": "^2.16.0",
     "twenty-sdk": "^2.16.0",
     "typescript": "^5.9.3",
+    "vite": "^8.0.0",
     "vite-tsconfig-paths": "^4.2.1",
     "vitest": "^4.0.0"
   }

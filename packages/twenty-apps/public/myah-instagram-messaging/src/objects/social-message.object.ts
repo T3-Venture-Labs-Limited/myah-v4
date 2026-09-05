@@ -55,7 +55,7 @@ export default defineObject({
   labelSingular: 'Myah social message',
   labelPlural: 'Myah social messages',
   description:
-    'Persisted Instagram DM message or manual first-DM touchpoint. This is the display source while polling is disabled.',
+    'Persisted Instagram DM message or manual first-DM touchpoint retained for server-managed messaging.',
   icon: 'IconMessage',
   labelIdentifierFieldMetadataUniversalIdentifier:
     SOCIAL_MESSAGE_TEXT_FIELD_UNIVERSAL_IDENTIFIER,

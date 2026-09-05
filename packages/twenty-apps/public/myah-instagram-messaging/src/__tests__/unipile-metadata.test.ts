@@ -522,29 +522,17 @@ describe('Unipile Instagram metadata', () => {
     });
   });
 
-  it('keeps application copy provider-neutral without adding Unipile secrets', () => {
+  it('keeps application ownership provider-neutral and metadata-only', () => {
     expect(applicationConfig.config.displayName).toBe(
       'Myah Instagram Messaging',
     );
     expect(applicationConfig.config.description).toMatch(
-      /Instagram conversations and messages/i,
+      /historical Instagram metadata/i,
     );
     expect(applicationConfig.config.description).not.toMatch(
       /composio|unipile/i,
     );
-    expect(applicationConfig.config.serverVariables).toMatchObject({
-      COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID: {
-        description:
-          'Shared Myah Composio Instagram OAuth configuration used to create workspace-scoped authorization links.',
-        isRequired: true,
-        isSecret: false,
-      },
-    });
-    expect(applicationConfig.config.serverVariables).not.toHaveProperty(
-      'UNIPILE_API_KEY',
-    );
-    expect(applicationConfig.config.serverVariables).not.toHaveProperty(
-      'UNIPILE_WEBHOOK_SECRET',
-    );
+    expect(applicationConfig.config.applicationVariables).toBeUndefined();
+    expect(applicationConfig.config.serverVariables).toBeUndefined();
   });
 });

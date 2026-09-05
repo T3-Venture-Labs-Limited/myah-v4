@@ -46,7 +46,7 @@ export default defineObject({
   labelSingular: 'Myah social conversation',
   labelPlural: 'Myah social conversations',
   description:
-    'Instagram DM conversation discovered manually through Composio. No automatic reply polling runs in the initial MVP.',
+    'Instagram DM conversation metadata retained for historical display and server-managed messaging.',
   icon: 'IconMessages',
   labelIdentifierFieldMetadataUniversalIdentifier:
     SOCIAL_CONVERSATION_LABEL_FIELD_UNIVERSAL_IDENTIFIER,
@@ -113,7 +113,7 @@ export default defineObject({
       label: 'Provider conversation ID',
       name: 'providerConversationId',
       description:
-        'Instagram/Composio conversation id used for manual message lookup.',
+        'Provider conversation id retained with the conversation metadata.',
     },
     {
       universalIdentifier:

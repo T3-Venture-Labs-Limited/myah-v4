@@ -35,7 +35,7 @@ export default defineObject({
   labelSingular: 'Myah Instagram account',
   labelPlural: 'Myah Instagram accounts',
   description:
-    'Workspace Instagram Business or Creator account connected for approved Myah message reads and replies.',
+    'Workspace Instagram account metadata retained for server-managed messaging.',
   icon: 'IconBrandInstagram',
   labelIdentifierFieldMetadataUniversalIdentifier:
     INSTAGRAM_ACCOUNT_LABEL_FIELD_UNIVERSAL_IDENTIFIER,
@@ -51,31 +51,30 @@ export default defineObject({
       universalIdentifier:
         INSTAGRAM_ACCOUNT_CONNECTED_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
-      label: 'Connected account ID',
+      label: 'Legacy connected account ID',
       name: 'connectedAccountId',
       isUnique: true,
       description:
-        'Composio connected account id for this workspace Instagram account. Hidden from normal user copy but used for server-side tool execution.',
+        'Legacy provider connection id retained with this workspace Instagram account.',
     },
     {
       universalIdentifier:
         INSTAGRAM_ACCOUNT_COMPOSIO_USER_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
-      label: 'Composio user ID',
+      label: 'Legacy provider user ID',
       name: 'composioUserId',
-      description:
-        'Workspace-scoped Composio user id, e.g. workspace:<workspaceId>:instagram.',
+      description: 'Legacy workspace user id retained for historical records.',
     },
     {
       universalIdentifier:
         INSTAGRAM_ACCOUNT_AUTH_CONFIG_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
-      label: 'Auth config ID',
+      label: 'Legacy authorization config ID',
       name: 'authConfigId',
       isNullable: true,
       defaultValue: null,
       description:
-        'Composio Instagram auth config id used to create this link.',
+        'Legacy authorization configuration id retained for historical records.',
     },
     {
       universalIdentifier:

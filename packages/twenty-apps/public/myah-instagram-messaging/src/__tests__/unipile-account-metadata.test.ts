@@ -77,12 +77,8 @@ describe('Unipile workspace account metadata', () => {
     });
   });
 
-  it('does not introduce Unipile transport configuration to the application manifest', () => {
-    expect(applicationConfig.config.serverVariables).not.toHaveProperty(
-      'UNIPILE_API_KEY',
-    );
-    expect(applicationConfig.config.serverVariables).not.toHaveProperty(
-      'UNIPILE_WEBHOOK_SECRET',
-    );
+  it('keeps provider transport out of the application manifest', () => {
+    expect(applicationConfig.config.applicationVariables).toBeUndefined();
+    expect(applicationConfig.config.serverVariables).toBeUndefined();
   });
 });

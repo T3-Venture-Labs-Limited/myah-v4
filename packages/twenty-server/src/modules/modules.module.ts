@@ -3,7 +3,6 @@ import { Module } from '@nestjs/common';
 import { CalendarModule } from 'src/modules/calendar/calendar.module';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
-import { MyahComposioModule } from 'src/modules/myah-composio/myah-composio.module';
 import { MyahShopifyModule } from 'src/modules/myah-shopify/myah-shopify.module';
 import { MyahStandardAppsModule } from 'src/modules/myah-standard-apps/myah-standard-apps.module';
 import { MyahUnipileModule } from 'src/modules/myah-unipile/myah-unipile.module';
@@ -16,7 +15,6 @@ import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-me
     MessagingModule,
     CalendarModule,
     ConnectedAccountModule,
-    MyahComposioModule,
     MyahShopifyModule,
     MyahStandardAppsModule,
     MyahUnipileModule,

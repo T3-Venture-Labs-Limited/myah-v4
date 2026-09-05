@@ -5,7 +5,6 @@ import { InstagramActionBudgetModule } from 'src/engine/core-modules/instagram-a
 import { ActionApprovalReconciliationCronCommand } from 'src/engine/core-modules/action-approval/crons/commands/action-approval-reconciliation.cron.command';
 import { ActionApprovalReconciliationCronJob } from 'src/engine/core-modules/action-approval/crons/action-approval-reconciliation.cron.job';
 import { ActionApprovalResolver } from 'src/engine/core-modules/action-approval/action-approval.resolver';
-import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-authority-context.service';
@@ -56,7 +55,6 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ActionReceiptWorkspaceProjectionWriterService,
     MyahInboxReplyAuthorityContextService,
     MyahInboxReplyReceiptProjectionService,
-    InstagramReplyActionDefinition,
     OutreachEmailActionDefinition,
     MyahInboxReplyActionDefinition,
     ActionApprovalReconciliationCronJob,
@@ -70,7 +68,6 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ActionApprovalService,
     ActionReceiptProjectorService,
     ActionReceiptRedactionService,
-    InstagramReplyActionDefinition,
     OutreachEmailActionDefinition,
     ActionApprovalReconciliationCronCommand,
     MyahInboxReplyActionDefinition,

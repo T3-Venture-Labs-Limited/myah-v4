@@ -6,7 +6,7 @@ import {
   type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 
-import { InstagramReplyActionProposalInputZodSchema } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { InstagramReplyActionProposalInputZodSchema } from 'src/engine/core-modules/tool/tools/instagram-tool/instagram-reply-tool.schema';
 import {
   OutreachEmailActionDefinition,
   OutreachEmailActionProposalInputZodSchema,

@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+export const InstagramReplyActionProposalInputZodSchema = z
+  .object({ draftId: z.string().uuid() })
+  .strict();
+
+export type InstagramReplyActionProposalInput = z.infer<
+  typeof InstagramReplyActionProposalInputZodSchema
+>;
+
 export const sendInstagramReplyInputSchema = z
   .object({
     actionApprovalBindingId: z
