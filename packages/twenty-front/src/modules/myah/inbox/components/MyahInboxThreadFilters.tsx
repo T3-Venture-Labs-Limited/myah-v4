@@ -56,6 +56,7 @@ export type MyahInboxRefreshStatus =
 
 export type MyahInboxThreadFiltersProps = {
   filters: MyahInboxFilters;
+  contentType?: 'contacts' | 'conversations';
   isRefreshing: boolean;
   loading: boolean;
   loadingMore: boolean;
@@ -67,6 +68,7 @@ export type MyahInboxThreadFiltersProps = {
 
 export const MyahInboxThreadFilters = ({
   filters,
+  contentType = 'conversations',
   isRefreshing,
   loading,
   loadingMore,
@@ -79,13 +81,16 @@ export const MyahInboxThreadFilters = ({
   const isCampaignMetadataReady = objectMetadataItems.some(
     (item) => item.nameSingular === 'campaign',
   );
+  const isContactMode = contentType === 'contacts';
 
   return (
     <StyledFilters>
       <StyledSearch>
         <TextInput
-          label="Search conversations"
-          placeholder="Search messages"
+          label={isContactMode ? 'Search contacts' : 'Search conversations'}
+          placeholder={
+            isContactMode ? 'Search names and messages' : 'Search messages'
+          }
           value={filters.search}
           fullWidth
           onChange={(search) => onFiltersChange({ ...filters, search })}
@@ -96,7 +101,9 @@ export const MyahInboxThreadFilters = ({
             clickableComponent={
               <IconButton
                 Icon={IconFilter}
-                ariaLabel="Filter conversations"
+                ariaLabel={
+                  isContactMode ? 'Filter contacts' : 'Filter conversations'
+                }
                 size="small"
                 variant="tertiary"
               />

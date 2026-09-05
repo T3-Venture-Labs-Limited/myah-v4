@@ -51,6 +51,7 @@ const rawRows = [
     displayName: 'Creator One',
     creatorId,
     creatorName: 'Creator One',
+    creatorInstagramUsername: 'creator.one',
     preview: 'Latest Instagram reply',
     sender: '@creator.one',
     emailThreadIds: [emailThreadAId, emailThreadBId],
@@ -61,6 +62,8 @@ const rawRows = [
       {
         id: instagramAId,
         providerConversationId: 'provider-chat-a',
+        provider: 'UNIPILE',
+        lifecycle: 'ACTIVE',
         recipientUsername: 'creator.one',
         recipientDisplayName: 'Creator One',
         lastActivityAt: '2026-09-05T12:00:00.000Z',
@@ -69,6 +72,8 @@ const rawRows = [
       {
         id: instagramBId,
         providerConversationId: 'provider-chat-b',
+        provider: 'UNIPILE',
+        lifecycle: 'ACTIVE',
         recipientUsername: 'creator.one',
         recipientDisplayName: 'Creator One',
         lastActivityAt: '2026-09-05T11:00:00.000Z',
@@ -85,6 +90,7 @@ const rawRows = [
     displayName: 'unmatched@example.com',
     creatorId: null,
     creatorName: null,
+    creatorInstagramUsername: null,
     preview: 'Unmatched email',
     sender: 'unmatched@example.com',
     emailThreadIds: [emailThreadAId],
@@ -102,6 +108,7 @@ const rawRows = [
     displayName: '@unmatched.creator',
     creatorId: null,
     creatorName: null,
+    creatorInstagramUsername: null,
     preview: 'Unmatched Instagram',
     sender: '@unmatched.creator',
     emailThreadIds: [],
@@ -112,6 +119,8 @@ const rawRows = [
       {
         id: instagramAId,
         providerConversationId: 'provider-unmatched',
+        provider: 'COMPOSIO_HISTORY',
+        lifecycle: 'HISTORICAL',
         recipientUsername: 'unmatched.creator',
         recipientDisplayName: null,
         lastActivityAt: '2026-09-05T09:00:00.000Z',
@@ -229,6 +238,7 @@ describe('MyahInboxContactQueryService', () => {
       edges: [
         {
           node: {
+            instagramUsername: 'creator.one',
             identityKind: 'CREATOR',
             displayName: 'Creator One',
             creator: { id: creatorId, name: 'Creator One' },
@@ -246,7 +256,11 @@ describe('MyahInboxContactQueryService', () => {
               state: 'AMBIGUOUS',
               needsAttention: true,
               conversations: expect.arrayContaining([
-                expect.objectContaining({ id: instagramAId }),
+                expect.objectContaining({
+                  id: instagramAId,
+                  provider: 'UNIPILE',
+                  lifecycle: 'ACTIVE',
+                }),
                 expect.objectContaining({ id: instagramBId }),
               ]),
             },

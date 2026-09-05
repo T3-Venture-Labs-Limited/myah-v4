@@ -88,6 +88,7 @@ type ContactRaw = {
   displayName: string | null;
   creatorId: string | null;
   creatorName: string | null;
+  creatorInstagramUsername: string | null;
   preview: string | null;
   sender: string | null;
   emailThreadIds: string[] | null;
@@ -298,6 +299,7 @@ export class MyahInboxContactQueryService {
               .createQueryBuilder('creator')
               .select('creator.id', 'id')
               .addSelect('creator.name', 'name')
+              .addSelect('creator."instagramUsername"', 'instagramUsername')
               .where('creator."deletedAt" IS NULL'),
           ),
           serializeOptionalPermissionQuery(
@@ -311,6 +313,8 @@ export class MyahInboxContactQueryService {
                   'social_conversation."providerConversationId"',
                   'providerConversationId',
                 )
+                .addSelect('social_conversation.provider', 'provider')
+                .addSelect('social_conversation.lifecycle', 'lifecycle')
                 .addSelect(
                   'social_conversation."recipientUsername"',
                   'recipientUsername',
@@ -322,7 +326,7 @@ export class MyahInboxContactQueryService {
                 .addSelect('social_conversation."createdAt"', 'createdAt')
                 .addSelect('social_conversation."updatedAt"', 'updatedAt')
                 .where('social_conversation."deletedAt" IS NULL'),
-            `SELECT NULL::uuid AS id, NULL::uuid AS "creatorId", NULL::text AS "providerConversationId", NULL::text AS "recipientUsername", NULL::text AS "recipientDisplayName", NULL::timestamptz AS "createdAt", NULL::timestamptz AS "updatedAt" WHERE FALSE`,
+            `SELECT NULL::uuid AS id, NULL::uuid AS "creatorId", NULL::text AS "providerConversationId", NULL::text AS provider, NULL::text AS lifecycle, NULL::text AS "recipientUsername", NULL::text AS "recipientDisplayName", NULL::timestamptz AS "createdAt", NULL::timestamptz AS "updatedAt" WHERE FALSE`,
           ),
           serializeOptionalPermissionQuery(
             socialMessageRepository,
@@ -534,8 +538,11 @@ email_source_rows AS (
     thread."snoozedUntil",
     creator.name AS "creatorName",
     creator.id AS "creatorId",
+    creator."instagramUsername" AS "creatorInstagramUsername",
     NULL::uuid AS "instagramConversationId",
     NULL::text AS "providerConversationId",
+    NULL::text AS "instagramProvider",
+    NULL::text AS "instagramLifecycle",
     NULL::text AS "recipientUsername",
     NULL::text AS "recipientDisplayName",
     NULL::text AS "instagramDirection",
@@ -561,8 +568,11 @@ instagram_source_rows AS (
     NULL::timestamptz AS "snoozedUntil",
     creator.name AS "creatorName",
     creator.id AS "creatorId",
+    creator."instagramUsername" AS "creatorInstagramUsername",
     conversation.id AS "instagramConversationId",
     conversation."providerConversationId",
+    conversation.provider::text AS "instagramProvider",
+    conversation.lifecycle::text AS "instagramLifecycle",
     conversation."recipientUsername",
     conversation."recipientDisplayName",
     latest.direction::text AS "instagramDirection",
@@ -614,6 +624,8 @@ instagram_aggregation AS (
     JSONB_AGG(JSONB_BUILD_OBJECT(
       'id', source."instagramConversationId",
       'providerConversationId', source."providerConversationId",
+      'provider', source."instagramProvider",
+      'lifecycle', source."instagramLifecycle",
       'recipientUsername', source."recipientUsername",
       'recipientDisplayName', source."recipientDisplayName",
       'lastActivityAt', source."activityAt",
@@ -641,6 +653,7 @@ contact AS (
     ) AS "displayName",
     latest."creatorId",
     latest."creatorName",
+    latest."creatorInstagramUsername",
     latest.preview,
     latest.sender,
     COALESCE(email."emailThreadIds", ARRAY[]::uuid[]) AS "emailThreadIds",
@@ -730,6 +743,7 @@ LIMIT ${limit}`;
       creator: row.creatorId
         ? { id: row.creatorId, name: row.creatorName }
         : null,
+      instagramUsername: row.creatorInstagramUsername,
       lastActivityAt,
       latestChannel: row.latestChannel,
       preview: row.preview,

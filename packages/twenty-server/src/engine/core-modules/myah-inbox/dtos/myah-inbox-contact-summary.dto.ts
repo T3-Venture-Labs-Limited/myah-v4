@@ -56,6 +56,12 @@ export class MyahInboxContactInstagramConversation {
   @Field(() => String)
   providerConversationId: string;
 
+  @Field(() => String)
+  provider: 'COMPOSIO_HISTORY' | 'UNIPILE';
+
+  @Field(() => String)
+  lifecycle: 'ACTIVE' | 'HISTORICAL';
+
   @Field(() => String, { nullable: true })
   recipientUsername: string | null;
 
@@ -100,6 +106,9 @@ export class MyahInboxContactSummary {
 
   @Field(() => String)
   lastActivityAt: string;
+
+  @Field(() => String, { nullable: true })
+  instagramUsername: string | null;
 
   @Field(() => MyahInboxContactLatestChannel)
   latestChannel: MyahInboxContactLatestChannel;

@@ -6,6 +6,7 @@ import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/c
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
 import {
+  GetInstagramMessageDraftInput,
   InstagramMessageDraftResultDto,
   InstagramMessageSendResultDto,
   InstagramMessageSendStatusDto,
@@ -70,6 +71,46 @@ export class InstagramMessageResolver {
       workspaceMemberId,
     });
     if (result.status === 'CONFLICT') {
+      await this.recordAccessService.assertCanReadDraft({
+        workspaceId: workspace.id,
+        draftId: result.draftId,
+        rolePermissionConfig,
+      });
+    }
+
+    return result;
+  }
+
+  @Query(() => InstagramMessageDraftResultDto, { nullable: true })
+  async instagramMessageDraft(
+    @Args('input') input: GetInstagramMessageDraftInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<InstagramMessageDraftResultDto | null> {
+    const rolePermissionConfig = this.getRolePermissionConfig(
+      workspace,
+      userWorkspaceId,
+      workspaceMemberId,
+    );
+    await this.permissionService.assertCanSend({
+      actionKind: input.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
+      rolePermissionConfig,
+      workspaceId: workspace.id,
+    });
+    await this.recordAccessService.assertCanSaveDraft({
+      ...input,
+      workspaceId: workspace.id,
+      draftId: '00000000-0000-4000-8000-000000000000',
+      expectedRevision: 0,
+      rolePermissionConfig,
+    });
+    const result = await this.draftService.getDraftForTarget({
+      ...input,
+      workspaceId: workspace.id,
+    });
+
+    if (result) {
       await this.recordAccessService.assertCanReadDraft({
         workspaceId: workspace.id,
         draftId: result.draftId,

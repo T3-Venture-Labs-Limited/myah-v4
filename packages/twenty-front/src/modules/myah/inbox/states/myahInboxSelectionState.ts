@@ -1,5 +1,7 @@
 import { createAtomState } from '@/ui/utilities/state/jotai/utils/createAtomState';
 
+import { type MyahInboxChannel } from '@/myah/inbox/types/MyahInboxContact';
+
 export type MyahInboxStateFilter =
   | 'NEEDS_REPLY'
   | 'WAITING_ON_CREATOR'
@@ -26,16 +28,27 @@ export const DEFAULT_MYAH_INBOX_FILTERS: MyahInboxFilters = {
   search: '',
 };
 
-export const myahInboxSelectedThreadIdState = createAtomState<string | null>({
-  key: 'myahInboxSelectedThreadIdState',
-  defaultValue: null,
-});
-export const myahInboxSelectionWorkspaceIdState = createAtomState<
-  string | null
->({
-  key: 'myahInboxSelectionWorkspaceIdState',
-  defaultValue: null,
-});
+export type MyahInboxContactSelection = {
+  workspaceId: string | null;
+  contactId: string | null;
+  channel: MyahInboxChannel | null;
+  emailThreadId: string | null;
+  instagramConversationId: string | null;
+};
+
+export const EMPTY_MYAH_INBOX_CONTACT_SELECTION: MyahInboxContactSelection = {
+  workspaceId: null,
+  contactId: null,
+  channel: null,
+  emailThreadId: null,
+  instagramConversationId: null,
+};
+
+export const myahInboxContactSelectionState =
+  createAtomState<MyahInboxContactSelection>({
+    key: 'myahInboxContactSelectionState',
+    defaultValue: EMPTY_MYAH_INBOX_CONTACT_SELECTION,
+  });
 
 export const myahInboxFiltersState = createAtomState<MyahInboxFilters>({
   key: 'myahInboxFiltersState',

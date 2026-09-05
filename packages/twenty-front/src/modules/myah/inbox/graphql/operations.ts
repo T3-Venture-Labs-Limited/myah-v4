@@ -141,3 +141,178 @@ export const GET_MYAH_INBOX_REPLY_SEND_STATUS = gql`
     }
   }
 `;
+
+const MYAH_INBOX_CONTACT_FIELDS = gql`
+  fragment MyahInboxContactFields on MyahInboxContactSummary {
+    id
+    identityKind
+    displayName
+    instagramUsername
+    lastActivityAt
+    latestChannel
+    preview
+    sender
+    needsAttention
+    creator {
+      id
+      name
+    }
+    email {
+      isAvailable
+      threadCount
+      threadIds
+      latestThreadId
+      needsAttention
+    }
+    instagram {
+      isAvailable
+      state
+      needsAttention
+      conversations {
+        id
+        providerConversationId
+        provider
+        lifecycle
+        recipientUsername
+        recipientDisplayName
+        lastActivityAt
+        latestDirection
+      }
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_CONTACTS = gql`
+  ${MYAH_INBOX_CONTACT_FIELDS}
+  query MyahInboxContacts(
+    $first: Int
+    $after: String
+    $contactId: String
+    $owner: String
+    $campaignId: String
+    $states: [MyahInboxState!]
+    $snoozeStatus: MyahInboxSnoozeStatus
+    $search: String
+  ) {
+    myahInboxContacts(
+      first: $first
+      after: $after
+      contactId: $contactId
+      owner: $owner
+      campaignId: $campaignId
+      states: $states
+      snoozeStatus: $snoozeStatus
+      search: $search
+    ) {
+      edges {
+        cursor
+        node {
+          ...MyahInboxContactFields
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_CONTACT = gql`
+  ${MYAH_INBOX_CONTACT_FIELDS}
+  query MyahInboxContact($contactId: String!) {
+    myahInboxContact(contactId: $contactId) {
+      ...MyahInboxContactFields
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_CONTACT_EMAIL_MESSAGES = gql`
+  query MyahInboxContactEmailMessages(
+    $contactId: String!
+    $first: Int
+    $after: String
+  ) {
+    myahInboxContactEmailMessages(
+      contactId: $contactId
+      first: $first
+      after: $after
+    ) {
+      edges {
+        cursor
+        node {
+          id
+          messageThreadId
+          subject
+          text
+          receivedAt
+          direction
+          visibility
+          participants {
+            role
+            handle
+            displayName
+          }
+          attachmentFileIds
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
+export const LINK_MYAH_INBOX_CONTACT_CREATOR = gql`
+  mutation LinkMyahInboxContactCreator(
+    $input: LinkMyahInboxContactCreatorInput!
+  ) {
+    linkMyahInboxContactCreator(input: $input)
+  }
+`;
+
+export const GET_INSTAGRAM_MESSAGE_DRAFT = gql`
+  query InstagramMessageDraft($input: GetInstagramMessageDraftInput!) {
+    instagramMessageDraft(input: $input) {
+      status
+      draftId
+      revision
+      body
+      executionLocked
+    }
+  }
+`;
+
+export const SAVE_INSTAGRAM_MESSAGE_DRAFT = gql`
+  mutation SaveInstagramMessageDraft($input: SaveInstagramMessageDraftInput!) {
+    saveInstagramMessageDraft(input: $input) {
+      status
+      draftId
+      revision
+      body
+    }
+  }
+`;
+
+export const SEND_INSTAGRAM_MESSAGE = gql`
+  mutation SendInstagramMessage($input: SendInstagramMessageInput!) {
+    sendInstagramMessage(input: $input) {
+      status
+      receiptId
+      code
+      nextEligibleAt
+    }
+  }
+`;
+
+export const GET_INSTAGRAM_MESSAGE_SEND_STATUS = gql`
+  query InstagramMessageSendStatus($input: InstagramMessageSendStatusInput!) {
+    instagramMessageSendStatus(input: $input) {
+      receiptId
+      state
+      providerCode
+      outcome
+    }
+  }
+`;

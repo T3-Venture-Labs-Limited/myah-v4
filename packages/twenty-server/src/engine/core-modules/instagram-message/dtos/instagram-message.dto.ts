@@ -40,6 +40,23 @@ export class SaveInstagramMessageDraftInput {
   conversationRecordId: string | null;
 }
 
+@InputType()
+export class GetInstagramMessageDraftInput {
+  @Field()
+  @IsIn(['FIRST_MESSAGE', 'REPLY'])
+  kind: 'FIRST_MESSAGE' | 'REPLY';
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  @IsOptional()
+  @IsUUID()
+  creatorRecordId: string | null;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  @IsOptional()
+  @IsUUID()
+  conversationRecordId: string | null;
+}
+
 @ObjectType()
 export class InstagramMessageDraftResultDto {
   @Field()
@@ -53,6 +70,9 @@ export class InstagramMessageDraftResultDto {
 
   @Field()
   body: string;
+
+  @Field(() => Boolean, { nullable: true })
+  executionLocked?: boolean | null;
 }
 
 @InputType()

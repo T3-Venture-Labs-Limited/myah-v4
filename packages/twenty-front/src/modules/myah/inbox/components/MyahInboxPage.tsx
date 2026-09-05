@@ -1,30 +1,38 @@
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
-import { MyahInboxThreadList } from '@/myah/inbox/components/MyahInboxThreadList';
-import { MyahInboxThreadPanel } from '@/myah/inbox/components/MyahInboxThreadPanel';
+import { MyahInboxContactConversation } from '@/myah/inbox/components/MyahInboxContactConversation';
+import { MyahInboxContactList } from '@/myah/inbox/components/MyahInboxContactList';
+import { useMyahInboxContactEmailMessages } from '@/myah/inbox/hooks/useMyahInboxContactEmailMessages';
+import { useMyahInboxContacts } from '@/myah/inbox/hooks/useMyahInboxContacts';
 import {
   MyahInboxDraftAutosaveProvider,
   useMyahInboxDraftAutosaveController,
   useMyahInboxDraftAutosaveControllerContext,
 } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
+import { useMyahInboxSelectedEmailThread } from '@/myah/inbox/hooks/useMyahInboxSelectedEmailThread';
 import {
-  type MyahInboxThread,
-  useMyahInboxThreads,
-} from '@/myah/inbox/hooks/useMyahInboxThreads';
-import {
+  EMPTY_MYAH_INBOX_CONTACT_SELECTION,
   type MyahInboxFilters,
+  myahInboxContactSelectionState,
   myahInboxFiltersState,
-  myahInboxSelectionWorkspaceIdState,
-  myahInboxSelectedThreadIdState,
 } from '@/myah/inbox/states/myahInboxSelectionState';
-import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
-
+import {
+  type MyahInboxChannel,
+  type MyahInboxContact,
+} from '@/myah/inbox/types/MyahInboxContact';
+import {
+  getMyahInboxContactSelection,
+  getMyahInboxRegroupedContactSelection,
+  getMyahInboxSelectionForChannel,
+} from '@/myah/inbox/utils/getMyahInboxContactSelection';
 import { SidePanelToggleButton } from '@/side-panel/components/SidePanelToggleButton';
 import { PageCardHeader } from '@/ui/layout/page/components/PageCardHeader';
+import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
-import { useContext, useEffect, useRef, useState } from 'react';
 import { IconInbox } from 'twenty-ui/icon';
 import { SegmentedControl } from 'twenty-ui/input';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
@@ -47,6 +55,23 @@ const StyledPanel = styled.div`
   }
 `;
 
+const StyledStatus = styled.div`
+  color: ${themeCssVariables.font.color.secondary};
+  display: flex;
+  flex: 1;
+  font-size: ${themeCssVariables.font.size.sm};
+  justify-content: center;
+  padding: ${themeCssVariables.spacing[6]};
+`;
+
+const StyledSelectionStatus = styled.div`
+  background: ${themeCssVariables.background.primary};
+  border-bottom: 1px solid ${themeCssVariables.border.color.light};
+  color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.xs};
+  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
+`;
+
 const StyledMobileWorkspace = styled.div`
   display: flex;
   flex: 1;
@@ -65,21 +90,14 @@ const StyledMobilePanel = styled.div`
   display: flex;
   flex: 1;
   min-height: 0;
+
+  &:focus-visible {
+    outline: 2px solid ${themeCssVariables.brand.focusRing};
+    outline-offset: -2px;
+  }
 `;
 
-const StyledSelectionStatus = styled.div`
-  background: ${themeCssVariables.background.primary};
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.xs};
-  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
-`;
-
-type MobilePanel = 'list' | 'thread';
-type ThreadUpdateStatus = {
-  message: string;
-  workspaceId: string | null;
-};
+type MobilePanel = 'contacts' | 'conversation';
 
 export const MyahInboxPage = () => {
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
@@ -135,91 +153,85 @@ const MyahInboxPageContent = ({
   const [myahInboxFilters, setMyahInboxFilters] = useAtomState(
     myahInboxFiltersState,
   );
-  const [myahInboxSelectedThreadId, setMyahInboxSelectedThreadId] =
-    useAtomState(myahInboxSelectedThreadIdState);
-  const [myahInboxSelectionWorkspaceId, setMyahInboxSelectionWorkspaceId] =
-    useAtomState(myahInboxSelectionWorkspaceIdState);
-  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('list');
-  const [threadUpdateStatus, setThreadUpdateStatus] =
-    useState<ThreadUpdateStatus | null>(null);
-  const [retainedSelectedThread, setRetainedSelectedThread] =
-    useState<MyahInboxThread | null>(null);
-  // Track visited workspaces synchronously without a selection-triggering render.
+  const [myahInboxContactSelection, setMyahInboxContactSelection] =
+    useAtomState(myahInboxContactSelectionState);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('contacts');
+  const [retainedContact, setRetainedContact] =
+    useState<MyahInboxContact | null>(null);
+  const [status, setStatus] = useState<{
+    message: string;
+    workspaceId: string | null;
+  } | null>(null);
+  // Tracks first-load Contact selection separately for each workspace.
   // oxlint-disable-next-line twenty/no-state-useref
-  const initializedSelectionWorkspaceIdsRef = useRef(new Set<string>());
+  const initializedWorkspaceIdsRef = useRef(new Set<string>());
+  // Avoids StrictMode cleanup clearing the remounted page selection.
   // oxlint-disable-next-line twenty/no-state-useref
-  const selectionCleanupGenerationRef = useRef(0);
-  const workspaceScopedFilters =
+  const cleanupGenerationRef = useRef(0);
+  // Transfers focus between mutually exclusive mobile panes.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const mobilePanelRef = useRef<HTMLDivElement>(null);
+  // Invalidates async refresh results after any newer selection transition.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const selectionGenerationRef = useRef(0);
+  const commitContactSelection = useCallback(
+    (nextSelection: typeof myahInboxContactSelection) => {
+      selectionGenerationRef.current += 1;
+      setMyahInboxContactSelection(nextSelection);
+    },
+    [setMyahInboxContactSelection],
+  );
+  const workspaceFilters =
     myahInboxFilters.campaignWorkspaceId === workspaceId
       ? myahInboxFilters
-      : {
-          ...myahInboxFilters,
-          campaignId: null,
-          campaignWorkspaceId: null,
-        };
-  const currentWorkspaceSelectedThreadId =
-    myahInboxSelectionWorkspaceId === workspaceId
-      ? myahInboxSelectedThreadId
-      : null;
-  const refreshScopeKey = JSON.stringify([
-    workspaceId,
-    workspaceScopedFilters.owner,
-    workspaceScopedFilters.campaignId,
-    workspaceScopedFilters.campaignWorkspaceId,
-    workspaceScopedFilters.states.join(','),
-    workspaceScopedFilters.snoozeStatus,
-    workspaceScopedFilters.search,
-  ]);
-  // oxlint-disable-next-line twenty/no-state-useref
-  const pendingRefreshSelectionIdRef = useRef<string | null>(null);
-  // oxlint-disable-next-line twenty/no-state-useref
-  const selectedThreadIdRef = useRef<string | null>(
-    currentWorkspaceSelectedThreadId,
-  );
-  selectedThreadIdRef.current = currentWorkspaceSelectedThreadId;
-  // oxlint-disable-next-line twenty/no-state-useref
-  const refreshRequestIdRef = useRef(0);
-  // oxlint-disable-next-line twenty/no-state-useref
-  const refreshInFlightRef = useRef<{
-    scopeKey: string;
-    requestId: number;
-  } | null>(null);
-  // oxlint-disable-next-line twenty/no-state-useref
-  const refreshScopeKeyRef = useRef(refreshScopeKey);
-  refreshScopeKeyRef.current = refreshScopeKey;
-  const inbox = useMyahInboxThreads(workspaceScopedFilters, workspaceId);
-  const selectedThread =
-    inbox.threads.find(({ id }) => id === currentWorkspaceSelectedThreadId) ??
-    (retainedSelectedThread?.id === currentWorkspaceSelectedThreadId
-      ? retainedSelectedThread
+      : { ...myahInboxFilters, campaignId: null, campaignWorkspaceId: null };
+  const contacts = useMyahInboxContacts(workspaceFilters, workspaceId);
+  const currentSelection =
+    myahInboxContactSelection.workspaceId === workspaceId
+      ? myahInboxContactSelection
+      : EMPTY_MYAH_INBOX_CONTACT_SELECTION;
+  const selectedContact =
+    contacts.contacts.find(
+      (contact) => contact.id === currentSelection.contactId,
+    ) ??
+    (retainedContact?.id === currentSelection.contactId
+      ? retainedContact
       : null);
+  const email = useMyahInboxContactEmailMessages(
+    workspaceId,
+    currentSelection.channel === 'EMAIL' ? (selectedContact?.id ?? null) : null,
+  );
+  const selectedThread = useMyahInboxSelectedEmailThread(
+    workspaceId,
+    currentSelection.channel === 'EMAIL'
+      ? currentSelection.emailThreadId
+      : null,
+  );
 
   useEffect(() => {
-    setThreadUpdateStatus(null);
-  }, [workspaceId]);
+    if (!isMobile) {
+      return;
+    }
 
-  useEffect(() => {
-    refreshRequestIdRef.current += 1;
-    refreshInFlightRef.current = null;
-    pendingRefreshSelectionIdRef.current = null;
-    setRetainedSelectedThread(null);
-  }, [refreshScopeKey]);
+    const panel = mobilePanelRef.current;
 
-  useEffect(() => {
-    const cleanupGenerationRef = selectionCleanupGenerationRef;
-    const cleanupGeneration = ++cleanupGenerationRef.current;
+    if (!panel) {
+      return;
+    }
 
-    return () => {
-      queueMicrotask(() => {
-        if (cleanupGenerationRef.current !== cleanupGeneration) {
-          return;
-        }
+    if (mobilePanel === 'contacts') {
+      const selectedOption = panel.querySelector(
+        '[role=\"option\"][aria-selected=\"true\"]',
+      );
 
-        setMyahInboxSelectedThreadId(null);
-        setMyahInboxSelectionWorkspaceId(null);
-      });
-    };
-  }, [setMyahInboxSelectedThreadId, setMyahInboxSelectionWorkspaceId]);
+      if (selectedOption instanceof HTMLElement) {
+        selectedOption.focus();
+        return;
+      }
+    }
+
+    panel.focus();
+  }, [currentSelection.contactId, isMobile, mobilePanel]);
 
   useEffect(() => {
     if (
@@ -235,77 +247,213 @@ const MyahInboxPageContent = ({
   }, [myahInboxFilters, setMyahInboxFilters, workspaceId]);
 
   useEffect(() => {
-    if (inbox.loading || !workspaceId || inbox.error) {
-      return;
-    }
-
-    if (currentWorkspaceSelectedThreadId) {
-      if (
-        inbox.threads.some(
-          ({ id }) => id === currentWorkspaceSelectedThreadId,
-        ) ||
-        retainedSelectedThread?.id === currentWorkspaceSelectedThreadId ||
-        pendingRefreshSelectionIdRef.current ===
-          currentWorkspaceSelectedThreadId
-      ) {
-        initializedSelectionWorkspaceIdsRef.current.add(workspaceId);
-        return;
-      }
-
-      void flush({
-        workspaceId,
-        threadId: currentWorkspaceSelectedThreadId,
-      });
-      setMyahInboxSelectedThreadId(null);
-      setMyahInboxSelectionWorkspaceId(null);
-      return;
-    }
-
     if (
-      myahInboxSelectionWorkspaceId !== null &&
-      myahInboxSelectionWorkspaceId !== workspaceId
+      myahInboxContactSelection.workspaceId !== null &&
+      myahInboxContactSelection.workspaceId !== workspaceId
     ) {
-      setMyahInboxSelectedThreadId(null);
-      setMyahInboxSelectionWorkspaceId(null);
+      if (myahInboxContactSelection.emailThreadId !== null) {
+        void flush({
+          workspaceId: myahInboxContactSelection.workspaceId,
+          threadId: myahInboxContactSelection.emailThreadId,
+        });
+      }
+      commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
+      setRetainedContact(null);
+      setMobilePanel('contacts');
+    }
+  }, [flush, myahInboxContactSelection, commitContactSelection, workspaceId]);
+
+  useEffect(() => {
+    const cleanupGeneration = ++cleanupGenerationRef.current;
+
+    return () => {
+      queueMicrotask(() => {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (cleanupGenerationRef.current === cleanupGeneration) {
+          commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
+        }
+      });
+    };
+  }, [commitContactSelection]);
+
+  useEffect(() => {
+    if (contacts.loading || contacts.error || !workspaceId) {
+      return;
     }
 
-    if (!initializedSelectionWorkspaceIdsRef.current.has(workspaceId)) {
-      initializedSelectionWorkspaceIdsRef.current.add(workspaceId);
-      if (inbox.threads.length > 0) {
-        setMyahInboxSelectedThreadId(inbox.threads[0].id);
-        setMyahInboxSelectionWorkspaceId(workspaceId);
+    if (selectedContact) {
+      initializedWorkspaceIdsRef.current.add(workspaceId);
+      const nextSelection = getMyahInboxContactSelection({
+        workspaceId,
+        contact: selectedContact,
+        previousSelection: currentSelection,
+      });
+
+      if (JSON.stringify(nextSelection) !== JSON.stringify(currentSelection)) {
+        commitContactSelection(nextSelection);
+      }
+      return;
+    }
+
+    if (currentSelection.contactId !== null) {
+      if (currentSelection.emailThreadId !== null) {
+        void flush({
+          workspaceId,
+          threadId: currentSelection.emailThreadId,
+        });
+      }
+      commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
+      setRetainedContact(null);
+      return;
+    }
+
+    if (!initializedWorkspaceIdsRef.current.has(workspaceId)) {
+      initializedWorkspaceIdsRef.current.add(workspaceId);
+      const firstContact = contacts.contacts[0];
+
+      if (firstContact !== undefined) {
+        commitContactSelection(
+          getMyahInboxContactSelection({
+            workspaceId,
+            contact: firstContact,
+            previousSelection: null,
+          }),
+        );
       }
     }
   }, [
-    currentWorkspaceSelectedThreadId,
-    inbox.error,
-    inbox.loading,
+    contacts.contacts,
+    contacts.error,
+    contacts.loading,
+    currentSelection,
     flush,
-    inbox.threads,
-    myahInboxSelectionWorkspaceId,
-    retainedSelectedThread,
-    setMyahInboxSelectedThreadId,
-    setMyahInboxSelectionWorkspaceId,
+    selectedContact,
+    commitContactSelection,
     workspaceId,
   ]);
 
-  const handleSelectThread = (threadId: string) => {
+  const flushSelectedEmailDraft = () => {
+    if (workspaceId && currentSelection.emailThreadId) {
+      void flush({
+        workspaceId,
+        threadId: currentSelection.emailThreadId,
+      });
+    }
+  };
+
+  const handleSelectContact = (
+    contactId: string,
+    options?: { openConversation?: boolean },
+  ) => {
     if (!workspaceId) {
       return;
     }
 
-    if (currentWorkspaceSelectedThreadId) {
-      void flush({
-        workspaceId,
-        threadId: currentWorkspaceSelectedThreadId,
-      });
+    if (contactId === currentSelection.contactId) {
+      if (isMobile && options?.openConversation) {
+        setMobilePanel('conversation');
+      }
+      return;
     }
-    setMyahInboxSelectedThreadId(threadId);
-    setMyahInboxSelectionWorkspaceId(workspaceId);
 
-    if (isMobile) {
-      setMobilePanel('thread');
+    const contact = contacts.contacts.find(({ id }) => id === contactId);
+
+    if (!contact) {
+      return;
     }
+
+    flushSelectedEmailDraft();
+    setRetainedContact(contact);
+    commitContactSelection(
+      getMyahInboxContactSelection({
+        workspaceId,
+        contact,
+        previousSelection: null,
+      }),
+    );
+
+    if (isMobile && options?.openConversation) {
+      setMobilePanel('conversation');
+    }
+  };
+
+  const handleSelectChannel = (channel: MyahInboxChannel) => {
+    if (!workspaceId || !selectedContact) {
+      return;
+    }
+
+    if (currentSelection.channel === 'EMAIL' && channel !== 'EMAIL') {
+      flushSelectedEmailDraft();
+    }
+    commitContactSelection(
+      getMyahInboxSelectionForChannel({
+        workspaceId,
+        contact: selectedContact,
+        channel,
+        previousSelection: currentSelection,
+      }),
+    );
+  };
+
+  const handleSelectEmailThread = (threadId: string) => {
+    if (!workspaceId || !selectedContact) {
+      return;
+    }
+
+    if (
+      currentSelection.emailThreadId &&
+      currentSelection.emailThreadId !== threadId
+    ) {
+      flushSelectedEmailDraft();
+    }
+    commitContactSelection({
+      workspaceId,
+      contactId: selectedContact.id,
+      channel: 'EMAIL',
+      emailThreadId: threadId,
+      instagramConversationId: null,
+    });
+  };
+
+  const handleRefresh = async (
+    selectedContactId = currentSelection.contactId,
+    options?: { force?: boolean; preserveTarget?: boolean },
+  ) => {
+    const refreshSelectionGeneration = selectionGenerationRef.current;
+    const refreshSelection = currentSelection;
+    const result = options?.force
+      ? await contacts.refresh(selectedContactId, { force: true })
+      : await contacts.refresh(selectedContactId);
+
+    if (
+      result.status !== 'success' ||
+      !workspaceId ||
+      selectionGenerationRef.current !== refreshSelectionGeneration
+    ) {
+      return;
+    }
+
+    if (!result.selectedContact) {
+      flushSelectedEmailDraft();
+      setRetainedContact(null);
+      commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
+      return;
+    }
+
+    setRetainedContact(result.selectedContact);
+    commitContactSelection(
+      options?.preserveTarget
+        ? getMyahInboxRegroupedContactSelection({
+            workspaceId,
+            contact: result.selectedContact,
+            previousSelection: refreshSelection,
+          })
+        : getMyahInboxContactSelection({
+            workspaceId,
+            contact: result.selectedContact,
+            previousSelection: refreshSelection,
+          }),
+    );
   };
 
   const handleFiltersChange = (nextFilters: MyahInboxFilters) => {
@@ -322,97 +470,70 @@ const MyahInboxPageContent = ({
     });
   };
 
-  const handleRefresh = async () => {
-    if (refreshInFlightRef.current?.scopeKey === refreshScopeKey) {
-      return;
-    }
+  const handleActivity = async () => {
+    await Promise.all([
+      selectedThread.refresh(),
+      email.refresh(),
+      handleRefresh(),
+    ]);
+  };
 
-    const request = {
-      scopeKey: refreshScopeKey,
-      requestId: ++refreshRequestIdRef.current,
-    };
-    const selectedThreadId = currentWorkspaceSelectedThreadId;
-
-    refreshInFlightRef.current = request;
-
-    if (selectedThreadId) {
-      if (selectedThread?.id === selectedThreadId) {
-        setRetainedSelectedThread(selectedThread);
-      }
-      pendingRefreshSelectionIdRef.current = selectedThreadId;
-    }
-
-    const result = await inbox.refresh(selectedThreadId);
-    const isCurrentRequest =
-      refreshRequestIdRef.current === request.requestId &&
-      refreshScopeKeyRef.current === request.scopeKey &&
-      refreshInFlightRef.current === request;
-
-    if (!isCurrentRequest) {
-      return;
-    }
-
-    refreshInFlightRef.current = null;
-
-    if (pendingRefreshSelectionIdRef.current === selectedThreadId) {
-      pendingRefreshSelectionIdRef.current = null;
-    }
-
-    if (selectedThreadIdRef.current !== selectedThreadId) {
-      return;
-    }
-
-    if (result.status !== 'success') {
-      return;
-    }
-
-    if (result.selectedThread?.id === selectedThreadId) {
-      setRetainedSelectedThread(result.selectedThread);
-      return;
-    }
-
-    setRetainedSelectedThread(null);
-    if (workspaceId && selectedThreadId) {
-      void flush({
-        workspaceId,
-        threadId: selectedThreadId,
-      });
-    }
-
-    setMyahInboxSelectedThreadId(null);
-    setMyahInboxSelectionWorkspaceId(null);
+  const publishStatus = (message: string) => {
+    setStatus({ message, workspaceId });
   };
 
   const handleThreadUpdated = (message: string) => {
-    setThreadUpdateStatus({ message, workspaceId });
-    void handleRefresh();
+    publishStatus(message);
+    void Promise.all([
+      selectedThread.refresh(),
+      email.refresh(),
+      handleRefresh(),
+    ]);
   };
 
-  const threadList = (
-    <MyahInboxThreadList
-      threads={inbox.threads}
+  const contactList = (
+    <MyahInboxContactList
+      contacts={contacts.contacts}
       filters={myahInboxFilters}
-      selectedThreadId={currentWorkspaceSelectedThreadId}
-      loading={inbox.loading}
-      loadingMore={inbox.loadingMore}
-      isRefreshing={inbox.isRefreshing}
-      refreshStatus={inbox.refreshStatus}
-      refreshError={inbox.refreshError?.message ?? null}
-      error={inbox.error}
-      hasNextPage={inbox.hasNextPage}
-      onSelectThread={handleSelectThread}
+      selectedContactId={currentSelection.contactId}
+      loading={contacts.loading}
+      loadingMore={contacts.loadingMore}
+      isRefreshing={contacts.isRefreshing}
+      refreshStatus={contacts.refreshStatus}
+      refreshError={contacts.refreshError?.message ?? null}
+      error={contacts.error}
+      hasNextPage={contacts.hasNextPage}
+      onSelectContact={handleSelectContact}
       onFiltersChange={handleFiltersChange}
-      onLoadMore={inbox.loadMore}
+      onLoadMore={() => void contacts.loadMore()}
       onRefresh={() => void handleRefresh()}
       onRetry={() => void handleRefresh()}
     />
   );
-  const threadPanel = (
-    <MyahInboxThreadPanel
-      thread={selectedThread}
-      onThreadUpdated={handleThreadUpdated}
-    />
-  );
+  const conversation =
+    workspaceId && selectedContact && currentSelection.channel ? (
+      <MyahInboxContactConversation
+        workspaceId={workspaceId}
+        contact={selectedContact}
+        selectionChannel={currentSelection.channel}
+        selectedEmailThreadId={currentSelection.emailThreadId}
+        email={email}
+        selectedThread={selectedThread}
+        onSelectChannel={handleSelectChannel}
+        onSelectEmailThread={handleSelectEmailThread}
+        onContactLinked={async (resultingContactId) => {
+          await handleRefresh(resultingContactId, {
+            force: true,
+            preserveTarget: true,
+          });
+        }}
+        onActivity={handleActivity}
+        onThreadUpdated={handleThreadUpdated}
+        onUpdateFailed={publishStatus}
+      />
+    ) : (
+      <StyledStatus>Select a contact to open the conversation.</StyledStatus>
+    );
 
   return (
     <PageCardLayout
@@ -424,41 +545,48 @@ const MyahInboxPageContent = ({
         />
       }
     >
-      {threadUpdateStatus?.workspaceId === workspaceId && (
+      {status?.workspaceId === workspaceId ? (
         <StyledSelectionStatus role="status" aria-live="polite">
-          {threadUpdateStatus.message}
+          {status.message}
         </StyledSelectionStatus>
-      )}
+      ) : null}
       {isMobile ? (
         <StyledMobileWorkspace>
           <StyledMobileNavigation aria-label="Inbox panels">
             <SegmentedControl
               ariaLabel="Inbox panels"
+              width="100%"
               value={mobilePanel}
               options={[
-                { label: 'Threads', value: 'list' },
+                { label: 'Contacts', value: 'contacts' },
                 {
                   label: 'Conversation',
-                  value: 'thread',
-                  disabled: !selectedThread,
+                  value: 'conversation',
+                  disabled: !selectedContact,
                 },
               ]}
               onChange={setMobilePanel}
             />
           </StyledMobileNavigation>
           <StyledSelectionStatus role="status" aria-live="polite">
-            {selectedThread
-              ? `Selected: ${selectedThread.subject || 'No subject'}`
-              : `${inbox.threads.length} conversations`}
+            {selectedContact
+              ? `Selected: ${selectedContact.displayName}`
+              : `${contacts.contacts.length} contacts`}
           </StyledSelectionStatus>
-          <StyledMobilePanel>
-            {mobilePanel === 'list' ? threadList : threadPanel}
+          <StyledMobilePanel
+            ref={mobilePanelRef}
+            aria-label={
+              mobilePanel === 'contacts' ? 'Contacts pane' : 'Conversation pane'
+            }
+            tabIndex={-1}
+          >
+            {mobilePanel === 'contacts' ? contactList : conversation}
           </StyledMobilePanel>
         </StyledMobileWorkspace>
       ) : (
         <StyledWorkspace>
-          <StyledPanel>{threadList}</StyledPanel>
-          <StyledPanel>{threadPanel}</StyledPanel>
+          <StyledPanel>{contactList}</StyledPanel>
+          <StyledPanel>{conversation}</StyledPanel>
         </StyledWorkspace>
       )}
     </PageCardLayout>

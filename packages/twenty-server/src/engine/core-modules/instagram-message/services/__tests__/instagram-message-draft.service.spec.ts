@@ -2,6 +2,9 @@ type DraftService = {
   saveDraft: (
     input: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>;
+  getDraftForTarget: (
+    input: Record<string, unknown>,
+  ) => Promise<Record<string, unknown> | null>;
 };
 
 type DraftServiceConstructor = new (...dependencies: never[]) => DraftService;
@@ -25,12 +28,15 @@ const loadService = (): DraftServiceConstructor | undefined => {
   }
 };
 
-const buildHarness = (queryImplementation?: (sql: string) => unknown[]) => {
-  const query = jest.fn(async (sql: string) =>
-    queryImplementation ? queryImplementation(sql) : [],
+const buildHarness = (
+  queryImplementation?: (sql: string, parameters?: unknown[]) => unknown[],
+) => {
+  const query = jest.fn(async (sql: string, parameters?: unknown[]) =>
+    queryImplementation ? queryImplementation(sql, parameters) : [],
   );
   const manager = { query };
   const dataSource = {
+    query,
     transaction: jest.fn(async (callback) => callback(manager)),
   };
   const globalWorkspaceOrmManager = {
@@ -52,6 +58,7 @@ const buildHarness = (queryImplementation?: (sql: string) => unknown[]) => {
 
   return {
     query,
+    actionApprovalService,
     service: new Service!(
       workspaceRepository as never,
       globalWorkspaceOrmManager as never,
@@ -183,5 +190,43 @@ describe('InstagramMessageDraftService', () => {
         conversationRecordId: conversationId,
       }),
     ).rejects.toThrow('Active Unipile conversation is unavailable');
+  });
+  it('loads the latest unsent server draft for the exact target after reload', async () => {
+    const harness = buildHarness((sql) =>
+      sql.includes('"_myahInstagramReplyDraft"')
+        ? [{ id: draftId, revision: 3, body: 'Saved across reload' }]
+        : [],
+    );
+    harness.actionApprovalService.isDraftExecutionLocked.mockResolvedValueOnce(
+      true,
+    );
+
+    await expect(
+      harness.service.getDraftForTarget({
+        workspaceId,
+        kind: 'REPLY',
+        creatorRecordId: null,
+        conversationRecordId: conversationId,
+      }),
+    ).resolves.toEqual({
+      status: 'SAVED',
+      draftId,
+      revision: 3,
+      body: 'Saved across reload',
+      executionLocked: true,
+    });
+    const [sql, parameters] = harness.query.mock.calls[0];
+
+    expect(sql).toContain('"sentAt" IS NULL');
+    expect(sql).toContain('"conversationId" = $2');
+    expect(sql).toContain('ORDER BY "updatedAt" DESC, "id" DESC');
+    expect(parameters).toEqual(['REPLY', conversationId]);
+    expect(
+      harness.actionApprovalService.isDraftExecutionLocked,
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      actionName: 'send_instagram_message',
+      draftId,
+    });
   });
 });

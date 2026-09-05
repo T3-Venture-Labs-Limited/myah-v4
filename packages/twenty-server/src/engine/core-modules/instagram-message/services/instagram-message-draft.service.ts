@@ -24,12 +24,24 @@ export type SaveInstagramMessageDraftInput = {
   conversationRecordId: string | null;
 };
 
+export type GetInstagramMessageDraftForTargetInput = {
+  workspaceId: string;
+  kind: 'FIRST_MESSAGE' | 'REPLY';
+  creatorRecordId: string | null;
+  conversationRecordId: string | null;
+};
+
 export type SaveInstagramMessageDraftResult = {
   status: 'SAVED' | 'CONFLICT';
   draftId: string;
   revision: number;
   body: string;
 };
+
+export type GetInstagramMessageDraftForTargetResult =
+  SaveInstagramMessageDraftResult & {
+    executionLocked: boolean;
+  };
 
 type DraftTarget = {
   creatorRecordId: string;
@@ -60,6 +72,58 @@ export class InstagramMessageDraftService {
     return this.draftLockService.withLock(
       { workspaceId: input.workspaceId, draftId: input.draftId },
       () => this.saveDraftWithLockHeld(input),
+    );
+  }
+
+  async getDraftForTarget(
+    input: GetInstagramMessageDraftForTargetInput,
+  ): Promise<GetInstagramMessageDraftForTargetResult | null> {
+    const workspace = await this.getWorkspace(input.workspaceId);
+
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        const schemaName = getWorkspaceSchemaName(workspace.id);
+        const targetPredicate =
+          input.kind === 'FIRST_MESSAGE'
+            ? '"creatorId" = $2 AND "conversationId" IS NULL'
+            : '"conversationId" = $2';
+        const targetRecordId =
+          input.kind === 'FIRST_MESSAGE'
+            ? input.creatorRecordId
+            : input.conversationRecordId;
+        const [draft] = await dataSource.query<SavedDraftRow[]>(
+          `SELECT "id", "revision", "body"
+           FROM "${schemaName}"."_myahInstagramReplyDraft"
+           WHERE "kind" = $1
+             AND ${targetPredicate}
+             AND "sentAt" IS NULL
+             AND "deletedAt" IS NULL
+           ORDER BY "updatedAt" DESC, "id" DESC
+           LIMIT 1`,
+          [input.kind, targetRecordId],
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        );
+
+        if (!draft) {
+          return null;
+        }
+
+        const executionLocked =
+          await this.actionApprovalService.isDraftExecutionLocked({
+            workspaceId: input.workspaceId,
+            actionName: 'send_instagram_message',
+            draftId: draft.id,
+          });
+
+        return {
+          ...this.toResult('SAVED', draft),
+          executionLocked,
+        };
+      },
+      buildSystemAuthContext({ workspace }),
     );
   }
 

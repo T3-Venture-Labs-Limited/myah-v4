@@ -25,6 +25,36 @@ export type MyahInboxReplySendActionProps = {
   entry: MyahInboxDraftAutosaveEntry;
   onDraftReconciled: (thread: MyahInboxDraftAutosaveThread) => void;
   onSendingChange: (sending: boolean) => void;
+  onSent?: () => void | Promise<void>;
+};
+
+const SEND_READINESS_DESCRIPTION_ID = 'myah-inbox-send-readiness';
+
+const getReadinessMessage = (
+  status: MyahInboxReplySendReadinessStatus | undefined,
+  hasPendingFirstSave: boolean,
+): string | null => {
+  switch (status) {
+    case MyahInboxReplySendReadinessStatus.READY:
+    case undefined:
+      return null;
+    case MyahInboxReplySendReadinessStatus.RECONNECT_REQUIRED:
+      return 'Reconnect the sending mailbox before sending.';
+    case MyahInboxReplySendReadinessStatus.MAILBOX_INELIGIBLE:
+      return 'This mailbox cannot send this reply.';
+    case MyahInboxReplySendReadinessStatus.OUTCOME_PENDING:
+      return 'A previous send is still being confirmed. Sending is locked.';
+    case MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN:
+      return 'A previous delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here.';
+    case MyahInboxReplySendReadinessStatus.RECIPIENT_UNAVAILABLE:
+      return 'This conversation has no readable recipient.';
+    case MyahInboxReplySendReadinessStatus.SENDER_UNAVAILABLE:
+      return 'No eligible sending mailbox is available.';
+    case MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE:
+      return hasPendingFirstSave
+        ? 'Saving the first shared draft…'
+        : 'This Email conversation is unavailable.';
+  }
 };
 
 export const MyahInboxReplySendAction = ({
@@ -33,6 +63,7 @@ export const MyahInboxReplySendAction = ({
   entry,
   onDraftReconciled,
   onSendingChange,
+  onSent,
 }: MyahInboxReplySendActionProps) => {
   const autosaveController = useMyahInboxDraftAutosaveControllerContext();
   const apolloCoreClient = useApolloCoreClient();
@@ -58,12 +89,18 @@ export const MyahInboxReplySendAction = ({
     (hasPendingFirstSave &&
       readiness?.status ===
         MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE);
+  const hasPersistedUnknownOutcome =
+    readiness?.status === MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN;
+  const readinessMessage = readinessLoading
+    ? 'Checking Email send readiness…'
+    : getReadinessMessage(readiness?.status, hasPendingFirstSave);
   const canAttemptSend =
     !disabled &&
     !isSending &&
     !sending &&
     !isPending &&
     !isUnknown &&
+    !hasPersistedUnknownOutcome &&
     !readinessLoading &&
     hasEligibleReadiness &&
     entry.status !== 'error' &&
@@ -74,6 +111,7 @@ export const MyahInboxReplySendAction = ({
     switch (result.outcome) {
       case MyahInboxReplySendOutcome.SENT:
         enqueueSuccessSnackBar({ message: t`Email sent` });
+        void onSent?.();
         void apolloCoreClient
           .refetchQueries({
             include: [
@@ -167,12 +205,22 @@ export const MyahInboxReplySendAction = ({
         variant="primary"
         accent="brand"
         size="small"
+        aria-describedby={
+          readinessMessage || isUnknown
+            ? SEND_READINESS_DESCRIPTION_ID
+            : undefined
+        }
         disabled={!canAttemptSend}
         onClick={handleSend}
       />
-      {isUnknown && (
-        <span role="alert">
-          {t`Delivery outcome is unknown. This draft is locked to prevent a duplicate send.`}
+      {(readinessMessage || isUnknown) && (
+        <span
+          id={SEND_READINESS_DESCRIPTION_ID}
+          role={isUnknown || hasPersistedUnknownOutcome ? 'alert' : 'status'}
+        >
+          {isUnknown
+            ? t`Delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here.`
+            : readinessMessage}
         </span>
       )}
     </>

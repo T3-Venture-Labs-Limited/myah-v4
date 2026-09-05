@@ -54,15 +54,18 @@ type MyahInboxDraftRecord = {
 
 export type MyahInboxReplyWorkspaceProps = {
   thread: MyahInboxThread;
+  onSent?: () => void | Promise<void>;
 };
 
 type MyahInboxReplyWorkspaceContentProps = {
   thread: MyahInboxThread;
+  onSent?: () => void | Promise<void>;
   workspaceId: string;
 };
 
 const MyahInboxReplyWorkspaceContent = ({
   thread,
+  onSent,
   workspaceId,
 }: MyahInboxReplyWorkspaceContentProps) => {
   const { record: draftRecord, loading: draftLoading } =
@@ -144,6 +147,7 @@ const MyahInboxReplyWorkspaceContent = ({
                 disabled={isGenerating || isApplyingProposal}
                 onDraftReconciled={draftAutosaveController.reconcile}
                 onSendingChange={setIsSending}
+                onSent={onSent}
               />
             </>
           }
@@ -155,6 +159,7 @@ const MyahInboxReplyWorkspaceContent = ({
 
 export const MyahInboxReplyWorkspace = ({
   thread,
+  onSent,
 }: MyahInboxReplyWorkspaceProps) => {
   const { objectMetadataItems } = useObjectMetadataItems();
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
@@ -176,6 +181,7 @@ export const MyahInboxReplyWorkspace = ({
         <MyahInboxReplyWorkspaceContent
           key={`${currentWorkspace.id}:${thread.id}`}
           thread={thread}
+          onSent={onSent}
           workspaceId={currentWorkspace.id}
         />
       ) : (

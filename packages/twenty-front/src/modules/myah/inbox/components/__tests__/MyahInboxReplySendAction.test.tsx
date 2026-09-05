@@ -32,17 +32,20 @@ jest.mock('twenty-ui/input', () => ({
     ariaLabel,
     variant,
     disabled,
+    'aria-describedby': ariaDescribedBy,
     onClick,
   }: {
     title: string;
     accent?: string;
     ariaLabel?: string;
     variant: string;
+    'aria-describedby'?: string;
     disabled?: boolean;
     onClick: () => void;
   }) => (
     <button
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
       data-accent={accent}
       data-variant={variant}
       disabled={disabled}
@@ -149,6 +152,7 @@ const renderAction = ({
   sending = false,
   onDraftReconciled = jest.fn(),
   onSendingChange = jest.fn(),
+  onSent = jest.fn(),
 }: {
   entry?: MyahInboxDraftAutosaveEntry;
   readiness?: string | null;
@@ -156,6 +160,7 @@ const renderAction = ({
   sending?: boolean;
   onDraftReconciled?: (thread: MyahInboxDraftAutosaveThread) => void;
   onSendingChange?: (sending: boolean) => void;
+  onSent?: () => void | Promise<void>;
 } = {}) => {
   mockReadiness = readiness ? { status: readiness, reason: null } : null;
   mockReadinessLoading = readinessLoading;
@@ -167,10 +172,11 @@ const renderAction = ({
       entry={entry}
       onDraftReconciled={onDraftReconciled}
       onSendingChange={onSendingChange}
+      onSent={onSent}
     />,
   );
 
-  return { ...rendered, onDraftReconciled, onSendingChange };
+  return { ...rendered, onDraftReconciled, onSendingChange, onSent };
 };
 
 describe('MyahInboxReplySendAction', () => {
@@ -269,20 +275,33 @@ describe('MyahInboxReplySendAction', () => {
   });
 
   it.each([
-    'RECONNECT_REQUIRED',
-    'MAILBOX_INELIGIBLE',
-    'OUTCOME_PENDING',
-    'OUTCOME_UNKNOWN',
-  ])('disables Send while readiness is %s', (readiness) => {
+    ['RECONNECT_REQUIRED', 'Reconnect the sending mailbox before sending.'],
+    ['MAILBOX_INELIGIBLE', 'This mailbox cannot send this reply.'],
+    [
+      'OUTCOME_PENDING',
+      'A previous send is still being confirmed. Sending is locked.',
+    ],
+    [
+      'OUTCOME_UNKNOWN',
+      'A previous delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here.',
+    ],
+  ])('explains why Send is disabled for %s', (readiness, message) => {
     renderAction({ readiness });
 
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    const sendButton = screen.getByRole('button', { name: 'Send' });
+    const explanation = screen.getByText(message);
+
+    expect(sendButton).toBeDisabled();
+    expect(sendButton).toHaveAttribute('aria-describedby', explanation.id);
   });
 
   it('disables Send while readiness loads or the send hook is executing', () => {
     const loading = renderAction({ readinessLoading: true });
 
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Checking Email send readiness',
+    );
 
     loading.unmount();
     renderAction({ sending: true });
@@ -298,7 +317,8 @@ describe('MyahInboxReplySendAction', () => {
     const onDraftReconciled = jest.fn();
     mockFlush.mockResolvedValue(flushed);
 
-    renderAction({ onDraftReconciled });
+    const onSent = jest.fn();
+    renderAction({ onDraftReconciled, onSent });
 
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -317,6 +337,7 @@ describe('MyahInboxReplySendAction', () => {
     expect(mockEnqueueSuccessSnackBar).toHaveBeenCalledWith({
       message: 'Email sent',
     });
+    expect(onSent).toHaveBeenCalledTimes(1);
     expect(mockRefetchQueries).toHaveBeenCalledWith({
       include: [
         'MyahInboxThreads',
@@ -506,7 +527,7 @@ describe('MyahInboxReplySendAction', () => {
 
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'Delivery outcome is unknown. This draft is locked to prevent a duplicate send.',
+        'Delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here.',
       ),
     );
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
