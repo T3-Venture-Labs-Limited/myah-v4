@@ -103,6 +103,7 @@ describe('OutreachEmailDraftService', () => {
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(),
     getRepository: jest.fn(),
+    getGlobalWorkspaceDataSource: jest.fn(),
   };
 
   const connectedAccountRepository = {
@@ -139,6 +140,17 @@ describe('OutreachEmailDraftService', () => {
       async (_workspaceId: string, objectName: string) =>
         workspaceRepositories[objectName],
     );
+    globalWorkspaceOrmManager.getGlobalWorkspaceDataSource.mockResolvedValue({
+      query: async () => {
+        const latestCampaignCreator = await campaignCreatorRepository.findOne.mock.results.at(-1)?.value;
+        return [
+          {
+            assignedManagedMailboxId:
+              latestCampaignCreator.assignedManagedMailboxId,
+          },
+        ];
+      },
+    });
     campaignCreatorRepository.findOne.mockResolvedValue(campaignCreator);
     creatorRepository.findOne.mockResolvedValue(creator);
     campaignRepository.findOne.mockResolvedValue(campaign);

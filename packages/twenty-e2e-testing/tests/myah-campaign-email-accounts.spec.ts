@@ -30,6 +30,7 @@ type CampaignCallbackFixture = {
 
 type CampaignMailboxFixtureStatus = {
   providerSendAttemptCount: number;
+  providerDraftPreparationCount: number;
 };
 
 type CampaignEmailAccount = {
@@ -82,6 +83,7 @@ const fixtureStatusQuery = `
   query GetMyahE2eCampaignMailboxFixtureStatus($input: MyahE2eFixtureIdInput!) {
     getMyahE2eCampaignMailboxFixtureStatus(input: $input) {
       providerSendAttemptCount
+      providerDraftPreparationCount
     }
   }
 `;
@@ -369,6 +371,10 @@ test('Campaign email accounts', async ({ page }) => {
       fixtureStatus.getMyahE2eCampaignMailboxFixtureStatus
         .providerSendAttemptCount,
     ).toBe(0);
+    expect(
+      fixtureStatus.getMyahE2eCampaignMailboxFixtureStatus
+        .providerDraftPreparationCount,
+    ).toBe(1);
 
     await selectOperationsTab(page);
     await expect(

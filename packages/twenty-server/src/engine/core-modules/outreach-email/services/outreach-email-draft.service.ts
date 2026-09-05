@@ -15,6 +15,7 @@ import { IsNull, type Repository } from 'typeorm';
 
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { isCanonicalManagedMailboxId } from 'src/engine/core-modules/outreach-email/utils/managed-mailbox-id.util';
+import { readCampaignCreatorManagedMailboxId } from 'src/engine/core-modules/outreach-email/utils/read-campaign-creator-managed-mailbox-id.util';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import {
   type OutreachPreparationAuthority,
@@ -250,6 +251,13 @@ export class OutreachEmailDraftService {
 
         const campaignCreator = await campaignCreatorRepository.findOne({
           where: { id: input.campaignCreatorId },
+          select: {
+            id: true,
+            creatorId: true,
+            campaignId: true,
+            selectedContactMethod: true,
+            assignedManagedMailboxId: true,
+          },
         });
 
         if (!campaignCreator) {
@@ -261,6 +269,13 @@ export class OutreachEmailDraftService {
             'Campaign Creator must reference one Creator and one Campaign',
           );
         }
+
+        const assignedManagedMailboxId =
+          await readCampaignCreatorManagedMailboxId(
+            this.globalWorkspaceOrmManager,
+            input.workspaceId,
+            campaignCreator.id,
+          );
 
         if (
           campaignCreator.selectedContactMethod?.trim().toUpperCase() !==
@@ -302,7 +317,7 @@ export class OutreachEmailDraftService {
             >
           | undefined;
 
-        if (campaignCreator.assignedManagedMailboxId === null) {
+        if (assignedManagedMailboxId === null) {
           defaultEmailAccount =
             await this.campaignAccountService.resolveDefaultEmailAccount(
               campaign.id,
@@ -318,7 +333,7 @@ export class OutreachEmailDraftService {
           }
           campaignAccountId = defaultEmailAccount.id;
         } else if (
-          !isCanonicalManagedMailboxId(campaignCreator.assignedManagedMailboxId)
+          !isCanonicalManagedMailboxId(assignedManagedMailboxId)
         ) {
           throw new Error(
             'Campaign Creator has an invalid assigned managed mailbox',
@@ -379,10 +394,10 @@ export class OutreachEmailDraftService {
           associationRepository,
         });
 
-        if (campaignCreator.assignedManagedMailboxId !== null) {
+        if (assignedManagedMailboxId !== null) {
           await this.managedEmailCampaignEligibilityService.assertEligible({
             workspaceId: input.workspaceId,
-            managedMailboxId: campaignCreator.assignedManagedMailboxId,
+            managedMailboxId: assignedManagedMailboxId,
             connectedAccountId: connectedAccount.id,
             messageChannelId: messageChannel.id,
             isFollowUp: threadContext.inReplyTo !== null,

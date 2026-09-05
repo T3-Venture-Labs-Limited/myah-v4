@@ -19,6 +19,7 @@ import {
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { isCanonicalManagedMailboxId } from 'src/engine/core-modules/outreach-email/utils/managed-mailbox-id.util';
+import { readCampaignCreatorManagedMailboxId } from 'src/engine/core-modules/outreach-email/utils/read-campaign-creator-managed-mailbox-id.util';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import {
@@ -759,8 +760,11 @@ export class OutreachEmailActionDefinition {
     const inReplyTo = graph.action.inReplyTo?.trim() || null;
     const recipientLabel = graph.creator.name?.trim();
     const campaignLabel = graph.campaign.name?.trim();
-    const rawAssignedManagedMailboxId = graph.campaignCreator
-      .assignedManagedMailboxId as unknown;
+    const rawAssignedManagedMailboxId = await readCampaignCreatorManagedMailboxId(
+      this.globalWorkspaceOrmManager,
+      workspaceId,
+      graph.campaignCreator.id,
+    );
     const campaignAccountId = graph.action.campaignAccountId?.trim() || null;
     const executionReceiptId = graph.action.executionReceiptId?.trim() || null;
     const sentHeaderMessageId =

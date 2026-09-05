@@ -82,6 +82,27 @@ type SourceControlledMyahMetadataSynchronizer = {
 const execFileAsync = promisify(execFile);
 const CAMPAIGN_ACCOUNT_METADATA_COMMAND =
   'upgrade:2-20:synchronize-myah-campaign-account-metadata';
+const TRANSACTION_FIXTURE_CAMPAIGN_NAME_PATTERN =
+  '^MYAH-270 (Transaction|Transition|Same Account|Rollback|Mixed Case|Insert Rollback|Rollback Successor|Query Runner Ownership|Migration Conflict|Remove Timestamp|Row Permission Excluded|Row Permission Allowed) [0-9a-f-]{36}$';
+const TRANSACTION_FIXTURE_CONNECTED_ACCOUNT_HANDLE_PATTERN =
+  '^myah-270-lock-[0-9a-f-]{36}-[0-3]@example\\.test$';
+const TRANSACTION_FIXTURE_TRIGGER_NAMES = [
+  'myah_270_set_default_barrier_trigger',
+  'myah_270_default_target_failure_trigger',
+  'myah_270_mixed_case_lock_barrier_trigger',
+  'myah_270_link_after_insert_failure_trigger',
+  'myah_270_transaction_audit_trigger',
+  'myah_270_waiting_successor_rollback_trigger',
+] as const;
+const TRANSACTION_FIXTURE_AUDIT_TABLE_NAME = 'myah_270_transaction_audit';
+const TRANSACTION_FIXTURE_FUNCTION_NAMES = [
+  'myah_270_set_default_barrier',
+  'myah_270_default_target_failure',
+  'myah_270_mixed_case_lock_barrier',
+  'myah_270_link_after_insert_failure',
+  'myah_270_transaction_audit_function',
+  'myah_270_waiting_successor_rollback',
+] as const;
 
 const synchronizeCampaignAccountMetadata = async (workspaceId: string) => {
   await execFileAsync(
@@ -305,6 +326,63 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     );
   };
 
+  const assertNoInterruptedFixtureResidue = async () => {
+    const [
+      campaignResidue,
+      connectedAccountResidue,
+      triggerResidue,
+      functionResidue,
+      auditTableResidue,
+    ] = await Promise.all([
+        global.testDataSource.query<Array<{ id: string }>>(
+          `SELECT "id" FROM "${workspaceSchemaName}"."campaign"
+             WHERE "name" ~ $1`,
+          [TRANSACTION_FIXTURE_CAMPAIGN_NAME_PATTERN],
+        ),
+        global.testDataSource.query<Array<{ id: string }>>(
+          `SELECT "id" FROM core."connectedAccount" WHERE "handle" ~ $1`,
+          [TRANSACTION_FIXTURE_CONNECTED_ACCOUNT_HANDLE_PATTERN],
+        ),
+        global.testDataSource.query<Array<{ name: string }>>(
+          `SELECT trigger_name AS "name"
+             FROM information_schema.triggers
+            WHERE event_object_schema = $1
+              AND event_object_table = 'campaignAccount'
+              AND trigger_name = ANY($2::text[])`,
+          [workspaceSchemaName, TRANSACTION_FIXTURE_TRIGGER_NAMES],
+        ),
+        global.testDataSource.query<Array<{ name: string }>>(
+          `SELECT proname AS "name"
+             FROM pg_proc AS procedure
+             INNER JOIN pg_namespace AS namespace
+               ON namespace.oid = procedure.pronamespace
+            WHERE namespace.nspname = $1
+              AND proname = ANY($2::text[])`,
+          [workspaceSchemaName, TRANSACTION_FIXTURE_FUNCTION_NAMES],
+        ),
+        global.testDataSource.query<Array<{ name: string }>>(
+          `SELECT relname AS "name"
+             FROM pg_class AS relation
+             INNER JOIN pg_namespace AS namespace
+               ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname = $1 AND relname = $2`,
+          [workspaceSchemaName, TRANSACTION_FIXTURE_AUDIT_TABLE_NAME],
+        ),
+      ]);
+    const residue = [
+      ...campaignResidue.map(({ id }) => `campaign:${id}`),
+      ...connectedAccountResidue.map(({ id }) => `connectedAccount:${id}`),
+      ...triggerResidue.map(({ name }) => `trigger:${name}`),
+      ...functionResidue.map(({ name }) => `function:${name}`),
+      ...auditTableResidue.map(({ name }) => `table:${name}`),
+    ];
+    if (residue.length) {
+      throw new Error(
+        `Interrupted CampaignAccount integration fixture residue detected; clean only these IDs/artifacts before retry: ${residue.join(', ')}`,
+      );
+    }
+  };
+
   beforeAll(async () => {
     const workspaces = await global.testDataSource.query<WorkspaceRow[]>(
       `SELECT "id" FROM core."workspace" ORDER BY "createdAt"`,
@@ -347,6 +425,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
       throw new Error('A workspace member is required');
     }
     userWorkspaceId = userWorkspace.id;
+    await assertNoInterruptedFixtureResidue();
     campaignAccountService = resolveProvider(CampaignAccountService);
     workspaceIteratorService = resolveProviderByName<WorkspaceIterator>(
       'WorkspaceIteratorService',
@@ -457,6 +536,25 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
 
     // A failed legacy-index restoration must not strand fixture records. Run
     // every restoration and deletion independently and report all failures.
+    for (const triggerName of TRANSACTION_FIXTURE_TRIGGER_NAMES) {
+      await attempt(`drop fixture trigger ${triggerName}`, () =>
+        global.testDataSource.query(
+          `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
+        ),
+      );
+    }
+    for (const functionName of TRANSACTION_FIXTURE_FUNCTION_NAMES) {
+      await attempt(`drop fixture function ${functionName}`, () =>
+        global.testDataSource.query(
+          `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
+        ),
+      );
+    }
+    await attempt('drop fixture transaction audit table', () =>
+      global.testDataSource.query(
+        `DROP TABLE IF EXISTS "${workspaceSchemaName}"."${TRANSACTION_FIXTURE_AUDIT_TABLE_NAME}"`,
+      ),
+    );
     await attempt('restore conflicting default', () =>
       global.testDataSource.query(
         `UPDATE "${workspaceSchemaName}"."campaignAccount"

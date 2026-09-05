@@ -222,6 +222,14 @@ const buildDefinition = ({
       async (_workspaceId: string, objectName: keyof typeof repositories) =>
         repositories[objectName],
     ),
+    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+      query: jest.fn(async () => [
+        {
+          assignedManagedMailboxId:
+            state.campaignCreator.assignedManagedMailboxId,
+        },
+      ]),
+    }),
   };
   const workspaceRepository = {
     findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),

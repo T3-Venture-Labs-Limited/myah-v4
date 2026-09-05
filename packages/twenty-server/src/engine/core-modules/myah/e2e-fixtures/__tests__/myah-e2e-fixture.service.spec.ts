@@ -7,6 +7,7 @@ const userWorkspaceId = 'a1a3b7a6-b1c2-4a75-9b01-100000000002';
 const campaignId = 'a1a3b7a6-b1c2-4a75-9b01-100000000003';
 const bindingId = 'a1a3b7a6-b1c2-4a75-9b01-100000000004';
 const operationsTabId = 'a1a3b7a6-b1c2-4a75-9b01-100000000005';
+const outreachActionId = 'a1a3b7a6-b1c2-4a75-9b01-100000000006';
 const workspace = {
   id: workspaceId,
   subdomain: 'apple',
@@ -37,6 +38,13 @@ describe('MyahE2eFixtureService', () => {
       recordApprovalBinding: jest.fn().mockResolvedValue(undefined),
     };
     const registry = new MyahE2eFixtureRegistryService();
+    const prepareOutreachEmailDraftTool = {
+      execute: jest.fn().mockResolvedValue({
+        success: true,
+        message: 'Outreach email draft prepared for approval.',
+        result: { outreachActionId },
+      }),
+    };
     const workspaceDomainsService = {
       buildWorkspaceURL: jest.fn(
         ({
@@ -63,6 +71,7 @@ describe('MyahE2eFixtureService', () => {
       outreachEmailActionDefinition as never,
       registry,
       workspaceDomainsService as never,
+      prepareOutreachEmailDraftTool as never,
     );
 
     return {
@@ -70,6 +79,7 @@ describe('MyahE2eFixtureService', () => {
       dataSource,
       manager,
       outreachEmailActionDefinition,
+      prepareOutreachEmailDraftTool,
       registry,
       service,
       workspaceDomainsService,
@@ -82,6 +92,7 @@ describe('MyahE2eFixtureService', () => {
       actionApprovalService,
       manager,
       outreachEmailActionDefinition,
+      prepareOutreachEmailDraftTool,
       service,
       workspaceDataSource,
     } = createService();
@@ -116,9 +127,27 @@ describe('MyahE2eFixtureService', () => {
       undefined,
       { shouldBypassPermissionChecks: true },
     );
-    expect(manager.query).toHaveBeenCalledWith(
-      expect.stringContaining("'MYAH-270 default'"),
-      expect.any(Array),
+    expect(
+      manager.query.mock.calls.some(([sql]: [string]) =>
+        sql.includes('INSERT INTO') && sql.includes('"outreachAction"'),
+      ),
+    ).toBe(false);
+    expect(prepareOutreachEmailDraftTool.execute).toHaveBeenCalledTimes(1);
+    expect(prepareOutreachEmailDraftTool.execute).toHaveBeenCalledWith(
+      {
+        campaignCreatorId: expect.any(String),
+        connectedAccountId: expect.any(String),
+        subject: 'MYAH-270 fixture subject',
+        body: 'MYAH-270 fixture body',
+      },
+      {
+        workspaceId,
+        userWorkspaceId,
+        threadId: expect.any(String),
+      },
+    );
+    expect(outreachEmailActionDefinition.propose).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { outreachActionId } }),
     );
     expect(manager.query).toHaveBeenCalledWith(
       expect.stringContaining('"pendingQuestionMessageId"'),
@@ -275,7 +304,10 @@ describe('MyahE2eFixtureService', () => {
 
     expect(
       service.getCampaignMailboxFixtureStatus(fixtureContext, fixture.id),
-    ).toEqual({ providerSendAttemptCount: 0 });
+    ).toEqual({
+      providerSendAttemptCount: 0,
+      providerDraftPreparationCount: 0,
+    });
     expect(() =>
       service.getCampaignMailboxFixtureStatus(
         {

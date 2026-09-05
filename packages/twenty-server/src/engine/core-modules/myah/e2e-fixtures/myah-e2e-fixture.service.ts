@@ -12,7 +12,6 @@ import {
 import { DataSource } from 'typeorm';
 
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
-import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { type WorkspaceDomainConfig } from 'src/engine/core-modules/domain/workspace-domains/types/workspace-domain-config.type';
@@ -20,6 +19,7 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { MyahE2eFixtureRegistryService } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture-registry.service';
 import { E2eFixtureGmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/e2e-fixture-gmail-message-outbound.service';
+import { PrepareOutreachEmailDraftTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/prepare-outreach-email-draft-tool';
 
 const EXPECTED_SUBJECT = 'MYAH-270 fixture subject';
 const EXPECTED_BODY = 'MYAH-270 fixture body';
@@ -47,6 +47,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
     private readonly registry: MyahE2eFixtureRegistryService,
     private readonly workspaceDomainsService: WorkspaceDomainsService,
+    private readonly prepareOutreachEmailDraftTool: PrepareOutreachEmailDraftTool,
   ) {}
 
   async createCampaignMailboxFixture(
@@ -60,7 +61,6 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     const campaignAccountId = randomUUID();
     const creatorId = randomUUID();
     const campaignCreatorId = randomUUID();
-    const outreachActionId = randomUUID();
     const threadId = randomUUID();
     const messageId = randomUUID();
     const partId = randomUUID();
@@ -72,7 +72,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
       campaignAccountIds: [campaignAccountId],
       creatorIds: [creatorId],
       campaignCreatorIds: [campaignCreatorId],
-      outreachActionIds: [outreachActionId],
+      outreachActionIds: [] as string[],
       actionApprovalBindingIds: [] as string[],
       agentChatThreadIds: [threadId],
       agentMessageIds: [messageId],
@@ -125,32 +125,6 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
           [campaignCreatorId, creatorId, campaignId],
         );
         await manager.query(
-          `INSERT INTO "${schemaName}"."outreachAction" (
-            "id", "name", "campaignCreatorId", "channel", "status", "subject", "body",
-            "contentDigest", "recipientEmail", "campaignAccountId", "connectedAccountId",
-            "messageChannelId", "senderEmail", "senderDisplayName", "providerDraftExternalId"
-          ) VALUES (
-            $1, 'MYAH-270 fixture outreach action', $2, 'EMAIL', 'PENDING', $3, $4,
-            $5, $6, $7, $8, $9, $10,
-            'MYAH-270 default', $11
-          )`,
-          [
-            outreachActionId,
-            campaignCreatorId,
-            EXPECTED_SUBJECT,
-            EXPECTED_BODY,
-            computeActionContentDigest(
-              JSON.stringify([EXPECTED_SUBJECT, EXPECTED_BODY]),
-            ),
-            EXPECTED_RECIPIENT,
-            campaignAccountId,
-            defaultMailbox.connectedAccountId,
-            defaultMailbox.messageChannelId,
-            defaultMailbox.email,
-            `myah-e2e-draft-${fixtureNonce}`,
-          ],
-        );
-        await manager.query(
           `INSERT INTO core."agentChatThread" (
             "id", "workspaceId", "userWorkspaceId", "title", "pendingQuestionMessageId"
           ) VALUES ($1, $2, $3, $4, $5)`,
@@ -163,6 +137,22 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
           ],
         );
       });
+
+      const preparedDraft = await this.prepareOutreachEmailDraftTool.execute(
+        {
+          campaignCreatorId,
+          connectedAccountId: defaultMailbox.connectedAccountId,
+          subject: EXPECTED_SUBJECT,
+          body: EXPECTED_BODY,
+        },
+        {
+          workspaceId: context.workspaceId,
+          userWorkspaceId: context.userWorkspaceId,
+          threadId,
+        },
+      );
+      const outreachActionId = this.fixtureOutreachActionId(preparedDraft);
+      records.outreachActionIds.push(outreachActionId);
 
       const proposal = await this.outreachEmailActionDefinition.propose({
         workspaceId: context.workspaceId,
@@ -231,6 +221,23 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     }
   }
 
+  private fixtureOutreachActionId(output: {
+    success: boolean;
+    result?: object;
+  }): string {
+    if (!output.success || !output.result) {
+      throw new Error(
+        `E2E fixture outreach draft preparation failed: ${Reflect.get(output, 'message')}`,
+      );
+    }
+    const outreachActionId = Reflect.get(output.result, 'outreachActionId');
+    if (typeof outreachActionId !== 'string') {
+      throw new Error('E2E fixture outreach draft preparation returned no action');
+    }
+
+    return outreachActionId;
+  }
+
   async createCallbackFixture(
     context: AuthenticatedFixtureContext,
     fixtureId: string,
@@ -282,13 +289,17 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
   getCampaignMailboxFixtureStatus(
     context: AuthenticatedFixtureContext,
     fixtureId: string,
-  ): { providerSendAttemptCount: number } {
+  ): { providerSendAttemptCount: number; providerDraftPreparationCount: number } {
     const fixture = this.registry.get(context.workspaceId, fixtureId);
     if (!fixture) throw new Error('E2E fixture was not found');
 
     return {
       providerSendAttemptCount:
         E2eFixtureGmailMessageOutboundService.getSendAttemptCount(
+          fixture.records.connectedAccountIds,
+        ),
+      providerDraftPreparationCount:
+        E2eFixtureGmailMessageOutboundService.getDraftPreparationCount(
           fixture.records.connectedAccountIds,
         ),
     };

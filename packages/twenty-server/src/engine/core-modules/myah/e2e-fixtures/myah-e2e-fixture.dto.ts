@@ -65,6 +65,9 @@ export class MyahE2eCampaignMailboxFixtureDTO {
 export class MyahE2eCampaignMailboxFixtureStatusDTO {
   @Field()
   providerSendAttemptCount!: number;
+
+  @Field()
+  providerDraftPreparationCount!: number;
 }
 
 @ObjectType()
