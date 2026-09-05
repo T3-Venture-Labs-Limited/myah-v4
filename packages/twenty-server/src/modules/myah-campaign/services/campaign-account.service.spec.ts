@@ -313,10 +313,12 @@ describe('CampaignAccountService', () => {
       },
     ]);
     expect(JSON.stringify(accounts)).not.toContain('secret-token');
-    // The post-commit list read uses the normal repository; the mutation itself does not.
-    expect(
-      harness.workspaceRepositories.campaign.findOne,
-    ).toHaveBeenCalledTimes(1);
+    // The locked mutation's Campaign read retains row-level permissions and
+    // receives the same transaction manager as the raw writes.
+    expect(harness.workspaceRepositories.campaign.findOne).toHaveBeenCalledWith(
+      { where: { id: campaignId } },
+      harness.transactionManager,
+    );
     expect(harness.orm.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
     expect(harness.transaction).toHaveBeenCalledTimes(1);
     expect(harness.transactionManager.queryRunner.query).toHaveBeenCalledWith(
@@ -324,6 +326,14 @@ describe('CampaignAccountService', () => {
       [workspaceId, campaignId],
     );
     expect(harness.transactionManager.getRepository).not.toHaveBeenCalled();
+    expect(
+      harness.transactionManager.queryRunner.query.mock.calls.some(
+        ([sql]) =>
+          typeof sql === 'string' &&
+          sql.includes('FROM') &&
+          sql.includes('"campaign"'),
+      ),
+    ).toBe(false);
   });
 
   it('rejects foreign, archived, unsupported, ambiguous, invalid-address, and duplicate account links', async () => {
@@ -506,9 +516,20 @@ describe('CampaignAccountService', () => {
       harness.workspaceRepositories.campaignAccount.update,
     ).not.toHaveBeenCalled();
     expect(harness.transactionManager.queryRunner.query).toHaveBeenCalledWith(
-      expect.stringContaining('SET "isDefault" = false'),
+      expect.stringContaining(
+        'SET "isDefault" = false, "updatedAt" = CURRENT_TIMESTAMP',
+      ),
       [campaignId],
     );
+    expect(
+      harness.transactionManager.queryRunner.query.mock.calls.some(
+        ([sql]) =>
+          typeof sql === 'string' &&
+          sql.includes(
+            'SET "isDefault" = true, "updatedAt" = CURRENT_TIMESTAMP',
+          ),
+      ),
+    ).toBe(true);
     await harness.service.remove(
       { campaignId, campaignAccountId: 'second' },
       authContext,
@@ -530,6 +551,68 @@ describe('CampaignAccountService', () => {
         }),
       ]),
     );
+  });
+
+  it('rejects link, default, and removal before raw writes when a row-level Campaign predicate excludes the record', async () => {
+    const makeExcludedHarness = () => {
+      const harness = createHarness({
+        campaignAccounts: [
+          {
+            id: 'excluded-link',
+            campaignId,
+            connectedAccountId: accountId,
+            messageChannelId: channelId,
+            channel: 'EMAIL',
+            isDefault: true,
+          },
+        ],
+      });
+      harness.workspaceRepositories.campaign.findOne.mockResolvedValue(null);
+      return harness;
+    };
+
+    const linkHarness = makeExcludedHarness();
+    await expect(
+      linkHarness.service.link(
+        { campaignId, connectedAccountId: accountId },
+        authContext,
+      ),
+    ).rejects.toThrow('Campaign not found');
+
+    const setDefaultHarness = makeExcludedHarness();
+    await expect(
+      setDefaultHarness.service.setDefault(
+        { campaignId, campaignAccountId: 'excluded-link' },
+        authContext,
+      ),
+    ).rejects.toThrow('Campaign not found');
+
+    const removeHarness = makeExcludedHarness();
+    await expect(
+      removeHarness.service.remove(
+        { campaignId, campaignAccountId: 'excluded-link' },
+        authContext,
+      ),
+    ).rejects.toThrow('Campaign not found');
+
+    for (const harness of [linkHarness, setDefaultHarness, removeHarness]) {
+      expect(harness.rows.campaignAccount).toEqual([
+        expect.objectContaining({ id: 'excluded-link', isDefault: true }),
+      ]);
+      expect(
+        harness.transactionManager.queryRunner.query.mock.calls.some(
+          ([sql]) =>
+            typeof sql === 'string' &&
+            (sql.includes('INSERT INTO') || sql.includes('UPDATE')),
+        ),
+      ).toBe(false);
+      expect(
+        harness.workspaceRepositories.campaign.findOne,
+      ).toHaveBeenCalledWith(
+        { where: { id: campaignId } },
+        harness.transactionManager,
+      );
+    }
   });
 
   it('allows every workspace account regardless of visibility for Campaign candidates, links, and defaults', async () => {

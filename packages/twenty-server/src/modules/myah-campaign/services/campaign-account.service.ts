@@ -186,7 +186,7 @@ export class CampaignAccountService {
         throw new Error('Campaign email account not found');
       await context.queryRunner.query(
         `UPDATE ${this.campaignAccountTable(context.schemaName)}
-            SET "isDefault" = false
+            SET "isDefault" = false, "updatedAt" = CURRENT_TIMESTAMP
           WHERE "campaignId" = $1 AND "channel" = 'EMAIL'
             AND "isDefault" = true AND "deletedAt" IS NULL`,
         [context.campaignId],
@@ -194,7 +194,7 @@ export class CampaignAccountService {
       const updated = await this.queryRows<{ id: string }>(
         context.queryRunner,
         `UPDATE ${this.campaignAccountTable(context.schemaName)}
-            SET "isDefault" = true
+            SET "isDefault" = true, "updatedAt" = CURRENT_TIMESTAMP
           WHERE id = $1 AND "campaignId" = $2 AND "channel" = 'EMAIL'
             AND "deletedAt" IS NULL
         RETURNING id`,
@@ -215,7 +215,7 @@ export class CampaignAccountService {
       const removed = await this.queryRows<{ id: string }>(
         context.queryRunner,
         `UPDATE ${this.campaignAccountTable(context.schemaName)}
-            SET "deletedAt" = NOW()
+            SET "deletedAt" = NOW(), "updatedAt" = CURRENT_TIMESTAMP
           WHERE id = $1 AND "campaignId" = $2 AND "channel" = 'EMAIL'
             AND "deletedAt" IS NULL
         RETURNING id`,
@@ -300,14 +300,21 @@ export class CampaignAccountService {
           'SELECT pg_advisory_xact_lock(hashtext(($1::uuid)::text), hashtext(($2::uuid)::text))',
           [workspaceId, campaignId],
         );
-        const campaign = await this.queryRows<{ id: string }>(
-          queryRunner,
-          `SELECT id FROM ${this.campaignTable(schemaName)}
-            WHERE id = $1 AND "deletedAt" IS NULL`,
-          [campaignId],
+        // WorkspaceRepository.findOne keeps row-level predicates in force and
+        // accepts the transaction manager, unlike its save path. Its read and
+        // every raw CampaignAccount write therefore share this QueryRunner.
+        const campaignRepository = await this.campaignRepository(authContext);
+        const campaign = await campaignRepository.findOne(
+          { where: { id: campaignId } },
+          manager,
         );
-        if (campaign.length !== 1) throw new Error('Campaign not found');
-        return callback({ queryRunner, workspaceId, campaignId, schemaName });
+        if (!campaign) throw new Error('Campaign not found');
+        return callback({
+          queryRunner,
+          workspaceId,
+          campaignId,
+          schemaName,
+        });
       });
     });
   }
@@ -360,10 +367,6 @@ export class CampaignAccountService {
     return (Array.isArray(result) && Array.isArray(result[0])
       ? result[0]
       : result) as unknown as T[];
-  }
-
-  private campaignTable(schemaName: string): string {
-    return `"${schemaName}"."campaign"`;
   }
 
   private campaignAccountTable(schemaName: string): string {

@@ -22,6 +22,7 @@ type UserWorkspaceRow = { id: string };
 type CampaignAccountRow = {
   connectedAccountId: string;
   isDefault: boolean;
+  updatedAt?: Date;
 };
 type PhysicalIndexRow = {
   indexName: string;
@@ -35,6 +36,9 @@ type TransactionAuditRow = {
   operation: string;
   backendPid: string;
   transactionId: string;
+  advisoryLockHeld: boolean;
+  workspaceLockKey: string;
+  campaignLockKey: string;
 };
 type WorkspaceIteratorReport = {
   fail: Array<{ workspaceId: string; error: Error }>;
@@ -117,6 +121,19 @@ const resolveProvider = <T>(type: Type<T>): T => {
   return provider.instance as T;
 };
 
+const waitForDatabaseCondition = async (
+  description: string,
+  condition: () => Promise<boolean>,
+): Promise<void> => {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (await condition()) return;
+    // Keep bounded waiting in PostgreSQL so contention tests observe database
+    // state rather than relying on Node scheduling delays.
+    await global.testDataSource.query('SELECT pg_sleep(0.01)');
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+};
+
 const resolveProviderByName = <T>(name: string): T => {
   const app = global.app as typeof global.app & {
     container: {
@@ -170,6 +187,31 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
   let workspaceIteratorService: WorkspaceIterator;
   let synchronizeCampaignAccountMetadataCommand: CampaignAccountSynchronizationCommand;
   let sourceControlledMyahMetadataService: SourceControlledMyahMetadataSynchronizer;
+
+  const waitForCampaignAdvisoryLock = async (
+    campaign: string,
+    granted: boolean,
+  ) =>
+    waitForDatabaseCondition(
+      `${granted ? 'granted' : 'waiting'} Campaign advisory lock`,
+      async () => {
+        const [lock] = await global.testDataSource.query<
+          Array<{ exists: boolean }>
+        >(
+          `SELECT EXISTS (
+             SELECT 1 FROM pg_locks
+              WHERE locktype = 'advisory'
+                AND mode = 'ExclusiveLock'
+                AND granted = $3
+                AND pid <> pg_backend_pid()
+                AND classid = hashtext(($1::uuid)::text)::oid
+                AND objid = hashtext(($2::uuid)::text)::oid
+           ) AS "exists"`,
+          [workspaceId, campaign, granted],
+        );
+        return lock.exists;
+      },
+    );
 
   beforeAll(async () => {
     const workspaces = await global.testDataSource.query<WorkspaceRow[]>(
@@ -288,82 +330,98 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
 
   afterAll(async () => {
     if (!workspaceId) return;
-    // Restore the source-controlled invariant even when the conflict assertion
-    // fails partway through, without touching any non-fixture Campaign rows.
-    await global.testDataSource.query(
-      `UPDATE "${workspaceSchemaName}"."campaignAccount"
-          SET "isDefault" = false
-        WHERE "campaignId" = $1 AND "connectedAccountId" = $2`,
-      [migrationConflictCampaignId, connectedAccountIds[1]],
+    const fixtureCampaignIds = [
+      campaignId,
+      transitionCampaignId,
+      sameAccountCampaignId,
+      rollbackCampaignId,
+      mixedCaseCampaignId,
+      insertRollbackCampaignId,
+      rollbackSuccessorCampaignId,
+      connectionOwnershipCampaignId,
+      migrationConflictCampaignId,
+    ];
+    const cleanupErrors: Error[] = [];
+    const attempt = async (label: string, cleanup: () => Promise<void>) => {
+      try {
+        await cleanup();
+      } catch (error) {
+        cleanupErrors.push(
+          new Error(
+            `${label}: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+      }
+    };
+
+    // A failed legacy-index restoration must not strand fixture records. Run
+    // every restoration and deletion independently and report all failures.
+    await attempt('restore conflicting default', () =>
+      global.testDataSource.query(
+        `UPDATE "${workspaceSchemaName}"."campaignAccount"
+            SET "isDefault" = false
+          WHERE "campaignId" = $1 AND "connectedAccountId" = $2`,
+        [migrationConflictCampaignId, connectedAccountIds[1]],
+      ),
     );
-    await synchronizeCampaignAccountMetadata(workspaceId);
-    await global.testDataSource.query(
-      `DELETE FROM "${workspaceSchemaName}"."campaignAccount"
-        WHERE "campaignId" = ANY($1::uuid[])`,
-      [
-        [
-          campaignId,
-          transitionCampaignId,
-          sameAccountCampaignId,
-          rollbackCampaignId,
-          mixedCaseCampaignId,
-          insertRollbackCampaignId,
-          rollbackSuccessorCampaignId,
-          connectionOwnershipCampaignId,
-          migrationConflictCampaignId,
-        ],
-      ],
+    await attempt('synchronize restored default index', () =>
+      synchronizeCampaignAccountMetadata(workspaceId),
     );
-    await global.testDataSource.query(
-      `DELETE FROM "${workspaceSchemaName}"."campaign"
-        WHERE "id" = ANY($1::uuid[])`,
-      [
-        [
-          campaignId,
-          transitionCampaignId,
-          sameAccountCampaignId,
-          rollbackCampaignId,
-          mixedCaseCampaignId,
-          insertRollbackCampaignId,
-          rollbackSuccessorCampaignId,
-          connectionOwnershipCampaignId,
-          migrationConflictCampaignId,
-        ],
-      ],
+    await attempt('delete CampaignAccount fixtures', () =>
+      global.testDataSource.query(
+        `DELETE FROM "${workspaceSchemaName}"."campaignAccount"
+          WHERE "campaignId" = ANY($1::uuid[])`,
+        [fixtureCampaignIds],
+      ),
     );
-    await global.testDataSource.query(
-      `DELETE FROM core."messageChannel" WHERE "id" = ANY($1::uuid[])`,
-      [messageChannelIds],
+    await attempt('delete Campaign fixtures', () =>
+      global.testDataSource.query(
+        `DELETE FROM "${workspaceSchemaName}"."campaign"
+          WHERE "id" = ANY($1::uuid[])`,
+        [fixtureCampaignIds],
+      ),
     );
-    await global.testDataSource.query(
-      `DELETE FROM core."connectedAccount" WHERE "id" = ANY($1::uuid[])`,
-      [connectedAccountIds],
+    await attempt('delete MessageChannel fixtures', () =>
+      global.testDataSource.query(
+        `DELETE FROM core."messageChannel" WHERE "id" = ANY($1::uuid[])`,
+        [messageChannelIds],
+      ),
     );
-    const [remainingCampaigns] = await global.testDataSource.query<
-      Array<{ count: number }>
-    >(
-      `SELECT COUNT(*)::int AS "count"
-         FROM "${workspaceSchemaName}"."campaign"
-        WHERE "id" = ANY($1::uuid[])`,
-      [
-        [
-          campaignId,
-          transitionCampaignId,
-          sameAccountCampaignId,
-          rollbackCampaignId,
-        ],
-      ],
+    await attempt('delete ConnectedAccount fixtures', () =>
+      global.testDataSource.query(
+        `DELETE FROM core."connectedAccount" WHERE "id" = ANY($1::uuid[])`,
+        [connectedAccountIds],
+      ),
     );
-    const [remainingConnectedAccounts] = await global.testDataSource.query<
-      Array<{ count: number }>
-    >(
-      `SELECT COUNT(*)::int AS "count"
-         FROM core."connectedAccount"
-        WHERE "id" = ANY($1::uuid[])`,
-      [connectedAccountIds],
-    );
-    expect(remainingCampaigns.count).toBe(0);
-    expect(remainingConnectedAccounts.count).toBe(0);
+    await attempt('verify Campaign fixture deletion', async () => {
+      const [remaining] = await global.testDataSource.query<
+        Array<{ count: number }>
+      >(
+        `SELECT COUNT(*)::int AS "count"
+           FROM "${workspaceSchemaName}"."campaign"
+          WHERE "id" = ANY($1::uuid[])`,
+        [fixtureCampaignIds],
+      );
+      expect(remaining.count).toBe(0);
+    });
+    await attempt('verify ConnectedAccount fixture deletion', async () => {
+      const [remaining] = await global.testDataSource.query<
+        Array<{ count: number }>
+      >(
+        `SELECT COUNT(*)::int AS "count"
+           FROM core."connectedAccount"
+          WHERE "id" = ANY($1::uuid[])`,
+        [connectedAccountIds],
+      );
+      expect(remaining.count).toBe(0);
+    });
+    if (cleanupErrors.length) {
+      throw new Error(
+        `CampaignAccount fixture cleanup failed:\n${cleanupErrors
+          .map(({ message }) => message)
+          .join('\n')}`,
+      );
+    }
   });
 
   it('installs the Campaign default partial unique index through the idempotent workspace command', async () => {
@@ -499,7 +557,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         buildSystemAuthContext(workspaceId),
       );
       transitions.push(setDefault);
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      await waitForCampaignAdvisoryLock(transitionCampaignId, true);
       const remove = campaignAccountService
         .remove(
           { campaignId: transitionCampaignId, campaignAccountId: target.id },
@@ -509,7 +567,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
           removeSettled = true;
         });
       transitions.push(remove);
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      await waitForCampaignAdvisoryLock(transitionCampaignId, false);
       expect(removeSettled).toBe(false);
       await Promise.all([setDefault, remove]);
     } finally {
@@ -604,6 +662,13 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         WHERE "campaignId" = $1 AND "connectedAccountId" = $2 AND "deletedAt" IS NULL`,
       [rollbackCampaignId, connectedAccountIds[1]],
     );
+    const preservedTimestamp = new Date('2000-01-01T00:00:00.000Z');
+    await global.testDataSource.query(
+      `UPDATE "${workspaceSchemaName}"."campaignAccount"
+          SET "updatedAt" = $2
+        WHERE "campaignId" = $1`,
+      [rollbackCampaignId, preservedTimestamp],
+    );
     const functionName = 'myah_270_default_target_failure';
     const triggerName = 'myah_270_default_target_failure_trigger';
     try {
@@ -638,7 +703,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
       );
     }
     const active = await global.testDataSource.query<CampaignAccountRow[]>(
-      `SELECT "connectedAccountId", "isDefault"
+      `SELECT "connectedAccountId", "isDefault", "updatedAt"
          FROM "${workspaceSchemaName}"."campaignAccount"
         WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
       [rollbackCampaignId],
@@ -648,13 +713,47 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         expect.objectContaining({
           connectedAccountId: connectedAccountIds[0],
           isDefault: true,
+          updatedAt: preservedTimestamp,
         }),
         expect.objectContaining({
           connectedAccountId: connectedAccountIds[1],
           isDefault: false,
+          updatedAt: preservedTimestamp,
         }),
       ]),
     );
+
+    await campaignAccountService.setDefault(
+      { campaignId: rollbackCampaignId, campaignAccountId: target.id },
+      buildSystemAuthContext(workspaceId),
+    );
+    const advanced = await global.testDataSource.query<CampaignAccountRow[]>(
+      `SELECT "connectedAccountId", "isDefault", "updatedAt"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
+      [rollbackCampaignId],
+    );
+    expect(advanced).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          connectedAccountId: connectedAccountIds[0],
+          isDefault: false,
+          updatedAt: expect.anything(),
+        }),
+        expect.objectContaining({
+          connectedAccountId: connectedAccountIds[1],
+          isDefault: true,
+          updatedAt: expect.anything(),
+        }),
+      ]),
+    );
+    expect(
+      advanced.every(
+        ({ updatedAt }) =>
+          updatedAt &&
+          new Date(updatedAt).getTime() > preservedTimestamp.getTime(),
+      ),
+    ).toBe(true);
   });
 
   it('serializes mixed-case Campaign UUID selection and remove into an intentional pause', async () => {
@@ -700,12 +799,15 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         buildSystemAuthContext(workspaceId),
       );
       transitions.push(setDefault);
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      await waitForCampaignAdvisoryLock(mixedCaseCampaignId, true);
       const remove = campaignAccountService.remove(
         { campaignId: mixedCaseCampaignId, campaignAccountId: target.id },
         buildSystemAuthContext(workspaceId),
       );
       transitions.push(remove);
+      // Without UUID canonicalization this exact key has no waiting holder;
+      // row locking alone cannot satisfy this advisory-lock observation.
+      await waitForCampaignAdvisoryLock(mixedCaseCampaignId, false);
       await Promise.all(transitions);
     } finally {
       await Promise.allSettled(transitions);
@@ -739,7 +841,9 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
          RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'forced insert rollback'; END; $$ LANGUAGE plpgsql`,
       );
       await global.testDataSource.query(
-        `CREATE TRIGGER "${triggerName}" AFTER INSERT ON "${workspaceSchemaName}"."campaignAccount"
+        `CREATE CONSTRAINT TRIGGER "${triggerName}"
+         AFTER INSERT ON "${workspaceSchemaName}"."campaignAccount"
+         DEFERRABLE INITIALLY DEFERRED
          FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
       );
       await expect(
@@ -780,7 +884,9 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
            operation text NOT NULL,
            "backendPid" integer NOT NULL,
            "transactionId" bigint NOT NULL,
-           "advisoryLockHeld" boolean NOT NULL
+           "advisoryLockHeld" boolean NOT NULL,
+           "workspaceLockKey" text NOT NULL,
+           "campaignLockKey" text NOT NULL
          )`,
       );
       auditObjects.table = true;
@@ -789,7 +895,8 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
          RETURNS trigger AS $$
          BEGIN
            INSERT INTO "${workspaceSchemaName}"."${auditTable}" (
-             operation, "backendPid", "transactionId", "advisoryLockHeld"
+             operation, "backendPid", "transactionId", "advisoryLockHeld",
+             "workspaceLockKey", "campaignLockKey"
            ) VALUES (
              TG_OP,
              pg_backend_pid(),
@@ -800,7 +907,11 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
                   AND locktype = 'advisory'
                   AND mode = 'ExclusiveLock'
                   AND granted
-             )
+                  AND classid = hashtext(('${workspaceId}'::uuid)::text)::oid
+                  AND objid = hashtext(('${connectionOwnershipCampaignId}'::uuid)::text)::oid
+             ),
+             hashtext(('${workspaceId}'::uuid)::text)::text,
+             hashtext(('${connectionOwnershipCampaignId}'::uuid)::text)::text
            );
            RETURN NEW;
          END;
@@ -850,7 +961,8 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
 
       const audit = await global.testDataSource.query<TransactionAuditRow[]>(
         `SELECT operation, "backendPid"::text AS "backendPid",
-                "transactionId"::text AS "transactionId"
+                "transactionId"::text AS "transactionId", "advisoryLockHeld",
+                "workspaceLockKey", "campaignLockKey"
            FROM "${workspaceSchemaName}"."${auditTable}"
           ORDER BY ctid`,
       );
@@ -870,20 +982,25 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         new Set(defaultTransition.map(({ transactionId }) => transactionId))
           .size,
       ).toBe(1);
-      const lockOwnership = await global.testDataSource.query<
-        Array<{ advisoryLockHeld: boolean }>
-      >(
-        `SELECT "advisoryLockHeld" FROM "${workspaceSchemaName}"."${auditTable}"`,
-      );
-      expect(lockOwnership).toEqual(
-        expect.arrayContaining([
-          { advisoryLockHeld: true },
-          { advisoryLockHeld: true },
-          { advisoryLockHeld: true },
-          { advisoryLockHeld: true },
-          { advisoryLockHeld: true },
-        ]),
-      );
+      const [{ workspaceLockKey, campaignLockKey }] =
+        await global.testDataSource.query<
+          Array<{ workspaceLockKey: string; campaignLockKey: string }>
+        >(
+          `SELECT hashtext(($1::uuid)::text)::text AS "workspaceLockKey",
+                  hashtext(($2::uuid)::text)::text AS "campaignLockKey"`,
+          [workspaceId, connectionOwnershipCampaignId],
+        );
+      expect(audit).toHaveLength(5);
+      expect(
+        audit.every(
+          (row) =>
+            row.advisoryLockHeld === true &&
+            row.workspaceLockKey === workspaceLockKey &&
+            row.campaignLockKey === campaignLockKey &&
+            row.backendPid.length > 0 &&
+            row.transactionId.length > 0,
+        ),
+      ).toBe(true);
     } finally {
       if (auditObjects.trigger) {
         await global.testDataSource.query(
@@ -959,7 +1076,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         buildSystemAuthContext(workspaceId),
       );
       transitions.push(failed);
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      await waitForCampaignAdvisoryLock(rollbackSuccessorCampaignId, true);
       const waitingSuccessor = campaignAccountService
         .setDefault(
           {
@@ -972,7 +1089,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
           successorSettled = true;
         });
       transitions.push(waitingSuccessor);
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      await waitForCampaignAdvisoryLock(rollbackSuccessorCampaignId, false);
       expect(successorSettled).toBe(false);
       await expect(failed).rejects.toThrow(
         'forced successor predecessor rollback',
