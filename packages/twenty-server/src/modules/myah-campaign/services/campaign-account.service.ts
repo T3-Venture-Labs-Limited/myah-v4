@@ -7,7 +7,8 @@ import {
   MessageChannelType,
 } from 'twenty-shared/types';
 import { emailSchema } from 'twenty-shared/utils';
-import { IsNull, type Repository } from 'typeorm';
+import { type QueryRunner, type Repository } from 'typeorm';
+import { validate as uuidValidate } from 'uuid';
 
 import {
   CampaignEmailAccountHealth,
@@ -19,7 +20,7 @@ import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channe
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
-import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
@@ -46,9 +47,11 @@ type CampaignAccountRecord = {
   deletedAt: Date | null;
 };
 
-type CampaignAccountMutationRepositories = {
-  campaign: WorkspaceRepository<CampaignRecord>;
-  campaignAccount: WorkspaceRepository<CampaignAccountRecord>;
+type CampaignAccountMutationContext = {
+  queryRunner: QueryRunner;
+  workspaceId: string;
+  campaignId: string;
+  schemaName: string;
 };
 
 @Injectable()
@@ -126,57 +129,43 @@ export class CampaignAccountService {
     input: { campaignId: string; connectedAccountId: string },
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
-    await this.mutate(
-      input.campaignId,
-      authContext,
-      async ({ campaignAccount: campaignAccounts }) => {
-        const account = await this.connectedAccountRepository.findOne({
-          where: {
-            id: input.connectedAccountId,
-            workspaceId: authContext.workspace.id,
-          },
-        });
-        if (
-          !account ||
-          account.archivedAt !== null ||
-          !SUPPORTED_PROVIDERS.has(account.provider) ||
-          !this.isEmail(account.handle)
-        )
-          throw new Error('Connected email account is not eligible');
-        const channel = await this.findExactEmailChannel(
-          account,
-          authContext.workspace.id,
-        );
-        if (!channel)
-          throw new Error('Connected email account has no exact EMAIL channel');
-        if (
-          await campaignAccounts.findOne({
-            where: {
-              campaignId: input.campaignId,
-              connectedAccountId: input.connectedAccountId,
-              channel: 'EMAIL',
-            },
-          })
-        )
-          throw new Error('Connected email account is already linked');
-        const hasActiveEmailLink = await campaignAccounts.findOne({
-          where: {
-            campaignId: input.campaignId,
-            channel: 'EMAIL',
-            deletedAt: IsNull(),
-          },
-        });
-        await campaignAccounts.save(
-          campaignAccounts.create({
-            campaignId: input.campaignId,
-            connectedAccountId: account.id,
-            messageChannelId: channel.id,
-            channel: 'EMAIL',
-            isDefault: !hasActiveEmailLink,
-          }),
-        );
-      },
-    );
+    await this.mutate(input.campaignId, authContext, async (context) => {
+      const account = await this.findEligibleAccountInTransaction(
+        context,
+        input.connectedAccountId,
+      );
+      if (!account) throw new Error('Connected email account is not eligible');
+      const channel = await this.findExactEmailChannelInTransaction(
+        context,
+        account,
+      );
+      if (!channel)
+        throw new Error('Connected email account has no exact EMAIL channel');
+
+      const duplicate = await this.queryRows<{ id: string }>(
+        context.queryRunner,
+        `SELECT id FROM ${this.campaignAccountTable(context.schemaName)}
+          WHERE "campaignId" = $1 AND "connectedAccountId" = $2
+            AND "channel" = 'EMAIL' AND "deletedAt" IS NULL LIMIT 1`,
+        [context.campaignId, account.id],
+      );
+      if (duplicate.length !== 0)
+        throw new Error('Connected email account is already linked');
+
+      const active = await this.queryRows<{ id: string }>(
+        context.queryRunner,
+        `SELECT id FROM ${this.campaignAccountTable(context.schemaName)}
+          WHERE "campaignId" = $1 AND "channel" = 'EMAIL'
+            AND "deletedAt" IS NULL LIMIT 1`,
+        [context.campaignId],
+      );
+      await context.queryRunner.query(
+        `INSERT INTO ${this.campaignAccountTable(context.schemaName)}
+          ("campaignId", "connectedAccountId", "messageChannelId", "channel", "isDefault")
+         VALUES ($1, $2, $3, 'EMAIL', $4)`,
+        [context.campaignId, account.id, channel.id, active.length === 0],
+      );
+    });
 
     return this.list(input.campaignId, authContext);
   }
@@ -185,41 +174,35 @@ export class CampaignAccountService {
     input: { campaignId: string; campaignAccountId: string },
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
-    await this.mutate(
-      input.campaignId,
-      authContext,
-      async ({ campaignAccount: campaignAccounts }) => {
-        const target = await campaignAccounts.findOne({
-          where: {
-            id: input.campaignAccountId,
-            campaignId: input.campaignId,
-            channel: 'EMAIL',
-            deletedAt: IsNull(),
-          },
-        });
-        if (!target) throw new Error('Campaign email account not found');
-        await campaignAccounts.update(
-          {
-            campaignId: input.campaignId,
-            channel: 'EMAIL',
-            isDefault: true,
-            deletedAt: IsNull(),
-          },
-          { isDefault: false },
-        );
-        const result = await campaignAccounts.update(
-          {
-            id: input.campaignAccountId,
-            campaignId: input.campaignId,
-            channel: 'EMAIL',
-            deletedAt: IsNull(),
-          },
-          { isDefault: true },
-        );
-        if (result.affected !== 1)
-          throw new Error('Campaign email account not found');
-      },
-    );
+    await this.mutate(input.campaignId, authContext, async (context) => {
+      const target = await this.queryRows<{ id: string }>(
+        context.queryRunner,
+        `SELECT id FROM ${this.campaignAccountTable(context.schemaName)}
+          WHERE id = $1 AND "campaignId" = $2 AND "channel" = 'EMAIL'
+            AND "deletedAt" IS NULL`,
+        [input.campaignAccountId, context.campaignId],
+      );
+      if (target.length !== 1)
+        throw new Error('Campaign email account not found');
+      await context.queryRunner.query(
+        `UPDATE ${this.campaignAccountTable(context.schemaName)}
+            SET "isDefault" = false
+          WHERE "campaignId" = $1 AND "channel" = 'EMAIL'
+            AND "isDefault" = true AND "deletedAt" IS NULL`,
+        [context.campaignId],
+      );
+      const updated = await this.queryRows<{ id: string }>(
+        context.queryRunner,
+        `UPDATE ${this.campaignAccountTable(context.schemaName)}
+            SET "isDefault" = true
+          WHERE id = $1 AND "campaignId" = $2 AND "channel" = 'EMAIL'
+            AND "deletedAt" IS NULL
+        RETURNING id`,
+        [input.campaignAccountId, context.campaignId],
+      );
+      if (updated.length !== 1)
+        throw new Error('Campaign email account not found');
+    });
 
     return this.list(input.campaignId, authContext);
   }
@@ -228,20 +211,19 @@ export class CampaignAccountService {
     input: { campaignId: string; campaignAccountId: string },
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
-    await this.mutate(
-      input.campaignId,
-      authContext,
-      async ({ campaignAccount: campaignAccounts }) => {
-        const result = await campaignAccounts.softDelete({
-          id: input.campaignAccountId,
-          campaignId: input.campaignId,
-          channel: 'EMAIL',
-          deletedAt: IsNull(),
-        });
-        if (result.affected !== 1)
-          throw new Error('Campaign email account not found');
-      },
-    );
+    await this.mutate(input.campaignId, authContext, async (context) => {
+      const removed = await this.queryRows<{ id: string }>(
+        context.queryRunner,
+        `UPDATE ${this.campaignAccountTable(context.schemaName)}
+            SET "deletedAt" = NOW()
+          WHERE id = $1 AND "campaignId" = $2 AND "channel" = 'EMAIL'
+            AND "deletedAt" IS NULL
+        RETURNING id`,
+        [input.campaignAccountId, context.campaignId],
+      );
+      if (removed.length !== 1)
+        throw new Error('Campaign email account not found');
+    });
 
     return this.list(input.campaignId, authContext);
   }
@@ -297,45 +279,99 @@ export class CampaignAccountService {
   private async mutate<T>(
     campaignId: string,
     authContext: WorkspaceAuthContext,
-    callback: (repositories: CampaignAccountMutationRepositories) => Promise<T>,
+    callback: (context: CampaignAccountMutationContext) => Promise<T>,
   ): Promise<T> {
     return this.executeInContext(authContext, async () => {
       this.assertCampaignUpdatePermission(authContext);
+      this.assertUuid('workspaceId', authContext.workspace.id);
+      this.assertUuid('campaignId', campaignId);
       const dataSource =
         await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+      const workspaceId = authContext.workspace.id;
+      const schemaName = getWorkspaceSchemaName(workspaceId);
 
       return dataSource.transaction(async (manager: WorkspaceEntityManager) => {
-        if (!manager.queryRunner)
+        const queryRunner = manager.queryRunner;
+        if (!queryRunner)
           throw new Error('Campaign account transaction has no query runner');
-        await manager.queryRunner.query(
-          'SELECT pg_advisory_xact_lock(hashtext($1))',
-          [`campaign-account:${authContext.workspace.id}:${campaignId}`],
+        // CampaignAccount is custom-API-only: raw runner queries deliberately
+        // avoid Workspace ORM events before this outer transaction commits.
+        await queryRunner.query(
+          'SELECT pg_advisory_xact_lock(hashtext(($1::uuid)::text), hashtext(($2::uuid)::text))',
+          [workspaceId, campaignId],
         );
-        const repositories = this.transactionRepositories(manager, authContext);
-        if (
-          !(await repositories.campaign.findOne({ where: { id: campaignId } }))
-        )
-          throw new Error('Campaign not found');
-
-        return callback(repositories);
+        const campaign = await this.queryRows<{ id: string }>(
+          queryRunner,
+          `SELECT id FROM ${this.campaignTable(schemaName)}
+            WHERE id = $1 AND "deletedAt" IS NULL`,
+          [campaignId],
+        );
+        if (campaign.length !== 1) throw new Error('Campaign not found');
+        return callback({ queryRunner, workspaceId, campaignId, schemaName });
       });
     });
   }
 
-  private transactionRepositories(
-    manager: WorkspaceEntityManager,
-    authContext: WorkspaceAuthContext,
-  ): CampaignAccountMutationRepositories {
-    return {
-      campaign: manager.getRepository<CampaignRecord>(
-        'campaign',
-        this.permissionOptions(authContext),
-      ),
-      campaignAccount: manager.getRepository<CampaignAccountRecord>(
-        'campaignAccount',
-        INTERNAL_REPOSITORY_OPTIONS,
-      ),
-    };
+  private async findEligibleAccountInTransaction(
+    context: CampaignAccountMutationContext,
+    connectedAccountId: string,
+  ): Promise<ConnectedAccountEntity | null> {
+    const accounts = await this.queryRows<ConnectedAccountEntity>(
+      context.queryRunner,
+      `SELECT id, "workspaceId", "handle", "name", "provider", "archivedAt", "authFailedAt"
+         FROM core."connectedAccount"
+        WHERE id = $1 AND "workspaceId" = $2 AND "archivedAt" IS NULL`,
+      [connectedAccountId, context.workspaceId],
+    );
+    const account = accounts[0];
+    if (
+      !account ||
+      !SUPPORTED_PROVIDERS.has(account.provider) ||
+      !this.isEmail(account.handle)
+    )
+      return null;
+    return account;
+  }
+
+  private async findExactEmailChannelInTransaction(
+    context: CampaignAccountMutationContext,
+    account: ConnectedAccountEntity,
+  ): Promise<MessageChannelEntity | null> {
+    const channels = await this.queryRows<MessageChannelEntity>(
+      context.queryRunner,
+      `SELECT id, "workspaceId", "connectedAccountId", "handle", "type", "isSyncEnabled", "syncStatus"
+         FROM core."messageChannel"
+        WHERE "workspaceId" = $1 AND "connectedAccountId" = $2
+          AND "type" = 'EMAIL' AND "handle" = $3`,
+      [context.workspaceId, account.id, account.handle],
+    );
+    return channels.length === 1 ? channels[0] : null;
+  }
+
+  private async queryRows<T>(
+    queryRunner: QueryRunner,
+    query: string,
+    parameters: unknown[],
+  ): Promise<T[]> {
+    const result = await queryRunner.query(query, parameters);
+
+    // PostgreSQL QueryRunner returns [rows, affected] for UPDATE/DELETE and
+    // rows for SELECT/INSERT. Keep every mutation decision on this runner.
+    return (Array.isArray(result) && Array.isArray(result[0])
+      ? result[0]
+      : result) as unknown as T[];
+  }
+
+  private campaignTable(schemaName: string): string {
+    return `"${schemaName}"."campaign"`;
+  }
+
+  private campaignAccountTable(schemaName: string): string {
+    return `"${schemaName}"."campaignAccount"`;
+  }
+
+  private assertUuid(label: string, value: string): void {
+    if (!uuidValidate(value)) throw new Error(`${label} must be a UUID`);
   }
 
   private async executeInContext<T>(

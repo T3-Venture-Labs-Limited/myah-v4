@@ -4,8 +4,6 @@ import {
   MessageChannelType,
 } from 'twenty-shared/types';
 
-import { IsNull } from 'typeorm';
-
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import {
   type ORMWorkspaceContext,
@@ -13,8 +11,8 @@ import {
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 
-const workspaceId = 'workspace-1';
-const otherWorkspaceId = 'workspace-2';
+const workspaceId = '11111111-1111-4111-8111-111111111110';
+const otherWorkspaceId = '22222222-2222-4222-8222-222222222220';
 const campaignId = '11111111-1111-4111-8111-111111111111';
 const secondCampaignId = '22222222-2222-4222-8222-222222222222';
 const accountId = '33333333-3333-4333-8333-333333333333';
@@ -134,8 +132,103 @@ const createHarness = (
     connectedAccount: createRepository(rows.connectedAccount),
     messageChannel: createRepository(rows.messageChannel),
   };
+  const query = jest.fn(async (sql: string, parameters: unknown[] = []) => {
+    if (sql.includes('pg_advisory_xact_lock')) return [];
+    if (sql.includes('FROM core."connectedAccount"')) {
+      return rows.connectedAccount.filter(
+        (account) =>
+          account.id === parameters[0] &&
+          account.workspaceId === parameters[1] &&
+          account.archivedAt == null,
+      );
+    }
+    if (sql.includes('FROM core."messageChannel"')) {
+      return rows.messageChannel.filter(
+        (channel) =>
+          channel.workspaceId === parameters[0] &&
+          channel.connectedAccountId === parameters[1] &&
+          channel.type === 'EMAIL' &&
+          channel.handle === parameters[2],
+      );
+    }
+    if (sql.includes('FROM') && sql.includes('"campaign"')) {
+      return rows.campaign.filter(
+        (campaign) =>
+          campaign.id === parameters[0] && campaign.deletedAt == null,
+      );
+    }
+    if (sql.includes('INSERT INTO') && sql.includes('"campaignAccount"')) {
+      const [
+        linkedCampaignId,
+        connectedAccountId,
+        messageChannelId,
+        isDefault,
+      ] = parameters;
+      rows.campaignAccount.push({
+        id: `campaign-account-${rows.campaignAccount.length + 1}`,
+        campaignId: linkedCampaignId,
+        connectedAccountId,
+        messageChannelId,
+        channel: 'EMAIL',
+        isDefault,
+      } as Row);
+      return [];
+    }
+    if (sql.includes('SET "isDefault" = false')) {
+      rows.campaignAccount
+        .filter(
+          (account) =>
+            account.campaignId === parameters[0] &&
+            account.channel === 'EMAIL' &&
+            account.isDefault === true &&
+            account.deletedAt == null,
+        )
+        .forEach((account) => {
+          account.isDefault = false;
+        });
+      return [];
+    }
+    if (sql.includes('SET "isDefault" = true')) {
+      const account = rows.campaignAccount.find(
+        (row) =>
+          row.id === parameters[0] &&
+          row.campaignId === parameters[1] &&
+          row.channel === 'EMAIL' &&
+          row.deletedAt == null,
+      );
+      if (account) account.isDefault = true;
+      return account ? [{ id: account.id }] : [];
+    }
+    if (sql.includes('SET "deletedAt" = NOW()')) {
+      const account = rows.campaignAccount.find(
+        (row) =>
+          row.id === parameters[0] &&
+          row.campaignId === parameters[1] &&
+          row.channel === 'EMAIL' &&
+          row.deletedAt == null,
+      );
+      if (account) account.deletedAt = 'deleted';
+      return account ? [{ id: account.id }] : [];
+    }
+    if (sql.includes('FROM') && sql.includes('"campaignAccount"')) {
+      const [first, second] = parameters;
+      return rows.campaignAccount.filter((account) => {
+        if (account.deletedAt != null || account.channel !== 'EMAIL')
+          return false;
+        if (sql.includes('"connectedAccountId"'))
+          return (
+            account.campaignId === first &&
+            account.connectedAccountId === second
+          );
+        if (sql.includes('WHERE id ='))
+          return account.id === first && account.campaignId === second;
+        return account.campaignId === first;
+      });
+    }
+    throw new Error(`Unhandled SQL in test: ${sql}`);
+  });
   const transactionManager = {
-    queryRunner: { query: jest.fn().mockResolvedValue(undefined) },
+    queryRunner: { query },
     getRepository: jest.fn(
       (name: string) =>
         workspaceRepositories[name as keyof typeof workspaceRepositories],
@@ -194,6 +287,7 @@ const createHarness = (
     messageOutboundService,
     transaction,
     orm,
+    queryImplementation: query.getMockImplementation(),
   };
 };
 
@@ -219,23 +313,17 @@ describe('CampaignAccountService', () => {
       },
     ]);
     expect(JSON.stringify(accounts)).not.toContain('secret-token');
-    expect(harness.workspaceRepositories.campaign.findOne).toHaveBeenCalledWith(
-      { where: { id: campaignId } },
-    );
+    // The post-commit list read uses the normal repository; the mutation itself does not.
+    expect(
+      harness.workspaceRepositories.campaign.findOne,
+    ).toHaveBeenCalledTimes(1);
     expect(harness.orm.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
     expect(harness.transaction).toHaveBeenCalledTimes(1);
     expect(harness.transactionManager.queryRunner.query).toHaveBeenCalledWith(
-      'SELECT pg_advisory_xact_lock(hashtext($1))',
-      [`campaign-account:${workspaceId}:${campaignId}`],
+      'SELECT pg_advisory_xact_lock(hashtext(($1::uuid)::text), hashtext(($2::uuid)::text))',
+      [workspaceId, campaignId],
     );
-    expect(harness.transactionManager.getRepository).toHaveBeenCalledWith(
-      'campaign',
-      expect.anything(),
-    );
-    expect(harness.transactionManager.getRepository).toHaveBeenCalledWith(
-      'campaignAccount',
-      expect.objectContaining({ shouldBypassPermissionChecks: true }),
-    );
+    expect(harness.transactionManager.getRepository).not.toHaveBeenCalled();
   });
 
   it('rejects foreign, archived, unsupported, ambiguous, invalid-address, and duplicate account links', async () => {
@@ -416,17 +504,10 @@ describe('CampaignAccountService', () => {
     );
     expect(
       harness.workspaceRepositories.campaignAccount.update,
-    ).toHaveBeenNthCalledWith(
-      1,
-      { campaignId, channel: 'EMAIL', isDefault: true, deletedAt: IsNull() },
-      { isDefault: false },
-    );
-    expect(
-      harness.workspaceRepositories.campaignAccount.update,
-    ).toHaveBeenNthCalledWith(
-      2,
-      { id: 'second', campaignId, channel: 'EMAIL', deletedAt: IsNull() },
-      { isDefault: true },
+    ).not.toHaveBeenCalled();
+    expect(harness.transactionManager.queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('SET "isDefault" = false'),
+      [campaignId],
     );
     await harness.service.remove(
       { campaignId, campaignAccountId: 'second' },
@@ -499,9 +580,11 @@ describe('CampaignAccountService', () => {
 
   it('fails closed on an out-of-band first-link default conflict without retrying', async () => {
     const harness = createHarness();
-    harness.workspaceRepositories.campaignAccount.save.mockRejectedValueOnce(
-      new Error('duplicate default'),
-    );
+    const query = harness.transactionManager.queryRunner.query;
+    query.mockImplementation(async (sql: string, parameters: unknown[]) => {
+      if (sql.includes('INSERT INTO')) throw new Error('duplicate default');
+      return (await harness.queryImplementation?.(sql, parameters)) ?? [];
+    });
 
     await expect(
       harness.service.link(
@@ -511,7 +594,7 @@ describe('CampaignAccountService', () => {
     ).rejects.toThrow('duplicate default');
     expect(
       harness.workspaceRepositories.campaignAccount.save,
-    ).toHaveBeenCalledTimes(1);
+    ).not.toHaveBeenCalled();
     expect(harness.rows.campaignAccount).toEqual([]);
   });
 
@@ -548,13 +631,7 @@ describe('CampaignAccountService', () => {
 
     expect(
       harness.workspaceRepositories.campaignAccount.findOne,
-    ).toHaveBeenNthCalledWith(2, {
-      where: {
-        campaignId,
-        channel: 'EMAIL',
-        deletedAt: IsNull(),
-      },
-    });
+    ).not.toHaveBeenCalled();
     expect(harness.rows.campaignAccount).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'existing', isDefault: false }),
@@ -699,17 +776,10 @@ describe('CampaignAccountService', () => {
         },
       ],
     });
-    harness.workspaceRepositories.campaignAccount.update.mockImplementation(
-      async (
-        where: Record<string, unknown>,
-        patch: Record<string, unknown>,
-      ) => {
-        if (where.id === 'target') return { affected: 0 };
-        const affected = harness.rows.campaignAccount.filter((row) =>
-          matches(row, where),
-        );
-        affected.forEach((row) => Object.assign(row, patch));
-        return { affected: affected.length };
+    harness.transactionManager.queryRunner.query.mockImplementation(
+      async (sql: string, parameters: unknown[]) => {
+        if (sql.includes('SET "isDefault" = true')) return [];
+        return (await harness.queryImplementation?.(sql, parameters)) ?? [];
       },
     );
 
@@ -729,10 +799,7 @@ describe('CampaignAccountService', () => {
     expect(harness.transaction).toHaveBeenCalledTimes(1);
     expect(
       harness.workspaceRepositories.campaignAccount.update,
-    ).not.toHaveBeenCalledWith(
-      { id: 'active', deletedAt: IsNull() },
-      { isDefault: true },
-    );
+    ).not.toHaveBeenCalled();
   });
 
   it('does not restore a prior default over a successor after a failed default transition', async () => {
@@ -756,12 +823,9 @@ describe('CampaignAccountService', () => {
         },
       ],
     });
-    harness.workspaceRepositories.campaignAccount.update.mockImplementation(
-      async (
-        where: Record<string, unknown>,
-        patch: Record<string, unknown>,
-      ) => {
-        if (where.id === 'target') {
+    harness.transactionManager.queryRunner.query.mockImplementation(
+      async (sql: string, parameters: unknown[]) => {
+        if (sql.includes('SET "isDefault" = true')) {
           harness.rows.campaignAccount.push({
             id: 'successor',
             campaignId,
@@ -772,11 +836,7 @@ describe('CampaignAccountService', () => {
           });
           throw new Error('default race lost');
         }
-        const affected = harness.rows.campaignAccount.filter((row) =>
-          matches(row, where),
-        );
-        affected.forEach((row) => Object.assign(row, patch));
-        return { affected: affected.length };
+        return (await harness.queryImplementation?.(sql, parameters)) ?? [];
       },
     );
 
@@ -788,10 +848,7 @@ describe('CampaignAccountService', () => {
     ).rejects.toThrow('default race lost');
     expect(
       harness.workspaceRepositories.campaignAccount.update,
-    ).not.toHaveBeenCalledWith(
-      { id: 'prior', deletedAt: IsNull() },
-      { isDefault: true },
-    );
+    ).not.toHaveBeenCalled();
   });
 
   it('does not clear the active default when a stale request selects a removed account', async () => {
