@@ -526,58 +526,94 @@ test('Campaign email accounts', async ({ page }) => {
 
     const authRequest = page.waitForRequest((request) => {
       const url = new URL(request.url());
-      return url.pathname === '/auth/google-apis';
+      return (
+        url.origin === new URL(backendGraphQLUrl).origin &&
+        url.pathname === '/auth/google-apis'
+      );
     });
-    let callbackFixture: CampaignCallbackFixture | undefined;
-    let callbackOperationsTabId: string | undefined;
-    await page.route(
-      'http://localhost:3000/auth/google-apis?**',
-      async (route) => {
-        const redirectLocation = new URL(
-          route.request().url(),
-        ).searchParams.get('redirectLocation');
-        if (!redirectLocation)
-          throw new Error('Google OAuth initiation omitted redirectLocation');
-        const runtimeOperationsTabId = new URL(
-          redirectLocation,
-          'http://localhost:3001',
-        ).hash.slice(1);
-        if (!isUuid(runtimeOperationsTabId))
-          throw new Error(
-            'Google OAuth initiation omitted a runtime Operations tab',
-          );
-        callbackOperationsTabId = runtimeOperationsTabId;
-        const callback = await postMetadataGraphql<{
-          createMyahE2eCampaignCallbackFixture: CampaignCallbackFixture;
-        }>(page, createCallbackFixtureMutation, {
-          input: {
-            fixtureId: fixture.id,
-            campaignId,
-            operationsTabId: runtimeOperationsTabId,
-          },
-        });
-        callbackFixture = callback.createMyahE2eCampaignCallbackFixture;
-        const initiationResponse = await route.fetch({ maxRedirects: 0 });
-        expect(initiationResponse.status()).toBe(302);
-        expect(
-          new URL(initiationResponse.headers().location ?? '').origin,
-        ).toBe('https://accounts.google.com');
-        await route.fulfill({
-          response: initiationResponse,
-          headers: { location: callbackFixture.callbackPath },
-        });
+    const authResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.origin === new URL(backendGraphQLUrl).origin &&
+        url.pathname === '/auth/google-apis'
+      );
+    });
+    const externalGoogleRequest = page.waitForRequest((request) =>
+      request.url().startsWith('https://accounts.google.com/'),
+    );
+    let resolveCallbackFixture: (fixture: CampaignCallbackFixture) => void;
+    const callbackFixtureReady = new Promise<CampaignCallbackFixture>(
+      (resolve) => {
+        resolveCallbackFixture = resolve;
       },
     );
+    const cdpSession = await page.context().newCDPSession(page);
+    await cdpSession.send('Fetch.enable', {
+      patterns: [
+        {
+          urlPattern: 'https://accounts.google.com/*',
+          requestStage: 'Request',
+        },
+      ],
+    });
+    cdpSession.on('Fetch.requestPaused', async ({ requestId, request }) => {
+      expect(new URL(request.url).origin).toBe('https://accounts.google.com');
+      const callbackFixture = await callbackFixtureReady;
+      await cdpSession.send('Fetch.fulfillRequest', {
+        requestId,
+        responseCode: 302,
+        responseHeaders: [
+          { name: 'location', value: callbackFixture.callbackPath },
+        ],
+      });
+    });
 
     await addEmailAccount.click();
-    await page
+    const connectWithGoogle = page
       .getByRole('button', { name: 'Connect with Google', exact: true })
-      .click();
+      .click({ noWaitAfter: true });
     const googleAuthRequest = await authRequest;
-    await expect.poll(() => callbackOperationsTabId).toBeDefined();
-    expect(
-      new URL(googleAuthRequest.url()).searchParams.get('redirectLocation'),
-    ).toBe(campaignOperationsReturnPath(campaignId, callbackOperationsTabId!));
+    const redirectLocation = new URL(googleAuthRequest.url()).searchParams.get(
+      'redirectLocation',
+    );
+    if (!redirectLocation)
+      throw new Error('Google OAuth initiation omitted redirectLocation');
+    const callbackOperationsTabId = new URL(
+      redirectLocation,
+      'http://localhost:3001',
+    ).hash.slice(1);
+    if (!isUuid(callbackOperationsTabId))
+      throw new Error(
+        'Google OAuth initiation omitted a runtime Operations tab',
+      );
+    expect(redirectLocation).toBe(
+      campaignOperationsReturnPath(campaignId, callbackOperationsTabId),
+    );
+    const googleAuthResponse = await authResponse;
+    expect(googleAuthResponse.status()).toBe(302);
+    expect(new URL(googleAuthResponse.headers().location ?? '').origin).toBe(
+      'https://accounts.google.com',
+    );
+    const callback = await postMetadataGraphql<{
+      createMyahE2eCampaignCallbackFixture: CampaignCallbackFixture;
+    }>(page, createCallbackFixtureMutation, {
+      input: {
+        fixtureId: fixture.id,
+        campaignId,
+        operationsTabId: callbackOperationsTabId,
+      },
+    });
+    const callbackFixture = callback.createMyahE2eCampaignCallbackFixture;
+    expect(new URL(callbackFixture.callbackPath).origin).toBe(
+      new URL(await workspaceUrl(page, campaignPath(campaignId))).origin,
+    );
+    resolveCallbackFixture!(callbackFixture);
+    await connectWithGoogle;
+    const googleAuthorizationRequest = await externalGoogleRequest;
+    expect(new URL(googleAuthorizationRequest.url()).origin).toBe(
+      'https://accounts.google.com',
+    );
+    await cdpSession.send('Fetch.disable');
 
     await expect(
       page.getByText('Email account linked.', { exact: true }),
