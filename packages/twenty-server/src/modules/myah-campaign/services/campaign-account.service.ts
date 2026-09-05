@@ -18,6 +18,10 @@ import { CacheLockService } from 'src/engine/core-modules/cache-lock/cache-lock.
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import {
+  TwentyORMException,
+  TwentyORMExceptionCode,
+} from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
@@ -174,10 +178,21 @@ export class CampaignAccountService {
       try {
         await campaignAccounts.save(link);
       } catch (error) {
-        if (!link.isDefault || !this.isDefaultUniqueIndexViolation(error)) {
+        if (!link.isDefault || !this.isDuplicateEntryDetected(error)) {
           throw error;
         }
-        const successorDefault = await campaignAccounts.findOne({
+        const existingLink = await campaignAccounts.findOne({
+          where: {
+            campaignId: input.campaignId,
+            connectedAccountId: input.connectedAccountId,
+            channel: 'EMAIL',
+            deletedAt: IsNull(),
+          },
+        });
+        if (existingLink) {
+          throw new Error('Connected email account is already linked');
+        }
+        const defaults = await campaignAccounts.find({
           where: {
             campaignId: input.campaignId,
             channel: 'EMAIL',
@@ -185,7 +200,7 @@ export class CampaignAccountService {
             deletedAt: IsNull(),
           },
         });
-        if (!successorDefault) throw error;
+        if (defaults.length !== 1) throw error;
         await campaignAccounts.save({ ...link, isDefault: false });
       }
       return this.listInWorkspace(
@@ -341,14 +356,10 @@ export class CampaignAccountService {
     });
   }
 
-  private isDefaultUniqueIndexViolation(error: unknown): boolean {
+  private isDuplicateEntryDetected(error: unknown): boolean {
     return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      'constraint' in error &&
-      error.code === '23505' &&
-      error.constraint === 'campaignAccountDefaultUniqueIndex'
+      error instanceof TwentyORMException &&
+      error.code === TwentyORMExceptionCode.DUPLICATE_ENTRY_DETECTED
     );
   }
 

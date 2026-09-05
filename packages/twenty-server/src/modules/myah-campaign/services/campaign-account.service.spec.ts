@@ -8,6 +8,10 @@ import { IsNull } from 'typeorm';
 
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import {
+  TwentyORMException,
+  TwentyORMExceptionCode,
+} from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
+import {
   type ORMWorkspaceContext,
   withWorkspaceContext,
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
@@ -495,10 +499,10 @@ describe('CampaignAccountService', () => {
           channel: 'EMAIL',
           isDefault: true,
         });
-        throw {
-          code: '23505',
-          constraint: 'campaignAccountDefaultUniqueIndex',
-        };
+        throw new TwentyORMException(
+          'A duplicate entry was detected',
+          TwentyORMExceptionCode.DUPLICATE_ENTRY_DETECTED,
+        );
       })
       .mockImplementationOnce(async (row: Row) => {
         harness.rows.campaignAccount.push(row);
