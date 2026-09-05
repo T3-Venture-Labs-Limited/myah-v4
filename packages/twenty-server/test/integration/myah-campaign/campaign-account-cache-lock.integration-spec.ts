@@ -79,6 +79,9 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
   const transitionCampaignId = randomUUID();
   const sameAccountCampaignId = randomUUID();
   const rollbackCampaignId = randomUUID();
+  const mixedCaseCampaignId = randomUUID();
+  const insertRollbackCampaignId = randomUUID();
+  const rollbackSuccessorCampaignId = randomUUID();
   const connectedAccountIds = [
     randomUUID(),
     randomUUID(),
@@ -147,7 +150,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
 
     await global.testDataSource.query(
       `INSERT INTO "${workspaceSchemaName}"."campaign" ("id", "name")
-       VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8)`,
+       VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8), ($9, $10), ($11, $12), ($13, $14)`,
       [
         campaignId,
         `MYAH-270 Transaction ${campaignId}`,
@@ -157,6 +160,12 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         `MYAH-270 Same Account ${sameAccountCampaignId}`,
         rollbackCampaignId,
         `MYAH-270 Rollback ${rollbackCampaignId}`,
+        mixedCaseCampaignId,
+        `MYAH-270 Mixed Case ${mixedCaseCampaignId}`,
+        insertRollbackCampaignId,
+        `MYAH-270 Insert Rollback ${insertRollbackCampaignId}`,
+        rollbackSuccessorCampaignId,
+        `MYAH-270 Rollback Successor ${rollbackSuccessorCampaignId}`,
       ],
     );
     for (const [index, connectedAccountId] of connectedAccountIds.entries()) {
@@ -204,6 +213,9 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
           transitionCampaignId,
           sameAccountCampaignId,
           rollbackCampaignId,
+          mixedCaseCampaignId,
+          insertRollbackCampaignId,
+          rollbackSuccessorCampaignId,
         ],
       ],
     );
@@ -216,6 +228,9 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
           transitionCampaignId,
           sameAccountCampaignId,
           rollbackCampaignId,
+          mixedCaseCampaignId,
+          insertRollbackCampaignId,
+          rollbackSuccessorCampaignId,
         ],
       ],
     );
@@ -361,14 +376,54 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         WHERE "campaignId" = $1 AND "connectedAccountId" = $2 AND "deletedAt" IS NULL`,
       [transitionCampaignId, connectedAccountIds[3]],
     );
-    await campaignAccountService.setDefault(
-      { campaignId: transitionCampaignId, campaignAccountId: target.id },
-      buildSystemAuthContext(workspaceId),
-    );
-    await campaignAccountService.remove(
-      { campaignId: transitionCampaignId, campaignAccountId: target.id },
-      buildSystemAuthContext(workspaceId),
-    );
+    const functionName = 'myah_270_set_default_barrier';
+    const triggerName = 'myah_270_set_default_barrier_trigger';
+    let removeSettled = false;
+    const transitions: Promise<unknown>[] = [];
+    try {
+      await global.testDataSource.query(
+        `CREATE OR REPLACE FUNCTION "${workspaceSchemaName}"."${functionName}"()
+         RETURNS trigger AS $$
+         BEGIN
+           IF NEW.id = '${target.id}'::uuid AND NEW."isDefault" = true THEN
+             PERFORM pg_sleep(0.25);
+           END IF;
+           RETURN NEW;
+         END;
+         $$ LANGUAGE plpgsql`,
+      );
+      await global.testDataSource.query(
+        `CREATE TRIGGER "${triggerName}"
+         BEFORE UPDATE ON "${workspaceSchemaName}"."campaignAccount"
+         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
+      );
+      const setDefault = campaignAccountService.setDefault(
+        { campaignId: transitionCampaignId, campaignAccountId: target.id },
+        buildSystemAuthContext(workspaceId),
+      );
+      transitions.push(setDefault);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      const remove = campaignAccountService
+        .remove(
+          { campaignId: transitionCampaignId, campaignAccountId: target.id },
+          buildSystemAuthContext(workspaceId),
+        )
+        .finally(() => {
+          removeSettled = true;
+        });
+      transitions.push(remove);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(removeSettled).toBe(false);
+      await Promise.all([setDefault, remove]);
+    } finally {
+      await Promise.allSettled(transitions);
+      await global.testDataSource.query(
+        `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
+      );
+      await global.testDataSource.query(
+        `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
+      );
+    }
 
     const active = await global.testDataSource.query<CampaignAccountRow[]>(
       `SELECT "connectedAccountId", "isDefault"
@@ -503,6 +558,118 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         }),
       ]),
     );
+  });
+
+  it('serializes mixed-case Campaign UUID selection and remove into an intentional pause', async () => {
+    await Promise.all(
+      connectedAccountIds
+        .slice(0, 2)
+        .map((connectedAccountId) =>
+          campaignAccountService.link(
+            { campaignId: mixedCaseCampaignId, connectedAccountId },
+            buildSystemAuthContext(workspaceId),
+          ),
+        ),
+    );
+    const [target] = await global.testDataSource.query<Array<{ id: string }>>(
+      `SELECT id FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "connectedAccountId" = $2 AND "deletedAt" IS NULL`,
+      [mixedCaseCampaignId, connectedAccountIds[1]],
+    );
+    const functionName = 'myah_270_mixed_case_lock_barrier';
+    const triggerName = 'myah_270_mixed_case_lock_barrier_trigger';
+    const transitions: Promise<unknown>[] = [];
+    try {
+      await global.testDataSource.query(
+        `CREATE OR REPLACE FUNCTION "${workspaceSchemaName}"."${functionName}"()
+         RETURNS trigger AS $$
+         BEGIN
+           IF NEW.id = '${target.id}'::uuid AND NEW."isDefault" = true THEN
+             PERFORM pg_sleep(0.25);
+           END IF;
+           RETURN NEW;
+         END;
+         $$ LANGUAGE plpgsql`,
+      );
+      await global.testDataSource.query(
+        `CREATE TRIGGER "${triggerName}" BEFORE UPDATE ON "${workspaceSchemaName}"."campaignAccount"
+         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
+      );
+      const setDefault = campaignAccountService.setDefault(
+        {
+          campaignId: mixedCaseCampaignId.toUpperCase(),
+          campaignAccountId: target.id,
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      transitions.push(setDefault);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      const remove = campaignAccountService.remove(
+        { campaignId: mixedCaseCampaignId, campaignAccountId: target.id },
+        buildSystemAuthContext(workspaceId),
+      );
+      transitions.push(remove);
+      await Promise.all(transitions);
+    } finally {
+      await Promise.allSettled(transitions);
+      await global.testDataSource.query(
+        `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
+      );
+      await global.testDataSource.query(
+        `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
+      );
+    }
+    const active = await global.testDataSource.query<CampaignAccountRow[]>(
+      `SELECT "connectedAccountId", "isDefault"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
+      [mixedCaseCampaignId],
+    );
+    expect(active).toEqual([
+      expect.objectContaining({
+        connectedAccountId: connectedAccountIds[0],
+        isDefault: false,
+      }),
+    ]);
+  });
+
+  it('rolls back a link inserted before an outer transaction failure', async () => {
+    const functionName = 'myah_270_link_after_insert_failure';
+    const triggerName = 'myah_270_link_after_insert_failure_trigger';
+    try {
+      await global.testDataSource.query(
+        `CREATE OR REPLACE FUNCTION "${workspaceSchemaName}"."${functionName}"()
+         RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'forced insert rollback'; END; $$ LANGUAGE plpgsql`,
+      );
+      await global.testDataSource.query(
+        `CREATE TRIGGER "${triggerName}" AFTER INSERT ON "${workspaceSchemaName}"."campaignAccount"
+         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
+      );
+      await expect(
+        campaignAccountService.link(
+          {
+            campaignId: insertRollbackCampaignId,
+            connectedAccountId: connectedAccountIds[0],
+          },
+          buildSystemAuthContext(workspaceId),
+        ),
+      ).rejects.toThrow('forced insert rollback');
+    } finally {
+      await global.testDataSource.query(
+        `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
+      );
+      await global.testDataSource.query(
+        `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
+      );
+    }
+    const [{ count }] = await global.testDataSource.query<
+      Array<{ count: string }>
+    >(
+      `SELECT COUNT(*)::text AS count FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1`,
+      [insertRollbackCampaignId],
+    );
+    expect(count).toBe('0');
   });
 
   it('rejects direct duplicate defaults while allowing non-default and soft-deleted rows', async () => {
