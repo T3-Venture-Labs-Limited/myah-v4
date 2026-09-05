@@ -50,8 +50,20 @@ const matches = (row: Row, where: Record<string, unknown>) =>
   );
 
 const createRepository = (rows: Row[]): Repository => ({
-  find: jest.fn(async ({ where }: { where?: Record<string, unknown> } = {}) =>
-    rows.filter((row) => !row.deletedAt && (!where || matches(row, where))),
+  find: jest.fn(
+    async ({
+      where,
+    }: {
+      where?: Record<string, unknown> | Record<string, unknown>[];
+    } = {}) =>
+      rows.filter(
+        (row) =>
+          !row.deletedAt &&
+          (!where ||
+            (Array.isArray(where)
+              ? where.some((condition) => matches(row, condition))
+              : matches(row, where))),
+      ),
   ),
   findOne: jest.fn(
     async ({ where }: { where: Record<string, unknown> }) =>
@@ -109,6 +121,7 @@ const createHarness = (
   seed: {
     campaignAccounts?: Row[];
     connectedAccounts?: Row[];
+    managedEmailMailboxes?: Row[];
     messageChannels?: Row[];
     campaigns?: Row[];
   } = {},
@@ -122,6 +135,7 @@ const createHarness = (
     ],
     campaignAccount: seed.campaignAccounts ?? [],
     connectedAccount: seed.connectedAccounts ?? [connectedAccount()],
+    managedEmailMailbox: seed.managedEmailMailboxes ?? [],
     messageChannel: seed.messageChannels ?? [messageChannel()],
   };
   const workspaceRepositories = {
@@ -130,6 +144,7 @@ const createHarness = (
   };
   const coreRepositories = {
     connectedAccount: createRepository(rows.connectedAccount),
+    managedEmailMailbox: createRepository(rows.managedEmailMailbox),
     messageChannel: createRepository(rows.messageChannel),
   };
   const query = jest.fn(async (sql: string, parameters: unknown[] = []) => {
@@ -272,10 +287,24 @@ const createHarness = (
   const messageOutboundService = {
     assertConnectedAccountSendable: jest.fn().mockResolvedValue(undefined),
   };
+  const managedEmailMailboxRepository = {
+    exists: jest.fn(
+      async (
+        scopedWorkspaceId: string,
+        { where }: { where: Record<string, unknown>[] },
+      ) =>
+        rows.managedEmailMailbox.some(
+          (mailbox) =>
+            mailbox.workspaceId === scopedWorkspaceId &&
+            where.some((condition) => matches(mailbox, condition)),
+        ),
+    ),
+  };
   const service = new CampaignAccountService(
     orm,
     coreRepositories.connectedAccount as never,
     coreRepositories.messageChannel as never,
+    managedEmailMailboxRepository as never,
     messageOutboundService as never,
   );
   return {
@@ -285,6 +314,7 @@ const createHarness = (
     coreRepositories,
     transactionManager,
     messageOutboundService,
+    managedEmailMailboxRepository,
     transaction,
     orm,
     queryImplementation: query.getMockImplementation(),
@@ -659,6 +689,37 @@ describe('CampaignAccountService', () => {
         workspaceId,
       ),
     ).resolves.toEqual(expect.objectContaining({ id: 'default' }));
+  });
+
+  it('rejects a linked default owned by a managed mailbox', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'default',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+      ],
+      managedEmailMailboxes: [
+        {
+          id: 'managed-mailbox-id',
+          workspaceId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          campaignEligibility: 'INELIGIBLE',
+        },
+      ],
+    });
+
+    await expect(
+      harness.service.resolveDefaultEmailAccount(campaignId, workspaceId),
+    ).rejects.toThrow('Campaign default email account is managed');
+    expect(
+      harness.messageOutboundService.assertConnectedAccountSendable,
+    ).not.toHaveBeenCalled();
   });
 
   it('fails closed on an out-of-band first-link default conflict without retrying', async () => {

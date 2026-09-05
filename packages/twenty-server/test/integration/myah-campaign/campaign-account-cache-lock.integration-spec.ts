@@ -207,6 +207,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
   let workspaceId: string;
   let workspaceSchemaName: string;
   let userWorkspaceId: string;
+  let ownsFixtureCleanup = false;
   let campaignAccountService: CampaignAccountService;
   let workspaceIteratorService: WorkspaceIterator;
   let synchronizeCampaignAccountMetadataCommand: CampaignAccountSynchronizationCommand;
@@ -334,41 +335,41 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
       functionResidue,
       auditTableResidue,
     ] = await Promise.all([
-        global.testDataSource.query<Array<{ id: string }>>(
-          `SELECT "id" FROM "${workspaceSchemaName}"."campaign"
+      global.testDataSource.query<Array<{ id: string }>>(
+        `SELECT "id" FROM "${workspaceSchemaName}"."campaign"
              WHERE "name" ~ $1`,
-          [TRANSACTION_FIXTURE_CAMPAIGN_NAME_PATTERN],
-        ),
-        global.testDataSource.query<Array<{ id: string }>>(
-          `SELECT "id" FROM core."connectedAccount" WHERE "handle" ~ $1`,
-          [TRANSACTION_FIXTURE_CONNECTED_ACCOUNT_HANDLE_PATTERN],
-        ),
-        global.testDataSource.query<Array<{ name: string }>>(
-          `SELECT trigger_name AS "name"
+        [TRANSACTION_FIXTURE_CAMPAIGN_NAME_PATTERN],
+      ),
+      global.testDataSource.query<Array<{ id: string }>>(
+        `SELECT "id" FROM core."connectedAccount" WHERE "handle" ~ $1`,
+        [TRANSACTION_FIXTURE_CONNECTED_ACCOUNT_HANDLE_PATTERN],
+      ),
+      global.testDataSource.query<Array<{ name: string }>>(
+        `SELECT trigger_name AS "name"
              FROM information_schema.triggers
             WHERE event_object_schema = $1
               AND event_object_table = 'campaignAccount'
               AND trigger_name = ANY($2::text[])`,
-          [workspaceSchemaName, TRANSACTION_FIXTURE_TRIGGER_NAMES],
-        ),
-        global.testDataSource.query<Array<{ name: string }>>(
-          `SELECT proname AS "name"
+        [workspaceSchemaName, TRANSACTION_FIXTURE_TRIGGER_NAMES],
+      ),
+      global.testDataSource.query<Array<{ name: string }>>(
+        `SELECT proname AS "name"
              FROM pg_proc AS procedure
              INNER JOIN pg_namespace AS namespace
                ON namespace.oid = procedure.pronamespace
             WHERE namespace.nspname = $1
               AND proname = ANY($2::text[])`,
-          [workspaceSchemaName, TRANSACTION_FIXTURE_FUNCTION_NAMES],
-        ),
-        global.testDataSource.query<Array<{ name: string }>>(
-          `SELECT relname AS "name"
+        [workspaceSchemaName, TRANSACTION_FIXTURE_FUNCTION_NAMES],
+      ),
+      global.testDataSource.query<Array<{ name: string }>>(
+        `SELECT relname AS "name"
              FROM pg_class AS relation
              INNER JOIN pg_namespace AS namespace
                ON namespace.oid = relation.relnamespace
             WHERE namespace.nspname = $1 AND relname = $2`,
-          [workspaceSchemaName, TRANSACTION_FIXTURE_AUDIT_TABLE_NAME],
-        ),
-      ]);
+        [workspaceSchemaName, TRANSACTION_FIXTURE_AUDIT_TABLE_NAME],
+      ),
+    ]);
     const residue = [
       ...campaignResidue.map(({ id }) => `campaign:${id}`),
       ...connectedAccountResidue.map(({ id }) => `connectedAccount:${id}`),
@@ -426,6 +427,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     }
     userWorkspaceId = userWorkspace.id;
     await assertNoInterruptedFixtureResidue();
+    ownsFixtureCleanup = true;
     campaignAccountService = resolveProvider(CampaignAccountService);
     workspaceIteratorService = resolveProviderByName<WorkspaceIterator>(
       'WorkspaceIteratorService',
@@ -506,7 +508,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
   });
 
   afterAll(async () => {
-    if (!workspaceId) return;
+    if (!workspaceId || !ownsFixtureCleanup) return;
     const fixtureCampaignIds = [
       campaignId,
       transitionCampaignId,

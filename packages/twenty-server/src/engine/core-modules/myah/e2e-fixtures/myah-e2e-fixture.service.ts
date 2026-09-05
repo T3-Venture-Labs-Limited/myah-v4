@@ -79,6 +79,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
       agentMessagePartIds: [partId],
       callbackConnectedAccountIdsByCampaignId: {},
     };
+    const fixture = this.registry.register(context.workspaceId, records);
 
     try {
       const createAndTrackMailbox = async (
@@ -196,8 +197,6 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
         ],
       );
 
-      const fixture = this.registry.register(context.workspaceId, records);
-
       return {
         id: fixture.id,
         availableAccountIds: [
@@ -214,9 +213,12 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
         expectedBody: EXPECTED_BODY,
       };
     } catch (error) {
-      await this.deleteRecords(context.workspaceId, records).catch(
-        () => undefined,
-      );
+      try {
+        await this.deleteRecords(context.workspaceId, records);
+        this.registry.release(context.workspaceId, fixture.id);
+      } catch {
+        // Keep the fixture registered so cleanup can be retried.
+      }
       throw error;
     }
   }
@@ -436,10 +438,12 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
       await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
     const schemaName = getWorkspaceSchemaName(workspaceId);
     const queryRunner = dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    let transactionStarted = false;
 
     try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      transactionStarted = true;
       const query = (sql: string, parameters: unknown[]) =>
         queryRunner.query(sql, parameters);
       const remove = async (table: string, ids?: string[]) => {
@@ -487,8 +491,9 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
       await remove('core."messageChannel"', records.messageChannelIds);
       await remove('core."connectedAccount"', records.connectedAccountIds);
       await queryRunner.commitTransaction();
+      transactionStarted = false;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (transactionStarted) await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();

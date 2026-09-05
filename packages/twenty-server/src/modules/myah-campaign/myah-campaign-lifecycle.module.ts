@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { ManagedEmailMailboxEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-mailbox.entity';
 import { MYAH_CREATOR_OPS_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-creator-ops-tool-service.token';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbound-manager/messaging-send-manager.module';
 import { WorkflowCommonModule } from 'src/modules/workflow/common/workflow-common.module';
 import { CampaignAccountResolver } from 'src/modules/myah-campaign/resolvers/campaign-account.resolver';
@@ -20,9 +22,14 @@ import { MyahCreatorOpsToolWorkspaceService } from 'src/modules/myah-campaign/to
     TwentyORMModule,
     WorkflowCommonModule,
     MessagingSendManagerModule,
-    TypeOrmModule.forFeature([ConnectedAccountEntity, MessageChannelEntity]),
+    TypeOrmModule.forFeature([
+      ConnectedAccountEntity,
+      ManagedEmailMailboxEntity,
+      MessageChannelEntity,
+    ]),
   ],
   providers: [
+    provideWorkspaceScopedRepository(ManagedEmailMailboxEntity),
     CampaignLifecycleService,
     CampaignAccountService,
     CampaignOutreachWorkflowLifecycleWorkspaceService,

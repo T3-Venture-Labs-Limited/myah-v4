@@ -232,6 +232,45 @@ describe('MyahE2eFixtureService', () => {
     );
   });
 
+  it('retains cleanup ownership when fixture creation and cleanup both fail', async () => {
+    const {
+      outreachEmailActionDefinition,
+      registry,
+      service,
+      workspaceQueryRunner,
+    } = createService();
+    outreachEmailActionDefinition.recordApprovalBinding.mockImplementationOnce(
+      async () => {
+        workspaceQueryRunner.query.mockRejectedValueOnce(
+          new Error('cleanup failed'),
+        );
+        throw new Error('record failed');
+      },
+    );
+
+    await expect(
+      service.createCampaignMailboxFixture(fixtureContext, campaignId),
+    ).rejects.toThrow('record failed');
+
+    expect(registry.entries()).toHaveLength(1);
+  });
+
+  it('releases the cleanup connection when transaction start fails', async () => {
+    const { registry, service, workspaceQueryRunner } = createService();
+    const fixture = registry.register(workspaceId, {
+      campaignIds: [],
+      connectedAccountIds: [],
+    });
+    workspaceQueryRunner.startTransaction.mockRejectedValueOnce(
+      new Error('transaction start failed'),
+    );
+
+    await expect(service.cleanup(fixtureContext, fixture.id)).rejects.toThrow(
+      'transaction start failed',
+    );
+    expect(workspaceQueryRunner.release).toHaveBeenCalledTimes(1);
+  });
+
   it('deletes only fixture-workspace receipts before their approval bindings and can retry cleanup', async () => {
     const { manager, registry, service } = createService();
     const fixture = registry.register(workspaceId, {

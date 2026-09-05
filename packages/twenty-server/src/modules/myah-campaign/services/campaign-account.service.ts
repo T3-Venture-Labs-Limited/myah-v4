@@ -15,9 +15,12 @@ import {
   type CampaignEmailAccountDTO,
 } from 'src/modules/myah-campaign/dtos/campaign-account.dto';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { ManagedEmailMailboxEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-mailbox.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
@@ -62,6 +65,8 @@ export class CampaignAccountService {
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
+    @InjectWorkspaceScopedRepository(ManagedEmailMailboxEntity)
+    private readonly managedEmailMailboxRepository: WorkspaceScopedRepository<ManagedEmailMailboxEntity>,
     private readonly messagingMessageOutboundService: MessagingMessageOutboundService,
   ) {}
 
@@ -264,6 +269,17 @@ export class CampaignAccountService {
         channel.syncStatus !== MessageChannelSyncStatus.ACTIVE
       )
         throw new Error('Campaign default email channel is unavailable');
+      const isManaged = await this.managedEmailMailboxRepository.exists(
+        workspaceId,
+        {
+          where: [
+            { connectedAccountId: account.id },
+            { messageChannelId: channel.id },
+          ],
+        },
+      );
+      if (isManaged)
+        throw new Error('Campaign default email account is managed');
       await this.messagingMessageOutboundService.assertConnectedAccountSendable(
         account,
       );
