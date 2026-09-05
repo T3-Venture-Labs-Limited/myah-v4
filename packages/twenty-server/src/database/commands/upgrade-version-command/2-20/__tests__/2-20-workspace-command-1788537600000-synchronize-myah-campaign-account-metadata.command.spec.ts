@@ -79,6 +79,8 @@ describe('SynchronizeMyahCampaignAccountMetadataCommand', () => {
       index: new Set([
         MYAH_STANDARD_OBJECTS.campaignAccount.indexes.campaignAccountUniqueIndex
           .universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaignAccount.indexes
+          .campaignAccountDefaultUniqueIndex.universalIdentifier,
       ]),
       objectPermission: new Set([
         '9dda7955-44b7-5ea0-ab63-6dc0630626e8',
@@ -106,6 +108,8 @@ describe('SynchronizeMyahCampaignAccountMetadataCommand', () => {
       index: new Set([
         MYAH_STANDARD_OBJECTS.campaignAccount.indexes.campaignAccountUniqueIndex
           .universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaignAccount.indexes
+          .campaignAccountDefaultUniqueIndex.universalIdentifier,
       ]),
       objectPermission: new Set([
         '9dda7955-44b7-5ea0-ab63-6dc0630626e8',

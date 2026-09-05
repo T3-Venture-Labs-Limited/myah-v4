@@ -55,6 +55,8 @@ export class SynchronizeMyahCampaignAccountMetadataCommand extends ActiveOrSuspe
       index: new Set([
         MYAH_STANDARD_OBJECTS.campaignAccount.indexes.campaignAccountUniqueIndex
           .universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaignAccount.indexes
+          .campaignAccountDefaultUniqueIndex.universalIdentifier,
       ]),
       objectPermission: new Set([
         MYAH_CAMPAIGN_ACCOUNT_READ_ONLY_OBJECT_PERMISSION_UNIVERSAL_IDENTIFIER,

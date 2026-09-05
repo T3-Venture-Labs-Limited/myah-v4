@@ -708,6 +708,9 @@ export const MYAH_STANDARD_OBJECTS = {
       campaignAccountUniqueIndex: {
         universalIdentifier: 'c682d674-b37b-5554-aff7-f00ed7eaa305',
       },
+      campaignAccountDefaultUniqueIndex: {
+        universalIdentifier: 'f4b7f8e0-9f0e-5e85-9fcf-cb80df8bb5ae',
+      },
     },
     views: {},
   },

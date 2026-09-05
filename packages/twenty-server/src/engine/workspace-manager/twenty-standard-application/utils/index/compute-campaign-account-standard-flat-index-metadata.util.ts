@@ -30,4 +30,18 @@ export const buildCampaignAccountStandardFlatIndexMetadatas = ({
     twentyStandardApplicationId,
     now,
   }),
+  campaignAccountDefaultUniqueIndex: createStandardIndexFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      indexName: 'campaignAccountDefaultUniqueIndex',
+      relatedFieldNames: ['campaign', 'channel'],
+      isUnique: true,
+      indexWhereClause: '"deletedAt" IS NULL AND "isDefault" = true',
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
 });

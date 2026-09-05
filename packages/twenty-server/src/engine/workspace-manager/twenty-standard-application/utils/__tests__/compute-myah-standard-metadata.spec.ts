@@ -1415,6 +1415,8 @@ describe('Myah standard metadata contract', () => {
       '417af66e-c311-53a8-8811-4d5818e01dc2';
     const campaignAccountUniqueIndexUniversalIdentifier =
       'c682d674-b37b-5554-aff7-f00ed7eaa305';
+    const campaignAccountDefaultUniqueIndexUniversalIdentifier =
+      'f4b7f8e0-9f0e-5e85-9fcf-cb80df8bb5ae';
 
     const objectMetadata =
       result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
@@ -1442,6 +1444,7 @@ describe('Myah standard metadata contract', () => {
     });
     expect(Object.keys(MYAH_STANDARD_OBJECTS.campaignAccount.indexes)).toEqual([
       'campaignAccountUniqueIndex',
+      'campaignAccountDefaultUniqueIndex',
     ]);
     expect(fieldMetadata[campaignFieldUniversalIdentifier]).toMatchObject({
       universalIdentifier: campaignFieldUniversalIdentifier,
@@ -1550,6 +1553,25 @@ describe('Myah standard metadata contract', () => {
         expect.objectContaining({
           fieldMetadataUniversalIdentifier:
             connectedAccountIdFieldUniversalIdentifier,
+        }),
+      ],
+    });
+    expect(
+      result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[
+        campaignAccountDefaultUniqueIndexUniversalIdentifier
+      ],
+    ).toMatchObject({
+      universalIdentifier: campaignAccountDefaultUniqueIndexUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      isUnique: true,
+      indexWhereClause: '"deletedAt" IS NULL AND "isDefault" = true',
+      universalFlatIndexFieldMetadatas: [
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier: campaignFieldUniversalIdentifier,
+        }),
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier: channelFieldUniversalIdentifier,
         }),
       ],
     });
