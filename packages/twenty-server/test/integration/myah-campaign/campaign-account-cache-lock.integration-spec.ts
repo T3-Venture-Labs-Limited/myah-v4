@@ -127,9 +127,8 @@ const waitForDatabaseCondition = async (
 ): Promise<void> => {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (await condition()) return;
-    // Keep bounded waiting in PostgreSQL so contention tests observe database
-    // state rather than relying on Node scheduling delays.
-    await global.testDataSource.query('SELECT pg_sleep(0.01)');
+    // Poll database state; no timing-based contention coordination is used.
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error(`Timed out waiting for ${description}`);
 };
@@ -165,6 +164,9 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
   const rollbackSuccessorCampaignId = randomUUID();
   const connectionOwnershipCampaignId = randomUUID();
   const migrationConflictCampaignId = randomUUID();
+  const removeUpdatedAtCampaignId = randomUUID();
+  const rowPermissionExcludedCampaignId = randomUUID();
+  const rowPermissionAllowedCampaignId = randomUUID();
   const connectedAccountIds = [
     randomUUID(),
     randomUUID(),
@@ -212,6 +214,95 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         return lock.exists;
       },
     );
+
+  const acquireTestBarrier = async (label: string) => {
+    const queryRunner = global.testDataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.query(
+      'SELECT pg_advisory_lock(hashtext($1), hashtext($2))',
+      ['myah-270-campaign-account-test-barrier', label],
+    );
+    return {
+      release: async () => {
+        try {
+          await queryRunner.query(
+            'SELECT pg_advisory_unlock(hashtext($1), hashtext($2))',
+            ['myah-270-campaign-account-test-barrier', label],
+          );
+        } finally {
+          await queryRunner.release();
+        }
+      },
+    };
+  };
+
+  const waitForTestBarrierWaiter = async (label: string) =>
+    waitForDatabaseCondition(
+      'predecessor arrival at controlled test barrier',
+      async () => {
+        const [lock] = await global.testDataSource.query<
+          Array<{ exists: boolean }>
+        >(
+          `SELECT EXISTS (
+           SELECT 1 FROM pg_locks
+            WHERE locktype = 'advisory'
+              AND mode = 'ExclusiveLock'
+              AND NOT granted
+              AND classid = hashtext($1)::oid
+              AND objid = hashtext($2)::oid
+         ) AS "exists"`,
+          ['myah-270-campaign-account-test-barrier', label],
+        );
+        return lock.exists;
+      },
+    );
+
+  const createTransactionBarrierTrigger = async ({
+    functionName,
+    triggerName,
+    targetId,
+    barrierLabel,
+    failure,
+  }: {
+    functionName: string;
+    triggerName: string;
+    targetId: string;
+    barrierLabel: string;
+    failure?: string;
+  }) => {
+    await global.testDataSource.query(
+      `CREATE OR REPLACE FUNCTION "${workspaceSchemaName}"."${functionName}"()
+       RETURNS trigger AS $$
+       BEGIN
+         IF NEW.id = '${targetId}'::uuid AND NEW."isDefault" = true THEN
+           PERFORM pg_advisory_xact_lock(
+             hashtext('myah-270-campaign-account-test-barrier'),
+             hashtext('${barrierLabel}')
+           );
+           ${failure ? `RAISE EXCEPTION '${failure}';` : ''}
+         END IF;
+         RETURN NEW;
+       END;
+       $$ LANGUAGE plpgsql`,
+    );
+    await global.testDataSource.query(
+      `CREATE TRIGGER "${triggerName}"
+       BEFORE UPDATE ON "${workspaceSchemaName}"."campaignAccount"
+       FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
+    );
+  };
+
+  const dropTransactionBarrierTrigger = async (
+    functionName: string,
+    triggerName: string,
+  ) => {
+    await global.testDataSource.query(
+      `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
+    );
+    await global.testDataSource.query(
+      `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
+    );
+  };
 
   beforeAll(async () => {
     const workspaces = await global.testDataSource.query<WorkspaceRow[]>(
@@ -272,7 +363,7 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
 
     await global.testDataSource.query(
       `INSERT INTO "${workspaceSchemaName}"."campaign" ("id", "name")
-       VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8), ($9, $10), ($11, $12), ($13, $14), ($15, $16), ($17, $18)`,
+       VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8), ($9, $10), ($11, $12), ($13, $14), ($15, $16), ($17, $18), ($19, $20), ($21, $22), ($23, $24)`,
       [
         campaignId,
         `MYAH-270 Transaction ${campaignId}`,
@@ -292,6 +383,12 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         `MYAH-270 Query Runner Ownership ${connectionOwnershipCampaignId}`,
         migrationConflictCampaignId,
         `MYAH-270 Migration Conflict ${migrationConflictCampaignId}`,
+        removeUpdatedAtCampaignId,
+        `MYAH-270 Remove Timestamp ${removeUpdatedAtCampaignId}`,
+        rowPermissionExcludedCampaignId,
+        `MYAH-270 Row Permission Excluded ${rowPermissionExcludedCampaignId}`,
+        rowPermissionAllowedCampaignId,
+        `MYAH-270 Row Permission Allowed ${rowPermissionAllowedCampaignId}`,
       ],
     );
     for (const [index, connectedAccountId] of connectedAccountIds.entries()) {
@@ -340,6 +437,9 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
       rollbackSuccessorCampaignId,
       connectionOwnershipCampaignId,
       migrationConflictCampaignId,
+      removeUpdatedAtCampaignId,
+      rowPermissionExcludedCampaignId,
+      rowPermissionAllowedCampaignId,
     ];
     const cleanupErrors: Error[] = [];
     const attempt = async (label: string, cleanup: () => Promise<void>) => {
@@ -367,6 +467,35 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     await attempt('synchronize restored default index', () =>
       synchronizeCampaignAccountMetadata(workspaceId),
     );
+    await attempt('verify restored default index after cleanup', async () => {
+      const indexes = await global.testDataSource.query<PhysicalIndexRow[]>(
+        `SELECT index_row.indisunique AS "isUnique",
+                index_row.indisvalid AS "isValid",
+                index_row.indisready AS "isReady",
+                string_agg(attribute.attname, ',' ORDER BY key_columns.ordinality) AS "columns",
+                pg_get_expr(index_row.indpred, index_row.indrelid) AS "predicate"
+           FROM pg_index AS index_row
+           INNER JOIN pg_class AS table_class ON table_class.oid = index_row.indrelid
+           INNER JOIN pg_namespace AS namespace ON namespace.oid = table_class.relnamespace
+           INNER JOIN unnest(index_row.indkey) WITH ORDINALITY AS key_columns(attnum, ordinality)
+             ON key_columns.attnum > 0
+           INNER JOIN pg_attribute AS attribute
+             ON attribute.attrelid = table_class.oid AND attribute.attnum = key_columns.attnum
+          WHERE namespace.nspname = $1 AND table_class.relname = 'campaignAccount'
+            AND index_row.indisunique AND pg_get_expr(index_row.indpred, index_row.indrelid) IS NOT NULL
+          GROUP BY index_row.indisunique, index_row.indisvalid, index_row.indisready,
+                   index_row.indpred, index_row.indrelid`,
+        [workspaceSchemaName],
+      );
+      expect(
+        indexes.find(
+          ({ columns, predicate }) =>
+            columns === 'campaignId,channel' &&
+            predicate.includes('"deletedAt" IS NULL') &&
+            predicate.includes('"isDefault" = true'),
+        ),
+      ).toMatchObject({ isUnique: true, isValid: true, isReady: true });
+    });
     await attempt('delete CampaignAccount fixtures', () =>
       global.testDataSource.query(
         `DELETE FROM "${workspaceSchemaName}"."campaignAccount"
@@ -533,31 +662,26 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     );
     const functionName = 'myah_270_set_default_barrier';
     const triggerName = 'myah_270_set_default_barrier_trigger';
+    const barrierLabel = randomUUID();
+    const barrier = await acquireTestBarrier(barrierLabel);
     let removeSettled = false;
     const transitions: Promise<unknown>[] = [];
     try {
-      await global.testDataSource.query(
-        `CREATE OR REPLACE FUNCTION "${workspaceSchemaName}"."${functionName}"()
-         RETURNS trigger AS $$
-         BEGIN
-           IF NEW.id = '${target.id}'::uuid AND NEW."isDefault" = true THEN
-             PERFORM pg_sleep(0.25);
-           END IF;
-           RETURN NEW;
-         END;
-         $$ LANGUAGE plpgsql`,
-      );
-      await global.testDataSource.query(
-        `CREATE TRIGGER "${triggerName}"
-         BEFORE UPDATE ON "${workspaceSchemaName}"."campaignAccount"
-         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
-      );
+      await createTransactionBarrierTrigger({
+        functionName,
+        triggerName,
+        targetId: target.id,
+        barrierLabel,
+      });
       const setDefault = campaignAccountService.setDefault(
         { campaignId: transitionCampaignId, campaignAccountId: target.id },
         buildSystemAuthContext(workspaceId),
       );
+      // Observe rejection immediately so cleanup never leaves an unhandled promise.
       transitions.push(setDefault);
+      void setDefault.catch(() => undefined);
       await waitForCampaignAdvisoryLock(transitionCampaignId, true);
+      await waitForTestBarrierWaiter(barrierLabel);
       const remove = campaignAccountService
         .remove(
           { campaignId: transitionCampaignId, campaignAccountId: target.id },
@@ -567,17 +691,15 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
           removeSettled = true;
         });
       transitions.push(remove);
+      void remove.catch(() => undefined);
       await waitForCampaignAdvisoryLock(transitionCampaignId, false);
       expect(removeSettled).toBe(false);
+      await barrier.release();
       await Promise.all([setDefault, remove]);
     } finally {
+      await barrier.release().catch(() => undefined);
       await Promise.allSettled(transitions);
-      await global.testDataSource.query(
-        `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
-      );
-      await global.testDataSource.query(
-        `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
-      );
+      await dropTransactionBarrierTrigger(functionName, triggerName);
     }
 
     const active = await global.testDataSource.query<CampaignAccountRow[]>(
@@ -639,6 +761,42 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         isDefault: true,
       }),
     ]);
+  });
+
+  it('advances updatedAt when a Campaign email account is successfully removed', async () => {
+    await campaignAccountService.link(
+      {
+        campaignId: removeUpdatedAtCampaignId,
+        connectedAccountId: connectedAccountIds[0],
+      },
+      buildSystemAuthContext(workspaceId),
+    );
+    const [link] = await global.testDataSource.query<Array<{ id: string }>>(
+      `SELECT id FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
+      [removeUpdatedAtCampaignId],
+    );
+    const beforeRemoval = new Date('2000-01-01T00:00:00.000Z');
+    await global.testDataSource.query(
+      `UPDATE "${workspaceSchemaName}"."campaignAccount"
+          SET "updatedAt" = $2 WHERE id = $1`,
+      [link.id, beforeRemoval],
+    );
+    await campaignAccountService.remove(
+      { campaignId: removeUpdatedAtCampaignId, campaignAccountId: link.id },
+      buildSystemAuthContext(workspaceId),
+    );
+    const [removed] = await global.testDataSource.query<
+      Array<{ deletedAt: Date; updatedAt: Date }>
+    >(
+      `SELECT "deletedAt", "updatedAt" FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE id = $1`,
+      [link.id],
+    );
+    expect(removed.deletedAt).toEqual(expect.anything());
+    expect(removed.updatedAt.getTime()).toBeGreaterThan(
+      beforeRemoval.getTime(),
+    );
   });
 
   it('rolls back the previous default when the target update fails after clear', async () => {
@@ -774,23 +932,16 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     );
     const functionName = 'myah_270_mixed_case_lock_barrier';
     const triggerName = 'myah_270_mixed_case_lock_barrier_trigger';
+    const barrierLabel = randomUUID();
+    const barrier = await acquireTestBarrier(barrierLabel);
     const transitions: Promise<unknown>[] = [];
     try {
-      await global.testDataSource.query(
-        `CREATE OR REPLACE FUNCTION "${workspaceSchemaName}"."${functionName}"()
-         RETURNS trigger AS $$
-         BEGIN
-           IF NEW.id = '${target.id}'::uuid AND NEW."isDefault" = true THEN
-             PERFORM pg_sleep(0.25);
-           END IF;
-           RETURN NEW;
-         END;
-         $$ LANGUAGE plpgsql`,
-      );
-      await global.testDataSource.query(
-        `CREATE TRIGGER "${triggerName}" BEFORE UPDATE ON "${workspaceSchemaName}"."campaignAccount"
-         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
-      );
+      await createTransactionBarrierTrigger({
+        functionName,
+        triggerName,
+        targetId: target.id,
+        barrierLabel,
+      });
       const setDefault = campaignAccountService.setDefault(
         {
           campaignId: mixedCaseCampaignId.toUpperCase(),
@@ -799,24 +950,24 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         buildSystemAuthContext(workspaceId),
       );
       transitions.push(setDefault);
+      void setDefault.catch(() => undefined);
       await waitForCampaignAdvisoryLock(mixedCaseCampaignId, true);
+      await waitForTestBarrierWaiter(barrierLabel);
       const remove = campaignAccountService.remove(
         { campaignId: mixedCaseCampaignId, campaignAccountId: target.id },
         buildSystemAuthContext(workspaceId),
       );
       transitions.push(remove);
+      void remove.catch(() => undefined);
       // Without UUID canonicalization this exact key has no waiting holder;
       // row locking alone cannot satisfy this advisory-lock observation.
       await waitForCampaignAdvisoryLock(mixedCaseCampaignId, false);
+      await barrier.release();
       await Promise.all(transitions);
     } finally {
+      await barrier.release().catch(() => undefined);
       await Promise.allSettled(transitions);
-      await global.testDataSource.query(
-        `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
-      );
-      await global.testDataSource.query(
-        `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
-      );
+      await dropTransactionBarrierTrigger(functionName, triggerName);
     }
     const active = await global.testDataSource.query<CampaignAccountRow[]>(
       `SELECT "connectedAccountId", "isDefault"
@@ -871,6 +1022,78 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
       [insertRollbackCampaignId],
     );
     expect(count).toBe('0');
+  });
+
+  it('rolls back a link after its insert callback returns before outer commit', async () => {
+    const marker = new Error('MYAH-270 controlled outer rollback');
+    const workspaceOrmManager = campaignAccountService as unknown as {
+      globalWorkspaceOrmManager: {
+        getGlobalWorkspaceDataSource: () => Promise<{
+          transaction: <T>(
+            callback: (manager: unknown) => Promise<T>,
+          ) => Promise<T>;
+        }>;
+      };
+    };
+    const dataSource =
+      await workspaceOrmManager.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+    const originalTransaction = dataSource.transaction.bind(dataSource);
+    let serviceCallbackReturnedAfterInsert = false;
+    let serviceRejected = false;
+    dataSource.transaction = async (callback) =>
+      originalTransaction(async (manager: unknown) => {
+        await callback(manager);
+        serviceCallbackReturnedAfterInsert = true;
+        throw marker;
+      });
+    try {
+      await expect(
+        campaignAccountService.link(
+          {
+            campaignId: insertRollbackCampaignId,
+            connectedAccountId: connectedAccountIds[0],
+          },
+          buildSystemAuthContext(workspaceId),
+        ),
+      ).rejects.toThrow(marker.message);
+      serviceRejected = true;
+    } finally {
+      dataSource.transaction = originalTransaction;
+    }
+
+    expect(serviceCallbackReturnedAfterInsert).toBe(true);
+    expect(serviceRejected).toBe(true);
+    const [{ count }] = await global.testDataSource.query<
+      Array<{ count: string }>
+    >(
+      `SELECT COUNT(*)::text AS count FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1`,
+      [insertRollbackCampaignId],
+    );
+    // The transaction callback has completed, so no ORM mutation event can
+    // have committed a CampaignAccount write before the controlled rollback.
+    expect(count).toBe('0');
+    await expect(
+      campaignAccountService.link(
+        {
+          campaignId: insertRollbackCampaignId,
+          connectedAccountId: connectedAccountIds[1],
+        },
+        buildSystemAuthContext(workspaceId),
+      ),
+    ).resolves.toHaveLength(1);
+    const [{ idleInTransactionCount }] = await global.testDataSource.query<
+      Array<{ idleInTransactionCount: string }>
+    >(
+      `SELECT COUNT(*)::text AS "idleInTransactionCount"
+         FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND state = 'idle in transaction'
+          AND pid <> pg_backend_pid()
+          AND query LIKE $1`,
+      [`%${workspaceSchemaName}%`],
+    );
+    expect(Number(idleInTransactionCount)).toBe(0);
   });
 
   it('keeps each default transition and its transactional advisory lock on one PostgreSQL backend and transaction', async () => {
@@ -1048,26 +1271,18 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     expect(successor).toBeDefined();
     const functionName = 'myah_270_waiting_successor_rollback';
     const triggerName = 'myah_270_waiting_successor_rollback_trigger';
+    const barrierLabel = randomUUID();
+    const barrier = await acquireTestBarrier(barrierLabel);
     const transitions: Promise<unknown>[] = [];
     let successorSettled = false;
     try {
-      await global.testDataSource.query(
-        `CREATE FUNCTION "${workspaceSchemaName}"."${functionName}"()
-         RETURNS trigger AS $$
-         BEGIN
-           IF NEW.id = '${failedTarget?.id}'::uuid AND NEW."isDefault" = true THEN
-             PERFORM pg_sleep(0.25);
-             RAISE EXCEPTION 'forced successor predecessor rollback';
-           END IF;
-           RETURN NEW;
-         END;
-         $$ LANGUAGE plpgsql`,
-      );
-      await global.testDataSource.query(
-        `CREATE TRIGGER "${triggerName}"
-         BEFORE UPDATE ON "${workspaceSchemaName}"."campaignAccount"
-         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
-      );
+      await createTransactionBarrierTrigger({
+        functionName,
+        triggerName,
+        targetId: failedTarget!.id,
+        barrierLabel,
+        failure: 'forced successor predecessor rollback',
+      });
       const failed = campaignAccountService.setDefault(
         {
           campaignId: rollbackSuccessorCampaignId,
@@ -1075,8 +1290,10 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         },
         buildSystemAuthContext(workspaceId),
       );
+      void failed.catch(() => undefined);
       transitions.push(failed);
       await waitForCampaignAdvisoryLock(rollbackSuccessorCampaignId, true);
+      await waitForTestBarrierWaiter(barrierLabel);
       const waitingSuccessor = campaignAccountService
         .setDefault(
           {
@@ -1088,21 +1305,19 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         .finally(() => {
           successorSettled = true;
         });
+      void waitingSuccessor.catch(() => undefined);
       transitions.push(waitingSuccessor);
       await waitForCampaignAdvisoryLock(rollbackSuccessorCampaignId, false);
       expect(successorSettled).toBe(false);
+      await barrier.release();
       await expect(failed).rejects.toThrow(
         'forced successor predecessor rollback',
       );
       await expect(waitingSuccessor).resolves.toBeDefined();
     } finally {
+      await barrier.release().catch(() => undefined);
       await Promise.allSettled(transitions);
-      await global.testDataSource.query(
-        `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
-      );
-      await global.testDataSource.query(
-        `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
-      );
+      await dropTransactionBarrierTrigger(functionName, triggerName);
     }
     const active = await global.testDataSource.query<CampaignAccountRow[]>(
       `SELECT "connectedAccountId", "isDefault" FROM "${workspaceSchemaName}"."campaignAccount"
@@ -1121,6 +1336,241 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
       [`%${workspaceSchemaName}%`],
     );
     expect(Number(idleInTransactionCount)).toBe(0);
+  });
+
+  it('enforces real row-level Campaign permissions before account writes while allowing a control Campaign', async () => {
+    const roleId = randomUUID();
+    const roleTarget = await global.testDataSource.query<
+      Array<{ id: string; roleId: string }>
+    >(
+      `SELECT id, "roleId" AS "roleId" FROM core."roleTarget"
+        WHERE "workspaceId" = $1 AND "userWorkspaceId" = $2`,
+      [workspaceId, userWorkspaceId],
+    );
+    expect(roleTarget).toHaveLength(1);
+    const [application] = await global.testDataSource.query<
+      Array<{ id: string }>
+    >(`SELECT id FROM core."application" WHERE "workspaceId" = $1 LIMIT 1`, [
+      workspaceId,
+    ]);
+    const [campaignMetadata] = await global.testDataSource.query<
+      Array<{ id: string }>
+    >(
+      `SELECT id FROM core."objectMetadata"
+        WHERE "workspaceId" = $1 AND "nameSingular" = 'campaign'`,
+      [workspaceId],
+    );
+    const [campaignIdField] = await global.testDataSource.query<
+      Array<{ id: string }>
+    >(
+      `SELECT field_metadata.id AS id FROM core."fieldMetadata" field_metadata
+        WHERE field_metadata."workspaceId" = $1
+          AND field_metadata."objectMetadataId" = $2
+          AND field_metadata.name = 'id'`,
+      [workspaceId, campaignMetadata.id],
+    );
+    expect(application).toBeDefined();
+    expect(campaignMetadata).toBeDefined();
+    expect(campaignIdField).toBeDefined();
+    const cacheService = resolveProviderByName<{
+      invalidateAndRecompute: (
+        workspace: string,
+        keys: string[],
+      ) => Promise<void>;
+    }>('WorkspaceCacheService');
+    const actorContextService = resolveProviderByName<{
+      buildUserAndAgentActorContext: (
+        userWorkspace: string,
+        workspace: string,
+      ) => Promise<{
+        authContext: Parameters<CampaignAccountService['link']>[1];
+      }>;
+    }>('AgentActorContextService');
+    const cacheKeys = [
+      'rolesPermissions',
+      'userWorkspaceRoleMap',
+      'flatRoleMaps',
+      'flatRoleTargetMaps',
+      'flatObjectPermissionMaps',
+      'flatRowLevelPermissionPredicateMaps',
+      'flatRowLevelPermissionPredicateGroupMaps',
+    ];
+    const originalRoleId = roleTarget[0].roleId;
+    try {
+      await global.testDataSource.query(
+        `INSERT INTO core."role" (
+          id, "workspaceId", "universalIdentifier", "applicationId", label,
+          "canReadAllObjectRecords", "canUpdateAllObjectRecords",
+          "canSoftDeleteAllObjectRecords", "canDestroyAllObjectRecords"
+        ) VALUES ($1, $2, $3, $4, $5, false, false, false, false)`,
+        [
+          roleId,
+          workspaceId,
+          randomUUID(),
+          application.id,
+          `MYAH-270 RLP ${roleId}`,
+        ],
+      );
+      await global.testDataSource.query(
+        `INSERT INTO core."objectPermission" (
+          id, "workspaceId", "universalIdentifier", "applicationId", "roleId",
+          "objectMetadataId", "canReadObjectRecords", "canUpdateObjectRecords",
+          "canSoftDeleteObjectRecords", "canDestroyObjectRecords"
+        ) VALUES ($1, $2, $3, $4, $5, $6, true, true, false, false)`,
+        [
+          randomUUID(),
+          workspaceId,
+          randomUUID(),
+          application.id,
+          roleId,
+          campaignMetadata.id,
+        ],
+      );
+      await global.testDataSource.query(
+        `INSERT INTO core."rowLevelPermissionPredicate" (
+          id, "workspaceId", "universalIdentifier", "applicationId", "roleId",
+          "objectMetadataId", "fieldMetadataId", operand, value
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'IS', $8::jsonb)`,
+        [
+          randomUUID(),
+          workspaceId,
+          randomUUID(),
+          application.id,
+          roleId,
+          campaignMetadata.id,
+          campaignIdField.id,
+          JSON.stringify(rowPermissionAllowedCampaignId),
+        ],
+      );
+      await global.testDataSource.query(
+        `UPDATE core."roleTarget" SET "roleId" = $1 WHERE id = $2`,
+        [roleId, roleTarget[0].id],
+      );
+      await cacheService.invalidateAndRecompute(workspaceId, cacheKeys);
+      const authContext = (
+        await actorContextService.buildUserAndAgentActorContext(
+          userWorkspaceId,
+          workspaceId,
+        )
+      ).authContext;
+
+      await campaignAccountService.link(
+        {
+          campaignId: rowPermissionExcludedCampaignId,
+          connectedAccountId: connectedAccountIds[0],
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      await campaignAccountService.link(
+        {
+          campaignId: rowPermissionExcludedCampaignId,
+          connectedAccountId: connectedAccountIds[1],
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      const excludedBefore = await global.testDataSource.query<
+        Array<{
+          id: string;
+          isDefault: boolean;
+          updatedAt: Date;
+          deletedAt: Date | null;
+        }>
+      >(
+        `SELECT id, "isDefault", "updatedAt", "deletedAt"
+           FROM "${workspaceSchemaName}"."campaignAccount"
+          WHERE "campaignId" = $1 ORDER BY id`,
+        [rowPermissionExcludedCampaignId],
+      );
+      await expect(
+        campaignAccountService.link(
+          {
+            campaignId: rowPermissionExcludedCampaignId,
+            connectedAccountId: connectedAccountIds[2],
+          },
+          authContext,
+        ),
+      ).rejects.toThrow('Campaign not found');
+      await expect(
+        campaignAccountService.setDefault(
+          {
+            campaignId: rowPermissionExcludedCampaignId,
+            campaignAccountId: excludedBefore[1].id,
+          },
+          authContext,
+        ),
+      ).rejects.toThrow('Campaign not found');
+      await expect(
+        campaignAccountService.remove(
+          {
+            campaignId: rowPermissionExcludedCampaignId,
+            campaignAccountId: excludedBefore[1].id,
+          },
+          authContext,
+        ),
+      ).rejects.toThrow('Campaign not found');
+      expect(
+        await global.testDataSource.query(
+          `SELECT id, "isDefault", "updatedAt", "deletedAt"
+             FROM "${workspaceSchemaName}"."campaignAccount"
+            WHERE "campaignId" = $1 ORDER BY id`,
+          [rowPermissionExcludedCampaignId],
+        ),
+      ).toEqual(excludedBefore);
+
+      await expect(
+        campaignAccountService.link(
+          {
+            campaignId: rowPermissionAllowedCampaignId,
+            connectedAccountId: connectedAccountIds[0],
+          },
+          authContext,
+        ),
+      ).resolves.toHaveLength(1);
+      await expect(
+        campaignAccountService.link(
+          {
+            campaignId: rowPermissionAllowedCampaignId,
+            connectedAccountId: connectedAccountIds[1],
+          },
+          authContext,
+        ),
+      ).resolves.toHaveLength(2);
+      const [allowedTarget] = await global.testDataSource.query<
+        Array<{ id: string }>
+      >(
+        `SELECT id FROM "${workspaceSchemaName}"."campaignAccount"
+          WHERE "campaignId" = $1 AND "connectedAccountId" = $2 AND "deletedAt" IS NULL`,
+        [rowPermissionAllowedCampaignId, connectedAccountIds[1]],
+      );
+      await expect(
+        campaignAccountService.setDefault(
+          {
+            campaignId: rowPermissionAllowedCampaignId,
+            campaignAccountId: allowedTarget.id,
+          },
+          authContext,
+        ),
+      ).resolves.toHaveLength(2);
+      await expect(
+        campaignAccountService.remove(
+          {
+            campaignId: rowPermissionAllowedCampaignId,
+            campaignAccountId: allowedTarget.id,
+          },
+          authContext,
+        ),
+      ).resolves.toHaveLength(1);
+    } finally {
+      await global.testDataSource.query(
+        `UPDATE core."roleTarget" SET "roleId" = $1 WHERE id = $2`,
+        [originalRoleId, roleTarget[0].id],
+      );
+      await global.testDataSource.query(
+        `DELETE FROM core."role" WHERE id = $1`,
+        [roleId],
+      );
+      await cacheService.invalidateAndRecompute(workspaceId, cacheKeys);
+    }
   });
 
   it('rejects direct duplicate defaults while allowing non-default and soft-deleted rows', async () => {
