@@ -299,6 +299,54 @@ describe('CampaignAccountService', () => {
     ]);
   });
 
+  it('keeps hard-deleted account and channel links visible as removable unavailable placeholders', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'deleted-account-link',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'deleted-channel-link',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+        },
+      ],
+      connectedAccounts: [connectedAccount({ id: secondAccountId })],
+      messageChannels: [],
+    });
+
+    await expect(harness.service.list(campaignId, authContext)).resolves.toEqual([
+      {
+        id: 'deleted-account-link',
+        connectedAccountId: accountId,
+        messageChannelId: channelId,
+        provider: null,
+        senderEmail: null,
+        label: 'Unavailable email account',
+        isDefault: true,
+        health: 'UNAVAILABLE',
+      },
+      {
+        id: 'deleted-channel-link',
+        connectedAccountId: secondAccountId,
+        messageChannelId: secondChannelId,
+        provider: null,
+        senderEmail: null,
+        label: 'Unavailable email account',
+        isDefault: false,
+        health: 'UNAVAILABLE',
+      },
+    ]);
+  });
+
   it('preserves the first default, serializes replacement, and does not promote after default removal', async () => {
     const harness = createHarness({
       campaignAccounts: [
@@ -420,6 +468,61 @@ describe('CampaignAccountService', () => {
     ).resolves.toEqual(expect.objectContaining({ id: 'default' }));
   });
 
+  it('retries a first-link default unique-index race as non-default without swallowing other errors', async () => {
+    const harness = createHarness({
+      connectedAccounts: [
+        connectedAccount(),
+        connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+    });
+    harness.workspaceRepositories.campaignAccount.save
+      .mockImplementationOnce(async () => {
+        harness.rows.campaignAccount.push({
+          id: 'successor-default',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        });
+        throw {
+          code: '23505',
+          constraint: 'campaignAccountDefaultUniqueIndex',
+        };
+      })
+      .mockImplementationOnce(async (row: Row) => {
+        harness.rows.campaignAccount.push(row);
+        return row;
+      });
+
+    await expect(
+      harness.service.link(
+        { campaignId, connectedAccountId: accountId },
+        authContext,
+      ),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ connectedAccountId: accountId, isDefault: false }),
+        expect.objectContaining({
+          connectedAccountId: secondAccountId,
+          isDefault: true,
+        }),
+      ]),
+    );
+    expect(harness.workspaceRepositories.campaignAccount.save).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ isDefault: false }),
+    );
+  });
+
   it('does not default a newly linked account when an active non-default link exists', async () => {
     const harness = createHarness({
       campaignAccounts: [
@@ -497,6 +600,23 @@ describe('CampaignAccountService', () => {
     await expect(
       noDefault.service.resolveDefaultEmailAccount(campaignId, workspaceId),
     ).rejects.toThrow();
+    const ambiguousChannel = createHarness({
+      campaignAccounts: [
+        {
+          id: 'default',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+      ],
+      messageChannels: [messageChannel(), messageChannel({ id: secondChannelId })],
+    });
+    await expect(
+      ambiguousChannel.service.resolveDefaultEmailAccount(campaignId, workspaceId),
+    ).rejects.toThrow('unavailable');
+
     const unavailableChannel = createHarness({
       campaignAccounts: [
         {

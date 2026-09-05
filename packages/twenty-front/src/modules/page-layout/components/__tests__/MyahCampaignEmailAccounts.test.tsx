@@ -370,6 +370,27 @@ describe('MyahCampaignEmailAccounts', () => {
     ).toBeEnabled();
   });
 
+  it('renders a hard-deleted default link as unavailable and still removable', () => {
+    renderWithAccounts({
+      accounts: [
+        {
+          ...linkedAccount,
+          health: 'UNAVAILABLE',
+          label: 'Unavailable email account',
+          provider: null as never,
+          senderEmail: null as never,
+        },
+      ],
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The default email account is unavailable',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Remove Unavailable email account' }),
+    ).toBeEnabled();
+  });
+
   it('announces account loading independently from candidate loading', () => {
     renderWithAccounts({ accountLoading: true, candidateLoading: true });
     openAccountPicker();

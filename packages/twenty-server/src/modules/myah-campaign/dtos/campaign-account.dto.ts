@@ -51,11 +51,11 @@ export class CampaignEmailAccountDTO {
   @Field(() => UUIDScalarType)
   messageChannelId!: string;
 
-  @Field(() => String)
-  provider!: ConnectedAccountProvider;
+  @Field(() => String, { nullable: true })
+  provider!: ConnectedAccountProvider | null;
 
-  @Field()
-  senderEmail!: string;
+  @Field(() => String, { nullable: true })
+  senderEmail!: string | null;
 
   @Field()
   label!: string;

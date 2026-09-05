@@ -105,8 +105,8 @@ const REMOVE_CAMPAIGN_EMAIL_ACCOUNT = gql`
 type CampaignEmailAccount = {
   id: string;
   connectedAccountId: string;
-  provider: string;
-  senderEmail: string;
+  provider: string | null;
+  senderEmail: string | null;
   label: string;
   isDefault: boolean;
   health: 'AVAILABLE' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE';
@@ -131,11 +131,11 @@ const providerIconByName: Record<string, IconComponent> = {
   MICROSOFT: IconMicrosoft,
 };
 
-const providerIcon = (provider: string) =>
-  providerIconByName[provider] ?? IconMail;
+const providerIcon = (provider: string | null) =>
+  provider === null ? IconMail : (providerIconByName[provider] ?? IconMail);
 
 const accountIdentifier = (account: CampaignEmailAccount) =>
-  account.senderEmail;
+  account.senderEmail ?? account.label;
 
 const isUuid = (value: string | null): value is string =>
   value !== null &&
@@ -457,7 +457,9 @@ export const MyahCampaignEmailAccounts = ({
               <Chip
                 label={accountIdentifier(account)}
                 leftComponent={
-                  <ProviderIcon aria-label={`${account.provider} provider`} />
+                  <ProviderIcon
+                    aria-label={`${account.provider ?? 'email'} provider`}
+                  />
                 }
                 rightComponent={
                   account.isDefault ? (

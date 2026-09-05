@@ -112,7 +112,9 @@ export class CampaignAccountService {
         );
       }
       return candidates.sort((left, right) =>
-        left.senderEmail.localeCompare(right.senderEmail),
+        (left.senderEmail ?? left.label).localeCompare(
+          right.senderEmail ?? right.label,
+        ),
       );
     });
   }
@@ -162,15 +164,30 @@ export class CampaignAccountService {
           deletedAt: IsNull(),
         },
       });
-      await campaignAccounts.save(
-        campaignAccounts.create({
-          campaignId: input.campaignId,
-          connectedAccountId: account.id,
-          messageChannelId: channel.id,
-          channel: 'EMAIL',
-          isDefault: !hasActiveEmailLink,
-        }),
-      );
+      const link = campaignAccounts.create({
+        campaignId: input.campaignId,
+        connectedAccountId: account.id,
+        messageChannelId: channel.id,
+        channel: 'EMAIL',
+        isDefault: !hasActiveEmailLink,
+      });
+      try {
+        await campaignAccounts.save(link);
+      } catch (error) {
+        if (!link.isDefault || !this.isDefaultUniqueIndexViolation(error)) {
+          throw error;
+        }
+        const successorDefault = await campaignAccounts.findOne({
+          where: {
+            campaignId: input.campaignId,
+            channel: 'EMAIL',
+            isDefault: true,
+            deletedAt: IsNull(),
+          },
+        });
+        if (!successorDefault) throw error;
+        await campaignAccounts.save({ ...link, isDefault: false });
+      }
       return this.listInWorkspace(
         input.campaignId,
         authContext.workspace.id,
@@ -296,17 +313,10 @@ export class CampaignAccountService {
         !this.isEmail(account.handle)
       )
         throw new Error('Campaign default email account is unavailable');
-      const channel = await this.messageChannelRepository.findOne({
-        where: {
-          id: link.messageChannelId,
-          workspaceId,
-          connectedAccountId: account.id,
-          type: MessageChannelType.EMAIL,
-          handle: account.handle,
-        },
-      });
+      const channel = await this.findExactEmailChannel(account, workspaceId);
       if (
         !channel ||
+        channel.id !== link.messageChannelId ||
         !channel.isSyncEnabled ||
         channel.syncStatus !== MessageChannelSyncStatus.ACTIVE
       )
@@ -321,6 +331,17 @@ export class CampaignAccountService {
         isDefault: true,
       });
     });
+  }
+
+  private isDefaultUniqueIndexViolation(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      'constraint' in error &&
+      error.code === '23505' &&
+      error.constraint === 'campaignAccountDefaultUniqueIndex'
+    );
   }
 
   private async mutate<T>(
@@ -425,7 +446,7 @@ export class CampaignAccountService {
               },
             })
           : null;
-        if (!account || !channel) return null;
+        if (!account || !channel) return this.toUnavailableDto(link);
         return this.toDto({
           id: link.id,
           connectedAccount: account,
@@ -436,7 +457,11 @@ export class CampaignAccountService {
     );
     return accounts
       .filter((account): account is CampaignEmailAccountDTO => account !== null)
-      .sort((left, right) => left.senderEmail.localeCompare(right.senderEmail));
+      .sort((left, right) =>
+        (left.senderEmail ?? left.label).localeCompare(
+          right.senderEmail ?? right.label,
+        ),
+      );
   }
 
   private async findExactEmailChannel(
@@ -456,6 +481,21 @@ export class CampaignAccountService {
 
   private isEmail(handle: string): boolean {
     return emailSchema.safeParse(handle).success;
+  }
+
+  private toUnavailableDto(
+    link: CampaignAccountRecord,
+  ): CampaignEmailAccountDTO {
+    return {
+      id: link.id,
+      connectedAccountId: link.connectedAccountId,
+      messageChannelId: link.messageChannelId,
+      provider: null,
+      senderEmail: null,
+      label: 'Unavailable email account',
+      isDefault: link.isDefault,
+      health: CampaignEmailAccountHealth.UNAVAILABLE,
+    };
   }
 
   private toDto({
