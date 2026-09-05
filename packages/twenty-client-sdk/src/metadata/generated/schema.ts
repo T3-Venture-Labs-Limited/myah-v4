@@ -2748,32 +2748,6 @@ export interface ToolIndexEntry {
     __typename: 'ToolIndexEntry'
 }
 
-export interface MyahE2eCampaignMailboxFixtureDTO {
-    id: Scalars['UUID']
-    availableAccountIds: Scalars['UUID'][]
-    unavailableAccountId: Scalars['UUID']
-    approvalThreadId: Scalars['UUID']
-    approvalThreadTitle: Scalars['String']
-    actionApprovalBindingId: Scalars['UUID']
-    expectedFrom: Scalars['String']
-    expectedTo: Scalars['String']
-    expectedSubject: Scalars['String']
-    expectedBody: Scalars['String']
-    __typename: 'MyahE2eCampaignMailboxFixtureDTO'
-}
-
-export interface MyahE2eCampaignMailboxFixtureStatusDTO {
-    providerSendAttemptCount: Scalars['Float']
-    providerDraftPreparationCount: Scalars['Float']
-    __typename: 'MyahE2eCampaignMailboxFixtureStatusDTO'
-}
-
-export interface MyahE2eCallbackFixtureDTO {
-    connectedAccountId: Scalars['UUID']
-    callbackPath: Scalars['String']
-    __typename: 'MyahE2eCallbackFixtureDTO'
-}
-
 export interface WorkspaceMailboxConnectionStatus {
     connectedAccountId: Scalars['UUID']
     errorCode?: Scalars['String']
@@ -3238,7 +3212,6 @@ export interface Query {
     pieChartData: PieChartData
     lineChartData: LineChartData
     barChartData: BarChartData
-    getMyahE2eCampaignMailboxFixtureStatus: MyahE2eCampaignMailboxFixtureStatusDTO
     getAutoCompleteAddress: AutocompleteResult[]
     getAddressDetails: PlaceDetailsResult
     getUsageAnalytics: UsageAnalytics
@@ -3493,9 +3466,6 @@ export interface Mutation {
     trackAnalytics: Analytics
     duplicateDashboard: DuplicatedDashboard
     impersonate: Impersonate
-    createMyahE2eCampaignMailboxFixture: MyahE2eCampaignMailboxFixtureDTO
-    createMyahE2eCampaignCallbackFixture: MyahE2eCallbackFixtureDTO
-    cleanupMyahE2eCampaignMailboxFixture: Scalars['Boolean']
     createCalendarEvent: CreateCalendarEventOutput
     sendEmail: SendEmailOutput
     startChannelSync: ChannelSyncSuccess
@@ -6426,35 +6396,6 @@ export interface ToolIndexEntryGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface MyahE2eCampaignMailboxFixtureDTOGenqlSelection{
-    id?: boolean | number
-    availableAccountIds?: boolean | number
-    unavailableAccountId?: boolean | number
-    approvalThreadId?: boolean | number
-    approvalThreadTitle?: boolean | number
-    actionApprovalBindingId?: boolean | number
-    expectedFrom?: boolean | number
-    expectedTo?: boolean | number
-    expectedSubject?: boolean | number
-    expectedBody?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface MyahE2eCampaignMailboxFixtureStatusDTOGenqlSelection{
-    providerSendAttemptCount?: boolean | number
-    providerDraftPreparationCount?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface MyahE2eCallbackFixtureDTOGenqlSelection{
-    connectedAccountId?: boolean | number
-    callbackPath?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface WorkspaceMailboxConnectionStatusGenqlSelection{
     connectedAccountId?: boolean | number
     errorCode?: boolean | number
@@ -6961,7 +6902,6 @@ export interface QueryGenqlSelection{
     pieChartData?: (PieChartDataGenqlSelection & { __args: {input: PieChartDataInput} })
     lineChartData?: (LineChartDataGenqlSelection & { __args: {input: LineChartDataInput} })
     barChartData?: (BarChartDataGenqlSelection & { __args: {input: BarChartDataInput} })
-    getMyahE2eCampaignMailboxFixtureStatus?: (MyahE2eCampaignMailboxFixtureStatusDTOGenqlSelection & { __args: {input: MyahE2eFixtureIdInput} })
     getAutoCompleteAddress?: (AutocompleteResultGenqlSelection & { __args: {address: Scalars['String'], token: Scalars['String'], country?: (Scalars['String'] | null), isFieldCity?: (Scalars['Boolean'] | null)} })
     getAddressDetails?: (PlaceDetailsResultGenqlSelection & { __args: {placeId: Scalars['String'], token: Scalars['String']} })
     getUsageAnalytics?: (UsageAnalyticsGenqlSelection & { __args?: {input?: (UsageAnalyticsInput | null)} })
@@ -7017,8 +6957,6 @@ export interface PieChartDataInput {objectMetadataId: Scalars['UUID'],configurat
 export interface LineChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
 
 export interface BarChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
-
-export interface MyahE2eFixtureIdInput {fixtureId: Scalars['UUID']}
 
 export interface UsageAnalyticsInput {periodStart?: (Scalars['DateTime'] | null),periodEnd?: (Scalars['DateTime'] | null),userWorkspaceId?: (Scalars['String'] | null),operationTypes?: (UsageOperationType[] | null)}
 
@@ -7265,9 +7203,6 @@ export interface MutationGenqlSelection{
     trackAnalytics?: (AnalyticsGenqlSelection & { __args: {type: AnalyticsType, name?: (Scalars['String'] | null), event?: (Scalars['String'] | null), properties?: (Scalars['JSON'] | null)} })
     duplicateDashboard?: (DuplicatedDashboardGenqlSelection & { __args: {id: Scalars['UUID']} })
     impersonate?: (ImpersonateGenqlSelection & { __args: {userId: Scalars['UUID'], workspaceId: Scalars['UUID']} })
-    createMyahE2eCampaignMailboxFixture?: (MyahE2eCampaignMailboxFixtureDTOGenqlSelection & { __args: {input: CreateMyahE2eCampaignMailboxFixtureInput} })
-    createMyahE2eCampaignCallbackFixture?: (MyahE2eCallbackFixtureDTOGenqlSelection & { __args: {input: CreateMyahE2eCallbackFixtureInput} })
-    cleanupMyahE2eCampaignMailboxFixture?: { __args: {input: MyahE2eFixtureIdInput} }
     createCalendarEvent?: (CreateCalendarEventOutputGenqlSelection & { __args: {input: CreateCalendarEventInput} })
     sendEmail?: (SendEmailOutputGenqlSelection & { __args: {input: SendEmailInput} })
     startChannelSync?: (ChannelSyncSuccessGenqlSelection & { __args: {connectedAccountId: Scalars['UUID']} })
@@ -7691,10 +7626,6 @@ export interface AgentChatApprovalDecisionInput {decision: Scalars['String'],com
 export interface CreateSkillInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],label: Scalars['String'],icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content: Scalars['String']}
 
 export interface UpdateSkillInput {id: Scalars['UUID'],name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null)}
-
-export interface CreateMyahE2eCampaignMailboxFixtureInput {campaignId: Scalars['UUID']}
-
-export interface CreateMyahE2eCallbackFixtureInput {fixtureId: Scalars['UUID'],campaignId: Scalars['UUID'],operationsTabId: Scalars['UUID']}
 
 export interface CreateCalendarEventInput {connectedAccountId: Scalars['String'],title: Scalars['String'],description?: (Scalars['String'] | null),location?: (Scalars['String'] | null),startsAt: Scalars['String'],endsAt: Scalars['String'],isFullDay?: (Scalars['Boolean'] | null),timeZone?: (Scalars['String'] | null),attendees?: (Scalars['String'] | null),sendInvitations?: (Scalars['Boolean'] | null),addConferencing?: (Scalars['Boolean'] | null)}
 
@@ -9798,30 +9729,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isToolIndexEntry = (obj?: { __typename?: any } | null): obj is ToolIndexEntry => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isToolIndexEntry"')
       return ToolIndexEntry_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MyahE2eCampaignMailboxFixtureDTO_possibleTypes: string[] = ['MyahE2eCampaignMailboxFixtureDTO']
-    export const isMyahE2eCampaignMailboxFixtureDTO = (obj?: { __typename?: any } | null): obj is MyahE2eCampaignMailboxFixtureDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCampaignMailboxFixtureDTO"')
-      return MyahE2eCampaignMailboxFixtureDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MyahE2eCampaignMailboxFixtureStatusDTO_possibleTypes: string[] = ['MyahE2eCampaignMailboxFixtureStatusDTO']
-    export const isMyahE2eCampaignMailboxFixtureStatusDTO = (obj?: { __typename?: any } | null): obj is MyahE2eCampaignMailboxFixtureStatusDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCampaignMailboxFixtureStatusDTO"')
-      return MyahE2eCampaignMailboxFixtureStatusDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MyahE2eCallbackFixtureDTO_possibleTypes: string[] = ['MyahE2eCallbackFixtureDTO']
-    export const isMyahE2eCallbackFixtureDTO = (obj?: { __typename?: any } | null): obj is MyahE2eCallbackFixtureDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCallbackFixtureDTO"')
-      return MyahE2eCallbackFixtureDTO_possibleTypes.includes(obj.__typename)
     }
     
 

@@ -3052,29 +3052,6 @@ type ToolIndexEntry {
   inputSchema: JSON
 }
 
-type MyahE2eCampaignMailboxFixtureDTO {
-  id: UUID!
-  availableAccountIds: [UUID!]!
-  unavailableAccountId: UUID!
-  approvalThreadId: UUID!
-  approvalThreadTitle: String!
-  actionApprovalBindingId: UUID!
-  expectedFrom: String!
-  expectedTo: String!
-  expectedSubject: String!
-  expectedBody: String!
-}
-
-type MyahE2eCampaignMailboxFixtureStatusDTO {
-  providerSendAttemptCount: Float!
-  providerDraftPreparationCount: Float!
-}
-
-type MyahE2eCallbackFixtureDTO {
-  connectedAccountId: UUID!
-  callbackPath: String!
-}
-
 type WorkspaceMailboxConnectionStatus {
   connectedAccountId: UUID!
   errorCode: String
@@ -3589,7 +3566,6 @@ type Query {
   pieChartData(input: PieChartDataInput!): PieChartData!
   lineChartData(input: LineChartDataInput!): LineChartData!
   barChartData(input: BarChartDataInput!): BarChartData!
-  getMyahE2eCampaignMailboxFixtureStatus(input: MyahE2eFixtureIdInput!): MyahE2eCampaignMailboxFixtureStatusDTO!
   getAutoCompleteAddress(address: String!, token: String!, country: String, isFieldCity: Boolean): [AutocompleteResult!]!
   getAddressDetails(placeId: String!, token: String!): PlaceDetailsResult!
   getUsageAnalytics(input: UsageAnalyticsInput): UsageAnalytics!
@@ -3714,10 +3690,6 @@ input LineChartDataInput {
 input BarChartDataInput {
   objectMetadataId: UUID!
   configuration: JSON!
-}
-
-input MyahE2eFixtureIdInput {
-  fixtureId: UUID!
 }
 
 input UsageAnalyticsInput {
@@ -3979,9 +3951,6 @@ type Mutation {
   trackAnalytics(type: AnalyticsType!, name: String, event: String, properties: JSON): Analytics!
   duplicateDashboard(id: UUID!): DuplicatedDashboard!
   impersonate(userId: UUID!, workspaceId: UUID!): Impersonate!
-  createMyahE2eCampaignMailboxFixture(input: CreateMyahE2eCampaignMailboxFixtureInput!): MyahE2eCampaignMailboxFixtureDTO!
-  createMyahE2eCampaignCallbackFixture(input: CreateMyahE2eCallbackFixtureInput!): MyahE2eCallbackFixtureDTO!
-  cleanupMyahE2eCampaignMailboxFixture(input: MyahE2eFixtureIdInput!): Boolean!
   createCalendarEvent(input: CreateCalendarEventInput!): CreateCalendarEventOutput!
   sendEmail(input: SendEmailInput!): SendEmailOutput!
   startChannelSync(connectedAccountId: UUID!): ChannelSyncSuccess!
@@ -5222,16 +5191,6 @@ input UpdateSkillInput {
 enum AnalyticsType {
   PAGEVIEW
   TRACK
-}
-
-input CreateMyahE2eCampaignMailboxFixtureInput {
-  campaignId: UUID!
-}
-
-input CreateMyahE2eCallbackFixtureInput {
-  fixtureId: UUID!
-  campaignId: UUID!
-  operationsTabId: UUID!
 }
 
 input CreateCalendarEventInput {
