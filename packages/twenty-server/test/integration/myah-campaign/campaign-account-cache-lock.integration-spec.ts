@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { type Type } from '@nestjs/common';
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import {
   ConnectedAccountProvider,
   MessageChannelPendingGroupEmailsAction,
@@ -29,6 +30,48 @@ type PhysicalIndexRow = {
   isReady: boolean;
   columns: string;
   predicate: string;
+};
+type TransactionAuditRow = {
+  operation: string;
+  backendPid: string;
+  transactionId: string;
+};
+type WorkspaceIteratorReport = {
+  fail: Array<{ workspaceId: string; error: Error }>;
+  success: Array<{ workspaceId: string }>;
+};
+type WorkspaceIteratorContext = {
+  dataSource: unknown;
+  index: number;
+  total: number;
+};
+type WorkspaceIterator = {
+  iterate: (args: {
+    workspaceIds: string[];
+    callback: (context: WorkspaceIteratorContext) => Promise<void>;
+  }) => Promise<WorkspaceIteratorReport>;
+};
+type CampaignAccountSynchronizationCommand = {
+  runOnWorkspace: (args: {
+    workspaceId: string;
+    dataSource: unknown;
+    index: number;
+    total: number;
+    options: { dryRun: boolean };
+  }) => Promise<void>;
+};
+type SourceControlledMyahMetadataSynchronizer = {
+  synchronizeWorkspace: (
+    args: {
+      workspaceId: string;
+      dataSource: unknown;
+      index: number;
+      total: number;
+      options: { dryRun: boolean };
+    },
+    selection: object,
+    options: object,
+  ) => Promise<void>;
 };
 
 const execFileAsync = promisify(execFile);
@@ -74,6 +117,27 @@ const resolveProvider = <T>(type: Type<T>): T => {
   return provider.instance as T;
 };
 
+const resolveProviderByName = <T>(name: string): T => {
+  const app = global.app as typeof global.app & {
+    container: {
+      getModules(): Map<
+        string,
+        {
+          providers: Map<
+            unknown,
+            { instance: unknown; metatype?: { name: string } }
+          >;
+        }
+      >;
+    };
+  };
+  const provider = [...app.container.getModules().values()]
+    .flatMap((module) => [...module.providers.values()])
+    .find((wrapper) => wrapper.metatype?.name === name);
+  if (!provider?.instance) throw new Error(`Missing provider ${name}`);
+  return provider.instance as T;
+};
+
 describe('CampaignAccountService transaction serialization (PostgreSQL)', () => {
   const campaignId = randomUUID();
   const transitionCampaignId = randomUUID();
@@ -82,6 +146,8 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
   const mixedCaseCampaignId = randomUUID();
   const insertRollbackCampaignId = randomUUID();
   const rollbackSuccessorCampaignId = randomUUID();
+  const connectionOwnershipCampaignId = randomUUID();
+  const migrationConflictCampaignId = randomUUID();
   const connectedAccountIds = [
     randomUUID(),
     randomUUID(),
@@ -101,6 +167,9 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
   let workspaceSchemaName: string;
   let userWorkspaceId: string;
   let campaignAccountService: CampaignAccountService;
+  let workspaceIteratorService: WorkspaceIterator;
+  let synchronizeCampaignAccountMetadataCommand: CampaignAccountSynchronizationCommand;
+  let sourceControlledMyahMetadataService: SourceControlledMyahMetadataSynchronizer;
 
   beforeAll(async () => {
     const workspaces = await global.testDataSource.query<WorkspaceRow[]>(
@@ -145,12 +214,23 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     }
     userWorkspaceId = userWorkspace.id;
     campaignAccountService = resolveProvider(CampaignAccountService);
+    workspaceIteratorService = resolveProviderByName<WorkspaceIterator>(
+      'WorkspaceIteratorService',
+    );
+    synchronizeCampaignAccountMetadataCommand =
+      resolveProviderByName<CampaignAccountSynchronizationCommand>(
+        'SynchronizeMyahCampaignAccountMetadataCommand',
+      );
+    sourceControlledMyahMetadataService =
+      resolveProviderByName<SourceControlledMyahMetadataSynchronizer>(
+        'SynchronizeSourceControlledMyahMetadataService',
+      );
     await synchronizeCampaignAccountMetadata(workspaceId);
     await synchronizeCampaignAccountMetadata(workspaceId);
 
     await global.testDataSource.query(
       `INSERT INTO "${workspaceSchemaName}"."campaign" ("id", "name")
-       VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8), ($9, $10), ($11, $12), ($13, $14)`,
+       VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8), ($9, $10), ($11, $12), ($13, $14), ($15, $16), ($17, $18)`,
       [
         campaignId,
         `MYAH-270 Transaction ${campaignId}`,
@@ -166,6 +246,10 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
         `MYAH-270 Insert Rollback ${insertRollbackCampaignId}`,
         rollbackSuccessorCampaignId,
         `MYAH-270 Rollback Successor ${rollbackSuccessorCampaignId}`,
+        connectionOwnershipCampaignId,
+        `MYAH-270 Query Runner Ownership ${connectionOwnershipCampaignId}`,
+        migrationConflictCampaignId,
+        `MYAH-270 Migration Conflict ${migrationConflictCampaignId}`,
       ],
     );
     for (const [index, connectedAccountId] of connectedAccountIds.entries()) {
@@ -204,6 +288,15 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
 
   afterAll(async () => {
     if (!workspaceId) return;
+    // Restore the source-controlled invariant even when the conflict assertion
+    // fails partway through, without touching any non-fixture Campaign rows.
+    await global.testDataSource.query(
+      `UPDATE "${workspaceSchemaName}"."campaignAccount"
+          SET "isDefault" = false
+        WHERE "campaignId" = $1 AND "connectedAccountId" = $2`,
+      [migrationConflictCampaignId, connectedAccountIds[1]],
+    );
+    await synchronizeCampaignAccountMetadata(workspaceId);
     await global.testDataSource.query(
       `DELETE FROM "${workspaceSchemaName}"."campaignAccount"
         WHERE "campaignId" = ANY($1::uuid[])`,
@@ -216,6 +309,8 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
           mixedCaseCampaignId,
           insertRollbackCampaignId,
           rollbackSuccessorCampaignId,
+          connectionOwnershipCampaignId,
+          migrationConflictCampaignId,
         ],
       ],
     );
@@ -231,6 +326,8 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
           mixedCaseCampaignId,
           insertRollbackCampaignId,
           rollbackSuccessorCampaignId,
+          connectionOwnershipCampaignId,
+          migrationConflictCampaignId,
         ],
       ],
     );
@@ -672,6 +769,243 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
     expect(count).toBe('0');
   });
 
+  it('keeps each default transition and its transactional advisory lock on one PostgreSQL backend and transaction', async () => {
+    const auditTable = 'myah_270_transaction_audit';
+    const functionName = 'myah_270_transaction_audit_function';
+    const triggerName = 'myah_270_transaction_audit_trigger';
+    const auditObjects = { table: false, function: false, trigger: false };
+    try {
+      await global.testDataSource.query(
+        `CREATE TABLE "${workspaceSchemaName}"."${auditTable}" (
+           operation text NOT NULL,
+           "backendPid" integer NOT NULL,
+           "transactionId" bigint NOT NULL,
+           "advisoryLockHeld" boolean NOT NULL
+         )`,
+      );
+      auditObjects.table = true;
+      await global.testDataSource.query(
+        `CREATE FUNCTION "${workspaceSchemaName}"."${functionName}"()
+         RETURNS trigger AS $$
+         BEGIN
+           INSERT INTO "${workspaceSchemaName}"."${auditTable}" (
+             operation, "backendPid", "transactionId", "advisoryLockHeld"
+           ) VALUES (
+             TG_OP,
+             pg_backend_pid(),
+             txid_current(),
+             EXISTS (
+               SELECT 1 FROM pg_locks
+                WHERE pid = pg_backend_pid()
+                  AND locktype = 'advisory'
+                  AND mode = 'ExclusiveLock'
+                  AND granted
+             )
+           );
+           RETURN NEW;
+         END;
+         $$ LANGUAGE plpgsql`,
+      );
+      auditObjects.function = true;
+      await global.testDataSource.query(
+        `CREATE TRIGGER "${triggerName}"
+         AFTER INSERT OR UPDATE ON "${workspaceSchemaName}"."campaignAccount"
+         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
+      );
+      auditObjects.trigger = true;
+
+      await campaignAccountService.link(
+        {
+          campaignId: connectionOwnershipCampaignId,
+          connectedAccountId: connectedAccountIds[0],
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      await campaignAccountService.link(
+        {
+          campaignId: connectionOwnershipCampaignId,
+          connectedAccountId: connectedAccountIds[1],
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      const [target] = await global.testDataSource.query<Array<{ id: string }>>(
+        `SELECT id FROM "${workspaceSchemaName}"."campaignAccount"
+          WHERE "campaignId" = $1 AND "connectedAccountId" = $2 AND "deletedAt" IS NULL`,
+        [connectionOwnershipCampaignId, connectedAccountIds[1]],
+      );
+      await campaignAccountService.setDefault(
+        {
+          campaignId: connectionOwnershipCampaignId,
+          campaignAccountId: target.id,
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      await campaignAccountService.remove(
+        {
+          campaignId: connectionOwnershipCampaignId,
+          campaignAccountId: target.id,
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+
+      const audit = await global.testDataSource.query<TransactionAuditRow[]>(
+        `SELECT operation, "backendPid"::text AS "backendPid",
+                "transactionId"::text AS "transactionId"
+           FROM "${workspaceSchemaName}"."${auditTable}"
+          ORDER BY ctid`,
+      );
+      expect(audit).toHaveLength(5);
+      expect(audit.map(({ operation }) => operation)).toEqual([
+        'INSERT',
+        'INSERT',
+        'UPDATE',
+        'UPDATE',
+        'UPDATE',
+      ]);
+      const defaultTransition = audit.slice(2, 4);
+      expect(
+        new Set(defaultTransition.map(({ backendPid }) => backendPid)).size,
+      ).toBe(1);
+      expect(
+        new Set(defaultTransition.map(({ transactionId }) => transactionId))
+          .size,
+      ).toBe(1);
+      const lockOwnership = await global.testDataSource.query<
+        Array<{ advisoryLockHeld: boolean }>
+      >(
+        `SELECT "advisoryLockHeld" FROM "${workspaceSchemaName}"."${auditTable}"`,
+      );
+      expect(lockOwnership).toEqual(
+        expect.arrayContaining([
+          { advisoryLockHeld: true },
+          { advisoryLockHeld: true },
+          { advisoryLockHeld: true },
+          { advisoryLockHeld: true },
+          { advisoryLockHeld: true },
+        ]),
+      );
+    } finally {
+      if (auditObjects.trigger) {
+        await global.testDataSource.query(
+          `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
+        );
+      }
+      if (auditObjects.function) {
+        await global.testDataSource.query(
+          `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
+        );
+      }
+      if (auditObjects.table) {
+        await global.testDataSource.query(
+          `DROP TABLE IF EXISTS "${workspaceSchemaName}"."${auditTable}"`,
+        );
+      }
+    }
+  });
+
+  it('releases a failed default transition so a waiting successor can commit without stale state', async () => {
+    await Promise.all(
+      connectedAccountIds
+        .slice(0, 3)
+        .map((connectedAccountId) =>
+          campaignAccountService.link(
+            { campaignId: rollbackSuccessorCampaignId, connectedAccountId },
+            buildSystemAuthContext(workspaceId),
+          ),
+        ),
+    );
+    const accounts = await global.testDataSource.query<
+      Array<{ id: string; connectedAccountId: string }>
+    >(
+      `SELECT id, "connectedAccountId" FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
+      [rollbackSuccessorCampaignId],
+    );
+    const failedTarget = accounts.find(
+      ({ connectedAccountId }) => connectedAccountId === connectedAccountIds[1],
+    );
+    const successor = accounts.find(
+      ({ connectedAccountId }) => connectedAccountId === connectedAccountIds[2],
+    );
+    expect(failedTarget).toBeDefined();
+    expect(successor).toBeDefined();
+    const functionName = 'myah_270_waiting_successor_rollback';
+    const triggerName = 'myah_270_waiting_successor_rollback_trigger';
+    const transitions: Promise<unknown>[] = [];
+    let successorSettled = false;
+    try {
+      await global.testDataSource.query(
+        `CREATE FUNCTION "${workspaceSchemaName}"."${functionName}"()
+         RETURNS trigger AS $$
+         BEGIN
+           IF NEW.id = '${failedTarget?.id}'::uuid AND NEW."isDefault" = true THEN
+             PERFORM pg_sleep(0.25);
+             RAISE EXCEPTION 'forced successor predecessor rollback';
+           END IF;
+           RETURN NEW;
+         END;
+         $$ LANGUAGE plpgsql`,
+      );
+      await global.testDataSource.query(
+        `CREATE TRIGGER "${triggerName}"
+         BEFORE UPDATE ON "${workspaceSchemaName}"."campaignAccount"
+         FOR EACH ROW EXECUTE FUNCTION "${workspaceSchemaName}"."${functionName}"()`,
+      );
+      const failed = campaignAccountService.setDefault(
+        {
+          campaignId: rollbackSuccessorCampaignId,
+          campaignAccountId: failedTarget!.id,
+        },
+        buildSystemAuthContext(workspaceId),
+      );
+      transitions.push(failed);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      const waitingSuccessor = campaignAccountService
+        .setDefault(
+          {
+            campaignId: rollbackSuccessorCampaignId,
+            campaignAccountId: successor!.id,
+          },
+          buildSystemAuthContext(workspaceId),
+        )
+        .finally(() => {
+          successorSettled = true;
+        });
+      transitions.push(waitingSuccessor);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(successorSettled).toBe(false);
+      await expect(failed).rejects.toThrow(
+        'forced successor predecessor rollback',
+      );
+      await expect(waitingSuccessor).resolves.toBeDefined();
+    } finally {
+      await Promise.allSettled(transitions);
+      await global.testDataSource.query(
+        `DROP TRIGGER IF EXISTS "${triggerName}" ON "${workspaceSchemaName}"."campaignAccount"`,
+      );
+      await global.testDataSource.query(
+        `DROP FUNCTION IF EXISTS "${workspaceSchemaName}"."${functionName}"()`,
+      );
+    }
+    const active = await global.testDataSource.query<CampaignAccountRow[]>(
+      `SELECT "connectedAccountId", "isDefault" FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL`,
+      [rollbackSuccessorCampaignId],
+    );
+    expect(active.filter(({ isDefault }) => isDefault)).toEqual([
+      expect.objectContaining({ connectedAccountId: connectedAccountIds[2] }),
+    ]);
+    const [{ idleInTransactionCount }] = await global.testDataSource.query<
+      Array<{ idleInTransactionCount: string }>
+    >(
+      `SELECT COUNT(*)::text AS "idleInTransactionCount" FROM pg_stat_activity
+        WHERE datname = current_database() AND state = 'idle in transaction'
+          AND pid <> pg_backend_pid() AND query LIKE $1`,
+      [`%${workspaceSchemaName}%`],
+    );
+    expect(Number(idleInTransactionCount)).toBe(0);
+  });
+
   it('rejects direct duplicate defaults while allowing non-default and soft-deleted rows', async () => {
     const links = await global.testDataSource.query<
       Array<{ id: string; isDefault: boolean }>
@@ -726,5 +1060,181 @@ describe('CampaignAccountService transaction serialization (PostgreSQL)', () => 
           SET "isDefault" = false WHERE id = $1`,
       [nonDefaultLink.id],
     );
+  });
+
+  it('fails conflicting legacy defaults without publishing index metadata, then synchronizes the repaired fixture idempotently', async () => {
+    const defaultIndexUniversalIdentifier =
+      MYAH_STANDARD_OBJECTS.campaignAccount.indexes
+        .campaignAccountDefaultUniqueIndex.universalIdentifier;
+    const selection = {
+      objectMetadata: new Set([
+        MYAH_STANDARD_OBJECTS.campaignAccount.universalIdentifier,
+      ]),
+      fieldMetadata: new Set([
+        MYAH_STANDARD_OBJECTS.campaign.fields.campaignAccounts
+          .universalIdentifier,
+        MYAH_STANDARD_OBJECTS.outreachAction.fields.campaignAccountId
+          .universalIdentifier,
+      ]),
+      index: new Set([
+        MYAH_STANDARD_OBJECTS.campaignAccount.indexes.campaignAccountUniqueIndex
+          .universalIdentifier,
+        defaultIndexUniversalIdentifier,
+      ]),
+      objectPermission: new Set(['9dda7955-44b7-5ea0-ab63-6dc0630626e8']),
+    };
+    const runCommand = () =>
+      workspaceIteratorService.iterate({
+        workspaceIds: [workspaceId],
+        callback: async ({ dataSource, index, total }) => {
+          await synchronizeCampaignAccountMetadataCommand.runOnWorkspace({
+            workspaceId,
+            dataSource,
+            index,
+            total,
+            options: { dryRun: false },
+          });
+        },
+      });
+    const deleteDefaultIndexMetadata = () =>
+      workspaceIteratorService.iterate({
+        workspaceIds: [workspaceId],
+        callback: async ({ dataSource, index, total }) => {
+          await sourceControlledMyahMetadataService.synchronizeWorkspace(
+            {
+              workspaceId,
+              dataSource,
+              index,
+              total,
+              options: { dryRun: false },
+            },
+            {},
+            {
+              deletionSelection: {
+                index: new Set([defaultIndexUniversalIdentifier]),
+              },
+            },
+          );
+        },
+      });
+    const coreDefaultIndex = () =>
+      global.testDataSource.query<
+        Array<{ id: string; isUnique: boolean; indexWhereClause: string }>
+      >(
+        `SELECT index_metadata.id, index_metadata."isUnique",
+                index_metadata."indexWhereClause"
+           FROM core."indexMetadata" index_metadata
+          WHERE index_metadata."workspaceId" = $1
+            AND index_metadata."universalIdentifier" = $2`,
+        [workspaceId, defaultIndexUniversalIdentifier],
+      );
+    const physicalDefaultIndexes = () =>
+      global.testDataSource.query<PhysicalIndexRow[]>(
+        `SELECT index_class.relname AS "indexName",
+                index_row.indisunique AS "isUnique",
+                index_row.indisvalid AS "isValid",
+                index_row.indisready AS "isReady",
+                string_agg(attribute.attname, ',' ORDER BY key_columns.ordinality) AS "columns",
+                pg_get_expr(index_row.indpred, index_row.indrelid) AS "predicate"
+           FROM pg_index AS index_row
+           INNER JOIN pg_class AS table_class ON table_class.oid = index_row.indrelid
+           INNER JOIN pg_namespace AS namespace ON namespace.oid = table_class.relnamespace
+           INNER JOIN pg_class AS index_class ON index_class.oid = index_row.indexrelid
+           INNER JOIN unnest(index_row.indkey) WITH ORDINALITY AS key_columns(attnum, ordinality)
+             ON key_columns.attnum > 0
+           INNER JOIN pg_attribute AS attribute
+             ON attribute.attrelid = table_class.oid AND attribute.attnum = key_columns.attnum
+          WHERE namespace.nspname = $1 AND table_class.relname = 'campaignAccount'
+            AND index_row.indisunique AND pg_get_expr(index_row.indpred, index_row.indrelid) IS NOT NULL
+          GROUP BY index_class.relname, index_row.indisunique, index_row.indisvalid,
+                   index_row.indisready, index_row.indpred, index_row.indrelid`,
+        [workspaceSchemaName],
+      );
+
+    const deletionReport = await deleteDefaultIndexMetadata();
+    expect(deletionReport).toEqual({ fail: [], success: [{ workspaceId }] });
+    expect(await coreDefaultIndex()).toEqual([]);
+    expect(
+      (await physicalDefaultIndexes()).find(
+        ({ columns, predicate }) =>
+          columns === 'campaignId,channel' &&
+          predicate.includes('"isDefault" = true'),
+      ),
+    ).toBeUndefined();
+
+    await global.testDataSource.query(
+      `INSERT INTO "${workspaceSchemaName}"."campaignAccount"
+        ("campaignId", "connectedAccountId", "messageChannelId", "channel", "isDefault")
+       VALUES ($1, $2, $3, 'EMAIL', true), ($1, $4, $5, 'EMAIL', true)`,
+      [
+        migrationConflictCampaignId,
+        connectedAccountIds[0],
+        messageChannelIds[0],
+        connectedAccountIds[1],
+        messageChannelIds[1],
+      ],
+    );
+
+    const conflictReport = await runCommand();
+    expect(conflictReport.fail).toHaveLength(1);
+    expect(conflictReport.fail[0].workspaceId).toBe(workspaceId);
+    expect(conflictReport.fail[0].error.message).toContain(
+      "Migration action 'create' for 'index'",
+    );
+    expect(conflictReport.success).toEqual([]);
+    const [{ conflictingDefaults }] = await global.testDataSource.query<
+      Array<{ conflictingDefaults: string }>
+    >(
+      `SELECT COUNT(*)::text AS "conflictingDefaults"
+         FROM "${workspaceSchemaName}"."campaignAccount"
+        WHERE "campaignId" = $1 AND "deletedAt" IS NULL AND "isDefault" = true`,
+      [migrationConflictCampaignId],
+    );
+    expect(conflictingDefaults).toBe('2');
+    expect(await coreDefaultIndex()).toEqual([]);
+    expect(
+      (await physicalDefaultIndexes()).find(
+        ({ columns, predicate }) =>
+          columns === 'campaignId,channel' &&
+          predicate.includes('"isDefault" = true'),
+      ),
+    ).toBeUndefined();
+
+    await global.testDataSource.query(
+      `UPDATE "${workspaceSchemaName}"."campaignAccount"
+          SET "isDefault" = false
+        WHERE "campaignId" = $1 AND "connectedAccountId" = $2`,
+      [migrationConflictCampaignId, connectedAccountIds[1]],
+    );
+    const repairReport = await runCommand();
+    expect(repairReport).toEqual({ fail: [], success: [{ workspaceId }] });
+    const [restoredMetadata] = await coreDefaultIndex();
+    expect(restoredMetadata).toMatchObject({
+      isUnique: true,
+      indexWhereClause: '"deletedAt" IS NULL AND "isDefault" = true',
+    });
+    const [restoredPhysicalIndex] = (await physicalDefaultIndexes()).filter(
+      ({ columns, predicate }) =>
+        columns === 'campaignId,channel' &&
+        predicate.includes('"deletedAt" IS NULL') &&
+        predicate.includes('"isDefault" = true'),
+    );
+    expect(restoredPhysicalIndex).toMatchObject({
+      isUnique: true,
+      isValid: true,
+      isReady: true,
+      columns: 'campaignId,channel',
+    });
+    const rerunReport = await runCommand();
+    expect(rerunReport).toEqual({ fail: [], success: [{ workspaceId }] });
+    expect(await coreDefaultIndex()).toEqual([restoredMetadata]);
+    expect(
+      (await physicalDefaultIndexes()).filter(
+        ({ columns, predicate }) =>
+          columns === 'campaignId,channel' &&
+          predicate.includes('"isDefault" = true'),
+      ),
+    ).toEqual([restoredPhysicalIndex]);
+    expect(selection.index).toContain(defaultIndexUniversalIdentifier);
   });
 });
