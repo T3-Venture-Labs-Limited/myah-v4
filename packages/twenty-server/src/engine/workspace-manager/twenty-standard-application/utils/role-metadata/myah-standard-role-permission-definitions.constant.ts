@@ -49,6 +49,16 @@ const buildReadOnlyObjectPermissionDefinition = ({
   canDestroyObjectRecords: false,
 });
 
+const MYAH_CAMPAIGN_ACCOUNT_READ_ONLY_OBJECT_PERMISSION_DEFINITION =
+  buildReadOnlyObjectPermissionDefinition({
+    roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+    objectMetadataUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.campaignAccount.universalIdentifier,
+  });
+
+export const MYAH_CAMPAIGN_ACCOUNT_READ_ONLY_OBJECT_PERMISSION_UNIVERSAL_IDENTIFIER =
+  MYAH_CAMPAIGN_ACCOUNT_READ_ONLY_OBJECT_PERMISSION_DEFINITION.universalIdentifier;
+
 export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
   ...[
     MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier,
@@ -93,6 +103,7 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
     canSoftDeleteObjectRecords: false,
     canDestroyObjectRecords: false,
   },
+  MYAH_CAMPAIGN_ACCOUNT_READ_ONLY_OBJECT_PERMISSION_DEFINITION,
   buildReadOnlyObjectPermissionDefinition({
     roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
     objectMetadataUniversalIdentifier:

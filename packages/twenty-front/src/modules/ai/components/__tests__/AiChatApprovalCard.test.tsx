@@ -143,6 +143,47 @@ describe('AiChatApprovalCard', () => {
     ).toBeVisible();
   });
 
+  it('classifies a bound outreach proposal as a high-risk email send and shows every exact transport field', () => {
+    const outreachProposal = {
+      ...serverDerivedProposal,
+      action: 'send_outreach_email',
+      body: `${'Full approved email body. '.repeat(20)}\nFinal paragraph.`,
+      recipientLabel: 'Creator <creator@example.test>',
+      sendingAccountLabel: 'Campaign mailbox <campaign@example.test>',
+      subject: 'Exact approved subject',
+    };
+    mockUseQuery.mockReturnValue({
+      data: { getActionApprovalProposal: outreachProposal },
+      loading: false,
+      error: undefined,
+    });
+
+    renderApprovalCard(boundApproval);
+
+    expect(screen.getByText('Review outreach email')).toBeVisible();
+    expect(screen.getByText(/Risk:/)).toHaveTextContent('Risk: High');
+    expect(screen.getByText(/Action:/)).toHaveTextContent('Action: Send email');
+    expect(
+      screen.getByText(`From: ${outreachProposal.sendingAccountLabel}`),
+    ).toBeVisible();
+    expect(
+      screen.getByText(`To: ${outreachProposal.recipientLabel}`),
+    ).toBeVisible();
+    expect(
+      screen.getByText(`Subject: ${outreachProposal.subject}`),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        (_content, element) => element?.textContent === outreachProposal.body,
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Request changes' }),
+    ).toBeEnabled();
+  });
+
   it('reuses the approval card to review the complete Inbox reply without editable transport fields', () => {
     const inboxProposal = {
       ...serverDerivedProposal,
@@ -234,6 +275,19 @@ describe('AiChatApprovalCard', () => {
           getActionApprovalProposal: {
             ...serverDerivedProposal,
             actionVersion: 2,
+          },
+        },
+        loading: false,
+      },
+    ],
+    [
+      'the outreach proposal is malformed',
+      {
+        data: {
+          getActionApprovalProposal: {
+            ...serverDerivedProposal,
+            action: 'send_outreach_email',
+            subject: null,
           },
         },
         loading: false,

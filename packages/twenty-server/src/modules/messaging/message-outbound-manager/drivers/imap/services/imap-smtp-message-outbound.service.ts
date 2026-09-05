@@ -36,6 +36,16 @@ export class ImapSmtpMessageOutboundService implements MessageOutboundDriver {
     private readonly messageFolderRepository: Repository<MessageFolderEntity>,
   ) {}
 
+  async assertSendable(
+    connectedAccount: ConnectedAccountEntity,
+  ): Promise<void> {
+    const smtpClient = await this.smtpClientProvider.getClient(
+      connectedAccount.id,
+    );
+
+    await smtpClient.verify();
+  }
+
   async sendMessage(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,

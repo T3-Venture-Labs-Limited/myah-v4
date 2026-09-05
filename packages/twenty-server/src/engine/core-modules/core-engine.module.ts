@@ -53,6 +53,8 @@ import { ConnectedAccountSyncWebhooksModule } from 'src/modules/connected-accoun
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { MyahInboxModule } from 'src/engine/core-modules/myah-inbox/myah-inbox.module';
+import { MyahE2eFixtureModule } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture.module';
+import { isE2eTestFixturesEnabled } from 'src/engine/core-modules/twenty-config/utils/is-e2e-test-fixtures-enabled.util';
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 import { OpenApiModule } from 'src/engine/core-modules/open-api/open-api.module';
 import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public-domain.module';
@@ -145,6 +147,7 @@ import { FileModule } from './file/file.module';
     MetricsModule,
     MyahInboxModule,
     MyahModule,
+    ...(isE2eTestFixturesEnabled() ? [MyahE2eFixtureModule] : []),
     MessageQueueModule.registerAsync({
       useFactory: messageQueueModuleFactory,
       inject: [TwentyConfigService, RedisClientService, MetricsService],

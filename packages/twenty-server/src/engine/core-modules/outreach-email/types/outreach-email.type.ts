@@ -16,6 +16,7 @@ export type OutreachPreparationAuthority = {
   recipientEmail: string;
   recipientLabel: string;
   campaignLabel: string;
+  campaignAccountId: string | null;
   mailboxSelection: OutreachMailboxSelection;
   inReplyTo: string | null;
   messageThreadId: string | null;

@@ -932,6 +932,33 @@ export type CampaignCreatorListRemovalImpactInput = {
   creatorListId: Scalars['UUID']['input'];
 };
 
+export type CampaignEmailAccountCampaignInput = {
+  campaignId: Scalars['UUID']['input'];
+};
+
+export type CampaignEmailAccountDto = {
+  __typename?: 'CampaignEmailAccountDTO';
+  connectedAccountId: Scalars['UUID']['output'];
+  health: CampaignEmailAccountHealth;
+  id: Scalars['UUID']['output'];
+  isDefault: Scalars['Boolean']['output'];
+  label: Scalars['String']['output'];
+  messageChannelId: Scalars['UUID']['output'];
+  provider?: Maybe<Scalars['String']['output']>;
+  senderEmail?: Maybe<Scalars['String']['output']>;
+};
+
+export enum CampaignEmailAccountHealth {
+  AVAILABLE = 'AVAILABLE',
+  RECONNECT_REQUIRED = 'RECONNECT_REQUIRED',
+  UNAVAILABLE = 'UNAVAILABLE'
+}
+
+export type CampaignEmailAccountLinkInput = {
+  campaignAccountId: Scalars['UUID']['input'];
+  campaignId: Scalars['UUID']['input'];
+};
+
 export type CampaignInfluencerCampaignInput = {
   campaignId: Scalars['UUID']['input'];
 };
@@ -2348,6 +2375,11 @@ export type LineChartSeries = {
   label: Scalars['String']['output'];
 };
 
+export type LinkCampaignEmailAccountInput = {
+  campaignId: Scalars['UUID']['input'];
+  connectedAccountId: Scalars['UUID']['input'];
+};
+
 export type ListAppConnectionsInput = {
   providerName?: InputMaybe<Scalars['String']['input']>;
   userWorkspaceId?: InputMaybe<Scalars['String']['input']>;
@@ -3106,12 +3138,14 @@ export type Mutation = {
   installApplication: Application;
   /** @deprecated Use installApplication instead */
   installMarketplaceApp: Scalars['Boolean']['output'];
+  linkCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   pauseManagedEmailWarmup: ManagedEmailActionResult;
   prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup;
   prepareManagedProviderCustomerFundingPaymentAction: ManagedProviderCustomerFundingPaymentAction;
   prepareManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod;
   reconnectWorkspaceMailbox: WorkspaceMailboxConnectionResult;
   refreshEnterpriseValidityToken: Scalars['Boolean']['output'];
+  removeCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   removeCreatorListMemberIntent: Scalars['Boolean']['output'];
   removeQueryFromEventStream: Scalars['Boolean']['output'];
   removeRoleFromAgent: Scalars['Boolean']['output'];
@@ -3140,6 +3174,7 @@ export type Mutation = {
   sendEmailViaEmailingDomain: SendEmailViaDomainOutput;
   sendInvitations: SendInvitations;
   sendMessageCampaign: SendMessageCampaignOutputDto;
+  setDefaultCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   setEnterpriseKey: EnterpriseLicenseInfoDto;
   setManagedEmailCampaignCap: ManagedEmailActionResult;
   setResourceCreditSubscriptionPrice: BillingUpdate;
@@ -3898,6 +3933,11 @@ export type MutationInstallMarketplaceAppArgs = {
 };
 
 
+export type MutationLinkCampaignEmailAccountArgs = {
+  input: LinkCampaignEmailAccountInput;
+};
+
+
 export type MutationPauseManagedEmailWarmupArgs = {
   input: ManagedEmailMailboxActionInput;
 };
@@ -3910,6 +3950,11 @@ export type MutationPrepareManagedProviderCustomerFundingPaymentActionArgs = {
 
 export type MutationReconnectWorkspaceMailboxArgs = {
   input: ReplaceWorkspaceMailboxCredentialsInput;
+};
+
+
+export type MutationRemoveCampaignEmailAccountArgs = {
+  input: CampaignEmailAccountLinkInput;
 };
 
 
@@ -4067,6 +4112,11 @@ export type MutationSendInvitationsArgs = {
 
 export type MutationSendMessageCampaignArgs = {
   input: SendMessageCampaignInput;
+};
+
+
+export type MutationSetDefaultCampaignEmailAccountArgs = {
+  input: CampaignEmailAccountLinkInput;
 };
 
 
@@ -4982,6 +5032,8 @@ export type Query = {
   billingPortalSession: BillingSession;
   campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDto;
   campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDto;
+  campaignEmailAccountCandidates: Array<CampaignEmailAccountDto>;
+  campaignEmailAccounts: Array<CampaignEmailAccountDto>;
   campaignInfluencerSnapshot: CampaignInfluencerSnapshotDto;
   chatMessages: Array<AgentMessage>;
   chatStreamCatchupChunks: ChatStreamCatchupChunks;
@@ -5148,6 +5200,16 @@ export type QueryCampaignCreatorListAdditionCandidatesArgs = {
 
 export type QueryCampaignCreatorListRemovalImpactArgs = {
   input: CampaignCreatorListRemovalImpactInput;
+};
+
+
+export type QueryCampaignEmailAccountCandidatesArgs = {
+  input: CampaignEmailAccountCampaignInput;
+};
+
+
+export type QueryCampaignEmailAccountsArgs = {
+  input: CampaignEmailAccountCampaignInput;
 };
 
 

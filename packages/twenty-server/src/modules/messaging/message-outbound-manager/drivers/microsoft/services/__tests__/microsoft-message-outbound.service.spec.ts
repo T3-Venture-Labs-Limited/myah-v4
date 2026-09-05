@@ -36,9 +36,15 @@ describe('MicrosoftMessageOutboundService', () => {
     delete: jest.fn(),
   };
 
+  const profileRequest = {
+    get: jest.fn(),
+  };
+
   const mockMicrosoftClient = {
     api: jest.fn((path: string) => {
       switch (path) {
+        case '/me':
+          return profileRequest;
         case '/me/messages':
           return messagesRequest;
         case '/me/messages/parent-message-id/createReply':
@@ -78,6 +84,7 @@ describe('MicrosoftMessageOutboundService', () => {
       conversationId: 'conversation-id',
     });
     draftDeleteRequest.delete.mockResolvedValue(undefined);
+    profileRequest.get.mockResolvedValue({ id: 'profile-id' });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -94,6 +101,14 @@ describe('MicrosoftMessageOutboundService', () => {
     service = module.get<MicrosoftMessageOutboundService>(
       MicrosoftMessageOutboundService,
     );
+  });
+
+  it('preflights Microsoft credentials without creating a draft', async () => {
+    await service.assertSendable(buildConnectedAccount());
+
+    expect(mockMicrosoftClient.api).toHaveBeenCalledWith('/me');
+    expect(profileRequest.get).toHaveBeenCalledTimes(1);
+    expect(messagesRequest.post).not.toHaveBeenCalled();
   });
 
   it('creates Microsoft drafts as replies when a parent internet message id is provided', async () => {

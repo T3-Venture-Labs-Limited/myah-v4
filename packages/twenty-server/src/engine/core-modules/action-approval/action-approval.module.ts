@@ -26,6 +26,7 @@ import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-wo
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbound-manager/messaging-send-manager.module';
+import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-campaign-lifecycle.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     WorkspaceCacheModule,
     PermissionsModule,
     MessagingSendManagerModule,
+    MyahCampaignLifecycleModule,
     TypeOrmModule.forFeature([
       ActionApprovalBindingEntity,
       ActionApprovalBindingEvidenceLinkEntity,

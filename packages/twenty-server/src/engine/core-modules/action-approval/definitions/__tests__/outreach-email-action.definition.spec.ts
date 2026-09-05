@@ -1,4 +1,7 @@
-import { ConnectedAccountProvider } from 'twenty-shared/types';
+import {
+  ConnectedAccountProvider,
+  MessageChannelType,
+} from 'twenty-shared/types';
 
 import {
   OutreachEmailActionDefinition,
@@ -19,6 +22,7 @@ const parentMessageId = '00000000-0000-4000-8000-000000000010';
 const messageThreadId = '00000000-0000-4000-8000-000000000011';
 const otherWorkspaceId = '00000000-0000-4000-8000-000000000012';
 const managedMailboxId = '00000000-0000-4000-8000-000000000013';
+const campaignAccountId = '00000000-0000-4000-8000-000000000014';
 
 const metadataIds = {
   outreachAction: '00000000-0000-4000-8000-000000000101',
@@ -26,6 +30,7 @@ const metadataIds = {
   creator: '00000000-0000-4000-8000-000000000103',
   campaign: '00000000-0000-4000-8000-000000000104',
   message: '00000000-0000-4000-8000-000000000105',
+  campaignAccount: '00000000-0000-4000-8000-000000000106',
 };
 
 const universalIdentifiers = {
@@ -34,6 +39,7 @@ const universalIdentifiers = {
   creator: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
   campaign: '9a09d54a-d464-5692-ac74-70527fb00ddd',
   message: '20202020-3f6b-4425-80ab-e468899ab4b2',
+  campaignAccount: '5999e4dd-01a4-5ef5-8c95-754bf079defb',
 };
 
 type FixtureState = {
@@ -47,6 +53,7 @@ type FixtureState = {
     body: string;
     contentDigest: string;
     recipientEmail: string;
+    campaignAccountId: string | null;
     connectedAccountId: string;
     messageChannelId: string;
     senderEmail: string;
@@ -67,7 +74,7 @@ type FixtureState = {
     creatorId: string;
     campaignId: string;
     selectedContactMethod: string;
-    assignedManagedMailboxId: string;
+    assignedManagedMailboxId: string | null;
   };
   creator: { id: string; name: string; email: string };
   campaign: { id: string; name: string };
@@ -97,7 +104,7 @@ type FixtureState = {
   };
 };
 
-const createFixtureState = (reply = false) => {
+const createFixtureState = (reply = false): FixtureState => {
   const subject = 'Partnership opportunity';
   const body = 'Would you like to collaborate?';
 
@@ -114,6 +121,7 @@ const createFixtureState = (reply = false) => {
         JSON.stringify([subject, body]),
       ),
       recipientEmail: 'creator@example.com',
+      campaignAccountId: null,
       connectedAccountId,
       messageChannelId,
       senderEmail: 'sender@example.com',
@@ -214,6 +222,14 @@ const buildDefinition = ({
       async (_workspaceId: string, objectName: keyof typeof repositories) =>
         repositories[objectName],
     ),
+    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+      query: jest.fn(async () => [
+        {
+          assignedManagedMailboxId:
+            state.campaignCreator.assignedManagedMailboxId,
+        },
+      ]),
+    }),
   };
   const workspaceRepository = {
     findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
@@ -242,6 +258,8 @@ const buildDefinition = ({
         idByUserId: { 'user-id': 'workspace-member-id' },
         byId: { 'workspace-member-id': { id: 'workspace-member-id' } },
       },
+      userWorkspaceRoleMap: { [userWorkspaceId]: 'role-id' },
+      apiKeyRoleMap: {},
     }),
   };
   const connectedAccountRepository = {
@@ -256,6 +274,16 @@ const buildDefinition = ({
     messageChannelId,
     effectiveDailyCap: 10,
   });
+  const resolveDefaultEmailAccount = jest.fn().mockResolvedValue({
+    id: campaignAccountId,
+    connectedAccountId,
+    messageChannelId,
+    senderEmail: 'sender@example.com',
+    senderDisplayName: 'Sender Name',
+    health: 'AVAILABLE',
+    isDefault: true,
+  });
+  const assertConnectedAccountSendable = jest.fn().mockResolvedValue(undefined);
   const Definition = OutreachEmailActionDefinition as unknown as new (
     ...args: unknown[]
   ) => OutreachEmailActionDefinition;
@@ -268,6 +296,8 @@ const buildDefinition = ({
     connectedAccountRepository,
     messageChannelRepository,
     assertEligible,
+    resolveDefaultEmailAccount,
+    assertConnectedAccountSendable,
     definition: new Definition(
       workspaceRepository,
       globalWorkspaceOrmManager,
@@ -277,6 +307,8 @@ const buildDefinition = ({
       connectedAccountRepository,
       messageChannelRepository,
       { assertEligible },
+      { resolveDefaultEmailAccount },
+      { assertConnectedAccountSendable },
     ),
   };
 };
@@ -341,6 +373,7 @@ describe('OutreachEmailActionDefinition', () => {
         sendingAccountFingerprint: computeActionContentDigest(
           JSON.stringify([
             managedMailboxId,
+            null,
             connectedAccountId,
             messageChannelId,
             'sender@example.com',
@@ -348,7 +381,7 @@ describe('OutreachEmailActionDefinition', () => {
           ]),
         ),
         actionContextFingerprint: computeActionContentDigest(
-          JSON.stringify([null, null, null]),
+          JSON.stringify(['provider-draft-id', null, null, null]),
         ),
         threadId,
         initiatorUserWorkspaceId: userWorkspaceId,
@@ -387,11 +420,243 @@ describe('OutreachEmailActionDefinition', () => {
     expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
       workspaceId,
       'outreachAction',
+      { intersectionOf: ['role-id'] },
     );
     expect(objectMetadataRepository.find).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ workspaceId }),
       }),
+    );
+  });
+
+  it('binds a linked default Campaign account with null managed identity and exact evidence', async () => {
+    const state = createFixtureState();
+    state.campaignCreator.assignedManagedMailboxId = null as never;
+    state.action.campaignAccountId = campaignAccountId;
+    const { definition, assertEligible, resolveDefaultEmailAccount } =
+      buildDefinition({ state });
+
+    const proposal = await propose(definition);
+
+    expect(proposal.canonicalGraph).toMatchObject({
+      managedMailboxId: null,
+      campaignAccountId,
+    });
+    expect(proposal.expectedActionBinding.sendingAccountFingerprint).toBe(
+      computeActionContentDigest(
+        JSON.stringify([
+          null,
+          campaignAccountId,
+          connectedAccountId,
+          messageChannelId,
+          'sender@example.com',
+          'Sender Name',
+        ]),
+      ),
+    );
+    expect(proposal.expectedActionBinding.evidenceLinks).toContainEqual({
+      objectMetadataId: metadataIds.campaignAccount,
+      recordId: campaignAccountId,
+      role: 'campaign_account',
+    });
+    expect(assertEligible).not.toHaveBeenCalled();
+    expect(resolveDefaultEmailAccount).toHaveBeenCalledWith(
+      campaignId,
+      workspaceId,
+    );
+  });
+
+  it('rebuilds linked sender authority and transport sendability immediately before execution', async () => {
+    const state = createFixtureState();
+    state.campaignCreator.assignedManagedMailboxId = null;
+    state.action.campaignAccountId = campaignAccountId;
+    const {
+      definition,
+      assertEligible,
+      resolveDefaultEmailAccount,
+      assertConnectedAccountSendable,
+    } = buildDefinition({ state });
+    const proposal = await propose(definition);
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).resolves.toBeDefined();
+
+    expect(assertEligible).not.toHaveBeenCalled();
+    expect(resolveDefaultEmailAccount).toHaveBeenCalledTimes(2);
+    expect(assertConnectedAccountSendable).toHaveBeenCalledWith(
+      expect.objectContaining({ id: connectedAccountId }),
+    );
+  });
+
+  it('rejects execution when a second matching EMAIL channel appears after approval', async () => {
+    const state = createFixtureState();
+    state.campaignCreator.assignedManagedMailboxId = null;
+    state.action.campaignAccountId = campaignAccountId;
+    const {
+      definition,
+      messageChannelRepository,
+      assertConnectedAccountSendable,
+    } = buildDefinition({ state });
+    const proposal = await propose(definition);
+    messageChannelRepository.find.mockResolvedValue([
+      state.messageChannel,
+      { ...state.messageChannel, id: otherWorkspaceId },
+    ]);
+    const transportCallsBeforeRebuild =
+      assertConnectedAccountSendable.mock.calls.length;
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).rejects.toThrow('Outreach email source graph is unavailable');
+    expect(assertConnectedAccountSendable).toHaveBeenCalledTimes(
+      transportCallsBeforeRebuild,
+    );
+    expect(messageChannelRepository.find).toHaveBeenLastCalledWith({
+      where: {
+        workspaceId,
+        connectedAccountId,
+        handle: 'sender@example.com',
+        type: MessageChannelType.EMAIL,
+      },
+      take: 2,
+    });
+  });
+
+  it('rejects linked execution when transport sendability changes', async () => {
+    const state = createFixtureState();
+    state.campaignCreator.assignedManagedMailboxId = null;
+    state.action.campaignAccountId = campaignAccountId;
+    const { definition, assertConnectedAccountSendable } = buildDefinition({
+      state,
+    });
+    const proposal = await propose(definition);
+    assertConnectedAccountSendable.mockRejectedValueOnce(
+      new Error('Transport sendability rejected'),
+    );
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).rejects.toThrow('Transport sendability rejected');
+  });
+
+  it.each([
+    ['default changed', { id: otherWorkspaceId }],
+    ['default no longer active', { isDefault: false }],
+    ['linked account changed', { connectedAccountId: otherWorkspaceId }],
+    ['linked channel changed', { messageChannelId: otherWorkspaceId }],
+    ['linked sender changed', { senderEmail: 'other@example.com' }],
+    ['linked health changed', { health: 'UNAVAILABLE' }],
+  ])('rejects rebuild when %s', async (_label, changedDefault) => {
+    const state = createFixtureState();
+    state.campaignCreator.assignedManagedMailboxId = null;
+    state.action.campaignAccountId = campaignAccountId;
+    const { definition, resolveDefaultEmailAccount } = buildDefinition({
+      state,
+    });
+    const proposal = await propose(definition);
+    resolveDefaultEmailAccount.mockResolvedValue(changedDefault);
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).rejects.toThrow('Outreach email source graph is unavailable');
+  });
+
+  it.each([
+    ['removed', new Error('Campaign has no unambiguous default email account')],
+    [
+      'authentication failed',
+      new Error('Campaign default email account is unavailable'),
+    ],
+    ['sendability failed', new Error('Transport sendability rejected')],
+  ])('rejects linked send when the default is %s', async (_label, error) => {
+    const state = createFixtureState();
+    state.campaignCreator.assignedManagedMailboxId = null;
+    state.action.campaignAccountId = campaignAccountId;
+    const { definition, resolveDefaultEmailAccount } = buildDefinition({
+      state,
+    });
+    const proposal = await propose(definition);
+    resolveDefaultEmailAccount.mockRejectedValue(error);
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).rejects.toThrow('Outreach email source graph is unavailable');
+  });
+
+  it.each<[string, unknown]>([
+    ['undefined', undefined],
+    ['empty', ''],
+    ['whitespace', '   '],
+    ['invalid', 'malformed'],
+  ])(
+    'rejects post-approval %s managed mailbox assignment before transport',
+    async (_label, assignedManagedMailboxId) => {
+      const state = createFixtureState();
+      state.campaignCreator.assignedManagedMailboxId = null;
+      state.action.campaignAccountId = campaignAccountId;
+      const { definition, assertConnectedAccountSendable } = buildDefinition({
+        state,
+      });
+      const proposal = await propose(definition);
+      const transportCallsBeforeMutation =
+        assertConnectedAccountSendable.mock.calls.length;
+      state.campaignCreator.assignedManagedMailboxId =
+        assignedManagedMailboxId as never;
+
+      await expect(
+        definition.rebuildExecutionAuthority({
+          workspaceId,
+          binding: proposal.expectedActionBinding,
+        }),
+      ).rejects.toThrow('Outreach email source graph is unavailable');
+      expect(assertConnectedAccountSendable).toHaveBeenCalledTimes(
+        transportCallsBeforeMutation,
+      );
+    },
+  );
+
+  it.each<[string, (state: FixtureState) => void]>([
+    [
+      'malformed managed mailbox ID',
+      (state) => (state.campaignCreator.assignedManagedMailboxId = 'malformed'),
+    ],
+    [
+      'missing linked account ID',
+      (state) => {
+        state.campaignCreator.assignedManagedMailboxId = null;
+        state.action.campaignAccountId = null;
+      },
+    ],
+    [
+      'malformed linked account ID',
+      (state) => {
+        state.campaignCreator.assignedManagedMailboxId = null;
+        state.action.campaignAccountId = 'malformed';
+      },
+    ],
+  ])('fails closed for %s', async (_label, mutate) => {
+    const state = createFixtureState();
+    mutate(state);
+    const { definition } = buildDefinition({ state });
+
+    await expect(propose(definition)).rejects.toThrow(
+      'Outreach email source graph is unavailable',
     );
   });
 
@@ -403,6 +668,7 @@ describe('OutreachEmailActionDefinition', () => {
     expect(proposal.expectedActionBinding).toMatchObject({
       actionContextFingerprint: computeActionContentDigest(
         JSON.stringify([
+          'provider-draft-id',
           '<parent@example.com>',
           messageThreadId,
           'provider-thread-id',
@@ -500,6 +766,10 @@ describe('OutreachEmailActionDefinition', () => {
     [
       'provider thread',
       (state) => (state.action.providerThreadExternalId = 'other-thread-id'),
+    ],
+    [
+      'provider draft',
+      (state) => (state.action.providerDraftExternalId = 'other-draft-id'),
     ],
   ])('rejects rebuild when %s changes', async (_label, mutate) => {
     const { definition, state } = buildDefinition();
