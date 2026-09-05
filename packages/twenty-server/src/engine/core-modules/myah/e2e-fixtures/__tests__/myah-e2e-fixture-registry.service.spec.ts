@@ -7,6 +7,7 @@ describe('MyahE2eFixtureRegistryService', () => {
   it('keeps opaque fixture ids private to their authenticated workspace', () => {
     const registry = new MyahE2eFixtureRegistryService();
     const fixture = registry.register(workspaceId, {
+      campaignIds: [],
       connectedAccountIds: ['a1a3b7a6-b1c2-4a75-9b01-100000000003'],
     });
 
@@ -22,17 +23,16 @@ describe('MyahE2eFixtureRegistryService', () => {
 
   it('caps active process-lifetime fixtures and releases an entry only after cleanup', () => {
     const registry = new MyahE2eFixtureRegistryService(2);
-    const first = registry.register(workspaceId, { connectedAccountIds: [] });
-    registry.register(workspaceId, { connectedAccountIds: [] });
+    const records = { campaignIds: [], connectedAccountIds: [] };
+    const first = registry.register(workspaceId, records);
+    registry.register(workspaceId, records);
 
-    expect(() =>
-      registry.register(workspaceId, { connectedAccountIds: [] }),
-    ).toThrow('E2E fixture capacity has been reached');
+    expect(() => registry.register(workspaceId, records)).toThrow(
+      'E2E fixture capacity has been reached',
+    );
 
     registry.release(workspaceId, first.id);
 
-    expect(() =>
-      registry.register(workspaceId, { connectedAccountIds: [] }),
-    ).not.toThrow();
+    expect(() => registry.register(workspaceId, records)).not.toThrow();
   });
 });

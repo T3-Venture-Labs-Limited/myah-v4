@@ -14,6 +14,8 @@ describe('isE2eTestFixturesEnabled', () => {
     ['development', 'false', false],
     ['development', 'true', true],
     ['test', 'true', true],
+    [undefined, 'true', false],
+    ['staging', 'true', false],
     ['production', 'true', false],
   ])('is %s with E2E_TEST_FIXTURES=%s -> %s', (nodeEnv, flag, expected) => {
     process.env.NODE_ENV = nodeEnv;

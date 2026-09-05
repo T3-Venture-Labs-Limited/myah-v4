@@ -81,6 +81,10 @@ describe('MyahE2eFixtureService', () => {
     );
     expect(actionApprovalService.createPendingBinding).toHaveBeenCalledTimes(1);
     expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining("'MYAH-270 default'"),
+      expect.any(Array),
+    );
+    expect(manager.query).toHaveBeenCalledWith(
       expect.stringContaining('"authFailedAt"'),
       expect.arrayContaining([expect.any(Date)]),
     );
@@ -90,9 +94,62 @@ describe('MyahE2eFixtureService', () => {
     expect(JSON.stringify(manager.query.mock.calls)).not.toContain('sendDraft');
   });
 
+  it('cleans mailboxes created before a later mailbox creation fails', async () => {
+    const { dataSource, manager, service } = createService();
+    dataSource.transaction
+      .mockImplementationOnce(
+        async (operation: (value: typeof manager) => unknown) =>
+          operation(manager),
+      )
+      .mockRejectedValueOnce(new Error('second mailbox failed'));
+
+    await expect(
+      service.createCampaignMailboxFixture(
+        { workspaceId, userWorkspaceId },
+        campaignId,
+      ),
+    ).rejects.toThrow('second mailbox failed');
+
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM core."messageChannel"'),
+      [expect.arrayContaining([expect.any(String)])],
+    );
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM core."connectedAccount"'),
+      [expect.arrayContaining([expect.any(String)])],
+    );
+  });
+
+  it('cleans a created approval binding after later fixture persistence fails', async () => {
+    const { manager, outreachEmailActionDefinition, service } = createService();
+    outreachEmailActionDefinition.recordApprovalBinding.mockRejectedValueOnce(
+      new Error('record failed'),
+    );
+
+    await expect(
+      service.createCampaignMailboxFixture(
+        { workspaceId, userWorkspaceId },
+        campaignId,
+      ),
+    ).rejects.toThrow('record failed');
+
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('"actionApprovalBindingEvidenceLink"'),
+      [[bindingId]],
+    );
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('"actionApprovalBinding"'),
+      [[bindingId]],
+    );
+  });
+
   it('fails closed for foreign cleanup ids and retains fixtures when deletion fails', async () => {
-    const { registry, service, workspaceDataSource } = createService();
-    const fixture = registry.register(workspaceId, { connectedAccountIds: [] });
+    const { manager, registry, service, workspaceDataSource } = createService();
+    const connectedAccountId = 'a1a3b7a6-b1c2-4a75-9b01-100000000005';
+    const fixture = registry.register(workspaceId, {
+      campaignIds: [],
+      connectedAccountIds: [connectedAccountId],
+    });
 
     await expect(
       service.cleanup(
@@ -115,19 +172,30 @@ describe('MyahE2eFixtureService', () => {
     await expect(
       service.cleanup({ workspaceId, userWorkspaceId }, fixture.id),
     ).resolves.toBe(true);
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('"campaignAccount" WHERE "connectedAccountId"'),
+      [[connectedAccountId]],
+    );
     await expect(
       service.cleanup({ workspaceId, userWorkspaceId }, fixture.id),
     ).resolves.toBe(false);
   });
 
-  it('returns a same-origin Operations callback path for a fixture-owned campaign', async () => {
-    const { registry, service } = createService();
+  it('returns one same-origin Operations callback mailbox for a fixture-owned campaign', async () => {
+    const { dataSource, registry, service } = createService();
     const fixture = registry.register(workspaceId, {
+      campaignIds: [campaignId],
       connectedAccountIds: [],
       messageChannelIds: [],
+      callbackConnectedAccountIdsByCampaignId: {},
     });
 
     const callback = await service.createCallbackFixture(
+      { workspaceId, userWorkspaceId },
+      fixture.id,
+      campaignId,
+    );
+    const repeatedCallback = await service.createCallbackFixture(
       { workspaceId, userWorkspaceId },
       fixture.id,
       campaignId,
@@ -137,5 +205,14 @@ describe('MyahE2eFixtureService', () => {
       `/object/campaign/${campaignId}?linkConnectedAccount=1&connectedAccountId=${callback.connectedAccountId}#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba`,
     );
     expect(callback.connectedAccountId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(repeatedCallback).toEqual(callback);
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    await expect(
+      service.createCallbackFixture(
+        { workspaceId, userWorkspaceId },
+        fixture.id,
+        'a1a3b7a6-b1c2-4a75-9b01-100000000099',
+      ),
+    ).rejects.toThrow('E2E fixture was not found');
   });
 });

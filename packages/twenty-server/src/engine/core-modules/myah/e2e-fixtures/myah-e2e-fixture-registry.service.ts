@@ -5,9 +5,11 @@ import { Injectable } from '@nestjs/common';
 const MAX_ACTIVE_FIXTURES = 100;
 
 type FixtureRecords = {
+  campaignIds: string[];
   connectedAccountIds: string[];
   messageChannelIds?: string[];
   campaignAccountIds?: string[];
+  callbackConnectedAccountIdsByCampaignId?: Record<string, string>;
   outreachActionIds?: string[];
   creatorIds?: string[];
   campaignCreatorIds?: string[];

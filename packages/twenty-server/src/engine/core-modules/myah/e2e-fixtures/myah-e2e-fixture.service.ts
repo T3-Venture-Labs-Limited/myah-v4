@@ -51,30 +51,6 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     await this.assertCampaign(context.workspaceId, campaignId);
 
     const fixtureNonce = randomUUID();
-    const defaultMailbox = await this.createMailbox(
-      context,
-      fixtureNonce,
-      'default',
-      false,
-    );
-    const firstAvailable = await this.createMailbox(
-      context,
-      fixtureNonce,
-      'available-1',
-      false,
-    );
-    const secondAvailable = await this.createMailbox(
-      context,
-      fixtureNonce,
-      'available-2',
-      false,
-    );
-    const unavailable = await this.createMailbox(
-      context,
-      fixtureNonce,
-      'reconnect',
-      true,
-    );
     const schemaName = getWorkspaceSchemaName(context.workspaceId);
     const campaignAccountId = randomUUID();
     const creatorId = randomUUID();
@@ -83,8 +59,42 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     const threadId = randomUUID();
     const messageId = randomUUID();
     const partId = randomUUID();
+    const records = {
+      campaignIds: [campaignId],
+      connectedAccountIds: [] as string[],
+      messageChannelIds: [] as string[],
+      campaignAccountIds: [campaignAccountId],
+      creatorIds: [creatorId],
+      campaignCreatorIds: [campaignCreatorId],
+      outreachActionIds: [outreachActionId],
+      actionApprovalBindingIds: [] as string[],
+      agentChatThreadIds: [threadId],
+      agentMessageIds: [messageId],
+      agentMessagePartIds: [partId],
+      callbackConnectedAccountIdsByCampaignId: {},
+    };
 
     try {
+      const createAndTrackMailbox = async (
+        label: string,
+        reconnectRequired: boolean,
+      ) => {
+        const mailbox = await this.createMailbox(
+          context,
+          fixtureNonce,
+          label,
+          reconnectRequired,
+        );
+        records.connectedAccountIds.push(mailbox.connectedAccountId);
+        records.messageChannelIds.push(mailbox.messageChannelId);
+
+        return mailbox;
+      };
+      const defaultMailbox = await createAndTrackMailbox('default', false);
+      const firstAvailable = await createAndTrackMailbox('available-1', false);
+      const secondAvailable = await createAndTrackMailbox('available-2', false);
+      const unavailable = await createAndTrackMailbox('reconnect', true);
+
       await this.dataSource.transaction(async (manager) => {
         await manager.query(
           `INSERT INTO "${schemaName}"."campaignAccount" (
@@ -116,7 +126,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
           ) VALUES (
             $1, 'MYAH-270 fixture outreach action', $2, 'EMAIL', 'PENDING', $3, $4,
             $5, $6, $7, $8, $9, $10,
-            'MYAH-270 fixture sender', $11
+            'MYAH-270 default', $11
           )`,
           [
             outreachActionId,
@@ -150,6 +160,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
       const binding = await this.actionApprovalService.createPendingBinding(
         proposal.expectedActionBinding,
       );
+      records.actionApprovalBindingIds.push(binding.id);
       await this.outreachEmailActionDefinition.recordApprovalBinding({
         expectedActionBinding: proposal.expectedActionBinding,
         approvalBindingId: binding.id,
@@ -176,28 +187,7 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
         ],
       );
 
-      const fixture = this.registry.register(context.workspaceId, {
-        connectedAccountIds: [
-          defaultMailbox.connectedAccountId,
-          firstAvailable.connectedAccountId,
-          secondAvailable.connectedAccountId,
-          unavailable.connectedAccountId,
-        ],
-        messageChannelIds: [
-          defaultMailbox.messageChannelId,
-          firstAvailable.messageChannelId,
-          secondAvailable.messageChannelId,
-          unavailable.messageChannelId,
-        ],
-        campaignAccountIds: [campaignAccountId],
-        creatorIds: [creatorId],
-        campaignCreatorIds: [campaignCreatorId],
-        outreachActionIds: [outreachActionId],
-        actionApprovalBindingIds: [binding.id],
-        agentChatThreadIds: [threadId],
-        agentMessageIds: [messageId],
-        agentMessagePartIds: [partId],
-      });
+      const fixture = this.registry.register(context.workspaceId, records);
 
       return {
         id: fixture.id,
@@ -214,27 +204,9 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
         expectedBody: EXPECTED_BODY,
       };
     } catch (error) {
-      await this.deleteRecords(context.workspaceId, {
-        connectedAccountIds: [
-          defaultMailbox.connectedAccountId,
-          firstAvailable.connectedAccountId,
-          secondAvailable.connectedAccountId,
-          unavailable.connectedAccountId,
-        ],
-        messageChannelIds: [
-          defaultMailbox.messageChannelId,
-          firstAvailable.messageChannelId,
-          secondAvailable.messageChannelId,
-          unavailable.messageChannelId,
-        ],
-        campaignAccountIds: [campaignAccountId],
-        creatorIds: [creatorId],
-        campaignCreatorIds: [campaignCreatorId],
-        outreachActionIds: [outreachActionId],
-        agentChatThreadIds: [threadId],
-        agentMessageIds: [messageId],
-        agentMessagePartIds: [partId],
-      }).catch(() => undefined);
+      await this.deleteRecords(context.workspaceId, records).catch(
+        () => undefined,
+      );
       throw error;
     }
   }
@@ -244,24 +216,35 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
     fixtureId: string,
     campaignId: string,
   ) {
-    if (!this.registry.get(context.workspaceId, fixtureId)) {
+    const fixture = this.registry.get(context.workspaceId, fixtureId);
+    if (!fixture || !fixture.records.campaignIds.includes(campaignId)) {
       throw new Error('E2E fixture was not found');
     }
     await this.assertCampaign(context.workspaceId, campaignId);
+    const existingConnectedAccountId =
+      fixture.records.callbackConnectedAccountIdsByCampaignId?.[campaignId];
+    if (existingConnectedAccountId) {
+      return {
+        connectedAccountId: existingConnectedAccountId,
+        callbackPath: this.callbackPath(campaignId, existingConnectedAccountId),
+      };
+    }
+
     const mailbox = await this.createMailbox(
       context,
       randomUUID(),
       'callback',
       false,
     );
-    const fixture = this.registry.get(context.workspaceId, fixtureId);
-    if (!fixture) throw new Error('E2E fixture was not found');
     fixture.records.connectedAccountIds.push(mailbox.connectedAccountId);
     fixture.records.messageChannelIds?.push(mailbox.messageChannelId);
+    fixture.records.callbackConnectedAccountIdsByCampaignId ??= {};
+    fixture.records.callbackConnectedAccountIdsByCampaignId[campaignId] =
+      mailbox.connectedAccountId;
 
     return {
       connectedAccountId: mailbox.connectedAccountId,
-      callbackPath: `/object/campaign/${campaignId}?linkConnectedAccount=1&connectedAccountId=${mailbox.connectedAccountId}#${CAMPAIGN_OPERATIONS_HASH}`,
+      callbackPath: this.callbackPath(campaignId, mailbox.connectedAccountId),
     };
   }
 
@@ -290,6 +273,10 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
         }
       }),
     );
+  }
+
+  private callbackPath(campaignId: string, connectedAccountId: string): string {
+    return `/object/campaign/${campaignId}?linkConnectedAccount=1&connectedAccountId=${connectedAccountId}#${CAMPAIGN_OPERATIONS_HASH}`;
   }
 
   private async createMailbox(
@@ -392,6 +379,12 @@ export class MyahE2eFixtureService implements OnModuleDestroy {
         records.campaignCreatorIds,
       );
       await remove(`"${schemaName}"."creator"`, records.creatorIds);
+      if (records.connectedAccountIds.length) {
+        await manager.query(
+          `DELETE FROM "${schemaName}"."campaignAccount" WHERE "connectedAccountId" = ANY($1::uuid[])`,
+          [records.connectedAccountIds],
+        );
+      }
       await remove(
         `"${schemaName}"."campaignAccount"`,
         records.campaignAccountIds,

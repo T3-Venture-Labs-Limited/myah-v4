@@ -1,4 +1,19 @@
-const loadImports = (nodeEnv: string, fixtureFlag: string | undefined) => {
+import {
+  GraphQLSchemaBuilderModule,
+  GraphQLSchemaFactory,
+} from '@nestjs/graphql';
+import { Test } from '@nestjs/testing';
+
+import { MyahE2eFixtureResolver } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture.resolver';
+import { MyahE2eFixtureService } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture.service';
+import { WorkspaceMailboxConnectionResolver } from 'src/engine/core-modules/myah/resolvers/workspace-mailbox-connection.resolver';
+import { WorkspaceMailboxConnectionService } from 'src/engine/core-modules/myah/services/workspace-mailbox-connection.service';
+import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+
+const loadImports = (
+  nodeEnv: string | undefined,
+  fixtureFlag: string | undefined,
+) => {
   jest.resetModules();
   process.env.NODE_ENV = nodeEnv;
   if (fixtureFlag === undefined) {
@@ -49,4 +64,34 @@ describe('CoreEngineModule E2E fixture registration', () => {
       expect(imports.includes(fixtureModule)).toBe(expected);
     },
   );
+
+  it('omits fixture mutations from the generated production schema', async () => {
+    const { imports, fixtureModule } = loadImports('production', 'true');
+    const moduleRef = await Test.createTestingModule({
+      imports: [GraphQLSchemaBuilderModule],
+      providers: [
+        WorkspaceMailboxConnectionResolver,
+        { provide: WorkspaceMailboxConnectionService, useValue: {} },
+        { provide: PermissionsService, useValue: {} },
+        MyahE2eFixtureResolver,
+        { provide: MyahE2eFixtureService, useValue: {} },
+      ],
+    }).compile();
+    const schema = await moduleRef
+      .get(GraphQLSchemaFactory)
+      .create([
+        WorkspaceMailboxConnectionResolver,
+        ...(imports.includes(fixtureModule) ? [MyahE2eFixtureResolver] : []),
+      ]);
+
+    expect(
+      Object.keys(schema.getMutationType()?.getFields() ?? {}),
+    ).not.toEqual(
+      expect.arrayContaining([
+        'createMyahE2eCampaignMailboxFixture',
+        'createMyahE2eCampaignCallbackFixture',
+        'cleanupMyahE2eCampaignMailboxFixture',
+      ]),
+    );
+  });
 });

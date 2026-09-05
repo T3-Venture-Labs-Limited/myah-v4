@@ -353,7 +353,8 @@ test('Campaign email accounts keep linked mailbox defaulting, pause without a de
     }>(page, campaignAccountsQuery, { input: { campaignId } });
     expect(
       accounts.campaignEmailAccounts.filter(
-        (account) => account.connectedAccountId === autoLinkedAccountId,
+        (account) =>
+          account.connectedAccountId === callbackFixture.connectedAccountId,
       ),
     ).toHaveLength(1);
   } finally {
