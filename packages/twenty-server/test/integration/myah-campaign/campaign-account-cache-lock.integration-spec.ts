@@ -283,12 +283,14 @@ describe('CampaignAccountService CacheLock serialization (PostgreSQL and Redis)'
 
     try {
       const links = await Promise.all(
-        connectedAccountIds.slice(0, 2).map((connectedAccountId) =>
-          campaignAccountService.link(
-            { campaignId, connectedAccountId },
-            buildSystemAuthContext(workspaceId),
+        connectedAccountIds
+          .slice(0, 2)
+          .map((connectedAccountId) =>
+            campaignAccountService.link(
+              { campaignId, connectedAccountId },
+              buildSystemAuthContext(workspaceId),
+            ),
           ),
-        ),
       );
       expect(links).toHaveLength(2);
 
