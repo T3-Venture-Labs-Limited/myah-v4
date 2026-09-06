@@ -1,4 +1,4 @@
-import { type Locator, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export class LoginPage {
   private readonly loginWithGoogleButton: Locator;
@@ -62,12 +62,10 @@ export class LoginPage {
     this.createWorkspaceButton = page.getByRole('button', {
       name: 'Create workspace',
     });
-    this.skipOnboardingStepButton = page
-      .getByRole('button', {
-        name: 'Skip',
-        exact: true,
-      })
-      .filter({ visible: true });
+    this.skipOnboardingStepButton = page.getByRole('button', {
+      name: 'Skip',
+      exact: true,
+    });
     this.firstNameField = page.getByLabel('First Name', { exact: true });
     this.lastNameField = page.getByLabel('Last name', { exact: true });
     this.syncEverythingWithGoogleRadio = page.locator(
@@ -167,6 +165,7 @@ export class LoginPage {
   }
 
   async clickSkipOnboardingStep() {
+    await expect(this.skipOnboardingStepButton).toHaveCount(1);
     await this.skipOnboardingStepButton.click();
   }
 
