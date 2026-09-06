@@ -71,8 +71,12 @@ export const GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION = gql`
 `;
 
 export const PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD = gql`
-  mutation PrepareManagedProviderCustomerFundingPaymentMethod {
-    prepareManagedProviderCustomerFundingPaymentMethod {
+  mutation PrepareManagedProviderCustomerFundingPaymentMethod(
+    $replaceExistingPaymentMethod: Boolean = false
+  ) {
+    prepareManagedProviderCustomerFundingPaymentMethod(
+      replaceExistingPaymentMethod: $replaceExistingPaymentMethod
+    ) {
       ready
       clientSecret
       publishableKey

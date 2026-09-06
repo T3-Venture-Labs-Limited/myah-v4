@@ -267,9 +267,11 @@ const candidate = {
 const configureHooks = ({
   accountError,
   accountLoading = false,
+  accountRefetch = jest.fn().mockResolvedValue({}),
   accounts = [linkedAccount],
   candidateError,
   candidateLoading = false,
+  candidateRefetch = jest.fn().mockResolvedValue({}),
   candidates = [candidate],
   link = jest.fn().mockResolvedValue({}),
   remove = jest.fn().mockResolvedValue({}),
@@ -277,17 +279,16 @@ const configureHooks = ({
 }: {
   accountError?: Error;
   accountLoading?: boolean;
+  accountRefetch?: jest.Mock;
   accounts?: (typeof linkedAccount)[];
   candidateError?: Error;
   candidateLoading?: boolean;
+  candidateRefetch?: jest.Mock;
   candidates?: (typeof candidate)[];
   link?: jest.Mock;
   remove?: jest.Mock;
   setDefault?: jest.Mock;
 } = {}) => {
-  const accountRefetch = jest.fn().mockResolvedValue({});
-  const candidateRefetch = jest.fn().mockResolvedValue({});
-
   mockUseQuery.mockImplementation(
     (document: { definitions: { name?: { value?: string } }[] }) => {
       const operationName = document.definitions[0]?.name?.value;
@@ -468,31 +469,37 @@ describe('MyahCampaignEmailAccounts', () => {
     );
   });
 
-  it('links a returned account once in StrictMode and replaces one-shot URL parameters', async () => {
-    const link = jest.fn().mockResolvedValue({
-      data: { linkCampaignEmailAccount: [linkedAccount] },
-    });
+  it('consumes callback parameters before linking and refetches active account queries', async () => {
+    let resolveLink: () => void = () => undefined;
+    const link = jest.fn(
+      (_options: {
+        awaitRefetchQueries: boolean;
+        refetchQueries: {
+          definitions: { name?: { value?: string } }[];
+        }[];
+        variables: {
+          input: { campaignId: string; connectedAccountId: string };
+        };
+      }) =>
+        new Promise<void>((resolve) => {
+          resolveLink = resolve;
+        }),
+    );
     mockLocation.search =
       '?linkConnectedAccount=1&connectedAccountId=123e4567-e89b-42d3-a456-426614174000';
-    configureHooks({ link });
+    const { accountRefetch, candidateRefetch } = configureHooks({ link });
 
-    render(
+    const { unmount } = render(
       <StrictMode>
         <MyahCampaignEmailAccounts campaignId="campaign-1" />
       </StrictMode>,
     );
 
-    await waitFor(() =>
-      expect(link).toHaveBeenCalledWith({
-        variables: {
-          input: {
-            campaignId: 'campaign-1',
-            connectedAccountId: '123e4567-e89b-42d3-a456-426614174000',
-          },
-        },
-      }),
-    );
-    expect(link).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(link).toHaveBeenCalledTimes(1));
+
+    const linkOptions = link.mock.calls[0][0];
+
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith(
       {
         hash: '#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
@@ -501,6 +508,37 @@ describe('MyahCampaignEmailAccounts', () => {
       },
       { replace: true },
     );
+    expect(linkOptions).toMatchObject({
+      awaitRefetchQueries: true,
+      variables: {
+        input: {
+          campaignId: 'campaign-1',
+          connectedAccountId: '123e4567-e89b-42d3-a456-426614174000',
+        },
+      },
+    });
+    expect(
+      linkOptions.refetchQueries.map(
+        (document) => document.definitions[0]?.name?.value,
+      ),
+    ).toEqual(['CampaignEmailAccounts', 'CampaignEmailAccountCandidates']);
+
+    mockLocation.search = '';
+    unmount();
+    render(<MyahCampaignEmailAccounts campaignId="campaign-1" />);
+
+    expect(link).toHaveBeenCalledTimes(1);
+
+    resolveLink();
+
+    await waitFor(() =>
+      expect(mockEnqueueSuccessSnackBar).toHaveBeenCalledWith({
+        message: 'Email account linked.',
+      }),
+    );
+    expect(accountRefetch).not.toHaveBeenCalled();
+    expect(candidateRefetch).not.toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
 
   it('opens the existing account connection settings seam', () => {

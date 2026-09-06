@@ -902,6 +902,24 @@ describe('ManagedProviderCustomerFundingService', () => {
     expect(stripe.prepareWorkspacePaymentMethod).not.toHaveBeenCalled();
   });
 
+  it('prepares a replacement payment method when the current method is ready', async () => {
+    const { service, stripe } = createHarness();
+
+    await expect(
+      service.prepareCustomerFundingPaymentMethod(workspaceId, true),
+    ).resolves.toEqual({
+      billingSummary,
+      clientSecret: 'seti_secret',
+      publishableKey: 'pk_test',
+      ready: false,
+      setupIntentId: 'seti_id',
+    });
+    expect(stripe.prepareWorkspacePaymentMethod).toHaveBeenCalledWith({
+      metronomeBaseUrlEnvironment: 'SANDBOX',
+      workspaceId,
+    });
+  });
+
   it('returns only bounded SetupIntent fields when a payment method is missing', async () => {
     const { service, stripe } = createHarness();
     stripe.getWorkspaceBillingDetailsSummary.mockResolvedValue({

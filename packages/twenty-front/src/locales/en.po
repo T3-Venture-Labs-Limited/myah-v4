@@ -6187,15 +6187,12 @@ msgstr "Count unique values"
 #. js-lingui-id: JNCzPW
 #: src/modules/object-metadata/hooks/useSortSubFieldChoicesForField.ts
 #: src/modules/object-record/record-field/ui/form-types/components/FormAddressFieldInput.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
 #: src/modules/settings/data-model/fields/forms/address/constants/DefaultSelectionAddressWithMessages.ts
 #: src/modules/ui/field/input/components/AddressInput.tsx
 msgid "Country"
 msgstr "Country"
-
-#. js-lingui-id: 87bpog
-#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
-msgid "Country code"
-msgstr "Country code"
 
 #. js-lingui-id: 1NDkH/
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -19516,6 +19513,11 @@ msgstr "Select 1 field"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Select a canceled mailbox pool before recovering capacity."
 msgstr "Select a canceled mailbox pool before recovering capacity."
+
+#. js-lingui-id: L+nQeT
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Select a country"
+msgstr "Select a country"
 
 #. js-lingui-id: OMoA3j
 #: src/modules/workflow/workflow-steps/workflow-actions/delay-actions/components/WorkflowEditActionDelay.tsx
