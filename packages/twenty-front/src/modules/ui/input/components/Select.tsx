@@ -34,6 +34,7 @@ export type CallToActionButton = {
 };
 
 export type SelectProps<Value extends SelectValue> = {
+  ariaLabel?: string;
   className?: string;
   disabled?: boolean;
   selectSizeVariant?: SelectSizeVariant;
@@ -75,6 +76,7 @@ const StyledDescription = styled.span`
 `;
 
 export const Select = <Value extends SelectValue>({
+  ariaLabel,
   className,
   disabled: disabledFromProps,
   selectSizeVariant,
@@ -208,8 +210,8 @@ export const Select = <Value extends SelectValue>({
           dropdownOffset={dropdownOffset}
           onOpen={handleDropdownOpen}
           clickableComponentAriaLabel={
-            isNonEmptyString(label)
-              ? `${label}: ${controlSelectedOption.label}`
+            isNonEmptyString(ariaLabel)
+              ? `${ariaLabel}: ${controlSelectedOption.label}`
               : undefined
           }
           isClickableComponentKeyboardAccessible

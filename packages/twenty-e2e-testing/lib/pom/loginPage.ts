@@ -62,8 +62,9 @@ export class LoginPage {
     this.createWorkspaceButton = page.getByRole('button', {
       name: 'Create workspace',
     });
-    this.skipOnboardingStepButton = page.locator('button:not([disabled])', {
-      hasText: /^Skip$/,
+    this.skipOnboardingStepButton = page.getByRole('button', {
+      name: 'Skip',
+      exact: true,
     });
     this.firstNameField = page.getByLabel('First Name', { exact: true });
     this.lastNameField = page.getByLabel('Last name', { exact: true });

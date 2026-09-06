@@ -256,6 +256,7 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
             onChange={(value) => set('postalCode', value)}
           />
           <Select
+            ariaLabel={t`Country`}
             dropdownId="managed-ai-billing-country"
             emptyOption={{ label: t`Select a country`, value: '' }}
             fullWidth

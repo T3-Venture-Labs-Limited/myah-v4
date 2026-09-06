@@ -138,6 +138,7 @@ describe('Select', () => {
     render(
       <Select
         dropdownId="country-select"
+        ariaLabel="Country"
         label="Country"
         value=""
         emptyOption={{ label: 'Select a country', value: '' }}
@@ -156,5 +157,21 @@ describe('Select', () => {
     expect(
       screen.getByRole('button', { name: 'Netherlands' }),
     ).toBeInTheDocument();
+  });
+
+  it('keeps the selected value as the accessible name by default', () => {
+    render(
+      <Select
+        dropdownId="view-type-select"
+        label="View type"
+        value="table"
+        options={[
+          { label: 'Table', value: 'table' },
+          { label: 'Kanban', value: 'kanban' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Table' })).toBeInTheDocument();
   });
 });
