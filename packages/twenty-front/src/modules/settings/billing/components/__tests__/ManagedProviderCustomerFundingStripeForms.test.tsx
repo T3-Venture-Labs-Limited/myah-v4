@@ -115,6 +115,24 @@ describe('ManagedProviderCustomerFundingPaymentForm tax IDs', () => {
     );
   });
 
+  it('selects a billing country by name and submits its ISO code', async () => {
+    const { onComplete } = renderPaymentForm();
+
+    fireEvent.click(screen.getByText('United States'));
+    fireEvent.click(await screen.findByText('Netherlands'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save billing details' }),
+    );
+
+    await waitFor(() =>
+      expect(onComplete).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ country: 'NL' }),
+      ),
+    );
+    expect(screen.queryByLabelText('Country code')).not.toBeInTheDocument();
+  });
+
   it('rejects whitespace-only tax ID fields paired with a value', () => {
     renderPaymentForm();
 

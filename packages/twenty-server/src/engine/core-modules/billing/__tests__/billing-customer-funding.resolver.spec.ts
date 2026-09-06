@@ -210,6 +210,19 @@ describe('BillingResolver customer AI funding', () => {
     expect(status.customerFundingHistory?.[0]).not.toHaveProperty('presetId');
   });
 
+  it('forwards an explicit payment-method replacement request', async () => {
+    const { fundingService, resolver } = createResolver();
+
+    await resolver.prepareManagedProviderCustomerFundingPaymentMethod(
+      workspace as never,
+      true,
+    );
+
+    expect(
+      fundingService.prepareCustomerFundingPaymentMethod,
+    ).toHaveBeenCalledWith(workspace.id, true);
+  });
+
   it('forwards bounded billing details when completing payment setup', async () => {
     const { fundingService, resolver } = createResolver();
 

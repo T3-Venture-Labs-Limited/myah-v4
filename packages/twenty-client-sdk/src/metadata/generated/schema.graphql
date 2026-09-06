@@ -3764,7 +3764,7 @@ type Mutation {
   emailPasswordResetLink(email: String!, workspaceId: UUID): EmailPasswordResetLink!
   updatePasswordViaResetToken(passwordResetToken: String!, newPassword: String!): InvalidatePassword!
   requestManagedProviderCustomerFunding(principalCents: Int!, idempotencyKey: String!): ManagedProviderCustomerFundingHistoryItem!
-  prepareManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod!
+  prepareManagedProviderCustomerFundingPaymentMethod(replaceExistingPaymentMethod: Boolean = false): ManagedProviderCustomerFundingPaymentMethod!
   completeManagedProviderCustomerFundingPaymentMethod(setupIntentId: String, name: String!, line1: String!, line2: String, city: String!, state: String, postalCode: String!, country: String!, taxIdType: String, taxIdValue: String): ManagedProviderCustomerFundingPaymentMethod!
   prepareManagedProviderCustomerFundingPaymentAction(actionId: String!): ManagedProviderCustomerFundingPaymentAction!
   acknowledgeManagedProviderCustomerFundingPaymentAction(actionId: String!): ManagedProviderCustomerFundingHistoryItem!

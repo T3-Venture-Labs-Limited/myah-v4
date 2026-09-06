@@ -190,7 +190,6 @@ export const Select = <Value extends SelectValue>({
     <StyledContainer
       className={className}
       fullWidth={fullWidth}
-      tabIndex={0}
       onBlur={onBlur}
       ref={selectContainerRef}
     >
@@ -208,6 +207,12 @@ export const Select = <Value extends SelectValue>({
           dropdownPlacement="bottom-start"
           dropdownOffset={dropdownOffset}
           onOpen={handleDropdownOpen}
+          clickableComponentAriaLabel={
+            isNonEmptyString(label)
+              ? `${label}: ${controlSelectedOption.label}`
+              : undefined
+          }
+          isClickableComponentKeyboardAccessible
           clickableComponent={
             <SelectControl
               selectedOption={controlSelectedOption}

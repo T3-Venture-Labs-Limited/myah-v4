@@ -10,6 +10,7 @@ import {
   SettingsWorkspaceBillingContent,
   type WorkspaceBillingViewModel,
 } from '~/modules/settings/billing/components/SettingsWorkspaceBillingContent';
+import { ManagedProviderCustomerFundingPaymentForm } from '~/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms';
 import {
   SettingsBilling,
   type SettingsBillingProps,
@@ -161,6 +162,20 @@ export const MissingPaymentDetails: Story = {
       customerFundingPaymentMethodReady: false,
     },
   },
+};
+
+export const PaymentAndBillingDetailsEditor: Story = {
+  parameters: { componentCanvas: true },
+  render: () => (
+    <ManagedProviderCustomerFundingPaymentForm
+      billingSummary={billingSummary}
+      clientSecret={null}
+      onCancel={fn()}
+      onComplete={() => Promise.resolve()}
+      publishableKey={null}
+      setupIntentId={null}
+    />
+  ),
 };
 
 export const MobileCustomTopUps: Story = {

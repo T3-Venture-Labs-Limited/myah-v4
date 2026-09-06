@@ -7015,7 +7015,7 @@ export interface MutationGenqlSelection{
     emailPasswordResetLink?: (EmailPasswordResetLinkGenqlSelection & { __args: {email: Scalars['String'], workspaceId?: (Scalars['UUID'] | null)} })
     updatePasswordViaResetToken?: (InvalidatePasswordGenqlSelection & { __args: {passwordResetToken: Scalars['String'], newPassword: Scalars['String']} })
     requestManagedProviderCustomerFunding?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {principalCents: Scalars['Int'], idempotencyKey: Scalars['String']} })
-    prepareManagedProviderCustomerFundingPaymentMethod?: ManagedProviderCustomerFundingPaymentMethodGenqlSelection
+    prepareManagedProviderCustomerFundingPaymentMethod?: (ManagedProviderCustomerFundingPaymentMethodGenqlSelection & { __args?: {replaceExistingPaymentMethod?: (Scalars['Boolean'] | null)} })
     completeManagedProviderCustomerFundingPaymentMethod?: (ManagedProviderCustomerFundingPaymentMethodGenqlSelection & { __args: {setupIntentId?: (Scalars['String'] | null), name: Scalars['String'], line1: Scalars['String'], line2?: (Scalars['String'] | null), city: Scalars['String'], state?: (Scalars['String'] | null), postalCode: Scalars['String'], country: Scalars['String'], taxIdType?: (Scalars['String'] | null), taxIdValue?: (Scalars['String'] | null)} })
     prepareManagedProviderCustomerFundingPaymentAction?: (ManagedProviderCustomerFundingPaymentActionGenqlSelection & { __args: {actionId: Scalars['String']} })
     acknowledgeManagedProviderCustomerFundingPaymentAction?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {actionId: Scalars['String']} })

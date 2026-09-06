@@ -8792,7 +8792,12 @@ export default {
                 }
             ],
             "prepareManagedProviderCustomerFundingPaymentMethod": [
-                156
+                156,
+                {
+                    "replaceExistingPaymentMethod": [
+                        6
+                    ]
+                }
             ],
             "completeManagedProviderCustomerFundingPaymentMethod": [
                 156,
