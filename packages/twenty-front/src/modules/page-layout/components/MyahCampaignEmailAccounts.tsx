@@ -249,38 +249,47 @@ export const MyahCampaignEmailAccounts = ({
 
     if (!connectionFailed && !shouldLink) return;
 
-    searchParams.delete('emailAccountConnectionFailed');
-    searchParams.delete('linkConnectedAccount');
-    searchParams.delete('connectedAccountId');
-    navigate(
-      {
-        hash: location.hash,
-        pathname: location.pathname,
-        search: searchParams.toString(),
-      },
-      { replace: true },
-    );
+    const clearConnectionParams = () => {
+      searchParams.delete('emailAccountConnectionFailed');
+      searchParams.delete('linkConnectedAccount');
+      searchParams.delete('connectedAccountId');
+      navigate(
+        {
+          hash: location.hash,
+          pathname: location.pathname,
+          search: searchParams.toString(),
+        },
+        { replace: true },
+      );
+    };
 
     if (connectionFailed) {
+      clearConnectionParams();
       enqueueErrorSnackBar({
         message: 'Email account connection failed. Try connecting it again.',
       });
       return;
     }
 
-    if (!isUuid(connectedAccountId) || autoLinkedAccountRef.current) {
-      if (!isUuid(connectedAccountId)) {
-        enqueueErrorSnackBar({ message: 'Email account could not be linked.' });
-      }
+    if (!isUuid(connectedAccountId)) {
+      clearConnectionParams();
+      enqueueErrorSnackBar({ message: 'Email account could not be linked.' });
       return;
     }
 
+    if (autoLinkedAccountRef.current) return;
+
+    clearConnectionParams();
     autoLinkedAccountRef.current = connectedAccountId;
     void linkAccount({
       variables: { input: { campaignId, connectedAccountId } },
+      awaitRefetchQueries: true,
+      refetchQueries: [
+        CAMPAIGN_EMAIL_ACCOUNTS,
+        CAMPAIGN_EMAIL_ACCOUNT_CANDIDATES,
+      ],
     })
-      .then(async () => {
-        await refreshAccountQueries();
+      .then(() => {
         enqueueSuccessSnackBar({ message: 'Email account linked.' });
       })
       .catch(() => {
@@ -295,7 +304,6 @@ export const MyahCampaignEmailAccounts = ({
     location.pathname,
     location.search,
     navigate,
-    refreshAccountQueries,
   ]);
 
   const handleSetDefault = async (account: CampaignEmailAccount) => {
