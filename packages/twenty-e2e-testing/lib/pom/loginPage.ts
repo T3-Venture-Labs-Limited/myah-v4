@@ -62,10 +62,12 @@ export class LoginPage {
     this.createWorkspaceButton = page.getByRole('button', {
       name: 'Create workspace',
     });
-    this.skipOnboardingStepButton = page.getByRole('button', {
-      name: 'Skip',
-      exact: true,
-    });
+    this.skipOnboardingStepButton = page
+      .getByRole('button', {
+        name: 'Skip',
+        exact: true,
+      })
+      .filter({ visible: true });
     this.firstNameField = page.getByLabel('First Name', { exact: true });
     this.lastNameField = page.getByLabel('Last name', { exact: true });
     this.syncEverythingWithGoogleRadio = page.locator(
