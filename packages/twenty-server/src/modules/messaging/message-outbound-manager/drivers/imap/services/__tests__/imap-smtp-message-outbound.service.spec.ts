@@ -46,12 +46,8 @@ describe('ImapSmtpMessageOutboundService', () => {
   const sendMail = jest.fn();
   const verify = jest.fn();
   const smtpClient = { sendMail, verify };
-  const executeWithAbsoluteDeadline = jest.fn(
-    (_smtpClient, operation: () => Promise<unknown>) => operation(),
-  );
   const smtpClientProvider = {
     getClient: jest.fn().mockResolvedValue(smtpClient),
-    executeWithAbsoluteDeadline,
   } as unknown as SmtpClientProvider;
   const draftsFolderService = {
     findOrCreateDraftsFolder: jest.fn().mockResolvedValue({ path: 'Drafts' }),
@@ -97,10 +93,6 @@ describe('ImapSmtpMessageOutboundService', () => {
   it('preflights SMTP credentials without sending or creating a draft', async () => {
     await service.assertSendable(buildConnectedAccount());
 
-    expect(executeWithAbsoluteDeadline).toHaveBeenCalledWith(
-      smtpClient,
-      expect.any(Function),
-    );
     expect(verify).toHaveBeenCalledTimes(1);
     expect(sendMail).not.toHaveBeenCalled();
     expect(append).not.toHaveBeenCalled();
@@ -125,10 +117,6 @@ describe('ImapSmtpMessageOutboundService', () => {
       headerMessageId: '<compiled-draft@example.com>',
     });
 
-    expect(executeWithAbsoluteDeadline).toHaveBeenCalledWith(
-      smtpClient,
-      expect.any(Function),
-    );
     expect(sendMail).toHaveBeenCalledWith({
       from: 'sender@example.com',
       to: 'recipient@example.com',

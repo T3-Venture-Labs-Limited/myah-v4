@@ -1,4 +1,4 @@
-import { createTransport, type Transporter } from 'nodemailer';
+import { createTransport } from 'nodemailer';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { type Repository } from 'typeorm';
 
@@ -37,6 +37,7 @@ describe('SmtpClientProvider', () => {
       username: 'sender@example.com',
     }),
   };
+  const verify = jest.fn();
   const provider = new SmtpClientProvider(
     secureHttpClientService as unknown as SecureHttpClientService,
     encryptionService as unknown as ConnectedAccountTokenEncryptionService,
@@ -46,35 +47,35 @@ describe('SmtpClientProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     repository.findOne.mockResolvedValue(connectedAccount);
-    (createTransport as jest.Mock).mockReturnValue({});
+    verify.mockResolvedValue(true);
+    (createTransport as jest.Mock).mockReturnValue({ verify });
   });
 
   afterEach(() => {
     jest.useRealTimers();
   });
 
-  it('configures phase and inactivity safeguards for personal SMTP', async () => {
-    await provider.getClient(connectedAccount.id);
+  it('configures owned-socket, phase, and inactivity safeguards for personal SMTP', async () => {
+    const client = await provider.getClient(connectedAccount.id);
+
+    await client.verify();
 
     expect(createTransport).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         greetingTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         socketTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        getSocket: expect.any(Function),
       }),
     );
   });
 
-  it('closes the transport before rejecting a pending operation at 30 seconds', async () => {
+  it('rejects a pending operation at the fixed 30 second deadline', async () => {
     jest.useFakeTimers();
-    const close = jest.fn();
-    const transporter = { close } as unknown as Transporter;
-    const operation = jest.fn(() => new Promise<never>(() => undefined));
+    verify.mockReturnValue(new Promise<never>(() => undefined));
+    const client = await provider.getClient(connectedAccount.id);
 
-    const pendingOperation = provider.executeWithAbsoluteDeadline(
-      transporter,
-      operation,
-    );
+    const pendingOperation = client.verify();
     const rejection = expect(pendingOperation).rejects.toThrow(
       `SMTP operation exceeded ${OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS}ms`,
     );
@@ -82,11 +83,10 @@ describe('SmtpClientProvider', () => {
     await jest.advanceTimersByTimeAsync(
       OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS - 1,
     );
-    expect(close).not.toHaveBeenCalled();
+    expect(verify).toHaveBeenCalledTimes(1);
 
     await jest.advanceTimersByTimeAsync(1);
 
-    expect(close).toHaveBeenCalledTimes(1);
     await rejection;
   });
 });
