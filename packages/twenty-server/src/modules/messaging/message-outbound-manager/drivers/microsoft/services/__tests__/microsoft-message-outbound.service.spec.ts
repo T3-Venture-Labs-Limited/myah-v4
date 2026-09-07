@@ -4,6 +4,7 @@ import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { MicrosoftOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/microsoft/microsoft-oauth2-client.provider';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { MicrosoftMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/microsoft/services/microsoft-message-outbound.service';
 
 // These tests exercise only provider dispatch and the connected-account ID.
@@ -17,6 +18,7 @@ describe('MicrosoftMessageOutboundService', () => {
   let service: MicrosoftMessageOutboundService;
 
   const messagesRequest = {
+    options: jest.fn().mockReturnThis(),
     filter: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     top: jest.fn().mockReturnThis(),
@@ -25,18 +27,22 @@ describe('MicrosoftMessageOutboundService', () => {
   };
 
   const replyRequest = {
+    options: jest.fn().mockReturnThis(),
     post: jest.fn(),
   };
 
   const draftRequest = {
+    options: jest.fn().mockReturnThis(),
     patch: jest.fn(),
   };
 
   const draftDeleteRequest = {
+    options: jest.fn().mockReturnThis(),
     delete: jest.fn(),
   };
 
   const profileRequest = {
+    options: jest.fn().mockReturnThis(),
     get: jest.fn(),
   };
 
@@ -113,6 +119,7 @@ describe('MicrosoftMessageOutboundService', () => {
 
   it('creates Microsoft drafts as replies when a parent internet message id is provided', async () => {
     const connectedAccount = buildConnectedAccount();
+    const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
 
     const result = await service.createDraft(
       {
@@ -132,6 +139,15 @@ describe('MicrosoftMessageOutboundService', () => {
     );
     expect(messagesRequest.select).toHaveBeenCalledWith('id');
     expect(messagesRequest.top).toHaveBeenCalledWith(1);
+    expect(timeoutSpy).toHaveBeenCalledWith(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
+    expect(messagesRequest.options).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
+    });
+    expect(service.providerRequestTimeoutMs).toBe(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
 
     expect(mockMicrosoftClient.api).toHaveBeenCalledWith(
       '/me/messages/parent-message-id/createReply',

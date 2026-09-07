@@ -16,6 +16,7 @@ import { MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME } from 'src/engine/core-m
 import { getWorkspaceMailboxTlsServername } from 'src/engine/core-modules/myah/utils/get-workspace-mailbox-tls-servername.util';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 
 @Injectable()
 export class SmtpClientProvider {
@@ -60,6 +61,9 @@ export class SmtpClientProvider {
       host: validatedSmtpHost,
       port: smtpParams.port,
       ...buildSmtpTlsOptions(smtpParams.connectionSecurity),
+      connectionTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+      greetingTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+      socketTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
       ...(isWorkspaceMailbox &&
       smtpParams.connectionSecurity === EmailConnectionSecurity.STARTTLS
         ? { requireTLS: true }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { isNonEmptyString } from '@sniptt/guards';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
 
 import { MicrosoftOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/microsoft/microsoft-oauth2-client.provider';
@@ -9,11 +10,17 @@ import { toMicrosoftRecipients } from 'src/modules/messaging/message-import-mana
 import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
-import { type Client as MicrosoftGraphClient } from '@microsoft/microsoft-graph-client';
+import {
+  type Client as MicrosoftGraphClient,
+  type GraphRequest,
+} from '@microsoft/microsoft-graph-client';
 import { isDefined } from 'twenty-shared/utils';
 
 @Injectable()
 export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
+  readonly providerRequestTimeoutMs =
+    OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS;
+
   private readonly logger = new Logger(MicrosoftMessageOutboundService.name);
 
   constructor(
@@ -27,7 +34,7 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
       connectedAccount.id,
     );
 
-    await microsoftClient.api('/me').get();
+    await this.request(microsoftClient, '/me').get();
   }
 
   async sendMessage(
@@ -44,7 +51,9 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
       conversationId,
     } = await this.createDraftMessage(microsoftClient, sendMessageInput);
 
-    await microsoftClient.api(`/me/messages/${messageId}/send`).post({});
+    await this.request(microsoftClient, `/me/messages/${messageId}/send`).post(
+      {},
+    );
 
     return {
       headerMessageId: internetMessageId ?? '',
@@ -110,7 +119,10 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
       connectedAccount.id,
     );
 
-    await microsoftClient.api(`/me/messages/${draftExternalId}`).delete();
+    await this.request(
+      microsoftClient,
+      `/me/messages/${draftExternalId}`,
+    ).delete();
   }
 
   private async createDraftMessage(
@@ -131,13 +143,15 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
     const message = this.composeMicrosoftMessage(sendMessageInput);
 
     if (isDefined(parentMessageGraphId)) {
-      const reply = await microsoftClient
-        .api(`/me/messages/${parentMessageGraphId}/createReply`)
-        .post({});
+      const reply = await this.request(
+        microsoftClient,
+        `/me/messages/${parentMessageGraphId}/createReply`,
+      ).post({});
 
-      const patched = await microsoftClient
-        .api(`/me/messages/${reply.id}`)
-        .patch(message);
+      const patched = await this.request(
+        microsoftClient,
+        `/me/messages/${reply.id}`,
+      ).patch(message);
 
       return {
         id: reply.id,
@@ -147,7 +161,9 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
       };
     }
 
-    const response = await microsoftClient.api('/me/messages').post(message);
+    const response = await this.request(microsoftClient, '/me/messages').post(
+      message,
+    );
 
     return {
       id: response.id,
@@ -162,14 +178,22 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
   ): Promise<string | undefined> {
     const escapedInternetMessageId = internetMessageId.split("'").join("''");
 
-    const response = await microsoftClient
-      .api('/me/messages')
+    const response = await this.request(microsoftClient, '/me/messages')
       .filter(`internetMessageId eq '${escapedInternetMessageId}'`)
       .select('id')
       .top(1)
       .get();
 
     return response?.value?.[0]?.id;
+  }
+
+  private request(
+    microsoftClient: MicrosoftGraphClient,
+    path: string,
+  ): GraphRequest {
+    return microsoftClient.api(path).options({
+      signal: AbortSignal.timeout(this.providerRequestTimeoutMs),
+    });
   }
 
   private composeMicrosoftMessage(

@@ -5,6 +5,7 @@ import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
 
 import { type EmailingDomainSendEmailInput } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-send-email-input.type';
 import { type EmailingDomainSendEmailResult } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-send-email-result.type';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 
 import { AwsSesClientProvider } from 'src/engine/core-modules/emailing-domain/drivers/aws-ses/providers/aws-ses-client.provider';
 import { AwsSesHandleErrorService } from 'src/engine/core-modules/emailing-domain/drivers/aws-ses/services/aws-ses-handle-error.service';
@@ -83,6 +84,11 @@ export class AwsSesSendEmailService {
             { Name: 'tenant_id', Value: input.workspaceId },
           ],
         }),
+        {
+          abortSignal: AbortSignal.timeout(
+            OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+          ),
+        },
       );
 
       if (!isDefined(response.MessageId)) {
