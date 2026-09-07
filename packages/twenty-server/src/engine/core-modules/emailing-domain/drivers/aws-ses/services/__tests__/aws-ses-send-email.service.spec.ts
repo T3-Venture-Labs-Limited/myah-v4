@@ -3,6 +3,7 @@ import { SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { type AwsSesClientProvider } from 'src/engine/core-modules/emailing-domain/drivers/aws-ses/providers/aws-ses-client.provider';
 import { type AwsSesHandleErrorService } from 'src/engine/core-modules/emailing-domain/drivers/aws-ses/services/aws-ses-handle-error.service';
 import { AwsSesSendEmailService } from 'src/engine/core-modules/emailing-domain/drivers/aws-ses/services/aws-ses-send-email.service';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import {
   EmailingDomainDriverException,
   EmailingDomainDriverExceptionCode,
@@ -45,14 +46,21 @@ describe('AwsSesSendEmailService', () => {
     const { service, send } = setUp();
 
     send.mockResolvedValue({ MessageId: 'msg-1' });
+    const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
 
     const result = await service.sendEmail(baseInput, baseContext);
 
+    expect(timeoutSpy).toHaveBeenCalledWith(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
+
     expect(result.messageId).toBe('msg-1');
 
-    const [command] = send.mock.calls[0];
+    const [command, options] = send.mock.calls[0];
 
     expect(command).toBeInstanceOf(SendEmailCommand);
+    expect(options).toEqual({ abortSignal: expect.any(AbortSignal) });
+    expect(options.abortSignal).not.toBe(AbortSignal.abort());
     expect(command.input).toMatchObject({
       FromEmailAddress: 'noreply@mail.example.com',
       Destination: { ToAddresses: ['user@example.com'] },

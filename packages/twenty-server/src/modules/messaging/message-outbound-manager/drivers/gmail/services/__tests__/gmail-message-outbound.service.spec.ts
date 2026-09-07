@@ -5,6 +5,7 @@ import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { GoogleOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/google/google-oauth2-client.provider';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { GmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/gmail-message-outbound.service';
 
 const MOCKED_EMAIL_BUFFER = Buffer.from(
@@ -121,9 +122,10 @@ describe('GmailMessageOutboundService', () => {
       buildConnectedAccount(ConnectedAccountProvider.GOOGLE),
     );
 
-    expect(mockGmailClient.users.getProfile).toHaveBeenCalledWith({
-      userId: 'me',
-    });
+    expect(mockGmailClient.users.getProfile).toHaveBeenCalledWith(
+      { userId: 'me' },
+      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+    );
     expect(mockCreateDraft).not.toHaveBeenCalled();
   });
 
@@ -143,12 +145,18 @@ describe('GmailMessageOutboundService', () => {
     await service.sendMessage(sendMessageInput, connectedAccount);
 
     expect(mockSend).toHaveBeenCalledTimes(1);
-    expect(mockSend).toHaveBeenCalledWith({
-      userId: 'me',
-      requestBody: {
-        raw: MOCKED_EMAIL_BUFFER.toString('base64url'),
+    expect(mockSend).toHaveBeenCalledWith(
+      {
+        userId: 'me',
+        requestBody: {
+          raw: MOCKED_EMAIL_BUFFER.toString('base64url'),
+        },
       },
-    });
+      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+    );
+    expect(service.providerRequestTimeoutMs).toBe(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
   });
 
   it('should send email with attachments via Gmail', async () => {
@@ -173,12 +181,15 @@ describe('GmailMessageOutboundService', () => {
     await service.sendMessage(sendMessageInput, connectedAccount);
 
     expect(mockSend).toHaveBeenCalledTimes(1);
-    expect(mockSend).toHaveBeenCalledWith({
-      userId: 'me',
-      requestBody: {
-        raw: MOCKED_EMAIL_BUFFER.toString('base64url'),
+    expect(mockSend).toHaveBeenCalledWith(
+      {
+        userId: 'me',
+        requestBody: {
+          raw: MOCKED_EMAIL_BUFFER.toString('base64url'),
+        },
       },
-    });
+      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+    );
   });
 
   it('should create Gmail drafts in the existing thread when a thread id is provided', async () => {
@@ -202,15 +213,18 @@ describe('GmailMessageOutboundService', () => {
     );
 
     expect(mockCreateDraft).toHaveBeenCalledTimes(1);
-    expect(mockCreateDraft).toHaveBeenCalledWith({
-      userId: 'me',
-      requestBody: {
-        message: {
-          raw: MOCKED_EMAIL_BUFFER.toString('base64url'),
-          threadId: 'gmail-thread-id',
+    expect(mockCreateDraft).toHaveBeenCalledWith(
+      {
+        userId: 'me',
+        requestBody: {
+          message: {
+            raw: MOCKED_EMAIL_BUFFER.toString('base64url'),
+            threadId: 'gmail-thread-id',
+          },
         },
       },
-    });
+      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+    );
 
     expect(result).toEqual({
       headerMessageId: '<compiled-draft@example.com>',
@@ -248,15 +262,21 @@ describe('GmailMessageOutboundService', () => {
 
     await service.deleteDraft('draft-message-id', connectedAccount);
 
-    expect(mockListDrafts).toHaveBeenCalledWith({
-      userId: 'me',
-      maxResults: 500,
-      pageToken: undefined,
-    });
-    expect(mockDeleteDraft).toHaveBeenCalledWith({
-      userId: 'me',
-      id: 'draft-resource-id',
-    });
+    expect(mockListDrafts).toHaveBeenCalledWith(
+      {
+        userId: 'me',
+        maxResults: 500,
+        pageToken: undefined,
+      },
+      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+    );
+    expect(mockDeleteDraft).toHaveBeenCalledWith(
+      {
+        userId: 'me',
+        id: 'draft-resource-id',
+      },
+      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+    );
   });
 
   it('sends caller-supplied content before deleting the provider draft', async () => {

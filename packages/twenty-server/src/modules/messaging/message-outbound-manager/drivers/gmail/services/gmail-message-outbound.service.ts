@@ -5,6 +5,7 @@ import { type gmail_v1, google } from 'googleapis';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import { isDefined } from 'twenty-shared/utils';
 
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
 
 import { GoogleOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/google/google-oauth2-client.provider';
@@ -18,6 +19,9 @@ import { toMailComposerOptions } from 'src/modules/messaging/message-outbound-ma
 
 @Injectable()
 export class GmailMessageOutboundService implements MessageOutboundDriver {
+  readonly providerRequestTimeoutMs =
+    OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS;
+
   private readonly logger = new Logger(GmailMessageOutboundService.name);
 
   constructor(
@@ -35,7 +39,10 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
       auth: oAuth2Client,
     });
 
-    await gmailClient.users.getProfile({ userId: 'me' });
+    await gmailClient.users.getProfile(
+      { userId: 'me' },
+      { timeout: this.providerRequestTimeoutMs },
+    );
   }
 
   async sendMessage(
@@ -45,15 +52,18 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     const { gmailClient, encodedMessage, messageBuffer } =
       await this.composeGmailMessage(connectedAccount, sendMessageInput);
 
-    const { data } = await gmailClient.users.messages.send({
-      userId: 'me',
-      requestBody: {
-        raw: encodedMessage,
-        ...(isNonEmptyString(sendMessageInput.threadExternalId)
-          ? { threadId: sendMessageInput.threadExternalId }
-          : {}),
+    const { data } = await gmailClient.users.messages.send(
+      {
+        userId: 'me',
+        requestBody: {
+          raw: encodedMessage,
+          ...(isNonEmptyString(sendMessageInput.threadExternalId)
+            ? { threadId: sendMessageInput.threadExternalId }
+            : {}),
+        },
       },
-    });
+      { timeout: this.providerRequestTimeoutMs },
+    );
 
     return {
       headerMessageId: extractMessageIdFromBuffer(messageBuffer),
@@ -69,17 +79,20 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     const { gmailClient, encodedMessage, messageBuffer } =
       await this.composeGmailMessage(connectedAccount, sendMessageInput);
 
-    const { data } = await gmailClient.users.drafts.create({
-      userId: 'me',
-      requestBody: {
-        message: {
-          raw: encodedMessage,
-          ...(isNonEmptyString(sendMessageInput.threadExternalId)
-            ? { threadId: sendMessageInput.threadExternalId }
-            : {}),
+    const { data } = await gmailClient.users.drafts.create(
+      {
+        userId: 'me',
+        requestBody: {
+          message: {
+            raw: encodedMessage,
+            ...(isNonEmptyString(sendMessageInput.threadExternalId)
+              ? { threadId: sendMessageInput.threadExternalId }
+              : {}),
+          },
         },
       },
-    });
+      { timeout: this.providerRequestTimeoutMs },
+    );
 
     const draftExternalId = data.message?.id;
 
@@ -139,7 +152,10 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     );
 
     if (isDefined(draftId)) {
-      await gmailClient.users.drafts.delete({ userId: 'me', id: draftId });
+      await gmailClient.users.drafts.delete(
+        { userId: 'me', id: draftId },
+        { timeout: this.providerRequestTimeoutMs },
+      );
 
       return;
     }
@@ -157,11 +173,14 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
 
     do {
       const { data }: { data: gmail_v1.Schema$ListDraftsResponse } =
-        await gmailClient.users.drafts.list({
-          userId: 'me',
-          maxResults: 500,
-          pageToken,
-        });
+        await gmailClient.users.drafts.list(
+          {
+            userId: 'me',
+            maxResults: 500,
+            pageToken,
+          },
+          { timeout: this.providerRequestTimeoutMs },
+        );
 
       const draft = (data.drafts ?? []).find(
         (currentDraft) => currentDraft.message?.id === messageId,
@@ -199,16 +218,20 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
       auth: oAuth2Client,
     });
 
-    const { data: gmailData } = await gmailClient.users.getProfile({
-      userId: 'me',
-    });
+    const { data: gmailData } = await gmailClient.users.getProfile(
+      { userId: 'me' },
+      { timeout: this.providerRequestTimeoutMs },
+    );
 
     const fromEmail = gmailData.emailAddress;
 
-    const { data: peopleData } = await peopleClient.people.get({
-      resourceName: 'people/me',
-      personFields: 'names',
-    });
+    const { data: peopleData } = await peopleClient.people.get(
+      {
+        resourceName: 'people/me',
+        personFields: 'names',
+      },
+      { timeout: this.providerRequestTimeoutMs },
+    );
 
     const fromName = peopleData?.names?.[0]?.displayName;
 
