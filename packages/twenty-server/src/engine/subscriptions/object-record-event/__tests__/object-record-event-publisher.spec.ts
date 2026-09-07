@@ -35,6 +35,7 @@ jest.mock(
   'src/engine/twenty-orm/utils/is-record-matching-rls-row-level-permission-predicate.util',
   () => ({
     isRecordMatchingRLSRowLevelPermissionPredicate: jest.fn(),
+    isRecordPotentiallyMatchingQueryFilter: jest.fn(),
   }),
 );
 
@@ -43,6 +44,7 @@ const {
 } = require('src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util');
 const {
   isRecordMatchingRLSRowLevelPermissionPredicate,
+  isRecordPotentiallyMatchingQueryFilter,
 } = require('src/engine/twenty-orm/utils/is-record-matching-rls-row-level-permission-predicate.util');
 
 type MockObjectRecordEvent = {
@@ -269,6 +271,7 @@ describe('ObjectRecordEventPublisher', () => {
     (
       isRecordMatchingRLSRowLevelPermissionPredicate as jest.Mock
     ).mockReturnValue(true);
+    (isRecordPotentiallyMatchingQueryFilter as jest.Mock).mockReturnValue(true);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -426,6 +429,9 @@ describe('ObjectRecordEventPublisher', () => {
     });
 
     it('should not publish events when record does not match RLS filter', async () => {
+      (buildRowLevelPermissionRecordFilter as jest.Mock).mockReturnValue({
+        status: { eq: 'active' },
+      });
       (
         isRecordMatchingRLSRowLevelPermissionPredicate as jest.Mock
       ).mockReturnValue(false);
@@ -461,6 +467,7 @@ describe('ObjectRecordEventPublisher', () => {
       expect(
         mockSubscriptionService.publishToEventStream,
       ).not.toHaveBeenCalled();
+      expect(isRecordPotentiallyMatchingQueryFilter).not.toHaveBeenCalled();
     });
 
     it('should filter restricted fields from events', async () => {
@@ -749,7 +756,7 @@ describe('ObjectRecordEventPublisher', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('should combine query filter with RLS filter', async () => {
+    it('should evaluate query relevance separately from the RLS filter', async () => {
       const rlsFilter: RecordGqlOperationFilter = { status: { eq: 'active' } };
 
       (buildRowLevelPermissionRecordFilter as jest.Mock).mockReturnValue(
@@ -802,12 +809,16 @@ describe('ObjectRecordEventPublisher', () => {
             name: 'Test Company',
             status: 'active',
           }),
-          filter: expect.objectContaining({
-            and: expect.arrayContaining([
-              { name: { eq: 'Test Company' } },
-              { status: { eq: 'active' } },
-            ]),
+          filter: rlsFilter,
+        }),
+      );
+      expect(isRecordPotentiallyMatchingQueryFilter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          record: expect.objectContaining({
+            name: 'Test Company',
+            status: 'active',
           }),
+          filter: { name: { eq: 'Test Company' } },
         }),
       );
     });
@@ -920,9 +931,7 @@ describe('ObjectRecordEventPublisher', () => {
 
       await service.publish(eventBatch as WorkspaceEventBatch<never>);
 
-      expect(
-        isRecordMatchingRLSRowLevelPermissionPredicate,
-      ).toHaveBeenCalledWith(
+      expect(isRecordPotentiallyMatchingQueryFilter).toHaveBeenCalledWith(
         expect.objectContaining({
           record: expect.objectContaining({
             id: 'record-1',

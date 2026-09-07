@@ -1,9 +1,16 @@
-import { FieldMetadataType, type ObjectRecord } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  type ObjectRecord,
+  type RecordGqlOperationFilter,
+} from 'twenty-shared/types';
 
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-import { isRecordMatchingRLSRowLevelPermissionPredicate } from 'src/engine/twenty-orm/utils/is-record-matching-rls-row-level-permission-predicate.util';
+import {
+  isRecordMatchingRLSRowLevelPermissionPredicate,
+  isRecordPotentiallyMatchingQueryFilter,
+} from 'src/engine/twenty-orm/utils/is-record-matching-rls-row-level-permission-predicate.util';
 
 describe('isRecordMatchingRLSRowLevelPermissionPredicate', () => {
   const createMockFlatObjectMetadata = (
@@ -121,6 +128,11 @@ describe('isRecordMatchingRLSRowLevelPermissionPredicate', () => {
         joinColumnName: 'companyId',
       },
     ),
+    createMockFlatFieldMetadata(
+      'list-memberships-id',
+      'listMemberships',
+      FieldMetadataType.RELATION,
+    ),
   ];
 
   const flatObjectMetadata = createMockFlatObjectMetadata(
@@ -139,6 +151,7 @@ describe('isRecordMatchingRLSRowLevelPermissionPredicate', () => {
       addressCity: 'Paris',
     },
     companyId: 'company-1',
+    listMemberships: [],
     deletedAt: null,
     id: 'record-1',
     createdAt: new Date().toISOString(),
@@ -328,5 +341,56 @@ describe('isRecordMatchingRLSRowLevelPermissionPredicate', () => {
         flatFieldMetadataMaps,
       }),
     ).toBe(false);
+  });
+
+  it('treats an unevaluated nested relation query as a potential match without weakening strict matching', () => {
+    // GraphQL emits one-to-many relation filters that this shared type omits.
+    const filter = {
+      listMemberships: {
+        creatorListId: {
+          in: ['list-1'],
+        },
+      },
+    } as unknown as RecordGqlOperationFilter;
+    const args = {
+      record: baseRecord,
+      filter,
+      flatObjectMetadata,
+      flatFieldMetadataMaps,
+    };
+
+    expect(() => isRecordMatchingRLSRowLevelPermissionPredicate(args)).toThrow(
+      'Unexpected value for UUID filter: {"creatorListId":{"in":["list-1"]}}',
+    );
+    expect(isRecordPotentiallyMatchingQueryFilter(args)).toBe(true);
+
+    const recordWithoutRelation = { ...baseRecord };
+    delete recordWithoutRelation.listMemberships;
+    const missingRelationArgs = {
+      ...args,
+      record: recordWithoutRelation,
+    };
+
+    expect(
+      isRecordMatchingRLSRowLevelPermissionPredicate(missingRelationArgs),
+    ).toBe(false);
+    expect(isRecordPotentiallyMatchingQueryFilter(missingRelationArgs)).toBe(
+      true,
+    );
+
+    const relationTargetFieldNamedIsArgs = {
+      ...args,
+      filter: {
+        listMemberships: {
+          is: {
+            eq: 'target-value',
+          },
+        },
+      } as unknown as RecordGqlOperationFilter,
+    };
+
+    expect(
+      isRecordPotentiallyMatchingQueryFilter(relationTargetFieldNamedIsArgs),
+    ).toBe(true);
   });
 });

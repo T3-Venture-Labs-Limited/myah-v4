@@ -7971,6 +7971,7 @@ msgid "Don't sync emails from team@ support@ noreply@..."
 msgstr "team@, support@, noreply@... adreslerinden e-postaları senkronize etme."
 
 #. js-lingui-id: DPfwMq
+#: src/modules/command-menu-item/components/RecordShowSidePanelOpenRecordButton.tsx
 #: src/modules/page-layout/widgets/fields/components/FieldsConfigurationGroupRenameInput.tsx
 msgid "Done"
 msgstr ""

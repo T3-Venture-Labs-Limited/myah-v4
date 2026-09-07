@@ -1,5 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
+import { createStore, Provider } from 'jotai';
+import { recordIndexCreationOptionsComponentState } from '@/object-record/record-index/states/recordIndexCreationOptionsComponentState';
+import { recordIndexOpenRecordInState } from '@/object-record/record-index/states/recordIndexOpenRecordInState';
 
 import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
 import {
@@ -15,7 +18,7 @@ const mockCloseSidePanelMenu = jest.fn();
 const mockCreateOneRecord = jest.fn(async (record: { id: string }) => record);
 const mockNavigate = jest.fn();
 const mockOpenRecordInSidePanel = jest.fn();
-const mockStore = { get: jest.fn(), set: jest.fn() };
+let store = createStore();
 const mockUpsertRecordsInStore = jest.fn();
 const mockOnRecordCreated = jest.fn();
 
@@ -84,11 +87,6 @@ jest.mock(
   }),
 );
 
-jest.mock('jotai', () => ({
-  ...jest.requireActual('jotai'),
-  useStore: () => mockStore,
-}));
-
 jest.mock('@/views/hooks/useGetCurrentViewOnly', () => ({
   useGetCurrentViewOnly: () => ({
     currentView: { openRecordIn: ViewOpenRecordIn.RECORD_PAGE },
@@ -115,7 +113,6 @@ const recordIndexContextValue: RecordIndexContextValue = {
   objectNameSingular: 'creator',
   objectPermissionsByObjectMetadataId: {},
   onIndexRecordsLoaded: jest.fn(),
-  onRecordCreated: mockOnRecordCreated,
   recordFieldByFieldMetadataItemId: {},
   recordIndexId: 'creator-index-list-a',
   viewBarInstanceId: 'creator-index-list-a',
@@ -123,23 +120,31 @@ const recordIndexContextValue: RecordIndexContextValue = {
 type ScopedContextStoreWrapperProps = {
   children: ReactNode;
 };
+type StoreWrapperProps = ScopedContextStoreWrapperProps;
+
+const StoreWrapper = ({ children }: StoreWrapperProps) => (
+  <Provider store={store}>{children}</Provider>
+);
 
 const ScopedContextStoreWrapper = ({
   children,
 }: ScopedContextStoreWrapperProps) => (
-  <ContextStoreComponentInstanceContext.Provider
-    value={{ instanceId: 'creator-list-pane-list-a' }}
-  >
-    <RecordIndexContextProvider value={recordIndexContextValue}>
-      {children}
-    </RecordIndexContextProvider>
-  </ContextStoreComponentInstanceContext.Provider>
+  <StoreWrapper>
+    <ContextStoreComponentInstanceContext.Provider
+      value={{ instanceId: 'creator-list-pane-list-a' }}
+    >
+      <RecordIndexContextProvider value={recordIndexContextValue}>
+        {children}
+      </RecordIndexContextProvider>
+    </ContextStoreComponentInstanceContext.Provider>
+  </StoreWrapper>
 );
 
 describe('useCreateNewIndexRecord', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockStore.get.mockReturnValue(ViewOpenRecordIn.SIDE_PANEL);
+    store = createStore();
+    store.set(recordIndexOpenRecordInState.atom, ViewOpenRecordIn.SIDE_PANEL);
     mockOnRecordCreated.mockResolvedValue(undefined);
   });
 
@@ -170,6 +175,14 @@ describe('useCreateNewIndexRecord', () => {
     mockOnRecordCreated.mockImplementation(async () => {
       expect(mockNavigate).not.toHaveBeenCalled();
     });
+    store.set(
+      recordIndexCreationOptionsComponentState.atomFamily({
+        instanceId: 'creator-list-pane-list-a',
+      }),
+      {
+        onRecordCreated: mockOnRecordCreated,
+      },
+    );
 
     const { result } = renderHook(
       () =>
@@ -190,12 +203,58 @@ describe('useCreateNewIndexRecord', () => {
     expect(mockNavigate).toHaveBeenCalled();
   });
 
-  it('does not require record index context when creating from a headless command', async () => {
-    const { result } = renderHook(() =>
-      useCreateNewIndexRecord({
-        instanceId: 'workflow-index-list-a',
-        objectMetadataItem,
+  it('preserves scoped membership and the naming panel outside React index context', async () => {
+    store.set(
+      recordIndexCreationOptionsComponentState.atomFamily({
+        instanceId: 'creator-index-list-a',
       }),
+      {
+        onRecordCreated: mockOnRecordCreated,
+        shouldCloseAfterCreation: true,
+      },
+    );
+    const { result } = renderHook(
+      () =>
+        useCreateNewIndexRecord({
+          instanceId: 'creator-index-list-a',
+          objectMetadataItem,
+        }),
+      { wrapper: StoreWrapper },
+    );
+
+    await act(async () => {
+      await result.current.createNewIndexRecord();
+    });
+
+    expect(mockOnRecordCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'new-creator-id' }),
+    );
+    expect(mockOpenRecordInSidePanel).toHaveBeenCalledWith({
+      recordId: 'new-creator-id',
+      objectNameSingular: 'creator',
+      isNewRecord: true,
+      shouldCloseAfterCreation: true,
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('does not require record index context when creating from a headless command', async () => {
+    store.set(
+      recordIndexCreationOptionsComponentState.atomFamily({
+        instanceId: 'creator-index-list-a',
+      }),
+      {
+        onRecordCreated: mockOnRecordCreated,
+        shouldCloseAfterCreation: true,
+      },
+    );
+    const { result } = renderHook(
+      () =>
+        useCreateNewIndexRecord({
+          instanceId: 'workflow-index-list-a',
+          objectMetadataItem,
+        }),
+      { wrapper: StoreWrapper },
     );
 
     await act(async () => {

@@ -19,6 +19,7 @@ import {
   type MultiSelectFilter,
   type NotObjectRecordFilter,
   type OrObjectRecordFilter,
+  type ObjectRecord,
   type PhonesFilter,
   type RatingFilter,
   type RawJsonFilter,
@@ -74,32 +75,64 @@ const isNotFilter = (
   filter: RecordGqlOperationFilter,
 ): filter is NotObjectRecordFilter => 'not' in filter && !!filter.not;
 
-export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
+const isUUIDFilter = (value: unknown): value is UUIDFilter => {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    ('eq' in value && typeof value.eq === 'string') ||
+    ('gt' in value && typeof value.gt === 'string') ||
+    ('gte' in value && typeof value.gte === 'string') ||
+    ('lt' in value && typeof value.lt === 'string') ||
+    ('lte' in value && typeof value.lte === 'string') ||
+    ('neq' in value && typeof value.neq === 'string') ||
+    ('in' in value &&
+      Array.isArray(value.in) &&
+      value.in.every((item: unknown) => typeof item === 'string')) ||
+    ('is' in value && (value.is === 'NULL' || value.is === 'NOT_NULL'))
+  );
+};
+
+class UnsupportedRelationFilterForInMemoryMatchingError extends Error {
+  constructor(filter: unknown) {
+    super(`Unexpected value for UUID filter: ${JSON.stringify(filter)}`);
+  }
+}
+
+type RecordFilterMatchArgs = {
+  record: ObjectRecord;
+  filter: RecordGqlOperationFilter;
+  flatObjectMetadata: FlatObjectMetadata;
+  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  shouldIgnoreSoftDeleteDefaultFilter?: boolean;
+};
+
+type InMemoryRecordFilterMatchArgs = RecordFilterMatchArgs & {
+  shouldSignalUnsupportedRelationFilter: boolean;
+};
+
+const isRecordMatchingFilter = ({
   record,
   filter,
   flatObjectMetadata,
   flatFieldMetadataMaps,
   shouldIgnoreSoftDeleteDefaultFilter,
-}: {
-  // oxlint-disable-next-line typescript/no-explicit-any
-  record: any;
-  filter: RecordGqlOperationFilter;
-  flatObjectMetadata: FlatObjectMetadata;
-  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
-  shouldIgnoreSoftDeleteDefaultFilter?: boolean;
-}): boolean => {
+  shouldSignalUnsupportedRelationFilter,
+}: InMemoryRecordFilterMatchArgs): boolean => {
   if (Object.keys(filter).length === 0 && record.deletedAt === null) {
     return true;
   }
 
   if (isImplicitAndFilter(filter)) {
     return Object.entries(filter).every(([filterKey, value]) =>
-      isRecordMatchingRLSRowLevelPermissionPredicate({
+      isRecordMatchingFilter({
         record,
         filter: { [filterKey]: value },
         flatObjectMetadata,
         flatFieldMetadataMaps,
         shouldIgnoreSoftDeleteDefaultFilter,
+        shouldSignalUnsupportedRelationFilter,
       }),
     );
   }
@@ -116,12 +149,13 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
     return (
       filterValue.length === 0 ||
       filterValue.every((andFilter) =>
-        isRecordMatchingRLSRowLevelPermissionPredicate({
+        isRecordMatchingFilter({
           record,
           filter: andFilter,
           flatObjectMetadata,
           flatFieldMetadataMaps,
           shouldIgnoreSoftDeleteDefaultFilter,
+          shouldSignalUnsupportedRelationFilter,
         }),
       )
     );
@@ -134,12 +168,13 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
       return (
         filterValue.length === 0 ||
         filterValue.some((orFilter) =>
-          isRecordMatchingRLSRowLevelPermissionPredicate({
+          isRecordMatchingFilter({
             record,
             filter: orFilter,
             flatObjectMetadata,
             flatFieldMetadataMaps,
             shouldIgnoreSoftDeleteDefaultFilter,
+            shouldSignalUnsupportedRelationFilter,
           }),
         )
       );
@@ -147,12 +182,13 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
 
     if (isObject(filterValue)) {
       // The API considers "or" with an object as an "and"
-      return isRecordMatchingRLSRowLevelPermissionPredicate({
+      return isRecordMatchingFilter({
         record,
         filter: filterValue,
         flatObjectMetadata,
         flatFieldMetadataMaps,
         shouldIgnoreSoftDeleteDefaultFilter,
+        shouldSignalUnsupportedRelationFilter,
       });
     }
 
@@ -168,12 +204,13 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
 
     return (
       isEmptyObject(filterValue) ||
-      !isRecordMatchingRLSRowLevelPermissionPredicate({
+      !isRecordMatchingFilter({
         record,
         filter: filterValue,
         flatObjectMetadata,
         flatFieldMetadataMaps,
         shouldIgnoreSoftDeleteDefaultFilter,
+        shouldSignalUnsupportedRelationFilter,
       })
     );
   }
@@ -221,6 +258,24 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
           '" not found for object metadata item ' +
           flatObjectMetadata.nameSingular,
       );
+    }
+
+    const isRelationField =
+      objectMetadataField.type === FieldMetadataType.RELATION ||
+      objectMetadataField.type === FieldMetadataType.MORPH_RELATION;
+    const isRelationJoinColumn =
+      isRelationField &&
+      computeMorphOrRelationFieldJoinColumnName({
+        name: objectMetadataField.name,
+      }) === filterKey;
+
+    if (
+      shouldSignalUnsupportedRelationFilter &&
+      isRelationField &&
+      !isRelationJoinColumn &&
+      !isUUIDFilter(filterValue)
+    ) {
+      throw new UnsupportedRelationFilterForInMemoryMatchingError(filterValue);
     }
 
     const recordFieldValue = record[filterKey];
@@ -414,10 +469,7 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
       }
       case FieldMetadataType.RELATION:
       case FieldMetadataType.MORPH_RELATION: {
-        const isJoinColumn =
-          computeMorphOrRelationFieldJoinColumnName({
-            name: objectMetadataField.name,
-          }) === filterKey;
+        const isJoinColumn = isRelationJoinColumn;
 
         if (isJoinColumn) {
           return isMatchingUUIDFilter({
@@ -444,4 +496,29 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
       }
     }
   });
+};
+
+export const isRecordMatchingRLSRowLevelPermissionPredicate = (
+  args: RecordFilterMatchArgs,
+): boolean =>
+  isRecordMatchingFilter({
+    ...args,
+    shouldSignalUnsupportedRelationFilter: false,
+  });
+
+export const isRecordPotentiallyMatchingQueryFilter = (
+  args: RecordFilterMatchArgs,
+): boolean => {
+  try {
+    return isRecordMatchingFilter({
+      ...args,
+      shouldSignalUnsupportedRelationFilter: true,
+    });
+  } catch (error) {
+    if (error instanceof UnsupportedRelationFilterForInMemoryMatchingError) {
+      return true;
+    }
+
+    throw error;
+  }
 };
