@@ -132,7 +132,12 @@ describe('workspace mailbox runtime transport security', () => {
       expect.objectContaining({ tls: { rejectUnauthorized: false } }),
     );
     expect(createTransport).toHaveBeenCalledWith(
-      expect.objectContaining({ tls: { rejectUnauthorized: false } }),
+      expect.objectContaining({
+        connectionTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        greetingTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        socketTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        tls: { rejectUnauthorized: false },
+      }),
     );
   });
 

@@ -23,6 +23,10 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS;
 
   private readonly logger = new Logger(GmailMessageOutboundService.name);
+  private readonly providerRequestOptions = {
+    timeout: this.providerRequestTimeoutMs,
+    retry: false,
+  };
 
   constructor(
     private readonly googleOAuth2ClientProvider: GoogleOAuth2ClientProvider,
@@ -41,7 +45,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
 
     await gmailClient.users.getProfile(
       { userId: 'me' },
-      { timeout: this.providerRequestTimeoutMs },
+      this.providerRequestOptions,
     );
   }
 
@@ -62,7 +66,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
             : {}),
         },
       },
-      { timeout: this.providerRequestTimeoutMs },
+      this.providerRequestOptions,
     );
 
     return {
@@ -91,7 +95,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
           },
         },
       },
-      { timeout: this.providerRequestTimeoutMs },
+      this.providerRequestOptions,
     );
 
     const draftExternalId = data.message?.id;
@@ -154,7 +158,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     if (isDefined(draftId)) {
       await gmailClient.users.drafts.delete(
         { userId: 'me', id: draftId },
-        { timeout: this.providerRequestTimeoutMs },
+        this.providerRequestOptions,
       );
 
       return;
@@ -179,7 +183,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
             maxResults: 500,
             pageToken,
           },
-          { timeout: this.providerRequestTimeoutMs },
+          this.providerRequestOptions,
         );
 
       const draft = (data.drafts ?? []).find(
@@ -220,7 +224,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
 
     const { data: gmailData } = await gmailClient.users.getProfile(
       { userId: 'me' },
-      { timeout: this.providerRequestTimeoutMs },
+      this.providerRequestOptions,
     );
 
     const fromEmail = gmailData.emailAddress;
@@ -230,7 +234,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
         resourceName: 'people/me',
         personFields: 'names',
       },
-      { timeout: this.providerRequestTimeoutMs },
+      this.providerRequestOptions,
     );
 
     const fromName = peopleData?.names?.[0]?.displayName;

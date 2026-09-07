@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import {
+  type Client as MicrosoftGraphClient,
+  type GraphRequest,
+  RetryHandlerOptions,
+} from '@microsoft/microsoft-graph-client';
 import { isNonEmptyString } from '@sniptt/guards';
 import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
@@ -10,10 +15,6 @@ import { toMicrosoftRecipients } from 'src/modules/messaging/message-import-mana
 import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
-import {
-  type Client as MicrosoftGraphClient,
-  type GraphRequest,
-} from '@microsoft/microsoft-graph-client';
 import { isDefined } from 'twenty-shared/utils';
 
 @Injectable()
@@ -191,9 +192,12 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
     microsoftClient: MicrosoftGraphClient,
     path: string,
   ): GraphRequest {
-    return microsoftClient.api(path).options({
-      signal: AbortSignal.timeout(this.providerRequestTimeoutMs),
-    });
+    return microsoftClient
+      .api(path)
+      .options({
+        signal: AbortSignal.timeout(this.providerRequestTimeoutMs),
+      })
+      .middlewareOptions([new RetryHandlerOptions(undefined, 0)]);
   }
 
   private composeMicrosoftMessage(
