@@ -64,6 +64,7 @@ describe('workspace mailbox runtime transport security', () => {
   const mockImapConnect = jest.fn().mockResolvedValue(undefined);
   const mockImapLogout = jest.fn().mockResolvedValue(undefined);
   const mockImapOn = jest.fn();
+  const mockSmtpVerify = jest.fn().mockResolvedValue(true);
   const imapClientProvider = new ImapClientProvider(
     secureHttpClientService as unknown as SecureHttpClientService,
     encryptionService as unknown as ConnectedAccountTokenEncryptionService,
@@ -84,12 +85,15 @@ describe('workspace mailbox runtime transport security', () => {
       on: mockImapOn,
     }));
     mockImapConnect.mockResolvedValue(undefined);
-    (createTransport as jest.Mock).mockReturnValue({});
+    mockSmtpVerify.mockResolvedValue(true);
+    (createTransport as jest.Mock).mockReturnValue({ verify: mockSmtpVerify });
   });
 
   it('enforces certificate verification and STARTTLS for Myah runtime clients', async () => {
     await imapClientProvider.getClient(myahAccount.id);
-    await smtpClientProvider.getClient(myahAccount.id);
+    const smtpClient = await smtpClientProvider.getClient(myahAccount.id);
+
+    await smtpClient.verify();
 
     expect(ImapFlow).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -126,7 +130,9 @@ describe('workspace mailbox runtime transport security', () => {
     } as ConnectedAccountEntity);
 
     await imapClientProvider.getClient(myahAccount.id);
-    await smtpClientProvider.getClient(myahAccount.id);
+    const smtpClient = await smtpClientProvider.getClient(myahAccount.id);
+
+    await smtpClient.verify();
 
     expect(ImapFlow).toHaveBeenCalledWith(
       expect.objectContaining({ tls: { rejectUnauthorized: false } }),
