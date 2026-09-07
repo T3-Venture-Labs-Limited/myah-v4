@@ -197,11 +197,19 @@ describe('SettingsBilling customer funding idempotency', () => {
   });
 
   it.each([
-    { buttonName: 'Add $5 credit', enterAmount: true },
-    { buttonName: 'Update payment details', enterAmount: false },
+    {
+      buttonName: 'Add $5 credit',
+      enterAmount: true,
+      replaceExistingPaymentMethod: false,
+    },
+    {
+      buttonName: 'Update payment details',
+      enterAmount: false,
+      replaceExistingPaymentMethod: true,
+    },
   ])(
     'opens managed payment setup with its Stripe key from $buttonName',
-    async ({ buttonName, enterAmount }) => {
+    async ({ buttonName, enterAmount, replaceExistingPaymentMethod }) => {
       const preparePaymentMethod = jest.fn().mockResolvedValue({
         data: {
           prepareManagedProviderCustomerFundingPaymentMethod: {
@@ -230,6 +238,9 @@ describe('SettingsBilling customer funding idempotency', () => {
       await waitFor(() =>
         expect(preparePaymentMethod).toHaveBeenCalledTimes(1),
       );
+      expect(preparePaymentMethod).toHaveBeenCalledWith({
+        variables: { replaceExistingPaymentMethod },
+      });
       await waitFor(() =>
         expect(mockUseStripePromise).toHaveBeenCalledWith('pk_test_managed'),
       );

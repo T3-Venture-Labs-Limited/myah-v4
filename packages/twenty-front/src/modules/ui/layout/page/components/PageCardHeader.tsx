@@ -15,12 +15,14 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 type PageCardHeaderProps = {
   links?: BreadcrumbProps['links'];
   breadcrumb?: ReactNode;
+  leadingAction?: ReactNode;
   icon?: ReactNode;
   title?: ReactNode;
   tag?: ReactNode;
   actionButton?: ReactNode;
   centerTitle?: boolean;
   titleColor?: string;
+  showTitleOnMobile?: boolean;
 };
 
 const StyledHeader = styled.div<{ centerTitle?: boolean }>`
@@ -82,18 +84,21 @@ const StyledRight = styled.div<{ centerTitle?: boolean }>`
 export const PageCardHeader = ({
   links,
   breadcrumb,
+  leadingAction,
   icon,
   title,
   tag,
   actionButton,
   centerTitle = false,
   titleColor,
+  showTitleOnMobile = false,
 }: PageCardHeaderProps) => {
   const isMobile = useIsMobile();
   const isNavigationDrawerExpanded = useNavigationDrawerExpanded();
 
   const hasTitleContent =
-    !isMobile && (isDefined(icon) || isDefined(title) || isDefined(tag));
+    (!isMobile || showTitleOnMobile) &&
+    (isDefined(icon) || isDefined(title) || isDefined(tag));
   const shouldCenterTitle = centerTitle && hasTitleContent;
 
   const titleContent = (
@@ -110,6 +115,7 @@ export const PageCardHeader = ({
         {!isNavigationDrawerExpanded && (
           <NavigationDrawerCollapseButton direction="right" />
         )}
+        {leadingAction}
         {isDefined(breadcrumb)
           ? breadcrumb
           : isDefined(links) && <Breadcrumb links={links} />}

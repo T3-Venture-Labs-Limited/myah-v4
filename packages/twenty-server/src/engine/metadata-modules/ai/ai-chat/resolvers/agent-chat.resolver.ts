@@ -434,6 +434,24 @@ export class AgentChatResolver {
       );
     }
 
+    if (decision.decision === 'approved') {
+      if (this.aiModelRegistryService.getAvailableModels().length === 0) {
+        throw new AiException(
+          'No AI models are available. Configure at least one AI provider.',
+          AiExceptionCode.API_KEY_NOT_CONFIGURED,
+        );
+      }
+
+      this.aiModelRegistryService.validateModelAvailability(
+        modelId ?? workspace.smartModel,
+        workspace,
+      );
+
+      if (!this.isManagedModel(modelId ?? workspace.smartModel, workspace.id)) {
+        await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+      }
+    }
+
     const streamId = generateId();
 
     const { turnId, rollback, shouldResume } =
@@ -459,22 +477,6 @@ export class AgentChatResolver {
     }
 
     try {
-      if (this.aiModelRegistryService.getAvailableModels().length === 0) {
-        throw new AiException(
-          'No AI models are available. Configure at least one AI provider.',
-          AiExceptionCode.API_KEY_NOT_CONFIGURED,
-        );
-      }
-
-      this.aiModelRegistryService.validateModelAvailability(
-        modelId ?? workspace.smartModel,
-        workspace,
-      );
-
-      if (!this.isManagedModel(modelId ?? workspace.smartModel, workspace.id)) {
-        await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
-      }
-
       await this.agentChatStreamingService.enqueueResumeStream({
         threadId,
         userWorkspaceId,

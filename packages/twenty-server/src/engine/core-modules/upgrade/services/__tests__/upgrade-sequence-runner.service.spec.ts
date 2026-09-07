@@ -1,11 +1,20 @@
-import { type WorkspaceIteratorReport } from 'src/database/commands/command-runners/workspace-iterator.service';
+import {
+  type WorkspaceIteratorService,
+  type WorkspaceIteratorReport,
+} from 'src/database/commands/command-runners/workspace-iterator.service';
+import { RepairOrphanedObjectNavigationCommandsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788766265947-repair-orphaned-object-navigation-commands.command';
+import { type ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { type TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { type UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
+import { type WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { type WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 import { type ParsedUpgradeCommandOptions } from 'src/database/commands/upgrade-version-command/upgrade.command';
 import { type UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { type UpgradeCommandRegistryService } from 'src/engine/core-modules/upgrade/services/upgrade-command-registry.service';
 import { type InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import { UpgradeSequenceReaderService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import { UpgradeSequenceRunnerService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-runner.service';
-import { type WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
+import { WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
 import { type UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade-aware/upgrade-aware-entity-metadata.adapter';
 import { type WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
 
@@ -300,4 +309,179 @@ describe('UpgradeSequenceRunnerService', () => {
     expect(runFastInstanceCommand).not.toHaveBeenCalled();
     expect(runSlowInstanceCommand).not.toHaveBeenCalled();
   });
+});
+
+describe('UpgradeSequenceRunnerService orphaned object-navigation repair delivery', () => {
+  it.each([false, true])(
+    'resumes the actual latest completed 2.20 cursor through the real command and workspace runner (dryRun=%s)',
+    async (dryRun) => {
+      const previousCommandName =
+        '2.20.0_SynchronizeMyahCampaignAccountMetadataCommand_1788537600000';
+      const repairCommandName =
+        '2.20.0_RepairOrphanedObjectNavigationCommandsCommand_1788766265947';
+      const previousRunOnWorkspace = jest.fn();
+      const migrate = jest.fn();
+      const emptyMaps = {
+        byUniversalIdentifier: {},
+        universalIdentifierById: {},
+        universalIdentifiersByApplicationId: {},
+      };
+      const command = new RepairOrphanedObjectNavigationCommandsCommand(
+        {} as WorkspaceIteratorService,
+        {
+          findWorkspaceTwentyStandardAndCustomApplicationOrThrow: jest
+            .fn()
+            .mockResolvedValue({
+              twentyStandardFlatApplication: {
+                id: 'standard-app',
+                universalIdentifier: 'standard-app-uid',
+              },
+            }),
+        } as unknown as ApplicationService,
+        {
+          getOrRecompute: jest.fn().mockResolvedValue({
+            flatObjectMetadataMaps: emptyMaps,
+            flatCommandMenuItemMaps: emptyMaps,
+          }),
+        } as unknown as WorkspaceCacheService,
+        {
+          validateBuildAndRunWorkspaceMigration: migrate,
+        } as unknown as WorkspaceMigrationValidateBuildAndRunService,
+      );
+      const runOnWorkspace = jest.spyOn(command, 'runOnWorkspace');
+      const sequenceReader = new UpgradeSequenceReaderService({
+        getBundleForVersion: (version: string) => ({
+          fastInstanceCommands: [],
+          slowInstanceCommands: [],
+          workspaceCommands:
+            version === '2.20.0'
+              ? [
+                  {
+                    command: { runOnWorkspace: previousRunOnWorkspace },
+                    name: previousCommandName,
+                    timestamp: 1788537600000,
+                    version: '2.20.0',
+                  },
+                  {
+                    command,
+                    name: repairCommandName,
+                    timestamp: 1788766265947,
+                    version: '2.20.0',
+                  },
+                ]
+              : [],
+        }),
+      } as unknown as UpgradeCommandRegistryService);
+      const recordUpgradeMigration = jest.fn().mockResolvedValue(undefined);
+      const invalidateInstanceAndAllWorkspacesStatus = jest
+        .fn()
+        .mockResolvedValue(undefined);
+      const workspaceCursors = new Map([
+        [
+          WORKSPACE_ID,
+          {
+            createdAt: new Date('2026-09-04T00:00:00.000Z'),
+            errorMessage: null,
+            executedByVersion: '2.20.0',
+            isInitial: false,
+            name: previousCommandName,
+            status: 'completed' as const,
+            workspaceId: WORKSPACE_ID,
+          },
+        ],
+      ]);
+      const upgradeMigrationService = {
+        getLastAttemptedCommandNameOrThrow: jest.fn().mockResolvedValue({
+          name: previousCommandName,
+          status: 'completed',
+        }),
+        getWorkspaceLastAttemptedCommandNameOrThrow: jest
+          .fn()
+          .mockResolvedValue(workspaceCursors),
+        recordUpgradeMigration,
+      } as unknown as UpgradeMigrationService;
+      const workspaceRunner = new WorkspaceCommandRunnerService(
+        {
+          get: jest.fn().mockReturnValue('2.20.0'),
+        } as unknown as TwentyConfigService,
+        upgradeMigrationService,
+        {
+          invalidateInstanceAndAllWorkspacesStatus,
+        } as unknown as UpgradeStatusService,
+      );
+      const iterate = jest.fn(async ({ callback }) => {
+        await callback({ index: 0, total: 1, workspaceId: WORKSPACE_ID });
+        return {
+          fail: [],
+          success: [{ workspaceId: WORKSPACE_ID }],
+        } satisfies WorkspaceIteratorReport;
+      });
+      const getActiveOrSuspendedWorkspaceIds = jest
+        .fn()
+        .mockResolvedValue([WORKSPACE_ID]);
+      const runFastInstanceCommand = jest.fn();
+      const runSlowInstanceCommand = jest.fn();
+      const runner = new UpgradeSequenceRunnerService(
+        upgradeMigrationService,
+        {
+          runFastInstanceCommand,
+          runSlowInstanceCommand,
+        } as unknown as InstanceCommandRunnerService,
+        workspaceRunner,
+        sequenceReader,
+        {
+          refresh: jest.fn().mockResolvedValue(undefined),
+        } as unknown as UpgradeAwareEntityMetadataAdapter,
+        { iterate } as unknown as WorkspaceIteratorService,
+        {
+          getActiveOrSuspendedWorkspaceIds,
+        } as unknown as WorkspaceVersionService,
+      );
+      const options = dryRun ? { dryRun: true } : {};
+      await expect(
+        runner.run({ options, sequence: sequenceReader.getUpgradeSequence() }),
+      ).resolves.toEqual({ totalSuccesses: 1, totalFailures: 0 });
+      expect(getActiveOrSuspendedWorkspaceIds).toHaveBeenCalled();
+      expect(iterate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceIds: [WORKSPACE_ID],
+          dryRun: options.dryRun,
+        }),
+      );
+      expect(previousRunOnWorkspace).not.toHaveBeenCalled();
+      expect(runFastInstanceCommand).not.toHaveBeenCalled();
+      expect(runSlowInstanceCommand).not.toHaveBeenCalled();
+      expect(runOnWorkspace).toHaveBeenCalledTimes(1);
+      expect(runOnWorkspace).toHaveBeenCalledWith({
+        workspaceId: WORKSPACE_ID,
+        options,
+        dataSource: undefined,
+        index: 0,
+        total: 1,
+      });
+      expect(migrate).not.toHaveBeenCalled();
+      if (dryRun) {
+        expect(recordUpgradeMigration).not.toHaveBeenCalled();
+        expect(invalidateInstanceAndAllWorkspacesStatus).not.toHaveBeenCalled();
+        expect(workspaceCursors.get(WORKSPACE_ID)?.name).toBe(
+          previousCommandName,
+        );
+      } else {
+        expect(recordUpgradeMigration).toHaveBeenCalledTimes(1);
+        expect(recordUpgradeMigration).toHaveBeenCalledWith({
+          name: repairCommandName,
+          workspaceIds: [WORKSPACE_ID],
+          isInstance: false,
+          status: 'completed',
+          executedByVersion: '2.20.0',
+        });
+        expect(invalidateInstanceAndAllWorkspacesStatus).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(recordUpgradeMigration.mock.invocationCallOrder[0]).toBeLessThan(
+          invalidateInstanceAndAllWorkspacesStatus.mock.invocationCallOrder[0],
+        );
+      }
+    },
+  );
 });

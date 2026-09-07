@@ -37,13 +37,13 @@ const StyledSelectedRecordsCount = styled.div`
 export type RecordIndexPageHeaderProps = {
   contextStoreInstanceId: string;
   headerTitle?: string;
-  headerActionButton?: ReactNode;
+  headerLeadingAction?: ReactNode;
 };
 
 export const RecordIndexPageHeader = ({
   contextStoreInstanceId,
   headerTitle,
-  headerActionButton,
+  headerLeadingAction,
 }: RecordIndexPageHeaderProps) => {
   const { findObjectMetadataItemByNamePlural } =
     useFilteredObjectMetadataItems();
@@ -85,6 +85,7 @@ export const RecordIndexPageHeader = ({
 
   return (
     <PageCardHeader
+      leadingAction={headerLeadingAction}
       icon={
         <RecordIndexPageHeaderIcon objectMetadataItem={objectMetadataItem} />
       }
@@ -92,7 +93,6 @@ export const RecordIndexPageHeader = ({
       actionButton={
         !embeddedSurfaceOptions && isDefined(contextStoreCurrentViewId) ? (
           <>
-            {headerActionButton}
             <MyahCreatorBulkActions
               contextStoreInstanceId={contextStoreInstanceId}
             />
@@ -101,6 +101,7 @@ export const RecordIndexPageHeader = ({
           </>
         ) : undefined
       }
+      showTitleOnMobile={isDefined(headerLeadingAction)}
     />
   );
 };

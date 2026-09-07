@@ -7,10 +7,15 @@ describe('validateAndReturnIndexWhereClause', () => {
     expect(validateAndReturnIndexWhereClause('')).toBeUndefined();
   });
 
-  it('should return the clause when it is in the allowlist', () => {
+  it('should return reviewed Campaign default and soft-delete clauses from the allowlist', () => {
     expect(validateAndReturnIndexWhereClause('"deletedAt" IS NULL')).toBe(
       '"deletedAt" IS NULL',
     );
+    expect(
+      validateAndReturnIndexWhereClause(
+        '"deletedAt" IS NULL AND "isDefault" = true',
+      ),
+    ).toBe('"deletedAt" IS NULL AND "isDefault" = true');
   });
 
   it('should throw for clauses not in the allowlist', () => {

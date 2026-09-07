@@ -60,7 +60,7 @@ export type RecordIndexSurfaceProps = {
   hideQueryOnlyRecordFilters?: boolean;
   hideEmptyStateSubtitle?: boolean;
   headerTitle?: string;
-  headerActionButton?: ReactNode;
+  headerLeadingAction?: ReactNode;
   embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;
 };
 
@@ -94,6 +94,41 @@ const RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect = ({
   return null;
 };
 
+type RecordIndexSurfaceCreationOptionsEffectProps = Pick<
+  RecordIndexSurfaceProps,
+  'onRecordCreated' | 'shouldCloseAfterCreation'
+> & {
+  recordIndexId: string;
+};
+
+const RecordIndexSurfaceCreationOptionsEffect = ({
+  recordIndexId,
+  onRecordCreated,
+  shouldCloseAfterCreation,
+}: RecordIndexSurfaceCreationOptionsEffectProps) => {
+  const setRecordIndexCreationOptions = useSetAtomComponentState(
+    recordIndexCreationOptionsComponentState,
+    recordIndexId,
+  );
+
+  useEffect(() => {
+    setRecordIndexCreationOptions({
+      onRecordCreated,
+      shouldCloseAfterCreation,
+    });
+
+    return () => {
+      setRecordIndexCreationOptions({});
+    };
+  }, [
+    onRecordCreated,
+    setRecordIndexCreationOptions,
+    shouldCloseAfterCreation,
+  ]);
+
+  return null;
+};
+
 const RecordIndexSurfaceInstance = ({
   contextStoreInstanceId,
   objectNameSingular,
@@ -109,7 +144,7 @@ const RecordIndexSurfaceInstance = ({
   hideQueryOnlyRecordFilters,
   hideEmptyStateSubtitle,
   headerTitle,
-  headerActionButton,
+  headerLeadingAction,
   embeddedSurfaceOptions,
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
@@ -151,25 +186,15 @@ const RecordIndexSurfaceInstance = ({
     setAreInitialQueryOnlyRecordFiltersInitialized(true);
   }, []);
 
-  useEffect(() => {
-    const creationOptionsState =
-      recordIndexCreationOptionsComponentState.atomFamily({
-        instanceId: recordIndexId,
-      });
-    store.set(creationOptionsState, {
-      onRecordCreated,
-      shouldCloseAfterCreation,
-    });
-
-    return () => {
-      store.set(creationOptionsState, {});
-    };
-  }, [onRecordCreated, recordIndexId, shouldCloseAfterCreation, store]);
-
   return (
     <ContextStoreComponentInstanceContext.Provider
       value={{ instanceId: contextStoreInstanceId }}
     >
+      <RecordIndexSurfaceCreationOptionsEffect
+        recordIndexId={recordIndexId}
+        onRecordCreated={onRecordCreated}
+        shouldCloseAfterCreation={shouldCloseAfterCreation}
+      />
       {isIsolatedSurface && (
         <RecordIndexSurfaceContextStoreInitEffect
           contextStoreInstanceId={contextStoreInstanceId}
@@ -237,7 +262,7 @@ const RecordIndexSurfaceInstance = ({
                       embeddedSurfaceOptions?.hidePageHeader ? undefined : (
                         <RecordIndexPageHeader
                           contextStoreInstanceId={contextStoreInstanceId}
-                          headerActionButton={headerActionButton}
+                          headerLeadingAction={headerLeadingAction}
                           headerTitle={headerTitle}
                         />
                       )
@@ -311,7 +336,7 @@ export const RecordIndexSurface = ({
   hideQueryOnlyRecordFilters,
   hideEmptyStateSubtitle,
   headerTitle,
-  headerActionButton,
+  headerLeadingAction,
   embeddedSurfaceOptions,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -345,7 +370,7 @@ export const RecordIndexSurface = ({
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
       hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
       hideEmptyStateSubtitle={hideEmptyStateSubtitle}
-      headerActionButton={headerActionButton}
+      headerLeadingAction={headerLeadingAction}
       headerTitle={headerTitle}
       embeddedSurfaceOptions={embeddedSurfaceOptions}
     />

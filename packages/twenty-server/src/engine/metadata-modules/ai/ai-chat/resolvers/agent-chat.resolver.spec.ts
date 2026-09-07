@@ -79,6 +79,28 @@ describe('AgentChatResolver managed provider credit preflight', () => {
     };
   };
 
+  it('does not resolve an approval when no model can resume it', async () => {
+    const { resolver, aiModelRegistryService, agentChatService } =
+      buildResolver(true);
+
+    aiModelRegistryService.getAvailableModels.mockReturnValue([]);
+
+    await expect(
+      resolver.resolveAgentChatApproval(
+        'thread-id',
+        'message-id',
+        { decision: 'approved' },
+        modelId,
+        'user-workspace-id',
+        workspace,
+      ),
+    ).rejects.toThrow(
+      'No AI models are available. Configure at least one AI provider.',
+    );
+    expect(agentChatService.resolvePendingApproval).not.toHaveBeenCalled();
+    expect(agentChatService.restorePendingApproval).not.toHaveBeenCalled();
+  });
+
   it.each([
     'sendChatMessage',
     'retryChatMessage',
@@ -115,7 +137,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
               : [
                   'thread-id',
                   'message-id',
-                  { approved: true },
+                  { decision: 'approved' },
                   modelId,
                   'user-workspace-id',
                   workspace,
@@ -166,7 +188,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
             : [
                 'thread-id',
                 'message-id',
-                { approved: true },
+                { decision: 'approved' },
                 modelId,
                 'user-workspace-id',
                 workspace,

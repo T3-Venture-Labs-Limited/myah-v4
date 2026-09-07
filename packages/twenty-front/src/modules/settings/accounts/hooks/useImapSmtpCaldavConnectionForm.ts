@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 
@@ -32,6 +33,7 @@ import { useConnectedImapSmtpCaldavAccount } from './useConnectedImapSmtpCaldavA
 type UseConnectionFormProps = {
   isEditing?: boolean;
   connectedAccountId?: string;
+  returnTo?: string;
 };
 
 export type ConnectionFormData = {
@@ -63,8 +65,10 @@ const DEFAULT_PROTOCOL_VALUES: Record<string, ConnectionParametersInput> = {
 export const useImapSmtpCaldavConnectionForm = ({
   isEditing = false,
   connectedAccountId,
+  returnTo,
 }: UseConnectionFormProps = {}) => {
   const navigate = useNavigateSettings();
+  const navigateApp = useNavigate();
 
   const formMethods = useForm<ConnectionFormData>({
     mode: 'onSubmit',
@@ -182,6 +186,18 @@ export const useImapSmtpCaldavConnectionForm = ({
         const { connectedAccountId: returnedConnectedAccountId } =
           data?.saveImapSmtpCaldavAccount ?? {};
 
+        if (!isEditing && returnTo && returnedConnectedAccountId) {
+          const returnUrl = new URL(returnTo, window.location.origin);
+          returnUrl.searchParams.set(
+            'connectedAccountId',
+            returnedConnectedAccountId,
+          );
+          navigateApp(
+            `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`,
+          );
+          return;
+        }
+
         navigate(SettingsPath.AccountsConfiguration, {
           connectedAccountId: returnedConnectedAccountId,
         });
@@ -198,6 +214,8 @@ export const useImapSmtpCaldavConnectionForm = ({
       connectedAccountId,
       enqueueSuccessSnackBar,
       navigate,
+      navigateApp,
+      returnTo,
       enqueueErrorSnackBar,
     ],
   );

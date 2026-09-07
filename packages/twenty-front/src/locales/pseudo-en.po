@@ -5647,17 +5647,18 @@ msgid "Connect the Instagram account you use for your business. You can review c
 msgstr ""
 
 #. js-lingui-id: YLx3sC
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect via IMAP/SMTP"
 msgstr ""
 
 #. js-lingui-id: Zgi9Fd
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect with Google"
 msgstr ""
 
 #. js-lingui-id: IOfqM8
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect with Microsoft"
 msgstr ""
 
@@ -6186,14 +6187,11 @@ msgstr ""
 #. js-lingui-id: JNCzPW
 #: src/modules/object-metadata/hooks/useSortSubFieldChoicesForField.ts
 #: src/modules/object-record/record-field/ui/form-types/components/FormAddressFieldInput.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
 #: src/modules/settings/data-model/fields/forms/address/constants/DefaultSelectionAddressWithMessages.ts
 #: src/modules/ui/field/input/components/AddressInput.tsx
 msgid "Country"
-msgstr ""
-
-#. js-lingui-id: 87bpog
-#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
-msgid "Country code"
 msgstr ""
 
 #. js-lingui-id: 1NDkH/
@@ -19492,6 +19490,11 @@ msgstr ""
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Select a canceled mailbox pool before recovering capacity."
+msgstr ""
+
+#. js-lingui-id: L+nQeT
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Select a country"
 msgstr ""
 
 #. js-lingui-id: OMoA3j

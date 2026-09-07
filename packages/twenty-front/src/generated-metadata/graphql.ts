@@ -932,6 +932,33 @@ export type CampaignCreatorListRemovalImpactInput = {
   creatorListId: Scalars['UUID']['input'];
 };
 
+export type CampaignEmailAccountCampaignInput = {
+  campaignId: Scalars['UUID']['input'];
+};
+
+export type CampaignEmailAccountDto = {
+  __typename?: 'CampaignEmailAccountDTO';
+  connectedAccountId: Scalars['UUID']['output'];
+  health: CampaignEmailAccountHealth;
+  id: Scalars['UUID']['output'];
+  isDefault: Scalars['Boolean']['output'];
+  label: Scalars['String']['output'];
+  messageChannelId: Scalars['UUID']['output'];
+  provider?: Maybe<Scalars['String']['output']>;
+  senderEmail?: Maybe<Scalars['String']['output']>;
+};
+
+export enum CampaignEmailAccountHealth {
+  AVAILABLE = 'AVAILABLE',
+  RECONNECT_REQUIRED = 'RECONNECT_REQUIRED',
+  UNAVAILABLE = 'UNAVAILABLE'
+}
+
+export type CampaignEmailAccountLinkInput = {
+  campaignAccountId: Scalars['UUID']['input'];
+  campaignId: Scalars['UUID']['input'];
+};
+
 export type CampaignInfluencerCampaignInput = {
   campaignId: Scalars['UUID']['input'];
 };
@@ -2348,6 +2375,11 @@ export type LineChartSeries = {
   label: Scalars['String']['output'];
 };
 
+export type LinkCampaignEmailAccountInput = {
+  campaignId: Scalars['UUID']['input'];
+  connectedAccountId: Scalars['UUID']['input'];
+};
+
 export type ListAppConnectionsInput = {
   providerName?: InputMaybe<Scalars['String']['input']>;
   userWorkspaceId?: InputMaybe<Scalars['String']['input']>;
@@ -3106,12 +3138,14 @@ export type Mutation = {
   installApplication: Application;
   /** @deprecated Use installApplication instead */
   installMarketplaceApp: Scalars['Boolean']['output'];
+  linkCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   pauseManagedEmailWarmup: ManagedEmailActionResult;
   prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup;
   prepareManagedProviderCustomerFundingPaymentAction: ManagedProviderCustomerFundingPaymentAction;
   prepareManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod;
   reconnectWorkspaceMailbox: WorkspaceMailboxConnectionResult;
   refreshEnterpriseValidityToken: Scalars['Boolean']['output'];
+  removeCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   removeCreatorListMemberIntent: Scalars['Boolean']['output'];
   removeQueryFromEventStream: Scalars['Boolean']['output'];
   removeRoleFromAgent: Scalars['Boolean']['output'];
@@ -3140,6 +3174,7 @@ export type Mutation = {
   sendEmailViaEmailingDomain: SendEmailViaDomainOutput;
   sendInvitations: SendInvitations;
   sendMessageCampaign: SendMessageCampaignOutputDto;
+  setDefaultCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   setEnterpriseKey: EnterpriseLicenseInfoDto;
   setManagedEmailCampaignCap: ManagedEmailActionResult;
   setResourceCreditSubscriptionPrice: BillingUpdate;
@@ -3898,6 +3933,11 @@ export type MutationInstallMarketplaceAppArgs = {
 };
 
 
+export type MutationLinkCampaignEmailAccountArgs = {
+  input: LinkCampaignEmailAccountInput;
+};
+
+
 export type MutationPauseManagedEmailWarmupArgs = {
   input: ManagedEmailMailboxActionInput;
 };
@@ -3908,8 +3948,18 @@ export type MutationPrepareManagedProviderCustomerFundingPaymentActionArgs = {
 };
 
 
+export type MutationPrepareManagedProviderCustomerFundingPaymentMethodArgs = {
+  replaceExistingPaymentMethod?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+
 export type MutationReconnectWorkspaceMailboxArgs = {
   input: ReplaceWorkspaceMailboxCredentialsInput;
+};
+
+
+export type MutationRemoveCampaignEmailAccountArgs = {
+  input: CampaignEmailAccountLinkInput;
 };
 
 
@@ -4067,6 +4117,11 @@ export type MutationSendInvitationsArgs = {
 
 export type MutationSendMessageCampaignArgs = {
   input: SendMessageCampaignInput;
+};
+
+
+export type MutationSetDefaultCampaignEmailAccountArgs = {
+  input: CampaignEmailAccountLinkInput;
 };
 
 
@@ -4982,6 +5037,8 @@ export type Query = {
   billingPortalSession: BillingSession;
   campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDto;
   campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDto;
+  campaignEmailAccountCandidates: Array<CampaignEmailAccountDto>;
+  campaignEmailAccounts: Array<CampaignEmailAccountDto>;
   campaignInfluencerSnapshot: CampaignInfluencerSnapshotDto;
   chatMessages: Array<AgentMessage>;
   chatStreamCatchupChunks: ChatStreamCatchupChunks;
@@ -5148,6 +5205,16 @@ export type QueryCampaignCreatorListAdditionCandidatesArgs = {
 
 export type QueryCampaignCreatorListRemovalImpactArgs = {
   input: CampaignCreatorListRemovalImpactInput;
+};
+
+
+export type QueryCampaignEmailAccountCandidatesArgs = {
+  input: CampaignEmailAccountCampaignInput;
+};
+
+
+export type QueryCampaignEmailAccountsArgs = {
+  input: CampaignEmailAccountCampaignInput;
 };
 
 
@@ -8636,7 +8703,9 @@ export type GetManagedProviderCustomerFundingActionQueryVariables = Exact<{
 
 export type GetManagedProviderCustomerFundingActionQuery = { __typename?: 'Query', managedProviderCustomerFundingAction: { __typename?: 'ManagedProviderCustomerFundingHistoryItem', id: string, fundingType: string, state: string, principalCents: string, taxCents?: string | null, collectedTotalCents?: string | null, expiresAt?: string | null, createdAt: string, updatedAt: string, invoiceUrl?: string | null, actionRequired: boolean } };
 
-export type PrepareManagedProviderCustomerFundingPaymentMethodMutationVariables = Exact<{ [key: string]: never; }>;
+export type PrepareManagedProviderCustomerFundingPaymentMethodMutationVariables = Exact<{
+  replaceExistingPaymentMethod?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
 
 
 export type PrepareManagedProviderCustomerFundingPaymentMethodMutation = { __typename?: 'Mutation', prepareManagedProviderCustomerFundingPaymentMethod: { __typename?: 'ManagedProviderCustomerFundingPaymentMethod', ready: boolean, clientSecret?: string | null, publishableKey?: string | null, setupIntentId?: string | null, billingSummary?: { __typename?: 'ManagedProviderCustomerFundingBillingSummary', name?: string | null, paymentMethodReady: boolean, address: { __typename?: 'ManagedProviderCustomerFundingBillingAddress', city?: string | null, country?: string | null, line1?: string | null, line2?: string | null, postalCode?: string | null, state?: string | null }, card?: { __typename?: 'ManagedProviderCustomerFundingCardSummary', brand: string, expiryMonth: number, expiryYear: number, last4: string } | null, taxId?: { __typename?: 'ManagedProviderCustomerFundingTaxIdSummary', country?: string | null, type: string } | null } | null } };
@@ -9924,7 +9993,7 @@ export const UpdateOneApplicationVariableDocument = {"kind":"Document","definiti
 export const ApplicationConnectionProvidersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ApplicationConnectionProviders"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"applicationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"applicationConnectionProviders"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"applicationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"applicationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"applicationId"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"oauth"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"scopes"}},{"kind":"Field","name":{"kind":"Name","value":"isClientCredentialsConfigured"}}]}}]}}]}}]} as unknown as DocumentNode<ApplicationConnectionProvidersQuery, ApplicationConnectionProvidersQueryVariables>;
 export const GetManagedProviderBillingStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedProviderBillingStatus"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedProviderBillingStatus"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"available"}},{"kind":"Field","name":{"kind":"Name","value":"prepaidBalanceCents"}},{"kind":"Field","name":{"kind":"Name","value":"pendingOperationCount"}},{"kind":"Field","name":{"kind":"Name","value":"reconciliationRequiredOperationCount"}},{"kind":"Field","name":{"kind":"Name","value":"customerFundingAvailable"}},{"kind":"Field","name":{"kind":"Name","value":"customerFundingPaymentMethodReady"}},{"kind":"Field","name":{"kind":"Name","value":"customerFundingPolicy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"incrementCents"}},{"kind":"Field","name":{"kind":"Name","value":"minimumPrincipalCents"}},{"kind":"Field","name":{"kind":"Name","value":"maximumPrincipalCents"}},{"kind":"Field","name":{"kind":"Name","value":"suggestedPrincipalCents"}}]}},{"kind":"Field","name":{"kind":"Name","value":"customerFundingBillingSummary"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"paymentMethodReady"}},{"kind":"Field","name":{"kind":"Name","value":"address"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"city"}},{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"line1"}},{"kind":"Field","name":{"kind":"Name","value":"line2"}},{"kind":"Field","name":{"kind":"Name","value":"postalCode"}},{"kind":"Field","name":{"kind":"Name","value":"state"}}]}},{"kind":"Field","name":{"kind":"Name","value":"card"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"brand"}},{"kind":"Field","name":{"kind":"Name","value":"expiryMonth"}},{"kind":"Field","name":{"kind":"Name","value":"expiryYear"}},{"kind":"Field","name":{"kind":"Name","value":"last4"}}]}},{"kind":"Field","name":{"kind":"Name","value":"taxId"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"customerFundingHistory"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"ManagedProviderCustomerFundingItem"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"ManagedProviderCustomerFundingItem"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedProviderCustomerFundingHistoryItem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"fundingType"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"principalCents"}},{"kind":"Field","name":{"kind":"Name","value":"taxCents"}},{"kind":"Field","name":{"kind":"Name","value":"collectedTotalCents"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceUrl"}},{"kind":"Field","name":{"kind":"Name","value":"actionRequired"}}]}}]} as unknown as DocumentNode<GetManagedProviderBillingStatusQuery, GetManagedProviderBillingStatusQueryVariables>;
 export const GetManagedProviderCustomerFundingActionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedProviderCustomerFundingAction"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"actionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedProviderCustomerFundingAction"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"actionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"actionId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"ManagedProviderCustomerFundingItem"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"ManagedProviderCustomerFundingItem"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedProviderCustomerFundingHistoryItem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"fundingType"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"principalCents"}},{"kind":"Field","name":{"kind":"Name","value":"taxCents"}},{"kind":"Field","name":{"kind":"Name","value":"collectedTotalCents"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceUrl"}},{"kind":"Field","name":{"kind":"Name","value":"actionRequired"}}]}}]} as unknown as DocumentNode<GetManagedProviderCustomerFundingActionQuery, GetManagedProviderCustomerFundingActionQueryVariables>;
-export const PrepareManagedProviderCustomerFundingPaymentMethodDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"PrepareManagedProviderCustomerFundingPaymentMethod"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"prepareManagedProviderCustomerFundingPaymentMethod"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"ready"}},{"kind":"Field","name":{"kind":"Name","value":"clientSecret"}},{"kind":"Field","name":{"kind":"Name","value":"publishableKey"}},{"kind":"Field","name":{"kind":"Name","value":"setupIntentId"}},{"kind":"Field","name":{"kind":"Name","value":"billingSummary"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"paymentMethodReady"}},{"kind":"Field","name":{"kind":"Name","value":"address"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"city"}},{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"line1"}},{"kind":"Field","name":{"kind":"Name","value":"line2"}},{"kind":"Field","name":{"kind":"Name","value":"postalCode"}},{"kind":"Field","name":{"kind":"Name","value":"state"}}]}},{"kind":"Field","name":{"kind":"Name","value":"card"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"brand"}},{"kind":"Field","name":{"kind":"Name","value":"expiryMonth"}},{"kind":"Field","name":{"kind":"Name","value":"expiryYear"}},{"kind":"Field","name":{"kind":"Name","value":"last4"}}]}},{"kind":"Field","name":{"kind":"Name","value":"taxId"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]}}]}}]} as unknown as DocumentNode<PrepareManagedProviderCustomerFundingPaymentMethodMutation, PrepareManagedProviderCustomerFundingPaymentMethodMutationVariables>;
+export const PrepareManagedProviderCustomerFundingPaymentMethodDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"PrepareManagedProviderCustomerFundingPaymentMethod"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"replaceExistingPaymentMethod"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}},"defaultValue":{"kind":"BooleanValue","value":false}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"prepareManagedProviderCustomerFundingPaymentMethod"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"replaceExistingPaymentMethod"},"value":{"kind":"Variable","name":{"kind":"Name","value":"replaceExistingPaymentMethod"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"ready"}},{"kind":"Field","name":{"kind":"Name","value":"clientSecret"}},{"kind":"Field","name":{"kind":"Name","value":"publishableKey"}},{"kind":"Field","name":{"kind":"Name","value":"setupIntentId"}},{"kind":"Field","name":{"kind":"Name","value":"billingSummary"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"paymentMethodReady"}},{"kind":"Field","name":{"kind":"Name","value":"address"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"city"}},{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"line1"}},{"kind":"Field","name":{"kind":"Name","value":"line2"}},{"kind":"Field","name":{"kind":"Name","value":"postalCode"}},{"kind":"Field","name":{"kind":"Name","value":"state"}}]}},{"kind":"Field","name":{"kind":"Name","value":"card"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"brand"}},{"kind":"Field","name":{"kind":"Name","value":"expiryMonth"}},{"kind":"Field","name":{"kind":"Name","value":"expiryYear"}},{"kind":"Field","name":{"kind":"Name","value":"last4"}}]}},{"kind":"Field","name":{"kind":"Name","value":"taxId"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]}}]}}]} as unknown as DocumentNode<PrepareManagedProviderCustomerFundingPaymentMethodMutation, PrepareManagedProviderCustomerFundingPaymentMethodMutationVariables>;
 export const CompleteManagedProviderCustomerFundingPaymentMethodDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CompleteManagedProviderCustomerFundingPaymentMethod"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"setupIntentId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"name"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"line1"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"line2"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"city"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"state"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"postalCode"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"country"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"taxIdType"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"taxIdValue"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"completeManagedProviderCustomerFundingPaymentMethod"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"setupIntentId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"setupIntentId"}}},{"kind":"Argument","name":{"kind":"Name","value":"name"},"value":{"kind":"Variable","name":{"kind":"Name","value":"name"}}},{"kind":"Argument","name":{"kind":"Name","value":"line1"},"value":{"kind":"Variable","name":{"kind":"Name","value":"line1"}}},{"kind":"Argument","name":{"kind":"Name","value":"line2"},"value":{"kind":"Variable","name":{"kind":"Name","value":"line2"}}},{"kind":"Argument","name":{"kind":"Name","value":"city"},"value":{"kind":"Variable","name":{"kind":"Name","value":"city"}}},{"kind":"Argument","name":{"kind":"Name","value":"state"},"value":{"kind":"Variable","name":{"kind":"Name","value":"state"}}},{"kind":"Argument","name":{"kind":"Name","value":"postalCode"},"value":{"kind":"Variable","name":{"kind":"Name","value":"postalCode"}}},{"kind":"Argument","name":{"kind":"Name","value":"country"},"value":{"kind":"Variable","name":{"kind":"Name","value":"country"}}},{"kind":"Argument","name":{"kind":"Name","value":"taxIdType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"taxIdType"}}},{"kind":"Argument","name":{"kind":"Name","value":"taxIdValue"},"value":{"kind":"Variable","name":{"kind":"Name","value":"taxIdValue"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"ready"}},{"kind":"Field","name":{"kind":"Name","value":"clientSecret"}},{"kind":"Field","name":{"kind":"Name","value":"publishableKey"}},{"kind":"Field","name":{"kind":"Name","value":"setupIntentId"}},{"kind":"Field","name":{"kind":"Name","value":"billingSummary"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"paymentMethodReady"}},{"kind":"Field","name":{"kind":"Name","value":"address"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"city"}},{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"line1"}},{"kind":"Field","name":{"kind":"Name","value":"line2"}},{"kind":"Field","name":{"kind":"Name","value":"postalCode"}},{"kind":"Field","name":{"kind":"Name","value":"state"}}]}},{"kind":"Field","name":{"kind":"Name","value":"card"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"brand"}},{"kind":"Field","name":{"kind":"Name","value":"expiryMonth"}},{"kind":"Field","name":{"kind":"Name","value":"expiryYear"}},{"kind":"Field","name":{"kind":"Name","value":"last4"}}]}},{"kind":"Field","name":{"kind":"Name","value":"taxId"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]}}]}}]} as unknown as DocumentNode<CompleteManagedProviderCustomerFundingPaymentMethodMutation, CompleteManagedProviderCustomerFundingPaymentMethodMutationVariables>;
 export const RequestManagedProviderCustomerFundingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RequestManagedProviderCustomerFunding"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"principalCents"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"idempotencyKey"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"requestManagedProviderCustomerFunding"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"principalCents"},"value":{"kind":"Variable","name":{"kind":"Name","value":"principalCents"}}},{"kind":"Argument","name":{"kind":"Name","value":"idempotencyKey"},"value":{"kind":"Variable","name":{"kind":"Name","value":"idempotencyKey"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"ManagedProviderCustomerFundingItem"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"ManagedProviderCustomerFundingItem"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedProviderCustomerFundingHistoryItem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"fundingType"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"principalCents"}},{"kind":"Field","name":{"kind":"Name","value":"taxCents"}},{"kind":"Field","name":{"kind":"Name","value":"collectedTotalCents"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceUrl"}},{"kind":"Field","name":{"kind":"Name","value":"actionRequired"}}]}}]} as unknown as DocumentNode<RequestManagedProviderCustomerFundingMutation, RequestManagedProviderCustomerFundingMutationVariables>;
 export const PrepareManagedProviderCustomerFundingPaymentActionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"PrepareManagedProviderCustomerFundingPaymentAction"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"actionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"prepareManagedProviderCustomerFundingPaymentAction"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"actionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"actionId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"clientSecret"}},{"kind":"Field","name":{"kind":"Name","value":"publishableKey"}}]}}]}}]} as unknown as DocumentNode<PrepareManagedProviderCustomerFundingPaymentActionMutation, PrepareManagedProviderCustomerFundingPaymentActionMutationVariables>;

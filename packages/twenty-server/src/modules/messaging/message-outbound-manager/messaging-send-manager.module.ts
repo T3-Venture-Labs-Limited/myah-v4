@@ -12,6 +12,7 @@ import { MessagingSmtpDriverModule } from 'src/modules/messaging/message-import-
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { MessagingMessageCleanerModule } from 'src/modules/messaging/message-cleaner/messaging-message-cleaner.module';
 import { EmailGroupMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/email-group/services/email-group-message-outbound.service';
+import { E2eFixtureGmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/e2e-fixture-gmail-message-outbound.service';
 import { GmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/gmail-message-outbound.service';
 import { ImapSmtpMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/imap/services/imap-smtp-message-outbound.service';
 import { MicrosoftMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/microsoft/services/microsoft-message-outbound.service';
@@ -19,6 +20,14 @@ import { MessagingDraftSendService } from 'src/modules/messaging/message-outboun
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import { SendEmailService } from 'src/modules/messaging/message-outbound-manager/services/send-email.service';
 import { SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
+import { isE2eTestFixturesEnabled } from 'src/engine/core-modules/twenty-config/utils/is-e2e-test-fixtures-enabled.util';
+
+const gmailMessageOutboundProvider = isE2eTestFixturesEnabled()
+  ? {
+      provide: GmailMessageOutboundService,
+      useClass: E2eFixtureGmailMessageOutboundService,
+    }
+  : GmailMessageOutboundService;
 
 @Module({
   imports: [
@@ -35,7 +44,7 @@ import { SentMessagePersistenceService } from 'src/modules/messaging/message-out
     ]),
   ],
   providers: [
-    GmailMessageOutboundService,
+    gmailMessageOutboundProvider,
     MicrosoftMessageOutboundService,
     ImapSmtpMessageOutboundService,
     EmailGroupMessageOutboundService,

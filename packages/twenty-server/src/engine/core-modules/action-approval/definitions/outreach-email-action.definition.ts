@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { isNonEmptyString } from '@sniptt/guards';
 import {
   ConnectedAccountProvider,
+  MessageChannelType,
   type ObjectRecord,
 } from 'twenty-shared/types';
 import { emailSchema } from 'twenty-shared/utils';
@@ -17,7 +18,15 @@ import {
   type OutreachEmailExpectedActionBinding,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { isCanonicalManagedMailboxId } from 'src/engine/core-modules/outreach-email/utils/managed-mailbox-id.util';
+import { readCampaignCreatorManagedMailboxId } from 'src/engine/core-modules/outreach-email/utils/read-campaign-creator-managed-mailbox-id.util';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
+import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
+import {
+  CampaignEmailAccountHealth,
+  type CampaignEmailAccountDTO,
+} from 'src/modules/myah-campaign/dtos/campaign-account.dto';
+import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
@@ -29,6 +38,8 @@ import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channe
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
@@ -43,6 +54,8 @@ const CAMPAIGN_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
   '9a09d54a-d464-5692-ac74-70527fb00ddd';
 const MESSAGE_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
   '20202020-3f6b-4425-80ab-e468899ab4b2';
+const CAMPAIGN_ACCOUNT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
+  '5999e4dd-01a4-5ef5-8c95-754bf079defb';
 const SOURCE_GRAPH_UNAVAILABLE = 'Outreach email source graph is unavailable';
 
 export const OutreachEmailActionProposalInputZodSchema = z
@@ -63,6 +76,7 @@ type OutreachEmailActionRecord = ObjectRecord & {
   body: string | null;
   contentDigest: string | null;
   recipientEmail: string | null;
+  campaignAccountId: string | null;
   connectedAccountId: string | null;
   messageChannelId: string | null;
   senderEmail: string | null;
@@ -104,13 +118,15 @@ type OutreachEmailEvidenceObjectMetadataIds = {
   creator: string;
   campaign: string;
   message: string;
+  campaignAccount: string;
 };
 
 type OutreachEmailExpectedActionBindingWithWorkspace =
   OutreachEmailExpectedActionBinding & { workspaceId: string };
 
 export type CanonicalOutreachEmailGraph = {
-  managedMailboxId: string;
+  managedMailboxId: string | null;
+  campaignAccountId: string | null;
   outreachActionId: string;
   campaignCreatorId: string;
   creatorId: string;
@@ -183,6 +199,8 @@ export class OutreachEmailActionDefinition {
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly managedEmailCampaignEligibilityService: ManagedEmailCampaignEligibilityService,
+    private readonly campaignAccountService: CampaignAccountService,
+    private readonly messagingMessageOutboundService: MessagingMessageOutboundService,
   ) {}
 
   async propose({
@@ -242,13 +260,18 @@ export class OutreachEmailActionDefinition {
       binding.draftId,
       binding.initiatorUserWorkspaceId,
     );
-    await this.managedEmailCampaignEligibilityService.assertEligible({
-      workspaceId,
-      managedMailboxId: graph.managedMailboxId,
-      connectedAccountId: graph.connectedAccountId,
-      messageChannelId: graph.messageChannelId,
-      isFollowUp: graph.inReplyTo !== null,
-    });
+    if (graph.managedMailboxId !== null) {
+      await this.managedEmailCampaignEligibilityService.assertEligible({
+        workspaceId,
+        managedMailboxId: graph.managedMailboxId,
+        connectedAccountId: graph.connectedAccountId,
+        messageChannelId: graph.messageChannelId,
+        isFollowUp: graph.inReplyTo !== null,
+      });
+    }
+    await this.messagingMessageOutboundService.assertConnectedAccountSendable(
+      graph.connectedAccount,
+    );
     const evidenceObjectMetadataIds =
       await this.resolveEvidenceObjectMetadataIds(workspaceId);
     const expectedActionBinding = this.buildExpectedActionBinding({
@@ -293,6 +316,7 @@ export class OutreachEmailActionDefinition {
             await this.globalWorkspaceOrmManager.getRepository<OutreachEmailActionRecord>(
               expectedActionBinding.workspaceId,
               'outreachAction',
+              { shouldBypassPermissionChecks: true },
             );
 
           return actionRepository.update(
@@ -304,6 +328,10 @@ export class OutreachEmailActionDefinition {
               body: graph.body,
               contentDigest: expectedActionBinding.contentDigest,
               recipientEmail: graph.recipientEmail,
+              campaignAccountId:
+                graph.campaignAccountId === null
+                  ? IsNull()
+                  : graph.campaignAccountId,
               connectedAccountId: graph.connectedAccountId,
               messageChannelId: graph.messageChannelId,
               senderEmail: graph.senderEmail,
@@ -433,6 +461,14 @@ export class OutreachEmailActionDefinition {
       },
     ];
 
+    if (graph.campaignAccountId !== null) {
+      evidenceLinks.push({
+        objectMetadataId: evidenceObjectMetadataIds.campaignAccount,
+        recordId: graph.campaignAccountId,
+        role: 'campaign_account',
+      });
+    }
+
     if (graph.parentMessageRecordId) {
       evidenceLinks.push({
         objectMetadataId: evidenceObjectMetadataIds.message,
@@ -455,6 +491,7 @@ export class OutreachEmailActionDefinition {
       sendingAccountFingerprint: computeActionContentDigest(
         JSON.stringify([
           graph.managedMailboxId,
+          graph.campaignAccountId,
           graph.connectedAccountId,
           graph.messageChannelId,
           graph.senderEmail,
@@ -463,6 +500,7 @@ export class OutreachEmailActionDefinition {
       ),
       actionContextFingerprint: computeActionContentDigest(
         JSON.stringify([
+          graph.providerDraftExternalId,
           graph.inReplyTo,
           graph.messageThreadId,
           graph.providerThreadExternalId,
@@ -520,6 +558,7 @@ export class OutreachEmailActionDefinition {
           CREATOR_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
           CAMPAIGN_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
           MESSAGE_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+          CAMPAIGN_ACCOUNT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
         ]),
       },
       select: { id: true, workspaceId: true, universalIdentifier: true },
@@ -545,18 +584,29 @@ export class OutreachEmailActionDefinition {
     const message = findMetadataId(
       MESSAGE_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
     );
+    const campaignAccount = findMetadataId(
+      CAMPAIGN_ACCOUNT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+    );
 
     if (
       !outreachAction ||
       !campaignCreator ||
       !creator ||
       !campaign ||
-      !message
+      !message ||
+      !campaignAccount
     ) {
       throw new Error(SOURCE_GRAPH_UNAVAILABLE);
     }
 
-    return { outreachAction, campaignCreator, creator, campaign, message };
+    return {
+      outreachAction,
+      campaignCreator,
+      creator,
+      campaign,
+      message,
+      campaignAccount,
+    };
   }
 
   private async loadCanonicalGraph(
@@ -576,6 +626,10 @@ export class OutreachEmailActionDefinition {
       workspace,
       initiatorUserWorkspaceId,
     );
+    const permissionOptions = await this.resolveUserPermissionOptions(
+      workspaceId,
+      authContext,
+    );
     const graph =
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
@@ -583,31 +637,37 @@ export class OutreachEmailActionDefinition {
             await this.globalWorkspaceOrmManager.getRepository<OutreachEmailActionRecord>(
               workspaceId,
               'outreachAction',
+              permissionOptions,
             );
           const campaignCreatorRepository =
             await this.globalWorkspaceOrmManager.getRepository<CampaignCreatorRecord>(
               workspaceId,
               'campaignCreator',
+              permissionOptions,
             );
           const creatorRepository =
             await this.globalWorkspaceOrmManager.getRepository<CreatorRecord>(
               workspaceId,
               'creator',
+              permissionOptions,
             );
           const campaignRepository =
             await this.globalWorkspaceOrmManager.getRepository<CampaignRecord>(
               workspaceId,
               'campaign',
+              permissionOptions,
             );
           const messageRepository =
             await this.globalWorkspaceOrmManager.getRepository<MessageWorkspaceEntity>(
               workspaceId,
               'message',
+              permissionOptions,
             );
           const associationRepository =
             await this.globalWorkspaceOrmManager.getRepository<MessageChannelMessageAssociationWorkspaceEntity>(
               workspaceId,
               'messageChannelMessageAssociation',
+              permissionOptions,
             );
           const action = await actionRepository.findOneBy({
             id: outreachActionId,
@@ -638,10 +698,10 @@ export class OutreachEmailActionDefinition {
               }),
               this.messageChannelRepository.find({
                 where: {
-                  id: action.messageChannelId ?? '',
                   workspaceId,
                   connectedAccountId: action.connectedAccountId ?? '',
                   handle: action.senderEmail ?? '',
+                  type: MessageChannelType.EMAIL,
                 },
                 take: 2,
               }),
@@ -700,8 +760,25 @@ export class OutreachEmailActionDefinition {
     const inReplyTo = graph.action.inReplyTo?.trim() || null;
     const recipientLabel = graph.creator.name?.trim();
     const campaignLabel = graph.campaign.name?.trim();
-    const managedMailboxId =
-      graph.campaignCreator.assignedManagedMailboxId?.trim();
+    const rawAssignedManagedMailboxId =
+      await readCampaignCreatorManagedMailboxId(
+        this.globalWorkspaceOrmManager,
+        workspaceId,
+        graph.campaignCreator.id,
+      );
+    const campaignAccountId = graph.action.campaignAccountId?.trim() || null;
+    const executionReceiptId = graph.action.executionReceiptId?.trim() || null;
+    const sentHeaderMessageId =
+      graph.action.sentHeaderMessageId?.trim() || null;
+    const providerMessageExternalId =
+      graph.action.providerMessageExternalId?.trim() || null;
+    const messageId = graph.action.messageId?.trim() || null;
+    const isManagedSender = rawAssignedManagedMailboxId !== null;
+    const managedMailboxId = isCanonicalManagedMailboxId(
+      rawAssignedManagedMailboxId,
+    )
+      ? rawAssignedManagedMailboxId
+      : null;
     const expectedContentDigest =
       isNonEmptyString(subject) && isNonEmptyString(body)
         ? computeActionContentDigest(JSON.stringify([subject, body]))
@@ -722,11 +799,16 @@ export class OutreachEmailActionDefinition {
       !isNonEmptyString(providerDraftExternalId) ||
       !isNonEmptyString(recipientLabel) ||
       !isNonEmptyString(campaignLabel) ||
-      !isNonEmptyString(managedMailboxId) ||
-      graph.action.executionReceiptId !== null ||
-      graph.action.sentHeaderMessageId !== null ||
-      graph.action.providerMessageExternalId !== null ||
-      graph.action.messageId !== null ||
+      (isManagedSender &&
+        (!isCanonicalManagedMailboxId(rawAssignedManagedMailboxId) ||
+          campaignAccountId !== null)) ||
+      (!isManagedSender &&
+        (typeof campaignAccountId !== 'string' ||
+          !z.uuid().safeParse(campaignAccountId).success)) ||
+      executionReceiptId !== null ||
+      sentHeaderMessageId !== null ||
+      providerMessageExternalId !== null ||
+      messageId !== null ||
       graph.action.completedAt !== null ||
       graph.campaignCreator.id !== graph.action.campaignCreatorId ||
       graph.campaignCreator.creatorId !== graph.creator.id ||
@@ -752,12 +834,29 @@ export class OutreachEmailActionDefinition {
       throw new Error(SOURCE_GRAPH_UNAVAILABLE);
     }
 
+    const canonicalCampaignAccountId = campaignAccountId;
+
+    if (canonicalCampaignAccountId !== null) {
+      await this.assertLinkedCampaignDefault(
+        {
+          campaignId: graph.campaign.id,
+          campaignAccountId: canonicalCampaignAccountId,
+          connectedAccountId: graph.connectedAccount.id,
+          messageChannelId: graph.messageChannel.id,
+          senderEmail,
+          senderDisplayName,
+        },
+        workspaceId,
+      );
+    }
+
     return {
       outreachActionId: graph.action.id,
       campaignCreatorId: graph.campaignCreator.id,
       creatorId: graph.creator.id,
       campaignId: graph.campaign.id,
       managedMailboxId,
+      campaignAccountId: canonicalCampaignAccountId,
       subject,
       body,
       recipientEmail,
@@ -774,6 +873,45 @@ export class OutreachEmailActionDefinition {
       parentMessageRecordId: graph.parentMessageRecordId,
       connectedAccount: graph.connectedAccount,
     };
+  }
+
+  private async assertLinkedCampaignDefault(
+    graph: Pick<
+      CanonicalOutreachEmailGraph,
+      | 'campaignId'
+      | 'campaignAccountId'
+      | 'connectedAccountId'
+      | 'messageChannelId'
+      | 'senderEmail'
+      | 'senderDisplayName'
+    >,
+    workspaceId: string,
+  ): Promise<void> {
+    if (graph.campaignAccountId === null) {
+      throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+    }
+
+    let defaultAccount: CampaignEmailAccountDTO;
+    try {
+      defaultAccount =
+        await this.campaignAccountService.resolveDefaultEmailAccount(
+          graph.campaignId,
+          workspaceId,
+        );
+    } catch {
+      throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+    }
+
+    if (
+      !defaultAccount.isDefault ||
+      defaultAccount.health !== CampaignEmailAccountHealth.AVAILABLE ||
+      defaultAccount.id !== graph.campaignAccountId ||
+      defaultAccount.connectedAccountId !== graph.connectedAccountId ||
+      defaultAccount.messageChannelId !== graph.messageChannelId ||
+      defaultAccount.senderEmail !== graph.senderEmail
+    ) {
+      throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+    }
   }
 
   private async resolveParentMessageRecordId({
@@ -872,6 +1010,28 @@ export class OutreachEmailActionDefinition {
       default:
         return false;
     }
+  }
+
+  private async resolveUserPermissionOptions(
+    workspaceId: string,
+    authContext: Awaited<ReturnType<typeof buildUserAuthContext>>,
+  ): Promise<RolePermissionConfig> {
+    const { userWorkspaceRoleMap, apiKeyRoleMap } =
+      await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'userWorkspaceRoleMap',
+        'apiKeyRoleMap',
+      ]);
+    const permissionOptions = resolveRolePermissionConfig({
+      authContext,
+      userWorkspaceRoleMap,
+      apiKeyRoleMap,
+    });
+
+    if (!permissionOptions) {
+      throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+    }
+
+    return permissionOptions;
   }
 
   private async buildInitiatorAuthContext(

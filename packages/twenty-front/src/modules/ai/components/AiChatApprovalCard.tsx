@@ -294,8 +294,14 @@ export const AiChatApprovalCard = ({
       : isActionApprovalProposalDecidable && exactProposal !== undefined
         ? {
             ...exactActionCopy[exactProposal.action],
-            actionKind: 'external_write',
-            riskLevel: 'medium',
+            actionKind:
+              exactProposal.action === 'send_outreach_email'
+                ? 'email_send'
+                : 'external_write',
+            riskLevel:
+              exactProposal.action === 'send_outreach_email'
+                ? 'high'
+                : 'medium',
             preview: { format: 'text', content: exactProposal.body },
           }
         : {

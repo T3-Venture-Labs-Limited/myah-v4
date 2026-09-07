@@ -116,6 +116,17 @@ describe('GmailMessageOutboundService', () => {
     jest.restoreAllMocks();
   });
 
+  it('preflights Gmail credentials without creating a draft', async () => {
+    await service.assertSendable(
+      buildConnectedAccount(ConnectedAccountProvider.GOOGLE),
+    );
+
+    expect(mockGmailClient.users.getProfile).toHaveBeenCalledWith({
+      userId: 'me',
+    });
+    expect(mockCreateDraft).not.toHaveBeenCalled();
+  });
+
   it('should send multipart/alternative email with both text and HTML parts via Gmail', async () => {
     const sendMessageInput = {
       to: 'recipient@example.com',

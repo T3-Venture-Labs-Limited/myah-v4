@@ -8,7 +8,7 @@ import { In } from 'typeorm';
 import { getFlatFieldsFromFlatObjectMetadata } from 'src/engine/api/graphql/workspace-schema-builder/utils/get-flat-fields-for-flat-object-metadata.util';
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
-import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { InjectObjectMetadataRepository } from 'src/engine/object-metadata-repository/object-metadata-repository.decorator';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
@@ -19,6 +19,7 @@ import { TaskWorkspaceEntity } from 'src/modules/task/standard-objects/task.work
 import { TimelineActivityRepository } from 'src/modules/timeline/repositories/timeline-activity.repository';
 import { TimelineActivityWorkspaceEntity } from 'src/modules/timeline/standard-objects/timeline-activity.workspace-entity';
 import { type TimelineActivityPayload } from 'src/modules/timeline/types/timeline-activity-payload';
+import { doesObjectSupportTimelineActivities } from 'src/modules/timeline/utils/does-object-support-timeline-activities.util';
 import { extractObjectSingularNameFromTargetColumnName } from 'src/modules/timeline/utils/extract-object-singular-name-from-target-column-name.util';
 
 type ActivityType = 'note' | 'task';
@@ -49,13 +50,50 @@ export class TimelineActivityService {
     }
 
     const { objectSingularName } = parseEventNameOrThrow(name);
+    const isActivityTarget =
+      objectSingularName === this.targetObjects.note ||
+      objectSingularName === this.targetObjects.task;
+    const someEventHasDiff = events.some((event) =>
+      isDefined(event.properties.diff),
+    );
+    const flatFieldMetadataMaps =
+      !isActivityTarget || someEventHasDiff
+        ? (
+            await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+              {
+                workspaceId,
+                flatMapsKeys: ['flatFieldMetadataMaps'],
+              },
+            )
+          ).flatFieldMetadataMaps
+        : undefined;
+    const objectFields = isDefined(flatFieldMetadataMaps)
+      ? getFlatFieldsFromFlatObjectMetadata(
+          objectMetadata,
+          flatFieldMetadataMaps,
+        )
+      : undefined;
+
+    if (
+      !isActivityTarget &&
+      (!isDefined(objectFields) ||
+        !isDefined(flatFieldMetadataMaps) ||
+        !doesObjectSupportTimelineActivities({
+          objectSingularName,
+          objectFields,
+          flatFieldMetadataMaps,
+        }))
+    ) {
+      return;
+    }
 
     const eventsWithoutPositionDiff =
-      await this.excludePositionFieldsFromEventsDiff({
-        events,
-        objectMetadata,
-        workspaceId,
-      });
+      someEventHasDiff && isDefined(objectFields)
+        ? this.excludePositionFieldsFromEventsDiff({
+            events,
+            objectFields,
+          })
+        : events;
 
     const timelineActivitiesPayloads =
       await this.transformEventsToTimelineActivityPayloads({
@@ -98,33 +136,15 @@ export class TimelineActivityService {
 
   // Position changes reach other consumers (SSE, webhooks, workflows) but render
   // blank in the timeline, so exclude them to avoid empty activity rows.
-  private async excludePositionFieldsFromEventsDiff({
+  private excludePositionFieldsFromEventsDiff({
     events,
-    objectMetadata,
-    workspaceId,
+    objectFields,
   }: {
     events: ObjectRecordBaseEvent[];
-    objectMetadata: FlatObjectMetadata;
-    workspaceId: string;
-  }): Promise<ObjectRecordBaseEvent[]> {
-    const someEventHasDiff = events.some((event) =>
-      isDefined(event.properties.diff),
-    );
-
-    if (!someEventHasDiff) {
-      return events;
-    }
-
-    const { flatFieldMetadataMaps } =
-      await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-        {
-          workspaceId,
-          flatMapsKeys: ['flatFieldMetadataMaps'],
-        },
-      );
-
+    objectFields: FlatFieldMetadata[];
+  }): ObjectRecordBaseEvent[] {
     const positionFieldNames = new Set(
-      getFlatFieldsFromFlatObjectMetadata(objectMetadata, flatFieldMetadataMaps)
+      objectFields
         .filter((field) => field.type === FieldMetadataType.POSITION)
         .map((field) => field.name),
     );

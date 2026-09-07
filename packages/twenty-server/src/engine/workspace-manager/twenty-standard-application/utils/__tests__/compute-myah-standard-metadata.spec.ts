@@ -1268,6 +1268,7 @@ describe('Myah standard metadata contract', () => {
         canSoftDeleteObjectRecords: false,
       },
       ...[
+        MYAH_STANDARD_OBJECTS.campaignAccount.universalIdentifier,
         MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
         MYAH_STANDARD_OBJECTS.campaignCreatorListSource.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
@@ -1395,6 +1396,212 @@ describe('Myah standard metadata contract', () => {
       ).toHaveLength(1);
     }
   });
+  it('materializes the Campaign account pool metadata contract', () => {
+    const campaignAccountObjectUniversalIdentifier =
+      '5999e4dd-01a4-5ef5-8c95-754bf079defb';
+    const campaignFieldUniversalIdentifier =
+      '462544a0-e6a2-5ca4-ae7b-a7acf5d26d24';
+    const channelFieldUniversalIdentifier =
+      '113a57a6-701b-5595-bfbf-f433a198ec5e';
+    const connectedAccountIdFieldUniversalIdentifier =
+      '6495ecde-ad97-520f-8024-4475ffdd6d17';
+    const isDefaultFieldUniversalIdentifier =
+      '19f14753-19a6-53fd-ae1e-45dd834b0470';
+    const messageChannelFieldUniversalIdentifier =
+      '8b1fe2fa-a30c-5196-a052-b2a13c31aedc';
+    const campaignAccountsFieldUniversalIdentifier =
+      '63ca6750-f2dc-5ff1-9e7f-a1b98a94cb86';
+    const outreachActionCampaignAccountIdFieldUniversalIdentifier =
+      '417af66e-c311-53a8-8811-4d5818e01dc2';
+    const campaignAccountUniqueIndexUniversalIdentifier =
+      'c682d674-b37b-5554-aff7-f00ed7eaa305';
+    const campaignAccountDefaultUniqueIndexUniversalIdentifier =
+      'f4b7f8e0-9f0e-5e85-9fcf-cb80df8bb5ae';
+
+    const objectMetadata =
+      result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+        campaignAccountObjectUniversalIdentifier
+      ];
+    const fieldMetadata =
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier;
+    const searchFieldMetadata = Object.values(
+      result.allFlatEntityMaps.flatSearchFieldMetadataMaps
+        .byUniversalIdentifier,
+    ).filter(isDefined);
+    const views = Object.values(
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const objectPermissions = Object.values(
+      mapsWithPermissions.flatObjectPermissionMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+
+    expect(objectMetadata).toMatchObject({
+      universalIdentifier: campaignAccountObjectUniversalIdentifier,
+      nameSingular: 'campaignAccount',
+      namePlural: 'campaignAccounts',
+      labelSingular: 'Campaign Account',
+      labelPlural: 'Campaign Accounts',
+    });
+    expect(Object.keys(MYAH_STANDARD_OBJECTS.campaignAccount.indexes)).toEqual([
+      'campaignAccountUniqueIndex',
+      'campaignAccountDefaultUniqueIndex',
+    ]);
+    expect(fieldMetadata[campaignFieldUniversalIdentifier]).toMatchObject({
+      universalIdentifier: campaignFieldUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      name: 'campaign',
+      type: FieldMetadataType.RELATION,
+      isNullable: false,
+      relationTargetObjectMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+      relationTargetFieldMetadataUniversalIdentifier:
+        campaignAccountsFieldUniversalIdentifier,
+      universalSettings: expect.objectContaining({
+        relationType: 'MANY_TO_ONE',
+        onDelete: 'CASCADE',
+        joinColumnName: 'campaignId',
+      }),
+    });
+    expect(fieldMetadata[channelFieldUniversalIdentifier]).toMatchObject({
+      universalIdentifier: channelFieldUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      name: 'channel',
+      type: FieldMetadataType.SELECT,
+      isNullable: false,
+      options: [
+        expect.objectContaining({
+          value: 'EMAIL',
+          label: 'Email',
+          position: 0,
+        }),
+      ],
+    });
+    expect(
+      fieldMetadata[connectedAccountIdFieldUniversalIdentifier],
+    ).toMatchObject({
+      universalIdentifier: connectedAccountIdFieldUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      name: 'connectedAccountId',
+      type: FieldMetadataType.TEXT,
+    });
+    expect(fieldMetadata[isDefaultFieldUniversalIdentifier]).toMatchObject({
+      universalIdentifier: isDefaultFieldUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      name: 'isDefault',
+      type: FieldMetadataType.BOOLEAN,
+      isNullable: false,
+      defaultValue: false,
+    });
+    expect(fieldMetadata[messageChannelFieldUniversalIdentifier]).toMatchObject(
+      {
+        universalIdentifier: messageChannelFieldUniversalIdentifier,
+        objectMetadataUniversalIdentifier:
+          campaignAccountObjectUniversalIdentifier,
+        name: 'messageChannelId',
+        type: FieldMetadataType.TEXT,
+        isNullable: true,
+      },
+    );
+    expect(
+      fieldMetadata[campaignAccountsFieldUniversalIdentifier],
+    ).toMatchObject({
+      universalIdentifier: campaignAccountsFieldUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+      name: 'campaignAccounts',
+      type: FieldMetadataType.RELATION,
+      relationTargetObjectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      relationTargetFieldMetadataUniversalIdentifier:
+        campaignFieldUniversalIdentifier,
+      universalSettings: expect.objectContaining({
+        relationType: 'ONE_TO_MANY',
+      }),
+    });
+    expect(
+      fieldMetadata[outreachActionCampaignAccountIdFieldUniversalIdentifier],
+    ).toMatchObject({
+      universalIdentifier:
+        outreachActionCampaignAccountIdFieldUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.outreachAction.universalIdentifier,
+      name: 'campaignAccountId',
+      type: FieldMetadataType.TEXT,
+      isNullable: true,
+    });
+    expect(
+      result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[
+        campaignAccountUniqueIndexUniversalIdentifier
+      ],
+    ).toMatchObject({
+      universalIdentifier: campaignAccountUniqueIndexUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      isUnique: true,
+      indexWhereClause: '"deletedAt" IS NULL',
+      universalFlatIndexFieldMetadatas: [
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier: campaignFieldUniversalIdentifier,
+        }),
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier: channelFieldUniversalIdentifier,
+        }),
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            connectedAccountIdFieldUniversalIdentifier,
+        }),
+      ],
+    });
+    expect(
+      result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[
+        campaignAccountDefaultUniqueIndexUniversalIdentifier
+      ],
+    ).toMatchObject({
+      universalIdentifier: campaignAccountDefaultUniqueIndexUniversalIdentifier,
+      objectMetadataUniversalIdentifier:
+        campaignAccountObjectUniversalIdentifier,
+      isUnique: true,
+      indexWhereClause: '"deletedAt" IS NULL AND "isDefault" = true',
+      universalFlatIndexFieldMetadatas: [
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier: campaignFieldUniversalIdentifier,
+        }),
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier: channelFieldUniversalIdentifier,
+        }),
+      ],
+    });
+    expect(
+      searchFieldMetadata.filter(
+        ({ objectMetadataUniversalIdentifier }) =>
+          objectMetadataUniversalIdentifier ===
+          campaignAccountObjectUniversalIdentifier,
+      ),
+    ).toHaveLength(0);
+    expect(
+      views.filter(
+        ({ objectMetadataUniversalIdentifier }) =>
+          objectMetadataUniversalIdentifier ===
+          campaignAccountObjectUniversalIdentifier,
+      ),
+    ).toHaveLength(0);
+    expect(objectPermissions).toContainEqual(
+      expect.objectContaining({
+        roleUniversalIdentifier: CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+        objectMetadataUniversalIdentifier:
+          campaignAccountObjectUniversalIdentifier,
+        canReadObjectRecords: true,
+        canUpdateObjectRecords: false,
+        canSoftDeleteObjectRecords: false,
+        canDestroyObjectRecords: false,
+      }),
+    );
+  });
+
   it('pins one managed mailbox identity to each Campaign Creator', () => {
     const field =
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[

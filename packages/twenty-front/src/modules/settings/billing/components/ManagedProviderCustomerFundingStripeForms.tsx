@@ -1,4 +1,6 @@
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
+import { useCountries } from '@/ui/input/components/internal/hooks/useCountries';
+import { Select } from '@/ui/input/components/Select';
 import { useStripeAppearance } from '@/settings/billing/hooks/useStripeAppearance';
 import { useStripePromise } from '@/settings/billing/hooks/useStripePromise';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
@@ -10,10 +12,10 @@ import {
   useElements,
   useStripe,
 } from '@stripe/react-stripe-js';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { InlineBanner } from 'twenty-ui/feedback';
-import { Button } from 'twenty-ui/input';
+import { Button, type SelectOption } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 import { H2Title } from 'twenty-ui/typography';
@@ -142,6 +144,16 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
 }) => {
   const stripePromise = useStripePromise(publishableKey);
   const appearance = useStripeAppearance();
+  const countries = useCountries();
+  const countryOptions = useMemo<SelectOption<string>[]>(
+    () =>
+      countries.map(({ countryCode, countryName }) => ({
+        label: countryName,
+        searchKeywords: countryCode,
+        value: countryCode,
+      })),
+    [countries],
+  );
   const [details, setDetails] = useState<CustomerFundingBillingDetails>({
     city: billingSummary?.address.city ?? '',
     country: billingSummary?.address.country ?? '',
@@ -243,12 +255,16 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
             value={details.postalCode}
             onChange={(value) => set('postalCode', value)}
           />
-          <SettingsTextInput
-            instanceId="managed-ai-billing-country"
-            label={t`Country code`}
-            required
+          <Select
+            ariaLabel={t`Country`}
+            dropdownId="managed-ai-billing-country"
+            emptyOption={{ label: t`Select a country`, value: '' }}
+            fullWidth
+            label={`${t`Country`}*`}
+            onChange={(value) => set('country', value)}
+            options={countryOptions}
             value={details.country}
-            onChange={(value) => set('country', value.toUpperCase())}
+            withSearchInput
           />
           <SettingsTextInput
             instanceId="managed-ai-billing-tax-id-type"

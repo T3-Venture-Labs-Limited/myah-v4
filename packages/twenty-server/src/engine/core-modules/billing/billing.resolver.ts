@@ -190,9 +190,16 @@ export class BillingResolver {
   )
   async prepareManagedProviderCustomerFundingPaymentMethod(
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @Args('replaceExistingPaymentMethod', {
+      defaultValue: false,
+      nullable: true,
+      type: () => Boolean,
+    })
+    replaceExistingPaymentMethod: boolean | null,
   ): Promise<ManagedProviderCustomerFundingPaymentMethodDTO> {
     return await this.managedProviderCustomerFundingService.prepareCustomerFundingPaymentMethod(
       workspace.id,
+      replaceExistingPaymentMethod === true,
     );
   }
 

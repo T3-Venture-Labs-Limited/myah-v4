@@ -170,6 +170,7 @@ export class ManagedProviderCustomerFundingService {
 
   async prepareCustomerFundingPaymentMethod(
     workspaceId: string,
+    replaceExistingPaymentMethod = false,
   ): Promise<CustomerFundingPaymentMethodPreparation> {
     if (!this.isCustomerFundingAvailable(workspaceId)) {
       throw new Error('Customer AI funding is unavailable');
@@ -184,20 +185,23 @@ export class ManagedProviderCustomerFundingService {
         metronomeBaseUrlEnvironment: environment,
         workspaceId,
       });
-      await this.stripe.assertWorkspaceBillingDetailsReady({
-        metronomeBaseUrlEnvironment: environment,
-        workspaceId,
-      });
 
-      return {
-        billingSummary,
-        clientSecret: null,
-        publishableKey: null,
-        ready: true,
-        setupIntentId: null,
-      };
+      if (!replaceExistingPaymentMethod) {
+        await this.stripe.assertWorkspaceBillingDetailsReady({
+          metronomeBaseUrlEnvironment: environment,
+          workspaceId,
+        });
+
+        return {
+          billingSummary,
+          clientSecret: null,
+          publishableKey: null,
+          ready: true,
+          setupIntentId: null,
+        };
+      }
     } catch {
-      if (billingSummary?.paymentMethodReady) {
+      if (!replaceExistingPaymentMethod && billingSummary?.paymentMethodReady) {
         return {
           billingSummary,
           clientSecret: null,
@@ -206,20 +210,20 @@ export class ManagedProviderCustomerFundingService {
           setupIntentId: null,
         };
       }
-
-      const preparation = await this.stripe.prepareWorkspacePaymentMethod({
-        metronomeBaseUrlEnvironment: environment,
-        workspaceId,
-      });
-
-      return {
-        billingSummary,
-        clientSecret: preparation.clientSecret,
-        publishableKey: preparation.publishableKey,
-        ready: false,
-        setupIntentId: preparation.setupIntentId,
-      };
     }
+
+    const preparation = await this.stripe.prepareWorkspacePaymentMethod({
+      metronomeBaseUrlEnvironment: environment,
+      workspaceId,
+    });
+
+    return {
+      billingSummary,
+      clientSecret: preparation.clientSecret,
+      publishableKey: preparation.publishableKey,
+      ready: false,
+      setupIntentId: preparation.setupIntentId,
+    };
   }
 
   async completeCustomerFundingPaymentMethod(

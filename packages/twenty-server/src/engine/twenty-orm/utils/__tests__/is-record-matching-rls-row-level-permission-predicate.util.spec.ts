@@ -393,4 +393,58 @@ describe('isRecordMatchingRLSRowLevelPermissionPredicate', () => {
       isRecordPotentiallyMatchingQueryFilter(relationTargetFieldNamedIsArgs),
     ).toBe(true);
   });
+
+  const unknownRelationFilter = {
+    listMemberships: { creatorListId: { in: ['list-1'] } },
+  } as unknown as RecordGqlOperationFilter;
+
+  it.each([
+    {
+      description: 'a rejecting scalar after an unknown relation in AND',
+      filter: {
+        and: [unknownRelationFilter, { jobTitle: { eq: 'Designer' } }],
+      },
+      expected: false,
+    },
+    {
+      description: 'a rejecting scalar in implicit AND',
+      filter: {
+        ...unknownRelationFilter,
+        jobTitle: { eq: 'Designer' },
+      },
+      expected: false,
+    },
+    {
+      description: 'a known matching OR branch under NOT',
+      filter: {
+        not: {
+          or: [unknownRelationFilter, { jobTitle: { eq: 'Engineer' } }],
+        },
+      },
+      expected: false,
+    },
+    {
+      description: 'a known rejecting AND branch under NOT',
+      filter: {
+        not: {
+          and: [unknownRelationFilter, { jobTitle: { eq: 'Designer' } }],
+        },
+      },
+      expected: true,
+    },
+    {
+      description: 'an unresolved relation under NOT',
+      filter: { not: unknownRelationFilter },
+      expected: true,
+    },
+  ])('preserves $description', ({ filter, expected }) => {
+    expect(
+      isRecordPotentiallyMatchingQueryFilter({
+        record: baseRecord,
+        filter: filter as RecordGqlOperationFilter,
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+      }),
+    ).toBe(expected);
+  });
 });

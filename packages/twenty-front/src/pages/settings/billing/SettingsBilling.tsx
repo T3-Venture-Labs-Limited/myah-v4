@@ -483,7 +483,9 @@ export const SettingsBilling = ({
       // Polling will reconcile the locally pending action without inviting a retry.
     }
   };
-  const managePaymentDetails = async (): Promise<boolean> => {
+  const managePaymentDetails = async (
+    replaceExistingPaymentMethod: boolean,
+  ): Promise<boolean> => {
     if (
       viewModel.state === 'ready' &&
       viewModel.customerFundingAvailable === false
@@ -493,7 +495,9 @@ export const SettingsBilling = ({
 
     setIsSubmitting(true);
     try {
-      const result = await preparePaymentMethod();
+      const result = await preparePaymentMethod({
+        variables: { replaceExistingPaymentMethod },
+      });
       const preparation =
         result.data?.prepareManagedProviderCustomerFundingPaymentMethod;
       if (preparation === undefined) throw new Error('Missing setup response');
@@ -521,7 +525,7 @@ export const SettingsBilling = ({
       await submitFunding(principalCents);
       return;
     }
-    if (await managePaymentDetails()) {
+    if (await managePaymentDetails(false)) {
       setPendingPrincipalCents(principalCents);
     }
   };
@@ -628,7 +632,7 @@ export const SettingsBilling = ({
             onManageManagedEmail={() =>
               navigateSettings(SettingsPath.WorkspaceEmail)
             }
-            onManagePaymentDetails={managePaymentDetails}
+            onManagePaymentDetails={() => managePaymentDetails(true)}
             onRequestFunding={requestFundingForAmount}
           />
         )}
