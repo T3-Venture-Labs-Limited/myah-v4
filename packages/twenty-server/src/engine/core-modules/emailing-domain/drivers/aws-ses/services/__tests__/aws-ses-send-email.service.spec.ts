@@ -24,6 +24,11 @@ describe('AwsSesSendEmailService', () => {
     configurationSetName: 'twenty-workspace-ws1',
   };
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
   const setUp = () => {
     const send = jest.fn();
     const clientProvider = {
@@ -46,21 +51,22 @@ describe('AwsSesSendEmailService', () => {
     const { service, send } = setUp();
 
     send.mockResolvedValue({ MessageId: 'msg-1' });
-    const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
+    const abortController = new AbortController();
+    const abortControllerSpy = jest
+      .spyOn(global, 'AbortController')
+      .mockImplementation(() => abortController);
 
     const result = await service.sendEmail(baseInput, baseContext);
 
-    expect(timeoutSpy).toHaveBeenCalledWith(
-      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
-    );
-
+    expect(abortControllerSpy).toHaveBeenCalledTimes(1);
     expect(result.messageId).toBe('msg-1');
 
     const [command, options] = send.mock.calls[0];
 
     expect(command).toBeInstanceOf(SendEmailCommand);
     expect(options).toEqual({ abortSignal: expect.any(AbortSignal) });
-    expect(options.abortSignal).not.toBe(AbortSignal.abort());
+    expect(options.abortSignal).toBe(abortController.signal);
+    expect(options.abortSignal.aborted).toBe(false);
     expect(command.input).toMatchObject({
       FromEmailAddress: 'noreply@mail.example.com',
       Destination: { ToAddresses: ['user@example.com'] },
@@ -74,6 +80,40 @@ describe('AwsSesSendEmailService', () => {
         { Name: 'domain', Value: 'mail.example.com' },
       ]),
     );
+  });
+
+  it('aborts and rejects a pending SES request at the absolute deadline', async () => {
+    jest.useFakeTimers();
+    const { service, send, handleErrorService } = setUp();
+    let suppliedSignal: AbortSignal | undefined;
+
+    send.mockImplementation((_command, options) => {
+      suppliedSignal = options.abortSignal;
+
+      return new Promise((_resolve, reject) => {
+        suppliedSignal?.addEventListener(
+          'abort',
+          () => reject(suppliedSignal?.reason),
+          { once: true },
+        );
+      });
+    });
+
+    const sendPromise = service.sendEmail(baseInput, baseContext);
+    const rejection = expect(sendPromise).rejects.toThrow(
+      `SES request exceeded ${OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS}ms`,
+    );
+
+    await jest.advanceTimersByTimeAsync(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS - 1,
+    );
+    expect(suppliedSignal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(1);
+
+    expect(suppliedSignal?.aborted).toBe(true);
+    await rejection;
+    expect(handleErrorService.handleAwsSesError).toHaveBeenCalledTimes(1);
   });
 
   it('should throw when SES returns no MessageId', async () => {

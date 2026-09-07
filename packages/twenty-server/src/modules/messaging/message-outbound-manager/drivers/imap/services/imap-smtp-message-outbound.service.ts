@@ -47,7 +47,9 @@ export class ImapSmtpMessageOutboundService implements MessageOutboundDriver {
       connectedAccount.id,
     );
 
-    await smtpClient.verify();
+    await this.smtpClientProvider.executeWithAbsoluteDeadline(smtpClient, () =>
+      smtpClient.verify(),
+    );
   }
 
   async sendMessage(
@@ -67,13 +69,15 @@ export class ImapSmtpMessageOutboundService implements MessageOutboundDriver {
       sendMessageInput,
     );
 
-    await smtpClient.sendMail({
-      from: handle,
-      to: sendMessageInput.to,
-      cc: sendMessageInput.cc,
-      bcc: sendMessageInput.bcc,
-      raw: messageBuffer,
-    });
+    await this.smtpClientProvider.executeWithAbsoluteDeadline(smtpClient, () =>
+      smtpClient.sendMail({
+        from: handle,
+        to: sendMessageInput.to,
+        cc: sendMessageInput.cc,
+        bcc: sendMessageInput.bcc,
+        raw: messageBuffer,
+      }),
+    );
 
     if (isDefined(connectionParameters?.IMAP)) {
       try {

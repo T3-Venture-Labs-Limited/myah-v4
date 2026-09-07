@@ -124,7 +124,10 @@ describe('GmailMessageOutboundService', () => {
 
     expect(mockGmailClient.users.getProfile).toHaveBeenCalledWith(
       { userId: 'me' },
-      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+      {
+        timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        retry: false,
+      },
     );
     expect(mockCreateDraft).not.toHaveBeenCalled();
   });
@@ -152,7 +155,10 @@ describe('GmailMessageOutboundService', () => {
           raw: MOCKED_EMAIL_BUFFER.toString('base64url'),
         },
       },
-      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+      {
+        timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        retry: false,
+      },
     );
     expect(service.providerRequestTimeoutMs).toBe(
       OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
@@ -188,7 +194,10 @@ describe('GmailMessageOutboundService', () => {
           raw: MOCKED_EMAIL_BUFFER.toString('base64url'),
         },
       },
-      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+      {
+        timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        retry: false,
+      },
     );
   });
 
@@ -223,7 +232,10 @@ describe('GmailMessageOutboundService', () => {
           },
         },
       },
-      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+      {
+        timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        retry: false,
+      },
     );
 
     expect(result).toEqual({
@@ -268,14 +280,20 @@ describe('GmailMessageOutboundService', () => {
         maxResults: 500,
         pageToken: undefined,
       },
-      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+      {
+        timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        retry: false,
+      },
     );
     expect(mockDeleteDraft).toHaveBeenCalledWith(
       {
         userId: 'me',
         id: 'draft-resource-id',
       },
-      { timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS },
+      {
+        timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        retry: false,
+      },
     );
   });
 

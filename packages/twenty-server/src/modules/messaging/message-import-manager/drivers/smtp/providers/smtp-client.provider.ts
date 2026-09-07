@@ -27,6 +27,31 @@ export class SmtpClientProvider {
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
   ) {}
 
+  public async executeWithAbsoluteDeadline<T>(
+    transporter: Transporter,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      deadlineTimer = setTimeout(() => {
+        transporter.close();
+        reject(
+          new Error(
+            `SMTP operation exceeded ${OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS}ms`,
+          ),
+        );
+      }, OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS);
+    });
+
+    try {
+      return await Promise.race([operation(), deadline]);
+    } finally {
+      if (isDefined(deadlineTimer)) {
+        clearTimeout(deadlineTimer);
+      }
+    }
+  }
+
   public async getClient(connectedAccountId: string): Promise<Transporter> {
     const connectedAccount = await this.connectedAccountRepository.findOne({
       where: { id: connectedAccountId },

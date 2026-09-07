@@ -1,5 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
+import { RetryHandlerOptions } from '@microsoft/microsoft-graph-client';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { MicrosoftOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/microsoft/microsoft-oauth2-client.provider';
@@ -19,6 +20,7 @@ describe('MicrosoftMessageOutboundService', () => {
 
   const messagesRequest = {
     options: jest.fn().mockReturnThis(),
+    middlewareOptions: jest.fn().mockReturnThis(),
     filter: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     top: jest.fn().mockReturnThis(),
@@ -28,21 +30,25 @@ describe('MicrosoftMessageOutboundService', () => {
 
   const replyRequest = {
     options: jest.fn().mockReturnThis(),
+    middlewareOptions: jest.fn().mockReturnThis(),
     post: jest.fn(),
   };
 
   const draftRequest = {
     options: jest.fn().mockReturnThis(),
+    middlewareOptions: jest.fn().mockReturnThis(),
     patch: jest.fn(),
   };
 
   const draftDeleteRequest = {
     options: jest.fn().mockReturnThis(),
+    middlewareOptions: jest.fn().mockReturnThis(),
     delete: jest.fn(),
   };
 
   const profileRequest = {
     options: jest.fn().mockReturnThis(),
+    middlewareOptions: jest.fn().mockReturnThis(),
     get: jest.fn(),
   };
 
@@ -145,6 +151,11 @@ describe('MicrosoftMessageOutboundService', () => {
     expect(messagesRequest.options).toHaveBeenCalledWith({
       signal: expect.any(AbortSignal),
     });
+    const [middlewareOptions] = messagesRequest.middlewareOptions.mock.calls[0];
+
+    expect(middlewareOptions).toHaveLength(1);
+    expect(middlewareOptions[0]).toBeInstanceOf(RetryHandlerOptions);
+    expect(middlewareOptions[0].maxRetries).toBe(0);
     expect(service.providerRequestTimeoutMs).toBe(
       OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
     );
