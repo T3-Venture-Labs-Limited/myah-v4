@@ -137,6 +137,7 @@ describe('SettingsBilling customer funding idempotency', () => {
           : query === GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION
             ? {
                 data:
+                  (options as { skip?: boolean } | undefined)?.skip === true ||
                   customerFundingActionState === undefined
                     ? undefined
                     : {
@@ -351,7 +352,7 @@ describe('SettingsBilling customer funding idempotency', () => {
         principalCents: 2_500,
       }),
     );
-    customerFundingActionState = 'BALANCE_ACTIVE';
+    customerFundingActionState = 'NEEDS_SUPPORT';
 
     renderBilling();
 
@@ -366,6 +367,13 @@ describe('SettingsBilling customer funding idempotency', () => {
     await waitFor(() =>
       expect(localStorage.getItem(pendingFundingStorageKey)).toBeNull(),
     );
+    await waitFor(() =>
+      expect(mockUseQuery).toHaveBeenCalledWith(
+        GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION,
+        expect.objectContaining({ skip: true }),
+      ),
+    );
+    expect(screen.getByText('Needs support')).toBeInTheDocument();
     expect(mockRequestFunding).not.toHaveBeenCalled();
     expect(
       await screen.findByRole('button', { name: 'Add $25 credit' }),
@@ -373,6 +381,47 @@ describe('SettingsBilling customer funding idempotency', () => {
     expect(
       screen.queryByRole('button', { name: /Retry/ }),
     ).not.toBeInTheDocument();
+
+    let rejectFreshRequest: (reason: Error) => void = () => undefined;
+    mockRequestFunding.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectFreshRequest = reject;
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Add $25 credit' }),
+    );
+    await waitFor(() =>
+      expect(readPendingFundingRequest()).toEqual({
+        actionId: null,
+        idempotencyKey: expect.any(String),
+        principalCents: 2_500,
+      }),
+    );
+    const freshIdempotencyKey = readPendingFundingRequest().idempotencyKey;
+
+    rejectFreshRequest(new Error('response lost'));
+    const retryButton = await screen.findByRole('button', {
+      name: 'Retry $25 credit',
+    });
+    await waitFor(() => expect(retryButton).toBeEnabled());
+    expect(readPendingFundingRequest()).toEqual({
+      actionId: null,
+      idempotencyKey: freshIdempotencyKey,
+      principalCents: 2_500,
+    });
+
+    mockRequestFunding.mockResolvedValueOnce({
+      data: {
+        requestManagedProviderCustomerFunding: { id: 'fresh-action-id' },
+      },
+    });
+    fireEvent.click(retryButton);
+    await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(2));
+    expect(mockRequestFunding.mock.calls[1][0].variables).toEqual({
+      idempotencyKey: freshIdempotencyKey,
+      principalCents: 2_500,
+    });
   });
 
   it('requests the managed Stripe key for payment authentication', () => {
