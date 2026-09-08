@@ -104,10 +104,7 @@ export class GoogleOAuth2ClientProvider {
 
       oAuth2Client.setCredentials(
         options
-          ? {
-              access_token: plaintextAccessToken,
-              refresh_token: plaintextRefreshToken,
-            }
+          ? { access_token: plaintextAccessToken }
           : { refresh_token: plaintextRefreshToken },
       );
 
