@@ -319,6 +319,93 @@ describe('SettingsAccountSendingPolicy', () => {
     ).toHaveValue(120_000);
   });
 
+  it('submits refreshed untouched values after props update before save completion', async () => {
+    let resolveMutation!: (result: { data: object }) => void;
+
+    mockUpdateConnectedAccountSendingPolicy.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveMutation = resolve;
+      }),
+    );
+
+    const { rerender } = render(
+      <SettingsAccountSendingPolicy
+        connectedAccountId="account-id"
+        dailySendLimit={50}
+        minimumSendIntervalMs={300_000}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Daily send limit'), {
+      target: { value: '80' },
+    });
+    fireEvent.change(
+      screen.getByLabelText('Minimum send interval (milliseconds)'),
+      { target: { value: '90000' } },
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save sending policy' }),
+    );
+
+    await waitFor(() =>
+      expect(mockUpdateConnectedAccountSendingPolicy).toHaveBeenNthCalledWith(
+        1,
+        {
+          variables: {
+            input: {
+              connectedAccountId: 'account-id',
+              dailySendLimit: 80,
+              minimumSendIntervalMs: 90_000,
+            },
+          },
+        },
+      ),
+    );
+
+    fireEvent.change(screen.getByLabelText('Daily send limit'), {
+      target: { value: '90' },
+    });
+    rerender(
+      <SettingsAccountSendingPolicy
+        connectedAccountId="account-id"
+        dailySendLimit={80}
+        minimumSendIntervalMs={120_000}
+      />,
+    );
+
+    await act(async () => {
+      resolveMutation({
+        data: {
+          updateConnectedAccountSendingPolicy: {
+            id: 'account-id',
+            dailySendLimit: 80,
+            minimumSendIntervalMs: 120_000,
+          },
+        },
+      });
+    });
+    await waitFor(() => expect(mockEnqueueSuccessSnackBar).toHaveBeenCalled());
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save sending policy' }),
+    );
+
+    await waitFor(() =>
+      expect(mockUpdateConnectedAccountSendingPolicy).toHaveBeenNthCalledWith(
+        2,
+        {
+          variables: {
+            input: {
+              connectedAccountId: 'account-id',
+              dailySendLimit: 90,
+              minimumSendIntervalMs: 120_000,
+            },
+          },
+        },
+      ),
+    );
+  });
+
   it.each([
     ['Daily send limit', '0'],
     ['Daily send limit', '-1'],
