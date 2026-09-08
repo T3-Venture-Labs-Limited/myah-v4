@@ -31,6 +31,7 @@ jest.mock('nodemailer/lib/mail-composer', () => {
 
 describe('GmailMessageOutboundService', () => {
   let service: GmailMessageOutboundService;
+  let mockGetClient: jest.Mock;
 
   const mockSend = jest.fn().mockResolvedValue({
     data: { id: 'message-id', threadId: 'gmail-thread-id' },
@@ -89,6 +90,7 @@ describe('GmailMessageOutboundService', () => {
   const mockOAuth2Client = {};
 
   beforeEach(async () => {
+    mockGetClient = jest.fn().mockResolvedValue(mockOAuth2Client);
     jest.spyOn(google, 'gmail').mockReturnValue(mockGmailClient as never);
     jest.spyOn(google, 'people').mockReturnValue(mockPeopleClient as never);
 
@@ -98,7 +100,7 @@ describe('GmailMessageOutboundService', () => {
         {
           provide: GoogleOAuth2ClientProvider,
           useValue: {
-            getClient: jest.fn().mockResolvedValue(mockOAuth2Client),
+            getClient: mockGetClient,
           },
         },
       ],
@@ -110,6 +112,7 @@ describe('GmailMessageOutboundService', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     mockSend.mockClear();
     mockCreateDraft.mockClear();
     mockListDrafts.mockClear();
@@ -125,11 +128,49 @@ describe('GmailMessageOutboundService', () => {
     expect(mockGmailClient.users.getProfile).toHaveBeenCalledWith(
       { userId: 'me' },
       {
+        signal: expect.any(AbortSignal),
         timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         retry: false,
       },
     );
     expect(mockCreateDraft).not.toHaveBeenCalled();
+  });
+
+  it('rejects stalled authentication at the absolute deadline and fences a late client', async () => {
+    jest.useFakeTimers();
+    let resolveClient: ((client: object) => void) | undefined;
+
+    mockGetClient.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveClient = resolve;
+      }),
+    );
+
+    const resultPromise = service.sendMessage(
+      {
+        to: 'recipient@example.com',
+        subject: 'Subject',
+        body: 'Body',
+        html: '<p>Body</p>',
+        attachments: [],
+      },
+      buildConnectedAccount(ConnectedAccountProvider.GOOGLE),
+    );
+
+    const rejection = expect(resultPromise).rejects.toThrow(/exceeded 30000ms/);
+
+    await jest.advanceTimersByTimeAsync(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
+    await rejection;
+
+    resolveClient?.(mockOAuth2Client);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockGmailClient.users.getProfile).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it('should send multipart/alternative email with both text and HTML parts via Gmail', async () => {
@@ -147,6 +188,17 @@ describe('GmailMessageOutboundService', () => {
 
     await service.sendMessage(sendMessageInput, connectedAccount);
 
+    const sharedSignal = mockGetClient.mock.calls[0][1]
+      .abortSignal as AbortSignal;
+
+    expect(mockGmailClient.users.getProfile).toHaveBeenCalledWith(
+      { userId: 'me' },
+      expect.objectContaining({ signal: sharedSignal }),
+    );
+    expect(mockPeopleClient.people.get).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ signal: sharedSignal }),
+    );
     expect(mockSend).toHaveBeenCalledTimes(1);
     expect(mockSend).toHaveBeenCalledWith(
       {
@@ -156,6 +208,7 @@ describe('GmailMessageOutboundService', () => {
         },
       },
       {
+        signal: sharedSignal,
         timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         retry: false,
       },
@@ -195,6 +248,7 @@ describe('GmailMessageOutboundService', () => {
         },
       },
       {
+        signal: expect.any(AbortSignal),
         timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         retry: false,
       },
@@ -233,6 +287,7 @@ describe('GmailMessageOutboundService', () => {
         },
       },
       {
+        signal: expect.any(AbortSignal),
         timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         retry: false,
       },
@@ -281,6 +336,7 @@ describe('GmailMessageOutboundService', () => {
         pageToken: undefined,
       },
       {
+        signal: expect.any(AbortSignal),
         timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         retry: false,
       },
@@ -291,6 +347,7 @@ describe('GmailMessageOutboundService', () => {
         id: 'draft-resource-id',
       },
       {
+        signal: expect.any(AbortSignal),
         timeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         retry: false,
       },
@@ -308,23 +365,19 @@ describe('GmailMessageOutboundService', () => {
       html: '<p>Approved body</p>',
       attachments: [],
     };
-    const sendMessage = jest
-      .spyOn(service, 'sendMessage')
-      .mockResolvedValue({ headerMessageId: '<sent@example.com>' });
-    const deleteDraft = jest
-      .spyOn(service, 'deleteDraft')
-      .mockResolvedValue(undefined);
-
     await service.sendDraft(
       'draft-message-id',
       approvedInput,
       connectedAccount,
     );
 
-    expect(sendMessage).toHaveBeenCalledWith(approvedInput, connectedAccount);
-    expect(deleteDraft).toHaveBeenCalledWith(
-      'draft-message-id',
-      connectedAccount,
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockDeleteDraft).toHaveBeenCalledWith(
+      { userId: 'me', id: 'draft-resource-id' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(mockSend.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDeleteDraft.mock.invocationCallOrder[0],
     );
   });
 });

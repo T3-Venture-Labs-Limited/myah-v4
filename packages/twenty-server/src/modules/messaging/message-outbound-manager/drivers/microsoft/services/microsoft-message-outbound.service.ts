@@ -6,16 +6,17 @@ import {
   RetryHandlerOptions,
 } from '@microsoft/microsoft-graph-client';
 import { isNonEmptyString } from '@sniptt/guards';
+import { isDefined } from 'twenty-shared/utils';
+
+import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { MicrosoftOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/microsoft/microsoft-oauth2-client.provider';
+import { toMicrosoftRecipients } from 'src/modules/messaging/message-import-manager/utils/to-microsoft-recipients.util';
 import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
-
-import { MicrosoftOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/microsoft/microsoft-oauth2-client.provider';
-import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
-import { toMicrosoftRecipients } from 'src/modules/messaging/message-import-manager/utils/to-microsoft-recipients.util';
 import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
-import { isDefined } from 'twenty-shared/utils';
+import { executeWithOutboundEmailProviderDeadline } from 'src/modules/messaging/message-outbound-manager/utils/execute-with-outbound-email-provider-deadline.util';
 
 @Injectable()
 export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
@@ -31,30 +32,58 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
   async assertSendable(
     connectedAccount: ConnectedAccountEntity,
   ): Promise<void> {
-    const microsoftClient = await this.microsoftOAuth2ClientProvider.getClient(
-      connectedAccount.id,
-    );
+    return executeWithOutboundEmailProviderDeadline(async (abortSignal) => {
+      const microsoftClient =
+        await this.microsoftOAuth2ClientProvider.getClient(
+          connectedAccount.id,
+          { abortSignal },
+        );
 
-    await this.request(microsoftClient, '/me').get();
+      abortSignal.throwIfAborted();
+      await this.request(microsoftClient, '/me', abortSignal).get();
+    });
   }
 
   async sendMessage(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
+    return executeWithOutboundEmailProviderDeadline((abortSignal) =>
+      this.sendMessageWithinDeadline(
+        sendMessageInput,
+        connectedAccount,
+        abortSignal,
+      ),
+    );
+  }
+
+  private async sendMessageWithinDeadline(
+    sendMessageInput: SendMessageInput,
+    connectedAccount: ConnectedAccountEntity,
+    abortSignal: AbortSignal,
+  ): Promise<SendMessageResult> {
     const microsoftClient = await this.microsoftOAuth2ClientProvider.getClient(
       connectedAccount.id,
+      { abortSignal },
     );
+
+    abortSignal.throwIfAborted();
 
     const {
       id: messageId,
       internetMessageId,
       conversationId,
-    } = await this.createDraftMessage(microsoftClient, sendMessageInput);
-
-    await this.request(microsoftClient, `/me/messages/${messageId}/send`).post(
-      {},
+    } = await this.createDraftMessage(
+      microsoftClient,
+      sendMessageInput,
+      abortSignal,
     );
+
+    await this.request(
+      microsoftClient,
+      `/me/messages/${messageId}/send`,
+      abortSignal,
+    ).post({});
 
     return {
       headerMessageId: internetMessageId ?? '',
@@ -67,12 +96,33 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<CreateDraftResult> {
+    return executeWithOutboundEmailProviderDeadline((abortSignal) =>
+      this.createDraftWithinDeadline(
+        sendMessageInput,
+        connectedAccount,
+        abortSignal,
+      ),
+    );
+  }
+
+  private async createDraftWithinDeadline(
+    sendMessageInput: SendMessageInput,
+    connectedAccount: ConnectedAccountEntity,
+    abortSignal: AbortSignal,
+  ): Promise<CreateDraftResult> {
     const microsoftClient = await this.microsoftOAuth2ClientProvider.getClient(
       connectedAccount.id,
+      { abortSignal },
     );
 
+    abortSignal.throwIfAborted();
+
     const { id, internetMessageId, conversationId } =
-      await this.createDraftMessage(microsoftClient, sendMessageInput);
+      await this.createDraftMessage(
+        microsoftClient,
+        sendMessageInput,
+        abortSignal,
+      );
 
     if (!isNonEmptyString(id)) {
       throw new Error('Microsoft draft did not return a message id');
@@ -96,39 +146,65 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
-    const sendResult = await this.sendMessage(
-      sendMessageInput,
-      connectedAccount,
-    );
-
-    try {
-      await this.deleteDraft(draftExternalId, connectedAccount);
-    } catch {
-      this.logger.warn(
-        `Failed to delete Microsoft draft ${draftExternalId} after send`,
+    return executeWithOutboundEmailProviderDeadline(async (abortSignal) => {
+      const sendResult = await this.sendMessageWithinDeadline(
+        sendMessageInput,
+        connectedAccount,
+        abortSignal,
       );
-    }
 
-    return sendResult;
+      try {
+        await this.deleteDraftWithinDeadline(
+          draftExternalId,
+          connectedAccount,
+          abortSignal,
+        );
+      } catch {
+        this.logger.warn(
+          `Failed to delete Microsoft draft ${draftExternalId} after send`,
+        );
+      }
+
+      return sendResult;
+    });
   }
 
   async deleteDraft(
     draftExternalId: string,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<void> {
+    return executeWithOutboundEmailProviderDeadline((abortSignal) =>
+      this.deleteDraftWithinDeadline(
+        draftExternalId,
+        connectedAccount,
+        abortSignal,
+      ),
+    );
+  }
+
+  private async deleteDraftWithinDeadline(
+    draftExternalId: string,
+    connectedAccount: ConnectedAccountEntity,
+    abortSignal: AbortSignal,
+  ): Promise<void> {
     const microsoftClient = await this.microsoftOAuth2ClientProvider.getClient(
       connectedAccount.id,
+      { abortSignal },
     );
+
+    abortSignal.throwIfAborted();
 
     await this.request(
       microsoftClient,
       `/me/messages/${draftExternalId}`,
+      abortSignal,
     ).delete();
   }
 
   private async createDraftMessage(
     microsoftClient: MicrosoftGraphClient,
     sendMessageInput: SendMessageInput,
+    abortSignal: AbortSignal,
   ): Promise<{
     id: string;
     internetMessageId?: string;
@@ -138,20 +214,22 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
       ? await this.findMessageByInternetMessageId(
           microsoftClient,
           sendMessageInput.inReplyTo,
+          abortSignal,
         )
       : undefined;
-
     const message = this.composeMicrosoftMessage(sendMessageInput);
 
     if (isDefined(parentMessageGraphId)) {
       const reply = await this.request(
         microsoftClient,
         `/me/messages/${parentMessageGraphId}/createReply`,
+        abortSignal,
       ).post({});
 
       const patched = await this.request(
         microsoftClient,
         `/me/messages/${reply.id}`,
+        abortSignal,
       ).patch(message);
 
       return {
@@ -162,9 +240,11 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
       };
     }
 
-    const response = await this.request(microsoftClient, '/me/messages').post(
-      message,
-    );
+    const response = await this.request(
+      microsoftClient,
+      '/me/messages',
+      abortSignal,
+    ).post(message);
 
     return {
       id: response.id,
@@ -176,10 +256,15 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
   private async findMessageByInternetMessageId(
     microsoftClient: MicrosoftGraphClient,
     internetMessageId: string,
+    abortSignal: AbortSignal,
   ): Promise<string | undefined> {
     const escapedInternetMessageId = internetMessageId.split("'").join("''");
 
-    const response = await this.request(microsoftClient, '/me/messages')
+    const response = await this.request(
+      microsoftClient,
+      '/me/messages',
+      abortSignal,
+    )
       .filter(`internetMessageId eq '${escapedInternetMessageId}'`)
       .select('id')
       .top(1)
@@ -191,13 +276,14 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
   private request(
     microsoftClient: MicrosoftGraphClient,
     path: string,
+    abortSignal: AbortSignal,
   ): GraphRequest {
+    abortSignal.throwIfAborted();
+
     return microsoftClient
       .api(path)
-      .options({
-        signal: AbortSignal.timeout(this.providerRequestTimeoutMs),
-      })
-      .middlewareOptions([new RetryHandlerOptions(undefined, 0)]);
+      .options({ signal: abortSignal })
+      .middlewareOptions([new RetryHandlerOptions(0, 0)]);
   }
 
   private composeMicrosoftMessage(

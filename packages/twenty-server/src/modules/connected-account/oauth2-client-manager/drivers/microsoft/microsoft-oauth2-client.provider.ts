@@ -13,7 +13,10 @@ import {
 } from 'src/engine/metadata-modules/connected-account/exceptions/connected-account-refresh-tokens.exception';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { MicrosoftOAuth2ClientAuthProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/microsoft/microsoft-oauth2-client-auth-provider';
-import { ConnectedAccountRefreshTokensService } from 'src/modules/connected-account/refresh-tokens-manager/services/connected-account-refresh-tokens.service';
+import {
+  type ConnectedAccountTokenResolutionOptions,
+  ConnectedAccountRefreshTokensService,
+} from 'src/modules/connected-account/refresh-tokens-manager/services/connected-account-refresh-tokens.service';
 
 @Injectable()
 export class MicrosoftOAuth2ClientProvider {
@@ -24,10 +27,17 @@ export class MicrosoftOAuth2ClientProvider {
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
   ) {}
 
-  public async getClient(connectedAccountId: string): Promise<Client> {
+  public async getClient(
+    connectedAccountId: string,
+    options?: ConnectedAccountTokenResolutionOptions,
+  ): Promise<Client> {
+    options?.abortSignal?.throwIfAborted();
+
     const connectedAccount = await this.connectedAccountRepository.findOne({
       where: { id: connectedAccountId },
     });
+
+    options?.abortSignal?.throwIfAborted();
 
     if (!isDefined(connectedAccount)) {
       throw new ConnectedAccountRefreshAccessTokenException(
@@ -43,11 +53,18 @@ export class MicrosoftOAuth2ClientProvider {
       );
     }
 
-    const { accessToken: encryptedAccessToken } =
-      await this.connectedAccountRefreshTokensService.resolveTokens(
-        connectedAccount,
-        connectedAccount.workspaceId,
-      );
+    const { accessToken: encryptedAccessToken } = options
+      ? await this.connectedAccountRefreshTokensService.resolveTokens(
+          connectedAccount,
+          connectedAccount.workspaceId,
+          options,
+        )
+      : await this.connectedAccountRefreshTokensService.resolveTokens(
+          connectedAccount,
+          connectedAccount.workspaceId,
+        );
+
+    options?.abortSignal?.throwIfAborted();
 
     if (!isDefined(encryptedAccessToken)) {
       throw new ConnectedAccountRefreshAccessTokenException(
@@ -66,10 +83,14 @@ export class MicrosoftOAuth2ClientProvider {
       plaintextAccessToken,
     );
 
-    return Client.initWithMiddleware({
+    const client = Client.initWithMiddleware({
       defaultVersion: 'v1.0',
       debugLogging: false,
       authProvider,
     });
+
+    options?.abortSignal?.throwIfAborted();
+
+    return client;
   }
 }

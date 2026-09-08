@@ -116,6 +116,20 @@ describe('MicrosoftOAuth2ClientProvider', () => {
       expect(client).toBeDefined();
     });
 
+    it('passes the outbound abort signal through token resolution', async () => {
+      const abortController = new AbortController();
+
+      await provider.getClient(mockConnectedAccountId, {
+        abortSignal: abortController.signal,
+      });
+
+      expect(
+        connectedAccountRefreshTokensService.resolveTokens,
+      ).toHaveBeenCalledWith(mockConnectedAccount, mockWorkspaceId, {
+        abortSignal: abortController.signal,
+      });
+    });
+
     it('should throw when the connected account does not exist', async () => {
       connectedAccountRepository.findOne.mockResolvedValue(null);
 

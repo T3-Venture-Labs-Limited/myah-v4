@@ -210,6 +210,62 @@ describe('ConnectedAccountRefreshTokensService', () => {
       );
     });
 
+    it('passes an outbound signal to Microsoft refresh and fences persistence after cancellation', async () => {
+      const connectedAccount = {
+        id: mockConnectedAccountId,
+        provider: ConnectedAccountProvider.MICROSOFT,
+        accessToken: mockEncryptedAccessToken,
+        refreshToken: mockEncryptedRefreshToken,
+        lastCredentialsRefreshedAt: null,
+      } as ConnectedAccountEntity;
+      const abortController = new AbortController();
+      let resolveRefresh:
+        | ((tokens: {
+            accessToken: PlaintextString;
+            refreshToken: PlaintextString;
+          }) => void)
+        | undefined;
+
+      jest
+        .spyOn(microsoftAPIRefreshAccessTokenService, 'refreshTokens')
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            resolveRefresh = resolve;
+          }),
+        );
+
+      const resultPromise = service.resolveTokens(
+        connectedAccount,
+        mockWorkspaceId,
+        { abortSignal: abortController.signal },
+      );
+
+      for (
+        let index = 0;
+        index < 10 &&
+        !jest.mocked(microsoftAPIRefreshAccessTokenService.refreshTokens).mock
+          .calls.length;
+        index++
+      ) {
+        await Promise.resolve();
+      }
+
+      expect(
+        microsoftAPIRefreshAccessTokenService.refreshTokens,
+      ).toHaveBeenCalledWith(mockRefreshTokenPlaintext, {
+        abortSignal: abortController.signal,
+      });
+
+      abortController.abort();
+      resolveRefresh?.({
+        accessToken: mockNewAccessTokenPlaintext,
+        refreshToken: mockRefreshTokenPlaintext,
+      });
+
+      await expect(resultPromise).rejects.toMatchObject({ name: 'AbortError' });
+      expect(connectedAccountRepository.update).not.toHaveBeenCalled();
+    });
+
     it('should decrypt the stored refresh token before sending to Google, persist the re-encrypted tokens, and return them encrypted', async () => {
       const connectedAccount = {
         id: mockConnectedAccountId,
