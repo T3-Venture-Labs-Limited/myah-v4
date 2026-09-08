@@ -11,6 +11,7 @@ import {
   WorkflowVersionEdgeException,
   WorkflowVersionEdgeExceptionCode,
 } from 'src/modules/workflow/common/exceptions/workflow-version-edge.exception';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { type WorkflowVersionWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
 import { assertWorkflowVersionIsDraft } from 'src/modules/workflow/common/utils/assert-workflow-version-is-draft.util';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
@@ -24,6 +25,7 @@ export class WorkflowVersionEdgeWorkspaceService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly workflowCommonWorkspaceService: WorkflowCommonWorkspaceService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async createWorkflowVersionEdge({
@@ -39,6 +41,10 @@ export class WorkflowVersionEdgeWorkspaceService {
     workspaceId: string;
     sourceConnectionOptions?: WorkflowStepConnectionOptions;
   }): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -109,6 +115,10 @@ export class WorkflowVersionEdgeWorkspaceService {
     workspaceId: string;
     sourceConnectionOptions?: WorkflowStepConnectionOptions;
   }): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(

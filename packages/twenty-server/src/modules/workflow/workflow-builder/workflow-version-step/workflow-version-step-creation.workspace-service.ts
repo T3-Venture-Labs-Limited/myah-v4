@@ -8,6 +8,7 @@ import {
   WorkflowVersionStepException,
   WorkflowVersionStepExceptionCode,
 } from 'src/modules/workflow/common/exceptions/workflow-version-step.exception';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { computeWorkflowVersionStepChanges } from 'src/modules/workflow/workflow-builder/utils/compute-workflow-version-step-updates.util';
 import { WorkflowSchemaWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-schema/workflow-schema.workspace-service';
 import { insertStep } from 'src/modules/workflow/workflow-builder/workflow-version-step/utils/insert-step';
@@ -21,6 +22,7 @@ export class WorkflowVersionStepCreationWorkspaceService {
     private readonly workflowSchemaWorkspaceService: WorkflowSchemaWorkspaceService,
     private readonly workflowVersionStepOperationsWorkspaceService: WorkflowVersionStepOperationsWorkspaceService,
     private readonly workflowVersionStepHelpersWorkspaceService: WorkflowVersionStepHelpersWorkspaceService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async createWorkflowVersionStep({
@@ -30,6 +32,10 @@ export class WorkflowVersionStepCreationWorkspaceService {
     workspaceId: string;
     input: CreateWorkflowVersionStepInput;
   }): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId: input.workflowVersionId, workspaceId },
+    );
+
     const {
       workflowVersionId,
       stepType,
@@ -110,6 +116,10 @@ export class WorkflowVersionStepCreationWorkspaceService {
     workflowVersionId: string;
     stepId: string;
   }): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const workflowVersion =
       await this.workflowVersionStepHelpersWorkspaceService.getValidatedDraftWorkflowVersion(
         {

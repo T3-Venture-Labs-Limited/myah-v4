@@ -9,6 +9,7 @@ import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service'
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkflowRunStatus } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 import { CodeStepBuildService } from 'src/modules/workflow/workflow-builder/workflow-version-step/code-step/services/code-step-build.service';
@@ -33,6 +34,7 @@ export class RunWorkflowJob {
     private readonly workflowRunWorkspaceService: WorkflowRunWorkspaceService,
     private readonly metricsService: MetricsService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   @Process(RUN_WORKFLOW_JOB_NAME)
@@ -45,6 +47,10 @@ export class RunWorkflowJob {
     this.logger.log(
       `Running workflow run ${workflowRunId} in workspace ${workspaceId}`,
     );
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {

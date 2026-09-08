@@ -3,9 +3,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
-import { type WorkspaceQueryRunner } from 'src/engine/twenty-orm/query-runner/workspace-query-runner';
 
-import { RecordPositionService } from 'src/engine/core-modules/record-position/services/record-position.service';
 import { type CustomWorkspaceEntity } from 'src/engine/twenty-orm/custom.workspace-entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
@@ -14,6 +12,7 @@ import {
   WorkflowVersionStatus,
   type WorkflowVersionWorkspaceEntity,
 } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
+import { CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
 import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 import {
   createListWorkflowRunsTool,
@@ -38,24 +37,11 @@ type CampaignOutreachWorkflowRunsArgs = CampaignOutreachWorkflowArgs &
     rolePermissionConfig: RolePermissionConfig;
   };
 
-type PostgresError = {
-  code?: string;
-};
-
-const isPostgresUniqueViolation = (error: unknown): error is PostgresError => {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === '23505'
-  );
-};
-
 @Injectable()
 export class CampaignOutreachWorkflowService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    private readonly recordPositionService: RecordPositionService,
+    private readonly campaignSequenceService: CampaignSequenceService,
   ) {}
 
   async find({
@@ -99,132 +85,24 @@ export class CampaignOutreachWorkflowService {
     workspaceId,
     campaignId,
   }: CampaignOutreachWorkflowArgs): Promise<CampaignOutreachWorkflow> {
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        await this.assertCampaignIsAccessible({ workspaceId, campaignId });
+    if (!authContext) {
+      throw new ForbiddenException(
+        'Authenticated workspace context is required',
+      );
+    }
 
-        const workspaceDataSource =
-          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-        const queryRunner = workspaceDataSource.createQueryRunner();
-        let workflowWasInserted = false;
-
-        try {
-          await queryRunner.connect();
-          await queryRunner.startTransaction();
-
-          const workflowRepository =
-            await this.getWorkflowRepository(workspaceId);
-          const existingWorkflow = await workflowRepository.findOne(
-            {
-              where: { outreachCampaignId: campaignId },
-              lock: { mode: 'pessimistic_write' },
-            },
-            queryRunner.manager,
-          );
-
-          if (isDefined(existingWorkflow)) {
-            await queryRunner.commitTransaction();
-
-            return this.toCampaignOutreachWorkflow({
-              workspaceId,
-              workflow: existingWorkflow,
-              queryRunner,
-            });
-          }
-
-          const workflowPosition =
-            await this.recordPositionService.buildRecordPosition({
-              value: 'first',
-              objectMetadata: {
-                isCustom: false,
-                nameSingular: 'workflow',
-              },
-              workspaceId,
-            });
-          const workflowInsertResult = await workflowRepository.insert(
-            {
-              name: 'Campaign Outreach',
-              outreachCampaignId: campaignId,
-              position: workflowPosition,
-            },
-            queryRunner.manager,
-          );
-          workflowWasInserted = true;
-
-          const workflowId = (
-            workflowInsertResult.generatedMaps[0] as { id?: string } | undefined
-          )?.id;
-
-          if (!isDefined(workflowId)) {
-            throw new Error(
-              'Campaign Outreach workflow creation returned no ID',
-            );
-          }
-
-          const workflowVersionPosition =
-            await this.recordPositionService.buildRecordPosition({
-              value: 'first',
-              objectMetadata: {
-                isCustom: false,
-                nameSingular: 'workflowVersion',
-              },
-              workspaceId,
-            });
-          const workflowVersionRepository =
-            await this.getWorkflowVersionRepository(workspaceId);
-          const workflowVersionInsertResult =
-            await workflowVersionRepository.insert(
-              {
-                name: 'v1',
-                position: workflowVersionPosition,
-                status: WorkflowVersionStatus.DRAFT,
-                workflowId,
-              },
-              queryRunner.manager,
-            );
-          const currentVersionId = (
-            workflowVersionInsertResult.generatedMaps[0] as
-              | { id?: string }
-              | undefined
-          )?.id;
-
-          if (!isDefined(currentVersionId)) {
-            throw new Error(
-              'Campaign Outreach workflow draft creation returned no ID',
-            );
-          }
-
-          await queryRunner.commitTransaction();
-
-          return {
-            campaignId,
-            currentVersionId,
-            name: 'Campaign Outreach',
-            workflowId,
-          };
-        } catch (error) {
-          if (queryRunner.isTransactionActive) {
-            await queryRunner.rollbackTransaction();
-          }
-
-          if (!workflowWasInserted && isPostgresUniqueViolation(error)) {
-            const workflow = await this.findExistingOutreachWorkflow({
-              workspaceId,
-              campaignId,
-            });
-
-            if (isDefined(workflow)) {
-              return workflow;
-            }
-          }
-
-          throw error;
-        } finally {
-          await queryRunner.release();
-        }
-      },
+    const snapshot = await this.campaignSequenceService.createInitial({
       authContext,
-    );
+      workspaceId,
+      campaignId,
+    });
+
+    return {
+      campaignId: snapshot.campaignId,
+      currentVersionId: snapshot.versionId,
+      name: 'Campaign Outreach',
+      workflowId: snapshot.workflowId,
+    };
   }
 
   private async assertCampaignIsAccessible({
@@ -288,23 +166,18 @@ export class CampaignOutreachWorkflowService {
   private async toCampaignOutreachWorkflow({
     workspaceId,
     workflow,
-    queryRunner,
   }: {
     workspaceId: string;
     workflow: WorkflowWorkspaceEntity;
-    queryRunner?: WorkspaceQueryRunner;
   }): Promise<CampaignOutreachWorkflow> {
     const workflowVersionRepository =
       await this.getWorkflowVersionRepository(workspaceId);
-    const workflowVersions = await workflowVersionRepository.find(
-      {
-        where: [
-          { workflowId: workflow.id, status: WorkflowVersionStatus.DRAFT },
-          { workflowId: workflow.id, status: WorkflowVersionStatus.ACTIVE },
-        ],
-      },
-      queryRunner?.manager,
-    );
+    const workflowVersions = await workflowVersionRepository.find({
+      where: [
+        { workflowId: workflow.id, status: WorkflowVersionStatus.DRAFT },
+        { workflowId: workflow.id, status: WorkflowVersionStatus.ACTIVE },
+      ],
+    });
     const currentVersion =
       workflowVersions.find(
         (workflowVersion) =>

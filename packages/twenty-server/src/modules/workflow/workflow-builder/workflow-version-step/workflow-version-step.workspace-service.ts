@@ -6,6 +6,7 @@ import { type WorkflowVersionStepChangesDTO } from 'src/engine/core-modules/work
 import { WorkflowVersionStepCreationWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step-creation.workspace-service';
 import { WorkflowVersionStepDeletionWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step-deletion.workspace-service';
 import { WorkflowVersionStepUpdateWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step-update.workspace-service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class WorkflowVersionStepWorkspaceService {
     private readonly workflowVersionStepCreationWorkspaceService: WorkflowVersionStepCreationWorkspaceService,
     private readonly workflowVersionStepUpdateWorkspaceService: WorkflowVersionStepUpdateWorkspaceService,
     private readonly workflowVersionStepDeletionWorkspaceService: WorkflowVersionStepDeletionWorkspaceService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async createWorkflowVersionStep({
@@ -23,6 +25,10 @@ export class WorkflowVersionStepWorkspaceService {
     workspaceId: string;
     input: CreateWorkflowVersionStepInput;
   }): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId: input.workflowVersionId, workspaceId },
+    );
+
     return this.workflowVersionStepCreationWorkspaceService.createWorkflowVersionStep(
       {
         workspaceId,
@@ -40,6 +46,10 @@ export class WorkflowVersionStepWorkspaceService {
     workflowVersionId: string;
     step: WorkflowAction;
   }): Promise<WorkflowActionDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     return this.workflowVersionStepUpdateWorkspaceService.updateWorkflowVersionStep(
       {
         workspaceId,
@@ -58,6 +68,10 @@ export class WorkflowVersionStepWorkspaceService {
     workflowVersionId: string;
     stepIdToDelete: string;
   }): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     return this.workflowVersionStepDeletionWorkspaceService.deleteWorkflowVersionStep(
       {
         workspaceId,
@@ -76,6 +90,10 @@ export class WorkflowVersionStepWorkspaceService {
     workflowVersionId: string;
     stepId: string;
   }): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     return this.workflowVersionStepCreationWorkspaceService.duplicateWorkflowVersionStep(
       {
         workspaceId,

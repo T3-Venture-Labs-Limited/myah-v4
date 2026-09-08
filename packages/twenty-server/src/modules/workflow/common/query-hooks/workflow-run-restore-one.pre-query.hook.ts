@@ -21,8 +21,8 @@ export class WorkflowRunRestoreOnePreQueryHook implements WorkspacePreQueryHookI
     const workspace = authContext.workspace;
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
-    await this.workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible(
-      { authContext, workflowRunId: payload.id, workspaceId: workspace.id },
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId: payload.id, workspaceId: workspace.id },
     );
 
     return payload;

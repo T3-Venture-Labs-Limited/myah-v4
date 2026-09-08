@@ -1,7 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { WorkflowVersionStatus } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
 import { CampaignOutreachWorkflowService } from 'src/modules/myah-outreach/services/campaign-outreach-workflow.service';
 
 const rolePermissionConfig = { unionOf: ['role-id'] };
@@ -95,19 +94,23 @@ const createServiceContext = () => {
       createQueryRunner: jest.fn().mockReturnValue(queryRunner),
     }),
   };
-  const recordPositionService = {
-    buildRecordPosition: jest.fn().mockResolvedValue(1),
+  const campaignSequenceService = {
+    createInitial: jest.fn().mockResolvedValue({
+      campaignId,
+      workflowId: 'workflow-a',
+      versionId: 'version-a',
+    }),
   };
   const service = new CampaignOutreachWorkflowService(
     globalWorkspaceOrmManager as never,
-    recordPositionService as never,
+    campaignSequenceService as never,
   );
 
   return {
     campaignRepository,
+    campaignSequenceService,
     globalWorkspaceOrmManager,
     queryRunner,
-    recordPositionService,
     service,
     workflowRepository,
     workflowVersionRepository,
@@ -115,111 +118,42 @@ const createServiceContext = () => {
 };
 
 describe('CampaignOutreachWorkflowService', () => {
-  it('creates a single Campaign-bound workflow with draft v1', async () => {
-    const {
-      service,
-      workflowRepository,
-      workflowVersionRepository,
-      recordPositionService,
-    } = createServiceContext();
+  it('creates or returns the immutable sequence definition through the scoped service', async () => {
+    const { campaignSequenceService, service } = createServiceContext();
 
     await expect(
-      service.createOrGet({ workspaceId, campaignId }),
+      service.createOrGet({ authContext, workspaceId, campaignId }),
     ).resolves.toEqual({
       campaignId,
       currentVersionId: 'version-a',
       name: 'Campaign Outreach',
       workflowId: 'workflow-a',
     });
-
-    expect(workflowRepository.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outreachCampaignId: campaignId,
-        position: 1,
-      }),
-      expect.anything(),
-    );
-    expect(workflowVersionRepository.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: 'v1',
-        status: WorkflowVersionStatus.DRAFT,
-        workflowId: 'workflow-a',
-      }),
-      expect.anything(),
-    );
-    expect(recordPositionService.buildRecordPosition).toHaveBeenCalledTimes(2);
+    expect(campaignSequenceService.createInitial).toHaveBeenCalledWith({
+      authContext,
+      campaignId,
+      workspaceId,
+    });
   });
 
-  it('returns the existing association instead of creating a second workflow', async () => {
-    const { service, workflowRepository, workflowVersionRepository } =
-      createServiceContext();
-    workflowRepository.findOne.mockResolvedValue({
-      id: 'workflow-a',
-      name: 'Existing outreach',
-      outreachCampaignId: campaignId,
-    });
-    workflowVersionRepository.find.mockResolvedValue([
-      {
-        id: 'version-a',
-        status: WorkflowVersionStatus.DRAFT,
-        workflowId: 'workflow-a',
-      },
-    ]);
+  it('requires explicit authenticated context for creation', async () => {
+    const { campaignSequenceService, service } = createServiceContext();
 
     await expect(
       service.createOrGet({ workspaceId, campaignId }),
-    ).resolves.toEqual({
-      campaignId,
-      currentVersionId: 'version-a',
-      name: 'Existing outreach',
-      workflowId: 'workflow-a',
-    });
-
-    expect(workflowRepository.insert).not.toHaveBeenCalled();
-    expect(workflowVersionRepository.insert).not.toHaveBeenCalled();
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(campaignSequenceService.createInitial).not.toHaveBeenCalled();
   });
 
-  it('re-reads the one persisted association after a unique-index race', async () => {
-    const { service, workflowRepository, workflowVersionRepository } =
-      createServiceContext();
-    workflowRepository.insert.mockRejectedValue({ code: '23505' });
-    workflowRepository.findOne
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: 'workflow-a',
-        name: 'Existing outreach',
-        outreachCampaignId: campaignId,
-      });
-    workflowVersionRepository.find.mockResolvedValue([
-      {
-        id: 'version-a',
-        status: WorkflowVersionStatus.DRAFT,
-        workflowId: 'workflow-a',
-      },
-    ]);
-
-    await expect(
-      service.createOrGet({ workspaceId, campaignId }),
-    ).resolves.toEqual({
-      campaignId,
-      currentVersionId: 'version-a',
-      name: 'Existing outreach',
-      workflowId: 'workflow-a',
-    });
-  });
-
-  it('rolls back when draft v1 creation fails', async () => {
-    const { queryRunner, service, workflowVersionRepository } =
-      createServiceContext();
-    workflowVersionRepository.insert.mockRejectedValue(
+  it('propagates transactional initial sequence failures', async () => {
+    const { campaignSequenceService, service } = createServiceContext();
+    campaignSequenceService.createInitial.mockRejectedValue(
       new Error('draft failed'),
     );
 
     await expect(
-      service.createOrGet({ workspaceId, campaignId }),
+      service.createOrGet({ authContext, workspaceId, campaignId }),
     ).rejects.toThrow('draft failed');
-
-    expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('rejects an inaccessible Campaign before reading a Workflow', async () => {
