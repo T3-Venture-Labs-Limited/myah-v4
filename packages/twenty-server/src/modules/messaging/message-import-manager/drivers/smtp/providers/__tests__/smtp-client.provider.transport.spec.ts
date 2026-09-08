@@ -1,6 +1,31 @@
+import { createHook } from 'async_hooks';
 import { createServer, type AddressInfo, type Server, type Socket } from 'net';
 
 import { createOwnedSocketSmtpClient } from 'src/modules/messaging/message-import-manager/drivers/smtp/providers/smtp-client.provider';
+
+const trackReferencedTimeouts = (durationMs: number) => {
+  const activeTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
+  const hook = createHook({
+    destroy: (asyncId) => activeTimeouts.delete(asyncId),
+    init: (asyncId, type, _triggerAsyncId, resource) => {
+      if (
+        type === 'Timeout' &&
+        (resource as NodeJS.Timeout & { _idleTimeout?: number })
+          ._idleTimeout === durationMs
+      ) {
+        activeTimeouts.set(asyncId, resource as ReturnType<typeof setTimeout>);
+      }
+    },
+  });
+
+  hook.enable();
+
+  return {
+    disable: () => hook.disable(),
+    getReferencedTimeouts: () =>
+      [...activeTimeouts.values()].filter((timeout) => timeout.hasRef()),
+  };
+};
 
 const waitFor = async <T>(promise: Promise<T>, description: string) => {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -177,11 +202,13 @@ describe('owned-socket SMTP deadline', () => {
     }
   });
 
-  it('uses the same owned-socket deadline while verify awaits the greeting', async () => {
+  it('clears the installed transport greeting timer when verify reaches the deadline', async () => {
     const loopbackServer = await startLoopbackSmtpServer({
       sendGreeting: false,
     });
     const deadlineMs = 100;
+    const greetingTimeoutMs = 10_000;
+    const timeoutTracker = trackReferencedTimeouts(greetingTimeoutMs);
     const client = createOwnedSocketSmtpClient(
       {
         host: loopbackServer.host,
@@ -189,7 +216,7 @@ describe('owned-socket SMTP deadline', () => {
         secure: false,
         ignoreTLS: true,
         connectionTimeout: 3000,
-        greetingTimeout: 3000,
+        greetingTimeout: greetingTimeoutMs,
         socketTimeout: 3000,
       },
       deadlineMs,
@@ -199,10 +226,14 @@ describe('owned-socket SMTP deadline', () => {
       await expect(client.verify()).rejects.toThrow(
         `SMTP operation exceeded ${deadlineMs}ms`,
       );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(timeoutTracker.getReferencedTimeouts()).toHaveLength(0);
       await expect(
         waitFor(loopbackServer.peerTerminated, 'verify peer termination'),
       ).resolves.toBeUndefined();
     } finally {
+      timeoutTracker.disable();
       await loopbackServer.close();
     }
   });

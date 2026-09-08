@@ -55,9 +55,9 @@ const executeWithOwnedSocket = <T>(
 
     const deadlineError = getDeadlineError(deadlineMs);
 
-    const destroyOwnedSocket = () => {
+    const destroyOwnedSocket = (error?: Error) => {
       if (isDefined(ownedSocket) && !ownedSocket.destroyed) {
-        ownedSocket.destroy();
+        ownedSocket.destroy(error);
       }
     };
 
@@ -168,7 +168,7 @@ const executeWithOwnedSocket = <T>(
       }
 
       terminal = true;
-      destroyOwnedSocket();
+      destroyOwnedSocket(deadlineError);
       settleSocketHook(deadlineError);
       clearResources();
       reject(deadlineError);
