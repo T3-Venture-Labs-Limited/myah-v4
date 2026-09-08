@@ -1,5 +1,11 @@
 import { SettingsAccountSendingPolicy } from '@/settings/accounts/components/SettingsAccountSendingPolicy';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 
 const GRAPHQL_INT_MAX = 2_147_483_647;
 
@@ -248,6 +254,69 @@ describe('SettingsAccountSendingPolicy', () => {
         },
       }),
     );
+  });
+
+  it('preserves edits made while saving and synchronizes the unchanged field', async () => {
+    let resolveMutation!: (result: { data: object }) => void;
+
+    mockUpdateConnectedAccountSendingPolicy.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveMutation = resolve;
+      }),
+    );
+
+    const { rerender } = render(
+      <SettingsAccountSendingPolicy
+        connectedAccountId="account-id"
+        dailySendLimit={50}
+        minimumSendIntervalMs={300_000}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Daily send limit'), {
+      target: { value: '80' },
+    });
+    fireEvent.change(
+      screen.getByLabelText('Minimum send interval (milliseconds)'),
+      { target: { value: '90000' } },
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save sending policy' }),
+    );
+
+    await waitFor(() =>
+      expect(mockUpdateConnectedAccountSendingPolicy).toHaveBeenCalledWith({
+        variables: {
+          input: {
+            connectedAccountId: 'account-id',
+            dailySendLimit: 80,
+            minimumSendIntervalMs: 90_000,
+          },
+        },
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText('Daily send limit'), {
+      target: { value: '90' },
+    });
+
+    await act(async () => {
+      resolveMutation({ data: {} });
+    });
+    await waitFor(() => expect(mockEnqueueSuccessSnackBar).toHaveBeenCalled());
+
+    rerender(
+      <SettingsAccountSendingPolicy
+        connectedAccountId="account-id"
+        dailySendLimit={80}
+        minimumSendIntervalMs={120_000}
+      />,
+    );
+
+    expect(screen.getByLabelText('Daily send limit')).toHaveValue(90);
+    expect(
+      screen.getByLabelText('Minimum send interval (milliseconds)'),
+    ).toHaveValue(120_000);
   });
 
   it.each([

@@ -96,6 +96,9 @@ export const SettingsAccountSendingPolicy = ({
       return;
     }
 
+    const submittedDailySendLimitInput = dailySendLimitInput;
+    const submittedMinimumSendIntervalMsInput = minimumSendIntervalMsInput;
+
     try {
       await updateConnectedAccountSendingPolicy({
         variables: {
@@ -106,14 +109,16 @@ export const SettingsAccountSendingPolicy = ({
           },
         },
       });
-      setDailySendLimitDraft((currentDraft) => ({
-        ...currentDraft,
-        isDirty: false,
-      }));
-      setMinimumSendIntervalMsDraft((currentDraft) => ({
-        ...currentDraft,
-        isDirty: false,
-      }));
+      setDailySendLimitDraft((currentDraft) =>
+        currentDraft.value === submittedDailySendLimitInput
+          ? { ...currentDraft, isDirty: false }
+          : currentDraft,
+      );
+      setMinimumSendIntervalMsDraft((currentDraft) =>
+        currentDraft.value === submittedMinimumSendIntervalMsInput
+          ? { ...currentDraft, isDirty: false }
+          : currentDraft,
+      );
       enqueueSuccessSnackBar({ message: t`Sending policy updated` });
     } catch (error) {
       if (CombinedGraphQLErrors.is(error)) {
