@@ -4,7 +4,7 @@ import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { useMutation } from '@apollo/client/react';
 import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { t } from '@lingui/core/macro';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { H2Title } from 'twenty-ui/typography';
@@ -31,6 +31,8 @@ type UpdateConnectedAccountSendingPolicyVariables = {
   };
 };
 
+const GRAPHQL_INT_MAX = 2_147_483_647;
+
 const parsePositiveInteger = (value: string) => {
   if (!/^[1-9]\d*$/.test(value)) {
     return null;
@@ -38,7 +40,9 @@ const parsePositiveInteger = (value: string) => {
 
   const parsedValue = Number(value);
 
-  return Number.isSafeInteger(parsedValue) ? parsedValue : null;
+  return Number.isSafeInteger(parsedValue) && parsedValue <= GRAPHQL_INT_MAX
+    ? parsedValue
+    : null;
 };
 
 export const SettingsAccountSendingPolicy = ({
@@ -46,12 +50,34 @@ export const SettingsAccountSendingPolicy = ({
   dailySendLimit,
   minimumSendIntervalMs,
 }: SettingsAccountSendingPolicyProps) => {
-  const [dailySendLimitInput, setDailySendLimitInput] = useState(
-    String(dailySendLimit),
-  );
-  const [minimumSendIntervalMsInput, setMinimumSendIntervalMsInput] = useState(
-    String(minimumSendIntervalMs),
-  );
+  const [dailySendLimitDraft, setDailySendLimitDraft] = useState({
+    isDirty: false,
+    value: String(dailySendLimit),
+  });
+  const [minimumSendIntervalMsDraft, setMinimumSendIntervalMsDraft] = useState({
+    isDirty: false,
+    value: String(minimumSendIntervalMs),
+  });
+
+  useEffect(() => {
+    setDailySendLimitDraft((currentDraft) =>
+      currentDraft.isDirty
+        ? currentDraft
+        : { isDirty: false, value: String(dailySendLimit) },
+    );
+  }, [dailySendLimit]);
+
+  useEffect(() => {
+    setMinimumSendIntervalMsDraft((currentDraft) =>
+      currentDraft.isDirty
+        ? currentDraft
+        : { isDirty: false, value: String(minimumSendIntervalMs) },
+    );
+  }, [minimumSendIntervalMs]);
+
+  const dailySendLimitInput = dailySendLimitDraft.value;
+  const minimumSendIntervalMsInput = minimumSendIntervalMsDraft.value;
+
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
   const [updateConnectedAccountSendingPolicy, { loading }] = useMutation<
     UpdateConnectedAccountSendingPolicyData,
@@ -80,6 +106,14 @@ export const SettingsAccountSendingPolicy = ({
           },
         },
       });
+      setDailySendLimitDraft((currentDraft) => ({
+        ...currentDraft,
+        isDirty: false,
+      }));
+      setMinimumSendIntervalMsDraft((currentDraft) => ({
+        ...currentDraft,
+        isDirty: false,
+      }));
       enqueueSuccessSnackBar({ message: t`Sending policy updated` });
     } catch (error) {
       if (CombinedGraphQLErrors.is(error)) {
@@ -99,20 +133,26 @@ export const SettingsAccountSendingPolicy = ({
       <SettingsTextInput
         instanceId={`connected-account-${connectedAccountId}-daily-send-limit`}
         label={t`Daily send limit`}
+        max={GRAPHQL_INT_MAX}
         min={1}
         step={1}
         type="number"
         value={dailySendLimitInput}
-        onChange={setDailySendLimitInput}
+        onChange={(value) => {
+          setDailySendLimitDraft({ isDirty: true, value });
+        }}
       />
       <SettingsTextInput
         instanceId={`connected-account-${connectedAccountId}-minimum-send-interval`}
         label={t`Minimum send interval (milliseconds)`}
+        max={GRAPHQL_INT_MAX}
         min={1}
         step={1}
         type="number"
         value={minimumSendIntervalMsInput}
-        onChange={setMinimumSendIntervalMsInput}
+        onChange={(value) => {
+          setMinimumSendIntervalMsDraft({ isDirty: true, value });
+        }}
       />
       <Button
         title={t`Save sending policy`}
