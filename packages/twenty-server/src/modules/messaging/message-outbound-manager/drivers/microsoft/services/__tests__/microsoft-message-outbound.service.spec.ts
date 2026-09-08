@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 
 import { RetryHandlerOptions } from '@microsoft/microsoft-graph-client';
@@ -303,5 +304,72 @@ describe('MicrosoftMessageOutboundService', () => {
     expect(sendRequest.post.mock.invocationCallOrder[0]).toBeLessThan(
       draftDeleteRequest.delete.mock.invocationCallOrder[0],
     );
+  });
+
+  it('returns an accepted Microsoft send when cleanup deletion reaches the original deadline', async () => {
+    jest.useFakeTimers();
+    const loggerWarnSpy = jest.spyOn(Logger.prototype, 'warn');
+    const submissionElapsedMs = 10_000;
+    let cleanupSignal: AbortSignal | undefined;
+    let resolveSend: ((result: undefined) => void) | undefined;
+
+    sendRequest.post.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSend = resolve;
+      }),
+    );
+    draftDeleteRequest.delete.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          const optionsCall = draftDeleteRequest.options.mock.calls.at(-1);
+
+          cleanupSignal = optionsCall?.[0].signal;
+          cleanupSignal?.addEventListener(
+            'abort',
+            () => reject(cleanupSignal?.reason),
+            { once: true },
+          );
+        }),
+    );
+
+    const resultPromise = service.sendDraft(
+      'draft-id',
+      {
+        to: 'recipient@example.com',
+        subject: 'Approved subject',
+        body: 'Approved body',
+        html: '<p>Approved body</p>',
+        attachments: [],
+      },
+      buildConnectedAccount(),
+    );
+    const resolution = expect(resultPromise).resolves.toEqual({
+      headerMessageId: '<draft@example.com>',
+      messageExternalId: 'draft-id',
+      threadExternalId: 'conversation-id',
+    });
+
+    await jest.advanceTimersByTimeAsync(submissionElapsedMs);
+    expect(sendRequest.post).toHaveBeenCalledTimes(1);
+
+    resolveSend?.(undefined);
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(draftDeleteRequest.delete).toHaveBeenCalledTimes(1);
+    expect(cleanupSignal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS - submissionElapsedMs - 1,
+    );
+    expect(cleanupSignal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await resolution;
+    expect(cleanupSignal?.aborted).toBe(true);
+    expect(loggerWarnSpy).toHaveBeenCalledTimes(1);
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      'Failed to delete Microsoft draft draft-id after send',
+    );
+    expect(jest.getTimerCount()).toBe(0);
   });
 });
