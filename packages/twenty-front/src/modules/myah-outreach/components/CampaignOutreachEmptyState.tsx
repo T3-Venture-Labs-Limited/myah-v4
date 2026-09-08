@@ -16,28 +16,26 @@ type CampaignOutreachEmptyStateProps = {
 export const CampaignOutreachEmptyState = ({
   isCreating,
   onCreate,
-}: CampaignOutreachEmptyStateProps) => {
-  return (
-    <AnimatedPlaceholderEmptyContainer>
-      <AnimatedPlaceholder type="noRecord" />
-      <AnimatedPlaceholderEmptyTextContainer>
-        <AnimatedPlaceholderEmptyTitle>
-          No outreach workflow yet
-        </AnimatedPlaceholderEmptyTitle>
-        <AnimatedPlaceholderEmptySubTitle>
-          Create the Campaign's dedicated outreach workflow to configure its
-          automation.
-        </AnimatedPlaceholderEmptySubTitle>
-      </AnimatedPlaceholderEmptyTextContainer>
-      <Button
-        ariaLabel="Create outreach workflow"
-        Icon={IconPlus}
-        disabled={isCreating}
-        isLoading={isCreating}
-        onClick={() => void onCreate()}
-        title="Create outreach workflow"
-        variant="secondary"
-      />
-    </AnimatedPlaceholderEmptyContainer>
-  );
-};
+}: CampaignOutreachEmptyStateProps) => (
+  <AnimatedPlaceholderEmptyContainer>
+    <AnimatedPlaceholder type="noRecord" />
+    <AnimatedPlaceholderEmptyTextContainer>
+      <AnimatedPlaceholderEmptyTitle>
+        No Campaign sequence yet
+      </AnimatedPlaceholderEmptyTitle>
+      <AnimatedPlaceholderEmptySubTitle>
+        Create an empty restricted Email/Instagram sequence. Nothing is created
+        by viewing this tab.
+      </AnimatedPlaceholderEmptySubTitle>
+    </AnimatedPlaceholderEmptyTextContainer>
+    <Button
+      Icon={IconPlus}
+      ariaLabel="Create Campaign sequence"
+      disabled={isCreating}
+      isLoading={isCreating}
+      onClick={() => void onCreate()}
+      title="Create Campaign sequence"
+      variant="secondary"
+    />
+  </AnimatedPlaceholderEmptyContainer>
+);

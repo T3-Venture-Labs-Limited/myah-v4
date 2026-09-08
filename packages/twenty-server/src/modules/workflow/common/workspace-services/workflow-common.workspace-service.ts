@@ -24,6 +24,7 @@ import {
   WorkflowCommonException,
   WorkflowCommonExceptionCode,
 } from 'src/modules/workflow/common/exceptions/workflow-common.exception';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { type WorkflowAutomatedTriggerWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-automated-trigger.workspace-entity';
 import { type WorkflowRunWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import {
@@ -56,6 +57,7 @@ export class WorkflowCommonWorkspaceService {
     private readonly logicFunctionFromSourceService: LogicFunctionFromSourceService,
     private readonly workspaceManyOrAllFlatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly commandMenuItemService: CommandMenuItemService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async getWorkflowVersionOrFail({
@@ -271,6 +273,12 @@ export class WorkflowCommonWorkspaceService {
     workspaceId: string;
     operation: 'restore' | 'delete' | 'destroy';
   }): Promise<void> {
+    for (const workflowId of workflowIds) {
+      await this.workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed(
+        { workflowId, workspaceId },
+      );
+    }
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {

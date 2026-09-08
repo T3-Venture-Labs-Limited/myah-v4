@@ -1,6 +1,13 @@
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { CampaignOutreachWorkflowLifecycleWorkspaceService } from 'src/modules/myah-campaign/services/campaign-outreach-workflow-lifecycle.workspace-service';
-import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
+import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+
+jest.mock(
+  'src/engine/twenty-orm/storage/orm-workspace-context.storage',
+  () => ({ getWorkspaceContext: jest.fn() }),
+);
+
+const getWorkspaceContextMock = jest.mocked(getWorkspaceContext);
 
 describe('CampaignOutreachWorkflowLifecycleService', () => {
   const workflowRepository = {
@@ -16,70 +23,151 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
     getRepository,
     executeInWorkspaceContext,
   } as unknown as GlobalWorkspaceOrmManager;
-  const handleWorkflowSubEntities = jest.fn();
-  const workflowCommonWorkspaceService = {
-    handleWorkflowSubEntities,
-  } as unknown as WorkflowCommonWorkspaceService;
   const authContext = {
     type: 'system',
     workspace: { id: 'workspace-a' },
   } as never;
   const service = new CampaignOutreachWorkflowLifecycleWorkspaceService(
     globalWorkspaceOrmManager,
-    workflowCommonWorkspaceService,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    getWorkspaceContextMock.mockReturnValue({
+      apiKeyRoleMap: {},
+      authContext,
+      userWorkspaceRoleMap: {},
+    } as never);
   });
 
-  it('cleans the Campaign workflow before a hard Campaign deletion', async () => {
-    workflowRepository.find.mockResolvedValue([{ id: 'workflow-a' }]);
+  describe('transactional parent precondition', () => {
+    const campaignRepository = { find: jest.fn() };
 
-    await service.handleCampaignDeletion({
-      authContext,
-      campaignIds: ['campaign-a'],
-      operation: 'destroy',
-      workspaceId: 'workspace-a',
+    const createTransactionManager = (
+      retainedWorkflows: Array<{ id: string }>,
+    ) => {
+      const query = jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'campaign-a' }, { id: 'campaign-b' }])
+        .mockResolvedValueOnce(retainedWorkflows);
+
+      return {
+        entityManager: {
+          getRepository: jest.fn(() => campaignRepository),
+          queryRunner: { isTransactionActive: true, query },
+        },
+        query,
+      };
+    };
+
+    it('locks sorted deduplicated Campaign IDs and rejects the complete batch before mutation', async () => {
+      campaignRepository.find.mockResolvedValue([
+        { id: 'campaign-a' },
+        { id: 'campaign-b' },
+      ]);
+      const { entityManager, query } = createTransactionManager([
+        { id: 'retained-workflow' },
+      ]);
+
+      await expect(
+        service.assertCampaignDeletionAllowedInTransaction({
+          authContext,
+          campaignIds: ['campaign-b', 'campaign-a', 'campaign-b'],
+          entityManager: entityManager as never,
+          workspaceId: '20202020-0000-4000-8000-000000000001',
+        }),
+      ).rejects.toThrow(
+        'Campaigns with outreach definitions cannot be deleted.',
+      );
+
+      expect(query).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('pg_advisory_xact_lock'),
+        ['20202020-0000-4000-8000-000000000001', 'campaign-a'],
+      );
+      expect(query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('pg_advisory_xact_lock'),
+        ['20202020-0000-4000-8000-000000000001', 'campaign-b'],
+      );
+      expect(query.mock.calls[2][0]).toContain('FOR UPDATE');
+      expect(query.mock.calls[2][1]).toEqual([['campaign-a', 'campaign-b']]);
+      expect(query.mock.calls[3][0]).toContain('"outreachCampaignId"');
     });
 
-    expect(handleWorkflowSubEntities).toHaveBeenCalledWith({
-      operation: 'destroy',
-      workflowIds: ['workflow-a'],
-      workspaceId: 'workspace-a',
+    it('permits a complete accessible no-outreach batch under the same transaction', async () => {
+      campaignRepository.find.mockResolvedValue([
+        { id: 'campaign-a' },
+        { id: 'campaign-b' },
+      ]);
+      const { entityManager } = createTransactionManager([]);
+
+      await expect(
+        service.assertCampaignDeletionAllowedInTransaction({
+          authContext,
+          campaignIds: ['campaign-a', 'campaign-b'],
+          entityManager: entityManager as never,
+          workspaceId: '20202020-0000-4000-8000-000000000001',
+        }),
+      ).resolves.toBeUndefined();
     });
 
-    expect(workflowRepository.delete).toHaveBeenCalledWith(['workflow-a']);
-    expect(executeInWorkspaceContext).toHaveBeenCalledWith(
-      expect.any(Function),
-      authContext,
-    );
-
-    expect(workflowRepository.find).toHaveBeenCalledWith(
-      expect.objectContaining({ withDeleted: true }),
-    );
+    it('fails closed without an active transaction', async () => {
+      await expect(
+        service.assertCampaignDeletionAllowedInTransaction({
+          authContext,
+          campaignIds: ['campaign-a'],
+          entityManager: {
+            queryRunner: { isTransactionActive: false },
+          } as never,
+          workspaceId: '20202020-0000-4000-8000-000000000001',
+        }),
+      ).rejects.toThrow('requires a transaction');
+    });
   });
 
-  it('deactivates and soft-deletes Campaign workflow resources after a Campaign soft deletion', async () => {
-    workflowRepository.find.mockResolvedValue([{ id: 'workflow-a' }]);
+  it.each(['delete', 'destroy'] as const)(
+    'rejects %s parent cascades for legacy Campaign outreach before mutation',
+    async (operation) => {
+      workflowRepository.find.mockResolvedValue([{ id: 'workflow-a' }]);
 
-    await service.handleCampaignDeletion({
-      authContext,
-      campaignIds: ['campaign-a'],
-      operation: 'delete',
-      workspaceId: 'workspace-a',
-    });
+      await expect(
+        service.handleCampaignDeletion({
+          authContext,
+          campaignIds: ['campaign-a'],
+          operation,
+          workspaceId: 'workspace-a',
+        }),
+      ).rejects.toThrow(
+        'Campaigns with outreach definitions cannot be deleted.',
+      );
 
-    expect(handleWorkflowSubEntities).toHaveBeenCalledWith({
-      operation: 'delete',
-      workflowIds: ['workflow-a'],
-      workspaceId: 'workspace-a',
-    });
+      expect(workflowRepository.softDelete).not.toHaveBeenCalled();
+      expect(workflowRepository.delete).not.toHaveBeenCalled();
+      expect(workflowRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({ withDeleted: true }),
+      );
+    },
+  );
 
-    expect(workflowRepository.softDelete).toHaveBeenCalledWith(['workflow-a']);
+  it('rejects Campaign delete preflight when any retained outreach definition exists', async () => {
+    workflowRepository.find.mockResolvedValue([
+      { id: 'archived-legacy-workflow', deletedAt: new Date() },
+      { id: 'sequence-workflow', deletedAt: null },
+    ]);
+
+    await expect(
+      service.assertCampaignDeletionAllowed({
+        authContext,
+        campaignIds: ['campaign-a'],
+        workspaceId: 'workspace-a',
+      }),
+    ).rejects.toThrow('Campaigns with outreach definitions cannot be deleted.');
   });
 
-  it('does nothing when deleted Campaigns do not own an Outreach workflow', async () => {
+  it('permits parent deletion when Campaigns have no Outreach definition', async () => {
     workflowRepository.find.mockResolvedValue([]);
 
     await service.handleCampaignDeletion({
@@ -88,7 +176,5 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
       operation: 'delete',
       workspaceId: 'workspace-a',
     });
-
-    expect(handleWorkflowSubEntities).not.toHaveBeenCalled();
   });
 });

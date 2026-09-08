@@ -20,6 +20,7 @@ import {
   WorkflowVersionStatus,
   type WorkflowVersionWorkspaceEntity,
 } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 import { assertWorkflowVersionTriggerIsDefined } from 'src/modules/workflow/common/utils/assert-workflow-version-trigger-is-defined.util';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
@@ -63,6 +64,7 @@ export class WorkflowTriggerWorkspaceService {
     private readonly commandMenuItemService: CommandMenuItemService,
     @InjectCacheStorage(CacheStorageNamespace.ModuleWorkflow)
     private readonly cacheStorageService: CacheStorageService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async runWorkflowVersion({
@@ -78,6 +80,10 @@ export class WorkflowTriggerWorkspaceService {
     workflowRunId?: string;
     workspaceId: string;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     await this.workflowCommonWorkspaceService.getWorkflowVersionOrFail({
       workflowVersionId,
       workspaceId,
@@ -96,6 +102,10 @@ export class WorkflowTriggerWorkspaceService {
     workflowVersionId: string,
     workspaceId: string,
   ) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -206,6 +216,57 @@ export class WorkflowTriggerWorkspaceService {
     workflowVersionId: string,
     workspaceId: string,
   ) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
+    return this.deactivateWorkflowVersionDefinition(
+      workflowVersionId,
+      workspaceId,
+    );
+  }
+
+  async reconcileLegacyCampaignWorkflowVersionAfterReplacement(
+    workflowVersionId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    await this.workflowOutreachAccessGuardService.assertLegacyCampaignWorkflowVersionReplacementAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
+    const authContext = buildSystemAuthContext(workspaceId);
+
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const workflowVersionRepository =
+        await this.globalWorkspaceOrmManager.getRepository<WorkflowVersionWorkspaceEntity>(
+          workspaceId,
+          'workflowVersion',
+          { shouldBypassPermissionChecks: true },
+        );
+      const workflowVersion = await workflowVersionRepository.findOne({
+        where: { id: workflowVersionId },
+        withDeleted: true,
+      });
+
+      if (!workflowVersion?.trigger) {
+        return;
+      }
+
+      await this.deleteCommandMenuItem(workflowVersion, workspaceId);
+
+      if (workflowVersion.trigger.type === WorkflowTriggerType.CRON) {
+        await this.cacheStorageService.hashDelete({
+          key: WORKFLOW_CRON_TRIGGER_CACHE_KEY,
+          field: workflowVersion.workflowId,
+        });
+      }
+    }, authContext);
+  }
+
+  private deactivateWorkflowVersionDefinition(
+    workflowVersionId: string,
+    workspaceId: string,
+  ) {
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -229,7 +290,21 @@ export class WorkflowTriggerWorkspaceService {
     );
   }
 
+  async stopPendingLegacyCampaignWorkflowRunForReplacement(
+    workflowRunId: string,
+    workspaceId: string,
+  ) {
+    return this.workflowRunnerWorkspaceService.stopPendingLegacyCampaignWorkflowRunForReplacement(
+      workspaceId,
+      workflowRunId,
+    );
+  }
+
   async stopWorkflowRun(workflowRunId: string, workspaceId: string) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     return this.workflowRunnerWorkspaceService.stopWorkflowRun(
       workspaceId,
       workflowRunId,
@@ -237,6 +312,10 @@ export class WorkflowTriggerWorkspaceService {
   }
 
   async retryWorkflowRun(workflowRunId: string, workspaceId: string) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     return this.workflowRunnerWorkspaceService.retryWorkflowRun(
       workspaceId,
       workflowRunId,

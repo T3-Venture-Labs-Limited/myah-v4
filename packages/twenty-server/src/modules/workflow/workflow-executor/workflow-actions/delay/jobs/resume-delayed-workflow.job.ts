@@ -9,6 +9,7 @@ import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queu
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkflowRunStatus } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import { RESUME_DELAYED_WORKFLOW_JOB_NAME } from 'src/modules/workflow/workflow-executor/workflow-actions/delay/contants/resume-delayed-workflow-job-name';
 import { isWorkflowDelayAction } from 'src/modules/workflow/workflow-executor/workflow-actions/delay/guards/is-workflow-delay-action.guard';
@@ -31,6 +32,7 @@ export class ResumeDelayedWorkflowJob {
     private readonly messageQueueService: MessageQueueService,
     private readonly workflowRunWorkspaceService: WorkflowRunWorkspaceService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   @Process(RESUME_DELAYED_WORKFLOW_JOB_NAME)
@@ -39,6 +41,10 @@ export class ResumeDelayedWorkflowJob {
     workflowRunId,
     stepId,
   }: ResumeDelayedWorkflowJobData): Promise<void> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {

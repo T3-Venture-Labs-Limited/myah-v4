@@ -21,8 +21,8 @@ export class WorkflowVersionRestoreOnePreQueryHook implements WorkspacePreQueryH
     const workspace = authContext.workspace;
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
-    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
-      { authContext, workflowVersionId: payload.id, workspaceId: workspace.id },
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId: payload.id, workspaceId: workspace.id },
     );
 
     return payload;

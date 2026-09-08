@@ -1,4 +1,4 @@
-import { type FindOptionsWhere } from 'typeorm';
+import { type FindOptionsWhere, IsNull } from 'typeorm';
 
 import {
   WorkflowRunStatus,
@@ -7,5 +7,7 @@ import {
 
 export const NOT_STARTED_RUNS_FIND_OPTIONS: FindOptionsWhere<WorkflowRunWorkspaceEntity> =
   {
+    deletedAt: IsNull(),
     status: WorkflowRunStatus.NOT_STARTED,
+    workflow: { outreachCampaignId: IsNull() },
   };

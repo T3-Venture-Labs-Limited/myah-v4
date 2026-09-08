@@ -2,12 +2,19 @@ import { type QueryResultFieldValue } from 'src/engine/api/graphql/workspace-que
 import { type ResolverArgs } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+
+export type WorkspacePreQueryHookTransactionContext = {
+  entityManager: WorkspaceEntityManager;
+};
 
 export interface WorkspacePreQueryHookInstance {
+  readonly shouldRunInTransaction?: true;
   execute(
     authContext: WorkspaceAuthContext,
     objectName: string,
     payload: ResolverArgs,
+    transactionContext?: WorkspacePreQueryHookTransactionContext,
   ): Promise<ResolverArgs>;
 }
 

@@ -24,8 +24,8 @@ export class WorkflowVersionDeleteOnePreQueryHook implements WorkspacePreQueryHo
     const { workspace } = authContext;
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
-    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
-      { authContext, workflowVersionId: payload.id, workspaceId: workspace.id },
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId: payload.id, workspaceId: workspace.id },
     );
 
     await this.workflowVersionValidationWorkspaceService.validateWorkflowVersionForDeleteOne(
