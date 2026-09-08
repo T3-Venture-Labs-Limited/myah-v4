@@ -108,6 +108,7 @@ const terminalFundingStates: Partial<
   Record<FundingHistoryItem['state'], true>
 > = {
   BALANCE_ACTIVE: true,
+  NEEDS_SUPPORT: true,
   PAYMENT_FAILED: true,
   REFUNDED: true,
 };
@@ -243,6 +244,8 @@ export const SettingsBilling = ({
     number | null
   >(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [recoveredTerminalFundingAction, setRecoveredTerminalFundingAction] =
+    useState<FundingHistoryItem | null>(null);
   const [pendingFundingRequest, setPendingFundingRequest] =
     useState<PendingFundingRequest | null>(() =>
       readPendingFundingRequest(workspaceId),
@@ -311,22 +314,23 @@ export const SettingsBilling = ({
           };
   const status = fundingData?.managedProviderBillingStatus;
   const customerFundingPolicy = status?.customerFundingPolicy;
+  const displayedFundingAction =
+    customerFundingAction ?? recoveredTerminalFundingAction;
   const displayedFundingHistory =
     status === undefined ||
-    pendingActionId === null ||
-    customerFundingAction === undefined ||
-    customerFundingAction === null ||
-    customerFundingAction.id !== pendingActionId ||
+    displayedFundingAction === undefined ||
+    displayedFundingAction === null ||
     status.customerFundingHistory.some(
-      (entry) => entry.id === customerFundingAction.id,
+      (entry) => entry.id === displayedFundingAction.id,
     )
       ? (status?.customerFundingHistory ?? [])
-      : [customerFundingAction, ...status.customerFundingHistory];
+      : [displayedFundingAction, ...status.customerFundingHistory];
 
   useEffect(() => {
     const request = readPendingFundingRequest(workspaceId);
     setPendingFundingRequest(request);
     setPendingActionId(request?.actionId ?? null);
+    setRecoveredTerminalFundingAction(null);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -351,6 +355,10 @@ export const SettingsBilling = ({
       return;
     }
 
+    if (customerFundingAction.id !== pendingActionId) {
+      return;
+    }
+
     if (terminalFundingStates[customerFundingAction.state] !== true) {
       return;
     }
@@ -358,6 +366,7 @@ export const SettingsBilling = ({
     if (pendingFundingRequest?.workspaceId === workspaceId) {
       clearPendingFundingRequest(workspaceId);
     }
+    setRecoveredTerminalFundingAction(customerFundingAction);
     setPendingFundingRequest(null);
     setPendingActionId(null);
   }, [
