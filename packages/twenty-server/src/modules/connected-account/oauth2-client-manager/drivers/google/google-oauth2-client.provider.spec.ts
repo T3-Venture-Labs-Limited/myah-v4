@@ -116,7 +116,7 @@ describe('GoogleOAuth2ClientProvider', () => {
   });
 
   describe('getClient', () => {
-    it('should load the entity, resolve tokens, decrypt the refresh token, and return an OAuth2Client', async () => {
+    it('preserves refresh-token-only client construction without options', async () => {
       const client = await provider.getClient(mockConnectedAccountId);
 
       expect(connectedAccountRepository.findOne).toHaveBeenCalledWith({
@@ -131,7 +131,30 @@ describe('GoogleOAuth2ClientProvider', () => {
         ciphertext: mockEncryptedRefreshToken,
         workspaceId: mockWorkspaceId,
       });
-      expect(client).toBeDefined();
+      expect(
+        connectedAccountTokenEncryptionService.decrypt,
+      ).toHaveBeenCalledTimes(1);
+      expect(client.credentials).toEqual({
+        refresh_token: mockRefreshTokenPlaintext,
+      });
+    });
+
+    it('passes the outbound abort signal through token resolution', async () => {
+      const abortController = new AbortController();
+
+      const client = await provider.getClient(mockConnectedAccountId, {
+        abortSignal: abortController.signal,
+      });
+
+      expect(
+        connectedAccountRefreshTokensService.resolveTokens,
+      ).toHaveBeenCalledWith(mockConnectedAccount, mockWorkspaceId, {
+        abortSignal: abortController.signal,
+      });
+      expect(client.credentials).toMatchObject({
+        access_token: 'access-token',
+        refresh_token: mockRefreshTokenPlaintext,
+      });
     });
 
     it('should throw when the connected account does not exist', async () => {

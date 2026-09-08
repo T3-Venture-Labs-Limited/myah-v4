@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { Gaxios } from 'gaxios';
 import { google } from 'googleapis';
 import { isDefined } from 'twenty-shared/utils';
 
@@ -10,7 +11,10 @@ import {
   ConnectedAccountRefreshAccessTokenExceptionCode,
 } from 'src/engine/metadata-modules/connected-account/exceptions/connected-account-refresh-tokens.exception';
 import { parseGoogleOAuthError } from 'src/modules/connected-account/refresh-tokens-manager/drivers/google/utils/parse-google-oauth-error.util';
-import { type ConnectedAccountPlaintextTokens } from 'src/modules/connected-account/refresh-tokens-manager/services/connected-account-refresh-tokens.service';
+import {
+  type ConnectedAccountPlaintextTokens,
+  type ConnectedAccountTokenResolutionOptions,
+} from 'src/modules/connected-account/refresh-tokens-manager/services/connected-account-refresh-tokens.service';
 
 @Injectable()
 export class GoogleAPIRefreshAccessTokenService {
@@ -18,18 +22,31 @@ export class GoogleAPIRefreshAccessTokenService {
 
   async refreshTokens(
     refreshToken: PlaintextString,
+    options?: ConnectedAccountTokenResolutionOptions,
   ): Promise<ConnectedAccountPlaintextTokens> {
-    const oAuth2Client = new google.auth.OAuth2({
+    options?.abortSignal?.throwIfAborted();
+
+    const clientOptions = {
       clientId: this.twentyConfigService.get('AUTH_GOOGLE_CLIENT_ID'),
       clientSecret: this.twentyConfigService.get('AUTH_GOOGLE_CLIENT_SECRET'),
-      transporterOptions: { fetchImplementation: fetch },
-    });
+    };
+    const oAuth2Client = options?.abortSignal
+      ? new google.auth.OAuth2({
+          ...clientOptions,
+          transporter: this.createOutboundTransport(options.abortSignal),
+        })
+      : new google.auth.OAuth2({
+          ...clientOptions,
+          transporterOptions: { fetchImplementation: fetch },
+        });
 
     oAuth2Client.setCredentials({
       refresh_token: refreshToken,
     });
     try {
       const { token } = await oAuth2Client.getAccessToken();
+
+      options?.abortSignal?.throwIfAborted();
 
       if (!isDefined(token)) {
         throw new ConnectedAccountRefreshAccessTokenException(
@@ -49,5 +66,24 @@ export class GoogleAPIRefreshAccessTokenService {
 
       throw parseGoogleOAuthError(error);
     }
+  }
+
+  private createOutboundTransport(abortSignal: AbortSignal): Gaxios {
+    const transporter = new Gaxios({ fetchImplementation: fetch });
+
+    transporter.interceptors.request.add({
+      resolved: async (requestOptions) => ({
+        ...requestOptions,
+        signal: abortSignal,
+        retry: false,
+        retryConfig: {
+          ...requestOptions.retryConfig,
+          retry: 0,
+          noResponseRetries: 0,
+        },
+      }),
+    });
+
+    return transporter;
   }
 }

@@ -5,15 +5,15 @@ import { type gmail_v1, google } from 'googleapis';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import { isDefined } from 'twenty-shared/utils';
 
+import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { GoogleOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/google/google-oauth2-client.provider';
+import { mimeEncode } from 'src/modules/messaging/message-import-manager/utils/mime-encode.util';
 import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
-
-import { GoogleOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/google/google-oauth2-client.provider';
-import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
-import { mimeEncode } from 'src/modules/messaging/message-import-manager/utils/mime-encode.util';
 import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
+import { executeWithOutboundEmailProviderDeadline } from 'src/modules/messaging/message-outbound-manager/utils/execute-with-outbound-email-provider-deadline.util';
 import { extractMessageIdFromBuffer } from 'src/modules/messaging/message-outbound-manager/utils/extract-message-id-from-buffer.util';
 import { toMailComposerOptions } from 'src/modules/messaging/message-outbound-manager/utils/to-mail-composer-options.util';
 
@@ -23,10 +23,6 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS;
 
   private readonly logger = new Logger(GmailMessageOutboundService.name);
-  private readonly providerRequestOptions = {
-    timeout: this.providerRequestTimeoutMs,
-    retry: false,
-  };
 
   constructor(
     private readonly googleOAuth2ClientProvider: GoogleOAuth2ClientProvider,
@@ -35,26 +31,47 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
   async assertSendable(
     connectedAccount: ConnectedAccountEntity,
   ): Promise<void> {
-    const oAuth2Client = await this.googleOAuth2ClientProvider.getClient(
-      connectedAccount.id,
-    );
-    const gmailClient = google.gmail({
-      version: 'v1',
-      auth: oAuth2Client,
-    });
+    return executeWithOutboundEmailProviderDeadline(async (abortSignal) => {
+      const oAuth2Client = await this.googleOAuth2ClientProvider.getClient(
+        connectedAccount.id,
+        { abortSignal },
+      );
 
-    await gmailClient.users.getProfile(
-      { userId: 'me' },
-      this.providerRequestOptions,
-    );
+      abortSignal.throwIfAborted();
+
+      const gmailClient = google.gmail({ version: 'v1', auth: oAuth2Client });
+
+      await gmailClient.users.getProfile(
+        { userId: 'me' },
+        this.getProviderRequestOptions(abortSignal),
+      );
+    });
   }
 
   async sendMessage(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
+    return executeWithOutboundEmailProviderDeadline((abortSignal) =>
+      this.sendMessageWithinDeadline(
+        sendMessageInput,
+        connectedAccount,
+        abortSignal,
+      ),
+    );
+  }
+
+  private async sendMessageWithinDeadline(
+    sendMessageInput: SendMessageInput,
+    connectedAccount: ConnectedAccountEntity,
+    abortSignal: AbortSignal,
+  ): Promise<SendMessageResult> {
     const { gmailClient, encodedMessage, messageBuffer } =
-      await this.composeGmailMessage(connectedAccount, sendMessageInput);
+      await this.composeGmailMessage(
+        connectedAccount,
+        sendMessageInput,
+        abortSignal,
+      );
 
     const { data } = await gmailClient.users.messages.send(
       {
@@ -66,7 +83,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
             : {}),
         },
       },
-      this.providerRequestOptions,
+      this.getProviderRequestOptions(abortSignal),
     );
 
     return {
@@ -80,8 +97,26 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<CreateDraftResult> {
+    return executeWithOutboundEmailProviderDeadline((abortSignal) =>
+      this.createDraftWithinDeadline(
+        sendMessageInput,
+        connectedAccount,
+        abortSignal,
+      ),
+    );
+  }
+
+  private async createDraftWithinDeadline(
+    sendMessageInput: SendMessageInput,
+    connectedAccount: ConnectedAccountEntity,
+    abortSignal: AbortSignal,
+  ): Promise<CreateDraftResult> {
     const { gmailClient, encodedMessage, messageBuffer } =
-      await this.composeGmailMessage(connectedAccount, sendMessageInput);
+      await this.composeGmailMessage(
+        connectedAccount,
+        sendMessageInput,
+        abortSignal,
+      );
 
     const { data } = await gmailClient.users.drafts.create(
       {
@@ -95,7 +130,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
           },
         },
       },
-      this.providerRequestOptions,
+      this.getProviderRequestOptions(abortSignal),
     );
 
     const draftExternalId = data.message?.id;
@@ -124,41 +159,65 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
-    const sendResult = await this.sendMessage(
-      sendMessageInput,
-      connectedAccount,
-    );
-
-    try {
-      await this.deleteDraft(draftExternalId, connectedAccount);
-    } catch {
-      this.logger.warn(
-        `Failed to delete Gmail draft ${draftExternalId} after send`,
+    return executeWithOutboundEmailProviderDeadline(async (abortSignal) => {
+      const sendResult = await this.sendMessageWithinDeadline(
+        sendMessageInput,
+        connectedAccount,
+        abortSignal,
       );
-    }
 
-    return sendResult;
+      try {
+        await this.deleteDraftWithinDeadline(
+          draftExternalId,
+          connectedAccount,
+          abortSignal,
+        );
+      } catch {
+        this.logger.warn(
+          `Failed to delete Gmail draft ${draftExternalId} after send`,
+        );
+      }
+
+      return sendResult;
+    });
   }
 
   async deleteDraft(
     draftExternalId: string,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<void> {
+    return executeWithOutboundEmailProviderDeadline((abortSignal) =>
+      this.deleteDraftWithinDeadline(
+        draftExternalId,
+        connectedAccount,
+        abortSignal,
+      ),
+    );
+  }
+
+  private async deleteDraftWithinDeadline(
+    draftExternalId: string,
+    connectedAccount: ConnectedAccountEntity,
+    abortSignal: AbortSignal,
+  ): Promise<void> {
     const oAuth2Client = await this.googleOAuth2ClientProvider.getClient(
       connectedAccount.id,
+      { abortSignal },
     );
 
-    const gmailClient = google.gmail({ version: 'v1', auth: oAuth2Client });
+    abortSignal.throwIfAborted();
 
+    const gmailClient = google.gmail({ version: 'v1', auth: oAuth2Client });
     const draftId = await this.findDraftIdByMessageId(
       gmailClient,
       draftExternalId,
+      abortSignal,
     );
 
     if (isDefined(draftId)) {
       await gmailClient.users.drafts.delete(
         { userId: 'me', id: draftId },
-        this.providerRequestOptions,
+        this.getProviderRequestOptions(abortSignal),
       );
 
       return;
@@ -172,6 +231,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
   private async findDraftIdByMessageId(
     gmailClient: gmail_v1.Gmail,
     messageId: string,
+    abortSignal: AbortSignal,
   ): Promise<string | undefined> {
     let pageToken: string | undefined = undefined;
 
@@ -183,7 +243,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
             maxResults: 500,
             pageToken,
           },
-          this.providerRequestOptions,
+          this.getProviderRequestOptions(abortSignal),
         );
 
       const draft = (data.drafts ?? []).find(
@@ -203,6 +263,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
   private async composeGmailMessage(
     connectedAccount: ConnectedAccountEntity,
     sendMessageInput: SendMessageInput,
+    abortSignal: AbortSignal,
   ): Promise<{
     gmailClient: gmail_v1.Gmail;
     encodedMessage: string;
@@ -210,23 +271,18 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
   }> {
     const oAuth2Client = await this.googleOAuth2ClientProvider.getClient(
       connectedAccount.id,
+      { abortSignal },
     );
 
-    const gmailClient = google.gmail({
-      version: 'v1',
-      auth: oAuth2Client,
-    });
+    abortSignal.throwIfAborted();
 
-    const peopleClient = google.people({
-      version: 'v1',
-      auth: oAuth2Client,
-    });
+    const gmailClient = google.gmail({ version: 'v1', auth: oAuth2Client });
+    const peopleClient = google.people({ version: 'v1', auth: oAuth2Client });
 
     const { data: gmailData } = await gmailClient.users.getProfile(
       { userId: 'me' },
-      this.providerRequestOptions,
+      this.getProviderRequestOptions(abortSignal),
     );
-
     const fromEmail = gmailData.emailAddress;
 
     const { data: peopleData } = await peopleClient.people.get(
@@ -234,26 +290,37 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
         resourceName: 'people/me',
         personFields: 'names',
       },
-      this.providerRequestOptions,
+      this.getProviderRequestOptions(abortSignal),
     );
-
     const fromName = peopleData?.names?.[0]?.displayName;
-
     const from = isDefined(fromName)
       ? `"${mimeEncode(fromName)}" <${fromEmail}>`
       : `${fromEmail}`;
-
     const mail = new MailComposer(
       toMailComposerOptions(from, sendMessageInput),
     );
-
     const compiledMessage = mail.compile();
 
     compiledMessage.keepBcc = true;
 
     const messageBuffer = await compiledMessage.build();
-    const encodedMessage = Buffer.from(messageBuffer).toString('base64url');
 
-    return { gmailClient, encodedMessage, messageBuffer };
+    abortSignal.throwIfAborted();
+
+    return {
+      gmailClient,
+      encodedMessage: Buffer.from(messageBuffer).toString('base64url'),
+      messageBuffer,
+    };
+  }
+
+  private getProviderRequestOptions(abortSignal: AbortSignal) {
+    abortSignal.throwIfAborted();
+
+    return {
+      signal: abortSignal,
+      timeout: this.providerRequestTimeoutMs,
+      retry: false,
+    };
   }
 }

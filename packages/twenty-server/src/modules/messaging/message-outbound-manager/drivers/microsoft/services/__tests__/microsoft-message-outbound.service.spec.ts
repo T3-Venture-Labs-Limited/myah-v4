@@ -17,6 +17,7 @@ const buildConnectedAccount = (): ConnectedAccountEntity =>
 
 describe('MicrosoftMessageOutboundService', () => {
   let service: MicrosoftMessageOutboundService;
+  let mockGetClient: jest.Mock;
 
   const messagesRequest = {
     options: jest.fn().mockReturnThis(),
@@ -38,6 +39,12 @@ describe('MicrosoftMessageOutboundService', () => {
     options: jest.fn().mockReturnThis(),
     middlewareOptions: jest.fn().mockReturnThis(),
     patch: jest.fn(),
+  };
+
+  const sendRequest = {
+    options: jest.fn().mockReturnThis(),
+    middlewareOptions: jest.fn().mockReturnThis(),
+    post: jest.fn(),
   };
 
   const draftDeleteRequest = {
@@ -65,6 +72,8 @@ describe('MicrosoftMessageOutboundService', () => {
           return draftRequest;
         case '/me/messages/draft-id':
           return draftDeleteRequest;
+        case '/me/messages/draft-id/send':
+          return sendRequest;
         default:
           throw new Error(`Unexpected Microsoft Graph path: ${path}`);
       }
@@ -73,6 +82,7 @@ describe('MicrosoftMessageOutboundService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockGetClient = jest.fn().mockResolvedValue(mockMicrosoftClient);
 
     messagesRequest.filter.mockReturnThis();
     messagesRequest.select.mockReturnThis();
@@ -95,6 +105,7 @@ describe('MicrosoftMessageOutboundService', () => {
       internetMessageId: '<patched-reply@example.com>',
       conversationId: 'conversation-id',
     });
+    sendRequest.post.mockResolvedValue(undefined);
     draftDeleteRequest.delete.mockResolvedValue(undefined);
     profileRequest.get.mockResolvedValue({ id: 'profile-id' });
 
@@ -104,7 +115,7 @@ describe('MicrosoftMessageOutboundService', () => {
         {
           provide: MicrosoftOAuth2ClientProvider,
           useValue: {
-            getClient: jest.fn().mockResolvedValue(mockMicrosoftClient),
+            getClient: mockGetClient,
           },
         },
       ],
@@ -123,10 +134,47 @@ describe('MicrosoftMessageOutboundService', () => {
     expect(messagesRequest.post).not.toHaveBeenCalled();
   });
 
+  it('rejects stalled authentication at the absolute deadline and fences a late client', async () => {
+    jest.useFakeTimers();
+    let resolveClient:
+      | ((client: typeof mockMicrosoftClient) => void)
+      | undefined;
+
+    mockGetClient.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveClient = resolve;
+      }),
+    );
+
+    const resultPromise = service.sendMessage(
+      {
+        to: 'recipient@example.com',
+        subject: 'Subject',
+        body: 'Body',
+        html: '<p>Body</p>',
+        attachments: [],
+      },
+      buildConnectedAccount(),
+    );
+
+    const rejection = expect(resultPromise).rejects.toThrow(/exceeded 30000ms/);
+
+    await jest.advanceTimersByTimeAsync(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
+    await rejection;
+
+    resolveClient?.(mockMicrosoftClient);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockMicrosoftClient.api).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+    jest.useRealTimers();
+  });
+
   it('creates Microsoft drafts as replies when a parent internet message id is provided', async () => {
     const connectedAccount = buildConnectedAccount();
-    const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
-
     const result = await service.createDraft(
       {
         to: 'recipient@example.com',
@@ -145,11 +193,17 @@ describe('MicrosoftMessageOutboundService', () => {
     );
     expect(messagesRequest.select).toHaveBeenCalledWith('id');
     expect(messagesRequest.top).toHaveBeenCalledWith(1);
-    expect(timeoutSpy).toHaveBeenCalledWith(
-      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
-    );
+    const sharedSignal = mockGetClient.mock.calls[0][1]
+      .abortSignal as AbortSignal;
+
     expect(messagesRequest.options).toHaveBeenCalledWith({
-      signal: expect.any(AbortSignal),
+      signal: sharedSignal,
+    });
+    expect(replyRequest.options).toHaveBeenCalledWith({
+      signal: sharedSignal,
+    });
+    expect(draftRequest.options).toHaveBeenCalledWith({
+      signal: sharedSignal,
     });
     const [middlewareOptions] = messagesRequest.middlewareOptions.mock.calls[0];
 
@@ -242,16 +296,12 @@ describe('MicrosoftMessageOutboundService', () => {
       html: '<p>Approved body</p>',
       attachments: [],
     };
-    const sendMessage = jest
-      .spyOn(service, 'sendMessage')
-      .mockResolvedValue({ headerMessageId: '<sent@example.com>' });
-    const deleteDraft = jest
-      .spyOn(service, 'deleteDraft')
-      .mockResolvedValue(undefined);
-
     await service.sendDraft('draft-id', approvedInput, connectedAccount);
 
-    expect(sendMessage).toHaveBeenCalledWith(approvedInput, connectedAccount);
-    expect(deleteDraft).toHaveBeenCalledWith('draft-id', connectedAccount);
+    expect(sendRequest.post).toHaveBeenCalledWith({});
+    expect(draftDeleteRequest.delete).toHaveBeenCalledTimes(1);
+    expect(sendRequest.post.mock.invocationCallOrder[0]).toBeLessThan(
+      draftDeleteRequest.delete.mock.invocationCallOrder[0],
+    );
   });
 });

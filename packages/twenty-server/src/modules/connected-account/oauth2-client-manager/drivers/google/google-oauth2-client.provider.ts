@@ -13,7 +13,10 @@ import {
   ConnectedAccountRefreshAccessTokenExceptionCode,
 } from 'src/engine/metadata-modules/connected-account/exceptions/connected-account-refresh-tokens.exception';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
-import { ConnectedAccountRefreshTokensService } from 'src/modules/connected-account/refresh-tokens-manager/services/connected-account-refresh-tokens.service';
+import {
+  type ConnectedAccountTokenResolutionOptions,
+  ConnectedAccountRefreshTokensService,
+} from 'src/modules/connected-account/refresh-tokens-manager/services/connected-account-refresh-tokens.service';
 
 @Injectable()
 export class GoogleOAuth2ClientProvider {
@@ -28,10 +31,15 @@ export class GoogleOAuth2ClientProvider {
 
   public async getClient(
     connectedAccountId: string,
+    options?: ConnectedAccountTokenResolutionOptions,
   ): Promise<Auth.OAuth2Client> {
+    options?.abortSignal?.throwIfAborted();
+
     const connectedAccount = await this.connectedAccountRepository.findOne({
       where: { id: connectedAccountId },
     });
+
+    options?.abortSignal?.throwIfAborted();
 
     if (!isDefined(connectedAccount)) {
       throw new ConnectedAccountRefreshAccessTokenException(
@@ -47,11 +55,21 @@ export class GoogleOAuth2ClientProvider {
       );
     }
 
-    const { refreshToken: encryptedRefreshToken } =
-      await this.connectedAccountRefreshTokensService.resolveTokens(
-        connectedAccount,
-        connectedAccount.workspaceId,
-      );
+    const {
+      accessToken: encryptedAccessToken,
+      refreshToken: encryptedRefreshToken,
+    } = options
+      ? await this.connectedAccountRefreshTokensService.resolveTokens(
+          connectedAccount,
+          connectedAccount.workspaceId,
+          options,
+        )
+      : await this.connectedAccountRefreshTokensService.resolveTokens(
+          connectedAccount,
+          connectedAccount.workspaceId,
+        );
+
+    options?.abortSignal?.throwIfAborted();
 
     if (!isDefined(encryptedRefreshToken)) {
       throw new ConnectedAccountRefreshAccessTokenException(
@@ -60,6 +78,12 @@ export class GoogleOAuth2ClientProvider {
       );
     }
 
+    const plaintextAccessToken = options
+      ? this.connectedAccountTokenEncryptionService.decrypt({
+          ciphertext: encryptedAccessToken,
+          workspaceId: connectedAccount.workspaceId,
+        })
+      : undefined;
     const plaintextRefreshToken =
       this.connectedAccountTokenEncryptionService.decrypt({
         ciphertext: encryptedRefreshToken,
@@ -78,7 +102,16 @@ export class GoogleOAuth2ClientProvider {
         transporterOptions: { fetchImplementation: fetch },
       });
 
-      oAuth2Client.setCredentials({ refresh_token: plaintextRefreshToken });
+      oAuth2Client.setCredentials(
+        options
+          ? {
+              access_token: plaintextAccessToken,
+              refresh_token: plaintextRefreshToken,
+            }
+          : { refresh_token: plaintextRefreshToken },
+      );
+
+      options?.abortSignal?.throwIfAborted();
 
       return oAuth2Client;
     } catch (error) {
