@@ -1,12 +1,14 @@
-import { Field, HideField, ObjectType } from '@nestjs/graphql';
+import { Field, HideField, Int, ObjectType } from '@nestjs/graphql';
 
 import {
   IsArray,
   IsDateString,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Min,
 } from 'class-validator';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
@@ -99,6 +101,16 @@ export class ConnectedAccountDTO {
   @IsString()
   @Field(() => String)
   visibility: string;
+
+  @IsInt()
+  @Min(1)
+  @Field(() => Int)
+  dailySendLimit: number;
+
+  @IsInt()
+  @Min(1)
+  @Field(() => Int)
+  minimumSendIntervalMs: number;
 
   @HideField()
   workspaceId: string;
