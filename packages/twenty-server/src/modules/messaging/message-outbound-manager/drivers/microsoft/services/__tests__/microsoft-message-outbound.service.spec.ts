@@ -321,7 +321,8 @@ describe('MicrosoftMessageOutboundService', () => {
     draftDeleteRequest.delete.mockImplementationOnce(
       () =>
         new Promise((_resolve, reject) => {
-          const optionsCall = draftDeleteRequest.options.mock.calls.at(-1);
+          const optionsCalls = draftDeleteRequest.options.mock.calls;
+          const optionsCall = optionsCalls[optionsCalls.length - 1];
 
           cleanupSignal = optionsCall?.[0].signal;
           cleanupSignal?.addEventListener(
