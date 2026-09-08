@@ -231,6 +231,7 @@ export const CreatorListScopedCreatorIndex = ({
         }
         shouldUseIndexIdentifierUrlOnFullPageOpen
         onRecordCreated={handleCreatorCreated}
+        shouldCloseAfterCreation
         shouldPreserveParentViewStateOnOpen={isMobile}
         initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
         headerTitle={creatorListContext.target.label}

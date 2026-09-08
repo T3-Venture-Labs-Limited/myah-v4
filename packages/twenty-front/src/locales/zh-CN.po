@@ -7969,6 +7969,7 @@ msgid "Don't sync emails from team@ support@ noreply@..."
 msgstr "不要同步来自team@、support@、noreply@...的电子邮件"
 
 #. js-lingui-id: DPfwMq
+#: src/modules/command-menu-item/components/RecordShowSidePanelOpenRecordButton.tsx
 #: src/modules/page-layout/widgets/fields/components/FieldsConfigurationGroupRenameInput.tsx
 msgid "Done"
 msgstr ""

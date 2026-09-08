@@ -9,6 +9,7 @@ import { recordGroupDefinitionsComponentSelector } from '@/object-record/record-
 import { getFieldMetadataItemGqlFieldName } from '@/object-metadata/utils/getFieldMetadataItemGqlFieldName';
 import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
 import { recordIndexOpenRecordInState } from '@/object-record/record-index/states/recordIndexOpenRecordInState';
+import { recordIndexCreationOptionsComponentState } from '@/object-record/record-index/states/recordIndexCreationOptionsComponentState';
 import { recordIndexRecordIdsByGroupComponentFamilyState } from '@/object-record/record-index/states/recordIndexRecordIdsByGroupComponentFamilyState';
 import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useUpsertRecordsInStore';
 import { useBuildRecordInputFromFilters } from '@/object-record/record-table/hooks/useBuildRecordInputFromFilters';
@@ -78,10 +79,18 @@ export const useCreateNewIndexRecord = ({
     useBuildRecordInputFromRLSPredicates({
       objectMetadataItem,
     });
-  const onRecordCreated = useOptionalRecordIndexContext()?.onRecordCreated;
+  const recordIndexContext = useOptionalRecordIndexContext();
+  const recordIndexId = instanceId ?? recordIndexContext?.recordIndexId;
 
   const createNewIndexRecord = useCallback(
     async (recordInput?: Partial<ObjectRecord>) => {
+      const creationOptions = isDefined(recordIndexId)
+        ? store.get(
+            recordIndexCreationOptionsComponentState.atomFamily({
+              instanceId: recordIndexId,
+            }),
+          )
+        : undefined;
       const recordId = v4();
       const recordInputFromRLSPredicates = buildRecordInputFromRLSPredicates();
       const recordInputFromFilters = buildRecordInputFromFilters();
@@ -103,16 +112,18 @@ export const useCreateNewIndexRecord = ({
         ...mergedRecordInput,
       });
 
-      await onRecordCreated?.(createdRecord);
+      await creationOptions?.onRecordCreated?.(createdRecord);
 
       if (
-        recordIndexOpenRecordIn === ViewOpenRecordIn.SIDE_PANEL &&
+        (creationOptions?.shouldCloseAfterCreation ||
+          recordIndexOpenRecordIn === ViewOpenRecordIn.SIDE_PANEL) &&
         canOpenObjectInSidePanel(objectMetadataItem.nameSingular)
       ) {
         openRecordInSidePanel({
           recordId,
           objectNameSingular: objectMetadataItem.nameSingular,
           isNewRecord: true,
+          shouldCloseAfterCreation: creationOptions?.shouldCloseAfterCreation,
         });
       } else {
         const labelIdentifierFieldMetadataItem =
@@ -189,7 +200,7 @@ export const useCreateNewIndexRecord = ({
       upsertRecordsInStore,
       closeSidePanelMenu,
       currentView?.openRecordIn,
-      onRecordCreated,
+      recordIndexId,
       contextStoreInstance?.instanceId,
     ],
   );

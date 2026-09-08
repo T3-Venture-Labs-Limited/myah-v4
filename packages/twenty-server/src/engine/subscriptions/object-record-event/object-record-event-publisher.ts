@@ -10,11 +10,7 @@ import {
   type RecordGqlOperationSignature,
   type RestrictedFieldsPermissions,
 } from 'twenty-shared/types';
-import {
-  combineFilters,
-  isDefined,
-  isRecordGqlOperationSignature,
-} from 'twenty-shared/utils';
+import { isDefined, isRecordGqlOperationSignature } from 'twenty-shared/utils';
 import { FindOptionsRelations, ObjectLiteral } from 'typeorm';
 
 import { ProcessNestedRelationsHelper } from 'src/engine/api/common/common-nested-relations-processor/process-nested-relations.helper';
@@ -43,7 +39,10 @@ import { ObjectRecordSubscriptionEvent } from 'src/engine/subscriptions/types/ob
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { buildRowLevelPermissionRecordFilter } from 'src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util';
-import { isRecordMatchingRLSRowLevelPermissionPredicate } from 'src/engine/twenty-orm/utils/is-record-matching-rls-row-level-permission-predicate.util';
+import {
+  isRecordMatchingRLSRowLevelPermissionPredicate,
+  isRecordPotentiallyMatchingQueryFilter,
+} from 'src/engine/twenty-orm/utils/is-record-matching-rls-row-level-permission-predicate.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceEventBatch } from 'src/engine/workspace-event-emitter/types/workspace-event-batch.type';
 import { parseEventNameOrThrow } from 'src/engine/workspace-event-emitter/utils/parse-event-name';
@@ -481,37 +480,42 @@ export class ObjectRecordEventPublisher {
     }
 
     const properties = event.properties as {
-      after?: object;
-      before?: object;
+      after?: ObjectRecord;
+      before?: ObjectRecord;
     };
-
     const record = properties?.after ?? properties?.before;
 
     if (!isDefined(record)) {
       return false;
     }
 
-    const queryFilter = operationSignature.variables?.filter ?? {};
-
-    const filtersToApply: RecordGqlOperationFilter[] = [queryFilter];
-
-    if (subscriberRLSFilter && Object.keys(subscriberRLSFilter).length > 0) {
-      filtersToApply.push(subscriberRLSFilter);
-    }
-
-    const combinedFilter = combineFilters(filtersToApply);
-
-    if (Object.keys(combinedFilter).length === 0) {
-      return true;
-    }
-
     const shouldIgnoreSoftDeleteDefaultFilter =
       event.action === DatabaseEventAction.DELETED ||
       event.action === DatabaseEventAction.RESTORED;
 
-    return isRecordMatchingRLSRowLevelPermissionPredicate({
+    if (
+      isDefined(subscriberRLSFilter) &&
+      Object.keys(subscriberRLSFilter).length > 0 &&
+      !isRecordMatchingRLSRowLevelPermissionPredicate({
+        record,
+        filter: subscriberRLSFilter,
+        flatObjectMetadata: objectMetadata,
+        flatFieldMetadataMaps,
+        shouldIgnoreSoftDeleteDefaultFilter,
+      })
+    ) {
+      return false;
+    }
+
+    const queryFilter = operationSignature.variables?.filter ?? {};
+
+    if (Object.keys(queryFilter).length === 0) {
+      return true;
+    }
+
+    return isRecordPotentiallyMatchingQueryFilter({
       record,
-      filter: combinedFilter,
+      filter: queryFilter,
       flatObjectMetadata: objectMetadata,
       flatFieldMetadataMaps,
       shouldIgnoreSoftDeleteDefaultFilter,
