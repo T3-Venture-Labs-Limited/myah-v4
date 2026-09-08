@@ -8,6 +8,7 @@ import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/con
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/connected-account/interceptors/connected-account-graphql-api-exception.interceptor';
 import { ConnectedAccountResolver } from 'src/engine/metadata-modules/connected-account/resolvers/connected-account.resolver';
+import { ConnectedAccountSendingPolicyService } from 'src/engine/metadata-modules/connected-account/services/connected-account-sending-policy.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
@@ -30,7 +31,11 @@ import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/
     ConnectedAccountMetadataService,
     ConnectedAccountResolver,
     ConnectedAccountGraphqlApiExceptionInterceptor,
+    ConnectedAccountSendingPolicyService,
   ],
-  exports: [ConnectedAccountMetadataService],
+  exports: [
+    ConnectedAccountMetadataService,
+    ConnectedAccountSendingPolicyService,
+  ],
 })
 export class ConnectedAccountMetadataModule {}

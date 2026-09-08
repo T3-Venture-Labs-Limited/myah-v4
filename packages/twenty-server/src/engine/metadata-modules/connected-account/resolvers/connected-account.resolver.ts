@@ -13,7 +13,9 @@ import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
 import { ConnectedAccountPublicDTO } from 'src/engine/metadata-modules/connected-account/dtos/connected-account-public.dto';
 import { ConnectedAccountDTO } from 'src/engine/metadata-modules/connected-account/dtos/connected-account.dto';
+import { UpdateConnectedAccountSendingPolicyInput } from 'src/engine/metadata-modules/connected-account/dtos/update-connected-account-sending-policy.input';
 import { ConnectedAccountGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/connected-account/interceptors/connected-account-graphql-api-exception.interceptor';
+import { ConnectedAccountSendingPolicyService } from 'src/engine/metadata-modules/connected-account/services/connected-account-sending-policy.service';
 import { buildPublicConnectedAccount } from 'src/engine/metadata-modules/connected-account/utils/build-public-connected-account.util';
 
 @UseGuards(WorkspaceAuthGuard)
@@ -22,6 +24,7 @@ import { buildPublicConnectedAccount } from 'src/engine/metadata-modules/connect
 export class ConnectedAccountResolver {
   constructor(
     private readonly connectedAccountMetadataService: ConnectedAccountMetadataService,
+    private readonly connectedAccountSendingPolicyService: ConnectedAccountSendingPolicyService,
   ) {}
 
   @Query(() => [ConnectedAccountPublicDTO])
@@ -37,6 +40,21 @@ export class ConnectedAccountResolver {
       });
 
     return accounts.map((account) => buildPublicConnectedAccount(account));
+  }
+
+  @Mutation(() => ConnectedAccountPublicDTO)
+  @UseGuards(NoPermissionGuard)
+  async updateConnectedAccountSendingPolicy(
+    @Args('input') input: UpdateConnectedAccountSendingPolicyInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<ConnectedAccountPublicDTO> {
+    const connectedAccount =
+      await this.connectedAccountSendingPolicyService.update({
+        ...input,
+        workspaceId: workspace.id,
+      });
+
+    return buildPublicConnectedAccount(connectedAccount);
   }
 
   @Mutation(() => ConnectedAccountPublicDTO)
