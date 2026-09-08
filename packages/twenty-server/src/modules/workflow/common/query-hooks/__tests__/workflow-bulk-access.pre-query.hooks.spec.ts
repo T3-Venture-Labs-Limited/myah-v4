@@ -22,7 +22,9 @@ describe.each([
 ])('%s', (_operation, Hook) => {
   it('authorizes every workflow before applying the bulk mutation', async () => {
     const workflowOutreachAccessGuardService = {
-      assertWorkflowIsAccessible: jest.fn().mockResolvedValue(undefined),
+      assertGenericWorkflowMutationAllowed: jest
+        .fn()
+        .mockResolvedValue(undefined),
     } as unknown as WorkflowOutreachAccessGuardService;
     const hook = new (Hook as new (
       guard: WorkflowOutreachAccessGuardService,
@@ -34,16 +36,14 @@ describe.each([
     );
 
     expect(
-      workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
+      workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed,
     ).toHaveBeenNthCalledWith(1, {
-      authContext,
       workflowId: 'workflow-a',
       workspaceId: 'workspace-a',
     });
     expect(
-      workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
+      workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed,
     ).toHaveBeenNthCalledWith(2, {
-      authContext,
       workflowId: 'workflow-b',
       workspaceId: 'workspace-a',
     });

@@ -38,7 +38,6 @@ import {
   type CampaignUpdateManyArgs,
 } from 'src/modules/myah-campaign/services/campaign-lifecycle.service';
 import { CampaignOutreachWorkflowLifecycleWorkspaceService } from 'src/modules/myah-campaign/services/campaign-outreach-workflow-lifecycle.workspace-service';
-import { MyahCampaignDeleteOnePostQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-delete.post-query.hooks';
 import {
   MyahCampaignDestroyManyPreQueryHook,
   MyahCampaignDestroyOnePreQueryHook,
@@ -183,32 +182,11 @@ describe('Myah Campaign query hooks', () => {
     expect(workspaceHookImports).toContain(MyahCampaignQueryHookModule);
   });
 
-  it('uses normalized delete-one results to clean Campaign Outreach workflows', async () => {
+  it('authorizes and locks Campaign rows within the destroy transaction', async () => {
     const campaignOutreachWorkflowLifecycleService = {
-      handleCampaignDeletion: jest.fn().mockResolvedValue(undefined),
-    } as unknown as CampaignOutreachWorkflowLifecycleWorkspaceService;
-    const hook = new MyahCampaignDeleteOnePostQueryHook(
-      campaignOutreachWorkflowLifecycleService,
-    );
-
-    await hook.execute(authContext, objectName, [
-      { id: 'campaign-a' },
-    ] as never);
-
-    expect(
-      campaignOutreachWorkflowLifecycleService.handleCampaignDeletion,
-    ).toHaveBeenCalledWith({
-      authContext,
-      campaignIds: ['campaign-a'],
-      operation: 'delete',
-      workspaceId: 'workspace-a',
-    });
-  });
-
-  it('authorizes Campaign rows before destroy cleanup', async () => {
-    const campaignOutreachWorkflowLifecycleService = {
-      assertCampaignsAreAccessible: jest.fn().mockResolvedValue(undefined),
-      handleCampaignDeletion: jest.fn().mockResolvedValue(undefined),
+      assertCampaignDeletionAllowedInTransaction: jest
+        .fn()
+        .mockResolvedValue(undefined),
     } as unknown as CampaignOutreachWorkflowLifecycleWorkspaceService;
     const destroyOneHook = new MyahCampaignDestroyOnePreQueryHook(
       campaignOutreachWorkflowLifecycleService,
@@ -217,25 +195,39 @@ describe('Myah Campaign query hooks', () => {
       campaignOutreachWorkflowLifecycleService,
     );
 
-    await destroyOneHook.execute(authContext, objectName, {
-      id: 'campaign-a',
-    } as never);
-    await destroyManyHook.execute(authContext, objectName, {
-      filter: { id: { in: ['campaign-a', 'campaign-b'] } },
-    } as never);
+    const transactionContext = {
+      entityManager: { queryRunner: { isTransactionActive: true } } as never,
+    };
+
+    await destroyOneHook.execute(
+      authContext,
+      objectName,
+      { id: 'campaign-a' } as never,
+      transactionContext,
+    );
+    await destroyManyHook.execute(
+      authContext,
+      objectName,
+      {
+        filter: { id: { in: ['campaign-a', 'campaign-b'] } },
+      } as never,
+      transactionContext,
+    );
 
     expect(
-      campaignOutreachWorkflowLifecycleService.assertCampaignsAreAccessible,
+      campaignOutreachWorkflowLifecycleService.assertCampaignDeletionAllowedInTransaction,
     ).toHaveBeenNthCalledWith(1, {
       authContext,
       campaignIds: ['campaign-a'],
+      entityManager: transactionContext.entityManager,
       workspaceId: 'workspace-a',
     });
     expect(
-      campaignOutreachWorkflowLifecycleService.assertCampaignsAreAccessible,
+      campaignOutreachWorkflowLifecycleService.assertCampaignDeletionAllowedInTransaction,
     ).toHaveBeenNthCalledWith(2, {
       authContext,
       campaignIds: ['campaign-a', 'campaign-b'],
+      entityManager: transactionContext.entityManager,
       workspaceId: 'workspace-a',
     });
   });

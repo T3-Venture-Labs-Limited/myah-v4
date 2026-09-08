@@ -25,11 +25,12 @@ export class WorkflowDestroyManyPreQueryHook implements WorkspacePreQueryHookIns
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
     for (const workflowId of payload.filter.id.in) {
-      await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
-        authContext,
-        workflowId,
-        workspaceId: workspace.id,
-      });
+      await this.workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed(
+        {
+          workflowId,
+          workspaceId: workspace.id,
+        },
+      );
     }
 
     await this.workflowCommonWorkspaceService.handleWorkflowSubEntities({

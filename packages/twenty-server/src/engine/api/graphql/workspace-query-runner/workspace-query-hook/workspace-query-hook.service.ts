@@ -9,6 +9,7 @@ import { CommonQueryNames } from 'src/engine/api/common/types/common-query-args.
 import { type WorkspaceQueryHookKey } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { WorkspaceQueryHookStorage } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/storage/workspace-query-hook.storage';
 import { type WorkspacePreQueryHookPayload } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/types/workspace-query-hook.type';
+import { type WorkspacePreQueryHookTransactionContext } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
 import { WorkspaceQueryHookExplorer } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/workspace-query-hook.explorer';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 
@@ -19,6 +20,17 @@ export class WorkspaceQueryHookService {
     private readonly workspaceQueryHookExplorer: WorkspaceQueryHookExplorer,
   ) {}
 
+  public shouldRunPreQueryHooksInTransaction(
+    objectName: string,
+    methodName: WorkspaceResolverBuilderMethodNames | CommonQueryNames,
+  ): boolean {
+    const key: WorkspaceQueryHookKey = `${objectName}.${methodName}`;
+
+    return this.workspaceQueryHookStorage
+      .getWorkspaceQueryPreHookInstances(key)
+      .some(({ instance }) => instance.shouldRunInTransaction === true);
+  }
+
   //TODO : Refacto-common - Should be Common
   public async executePreQueryHooks<
     T extends WorkspaceResolverBuilderMethodNames | CommonQueryNames,
@@ -28,6 +40,7 @@ export class WorkspaceQueryHookService {
     objectName: string,
     methodName: T,
     payload: WorkspacePreQueryHookPayload<T>,
+    transactionContext?: WorkspacePreQueryHookTransactionContext,
   ): Promise<WorkspacePreQueryHookPayload<T>> {
     const key: WorkspaceQueryHookKey = `${objectName}.${methodName}`;
     const preHookInstances =
@@ -40,7 +53,7 @@ export class WorkspaceQueryHookService {
     for (const preHookInstance of preHookInstances) {
       // Deep merge all return of handleHook into payload before returning it
       const hookPayload = await this.workspaceQueryHookExplorer.handlePreHook(
-        [authContext, objectName, payload],
+        [authContext, objectName, payload, transactionContext],
         preHookInstance.instance,
         preHookInstance.host,
         preHookInstance.isRequestScoped,

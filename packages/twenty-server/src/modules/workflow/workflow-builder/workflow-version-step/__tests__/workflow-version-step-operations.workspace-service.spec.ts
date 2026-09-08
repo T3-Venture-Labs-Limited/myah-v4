@@ -15,6 +15,7 @@ import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-t
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 import { CodeStepBuildService } from 'src/modules/workflow/workflow-builder/workflow-version-step/code-step/services/code-step-build.service';
 import { WorkflowVersionStepOperationsWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step-operations.workspace-service';
@@ -125,6 +126,14 @@ describe('WorkflowVersionStepOperationsWorkspaceService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WorkflowVersionStepOperationsWorkspaceService,
+        {
+          provide: WorkflowOutreachAccessGuardService,
+          useValue: {
+            assertGenericWorkflowVersionMutationAllowed: jest
+              .fn()
+              .mockResolvedValue(undefined),
+          },
+        },
         {
           provide: GlobalWorkspaceOrmManager,
           useValue: globalWorkspaceOrmManager,

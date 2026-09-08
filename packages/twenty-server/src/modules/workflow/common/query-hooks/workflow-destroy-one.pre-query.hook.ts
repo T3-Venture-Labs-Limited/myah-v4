@@ -24,11 +24,12 @@ export class WorkflowDestroyOnePreQueryHook implements WorkspacePreQueryHookInst
     const workspace = authContext.workspace;
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
-    await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
-      authContext,
-      workflowId: payload.id,
-      workspaceId: workspace.id,
-    });
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed(
+      {
+        workflowId: payload.id,
+        workspaceId: workspace.id,
+      },
+    );
 
     await this.workflowCommonWorkspaceService.handleWorkflowSubEntities({
       workflowIds: [payload.id],

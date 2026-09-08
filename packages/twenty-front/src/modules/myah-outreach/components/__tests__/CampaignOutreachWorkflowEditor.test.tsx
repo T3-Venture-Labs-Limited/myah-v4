@@ -1,153 +1,213 @@
 import { render, screen } from '@testing-library/react';
+import { type CampaignSequence } from 'twenty-shared/workflow';
 
 import { CampaignOutreachWorkflowEditor } from '@/myah-outreach/components/CampaignOutreachWorkflowEditor';
-import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
-import { CampaignOutreachWorkflowGraph } from '@/myah-outreach/components/CampaignOutreachWorkflowGraph';
+import { type CampaignSequenceSnapshot } from '@/myah-outreach/hooks/useCampaignSequence';
+import { PAGE_LAYOUT_SIDE_PANEL_TAB_CHANGE_EVENT } from '@/page-layout/constants/PageLayoutSidePanelTabChangeEvent';
 
-const mockWorkflowVisualizerEffect = jest.fn(
-  (_props: { workflowId: string }) => null,
-);
-const mockWorkflowSSESubscribeEffect = jest.fn(
-  (_props: { workflowId: string }) => null,
-);
-const mockWorkflowDiagramEffect = jest.fn(() => null);
-const mockWorkflowDiagramCanvasEditable = jest.fn(() => (
-  <div>Native editable workflow canvas</div>
-));
+const mockBlocker = {
+  state: 'unblocked' as 'unblocked' | 'blocked',
+  proceed: jest.fn(),
+  reset: jest.fn(),
+};
+
+jest.mock('react-router-dom', () => ({
+  useBlocker: () => ({ ...mockBlocker }),
+}));
 
 jest.mock('@/ui/layout/page/components/PageCardHeader', () => ({
-  PageCardHeader: ({ title, tag }: { title: string; tag: React.ReactNode }) => (
+  PageCardHeader: ({
+    actionButton,
+    tag,
+    title,
+  }: {
+    actionButton: React.ReactNode;
+    tag: React.ReactNode;
+    title: string;
+  }) => (
     <header>
       {title}
       {tag}
+      {actionButton}
     </header>
   ),
 }));
+
 jest.mock('@/information-banner/components/InformationBannerWrapper', () => ({
   InformationBannerWrapper: () => <div>Page-level information banner</div>,
+}));
+
+jest.mock('@/myah-outreach/components/CampaignSequenceMessageEditor', () => ({
+  CampaignSequenceMessageEditor: ({ editable }: { editable: boolean }) => (
+    <div>Message editor {editable ? 'editable' : 'read only'}</div>
+  ),
+}));
+
+const mockSequenceEditor = jest.fn(({ editable }: { editable: boolean }) => (
+  <div>Sequence editor {editable ? 'editable' : 'read only'}</div>
+));
+jest.mock('@/myah-outreach/components/CampaignSequenceEditor', () => ({
+  CampaignSequenceEditor: (props: { editable: boolean }) =>
+    mockSequenceEditor(props),
 }));
 
 jest.mock(
   '@/myah-outreach/components/CampaignOutreachWorkflowActionBar',
   () => ({
-    CampaignOutreachWorkflowActionBar: () => <div>Campaign actions</div>,
+    CampaignOutreachWorkflowActionBar: () => (
+      <div>Restricted Campaign actions</div>
+    ),
   }),
 );
 
-jest.mock('@/workflow/hooks/useWorkflowWithCurrentVersion', () => ({
-  useWorkflowWithCurrentVersion: () => ({
-    currentVersion: { status: 'DRAFT' },
-  }),
-}));
-
-jest.mock('@/workflow/utils/getWorkflowVisualizerComponentInstanceId', () => ({
-  getWorkflowVisualizerComponentInstanceId: ({
-    recordId,
-  }: {
-    recordId: string;
-  }) => `instance-${recordId}`,
-}));
-
-jest.mock(
-  '@/workflow/workflow-diagram/components/WorkflowVisualizerEffect',
-  () => ({
-    WorkflowVisualizerEffect: (props: { workflowId: string }) => {
-      mockWorkflowVisualizerEffect(props);
-
-      return null;
+const campaignId = 'a0000000-0000-4000-8000-000000000001';
+const messageId = 'b0000000-0000-4000-8000-000000000002';
+const sequence: CampaignSequence = {
+  schemaVersion: 1,
+  messages: [
+    {
+      id: messageId,
+      channel: 'EMAIL',
+      subject: 'Hello',
+      body: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello"}]}]}',
+      files: [],
+      replyToThread: false,
     },
-  }),
-);
+  ],
+  delaysSeconds: [],
+};
 
-jest.mock(
-  '@/workflow/workflow-diagram/components/WorkflowSSESubscribeEffect',
-  () => ({
-    WorkflowSSESubscribeEffect: (props: { workflowId: string }) => {
-      mockWorkflowSSESubscribeEffect(props);
+const makeState = ({ dirty = false, editable = true } = {}) => {
+  const snapshot: CampaignSequenceSnapshot = {
+    campaignId,
+    workflowId: 'c0000000-0000-4000-8000-000000000003',
+    versionId: 'd0000000-0000-4000-8000-000000000004',
+    sequence,
+    lifecycleStatus: editable ? 'DRAFT' : 'ACTIVE',
+    editable,
+    issues: [],
+  };
 
-      return null;
-    },
-  }),
-);
+  return {
+    snapshot,
+    draft: sequence,
+    selectedMessageId: messageId,
+    loading: false,
+    saving: false,
+    dirty,
+    error: null,
+    loadResult: { kind: 'SEQUENCE' as const, snapshot },
+    reloadGeneration: 0,
+    setDraft: jest.fn(),
+    addAttachments: jest.fn(),
+    selectMessage: jest.fn(),
+    save: jest.fn().mockResolvedValue(undefined),
+    reload: jest.fn().mockResolvedValue(undefined),
+  };
+};
 
-jest.mock(
-  '@/workflow/workflow-diagram/components/WorkflowDiagramEffect',
-  () => ({
-    WorkflowDiagramEffect: () => {
-      mockWorkflowDiagramEffect();
-
-      return null;
-    },
-  }),
-);
-
-jest.mock(
-  '@/workflow/workflow-diagram/components/WorkflowDiagramCanvasEditable',
-  () => ({
-    WorkflowDiagramCanvasEditable: () => {
-      mockWorkflowDiagramCanvasEditable();
-
-      return <div>Native editable workflow canvas</div>;
-    },
-  }),
-);
+const renderEditor = (state = makeState()) =>
+  render(
+    <CampaignOutreachWorkflowEditor
+      campaignId={campaignId}
+      sequenceState={state}
+    />,
+  );
 
 describe('CampaignOutreachWorkflowEditor', () => {
   beforeEach(() => {
-    mockWorkflowVisualizerEffect.mockClear();
-    mockWorkflowSSESubscribeEffect.mockClear();
-    mockWorkflowDiagramEffect.mockClear();
-    mockWorkflowDiagramCanvasEditable.mockClear();
+    mockSequenceEditor.mockClear();
+    mockBlocker.state = 'unblocked';
+    mockBlocker.proceed.mockClear();
+    mockBlocker.reset.mockClear();
   });
 
-  it('mounts the editable native graph for the verified Outreach workflow ID', () => {
-    render(<CampaignOutreachWorkflowGraph workflowId="workflow-a" />);
-
-    expect(mockWorkflowVisualizerEffect).toHaveBeenCalledWith(
-      expect.objectContaining({ workflowId: 'workflow-a' }),
-    );
-    expect(mockWorkflowSSESubscribeEffect).toHaveBeenCalledWith(
-      expect.objectContaining({ workflowId: 'workflow-a' }),
-    );
-    expect(mockWorkflowDiagramEffect).toHaveBeenCalled();
-    expect(mockWorkflowDiagramCanvasEditable).toHaveBeenCalled();
-  });
-
-  it('renders the Campaign-scoped editor host and Draft badge', () => {
-    render(
-      <CampaignOutreachWorkflowEditor
-        campaignId="campaign-a"
-        workflowId="workflow-a"
-      />,
-    );
+  it('renders the restricted vertical editor without the generic canvas', () => {
+    renderEditor();
 
     expect(
       screen.getByTestId('campaign-outreach-workflow-editor'),
     ).toBeVisible();
     expect(screen.getByText('Campaign Outreach')).toBeVisible();
-    expect(screen.getByText('Draft')).toBeVisible();
+    expect(screen.getByText('Sequence editor editable')).toBeVisible();
+    expect(screen.getByText('Message editor editable')).toBeVisible();
+    expect(
+      screen.queryByText(/native editable workflow canvas/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Activate' }),
+    ).not.toBeInTheDocument();
   });
 
-  it('keeps page-level information banners enabled by default', () => {
-    render(
-      <PageCardLayout header={<div>Page header</div>}>
-        <div>Page content</div>
-      </PageCardLayout>,
-    );
+  it('passes non-editable lifecycle state through every authoring surface', () => {
+    renderEditor(makeState({ editable: false }));
 
-    expect(screen.getByText('Page-level information banner')).toBeVisible();
+    expect(screen.getByText('ACTIVE')).toBeVisible();
+    expect(screen.getByText('Sequence editor read only')).toBeVisible();
+    expect(screen.getByText('Message editor read only')).toBeVisible();
+    expect(
+      screen.getByText(/Stop Campaign outreach before editing/i),
+    ).toBeVisible();
   });
 
-  it('does not repeat the page-level information banner inside Outreach', () => {
+  it('blocks a dirty side-panel tab transition unless discard is confirmed', () => {
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    const state = makeState({ dirty: true });
     render(
       <CampaignOutreachWorkflowEditor
-        campaignId="campaign-a"
-        workflowId="workflow-a"
+        campaignId={campaignId}
+        isInSidePanel
+        sequenceState={state}
       />,
     );
 
+    const cancelled = !window.dispatchEvent(
+      new CustomEvent(PAGE_LAYOUT_SIDE_PANEL_TAB_CHANGE_EVENT, {
+        cancelable: true,
+      }),
+    );
+
+    expect(cancelled).toBe(true);
     expect(
-      screen.queryByText('Page-level information banner'),
-    ).not.toBeInTheDocument();
+      screen.getByTestId('campaign-outreach-workflow-editor'),
+    ).toBeVisible();
+    expect(state.draft).toEqual(sequence);
+
+    confirm.mockReturnValue(true);
+    const permitted = window.dispatchEvent(
+      new CustomEvent(PAGE_LAYOUT_SIDE_PANEL_TAB_CHANGE_EVENT, {
+        cancelable: true,
+      }),
+    );
+    expect(permitted).toBe(true);
+    confirm.mockRestore();
+  });
+
+  it('blocks router navigation while dirty and requires explicit discard confirmation', () => {
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    mockBlocker.state = 'blocked';
+    const { rerender } = renderEditor(makeState({ dirty: true }));
+
+    expect(confirm).toHaveBeenCalled();
+    expect(mockBlocker.reset).toHaveBeenCalledTimes(1);
+    expect(mockBlocker.proceed).not.toHaveBeenCalled();
+
+    mockBlocker.state = 'unblocked';
+    rerender(
+      <CampaignOutreachWorkflowEditor
+        campaignId={campaignId}
+        sequenceState={makeState({ dirty: true })}
+      />,
+    );
+    confirm.mockReturnValue(true);
+    mockBlocker.state = 'blocked';
+    rerender(
+      <CampaignOutreachWorkflowEditor
+        campaignId={campaignId}
+        sequenceState={makeState({ dirty: true })}
+      />,
+    );
+    expect(mockBlocker.proceed).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
   });
 });

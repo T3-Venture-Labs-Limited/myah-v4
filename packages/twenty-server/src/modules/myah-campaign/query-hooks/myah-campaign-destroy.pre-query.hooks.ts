@@ -1,6 +1,9 @@
 import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
 
-import { type WorkspacePreQueryHookInstance } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
+import {
+  type WorkspacePreQueryHookInstance,
+  type WorkspacePreQueryHookTransactionContext,
+} from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
 import {
   type DestroyManyResolverArgs,
   type DestroyOneResolverArgs,
@@ -40,10 +43,12 @@ const cleanCampaignWorkflowsBeforeDestruction = async ({
   authContext,
   campaignIds,
   campaignOutreachWorkflowLifecycleService,
+  transactionContext,
 }: {
   authContext: WorkspaceAuthContext;
   campaignIds: string[];
   campaignOutreachWorkflowLifecycleService: CampaignOutreachWorkflowLifecycleWorkspaceService;
+  transactionContext?: WorkspacePreQueryHookTransactionContext;
 }): Promise<void> => {
   const workspace = authContext.workspace;
 
@@ -53,21 +58,24 @@ const cleanCampaignWorkflowsBeforeDestruction = async ({
     return;
   }
 
-  await campaignOutreachWorkflowLifecycleService.assertCampaignsAreAccessible({
-    authContext,
-    campaignIds,
-    workspaceId: workspace.id,
-  });
-  await campaignOutreachWorkflowLifecycleService.handleCampaignDeletion({
-    authContext,
-    campaignIds,
-    operation: 'destroy',
-    workspaceId: workspace.id,
-  });
+  if (!transactionContext) {
+    throw new Error('Campaign destruction requires a transaction');
+  }
+
+  await campaignOutreachWorkflowLifecycleService.assertCampaignDeletionAllowedInTransaction(
+    {
+      authContext,
+      campaignIds,
+      entityManager: transactionContext.entityManager,
+      workspaceId: workspace.id,
+    },
+  );
 };
 
 @WorkspaceQueryHook('campaign.destroyOne')
 export class MyahCampaignDestroyOnePreQueryHook implements WorkspacePreQueryHookInstance {
+  readonly shouldRunInTransaction = true as const;
+
   constructor(
     private readonly campaignOutreachWorkflowLifecycleService: CampaignOutreachWorkflowLifecycleWorkspaceService,
   ) {}
@@ -76,12 +84,14 @@ export class MyahCampaignDestroyOnePreQueryHook implements WorkspacePreQueryHook
     authContext: WorkspaceAuthContext,
     _objectName: string,
     payload: DestroyOneResolverArgs,
+    transactionContext?: WorkspacePreQueryHookTransactionContext,
   ): Promise<DestroyOneResolverArgs> {
     await cleanCampaignWorkflowsBeforeDestruction({
       authContext,
       campaignIds: [payload.id],
       campaignOutreachWorkflowLifecycleService:
         this.campaignOutreachWorkflowLifecycleService,
+      transactionContext,
     });
 
     return payload;
@@ -90,6 +100,8 @@ export class MyahCampaignDestroyOnePreQueryHook implements WorkspacePreQueryHook
 
 @WorkspaceQueryHook('campaign.destroyMany')
 export class MyahCampaignDestroyManyPreQueryHook implements WorkspacePreQueryHookInstance {
+  readonly shouldRunInTransaction = true as const;
+
   constructor(
     private readonly campaignOutreachWorkflowLifecycleService: CampaignOutreachWorkflowLifecycleWorkspaceService,
   ) {}
@@ -98,12 +110,14 @@ export class MyahCampaignDestroyManyPreQueryHook implements WorkspacePreQueryHoo
     authContext: WorkspaceAuthContext,
     _objectName: string,
     payload: DestroyManyResolverArgs,
+    transactionContext?: WorkspacePreQueryHookTransactionContext,
   ): Promise<DestroyManyResolverArgs> {
     await cleanCampaignWorkflowsBeforeDestruction({
       authContext,
       campaignIds: getCampaignIdsFromDestroyFilter(payload.filter),
       campaignOutreachWorkflowLifecycleService:
         this.campaignOutreachWorkflowLifecycleService,
+      transactionContext,
     });
 
     return payload;

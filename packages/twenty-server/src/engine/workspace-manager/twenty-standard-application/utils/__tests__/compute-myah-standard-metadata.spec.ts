@@ -101,6 +101,61 @@ describe('Myah standard metadata contract', () => {
     }
   });
 
+  it('adds one private nullable Campaign sequence field to workflow versions', () => {
+    const campaignSequenceFields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (field) =>
+          field.objectMetadataUniversalIdentifier ===
+            STANDARD_OBJECTS.workflowVersion.universalIdentifier &&
+          field.name === 'campaignSequence',
+      );
+
+    expect(campaignSequenceFields).toHaveLength(1);
+    expect(campaignSequenceFields[0]).toEqual(
+      expect.objectContaining({
+        universalIdentifier: '9a791319-798c-4a65-9eb9-1731b407d2a8',
+        objectMetadataUniversalIdentifier:
+          STANDARD_OBJECTS.workflowVersion.universalIdentifier,
+        name: 'campaignSequence',
+        type: FieldMetadataType.RAW_JSON,
+        isSystem: true,
+        isNullable: true,
+        isUIEditable: false,
+      }),
+    );
+  });
+
+  it('keeps the private Campaign sequence out of ordinary workflow views and page layouts', () => {
+    const campaignSequenceUniversalIdentifier =
+      '9a791319-798c-4a65-9eb9-1731b407d2a8';
+    const viewFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const pageLayoutWidgets = Object.values(
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+
+    expect(viewFields).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier: campaignSequenceUniversalIdentifier,
+        }),
+      ]),
+    );
+    expect(pageLayoutWidgets).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          universalConfiguration: expect.objectContaining({
+            fieldMetadataId: campaignSequenceUniversalIdentifier,
+          }),
+        }),
+      ]),
+    );
+  });
+
   it('retains CRM metadata in the generic standard map', () => {
     const crmObjectUniversalIdentifiers = [
       STANDARD_OBJECTS.person.universalIdentifier,

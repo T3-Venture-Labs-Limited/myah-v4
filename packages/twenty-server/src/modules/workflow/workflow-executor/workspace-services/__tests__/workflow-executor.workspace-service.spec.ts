@@ -17,6 +17,7 @@ import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-res
 import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkflowActionFactory } from 'src/modules/workflow/workflow-executor/factories/workflow-action.factory';
 import { shouldExecuteStep } from 'src/modules/workflow/workflow-executor/utils/should-execute-step.util';
 import { shouldFailSafely } from 'src/modules/workflow/workflow-executor/utils/should-fail-safely.util';
@@ -100,6 +101,14 @@ describe('WorkflowExecutorWorkspaceService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WorkflowExecutorWorkspaceService,
+        {
+          provide: WorkflowOutreachAccessGuardService,
+          useValue: {
+            assertGenericWorkflowRunMutationAllowed: jest
+              .fn()
+              .mockResolvedValue(undefined),
+          },
+        },
         {
           provide: WorkflowActionFactory,
           useValue: {
