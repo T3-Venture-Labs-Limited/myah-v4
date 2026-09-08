@@ -4,7 +4,7 @@ import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { useMutation } from '@apollo/client/react';
 import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { t } from '@lingui/core/macro';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { H2Title } from 'twenty-ui/typography';
@@ -50,33 +50,15 @@ export const SettingsAccountSendingPolicy = ({
   dailySendLimit,
   minimumSendIntervalMs,
 }: SettingsAccountSendingPolicyProps) => {
-  const [dailySendLimitDraft, setDailySendLimitDraft] = useState({
-    isDirty: false,
-    value: String(dailySendLimit),
-  });
-  const [minimumSendIntervalMsDraft, setMinimumSendIntervalMsDraft] = useState({
-    isDirty: false,
-    value: String(minimumSendIntervalMs),
-  });
+  const [dailySendLimitOverride, setDailySendLimitOverride] = useState<
+    string | null
+  >(null);
+  const [minimumSendIntervalMsOverride, setMinimumSendIntervalMsOverride] =
+    useState<string | null>(null);
 
-  useEffect(() => {
-    setDailySendLimitDraft((currentDraft) =>
-      currentDraft.isDirty
-        ? currentDraft
-        : { isDirty: false, value: String(dailySendLimit) },
-    );
-  }, [dailySendLimit]);
-
-  useEffect(() => {
-    setMinimumSendIntervalMsDraft((currentDraft) =>
-      currentDraft.isDirty
-        ? currentDraft
-        : { isDirty: false, value: String(minimumSendIntervalMs) },
-    );
-  }, [minimumSendIntervalMs]);
-
-  const dailySendLimitInput = dailySendLimitDraft.value;
-  const minimumSendIntervalMsInput = minimumSendIntervalMsDraft.value;
+  const dailySendLimitInput = dailySendLimitOverride ?? String(dailySendLimit);
+  const minimumSendIntervalMsInput =
+    minimumSendIntervalMsOverride ?? String(minimumSendIntervalMs);
 
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
   const [updateConnectedAccountSendingPolicy, { loading }] = useMutation<
@@ -109,15 +91,15 @@ export const SettingsAccountSendingPolicy = ({
           },
         },
       });
-      setDailySendLimitDraft((currentDraft) =>
-        currentDraft.value === submittedDailySendLimitInput
-          ? { ...currentDraft, isDirty: false }
-          : currentDraft,
+      setDailySendLimitOverride((currentOverride) =>
+        currentOverride === submittedDailySendLimitInput
+          ? null
+          : currentOverride,
       );
-      setMinimumSendIntervalMsDraft((currentDraft) =>
-        currentDraft.value === submittedMinimumSendIntervalMsInput
-          ? { ...currentDraft, isDirty: false }
-          : currentDraft,
+      setMinimumSendIntervalMsOverride((currentOverride) =>
+        currentOverride === submittedMinimumSendIntervalMsInput
+          ? null
+          : currentOverride,
       );
       enqueueSuccessSnackBar({ message: t`Sending policy updated` });
     } catch (error) {
@@ -143,9 +125,7 @@ export const SettingsAccountSendingPolicy = ({
         step={1}
         type="number"
         value={dailySendLimitInput}
-        onChange={(value) => {
-          setDailySendLimitDraft({ isDirty: true, value });
-        }}
+        onChange={setDailySendLimitOverride}
       />
       <SettingsTextInput
         instanceId={`connected-account-${connectedAccountId}-minimum-send-interval`}
@@ -155,9 +135,7 @@ export const SettingsAccountSendingPolicy = ({
         step={1}
         type="number"
         value={minimumSendIntervalMsInput}
-        onChange={(value) => {
-          setMinimumSendIntervalMsDraft({ isDirty: true, value });
-        }}
+        onChange={setMinimumSendIntervalMsOverride}
       />
       <Button
         title={t`Save sending policy`}
