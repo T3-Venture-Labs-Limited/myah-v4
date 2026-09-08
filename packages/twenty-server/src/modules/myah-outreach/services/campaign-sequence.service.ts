@@ -80,6 +80,29 @@ export type ValidateCampaignSequenceArgs = CampaignSequenceScope & {
   expectedVersionId: string;
 };
 
+export type LoadCampaignSequenceEmailByVersionArgs = CampaignSequenceScope & {
+  workflowVersionId: string;
+  messageId: string;
+};
+
+type CampaignSequenceEmail = Extract<
+  CampaignSequence['messages'][number],
+  { channel: 'EMAIL' }
+>;
+
+export type ValidatedCampaignSequenceEmail = {
+  workspaceId: string;
+  campaignId: string;
+  workflowId: string;
+  workflowVersionId: string;
+  messageId: string;
+  subject: string;
+  body: string;
+  files: CampaignSequenceEmail['files'];
+  replyToThread: boolean;
+  issues: CampaignSequenceIssue[];
+};
+
 type CampaignRecord = {
   id: string;
   lifecycleStatus: string | null;
@@ -168,6 +191,94 @@ export class CampaignSequenceService {
           lifecycleStatus: campaign.lifecycleStatus,
           canUpdate: this.canUpdateCampaign(permissionOptions),
         }),
+      };
+    });
+  }
+
+  async loadEmailByVersion(
+    args: LoadCampaignSequenceEmailByVersionArgs,
+  ): Promise<ValidatedCampaignSequenceEmail> {
+    const normalized = this.normalizeScope(args);
+    const workflowVersionId = this.canonicalUuid(
+      'workflowVersionId',
+      args.workflowVersionId,
+    );
+    const messageId = this.canonicalUuid('messageId', args.messageId);
+
+    return this.executeInContext(normalized.authContext, async () => {
+      const permissionOptions = this.permissionOptions(normalized.authContext);
+      const campaignRepository =
+        await this.globalWorkspaceOrmManager.getRepository<CampaignRecord>(
+          normalized.workspaceId,
+          'campaign',
+          permissionOptions,
+        );
+      const campaign = await campaignRepository.findOne({
+        where: { id: normalized.campaignId },
+        select: { id: true },
+      });
+
+      if (!campaign) {
+        throw new ForbiddenException('Campaign not found or inaccessible');
+      }
+
+      const workflow = await this.findWorkflow({
+        campaignId: normalized.campaignId,
+        workspaceId: normalized.workspaceId,
+      });
+
+      if (!workflow) {
+        throw new NotFoundException('Campaign sequence version not found');
+      }
+
+      const workflowVersionRepository = await this.workflowVersionRepository(
+        normalized.workspaceId,
+      );
+      const version = await workflowVersionRepository.findOne({
+        where: { id: workflowVersionId, workflowId: workflow.id },
+      });
+
+      if (!version) {
+        throw new NotFoundException('Campaign sequence version not found');
+      }
+
+      if (version.campaignSequence === null) {
+        throw new ConflictException('Campaign sequence version is legacy');
+      }
+
+      const sequence = this.parseStoredSequence(version.campaignSequence);
+      const matchingMessages = sequence.messages.filter(
+        (message) => message.id === messageId,
+      );
+
+      if (matchingMessages.length === 0) {
+        throw new NotFoundException('Campaign sequence email not found');
+      }
+      if (matchingMessages.length > 1) {
+        throw new InternalServerErrorException(
+          'Campaign sequence data is invalid',
+        );
+      }
+
+      const message = matchingMessages[0];
+
+      if (message.channel !== 'EMAIL') {
+        throw new ConflictException(
+          'Campaign sequence message is not an email',
+        );
+      }
+
+      return {
+        workspaceId: normalized.workspaceId,
+        campaignId: normalized.campaignId,
+        workflowId: workflow.id,
+        workflowVersionId,
+        messageId,
+        subject: message.subject,
+        body: message.body,
+        files: message.files,
+        replyToThread: message.replyToThread,
+        issues: validateCampaignSequence(sequence),
       };
     });
   }

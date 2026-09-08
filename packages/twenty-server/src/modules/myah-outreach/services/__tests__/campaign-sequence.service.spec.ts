@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { WorkflowVersionStatus } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
@@ -19,6 +21,9 @@ const workflowId = '20202020-4444-4444-8444-444444444444';
 const versionId = '20202020-5555-4555-8555-555555555555';
 const nextVersionId = '20202020-6666-4666-8666-666666666666';
 const messageId = '20202020-7777-4777-8777-777777777777';
+const secondMessageId = '20202020-8888-4888-8888-888888888888';
+const firstFileId = '20202020-9999-4999-8999-999999999999';
+const secondFileId = '20202020-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const rolePermissionConfig = { unionOf: ['role-id'] };
 const authContext = {
   type: 'user',
@@ -124,17 +129,17 @@ const createContext = () => {
       .fn()
       .mockResolvedValue({ generatedMaps: [{ id: workflowId }] }),
   };
+  const workflowVersion = {
+    id: versionId,
+    workflowId,
+    name: 'v1',
+    position: 0,
+    status: WorkflowVersionStatus.DRAFT,
+    campaignSequence: sequence,
+  };
   const workflowVersionRepository = {
-    find: jest.fn().mockResolvedValue([
-      {
-        id: versionId,
-        workflowId,
-        name: 'v1',
-        position: 0,
-        status: WorkflowVersionStatus.DRAFT,
-        campaignSequence: sequence,
-      },
-    ]),
+    find: jest.fn().mockResolvedValue([workflowVersion]),
+    findOne: jest.fn().mockResolvedValue(workflowVersion),
     insert: jest
       .fn()
       .mockResolvedValue({ generatedMaps: [{ id: nextVersionId }] }),
@@ -282,6 +287,207 @@ describe('CampaignSequenceService', () => {
         workspaceId: otherWorkspaceId,
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  describe('loadEmailByVersion', () => {
+    const loadArgs = {
+      authContext,
+      campaignId,
+      messageId,
+      workflowVersionId: versionId,
+      workspaceId,
+    };
+
+    it('loads the exact historical Email with authored file order and no side effects', async () => {
+      const {
+        dataSource,
+        queryRunner,
+        service,
+        workflowQueue,
+        workflowVersionRepository,
+      } = createContext();
+      const files = [
+        {
+          id: firstFileId,
+          name: 'first.pdf',
+          size: 10,
+          type: 'application/pdf',
+          createdAt: '2026-09-08T00:00:00.000Z',
+        },
+        {
+          id: secondFileId,
+          name: 'second.png',
+          size: 20,
+          type: 'image/png',
+          createdAt: '2026-09-08T00:00:01.000Z',
+        },
+      ];
+      const historicalSequence = {
+        ...sequence,
+        messages: [
+          { ...sequence.messages[0], id: secondMessageId },
+          {
+            ...sequence.messages[0],
+            files,
+            replyToThread: true,
+            subject: '',
+          },
+        ],
+        delaysSeconds: [1],
+      };
+      workflowVersionRepository.find.mockResolvedValue([
+        {
+          id: nextVersionId,
+          workflowId,
+          status: WorkflowVersionStatus.DRAFT,
+          campaignSequence: sequence,
+        },
+      ]);
+      workflowVersionRepository.findOne.mockResolvedValue({
+        id: versionId,
+        workflowId,
+        status: WorkflowVersionStatus.DEACTIVATED,
+        campaignSequence: historicalSequence,
+      });
+
+      await expect(service.loadEmailByVersion(loadArgs)).resolves.toEqual({
+        workspaceId,
+        campaignId,
+        workflowId,
+        workflowVersionId: versionId,
+        messageId,
+        subject: '',
+        body: sequence.messages[0].body,
+        files,
+        replyToThread: true,
+        issues: [
+          expect.objectContaining({
+            code: 'CONTENT_REQUIRED',
+            messageId,
+            path: 'messages.1.subject',
+          }),
+        ],
+      });
+      expect(workflowVersionRepository.findOne).toHaveBeenCalledWith({
+        where: { id: versionId, workflowId },
+      });
+      expect(workflowVersionRepository.find).not.toHaveBeenCalled();
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+      expect(queryRunner.query).not.toHaveBeenCalled();
+      expect(workflowQueue.add).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['workflowVersionId', 'not-a-version-id'],
+      ['messageId', 'not-a-message-id'],
+    ])(
+      'rejects malformed %s before repository access',
+      async (field, value) => {
+        const { campaignRepository, service } = createContext();
+
+        await expect(
+          service.loadEmailByVersion({ ...loadArgs, [field]: value }),
+        ).rejects.toEqual(new BadRequestException(`${field} must be a UUID`));
+        expect(campaignRepository.findOne).not.toHaveBeenCalled();
+      },
+    );
+
+    it('fails closed for cross-workspace and inaccessible Campaign scopes', async () => {
+      const { campaignRepository, service } = createContext();
+
+      await expect(
+        service.loadEmailByVersion({
+          ...loadArgs,
+          workspaceId: otherWorkspaceId,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(campaignRepository.findOne).not.toHaveBeenCalled();
+
+      campaignRepository.findOne.mockResolvedValueOnce(null);
+      await expect(service.loadEmailByVersion(loadArgs)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it('rejects an absent Campaign Workflow or unrelated immutable version', async () => {
+      const { service, workflowRepository, workflowVersionRepository } =
+        createContext();
+      workflowRepository.findOne.mockResolvedValueOnce(null);
+
+      await expect(service.loadEmailByVersion(loadArgs)).rejects.toEqual(
+        new NotFoundException('Campaign sequence version not found'),
+      );
+      expect(workflowVersionRepository.findOne).not.toHaveBeenCalled();
+
+      workflowVersionRepository.findOne.mockResolvedValueOnce(null);
+      await expect(service.loadEmailByVersion(loadArgs)).rejects.toEqual(
+        new NotFoundException('Campaign sequence version not found'),
+      );
+    });
+
+    it('rejects legacy and malformed persisted versions', async () => {
+      const { service, workflowVersionRepository } = createContext();
+      workflowVersionRepository.findOne.mockResolvedValueOnce({
+        id: versionId,
+        workflowId,
+        campaignSequence: null,
+      });
+
+      await expect(service.loadEmailByVersion(loadArgs)).rejects.toEqual(
+        new ConflictException('Campaign sequence version is legacy'),
+      );
+
+      workflowVersionRepository.findOne.mockResolvedValueOnce({
+        id: versionId,
+        workflowId,
+        campaignSequence: { ...sequence, unexpected: true },
+      });
+      await expect(service.loadEmailByVersion(loadArgs)).rejects.toEqual(
+        new InternalServerErrorException('Campaign sequence data is invalid'),
+      );
+    });
+
+    it('rejects a missing or non-Email message', async () => {
+      const { service, workflowVersionRepository } = createContext();
+
+      await expect(
+        service.loadEmailByVersion({ ...loadArgs, messageId: secondMessageId }),
+      ).rejects.toEqual(
+        new NotFoundException('Campaign sequence email not found'),
+      );
+
+      workflowVersionRepository.findOne.mockResolvedValueOnce({
+        id: versionId,
+        workflowId,
+        campaignSequence: {
+          schemaVersion: 1,
+          messages: [
+            { id: messageId, channel: 'INSTAGRAM', text: 'Hello there' },
+          ],
+          delaysSeconds: [],
+        },
+      });
+      await expect(service.loadEmailByVersion(loadArgs)).rejects.toEqual(
+        new ConflictException('Campaign sequence message is not an email'),
+      );
+    });
+
+    it('treats duplicate stable message IDs as invalid persisted data', async () => {
+      const { service, workflowVersionRepository } = createContext();
+      workflowVersionRepository.findOne.mockResolvedValueOnce({
+        id: versionId,
+        workflowId,
+        campaignSequence: {
+          ...sequence,
+          messages: [sequence.messages[0], sequence.messages[0]],
+          delaysSeconds: [1],
+        },
+      });
+
+      await expect(service.loadEmailByVersion(loadArgs)).rejects.toEqual(
+        new InternalServerErrorException('Campaign sequence data is invalid'),
+      );
+    });
   });
 
   it('strictly rejects malicious payload keys before opening a transaction', async () => {
