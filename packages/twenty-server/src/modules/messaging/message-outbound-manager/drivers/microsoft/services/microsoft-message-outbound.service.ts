@@ -146,27 +146,45 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
-    return executeWithOutboundEmailProviderDeadline(async (abortSignal) => {
-      const sendResult = await this.sendMessageWithinDeadline(
-        sendMessageInput,
-        connectedAccount,
-        abortSignal,
-      );
+    let acceptedSendResult: SendMessageResult | undefined;
 
-      try {
-        await this.deleteDraftWithinDeadline(
-          draftExternalId,
-          connectedAccount,
-          abortSignal,
-        );
-      } catch {
-        this.logger.warn(
-          `Failed to delete Microsoft draft ${draftExternalId} after send`,
-        );
+    try {
+      return await executeWithOutboundEmailProviderDeadline(
+        async (abortSignal) => {
+          acceptedSendResult = await this.sendMessageWithinDeadline(
+            sendMessageInput,
+            connectedAccount,
+            abortSignal,
+          );
+
+          try {
+            await this.deleteDraftWithinDeadline(
+              draftExternalId,
+              connectedAccount,
+              abortSignal,
+            );
+          } catch {
+            if (!abortSignal.aborted) {
+              this.logger.warn(
+                `Failed to delete Microsoft draft ${draftExternalId} after send`,
+              );
+            }
+          }
+
+          return acceptedSendResult;
+        },
+      );
+    } catch (error) {
+      if (!isDefined(acceptedSendResult)) {
+        throw error;
       }
 
-      return sendResult;
-    });
+      this.logger.warn(
+        `Failed to delete Microsoft draft ${draftExternalId} after send`,
+      );
+
+      return acceptedSendResult;
+    }
   }
 
   async deleteDraft(

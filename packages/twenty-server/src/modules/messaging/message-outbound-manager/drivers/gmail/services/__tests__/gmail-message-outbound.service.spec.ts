@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 
 import { google } from 'googleapis';
@@ -379,5 +380,77 @@ describe('GmailMessageOutboundService', () => {
     expect(mockSend.mock.invocationCallOrder[0]).toBeLessThan(
       mockDeleteDraft.mock.invocationCallOrder[0],
     );
+  });
+
+  it('returns an accepted Gmail send when cleanup authentication reaches the original deadline', async () => {
+    jest.useFakeTimers();
+    const loggerWarnSpy = jest.spyOn(Logger.prototype, 'warn');
+    const submissionElapsedMs = 10_000;
+    let cleanupSignal: AbortSignal | undefined;
+    let resolveSend:
+      | ((result: { data: { id: string; threadId: string } }) => void)
+      | undefined;
+
+    mockSend.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSend = resolve;
+      }),
+    );
+    mockGetClient
+      .mockResolvedValueOnce(mockOAuth2Client)
+      .mockImplementationOnce((_connectedAccountId, options) => {
+        cleanupSignal = options.abortSignal;
+
+        return new Promise((_resolve, reject) => {
+          cleanupSignal?.addEventListener(
+            'abort',
+            () => reject(cleanupSignal?.reason),
+            { once: true },
+          );
+        });
+      });
+
+    const resultPromise = service.sendDraft(
+      'draft-message-id',
+      {
+        to: 'recipient@example.com',
+        subject: 'Approved subject',
+        body: 'Approved body',
+        html: '<p>Approved body</p>',
+        attachments: [],
+      },
+      buildConnectedAccount(ConnectedAccountProvider.GOOGLE),
+    );
+    const resolution = expect(resultPromise).resolves.toEqual({
+      headerMessageId: '<compiled-draft@example.com>',
+      messageExternalId: 'message-id',
+      threadExternalId: 'gmail-thread-id',
+    });
+
+    await jest.advanceTimersByTimeAsync(submissionElapsedMs);
+    expect(mockSend).toHaveBeenCalledTimes(1);
+
+    resolveSend?.({
+      data: { id: 'message-id', threadId: 'gmail-thread-id' },
+    });
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(mockGetClient).toHaveBeenCalledTimes(2);
+    expect(cleanupSignal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS - submissionElapsedMs - 1,
+    );
+    expect(cleanupSignal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await resolution;
+    expect(cleanupSignal?.aborted).toBe(true);
+    expect(mockListDrafts).not.toHaveBeenCalled();
+    expect(loggerWarnSpy).toHaveBeenCalledTimes(1);
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      'Failed to delete Gmail draft draft-message-id after send',
+    );
+    expect(jest.getTimerCount()).toBe(0);
   });
 });
