@@ -1,6 +1,7 @@
 import { validate } from 'class-validator';
 import { getMetadataArgsStorage, IsNull, type Repository } from 'typeorm';
 
+import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import {
   ConnectedAccountException,
@@ -11,6 +12,7 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { ConnectedAccountResolver } from 'src/engine/metadata-modules/connected-account/resolvers/connected-account.resolver';
 import { ConnectedAccountSendingPolicyService } from 'src/engine/metadata-modules/connected-account/services/connected-account-sending-policy.service';
 
+const GRAPHQL_INT_MAX = 2_147_483_647;
 const workspaceId = '20202020-1111-4444-8888-111111111111';
 const connectedAccountId = '20202020-2222-4444-8888-222222222222';
 
@@ -80,13 +82,32 @@ describe('ConnectedAccount sending policy', () => {
       );
     });
 
-    it('accepts positive integers', async () => {
+    it.each(['dailySendLimit', 'minimumSendIntervalMs'] as const)(
+      'rejects %s above the signed GraphQL Int maximum',
+      async (property) => {
+        const input = Object.assign(
+          new UpdateConnectedAccountSendingPolicyInput(),
+          {
+            connectedAccountId,
+            dailySendLimit: 50,
+            minimumSendIntervalMs: 300_000,
+            [property]: GRAPHQL_INT_MAX + 1,
+          },
+        );
+
+        await expect(validate(input)).resolves.toEqual(
+          expect.arrayContaining([expect.objectContaining({ property })]),
+        );
+      },
+    );
+
+    it('accepts the signed GraphQL Int maximum', async () => {
       const input = Object.assign(
         new UpdateConnectedAccountSendingPolicyInput(),
         {
           connectedAccountId,
-          dailySendLimit: 1,
-          minimumSendIntervalMs: 1,
+          dailySendLimit: GRAPHQL_INT_MAX,
+          minimumSendIntervalMs: GRAPHQL_INT_MAX,
         },
       );
 
@@ -97,9 +118,15 @@ describe('ConnectedAccount sending policy', () => {
   describe('service workspace authority', () => {
     const repository = {
       findOne: jest.fn(),
-      save: jest.fn(),
+      update: jest.fn(),
     } as unknown as jest.Mocked<Repository<ConnectedAccountEntity>>;
     const service = new ConnectedAccountSendingPolicyService(repository);
+
+    const activeWorkspacePredicate = {
+      archivedAt: IsNull(),
+      id: connectedAccountId,
+      workspaceId,
+    };
 
     beforeEach(() => {
       jest.clearAllMocks();
@@ -108,8 +135,10 @@ describe('ConnectedAccount sending policy', () => {
     it.each([
       { dailySendLimit: 0, minimumSendIntervalMs: 300_000 },
       { dailySendLimit: 1.5, minimumSendIntervalMs: 300_000 },
+      { dailySendLimit: GRAPHQL_INT_MAX + 1, minimumSendIntervalMs: 300_000 },
       { dailySendLimit: 50, minimumSendIntervalMs: -1 },
       { dailySendLimit: 50, minimumSendIntervalMs: 1.5 },
+      { dailySendLimit: 50, minimumSendIntervalMs: GRAPHQL_INT_MAX + 1 },
     ])(
       'rejects invalid policy values at the service boundary',
       async (policy) => {
@@ -122,12 +151,43 @@ describe('ConnectedAccount sending policy', () => {
         ).rejects.toMatchObject({
           code: ConnectedAccountExceptionCode.INVALID_CONNECTED_ACCOUNT_INPUT,
         });
+        expect(repository.update).not.toHaveBeenCalled();
         expect(repository.findOne).not.toHaveBeenCalled();
       },
     );
 
-    it('looks up only an active account in the authenticated workspace', async () => {
-      repository.findOne.mockResolvedValue(null);
+    it('allows a same-workspace non-owner by writing only policy fields and reloading concurrent unrelated changes', async () => {
+      const freshAccount = buildConnectedAccount({
+        accessToken: 'new-access-token' as EncryptedString,
+        dailySendLimit: GRAPHQL_INT_MAX,
+        minimumSendIntervalMs: GRAPHQL_INT_MAX,
+        refreshToken: 'new-refresh-token' as EncryptedString,
+        userWorkspaceId: '20202020-5555-4444-8888-555555555555',
+      });
+
+      repository.update.mockResolvedValue({ affected: 1 } as never);
+      repository.findOne.mockResolvedValue(freshAccount);
+
+      await expect(
+        service.update({
+          connectedAccountId,
+          dailySendLimit: GRAPHQL_INT_MAX,
+          minimumSendIntervalMs: GRAPHQL_INT_MAX,
+          workspaceId,
+        }),
+      ).resolves.toBe(freshAccount);
+
+      expect(repository.update).toHaveBeenCalledWith(activeWorkspacePredicate, {
+        dailySendLimit: GRAPHQL_INT_MAX,
+        minimumSendIntervalMs: GRAPHQL_INT_MAX,
+      });
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: activeWorkspacePredicate,
+      });
+    });
+
+    it('rejects a concurrent archive when the conditional write affects no row', async () => {
+      repository.update.mockResolvedValue({ affected: 0 } as never);
 
       await expect(
         service.update({
@@ -140,70 +200,55 @@ describe('ConnectedAccount sending policy', () => {
         code: ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
       });
 
-      expect(repository.findOne).toHaveBeenCalledWith({
-        where: {
-          archivedAt: IsNull(),
-          id: connectedAccountId,
-          workspaceId,
-        },
-      });
-    });
-
-    it('rejects a cross-workspace account id', async () => {
-      repository.findOne.mockResolvedValue(null);
-
-      await expect(
-        service.update({
-          connectedAccountId,
-          dailySendLimit: 75,
-          minimumSendIntervalMs: 120_000,
-          workspaceId: '20202020-4444-4444-8888-444444444444',
-        }),
-      ).rejects.toMatchObject({
-        code: ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
-      });
-    });
-
-    it('rejects an archived account id', async () => {
-      repository.findOne.mockResolvedValue(null);
-
-      await expect(
-        service.update({
-          connectedAccountId,
-          dailySendLimit: 75,
-          minimumSendIntervalMs: 120_000,
-          workspaceId,
-        }),
-      ).rejects.toMatchObject({
-        code: ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
-      });
-    });
-
-    it('allows a same-workspace non-owner to update both values', async () => {
-      const account = buildConnectedAccount();
-
-      repository.findOne.mockResolvedValue(account);
-      repository.save.mockResolvedValue(account);
-
-      await expect(
-        service.update({
-          connectedAccountId,
-          dailySendLimit: 75,
-          minimumSendIntervalMs: 120_000,
-          workspaceId,
-        }),
-      ).resolves.toMatchObject({
+      expect(repository.update).toHaveBeenCalledWith(activeWorkspacePredicate, {
         dailySendLimit: 75,
         minimumSendIntervalMs: 120_000,
       });
+      expect(repository.findOne).not.toHaveBeenCalled();
+    });
 
-      expect(repository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
+    it('rejects a cross-workspace account id', async () => {
+      const foreignWorkspaceId = '20202020-4444-4444-8888-444444444444';
+
+      repository.update.mockResolvedValue({ affected: 0 } as never);
+
+      await expect(
+        service.update({
+          connectedAccountId,
           dailySendLimit: 75,
           minimumSendIntervalMs: 120_000,
-          userWorkspaceId: account.userWorkspaceId,
+          workspaceId: foreignWorkspaceId,
         }),
+      ).rejects.toMatchObject({
+        code: ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      });
+      expect(repository.update).toHaveBeenCalledWith(
+        {
+          archivedAt: IsNull(),
+          id: connectedAccountId,
+          workspaceId: foreignWorkspaceId,
+        },
+        {
+          dailySendLimit: 75,
+          minimumSendIntervalMs: 120_000,
+        },
       );
+    });
+
+    it('rejects when the account is archived before the reload', async () => {
+      repository.update.mockResolvedValue({ affected: 1 } as never);
+      repository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.update({
+          connectedAccountId,
+          dailySendLimit: 75,
+          minimumSendIntervalMs: 120_000,
+          workspaceId,
+        }),
+      ).rejects.toMatchObject({
+        code: ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      });
     });
   });
 
