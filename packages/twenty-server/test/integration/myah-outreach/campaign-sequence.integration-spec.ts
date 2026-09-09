@@ -159,7 +159,7 @@ const waitFor = async (
 };
 
 describe('CampaignSequenceService and API (PostgreSQL)', () => {
-  const campaignIds = Array.from({ length: 13 }, () => randomUUID());
+  const campaignIds = Array.from({ length: 14 }, () => randomUUID());
   const barrierKey = randomUUID();
   const barrierSuffix = barrierKey.split('-').join('');
   const barrierFunction = `myah_319_sequence_barrier_${barrierSuffix}`;
@@ -964,8 +964,27 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
     }
   });
 
-  it('holds the Campaign row until save commits before a status update', async () => {
-    const initial = await createFixture(campaignIds[5]);
+  it.each([
+    [
+      'holds the Campaign row until save commits before a status update',
+      campaignIds[5],
+      false,
+    ],
+    [
+      'cancels and rolls back a blocked save after an injected assertion failure',
+      campaignIds[13],
+      true,
+    ],
+  ] as const)('%s', async (_title, campaignId, injectAssertionFailure) => {
+    const initial = await createFixture(campaignId);
+    const versionsBefore = await global.testDataSource.query<
+      Array<{ campaignSequence: unknown; id: string; status: string }>
+    >(
+      `SELECT "campaignSequence", "id", "status"
+         FROM "${schemaName}"."workflowVersion"
+        WHERE "workflowId" = $1 ORDER BY "createdAt", "id"`,
+      [initial.workflowId],
+    );
     if (
       !/^[0-9a-f-]{36}$/.test(initial.workflowId) ||
       !/^[0-9a-f-]{36}$/.test(barrierKey)
@@ -992,6 +1011,10 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
       'SELECT pg_backend_pid()::integer AS pid',
     )) as Array<{ pid: number }>;
     await prepareSideEffectObservation();
+    const injectedAssertionError = new Error(
+      'injected MYAH-319 blocked-save assertion failure',
+    );
+    const cleanupFailures: Array<{ error: unknown; phase: string }> = [];
 
     let blockerReleased = false;
     let barrierReleased = false;
@@ -1013,7 +1036,7 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
     const save = service
       .save({
         authContext,
-        campaignId: campaignIds[5],
+        campaignId,
         expectedVersionId: initial.versionId,
         sequence: editedSequence('Save first'),
         workspaceId,
@@ -1107,13 +1130,14 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
         if (!campaignReset) {
           const resetCampaignStatement = `UPDATE "${schemaName}"."campaign" SET "lifecycleStatus" = 'DRAFT' WHERE "id" = $1`;
           await global.testDataSource.query(resetCampaignStatement, [
-            campaignIds[5],
+            campaignId,
           ]);
           campaignReset = true;
         }
         activePendingOperationCleanups.delete(cleanup);
       },
       reportCleanupFailure: (phase, error) => {
+        cleanupFailures.push({ error, phase });
         process.stderr.write(
           `MYAH-319 pending-write cleanup failed during ${phase}: ${String(error)}\n`,
         );
@@ -1122,7 +1146,7 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
     };
     activePendingOperationCleanups.add(cleanup);
 
-    await runWithPendingOperationCleanup(async () => {
+    const scenario = runWithPendingOperationCleanup(async () => {
       await waitFor('save insert barrier', async () => {
         const waiters = await global.testDataSource.query<
           Array<{ pid: number }>
@@ -1142,13 +1166,15 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
         return saveBackendPid !== undefined;
       });
       expectNoEscapedSideEffects([initial.workflowId, initial.versionId]);
+      if (injectAssertionFailure) throw injectedAssertionError;
+
       const [{ pid }] = (await updater.query(
         'SELECT pg_backend_pid() AS pid',
       )) as Array<{ pid: number }>;
       const activateCampaignStatement = `UPDATE "${schemaName}"."campaign" SET "lifecycleStatus" = 'ACTIVE' WHERE "id" = $1`;
       statusUpdateOutcome = 'PENDING';
       statusUpdate = updater
-        .query(activateCampaignStatement, [campaignIds[5]])
+        .query(activateCampaignStatement, [campaignId])
         .finally(() => {
           statusUpdateOutcome = 'SETTLED';
         });
@@ -1171,10 +1197,75 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
         Array<{ lifecycleStatus: string }>
       >(
         `SELECT "lifecycleStatus" FROM "${schemaName}"."campaign" WHERE "id" = $1`,
-        [campaignIds[5]],
+        [campaignId],
       );
       expect(campaign.lifecycleStatus).toBe('ACTIVE');
     }, cleanup);
+
+    if (!injectAssertionFailure) {
+      await scenario;
+      expect(cleanupFailures).toEqual([]);
+      return;
+    }
+
+    await expect(scenario).rejects.toBe(injectedAssertionError);
+    expect(saveBackendPid).toBeDefined();
+    expect(saveCancellationConfirmed).toBe(true);
+    expect(saveOutcome).toBe('REJECTED');
+    expect(statusUpdateOutcome).toBe('NOT_STARTED');
+    expect(cleanupFailures).toEqual([]);
+    expect(barrier.isReleased).toBe(true);
+    expect(updater.isReleased).toBe(true);
+    expect(activePendingOperationCleanups.has(cleanup)).toBe(false);
+    expectNoEscapedSideEffects([initial.workflowId, initial.versionId]);
+
+    const versionsAfter = await global.testDataSource.query<
+      Array<{ campaignSequence: unknown; id: string; status: string }>
+    >(
+      `SELECT "campaignSequence", "id", "status"
+         FROM "${schemaName}"."workflowVersion"
+        WHERE "workflowId" = $1 ORDER BY "createdAt", "id"`,
+      [initial.workflowId],
+    );
+    expect(versionsAfter).toEqual(versionsBefore);
+    expect(versionsAfter).toEqual([
+      {
+        campaignSequence: initial.sequence,
+        id: initial.versionId,
+        status: 'DRAFT',
+      },
+    ]);
+
+    const [campaign] = await global.testDataSource.query<
+      Array<{ lifecycleStatus: string }>
+    >(
+      `SELECT "lifecycleStatus" FROM "${schemaName}"."campaign" WHERE "id" = $1`,
+      [campaignId],
+    );
+    expect(campaign.lifecycleStatus).toBe('DRAFT');
+
+    if (saveBackendPid === undefined) {
+      throw new Error('Missing owned MYAH-319 save waiter identity');
+    }
+    const [cleanupState] = await global.testDataSource.query<
+      Array<{ lockHeld: boolean; waiterPresent: boolean }>
+    >(
+      `SELECT EXISTS (
+                SELECT 1 FROM pg_locks
+                 WHERE pid = $2 AND locktype = 'advisory'
+                   AND objid = hashtext($1)::oid
+              ) AS "lockHeld",
+              EXISTS (
+                SELECT 1 FROM pg_stat_activity
+                 WHERE pid = $3
+                   AND $2 = ANY(pg_blocking_pids(pid))
+              ) AS "waiterPresent"`,
+      [barrierKey, barrierPid, saveBackendPid],
+    );
+    expect(cleanupState).toEqual({
+      lockHeld: false,
+      waiterPresent: false,
+    });
   });
 
   it('serves authenticated load, save, and validation endpoints', async () => {
