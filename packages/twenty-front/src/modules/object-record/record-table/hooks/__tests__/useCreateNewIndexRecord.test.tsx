@@ -1,4 +1,7 @@
+import { getTestEnrichedObjectMetadataItemsMock } from '~/testing/utils/getTestEnrichedObjectMetadataItemsMock';
 import { act, renderHook } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { SnackBarComponentInstanceContext } from '@/ui/feedback/snack-bar-manager/contexts/SnackBarComponentInstanceContext';
 import { type ReactNode } from 'react';
 import { createStore, Provider } from 'jotai';
 import { recordIndexCreationOptionsComponentState } from '@/object-record/record-index/states/recordIndexCreationOptionsComponentState';
@@ -123,7 +126,15 @@ type ScopedContextStoreWrapperProps = {
 type StoreWrapperProps = ScopedContextStoreWrapperProps;
 
 const StoreWrapper = ({ children }: StoreWrapperProps) => (
-  <Provider store={store}>{children}</Provider>
+  <Provider store={store}>
+    <BrowserRouter>
+      <SnackBarComponentInstanceContext.Provider
+        value={{ instanceId: 'index-test-snacks' }}
+      >
+        {children}
+      </SnackBarComponentInstanceContext.Provider>
+    </BrowserRouter>
+  </Provider>
 );
 
 const ScopedContextStoreWrapper = ({
@@ -267,3 +278,86 @@ describe('useCreateNewIndexRecord', () => {
     expect(mockOnRecordCreated).not.toHaveBeenCalled();
   });
 });
+
+it('preserves the default headless path with actual native Workflow metadata and caller fields', async () => {
+  jest.clearAllMocks();
+  const workflow = getTestEnrichedObjectMetadataItemsMock().find(
+    (item) => item.nameSingular === 'workflow',
+  );
+  if (!workflow) throw new Error('Native Workflow metadata fixture missing');
+  const { result } = renderHook(
+    () =>
+      useCreateNewIndexRecord({
+        objectMetadataItem: workflow,
+        instanceId: 'workflow-index',
+      }),
+    { wrapper: StoreWrapper },
+  );
+  await act(async () => {
+    await result.current.createNewIndexRecord({
+      name: 'Workflow draft',
+      position: 'last',
+    });
+  });
+  expect(mockCreateOneRecord).toHaveBeenCalledWith({
+    id: 'new-creator-id',
+    name: 'Workflow draft',
+    position: 'last',
+  });
+  expect(mockCreateOneRecord.mock.calls[0]).toHaveLength(1);
+});
+
+it.each(['first', 'last'] as const)(
+  'preserves board group calendar and RLS/filter precedence for default index %s',
+  async (position) => {
+    jest.clearAllMocks();
+    mockBuildRecordInputFromRLSPredicates.mockReturnValue({
+      id: 'rls-id',
+      name: 'RLS name',
+      objective: 'RLS objective',
+      startDate: '2026-01-01',
+      endDate: '2026-01-02',
+    });
+    mockBuildRecordInputFromFilters.mockReturnValue({
+      id: 'filter-id',
+      name: 'Filter name',
+      status: 'FILTER_GROUP',
+      startDate: '2026-02-01',
+    });
+    const { result } = renderHook(
+      () =>
+        useCreateNewIndexRecord({
+          objectMetadataItem,
+          instanceId: 'default-index',
+        }),
+      { wrapper: StoreWrapper },
+    );
+    try {
+      await act(async () => {
+        await result.current.createNewIndexRecord({
+          id: 'caller-id',
+          name: 'Caller name',
+          status: 'CALLER_GROUP',
+          position,
+          startDate: '2026-03-01',
+          endDate: '2026-03-02',
+        });
+      });
+      expect(mockCreateOneRecord).toHaveBeenCalledWith({
+        id: 'caller-id',
+        name: 'Caller name',
+        objective: 'RLS objective',
+        status: 'CALLER_GROUP',
+        position,
+        startDate: '2026-03-01',
+        endDate: '2026-03-02',
+      });
+      expect(mockCreateOneRecord.mock.calls[0]).toHaveLength(1);
+      expect(mockBuildRecordInputFromFilters).toHaveBeenCalledTimes(1);
+      expect(mockBuildRecordInputFromRLSPredicates).toHaveBeenCalledTimes(1);
+    } finally {
+      mockBuildRecordInputFromRLSPredicates.mockReturnValue({});
+      mockBuildRecordInputFromFilters.mockReturnValue({});
+    }
+  },
+);
