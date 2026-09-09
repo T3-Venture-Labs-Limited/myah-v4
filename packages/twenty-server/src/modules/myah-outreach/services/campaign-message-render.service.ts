@@ -23,6 +23,7 @@ import { CampaignMessageMaterializerService } from './campaign-message-materiali
 const RENDER_DIGEST_DOMAIN = 'campaign-email-render-digest/v1';
 const subjectVariablePattern = /{{([^{}]+)}}/g;
 const supportedVariables = new Set<string>(SUPPORTED_CREATOR_VARIABLES);
+const bodyResolutionFailure = Symbol('bodyResolutionFailure');
 
 type JsonRecord = Record<string, unknown>;
 
@@ -263,7 +264,6 @@ export class CampaignMessageRenderService {
         handle: material.sender.handle,
         provider: material.sender.provider,
         senderPoolFingerprint: material.sender.senderPoolFingerprint,
-        isPreviewProjection: material.sender.isPreviewProjection,
       },
       orderedAttachmentProofs,
       replyIntent: material.authored.replyToThread,
@@ -450,7 +450,7 @@ export class CampaignMessageRenderService {
 
     const resolved = this.resolveBodyNode(document, variables);
 
-    if (resolved === null) {
+    if (resolved === bodyResolutionFailure) {
       return {
         kind: 'BLOCKED',
         blockers: [
@@ -477,13 +477,15 @@ export class CampaignMessageRenderService {
   private resolveBodyNode(
     value: unknown,
     variables: Readonly<Record<SupportedCreatorVariable, string>>,
-  ): unknown | null {
+  ): unknown | typeof bodyResolutionFailure {
     if (Array.isArray(value)) {
       const resolved = value.map((item) =>
         this.resolveBodyNode(item, variables),
       );
 
-      return resolved.includes(null) ? null : resolved;
+      return resolved.includes(bodyResolutionFailure)
+        ? bodyResolutionFailure
+        : resolved;
     }
 
     if (!isJsonRecord(value)) {
@@ -495,13 +497,13 @@ export class CampaignMessageRenderService {
         !isJsonRecord(value.attrs) ||
         typeof value.attrs.variable !== 'string'
       ) {
-        return null;
+        return bodyResolutionFailure;
       }
 
       const match = /^{{([^{}]+)}}$/.exec(value.attrs.variable);
 
       if (match === null || !supportedVariables.has(match[1])) {
-        return null;
+        return bodyResolutionFailure;
       }
 
       return {
@@ -515,8 +517,8 @@ export class CampaignMessageRenderService {
     for (const [key, nestedValue] of Object.entries(value)) {
       const resolved = this.resolveBodyNode(nestedValue, variables);
 
-      if (resolved === null) {
-        return null;
+      if (resolved === bodyResolutionFailure) {
+        return bodyResolutionFailure;
       }
 
       output[key] = resolved;
@@ -530,6 +532,41 @@ export class CampaignMessageRenderService {
     composed: ComposedEmail,
   ): CampaignMessageBlocker[] {
     const blockers: CampaignMessageBlocker[] = [];
+
+    if (
+      !isJsonRecord(composed) ||
+      typeof composed.sanitizedSubject !== 'string' ||
+      composed.sanitizedSubject.trim().length === 0 ||
+      typeof composed.sanitizedHtmlBody !== 'string' ||
+      composed.sanitizedHtmlBody.trim().length === 0 ||
+      typeof composed.plainTextBody !== 'string' ||
+      typeof composed.toRecipientsDisplay !== 'string' ||
+      typeof composed.shouldPersistMessage !== 'boolean'
+    ) {
+      return [
+        {
+          code: 'INVALID_CONTENT',
+          message: 'Composed email content is invalid',
+        },
+      ];
+    }
+
+    if (
+      !isJsonRecord(composed.recipients) ||
+      !Array.isArray(composed.recipients.to) ||
+      !Array.isArray(composed.recipients.cc) ||
+      !Array.isArray(composed.recipients.bcc) ||
+      !isJsonRecord(composed.connectedAccount) ||
+      !Array.isArray(composed.attachments)
+    ) {
+      return [
+        {
+          code: 'MATERIAL_STALE',
+          message: 'Composed email material is incomplete',
+        },
+      ];
+    }
+
     const account = composed.connectedAccount;
 
     if (
@@ -558,6 +595,10 @@ export class CampaignMessageRenderService {
         const expected = material.attachments[index];
 
         if (
+          !isJsonRecord(attachment) ||
+          typeof attachment.filename !== 'string' ||
+          typeof attachment.contentType !== 'string' ||
+          !Buffer.isBuffer(attachment.content) ||
           attachment.filename !== expected.filename ||
           attachment.contentType !== expected.contentType ||
           attachment.content.length !== expected.size ||
