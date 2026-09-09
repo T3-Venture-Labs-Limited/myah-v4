@@ -30,6 +30,7 @@ type TriggerCreateRecordsOptimisticEffectArgs = {
   objectMetadataItems: EnrichedObjectMetadataItem[];
   shouldMatchRootQueryFilter?: boolean;
   checkForRecordInCache?: boolean;
+  creationPosition?: 'first' | 'last';
   objectPermissionsByObjectMetadataId: Record<
     string,
     ObjectPermissions & { objectMetadataId: string }
@@ -44,6 +45,7 @@ export const triggerCreateRecordsOptimisticEffect = ({
   objectMetadataItems,
   shouldMatchRootQueryFilter,
   checkForRecordInCache = false,
+  creationPosition,
   objectPermissionsByObjectMetadataId,
   upsertRecordsInStore,
 }: TriggerCreateRecordsOptimisticEffectArgs) => {
@@ -172,9 +174,19 @@ export const triggerCreateRecordsOptimisticEffect = ({
           return rootQueryCachedObjectRecordConnection;
         }
 
+        const hasExplicitSort =
+          Array.isArray(rootQueryVariables?.orderBy) &&
+          rootQueryVariables.orderBy.length > 0;
+        const entriesForSorting =
+          creationPosition && !hasExplicitSort
+            ? newEntries.map((entry) => ({
+                ...entry,
+                record: { ...entry.record, position: creationPosition },
+              }))
+            : newEntries;
         const sortedEdges = buildSortedConnectionEdges({
           currentEdges: rootQueryCachedRecordEdges ?? [],
-          newEntries,
+          newEntries: entriesForSorting,
           orderBy: rootQueryVariables?.orderBy,
           readField,
         });

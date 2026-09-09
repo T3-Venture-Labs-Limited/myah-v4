@@ -1,3 +1,4 @@
+import { registerCampaignCreationOrigin } from '@/object-record/record-index/states/campaignCreationState';
 import { getCommandMenuIdFromRecordIndexId } from '@/command-menu-item/utils/getCommandMenuIdFromRecordIndexId';
 import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
@@ -96,16 +97,22 @@ const RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect = ({
 
 type RecordIndexSurfaceCreationOptionsEffectProps = Pick<
   RecordIndexSurfaceProps,
-  'onRecordCreated' | 'shouldCloseAfterCreation'
+  'onRecordCreated' | 'shouldCloseAfterCreation' | 'objectNameSingular'
 > & {
   recordIndexId: string;
 };
 
-const RecordIndexSurfaceCreationOptionsEffect = ({
+export const RecordIndexSurfaceCreationOptionsEffect = ({
+  objectNameSingular,
   recordIndexId,
   onRecordCreated,
   shouldCloseAfterCreation,
 }: RecordIndexSurfaceCreationOptionsEffectProps) => {
+  const store = useStore();
+  useEffect(() => {
+    if (objectNameSingular === 'campaign')
+      return registerCampaignCreationOrigin(store, recordIndexId);
+  }, [store, recordIndexId, objectNameSingular]);
   const setRecordIndexCreationOptions = useSetAtomComponentState(
     recordIndexCreationOptionsComponentState,
     recordIndexId,
@@ -191,6 +198,7 @@ const RecordIndexSurfaceInstance = ({
       value={{ instanceId: contextStoreInstanceId }}
     >
       <RecordIndexSurfaceCreationOptionsEffect
+        objectNameSingular={objectNameSingular}
         recordIndexId={recordIndexId}
         onRecordCreated={onRecordCreated}
         shouldCloseAfterCreation={shouldCloseAfterCreation}
