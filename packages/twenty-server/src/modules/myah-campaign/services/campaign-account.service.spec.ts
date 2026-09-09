@@ -209,10 +209,16 @@ const createHarness = (
       return [];
     }
     if (sql.includes('SET "isDefault" = true')) {
+      const promotesByConnectedAccount = sql.includes(
+        'AND "connectedAccountId" = $2',
+      );
       const account = rows.campaignAccount.find(
         (row) =>
-          row.id === parameters[0] &&
-          row.campaignId === parameters[1] &&
+          (promotesByConnectedAccount
+            ? row.campaignId === parameters[0] &&
+              row.connectedAccountId === parameters[1] &&
+              row.isDefault === false
+            : row.id === parameters[0] && row.campaignId === parameters[1]) &&
           row.channel === 'EMAIL' &&
           row.deletedAt == null,
       );
@@ -1341,6 +1347,7 @@ describe('CampaignAccountService', () => {
       expect.objectContaining({
         id: 'removed-second',
         connectedAccountId: secondAccountId,
+        isDefault: true,
       }),
     ]);
     expect(
@@ -1349,12 +1356,99 @@ describe('CampaignAccountService', () => {
     expect(
       activeRows().filter((row) => row.connectedAccountId === secondAccountId),
     ).toHaveLength(1);
+    expect(activeRows().filter((row) => row.isDefault)).toHaveLength(1);
+    await expect(
+      harness.service.resolveDefaultEmailAccountProviderFree(
+        campaignId,
+        workspaceId,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({ id: 'removed-second', isDefault: true }),
+    );
+    expect(
+      harness.messageOutboundService.assertConnectedAccountSendable,
+    ).not.toHaveBeenCalled();
+
+    const rowsAfterPromotion = harness.rows.campaignAccount.map((row) => ({
+      ...row,
+    }));
+    await harness.service.replaceCampaignEmailPool(
+      { campaignId, connectedAccountIds: [secondAccountId] },
+      authContext,
+    );
+    expect(harness.rows.campaignAccount).toEqual(rowsAfterPromotion);
+    expect(activeRows().filter((row) => row.isDefault)).toHaveLength(1);
+
+    await harness.service.replaceCampaignEmailPool(
+      { campaignId, connectedAccountIds: [] },
+      authContext,
+    );
+    expect(activeRows()).toEqual([]);
+    expect(activeRows().filter((row) => row.isDefault)).toHaveLength(0);
     expect(
       harness.senderReadinessService.getCampaignEmailSenderPoolInTransaction,
     ).toHaveBeenCalledWith(
       { workspaceId, campaignId },
       harness.transactionManager,
     );
+  });
+
+  it('rolls back the exact prior pool when deterministic default promotion loses', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'active-first',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'active-second',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+        },
+      ],
+      connectedAccounts: [
+        connectedAccount(),
+        connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+    });
+    const priorRows = harness.rows.campaignAccount.map((row) => ({ ...row }));
+    harness.transactionManager.queryRunner.query.mockImplementation(
+      async (sql: string, parameters: unknown[]) => {
+        if (
+          sql.includes('SET "isDefault" = true') &&
+          sql.includes('AND "connectedAccountId" = $2')
+        )
+          return [];
+        return (await harness.queryImplementation?.(sql, parameters)) ?? [];
+      },
+    );
+
+    await expect(
+      harness.service.replaceCampaignEmailPool(
+        { campaignId, connectedAccountIds: [secondAccountId] },
+        authContext,
+      ),
+    ).rejects.toThrow('Could not establish Campaign email pool default');
+
+    expect(harness.rows.campaignAccount).toEqual(priorRows);
+    expect(
+      harness.senderReadinessService.getCampaignEmailSenderPoolInTransaction,
+    ).not.toHaveBeenCalled();
   });
 
   it('rolls back replacement when any selected account is ineligible', async () => {
