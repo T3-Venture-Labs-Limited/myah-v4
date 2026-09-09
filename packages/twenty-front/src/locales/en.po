@@ -1251,6 +1251,11 @@ msgstr "500 Error - {duration}ms"
 msgid "7d"
 msgstr "7d"
 
+#. js-lingui-id: zQz49J
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "A Campaign creation is pending in another view. Return there to continue."
+msgstr "A Campaign creation is pending in another view. Return there to continue."
+
 #. js-lingui-id: XyYY2A
 #. placeholder {0}: conflictingCurrentPool.intent.product
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -4201,6 +4206,11 @@ msgstr "Campaign Agent settings could not be saved."
 msgid "Campaign Agent settings saved."
 msgstr "Campaign Agent settings saved."
 
+#. js-lingui-id: M3txsw
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Campaign creation is already in progress."
+msgstr "Campaign creation is already in progress."
+
 #. js-lingui-id: su0ybc
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
@@ -4216,6 +4226,21 @@ msgstr "Campaign queued to {queuedCount} recipient(s)"
 #: src/modules/activities/emails/hooks/useSendMessageCampaign.ts
 msgid "Campaign queued to {queuedCount} recipient(s), {skippedCount} skipped"
 msgstr "Campaign queued to {queuedCount} recipient(s), {skippedCount} skipped"
+
+#. js-lingui-id: r3wwzn
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Campaign saved, but could not open. Choose New in the original view to open it."
+msgstr "Campaign saved, but could not open. Choose New in the original view to open it."
+
+#. js-lingui-id: y+oXZ8
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Campaign saved, but counts could not refresh."
+msgstr "Campaign saved, but counts could not refresh."
+
+#. js-lingui-id: C3/N+m
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Campaign saved, but some data could not refresh. Reopen the Campaign or refresh this view."
+msgstr "Campaign saved, but some data could not refresh. Reopen the Campaign or refresh this view."
 
 #. js-lingui-id: oRJtCM
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
@@ -6060,6 +6085,16 @@ msgstr "Cost per million tokens (USD)"
 msgid "Cost per million tokens for cached input (USD)"
 msgstr "Cost per million tokens for cached input (USD)"
 
+#. js-lingui-id: 4h4AUx
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Could not confirm whether the Campaign was saved. Choose New to check again and retry the same creation. If this keeps happening, check your Campaign access."
+msgstr "Could not confirm whether the Campaign was saved. Choose New to check again and retry the same creation. If this keeps happening, check your Campaign access."
+
+#. js-lingui-id: DkaE7S
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Could not create Campaign."
+msgstr "Could not create Campaign."
+
 #. js-lingui-id: VVRHmR
 #: src/modules/settings/security/components/approvedAccessDomains/SettingsSecurityApprovedAccessDomainRowDropdownMenu.tsx
 msgid "Could not delete approved access domain"
@@ -6427,6 +6462,11 @@ msgstr "Created on {0}"
 #: src/modules/ai/constants/crud-tool-operation-verbs.constant.ts
 msgid "Creating {objectLabel}"
 msgstr "Creating {objectLabel}"
+
+#. js-lingui-id: XhDAhd
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Creating Campaign…"
+msgstr "Creating Campaign…"
 
 #. js-lingui-id: fR16ki
 #: src/modules/auth/sign-in-up/constants/WorkspaceActivationMessages.ts
@@ -18077,6 +18117,11 @@ msgstr "Renews automatically"
 msgid "Renews monthly: {0} on {monthlyRenewalDate}"
 msgstr "Renews monthly: {0} on {monthlyRenewalDate}"
 
+#. js-lingui-id: d5Xagu
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Reopen the original Campaign view to continue this creation."
+msgstr "Reopen the original Campaign view to continue this creation."
+
 #. js-lingui-id: Ee8JBW
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
 msgid "Reorder field"
@@ -18514,6 +18559,11 @@ msgstr "Return to inventory"
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
 msgid "Return to mailbox overview"
 msgstr "Return to mailbox overview"
+
+#. js-lingui-id: fLfCca
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Return to original view"
+msgstr "Return to original view"
 
 #. js-lingui-id: ZbpKL+
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminJobDetailsExpandable.tsx
@@ -25184,6 +25234,16 @@ msgstr "You have scheduled a credit pack change. Do you want to cancel it?"
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "You need to sign in again first."
 msgstr "You need to sign in again first."
+
+#. js-lingui-id: 7h4Xj4
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "You no longer have permission to confirm this Campaign creation."
+msgstr "You no longer have permission to confirm this Campaign creation."
+
+#. js-lingui-id: hKB6AR
+#: src/modules/object-record/hooks/useCreateOneRecord.ts
+msgid "You no longer have permission to create Campaigns."
+msgstr "You no longer have permission to create Campaigns."
 
 #. js-lingui-id: z8eKS7
 #: src/modules/settings/billing/hooks/useBillingWording.ts
