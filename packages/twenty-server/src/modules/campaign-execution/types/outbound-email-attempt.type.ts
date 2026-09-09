@@ -72,7 +72,7 @@ export type CampaignSequenceReservationBinding = CommonReservationBinding &
   };
 
 export type CampaignTestReservationBinding = CommonReservationBinding &
-  RotatingSelectionConstraint & {
+  (RotatingSelectionConstraint | TrustedPinnedReplySelectionConstraint) & {
     senderPoolFingerprint: string;
   };
 
@@ -100,7 +100,7 @@ export type CampaignSequenceAttemptReservationIdentity =
     };
 
 export type CampaignTestAttemptReservationIdentity = CommonReservationIdentity &
-  RotatingSelectionConstraint & {
+  (RotatingSelectionConstraint | TrustedPinnedReplySelectionConstraint) & {
     source: 'CAMPAIGN_TEST';
     campaignId: string;
     workflowVersionId: string;

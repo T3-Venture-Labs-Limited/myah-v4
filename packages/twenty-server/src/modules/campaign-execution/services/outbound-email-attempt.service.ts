@@ -281,8 +281,8 @@ const hasOnlyExpectedSourceFields = (
 
   if (input.source === 'CAMPAIGN_TEST') {
     return (
-      input.selectionConstraintKind === 'ROTATE' &&
-      input.priorAcceptedEvidenceId === null &&
+      (input.selectionConstraintKind === 'ROTATE' ||
+        input.selectionConstraintKind === 'PINNED_REPLY') &&
       [
         input.campaignId,
         input.workflowVersionId,
@@ -700,7 +700,10 @@ const isValidSubmissionInput = (
         capability.testTransportDigest,
       ].every(isDigest) &&
       isValidCommonReservationBinding(capability.reservationBinding) &&
-      hasValidSelectionBinding(capability.reservationBinding, ['ROTATE']) &&
+      hasValidSelectionBinding(capability.reservationBinding, [
+        'ROTATE',
+        'PINNED_REPLY',
+      ]) &&
       isDigest(capability.reservationBinding.senderPoolFingerprint)
     );
   }

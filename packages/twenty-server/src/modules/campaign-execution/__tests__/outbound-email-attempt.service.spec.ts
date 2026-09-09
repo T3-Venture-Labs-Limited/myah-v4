@@ -31,6 +31,8 @@ const ids = {
   enrollment: '77777777-7777-4777-8777-777777777777',
   evidence: '88888888-8888-4888-8888-888888888888',
   message: '99999999-9999-4999-8999-999999999999',
+  otherAccount: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  otherChannel: '12121212-1212-4212-8212-121212121212',
   occurrence: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   proof: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   requester: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
@@ -98,6 +100,12 @@ const testReservation = (): OutboundEmailAttemptReservationIdentity => ({
   unknownAfter,
   workflowVersionId: ids.version,
   workspaceId: ids.workspace,
+});
+
+const pinnedTestReservation = (): OutboundEmailAttemptReservationIdentity => ({
+  ...testReservation(),
+  priorAcceptedEvidenceId: ids.evidence,
+  selectionConstraintKind: 'PINNED_REPLY',
 });
 
 const directReservation = (): OutboundEmailAttemptReservationIdentity => ({
@@ -256,6 +264,18 @@ const testSubmission = (): CampaignTestSubmissionInput => ({
   workspaceId: ids.workspace,
 });
 
+const pinnedTestSubmission = (): CampaignTestSubmissionInput => {
+  const submission = testSubmission();
+
+  submission.submissionCapability.reservationBinding = {
+    ...submission.submissionCapability.reservationBinding,
+    priorAcceptedEvidenceId: ids.evidence,
+    selectionConstraintKind: 'PINNED_REPLY',
+  };
+
+  return submission;
+};
+
 const directSubmission = (): DirectSubmissionInput => ({
   attemptId: ids.attempt,
   connectedAccountId: ids.account,
@@ -391,10 +411,17 @@ const compileTimeNegativeFixtures = () => {
     ...sequenceReservation(),
     selectionConstraintKind: 'EXPLICIT',
   };
-  // @ts-expect-error Campaign test cannot use pinned-reply sender selection
-  const pinnedTest: OutboundEmailAttemptReservationIdentity = {
+  const pinnedTest: OutboundEmailAttemptReservationIdentity =
+    pinnedTestReservation();
+  // @ts-expect-error Campaign test cannot use explicit sender selection
+  const explicitTest: OutboundEmailAttemptReservationIdentity = {
     ...testReservation(),
-    priorAcceptedEvidenceId: ids.evidence,
+    selectionConstraintKind: 'EXPLICIT',
+  };
+  // @ts-expect-error pinned Campaign test requires non-null evidence
+  const pinnedTestWithoutEvidence: OutboundEmailAttemptReservationIdentity = {
+    ...testReservation(),
+    priorAcceptedEvidenceId: null,
     selectionConstraintKind: 'PINNED_REPLY',
   };
   // @ts-expect-error direct sources cannot rotate sender selection
@@ -486,6 +513,8 @@ const compileTimeNegativeFixtures = () => {
   return [
     explicitSequence,
     pinnedTest,
+    explicitTest,
+    pinnedTestWithoutEvidence,
     rotatingDirect,
     invalidSequenceBegin,
     invalidTestBegin,
@@ -618,7 +647,7 @@ describe('OutboundEmailAttempt entity contract', () => {
       '"attemptNumber" IS NOT NULL\n      AND "attemptNumber" > 0',
     );
     expect(sourceCheck).toContain(
-      `"source" = 'CAMPAIGN_TEST'\n      AND "selectionConstraintKind" = 'ROTATE'\n      AND "priorAcceptedEvidenceId" IS NULL`,
+      `"source" = 'CAMPAIGN_TEST'\n      AND "selectionConstraintKind" IN ('ROTATE', 'PINNED_REPLY')`,
     );
     expect(sourceCheck).toContain(
       `"source" IN ('INBOX', 'AUTOMATED_REPLY')\n      AND "directReservationCapabilityId" IS NOT NULL\n      AND "selectionConstraintKind" IN ('PINNED_REPLY', 'EXPLICIT')`,
@@ -671,14 +700,6 @@ describe('OutboundEmailAttemptService reservation fence', () => {
       { ...sequenceReservation(), selectionConstraintKind: 'EXPLICIT' },
     ],
     [
-      'Campaign test pinned selection',
-      {
-        ...testReservation(),
-        priorAcceptedEvidenceId: ids.evidence,
-        selectionConstraintKind: 'PINNED_REPLY',
-      },
-    ],
-    [
       'Campaign test explicit selection',
       { ...testReservation(), selectionConstraintKind: 'EXPLICIT' },
     ],
@@ -695,6 +716,39 @@ describe('OutboundEmailAttemptService reservation fence', () => {
       ),
     ).rejects.toThrow('Invalid outbound email attempt input');
     expect(harness.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing pinned evidence', null],
+    ['noncanonical pinned evidence', ids.workspace.toUpperCase()],
+    ['malformed pinned evidence', 'not-a-uuid'],
+  ])('rejects Campaign test %s before SQL', async (_label, evidence) => {
+    const harness = createHarness();
+    await expect(
+      harness.service.lockAttemptForReservation(
+        {
+          ...pinnedTestReservation(),
+          priorAcceptedEvidenceId: evidence,
+        } as OutboundEmailAttemptReservationIdentity,
+        harness.manager,
+      ),
+    ).rejects.toThrow('Invalid outbound email attempt input');
+    expect(harness.query).not.toHaveBeenCalled();
+  });
+
+  it('accepts canonical pinned Campaign test evidence and takes the attempt fence', async () => {
+    const harness = createHarness();
+
+    await expect(
+      harness.service.lockAttemptForReservation(
+        pinnedTestReservation(),
+        harness.manager,
+      ),
+    ).resolves.toEqual({ status: 'NEW' });
+    expect(harness.calls.map(({ sql }) => sql)).toEqual([
+      expect.stringContaining('pg_advisory_xact_lock'),
+      expect.stringContaining('FOR UPDATE'),
+    ]);
   });
 
   it('takes the namespaced parameterized advisory fence before row lookup and returns NEW', async () => {
@@ -1204,6 +1258,79 @@ describe('OutboundEmailAttemptService processing CAS and receipt', () => {
         ),
       ).resolves.toEqual({ status: 'IDENTITY_CONFLICT' });
       expect(harness.calls).toHaveLength(1);
+    }
+  });
+
+  it('acquires a pinned Campaign test only with its exact nested evidence binding', async () => {
+    const reservation = pinnedTestReservation();
+    const receipt = receiptFrom(reservation);
+    const submission = pinnedTestSubmission();
+    const harness = createHarness({
+      observedAt: new Date('2026-03-10T14:00:29.999Z'),
+      row: receipt,
+    });
+
+    await expect(
+      harness.service.beginSubmission(submission, harness.manager),
+    ).resolves.toMatchObject({
+      receipt: {
+        priorAcceptedEvidenceId: ids.evidence,
+        selectionConstraintKind: 'PINNED_REPLY',
+      },
+      status: 'PROCESSING_ACQUIRED',
+    });
+
+    const mismatchedEvidence = {
+      ...submission.submissionCapability.reservationBinding,
+      priorAcceptedEvidenceId: ids.proof,
+      selectionConstraintKind: 'PINNED_REPLY' as const,
+    };
+    const mismatchHarness = createHarness({ row: receipt });
+
+    await expect(
+      mismatchHarness.service.beginSubmission(
+        {
+          ...submission,
+          submissionCapability: {
+            ...submission.submissionCapability,
+            reservationBinding: mismatchedEvidence,
+          },
+        },
+        mismatchHarness.manager,
+      ),
+    ).resolves.toEqual({ status: 'IDENTITY_CONFLICT' });
+    expect(mismatchHarness.calls).toHaveLength(1);
+
+    for (const reservationBinding of [
+      {
+        ...submission.submissionCapability.reservationBinding,
+        priorAcceptedEvidenceId: null,
+      },
+      {
+        ...submission.submissionCapability.reservationBinding,
+        priorAcceptedEvidenceId: ids.workspace.toUpperCase(),
+      },
+      {
+        ...submission.submissionCapability.reservationBinding,
+        priorAcceptedEvidenceId: null,
+        selectionConstraintKind: 'EXPLICIT',
+      },
+    ]) {
+      const invalidHarness = createHarness({ row: receipt });
+
+      await expect(
+        invalidHarness.service.beginSubmission(
+          {
+            ...submission,
+            submissionCapability: {
+              ...submission.submissionCapability,
+              reservationBinding,
+            },
+          } as CampaignTestSubmissionInput,
+          invalidHarness.manager,
+        ),
+      ).rejects.toThrow('Invalid outbound email submission input');
+      expect(invalidHarness.calls).toHaveLength(0);
     }
   });
 
@@ -2585,6 +2712,14 @@ const statefulSender: ReadyCampaignSenderReadiness = {
   status: 'READY',
 };
 
+const otherStatefulSender: ReadyCampaignSenderReadiness = {
+  ...statefulSender,
+  campaignAccountId: 'other-campaign-account',
+  connectedAccountId: ids.otherAccount,
+  messageChannelId: ids.otherChannel,
+  senderHandle: 'other-sender@example.com',
+};
+
 const statefulReserveInput = (
   source: 'CAMPAIGN_SEQUENCE' | 'CAMPAIGN_TEST' | 'INBOX',
 ): ReserveOutboundEmailAttemptInput => {
@@ -2637,11 +2772,21 @@ const statefulSubmission = (
   if (source === 'CAMPAIGN_TEST') {
     const input = testSubmission();
 
+    const selectionBinding =
+      receipt.selectionConstraintKind === 'PINNED_REPLY'
+        ? {
+            priorAcceptedEvidenceId: receipt.priorAcceptedEvidenceId as string,
+            selectionConstraintKind: 'PINNED_REPLY' as const,
+          }
+        : {
+            priorAcceptedEvidenceId: null,
+            selectionConstraintKind: 'ROTATE' as const,
+          };
+
     input.submissionCapability.reservationBinding = {
       claimedAt: receipt.claimedAt,
       localDate: receipt.localDate,
-      priorAcceptedEvidenceId: null,
-      selectionConstraintKind: 'ROTATE',
+      ...selectionBinding,
       senderPoolFingerprint: receipt.senderPoolFingerprint as string,
       slotAt: receipt.slotAt,
       unknownAfter: receipt.unknownAfter,
@@ -3820,6 +3965,153 @@ describe('real-service outcome structured-result validation', () => {
 });
 
 describe('real-service composed selection and readiness exits', () => {
+  it('composes pinned Campaign test through exact locks, replay, begin, digest fence, and outcome without fallback', async () => {
+    const harness = createStatefulCompositionHarness({
+      samples: sameDaySamples(4),
+    });
+    const input = statefulReserveInput('CAMPAIGN_TEST');
+
+    if (input.source !== 'CAMPAIGN_TEST') throw new Error('Invalid fixture');
+    input.candidates = [statefulSender, otherStatefulSender];
+    input.selectionConstraintKind = 'PINNED_REPLY';
+    input.priorAcceptedEvidenceId = ids.evidence;
+
+    const reserved = await harness.transaction(() =>
+      harness.service.reserveWithMailboxCapacity(input, harness.manager),
+    );
+
+    expect(reserved.status).toBe('RESERVED');
+    if (reserved.status !== 'RESERVED') return;
+    expect(reserved.receipt).toMatchObject({
+      connectedAccountId: ids.account,
+      priorAcceptedEvidenceId: ids.evidence,
+      selectionConstraintKind: 'PINNED_REPLY',
+    });
+    expect(
+      harness.calls
+        .filter(({ sql }) =>
+          ['mailboxDispatchClock', 'mailboxCapacityDay'].some((table) =>
+            sql.includes(table),
+          ),
+        )
+        .every(({ params }) => params[1] === ids.account),
+    ).toBe(true);
+    expect(
+      harness.calls.some(({ params }) => params.includes(ids.otherAccount)),
+    ).toBe(false);
+
+    await expect(
+      harness.transaction(() =>
+        harness.service.reserveWithMailboxCapacity(input, harness.manager),
+      ),
+    ).resolves.toMatchObject({ status: 'EXACT_REPLAY' });
+
+    const submission = statefulSubmission('CAMPAIGN_TEST', reserved.receipt);
+    await expect(
+      harness.transaction(() =>
+        harness.service.beginSubmission(submission, harness.manager),
+      ),
+    ).resolves.toMatchObject({ status: 'PROCESSING_ACQUIRED' });
+    expect(
+      await harness.service.blockReservedAttemptBeforeProvider(
+        {
+          reason: 'STALE_FINAL_EVIDENCE',
+          reservation: {
+            ...pinnedTestReservation(),
+            claimedAt: reserved.receipt.claimedAt,
+            localDate: reserved.receipt.localDate,
+            slotAt: reserved.receipt.slotAt,
+            unknownAfter: reserved.receipt.unknownAfter,
+          },
+        },
+        harness.manager,
+      ),
+    ).toEqual({ status: 'NOT_RESERVED' });
+    await expect(
+      harness.service.recordAccepted(
+        {
+          ...submission,
+          finalEvidenceDigest: digest,
+          projectedMessageId: null,
+          providerMessageId: 'pinned-test-mismatch',
+        },
+        harness.manager,
+      ),
+    ).resolves.toEqual({ status: 'IDENTITY_CONFLICT' });
+    pushStatefulSample(harness, new Date('2026-03-10T14:00:30.000Z'));
+    await expect(
+      harness.transaction(() =>
+        harness.service.recordAccepted(
+          {
+            ...submission,
+            projectedMessageId: null,
+            providerMessageId: 'pinned-test-accepted',
+          },
+          harness.manager,
+        ),
+      ),
+    ).resolves.toMatchObject({
+      receipt: {
+        attemptState: 'ACCEPTED',
+        priorAcceptedEvidenceId: ids.evidence,
+      },
+      status: 'RECORDED',
+    });
+
+    const blockedHarness = createStatefulCompositionHarness({
+      samples: sameDaySamples(3),
+    });
+    const blocked = await blockedHarness.transaction(() =>
+      blockedHarness.service.reserveWithMailboxCapacity(
+        input,
+        blockedHarness.manager,
+      ),
+    );
+
+    expect(blocked.status).toBe('RESERVED');
+    if (blocked.status !== 'RESERVED') return;
+    const exactReservation = {
+      ...pinnedTestReservation(),
+      claimedAt: blocked.receipt.claimedAt,
+      localDate: blocked.receipt.localDate,
+      slotAt: blocked.receipt.slotAt,
+      unknownAfter: blocked.receipt.unknownAfter,
+    };
+    await expect(
+      blockedHarness.transaction(() =>
+        blockedHarness.service.blockReservedAttemptBeforeProvider(
+          {
+            reason: 'STALE_FINAL_EVIDENCE',
+            reservation: exactReservation,
+          },
+          blockedHarness.manager,
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 'RECORDED' });
+    await expect(
+      blockedHarness.service.blockReservedAttemptBeforeProvider(
+        {
+          reason: 'STALE_FINAL_EVIDENCE',
+          reservation: exactReservation,
+        },
+        blockedHarness.manager,
+      ),
+    ).resolves.toMatchObject({ status: 'EXACT_REPLAY' });
+
+    const missing = createStatefulCompositionHarness();
+    await expect(
+      missing.service.reserveWithMailboxCapacity(
+        { ...input, candidates: [otherStatefulSender] },
+        missing.manager,
+      ),
+    ).resolves.toEqual({
+      reason: 'PINNED_SENDER_NOT_READY',
+      status: 'BLOCKED',
+    });
+    expect(missing.clocks.size).toBe(0);
+    expect(missing.days.size).toBe(0);
+  });
+
   it('composes PINNED_REPLY without fallback and binds the produced PROCESSING input', async () => {
     const harness = createStatefulCompositionHarness({
       samples: sameDaySamples(3),

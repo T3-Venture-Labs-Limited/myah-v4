@@ -97,8 +97,7 @@ import {
       AND "directReservationCapabilityId" IS NULL
     ) OR (
       "source" = 'CAMPAIGN_TEST'
-      AND "selectionConstraintKind" = 'ROTATE'
-      AND "priorAcceptedEvidenceId" IS NULL
+      AND "selectionConstraintKind" IN ('ROTATE', 'PINNED_REPLY')
       AND "campaignId" IS NOT NULL
       AND "workflowVersionId" IS NOT NULL
       AND "messageId" IS NOT NULL
