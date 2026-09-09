@@ -23,6 +23,13 @@ import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { CampaignSenderReadinessService } from 'src/modules/myah-campaign/services/campaign-sender-readiness.service';
+import {
+  type CampaignSenderCandidateReadiness,
+  type CampaignSenderPoolSnapshot,
+  type ReadyCampaignSenderReadiness,
+  type CampaignSenderBlockedReason,
+} from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
@@ -39,7 +46,7 @@ const SUPPORTED_PROVIDERS = new Set<ConnectedAccountProvider>([
   ConnectedAccountProvider.IMAP_SMTP_CALDAV,
 ]);
 
-type CampaignRecord = { id: string };
+type CampaignRecord = { id: string; lifecycleStatus: string };
 type CampaignAccountRecord = {
   id: string;
   campaignId: string;
@@ -51,6 +58,7 @@ type CampaignAccountRecord = {
 };
 
 type CampaignAccountMutationContext = {
+  manager: WorkspaceEntityManager;
   queryRunner: QueryRunner;
   workspaceId: string;
   campaignId: string;
@@ -68,6 +76,7 @@ export class CampaignAccountService {
     @InjectWorkspaceScopedRepository(ManagedEmailMailboxEntity)
     private readonly managedEmailMailboxRepository: WorkspaceScopedRepository<ManagedEmailMailboxEntity>,
     private readonly messagingMessageOutboundService: MessagingMessageOutboundService,
+    private readonly campaignSenderReadinessService: CampaignSenderReadinessService,
   ) {}
 
   async list(
@@ -113,12 +122,40 @@ export class CampaignAccountService {
           authContext.workspace.id,
         );
         if (!channel) continue;
+        const isManaged = await this.managedEmailMailboxRepository.exists(
+          authContext.workspace.id,
+          {
+            where: [
+              { connectedAccountId: account.id },
+              { messageChannelId: channel.id },
+            ],
+          },
+        );
+        const senderReadiness =
+          this.campaignSenderReadinessService.evaluateCandidateSenderReadiness({
+            workspaceId: authContext.workspace.id,
+            connectedAccountId: account.id,
+            messageChannelId: channel.id,
+            accountWorkspaceId: account.workspaceId,
+            channelWorkspaceId: channel.workspaceId,
+            channelConnectedAccountId: channel.connectedAccountId,
+            accountHandle: account.handle,
+            channelHandle: channel.handle,
+            provider: account.provider,
+            archivedAt: account.archivedAt,
+            authFailedAt: account.authFailedAt,
+            scopes: account.scopes,
+            isSyncEnabled: channel.isSyncEnabled,
+            syncStatus: channel.syncStatus,
+            isManaged,
+          });
         candidates.push(
           this.toDto({
             id: account.id,
             connectedAccount: account,
             messageChannel: channel,
             isDefault: false,
+            senderReadiness,
           }),
         );
       }
@@ -128,6 +165,169 @@ export class CampaignAccountService {
         ),
       );
     });
+  }
+
+  async replaceCampaignEmailPool(
+    input: { campaignId: string; connectedAccountIds: string[] },
+    authContext: WorkspaceAuthContext,
+  ): Promise<CampaignSenderPoolSnapshot> {
+    const selectedIds = [...new Set(input.connectedAccountIds)].sort();
+    selectedIds.forEach((id) => this.assertUuid('connectedAccountId', id));
+
+    const mutation = await this.mutate(
+      input.campaignId,
+      authContext,
+      async (context) => {
+        const bindings = new Map<string, string>();
+        for (const connectedAccountId of selectedIds) {
+          const account = await this.findEligibleAccountInTransaction(
+            context,
+            connectedAccountId,
+          );
+          if (!account)
+            throw new Error('Connected email account is not eligible');
+          const channel = await this.findExactEmailChannelInTransaction(
+            context,
+            account,
+          );
+          if (!channel)
+            throw new Error(
+              'Connected email account has no exact EMAIL channel',
+            );
+          bindings.set(account.id, channel.id);
+        }
+
+        const active = await this.queryRows<{
+          id: string;
+          connectedAccountId: string;
+          isDefault: boolean;
+        }>(
+          context.queryRunner,
+          `SELECT id, "connectedAccountId", "isDefault"
+             FROM ${this.campaignAccountTable(context.schemaName)}
+            WHERE "campaignId" = $1 AND "channel" = 'EMAIL'
+              AND "deletedAt" IS NULL`,
+          [context.campaignId],
+        );
+        const selected = new Set(selectedIds);
+        for (const link of active) {
+          if (selected.has(link.connectedAccountId)) continue;
+          await this.queryRows(
+            context.queryRunner,
+            `UPDATE ${this.campaignAccountTable(context.schemaName)}
+                SET "deletedAt" = NOW(), "updatedAt" = CURRENT_TIMESTAMP
+              WHERE id = $1 AND "campaignId" = $2 AND "channel" = 'EMAIL'
+                AND "deletedAt" IS NULL`,
+            [link.id, context.campaignId],
+          );
+        }
+
+        const activeByAccountId = new Set(
+          active
+            .filter((link) => selected.has(link.connectedAccountId))
+            .map((link) => link.connectedAccountId),
+        );
+        let hasDefault = active.some(
+          (link) => selected.has(link.connectedAccountId) && link.isDefault,
+        );
+        for (const connectedAccountId of selectedIds) {
+          if (activeByAccountId.has(connectedAccountId)) continue;
+          const restored = await this.queryRows<{ id: string }>(
+            context.queryRunner,
+            `SELECT id FROM ${this.campaignAccountTable(context.schemaName)}
+              WHERE "campaignId" = $1 AND "connectedAccountId" = $2
+                AND "channel" = 'EMAIL' AND "deletedAt" IS NOT NULL
+              ORDER BY "deletedAt" DESC LIMIT 1`,
+            [context.campaignId, connectedAccountId],
+          );
+          const isDefault = !hasDefault;
+          if (restored[0]) {
+            await this.queryRows(
+              context.queryRunner,
+              `UPDATE ${this.campaignAccountTable(context.schemaName)}
+                  SET "deletedAt" = NULL, "messageChannelId" = $3,
+                      "isDefault" = $4, "updatedAt" = CURRENT_TIMESTAMP
+                WHERE id = $1 AND "campaignId" = $2 AND "channel" = 'EMAIL'
+                  AND "deletedAt" IS NOT NULL`,
+              [
+                restored[0].id,
+                context.campaignId,
+                bindings.get(connectedAccountId),
+                isDefault,
+              ],
+            );
+          } else {
+            await this.queryRows(
+              context.queryRunner,
+              `INSERT INTO ${this.campaignAccountTable(context.schemaName)}
+                ("campaignId", "connectedAccountId", "messageChannelId", "channel", "isDefault")
+               VALUES ($1, $2, $3, 'EMAIL', $4)`,
+              [
+                context.campaignId,
+                connectedAccountId,
+                bindings.get(connectedAccountId),
+                isDefault,
+              ],
+            );
+          }
+          hasDefault ||= isDefault;
+        }
+      },
+    );
+    return mutation.snapshot;
+  }
+
+  getCampaignEmailSenderPool(
+    input: { campaignId: string },
+    authContext: WorkspaceAuthContext,
+  ): Promise<CampaignSenderPoolSnapshot> {
+    return this.campaignSenderReadinessService.getCampaignEmailSenderPool(
+      input,
+      authContext,
+    );
+  }
+
+  resolveExactCampaignEmailSender(
+    input: {
+      campaignId: string;
+      connectedAccountId: string;
+      expectedSenderPoolFingerprint: string;
+    },
+    authContext: WorkspaceAuthContext,
+  ): Promise<
+    | { status: 'READY'; sender: ReadyCampaignSenderReadiness }
+    | { status: 'STALE_POOL' }
+    | { status: 'BLOCKED'; reason: CampaignSenderBlockedReason }
+  > {
+    return this.campaignSenderReadinessService.resolveExactCampaignEmailSender(
+      input,
+      authContext,
+    );
+  }
+
+  getCampaignEmailSenderPoolInTransaction(
+    input: { workspaceId: string; campaignId: string },
+    manager: WorkspaceEntityManager,
+  ): Promise<CampaignSenderPoolSnapshot> {
+    return this.campaignSenderReadinessService.getCampaignEmailSenderPoolInTransaction(
+      input,
+      manager,
+    );
+  }
+
+  resolveExactCampaignEmailSenderInTransaction(
+    input: {
+      workspaceId: string;
+      campaignId: string;
+      connectedAccountId: string;
+      expectedSenderPoolFingerprint: string;
+    },
+    manager: WorkspaceEntityManager,
+  ) {
+    return this.campaignSenderReadinessService.resolveExactCampaignEmailSenderInTransaction(
+      input,
+      manager,
+    );
   }
 
   async link(
@@ -296,7 +496,7 @@ export class CampaignAccountService {
     campaignId: string,
     authContext: WorkspaceAuthContext,
     callback: (context: CampaignAccountMutationContext) => Promise<T>,
-  ): Promise<T> {
+  ): Promise<{ result: T; snapshot: CampaignSenderPoolSnapshot }> {
     return this.executeInContext(authContext, async () => {
       this.assertCampaignUpdatePermission(authContext);
       this.assertUuid('workspaceId', authContext.workspace.id);
@@ -321,16 +521,30 @@ export class CampaignAccountService {
         // every raw CampaignAccount write therefore share this QueryRunner.
         const campaignRepository = await this.campaignRepository(authContext);
         const campaign = await campaignRepository.findOne(
-          { where: { id: campaignId } },
+          {
+            where: { id: campaignId },
+            lock: { mode: 'pessimistic_write' },
+          },
           manager,
         );
         if (!campaign) throw new Error('Campaign not found');
-        return callback({
+        if (!['DRAFT', 'PAUSED'].includes(campaign.lifecycleStatus))
+          throw new Error(
+            'Campaign email pool is editable only while Draft or Stopped',
+          );
+        const result = await callback({
+          manager,
           queryRunner,
           workspaceId,
           campaignId,
           schemaName,
         });
+        const snapshot =
+          await this.campaignSenderReadinessService.getCampaignEmailSenderPoolInTransaction(
+            { workspaceId, campaignId },
+            manager,
+          );
+        return { result, snapshot };
       });
     });
   }
@@ -380,6 +594,7 @@ export class CampaignAccountService {
 
     // PostgreSQL QueryRunner returns [rows, affected] for UPDATE/DELETE and
     // rows for SELECT/INSERT. Keep every mutation decision on this runner.
+    // SAFETY: the runner result is the row shape selected by the caller's static SQL.
     return (Array.isArray(result) && Array.isArray(result[0])
       ? result[0]
       : result) as unknown as T[];
@@ -538,11 +753,13 @@ export class CampaignAccountService {
     connectedAccount,
     messageChannel,
     isDefault,
+    senderReadiness,
   }: {
     id: string;
     connectedAccount: ConnectedAccountEntity;
     messageChannel: MessageChannelEntity;
     isDefault: boolean;
+    senderReadiness?: CampaignSenderCandidateReadiness;
   }): CampaignEmailAccountDTO {
     return {
       id,
@@ -553,6 +770,7 @@ export class CampaignAccountService {
       label: connectedAccount.name?.trim() || messageChannel.handle,
       isDefault,
       health: this.health(connectedAccount, messageChannel),
+      ...(senderReadiness ? { senderReadiness } : {}),
     };
   }
 
