@@ -166,3 +166,26 @@ describe('MyahInboxContextPanel', () => {
     ).toBeInTheDocument();
   });
 });
+
+it('keeps the current tab while same-thread Campaign linkage changes', () => {
+  const view = render(<MyahInboxContextPanel thread={linkedThread} />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Campaign' }));
+  view.rerender(
+    <MyahInboxContextPanel
+      thread={{
+        ...linkedThread,
+        campaign: { id: 'campaign-2', name: 'Changed Campaign' },
+      }}
+    />,
+  );
+  expect(screen.getByRole('tab', { name: 'Campaign' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(
+    screen.getByText('native campaign campaign-2 default-tab-only'),
+  ).toBeVisible();
+  expect(
+    screen.queryByText('native campaign campaign-1 default-tab-only'),
+  ).not.toBeInTheDocument();
+});

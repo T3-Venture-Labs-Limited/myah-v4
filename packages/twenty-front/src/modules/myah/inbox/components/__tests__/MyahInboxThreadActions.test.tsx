@@ -352,9 +352,7 @@ describe('MyahInboxThreadActions', () => {
       screen.getByRole('button', { name: 'Conversation details' }),
     );
 
-    expect(mockOpenMyahInboxContextInSidePanel).toHaveBeenCalledWith({
-      thread: unlinkedThread,
-    });
+    expect(mockOpenMyahInboxContextInSidePanel).toHaveBeenCalledWith();
     expect(mockAppTooltip).toHaveBeenCalledWith(
       expect.objectContaining({
         anchorSelect: "[data-testid='myah-inbox-thread-details-action']",

@@ -328,7 +328,35 @@ const renderPage = (store = createStore()) => ({
   ),
 });
 
+const mockContextEffect = jest.fn();
+jest.mock('@/myah/inbox/components/MyahInboxContextEffect', () => ({
+  MyahInboxContextEffect: (props: {
+    workspaceId: string | null;
+    thread: unknown;
+  }) => {
+    mockContextEffect(props);
+    return null;
+  },
+}));
+
 describe('MyahInboxPage', () => {
+  it('publishes the current selected thread to the context sidecar', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(mockContextEffect).toHaveBeenLastCalledWith({
+        workspaceId: 'workspace-1',
+        thread: threads[0],
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select Second conversation' }),
+    );
+    expect(mockContextEffect).toHaveBeenLastCalledWith({
+      workspaceId: 'workspace-1',
+      thread: threads[1],
+    });
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockRefresh.mockReset();
