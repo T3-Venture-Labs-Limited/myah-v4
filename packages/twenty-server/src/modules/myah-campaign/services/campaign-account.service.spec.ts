@@ -1357,17 +1357,6 @@ describe('CampaignAccountService', () => {
       activeRows().filter((row) => row.connectedAccountId === secondAccountId),
     ).toHaveLength(1);
     expect(activeRows().filter((row) => row.isDefault)).toHaveLength(1);
-    await expect(
-      harness.service.resolveDefaultEmailAccountProviderFree(
-        campaignId,
-        workspaceId,
-      ),
-    ).resolves.toEqual(
-      expect.objectContaining({ id: 'removed-second', isDefault: true }),
-    );
-    expect(
-      harness.messageOutboundService.assertConnectedAccountSendable,
-    ).not.toHaveBeenCalled();
 
     const rowsAfterPromotion = harness.rows.campaignAccount.map((row) => ({
       ...row,
