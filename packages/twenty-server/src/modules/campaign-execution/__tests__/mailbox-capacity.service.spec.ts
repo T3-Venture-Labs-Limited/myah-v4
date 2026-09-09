@@ -5,7 +5,9 @@ import { type EntityManager, getMetadataArgsStorage } from 'typeorm';
 import { CampaignExecutionModule } from 'src/modules/campaign-execution/campaign-execution.module';
 import { MailboxCapacityDayEntity } from 'src/modules/campaign-execution/entities/mailbox-capacity-day.entity';
 import { MailboxDispatchClockEntity } from 'src/modules/campaign-execution/entities/mailbox-dispatch-clock.entity';
+import { OutboundEmailAttemptEntity } from 'src/modules/campaign-execution/entities/outbound-email-attempt.entity';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
+import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
 import { type LockAndRankMailboxCapacityInput } from 'src/modules/campaign-execution/types/mailbox-capacity-candidate.type';
 import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
 
@@ -828,7 +830,7 @@ describe('campaign capacity entity and module metadata', () => {
     ).not.toContain('dailySendLimit');
   });
 
-  it('registers and exports only the capacity entities and service', () => {
+  it('registers and exports the capacity and sole-attempt entities and services', () => {
     const providers = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
       CampaignExecutionModule,
@@ -842,9 +844,31 @@ describe('campaign capacity entity and module metadata', () => {
       CampaignExecutionModule,
     );
 
-    expect(providers).toEqual([MailboxCapacityService]);
-    expect(exports).toHaveLength(2);
-    expect(exports).toContain(MailboxCapacityService);
+    expect(providers).toEqual([
+      MailboxCapacityService,
+      OutboundEmailAttemptService,
+    ]);
+    expect(exports).toHaveLength(3);
+    expect(exports).toEqual(
+      expect.arrayContaining([
+        MailboxCapacityService,
+        OutboundEmailAttemptService,
+      ]),
+    );
     expect(imports).toHaveLength(1);
+    // SAFETY: Nest stores TypeOrmModule.forFeature metadata on this dynamic module.
+    const typeOrmImport = imports[0] as {
+      providers: Array<{ targetEntitySchema: { target: Function } }>;
+    };
+
+    expect(
+      typeOrmImport.providers.map(
+        ({ targetEntitySchema }) => targetEntitySchema.target,
+      ),
+    ).toEqual([
+      MailboxDispatchClockEntity,
+      MailboxCapacityDayEntity,
+      OutboundEmailAttemptEntity,
+    ]);
   });
 });
