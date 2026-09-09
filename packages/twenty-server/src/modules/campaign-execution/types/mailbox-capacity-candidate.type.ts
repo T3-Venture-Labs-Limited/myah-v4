@@ -43,3 +43,30 @@ export type LockAndRankMailboxCapacityResult =
       status: 'BLOCKED';
       reason: 'PINNED_SENDER_NOT_READY' | 'INVALID_CAPACITY_INPUT';
     };
+
+export type RevalidateMailboxCapacityForMutationInput = {
+  lockInput: LockAndRankMailboxCapacityInput;
+  initial: Extract<
+    LockAndRankMailboxCapacityResult,
+    { status: 'ELIGIBLE_NOW' }
+  >;
+};
+
+export type RevalidateMailboxCapacityForMutationResult =
+  | Extract<
+      LockAndRankMailboxCapacityResult,
+      { status: 'ELIGIBLE_NOW' | 'NOT_READY' }
+    >
+  | { status: 'MUTATION_WINDOW_STALE' }
+  | {
+      status: 'BLOCKED';
+      reason: 'INVALID_CAPACITY_INPUT';
+    };
+
+export type LockedReservationDay = {
+  workspaceId: string;
+  connectedAccountId: string;
+  localDate: string;
+  acceptedCount: number;
+  reservedCount: number;
+};

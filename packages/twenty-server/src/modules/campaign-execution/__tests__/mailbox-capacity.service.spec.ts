@@ -8,7 +8,10 @@ import { MailboxDispatchClockEntity } from 'src/modules/campaign-execution/entit
 import { OutboundEmailAttemptEntity } from 'src/modules/campaign-execution/entities/outbound-email-attempt.entity';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
-import { type LockAndRankMailboxCapacityInput } from 'src/modules/campaign-execution/types/mailbox-capacity-candidate.type';
+import {
+  type LockedMailboxCapacityCandidate,
+  type LockAndRankMailboxCapacityInput,
+} from 'src/modules/campaign-execution/types/mailbox-capacity-candidate.type';
 import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
@@ -98,7 +101,7 @@ const createHarness = (options: HarnessOptions = {}) => {
         options.dayRows?.[id] ?? [
           { acceptedCount: 0, connectedAccountId: id, reservedCount: 0 },
         ]
-      );
+      ).map((row) => ({ localDate: params[2], ...row }));
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   });
@@ -150,6 +153,85 @@ const columnOptions = (target: Function, propertyName: string) =>
   )?.options;
 
 describe('MailboxCapacityService', () => {
+  it('revalidates from a final post-new-day-lock sample before choosing the decisive winner', async () => {
+    const first = new Date('2026-03-11T03:59:59.000Z');
+    const crossed = new Date('2026-03-11T04:00:01.000Z');
+    const final = new Date('2026-03-11T04:01:02.000Z');
+    const samples = [crossed, final];
+    const calls: string[] = [];
+    const query = jest.fn(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('MATERIALIZED')) {
+        const observedAt = samples.shift() as Date;
+        calls.push(`sample:${observedAt.toISOString()}`);
+        return [
+          {
+            localDate: '2026-03-11',
+            nextLocalMidnightAt: new Date('2026-03-12T04:00:00.000Z'),
+            observedAt,
+          },
+        ];
+      }
+      if (sql.includes('INSERT INTO "core"."mailboxCapacityDay"')) {
+        calls.push(`day-upsert:${params[1]}`);
+        return [];
+      }
+      if (sql.includes('FROM "core"."mailboxCapacityDay"')) {
+        calls.push(`day-lock:${params[1]}`);
+        return [
+          {
+            acceptedCount: 0,
+            connectedAccountId: params[1],
+            localDate: params[2],
+            reservedCount: 0,
+          },
+        ];
+      }
+      if (sql.includes('FROM "core"."mailboxDispatchClock"')) {
+        return [{ connectedAccountId: params[1], nextEligibleAt: null }];
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const service = new MailboxCapacityService();
+    const input = rotateInput();
+    const initial = {
+      lockedCandidates: [...input.candidates]
+        .sort((left, right) =>
+          left.connectedAccountId.localeCompare(right.connectedAccountId),
+        )
+        .map((sender) => ({
+          acceptedCount: 0,
+          earliestEligibleAt: first,
+          localDate: '2026-03-10',
+          nextEligibleAt: null,
+          nextLocalMidnightAt: crossed,
+          reservedCount: 0,
+          sender,
+        })),
+      observedAt: first,
+      selected: undefined as never,
+      status: 'ELIGIBLE_NOW' as const,
+    };
+    initial.selected = initial.lockedCandidates[0] as never;
+
+    const result = await service.revalidateForReservationMutation(
+      { initial, lockInput: input },
+      {
+        queryRunner: { isTransactionActive: true, query },
+      } as unknown as EntityManager,
+    );
+
+    expect(result.status).toBe('ELIGIBLE_NOW');
+    if (result.status !== 'ELIGIBLE_NOW') return;
+    expect(result.observedAt).toEqual(final);
+    expect(calls).toContain(`sample:${final.toISOString()}`);
+    expect(calls.indexOf(`sample:${final.toISOString()}`)).toBeGreaterThan(
+      calls.indexOf(`day-lock:${accountA}`),
+    );
+    expect(calls.filter((call) => call.startsWith('day-lock:'))).toHaveLength(
+      4,
+    );
+  });
+
   it('uses only the supplied active query runner and does not open a transaction', async () => {
     const harness = createHarness();
 
@@ -870,5 +952,248 @@ describe('campaign capacity entity and module metadata', () => {
       MailboxCapacityDayEntity,
       OutboundEmailAttemptEntity,
     ]);
+  });
+});
+
+describe('MailboxCapacityService mutation revalidation and CAS', () => {
+  const initialEligible = () => {
+    const input = rotateInput();
+    const observedAt = new Date('2026-03-11T03:59:59.000Z');
+    const lockedCandidates = [...input.candidates]
+      .sort((left, right) =>
+        left.connectedAccountId.localeCompare(right.connectedAccountId),
+      )
+      .map((sender) => ({
+        acceptedCount: 0,
+        earliestEligibleAt: observedAt,
+        localDate: '2026-03-10',
+        nextEligibleAt: null,
+        nextLocalMidnightAt: new Date('2026-03-11T04:00:00.000Z'),
+        reservedCount: 0,
+        sender,
+      }));
+
+    return {
+      input,
+      initial: {
+        lockedCandidates,
+        observedAt,
+        selected: lockedCandidates[0],
+        status: 'ELIGIBLE_NOW' as const,
+      },
+    };
+  };
+
+  it('stops after one newly locked date when the post-wait sample crosses a second date', async () => {
+    const { initial, input } = initialEligible();
+    const samples = [
+      {
+        localDate: '2026-03-11',
+        nextLocalMidnightAt: new Date('2026-03-12T04:00:00.000Z'),
+        observedAt: new Date('2026-03-11T04:00:01.000Z'),
+      },
+      {
+        localDate: '2026-03-12',
+        nextLocalMidnightAt: new Date('2026-03-13T04:00:00.000Z'),
+        observedAt: new Date('2026-03-12T04:00:01.000Z'),
+      },
+    ];
+    const query = jest.fn(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('MATERIALIZED')) return [samples.shift()];
+      if (sql.includes('INSERT INTO "core"."mailboxCapacityDay"')) return [];
+      if (sql.includes('FROM "core"."mailboxCapacityDay"')) {
+        return [
+          {
+            acceptedCount: 0,
+            connectedAccountId: params[1],
+            localDate: params[2],
+            reservedCount: 0,
+          },
+        ];
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const result =
+      await new MailboxCapacityService().revalidateForReservationMutation(
+        { initial, lockInput: input },
+        {
+          queryRunner: { isTransactionActive: true, query },
+        } as unknown as EntityManager,
+      );
+
+    expect(result).toEqual({ status: 'MUTATION_WINDOW_STALE' });
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('UPDATE "core"."mailboxCapacityDay"'),
+      ),
+    ).toBe(false);
+  });
+
+  it('uses a same-day mutation sample to change the genuine initial winner after another spacing gate expires', async () => {
+    const { initial, input } = initialEligible();
+    const expiringGate = new Date('2026-03-11T03:59:59.250Z');
+    const initiallyGated = initial.lockedCandidates.find(
+      ({ sender }) => sender.connectedAccountId === accountB,
+    ) as LockedMailboxCapacityCandidate | undefined;
+    const initialWinner = initial.lockedCandidates.find(
+      ({ sender }) => sender.connectedAccountId === accountA,
+    );
+
+    if (initiallyGated === undefined || initialWinner === undefined) {
+      throw new Error('Invalid winner-change fixture');
+    }
+    initiallyGated.nextEligibleAt = expiringGate;
+    initiallyGated.earliestEligibleAt = expiringGate;
+    initial.selected = initialWinner;
+    expect(initial.selected.sender.connectedAccountId).toBe(accountA);
+
+    const finalAt = new Date('2026-03-11T03:59:59.500Z');
+    const query = jest.fn(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('MATERIALIZED')) {
+        return [
+          {
+            localDate: '2026-03-10',
+            nextLocalMidnightAt: new Date('2026-03-11T04:00:00.000Z'),
+            observedAt: finalAt,
+          },
+        ];
+      }
+      if (sql.includes('FROM "core"."mailboxDispatchClock"')) {
+        return [
+          {
+            connectedAccountId: params[1],
+            nextEligibleAt: params[1] === accountB ? expiringGate : null,
+          },
+        ];
+      }
+      if (sql.includes('FROM "core"."mailboxCapacityDay"')) {
+        return [
+          {
+            acceptedCount: 0,
+            connectedAccountId: params[1],
+            localDate: params[2],
+            reservedCount: 0,
+          },
+        ];
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const result =
+      await new MailboxCapacityService().revalidateForReservationMutation(
+        { initial, lockInput: input },
+        {
+          queryRunner: { isTransactionActive: true, query },
+        } as unknown as EntityManager,
+      );
+
+    expect(result.status).toBe('ELIGIBLE_NOW');
+    if (result.status === 'ELIGIBLE_NOW') {
+      expect(result.selected.sender.connectedAccountId).toBe(accountB);
+      expect(result.observedAt).toEqual(finalAt);
+    }
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['wrong', '2026-03-09'],
+  ])(
+    'rejects a %s decisive day binding for a nonselected candidate',
+    async (_label, returnedDate) => {
+      const { initial, input } = initialEligible();
+      const query = jest.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('MATERIALIZED')) {
+          return [
+            {
+              localDate: '2026-03-10',
+              nextLocalMidnightAt: new Date('2026-03-11T04:00:00.000Z'),
+              observedAt: new Date('2026-03-10T15:00:00.000Z'),
+            },
+          ];
+        }
+        if (sql.includes('FROM "core"."mailboxDispatchClock"')) {
+          return [{ connectedAccountId: params[1], nextEligibleAt: null }];
+        }
+        if (sql.includes('FROM "core"."mailboxCapacityDay"')) {
+          return [
+            {
+              acceptedCount: params[1] === accountB ? 1 : 0,
+              connectedAccountId: params[1],
+              localDate: params[1] === accountB ? returnedDate : params[2],
+              reservedCount: 0,
+            },
+          ];
+        }
+        throw new Error(`Unexpected SQL: ${sql}`);
+      });
+
+      await expect(
+        new MailboxCapacityService().revalidateForReservationMutation(
+          { initial, lockInput: input },
+          {
+            queryRunner: { isTransactionActive: true, query },
+          } as unknown as EntityManager,
+        ),
+      ).resolves.toEqual({
+        reason: 'INVALID_CAPACITY_INPUT',
+        status: 'BLOCKED',
+      });
+    },
+  );
+
+  it('requires one structured day increment and one structured monotonic clock update', async () => {
+    const calls: Array<{ sql: string; structured?: boolean }> = [];
+    const slot = new Date('2026-03-10T14:00:00.000Z');
+    const query = jest.fn(
+      async (sql: string, _params: unknown[] = [], structured?: boolean) => {
+        calls.push({ sql, structured });
+        if (sql.includes('UPDATE "core"."mailboxCapacityDay"')) {
+          return {
+            affected: 1,
+            records: [
+              {
+                acceptedCount: 4,
+                connectedAccountId: accountA,
+                localDate: '2026-03-10',
+                reservedCount: 6,
+              },
+            ],
+          };
+        }
+        if (sql.includes('UPDATE "core"."mailboxDispatchClock"')) {
+          return {
+            affected: 1,
+            records: [
+              {
+                connectedAccountId: accountA,
+                nextEligibleAt: new Date(slot.getTime() + 300_000),
+              },
+            ],
+          };
+        }
+        throw new Error(`Unexpected SQL: ${sql}`);
+      },
+    );
+
+    await new MailboxCapacityService().incrementReservedAndAdvanceClock(
+      {
+        lockedDay: {
+          acceptedCount: 4,
+          connectedAccountId: accountA,
+          localDate: '2026-03-10',
+          reservedCount: 5,
+          workspaceId,
+        },
+        minimumSendIntervalMs: 300_000,
+        slotAt: slot,
+      },
+      {
+        queryRunner: { isTransactionActive: true, query },
+      } as unknown as EntityManager,
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(calls.every(({ structured }) => structured === true)).toBe(true);
+    expect(calls[0].sql).toContain('"reservedCount" + 1');
+    expect(calls[1].sql).toContain('GREATEST');
   });
 });

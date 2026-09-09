@@ -1,3 +1,5 @@
+import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
+
 export const OUTBOUND_EMAIL_ATTEMPT_STATES = [
   'RESERVED',
   'PROCESSING',
@@ -130,6 +132,31 @@ export type OutboundEmailAttemptReservationIdentity =
   | CampaignTestAttemptReservationIdentity
   | DirectAttemptReservationIdentity;
 
+export type OutboundEmailAttemptReservationRequestIdentity =
+  OutboundEmailAttemptReservationIdentity extends infer Identity
+    ? Identity extends OutboundEmailAttemptReservationIdentity
+      ? Omit<Identity, 'localDate' | 'claimedAt' | 'slotAt' | 'unknownAfter'>
+      : never
+    : never;
+
+export type ReserveOutboundEmailAttemptInput =
+  OutboundEmailAttemptReservationRequestIdentity & {
+    workspaceTimeZone: string;
+    candidates: ReadyCampaignSenderReadiness[];
+  };
+
+export type ReserveOutboundEmailAttemptResult =
+  | { status: 'RESERVED'; receipt: OutboundEmailAttemptReceipt }
+  | { status: 'EXACT_REPLAY'; receipt: OutboundEmailAttemptReceipt }
+  | { status: 'IDENTITY_CONFLICT' }
+  | { status: 'STALE_PROJECTION' }
+  | { status: 'MUTATION_WINDOW_STALE' }
+  | { status: 'NOT_READY'; nextEligibleAt: Date }
+  | {
+      status: 'BLOCKED';
+      reason: 'PINNED_SENDER_NOT_READY' | 'INVALID_CAPACITY_INPUT';
+    };
+
 type CommonSubmissionInput = {
   attemptId: string;
   workspaceId: string;
@@ -227,6 +254,56 @@ export type BeginOutboundEmailSubmissionInput =
   | CampaignSequenceSubmissionInput
   | CampaignTestSubmissionInput
   | DirectSubmissionInput;
+
+type WithSubmission<Input extends object> =
+  BeginOutboundEmailSubmissionInput extends infer Submission
+    ? Submission extends BeginOutboundEmailSubmissionInput
+      ? Submission & Input
+      : never
+    : never;
+
+export type BlockReservedAttemptBeforeProviderInput = {
+  reservation: OutboundEmailAttemptReservationIdentity;
+  reason: 'STALE_FINAL_EVIDENCE';
+};
+
+export type AcceptedOutcomeEvidence = {
+  providerMessageId: string;
+  projectedMessageId: string | null;
+};
+
+export type DefiniteOutcomeEvidence = {
+  safeOutcomeReason:
+    | 'DEFINITELY_UNACCEPTED_RETRYABLE'
+    | 'DEFINITELY_UNACCEPTED_NON_RETRYABLE';
+};
+
+export type RecordAcceptedInput = WithSubmission<AcceptedOutcomeEvidence>;
+export type RecordDefinitelyUnacceptedInput =
+  WithSubmission<DefiniteOutcomeEvidence>;
+export type MarkUnknownAfterDeadlineInput = BeginOutboundEmailSubmissionInput;
+export type ResolveUnknownAcceptedInput = RecordAcceptedInput;
+export type ResolveUnknownDefinitelyUnacceptedInput =
+  RecordDefinitelyUnacceptedInput;
+
+export type AttemptOutcomeResult =
+  | { status: 'RECORDED'; receipt: OutboundEmailAttemptReceipt }
+  | { status: 'EXACT_REPLAY'; receipt: OutboundEmailAttemptReceipt }
+  | { status: 'NOT_FOUND' }
+  | { status: 'IDENTITY_CONFLICT' }
+  | { status: 'INCOMPATIBLE_STATE'; receipt: OutboundEmailAttemptReceipt }
+  | { status: 'EVIDENCE_CONFLICT'; receipt: OutboundEmailAttemptReceipt };
+
+export type UnknownAttemptOutcomeResult =
+  | AttemptOutcomeResult
+  | { status: 'NOT_DUE'; receipt: OutboundEmailAttemptReceipt };
+
+export type BlockReservedAttemptBeforeProviderResult =
+  | { status: 'RECORDED'; receipt: OutboundEmailAttemptReceipt }
+  | { status: 'EXACT_REPLAY'; receipt: OutboundEmailAttemptReceipt }
+  | { status: 'NOT_FOUND' }
+  | { status: 'IDENTITY_CONFLICT' }
+  | { status: 'NOT_RESERVED' };
 
 type ReceiptOutcomeFields = {
   attemptState: OutboundEmailAttemptState;

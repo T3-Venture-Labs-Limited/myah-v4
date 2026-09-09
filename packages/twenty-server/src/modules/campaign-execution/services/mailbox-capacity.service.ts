@@ -4,8 +4,11 @@ import { type EntityManager, type QueryRunner } from 'typeorm';
 import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
 import {
   type LockAndRankMailboxCapacityInput,
+  type LockedReservationDay,
   type LockAndRankMailboxCapacityResult,
   type LockedMailboxCapacityCandidate,
+  type RevalidateMailboxCapacityForMutationInput,
+  type RevalidateMailboxCapacityForMutationResult,
 } from 'src/modules/campaign-execution/types/mailbox-capacity-candidate.type';
 
 type ClockRow = {
@@ -16,6 +19,7 @@ type ClockRow = {
 type DayRow = {
   acceptedCount: number;
   connectedAccountId: string;
+  localDate: string;
   reservedCount: number;
 };
 
@@ -64,12 +68,52 @@ const DAY_UPSERT_SQL = `
 `;
 
 const DAY_LOCK_SQL = `
-  SELECT "connectedAccountId", "acceptedCount", "reservedCount"
+  SELECT "connectedAccountId", "localDate", "acceptedCount", "reservedCount"
   FROM "core"."mailboxCapacityDay"
   WHERE "workspaceId" = $1
     AND "connectedAccountId" = $2
     AND "localDate" = $3
   FOR UPDATE
+`;
+
+const INCREMENT_RESERVED_SQL = `
+  UPDATE "core"."mailboxCapacityDay"
+  SET "reservedCount" = "reservedCount" + 1
+  WHERE "workspaceId" = $1
+    AND "connectedAccountId" = $2
+    AND "localDate" = $3
+  RETURNING "connectedAccountId", "localDate", "acceptedCount", "reservedCount"
+`;
+
+const ADVANCE_CLOCK_SQL = `
+  UPDATE "core"."mailboxDispatchClock"
+  SET "nextEligibleAt" = GREATEST(
+    COALESCE("nextEligibleAt", $3::timestamptz),
+    $4::timestamptz
+  )
+  WHERE "workspaceId" = $1 AND "connectedAccountId" = $2
+  RETURNING "connectedAccountId", "nextEligibleAt"
+`;
+
+const RELEASE_RESERVED_SQL = `
+  UPDATE "core"."mailboxCapacityDay"
+  SET "reservedCount" = "reservedCount" - 1
+  WHERE "workspaceId" = $1
+    AND "connectedAccountId" = $2
+    AND "localDate" = $3
+    AND "reservedCount" > 0
+  RETURNING "connectedAccountId", "localDate", "acceptedCount", "reservedCount"
+`;
+
+const CONSUME_RESERVED_SQL = `
+  UPDATE "core"."mailboxCapacityDay"
+  SET "reservedCount" = "reservedCount" - 1,
+      "acceptedCount" = "acceptedCount" + 1
+  WHERE "workspaceId" = $1
+    AND "connectedAccountId" = $2
+    AND "localDate" = $3
+    AND "reservedCount" > 0
+  RETURNING "connectedAccountId", "localDate", "acceptedCount", "reservedCount"
 `;
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -184,9 +228,11 @@ const hasOneExpectedClockRow = (
 const hasOneExpectedDayRow = (
   rows: DayRow[],
   connectedAccountId: string,
+  localDate: string,
 ): boolean =>
   rows.length === 1 &&
   rows[0].connectedAccountId === connectedAccountId &&
+  rows[0].localDate === localDate &&
   Number.isInteger(rows[0].acceptedCount) &&
   rows[0].acceptedCount >= 0 &&
   Number.isInteger(rows[0].reservedCount) &&
@@ -194,6 +240,35 @@ const hasOneExpectedDayRow = (
 
 const maxDate = (...dates: Date[]): Date =>
   new Date(Math.max(...dates.map((date) => date.getTime())));
+
+const isLocalDate = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+};
+
+const oneStructuredRecord = (result: unknown): unknown | null => {
+  if (
+    result === null ||
+    typeof result !== 'object' ||
+    !('affected' in result) ||
+    result.affected !== 1 ||
+    !('records' in result) ||
+    !Array.isArray(result.records) ||
+    result.records.length !== 1
+  ) {
+    return null;
+  }
+
+  return result.records[0];
+};
 
 const compareLockedCandidates = (
   left: LockedMailboxCapacityCandidate,
@@ -302,7 +377,13 @@ export class MailboxCapacityService {
         sample.localDate,
       ])) as DayRow[];
 
-      if (hasOneExpectedDayRow(rows, candidate.connectedAccountId)) {
+      if (
+        hasOneExpectedDayRow(
+          rows,
+          candidate.connectedAccountId,
+          sample.localDate,
+        )
+      ) {
         dayRows.set(candidate.connectedAccountId, rows[0]);
       }
     }
@@ -311,11 +392,357 @@ export class MailboxCapacityService {
       return INVALID_INPUT_RESULT;
     }
 
+    return this.rankLockedRows(candidates, clockRows, dayRows, {
+      localDate: sample.localDate,
+      nextLocalMidnightAt,
+      observedAt,
+    });
+  }
+
+  async revalidateForReservationMutation(
+    input: RevalidateMailboxCapacityForMutationInput,
+    manager: EntityManager,
+  ): Promise<RevalidateMailboxCapacityForMutationResult> {
+    const queryRunner = manager.queryRunner;
+
+    if (
+      !this.isActiveQueryRunner(queryRunner) ||
+      !hasValidInput(input.lockInput)
+    ) {
+      return INVALID_INPUT_RESULT;
+    }
+
+    const candidates = selectCandidates(input.lockInput);
+    const initialDates = new Set(
+      input.initial.lockedCandidates.map(({ localDate }) => localDate),
+    );
+
+    if (
+      candidates === null ||
+      candidates.length === 0 ||
+      input.initial.lockedCandidates.length !== candidates.length ||
+      initialDates.size !== 1 ||
+      candidates.some(
+        (candidate, index) =>
+          input.initial.lockedCandidates[index]?.sender.connectedAccountId !==
+          candidate.connectedAccountId,
+      )
+    ) {
+      return INVALID_INPUT_RESULT;
+    }
+
+    const mutationSample = await this.sampleTime(
+      queryRunner,
+      input.lockInput.workspaceTimeZone,
+    );
+
+    if (mutationSample === null) return INVALID_INPUT_RESULT;
+
+    const initialDate = [...initialDates][0];
+    let decisiveSample = mutationSample;
+
+    if (mutationSample.localDate !== initialDate) {
+      for (const candidate of candidates) {
+        await queryRunner.query(DAY_UPSERT_SQL, [
+          input.lockInput.workspaceId,
+          candidate.connectedAccountId,
+          mutationSample.localDate,
+        ]);
+      }
+
+      for (const candidate of candidates) {
+        const rows = (await queryRunner.query(DAY_LOCK_SQL, [
+          input.lockInput.workspaceId,
+          candidate.connectedAccountId,
+          mutationSample.localDate,
+        ])) as DayRow[];
+
+        if (
+          !hasOneExpectedDayRow(
+            rows,
+            candidate.connectedAccountId,
+            mutationSample.localDate,
+          )
+        ) {
+          return INVALID_INPUT_RESULT;
+        }
+      }
+
+      const finalSample = await this.sampleTime(
+        queryRunner,
+        input.lockInput.workspaceTimeZone,
+      );
+
+      if (finalSample === null) return INVALID_INPUT_RESULT;
+      if (finalSample.localDate !== mutationSample.localDate) {
+        return { status: 'MUTATION_WINDOW_STALE' };
+      }
+
+      decisiveSample = finalSample;
+    }
+
+    return this.rankAlreadyLockedCandidates(
+      queryRunner,
+      input.lockInput.workspaceId,
+      candidates,
+      decisiveSample,
+    );
+  }
+
+  async lockReservationDay(
+    input: {
+      workspaceId: string;
+      connectedAccountId: string;
+      localDate: string;
+    },
+    manager: EntityManager,
+  ): Promise<LockedReservationDay> {
+    const queryRunner = manager.queryRunner;
+
+    if (
+      !this.isActiveQueryRunner(queryRunner) ||
+      !isCanonicalUuid(input.workspaceId) ||
+      !isCanonicalUuid(input.connectedAccountId) ||
+      !isLocalDate(input.localDate)
+    ) {
+      throw new Error('Invalid reservation day lock input');
+    }
+
+    const rows = (await queryRunner.query(DAY_LOCK_SQL, [
+      input.workspaceId,
+      input.connectedAccountId,
+      input.localDate,
+    ])) as DayRow[];
+
+    if (
+      !hasOneExpectedDayRow(rows, input.connectedAccountId, input.localDate)
+    ) {
+      throw new Error('Reservation day lock did not return one valid row');
+    }
+
+    return { ...input, ...rows[0] };
+  }
+
+  async incrementReservedAndAdvanceClock(
+    input: {
+      lockedDay: LockedReservationDay;
+      slotAt: Date;
+      minimumSendIntervalMs: number;
+    },
+    manager: EntityManager,
+  ): Promise<void> {
+    const queryRunner = manager.queryRunner;
+    const { lockedDay } = input;
+
+    if (
+      !this.isActiveQueryRunner(queryRunner) ||
+      toValidDate(input.slotAt) === null ||
+      !Number.isInteger(input.minimumSendIntervalMs) ||
+      input.minimumSendIntervalMs < 0
+    ) {
+      throw new Error('Invalid reservation capacity mutation input');
+    }
+
+    const dayResult = await queryRunner.query(
+      INCREMENT_RESERVED_SQL,
+      [
+        lockedDay.workspaceId,
+        lockedDay.connectedAccountId,
+        lockedDay.localDate,
+      ],
+      true,
+    );
+    const dayRecord = oneStructuredRecord(dayResult) as DayRow | null;
+
+    if (
+      dayRecord === null ||
+      !hasOneExpectedDayRow(
+        [dayRecord],
+        lockedDay.connectedAccountId,
+        lockedDay.localDate,
+      ) ||
+      dayRecord.acceptedCount !== lockedDay.acceptedCount ||
+      dayRecord.reservedCount !== lockedDay.reservedCount + 1
+    ) {
+      throw new Error('Reservation day increment did not affect one valid row');
+    }
+
+    const nextEligibleAt = new Date(
+      input.slotAt.getTime() + input.minimumSendIntervalMs,
+    );
+    const clockResult = await queryRunner.query(
+      ADVANCE_CLOCK_SQL,
+      [
+        lockedDay.workspaceId,
+        lockedDay.connectedAccountId,
+        input.slotAt,
+        nextEligibleAt,
+      ],
+      true,
+    );
+    const clockRecord = oneStructuredRecord(clockResult) as ClockRow | null;
+    const returnedNextEligibleAt = toValidDate(clockRecord?.nextEligibleAt);
+
+    if (
+      clockRecord === null ||
+      !hasOneExpectedClockRow([clockRecord], lockedDay.connectedAccountId) ||
+      returnedNextEligibleAt === null ||
+      returnedNextEligibleAt < nextEligibleAt
+    ) {
+      throw new Error('Mailbox clock advance did not affect one valid row');
+    }
+  }
+
+  async releaseReserved(
+    lockedDay: LockedReservationDay,
+    manager: EntityManager,
+  ): Promise<void> {
+    await this.mutateReservedCount(
+      lockedDay,
+      RELEASE_RESERVED_SQL,
+      false,
+      manager,
+    );
+  }
+
+  async consumeReserved(
+    lockedDay: LockedReservationDay,
+    manager: EntityManager,
+  ): Promise<void> {
+    await this.mutateReservedCount(
+      lockedDay,
+      CONSUME_RESERVED_SQL,
+      true,
+      manager,
+    );
+  }
+
+  private async mutateReservedCount(
+    lockedDay: LockedReservationDay,
+    sql: string,
+    accepted: boolean,
+    manager: EntityManager,
+  ): Promise<void> {
+    const queryRunner = manager.queryRunner;
+
+    if (
+      !this.isActiveQueryRunner(queryRunner) ||
+      lockedDay.reservedCount <= 0
+    ) {
+      throw new Error('Invalid reservation capacity transition');
+    }
+
+    const result = await queryRunner.query(
+      sql,
+      [
+        lockedDay.workspaceId,
+        lockedDay.connectedAccountId,
+        lockedDay.localDate,
+      ],
+      true,
+    );
+    const record = oneStructuredRecord(result) as DayRow | null;
+
+    if (
+      record === null ||
+      !hasOneExpectedDayRow(
+        [record],
+        lockedDay.connectedAccountId,
+        lockedDay.localDate,
+      ) ||
+      record.reservedCount !== lockedDay.reservedCount - 1 ||
+      record.acceptedCount !== lockedDay.acceptedCount + (accepted ? 1 : 0)
+    ) {
+      throw new Error(
+        'Reservation capacity transition did not affect one valid row',
+      );
+    }
+  }
+
+  private async sampleTime(
+    queryRunner: QueryRunner,
+    workspaceTimeZone: string,
+  ): Promise<
+    (TimeSampleRow & { observedAt: Date; nextLocalMidnightAt: Date }) | null
+  > {
+    const rows = (await queryRunner.query(TIME_SAMPLE_SQL, [
+      workspaceTimeZone,
+    ])) as TimeSampleRow[];
+    const row = rows[0];
+    const observedAt = toValidDate(row?.observedAt);
+    const nextLocalMidnightAt = toValidDate(row?.nextLocalMidnightAt);
+
+    if (
+      rows.length !== 1 ||
+      observedAt === null ||
+      nextLocalMidnightAt === null ||
+      nextLocalMidnightAt <= observedAt ||
+      !isLocalDate(row?.localDate)
+    ) {
+      return null;
+    }
+
+    return {
+      ...row,
+      localDate: row.localDate,
+      nextLocalMidnightAt,
+      observedAt,
+    };
+  }
+
+  private async rankAlreadyLockedCandidates(
+    queryRunner: QueryRunner,
+    workspaceId: string,
+    candidates: ReadyCampaignSenderReadiness[],
+    sample: TimeSampleRow & { observedAt: Date; nextLocalMidnightAt: Date },
+  ): Promise<RevalidateMailboxCapacityForMutationResult> {
+    const clocks = new Map<string, ClockRow>();
+    const days = new Map<string, DayRow>();
+
+    for (const sender of candidates) {
+      const rows = (await queryRunner.query(CLOCK_LOCK_SQL, [
+        workspaceId,
+        sender.connectedAccountId,
+      ])) as ClockRow[];
+
+      if (!hasOneExpectedClockRow(rows, sender.connectedAccountId)) {
+        return INVALID_INPUT_RESULT;
+      }
+      clocks.set(sender.connectedAccountId, rows[0]);
+    }
+
+    for (const sender of candidates) {
+      const rows = (await queryRunner.query(DAY_LOCK_SQL, [
+        workspaceId,
+        sender.connectedAccountId,
+        sample.localDate,
+      ])) as DayRow[];
+
+      if (
+        !hasOneExpectedDayRow(rows, sender.connectedAccountId, sample.localDate)
+      ) {
+        return INVALID_INPUT_RESULT;
+      }
+      days.set(sender.connectedAccountId, rows[0]);
+    }
+
+    return this.rankLockedRows(candidates, clocks, days, sample);
+  }
+
+  private rankLockedRows(
+    candidates: ReadyCampaignSenderReadiness[],
+    clocks: Map<string, ClockRow>,
+    days: Map<string, DayRow>,
+    sample: TimeSampleRow & { observedAt: Date; nextLocalMidnightAt: Date },
+  ): Exclude<
+    RevalidateMailboxCapacityForMutationResult,
+    { status: 'MUTATION_WINDOW_STALE' }
+  > {
     const lockedCandidates: LockedMailboxCapacityCandidate[] = [];
 
     for (const sender of candidates) {
-      const clockRow = clockRows.get(sender.connectedAccountId);
-      const dayRow = dayRows.get(sender.connectedAccountId);
+      const clockRow = clocks.get(sender.connectedAccountId);
+      const dayRow = days.get(sender.connectedAccountId);
       const nextEligibleAt = toValidDate(clockRow?.nextEligibleAt ?? null);
 
       if (
@@ -328,19 +755,20 @@ export class MailboxCapacityService {
 
       const usage = dayRow.acceptedCount + dayRow.reservedCount;
       const capacityEligibleAt =
-        usage < sender.dailySendLimit ? observedAt : nextLocalMidnightAt;
-      const spacingEligibleAt = nextEligibleAt ?? observedAt;
+        usage < sender.dailySendLimit
+          ? sample.observedAt
+          : sample.nextLocalMidnightAt;
 
       lockedCandidates.push({
         acceptedCount: dayRow.acceptedCount,
         earliestEligibleAt: maxDate(
-          observedAt,
+          sample.observedAt,
           capacityEligibleAt,
-          spacingEligibleAt,
+          nextEligibleAt ?? sample.observedAt,
         ),
         localDate: sample.localDate,
         nextEligibleAt,
-        nextLocalMidnightAt,
+        nextLocalMidnightAt: sample.nextLocalMidnightAt,
         reservedCount: dayRow.reservedCount,
         sender,
       });
@@ -348,21 +776,19 @@ export class MailboxCapacityService {
 
     const selected = [...lockedCandidates].sort(compareLockedCandidates)[0];
 
-    if (selected.earliestEligibleAt <= observedAt) {
-      return {
-        lockedCandidates,
-        observedAt,
-        selected,
-        status: 'ELIGIBLE_NOW',
-      };
-    }
-
-    return {
-      lockedCandidates,
-      nextEligibleAt: selected.earliestEligibleAt,
-      observedAt,
-      status: 'NOT_READY',
-    };
+    return selected.earliestEligibleAt <= sample.observedAt
+      ? {
+          lockedCandidates,
+          observedAt: sample.observedAt,
+          selected,
+          status: 'ELIGIBLE_NOW',
+        }
+      : {
+          lockedCandidates,
+          nextEligibleAt: selected.earliestEligibleAt,
+          observedAt: sample.observedAt,
+          status: 'NOT_READY',
+        };
   }
 
   private isActiveQueryRunner(
