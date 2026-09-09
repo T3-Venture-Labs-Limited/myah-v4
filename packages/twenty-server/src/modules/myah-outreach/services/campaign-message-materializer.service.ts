@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
+import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import {
   SUPPORTED_CREATOR_VARIABLES,
@@ -80,6 +81,9 @@ const sha256 = (value: string | Buffer): string =>
   createHash('sha256').update(value).digest('hex');
 
 const supportedVariables = new Set<string>(SUPPORTED_CREATOR_VARIABLES);
+const supportedProviders = new Set<ConnectedAccountProvider>(
+  Object.values(ConnectedAccountProvider),
+);
 
 const subjectVariablePattern = /{{([^{}]+)}}/g;
 
@@ -345,7 +349,9 @@ export class CampaignMessageMaterializerService {
       context.authContext.userWorkspaceId !==
         (context.kind === 'DISPATCH'
           ? context.renderContext.initiatorUserWorkspaceId
-          : context.requesterUserWorkspaceId)
+          : context.requesterUserWorkspaceId) ||
+      (context.kind !== 'DISPATCH' &&
+        context.authContext.user.id !== context.requesterUserId)
     ) {
       return [
         blocker('MATERIAL_STALE', 'Render authority does not match the email'),
@@ -701,6 +707,11 @@ export class CampaignMessageMaterializerService {
       typeof sender.messageChannelId !== 'string' ||
       typeof sender.handle !== 'string' ||
       typeof sender.senderPoolFingerprint !== 'string' ||
+      !supportedProviders.has(sender.provider) ||
+      !Array.isArray(sender.authorizedEmailSenderPool) ||
+      (sender.projectedSlotAt !== null &&
+        (!(sender.projectedSlotAt instanceof Date) ||
+          Number.isNaN(sender.projectedSlotAt.getTime()))) ||
       typeof sender.isPreviewProjection !== 'boolean' ||
       sender.connectedAccountId.trim().length === 0 ||
       sender.messageChannelId.trim().length === 0 ||
@@ -735,6 +746,8 @@ export class CampaignMessageMaterializerService {
       sender.messageChannelId === binding.messageChannelId &&
       sender.handle === binding.senderHandle &&
       sender.senderPoolFingerprint === binding.senderPoolFingerprint &&
+      (context.kind !== 'DISPATCH' ||
+        sender.provider === context.senderBinding.provider) &&
       !sender.isPreviewProjection;
 
     if (
@@ -791,7 +804,14 @@ export class CampaignMessageMaterializerService {
     thread: CampaignMessageMaterialThread,
   ): CampaignMessageBlocker[] {
     if (!replyToThread) {
-      return thread.kind === 'NEW_THREAD'
+      const matchesNewThreadScope =
+        thread.kind === 'NEW_THREAD' &&
+        (context.kind !== 'DISPATCH' ||
+          ('kind' in context.replyEvidence &&
+            context.replyEvidence.kind === 'NEW_THREAD' &&
+            context.renderContext.replyEvidenceId === null));
+
+      return matchesNewThreadScope
         ? []
         : [
             blocker(
@@ -836,6 +856,8 @@ export class CampaignMessageMaterializerService {
       evidence.messageChannelId === sender.messageChannelId &&
       evidence.senderHandle === sender.handle &&
       evidence.evidenceId.trim().length > 0 &&
+      evidence.priorMessageId.trim().length > 0 &&
+      evidence.priorMessageId !== coordinates.messageId &&
       evidence.providerMessageId.trim().length > 0 &&
       evidence.providerThreadId.trim().length > 0;
 
@@ -852,6 +874,18 @@ export class CampaignMessageMaterializerService {
       if (
         'kind' in context.replyEvidence ||
         context.replyEvidence.evidenceId !== evidence.evidenceId ||
+        context.replyEvidence.enrollmentId !== evidence.enrollmentId ||
+        context.replyEvidence.occurrenceId !== evidence.occurrenceId ||
+        context.replyEvidence.priorMessageId !== evidence.priorMessageId ||
+        context.replyEvidence.normalizedRecipient !==
+          evidence.normalizedRecipient ||
+        context.replyEvidence.connectedAccountId !==
+          evidence.connectedAccountId ||
+        context.replyEvidence.messageChannelId !== evidence.messageChannelId ||
+        context.replyEvidence.senderHandle !== evidence.senderHandle ||
+        context.replyEvidence.providerMessageId !==
+          evidence.providerMessageId ||
+        context.replyEvidence.providerThreadId !== evidence.providerThreadId ||
         context.renderContext.replyEvidenceId !== evidence.evidenceId ||
         context.renderContext.enrollmentId !== evidence.enrollmentId ||
         context.renderContext.occurrenceId !== evidence.occurrenceId

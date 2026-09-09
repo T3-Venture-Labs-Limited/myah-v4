@@ -26,6 +26,7 @@ const campaignId = '20202020-2222-4222-8222-222222222222';
 const campaignCreatorId = '20202020-3333-4333-8333-333333333333';
 const workflowVersionId = '20202020-4444-4444-8444-444444444444';
 const messageId = '20202020-5555-4555-8555-555555555555';
+const requesterUserId = 'requester-user-id';
 const firstFileId = '20202020-6666-4666-8666-666666666666';
 const secondFileId = '20202020-7777-4777-8777-777777777777';
 
@@ -44,12 +45,39 @@ const context = {
     workspace: { id: workspaceId },
     userWorkspaceId: 'user-workspace-id',
     workspaceMemberId: 'workspace-member-id',
-    user: {},
+    user: { id: requesterUserId },
     workspaceMember: {},
   },
-  requesterUserId: 'requester-user-id',
+  requesterUserId,
   requesterUserWorkspaceId: 'user-workspace-id',
   threadScope: { kind: 'NEW_THREAD' },
+} as CampaignMessageRenderContext;
+
+const testFinalizationContext = {
+  ...context,
+  kind: 'TEST_FINALIZATION',
+  reservationBinding: {
+    kind: 'CAMPAIGN_TEST_RESERVATION',
+    source: 'CAMPAIGN_TEST',
+    workspaceId,
+    campaignId,
+    campaignCreatorId,
+    workflowVersionId,
+    messageId,
+    attemptId: 'attempt-id',
+    testPreparationProofId: 'test-preparation-proof-id',
+    reservedAt: new Date('2026-09-07T11:00:00.000Z'),
+    requesterUserId,
+    requesterUserWorkspaceId: 'user-workspace-id',
+    normalizedRecipient: 'creator@example.com',
+    connectedAccountId: 'account-id',
+    messageChannelId: 'channel-id',
+    senderHandle: 'sender@example.com',
+    senderPoolFingerprint: 'pool-fingerprint',
+    renderDigest: 'render-digest',
+    previewDigest: 'preview-digest',
+    testTransportDigest: 'test-transport-digest',
+  },
 } as CampaignMessageRenderContext;
 
 const authoredBody = JSON.stringify({
@@ -151,8 +179,17 @@ const baseMaterial = (): MutableCampaignMessageMaterial => ({
 
 const cloneMaterial = (
   material: CampaignMessageMaterial,
-): MutableCampaignMessageMaterial =>
-  structuredClone(material) as unknown as MutableCampaignMessageMaterial;
+): MutableCampaignMessageMaterial => {
+  const cloned = structuredClone(
+    material,
+  ) as unknown as MutableCampaignMessageMaterial;
+
+  cloned.attachments.forEach((attachment, index) => {
+    attachment.bytes = Buffer.from(material.attachments[index].bytes);
+  });
+
+  return cloned;
+};
 
 const makeHarness = (
   material = baseMaterial(),
@@ -209,9 +246,10 @@ const makeHarness = (
 const readyRender = async (
   material = baseMaterial(),
   mutateComposed?: (composed: Record<string, unknown>) => void,
+  suppliedContext: CampaignMessageRenderContext = context,
 ) => {
   const { service } = makeHarness(material, mutateComposed);
-  const renderContext = structuredClone(context);
+  const renderContext = structuredClone(suppliedContext);
 
   renderContext.authContext.workspace.id = material.coordinates.workspaceId;
   const result = await service.renderSequenceEmail(
@@ -264,6 +302,76 @@ describe('CampaignMessageRenderService', () => {
           { fileId: secondFileId },
         ],
       },
+    });
+  });
+
+  it('preserves validator-accepted nullable TipTap attributes', async () => {
+    const material = baseMaterial();
+
+    material.authored.body = JSON.stringify({
+      type: 'doc',
+      content: [
+        {
+          type: 'orderedList',
+          attrs: { type: null },
+          content: [
+            {
+              type: 'listItem',
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Linked',
+                      marks: [
+                        {
+                          type: 'link',
+                          attrs: {
+                            href: 'https://example.com',
+                            target: null,
+                            rel: null,
+                            class: null,
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const { service, composeEmail } = makeHarness(material);
+
+    await expect(
+      service.renderSequenceEmail(coordinates, context),
+    ).resolves.toMatchObject({ kind: 'READY' });
+    expect(composeEmail.mock.calls[0][0].body).toContain('"type":null');
+    expect(composeEmail.mock.calls[0][0].body).toContain('"class":null');
+  });
+
+  it('still blocks unsupported variableTag nodes', async () => {
+    const material = baseMaterial();
+
+    material.authored.body = JSON.stringify({
+      type: 'doc',
+      content: [
+        {
+          type: 'variableTag',
+          attrs: { variable: '{{creator.instagramUsername}}' },
+        },
+      ],
+    });
+    const { service } = makeHarness(material);
+
+    await expect(
+      service.renderSequenceEmail(coordinates, context),
+    ).resolves.toMatchObject({
+      kind: 'BLOCKED',
+      blockers: [expect.objectContaining({ code: 'UNKNOWN_VARIABLE' })],
     });
   });
 
@@ -409,12 +517,6 @@ describe('CampaignMessageRenderService', () => {
       },
     ],
     [
-      'sender projection kind',
-      (value: MutableCampaignMessageMaterial) => {
-        value.sender.isPreviewProjection = false;
-      },
-    ],
-    [
       'attachment identity',
       (value: MutableCampaignMessageMaterial) => {
         value.attachments[0].fileId = '30303030-6666-4666-8666-666666666666';
@@ -472,6 +574,30 @@ describe('CampaignMessageRenderService', () => {
     expect(changedRender.renderDigest).not.toBe(baseline.renderDigest);
   });
 
+  it('keeps the canonical digest stable from preview to retained-sender test finalization', async () => {
+    const previewMaterial = baseMaterial();
+    const finalizedMaterial = cloneMaterial(previewMaterial);
+
+    finalizedMaterial.sender.isPreviewProjection = false;
+    const preview = await readyRender(previewMaterial);
+    const finalized = await readyRender(
+      finalizedMaterial,
+      undefined,
+      testFinalizationContext,
+    );
+
+    expect(preview.sender.isPreviewProjection).toBe(true);
+    expect(finalized.sender.isPreviewProjection).toBe(false);
+    expect(finalized.sender).toMatchObject({
+      connectedAccountId: preview.sender.connectedAccountId,
+      messageChannelId: preview.sender.messageChannelId,
+      handle: preview.sender.handle,
+      provider: preview.sender.provider,
+      senderPoolFingerprint: preview.sender.senderPoolFingerprint,
+    });
+    expect(finalized.renderDigest).toBe(preview.renderDigest);
+  });
+
   it('changes digest for verified reply evidence and final thread headers', async () => {
     const first = baseMaterial();
 
@@ -507,6 +633,48 @@ describe('CampaignMessageRenderService', () => {
     });
 
     expect(secondRender.renderDigest).not.toBe(firstRender.renderDigest);
+  });
+
+  it('blocks a subject that the composer sanitizes to empty', async () => {
+    const { service } = makeHarness(baseMaterial(), (composed) => {
+      composed.sanitizedSubject = '   ';
+    });
+
+    await expect(
+      service.renderSequenceEmail(coordinates, context),
+    ).resolves.toMatchObject({
+      kind: 'BLOCKED',
+      blockers: [expect.objectContaining({ code: 'INVALID_CONTENT' })],
+    });
+  });
+
+  it.each(['sanitizedSubject', 'sanitizedHtmlBody', 'plainTextBody'] as const)(
+    'blocks missing final composed content field %s',
+    async (field) => {
+      const { service } = makeHarness(baseMaterial(), (composed) => {
+        delete composed[field];
+      });
+
+      await expect(
+        service.renderSequenceEmail(coordinates, context),
+      ).resolves.toMatchObject({
+        kind: 'BLOCKED',
+        blockers: [expect.objectContaining({ code: 'INVALID_CONTENT' })],
+      });
+    },
+  );
+
+  it('blocks blank final composed HTML', async () => {
+    const { service } = makeHarness(baseMaterial(), (composed) => {
+      composed.sanitizedHtmlBody = '';
+    });
+
+    await expect(
+      service.renderSequenceEmail(coordinates, context),
+    ).resolves.toMatchObject({
+      kind: 'BLOCKED',
+      blockers: [expect.objectContaining({ code: 'INVALID_CONTENT' })],
+    });
   });
 
   it('blocks when composer output attachment bytes differ from authorized material', async () => {
