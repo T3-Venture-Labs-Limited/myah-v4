@@ -66,8 +66,12 @@ screenshots/
 /.letta/
 
 # Local-only agent, worktree, planning, and documentation artifacts
+/.agents/
+/.pi/
 /.worktrees/
 /.omp/
 /.docs/
 /docs/operations/environment-isolation-audit.md
 /.superpowers/
+/MARKDOWN_PREVIEW_TEST.md
+/omp-session-*.html
