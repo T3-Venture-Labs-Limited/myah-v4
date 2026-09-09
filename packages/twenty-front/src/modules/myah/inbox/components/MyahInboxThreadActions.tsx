@@ -224,7 +224,7 @@ export const MyahInboxThreadActions = ({
         dataTestId="myah-inbox-thread-details-action"
         size="small"
         variant="tertiary"
-        onClick={() => openMyahInboxContextInSidePanel({ thread })}
+        onClick={() => openMyahInboxContextInSidePanel()}
       />
       <AppTooltip
         anchorSelect="[data-testid='myah-inbox-thread-details-action']"

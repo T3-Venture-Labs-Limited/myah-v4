@@ -1,3 +1,12 @@
+import { useNavigationDrawerExpanded } from '@/navigation/hooks/useNavigationDrawerExpanded';
+import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
+import { NAVIGATION_DRAWER_COLLAPSED_WIDTH } from '@/ui/layout/resizable-panel/constants/NavigationDrawerCollapsedWidth';
+import {
+  NAVIGATION_DRAWER_WIDTH_VAR,
+  navigationDrawerWidthState,
+} from '@/ui/navigation/states/navigationDrawerWidthState';
+import { SidePanelPages } from 'twenty-shared/types';
+import { useScreenSize } from 'twenty-ui/utilities';
 import { tableWidthResizeIsActiveState } from '@/object-record/record-table/states/tableWidthResizeIsActivedState';
 import { SidePanelRouter } from '@/side-panel/components/SidePanelRouter';
 import { SidePanelWidthEffect } from '@/side-panel/components/SidePanelWidthEffect';
@@ -20,6 +29,10 @@ import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomStat
 import { styled } from '@linaria/react';
 import { useCallback, useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
+
+// The Inbox's existing 3:9 grid gets 145px for its list and 435px for the
+// conversation at this budget. Native min320 takes precedence on narrow views.
+const MYAH_INBOX_MIN_CONTENT_WIDTH = 580;
 
 const StyledSidePanelWrapper = styled.div<{
   isOpen: boolean;
@@ -61,6 +74,36 @@ export const SidePanelForDesktop = () => {
   const isSidePanelOpened = useAtomStateValue(isSidePanelOpenedState);
   const isSidePanelClosing = useAtomStateValue(isSidePanelClosingState);
   const [sidePanelWidth, setSidePanelWidth] = useAtomState(sidePanelWidthState);
+  const sidePanelPage = useAtomStateValue(sidePanelPageState);
+  const { width: screenWidth } = useScreenSize();
+  const isNavigationDrawerExpanded = useNavigationDrawerExpanded();
+  const navigationDrawerWidth = useAtomStateValue(navigationDrawerWidthState);
+  const isInboxContext = sidePanelPage === SidePanelPages.MyahInboxContext;
+  const occupiedNavigationWidth = isNavigationDrawerExpanded
+    ? navigationDrawerWidth
+    : NAVIGATION_DRAWER_COLLAPSED_WIDTH;
+  const constraints = isInboxContext
+    ? {
+        ...SIDE_PANEL_CONSTRAINTS,
+        max: Math.max(
+          SIDE_PANEL_CONSTRAINTS.min,
+          Math.min(
+            SIDE_PANEL_CONSTRAINTS.max,
+            screenWidth -
+              occupiedNavigationWidth -
+              MYAH_INBOX_MIN_CONTENT_WIDTH,
+          ),
+        ),
+      }
+    : SIDE_PANEL_CONSTRAINTS;
+  const currentWidth = isInboxContext
+    ? Math.max(constraints.min, Math.min(sidePanelWidth, constraints.max))
+    : sidePanelWidth;
+  // CSS follows live native nav drag as well as viewport changes. The stored
+  // width stays untouched until the user deliberately completes a panel drag.
+  const navigationWidthCss = isNavigationDrawerExpanded
+    ? `var(${NAVIGATION_DRAWER_WIDTH_VAR})`
+    : `${NAVIGATION_DRAWER_COLLAPSED_WIDTH}px`;
   const { closeSidePanelMenu } = useSidePanelMenu();
   const { sidePanelCloseAnimationCompleteCleanup } =
     useSidePanelCloseAnimationCompleteCleanup();
@@ -100,11 +143,19 @@ export const SidePanelForDesktop = () => {
 
   const handleWidthChange = useCallback(
     (width: number) => {
+      if (isInboxContext) {
+        // A changed cap can finish at the already-persisted width, so the
+        // width effect will not rerun to replace the last pointer-move CSS.
+        document.documentElement.style.setProperty(
+          SIDE_PANEL_WIDTH_VAR,
+          `${width}px`,
+        );
+      }
       setSidePanelWidth(width);
       setIsResizing(false);
       setTableWidthResizeIsActive(true);
     },
-    [setSidePanelWidth, setTableWidthResizeIsActive],
+    [isInboxContext, setSidePanelWidth, setTableWidthResizeIsActive],
   );
 
   const handleResizeStart = useCallback(() => {
@@ -123,8 +174,8 @@ export const SidePanelForDesktop = () => {
       <SidePanelWidthEffect />
       <ResizablePanelGap
         side="left"
-        constraints={SIDE_PANEL_CONSTRAINTS}
-        currentWidth={sidePanelWidth}
+        constraints={constraints}
+        currentWidth={currentWidth}
         onWidthChange={handleWidthChange}
         onCollapse={handleCollapse}
         gapWidth={0}
@@ -135,6 +186,14 @@ export const SidePanelForDesktop = () => {
       <StyledSidePanelWrapper
         isOpen={isSidePanelOpened}
         isResizing={isResizing}
+        style={
+          isInboxContext
+            ? {
+                minWidth: isSidePanelOpened ? constraints.min : 0,
+                maxWidth: `clamp(${constraints.min}px, calc(100vw - ${navigationWidthCss} - ${MYAH_INBOX_MIN_CONTENT_WIDTH}px), ${SIDE_PANEL_CONSTRAINTS.max}px)`,
+              }
+            : undefined
+        }
         onTransitionEnd={handleTransitionEnd}
         data-side-panel=""
         data-click-outside-id={SIDE_PANEL_CLICK_OUTSIDE_ID}

@@ -1,3 +1,4 @@
+import { MyahInboxContextEffect } from '@/myah/inbox/components/MyahInboxContextEffect';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxThreadList } from '@/myah/inbox/components/MyahInboxThreadList';
 import { MyahInboxThreadPanel } from '@/myah/inbox/components/MyahInboxThreadPanel';
@@ -424,6 +425,10 @@ const MyahInboxPageContent = ({
         />
       }
     >
+      <MyahInboxContextEffect
+        workspaceId={workspaceId}
+        thread={selectedThread}
+      />
       {threadUpdateStatus?.workspaceId === workspaceId && (
         <StyledSelectionStatus role="status" aria-live="polite">
           {threadUpdateStatus.message}
