@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { Injectable } from '@nestjs/common';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
@@ -22,6 +20,7 @@ import {
   type CampaignThreadMaterialPort,
 } from 'src/modules/myah-outreach/types/campaign-message-render.type';
 
+import { CampaignSequenceFixedMaterialService } from './campaign-sequence-fixed-material.service';
 import {
   CampaignSequenceService,
   type ValidatedCampaignSequenceEmail,
@@ -76,9 +75,6 @@ const unavailableThreadPort: CampaignThreadMaterialPort = {
     ],
   }),
 };
-
-const sha256 = (value: string | Buffer): string =>
-  createHash('sha256').update(value).digest('hex');
 
 const supportedVariables = new Set<string>(SUPPORTED_CREATOR_VARIABLES);
 const supportedProviders = new Set<ConnectedAccountProvider>(
@@ -167,14 +163,22 @@ const materialPortValue = <T>(
 
 @Injectable()
 export class CampaignMessageMaterializerService {
+  private readonly fixedMaterialService: CampaignSequenceFixedMaterialService;
+
   constructor(
     private readonly campaignSequenceService: CampaignSequenceService,
     private readonly creatorPort: CampaignCreatorMaterialPort = unavailableCreatorPort,
-    private readonly signaturePort: CampaignSignatureMaterialPort = unavailableSignaturePort,
+    signaturePort: CampaignSignatureMaterialPort = unavailableSignaturePort,
     private readonly senderPort: CampaignSenderMaterialPort = unavailableSenderPort,
-    private readonly attachmentPort: CampaignAttachmentStoragePort = unavailableAttachmentPort,
+    attachmentPort: CampaignAttachmentStoragePort = unavailableAttachmentPort,
     private readonly threadPort: CampaignThreadMaterialPort = unavailableThreadPort,
-  ) {}
+  ) {
+    this.fixedMaterialService = new CampaignSequenceFixedMaterialService(
+      campaignSequenceService,
+      signaturePort,
+      attachmentPort,
+    );
+  }
 
   async load(
     coordinates: CampaignMessageRenderCoordinates,
@@ -242,19 +246,27 @@ export class CampaignMessageMaterializerService {
       };
     }
 
-    const [creatorResult, signatureResult, senderResult] = await Promise.all([
-      this.creatorPort.load({
-        coordinates,
-        authContext: context.authContext,
-      }),
-      this.signaturePort.load({ coordinates, context }),
-      this.senderPort.load({ coordinates, context }),
-    ]);
-    const blockers: CampaignMessageBlocker[] = [];
+    const [creatorResult, fixedMaterialResult, senderResult] =
+      await Promise.all([
+        this.creatorPort.load({
+          coordinates,
+          authContext: context.authContext,
+        }),
+        this.fixedMaterialService.loadMessageFixedMaterial({
+          workspaceId: coordinates.workspaceId,
+          campaignId: coordinates.campaignId,
+          messageId: coordinates.messageId,
+          files: email.files,
+          authContext: context.authContext,
+        }),
+        this.senderPort.load({ coordinates, context }),
+      ]);
+    const blockers: CampaignMessageBlocker[] = [
+      ...fixedMaterialResult.blockers,
+    ];
     const creator = materialPortValue(creatorResult, blockers);
-    const signatureValue = materialPortValue(signatureResult, blockers);
     const sender = materialPortValue(senderResult, blockers);
-    const attachments = await this.loadAttachments(email, context, blockers);
+    const { attachments, signature } = fixedMaterialResult;
 
     const creatorBlockers =
       creator === null ? [] : this.validateCreator(creator);
@@ -294,8 +306,6 @@ export class CampaignMessageMaterializerService {
         );
       }
     }
-
-    const signature = this.materializeSignature(signatureValue, blockers);
 
     if (attachments !== null) {
       blockers.push(
@@ -564,136 +574,6 @@ export class CampaignMessageMaterializerService {
     }
 
     return blockers;
-  }
-
-  private async loadAttachments(
-    email: ValidatedCampaignSequenceEmail,
-    context: CampaignMessageRenderContext,
-    blockers: CampaignMessageBlocker[],
-  ): Promise<
-    readonly (CampaignAttachmentProof & Readonly<{ bytes: Buffer }>)[] | null
-  > {
-    const attachments: (CampaignAttachmentProof &
-      Readonly<{ bytes: Buffer }>)[] = [];
-
-    for (const file of email.files) {
-      if (
-        !isJsonRecord(file) ||
-        typeof file.id !== 'string' ||
-        typeof file.name !== 'string' ||
-        typeof file.type !== 'string' ||
-        typeof file.createdAt !== 'string' ||
-        file.id.trim().length === 0 ||
-        file.name.trim().length === 0 ||
-        file.type.trim().length === 0 ||
-        !Number.isSafeInteger(file.size) ||
-        (typeof file.size === 'number' && file.size < 0)
-      ) {
-        blockers.push(
-          blocker(
-            'ATTACHMENT_CHANGED',
-            'Campaign attachment metadata changed',
-            {
-              ...(isJsonRecord(file) && typeof file.id === 'string'
-                ? { fileId: file.id }
-                : {}),
-              messageId: email.messageId,
-            },
-          ),
-        );
-        continue;
-      }
-
-      const result = await this.attachmentPort.load({
-        workspaceId: email.workspaceId,
-        file,
-        authContext: context.authContext,
-      });
-
-      if (result.kind === 'NOT_FOUND') {
-        blockers.push(
-          blocker('ATTACHMENT_NOT_FOUND', 'Campaign attachment was not found', {
-            fileId: file.id,
-            messageId: email.messageId,
-          }),
-        );
-        continue;
-      }
-
-      if (result.kind === 'FORBIDDEN') {
-        blockers.push(
-          blocker(
-            'ATTACHMENT_FORBIDDEN',
-            'Campaign attachment is not accessible',
-            { fileId: file.id, messageId: email.messageId },
-          ),
-        );
-        continue;
-      }
-
-      if (result.kind === 'CHANGED') {
-        blockers.push(
-          blocker('ATTACHMENT_CHANGED', 'Campaign attachment bytes changed', {
-            fileId: file.id,
-            messageId: email.messageId,
-          }),
-        );
-        continue;
-      }
-
-      if (
-        typeof result.value.filename !== 'string' ||
-        typeof result.value.contentType !== 'string' ||
-        !Buffer.isBuffer(result.value.bytes) ||
-        result.value.filename !== file.name ||
-        result.value.contentType !== file.type ||
-        result.value.bytes.length !== file.size
-      ) {
-        blockers.push(
-          blocker('ATTACHMENT_CHANGED', 'Campaign attachment bytes changed', {
-            fileId: file.id,
-            messageId: email.messageId,
-          }),
-        );
-        continue;
-      }
-
-      attachments.push({
-        fileId: file.id,
-        filename: result.value.filename,
-        contentType: result.value.contentType,
-        size: result.value.bytes.length,
-        contentDigest: sha256(result.value.bytes),
-        bytes: result.value.bytes,
-      });
-    }
-
-    return blockers.some(({ code }) => code.startsWith('ATTACHMENT_'))
-      ? null
-      : attachments;
-  }
-
-  private materializeSignature(
-    value: Readonly<{ html: string | null }> | null,
-    blockers: CampaignMessageBlocker[],
-  ): Readonly<{ html: string; digest: string }> | null {
-    if (value === null || value.html === null) {
-      return null;
-    }
-
-    if (typeof value.html !== 'string') {
-      blockers.push(
-        blocker('INVALID_CONTENT', 'Campaign signature material is invalid'),
-      );
-
-      return null;
-    }
-
-    if (value.html.trim().length === 0) {
-      return null;
-    }
-
-    return { html: value.html, digest: sha256(value.html) };
   }
 
   private validateSender(

@@ -263,6 +263,37 @@ export type CampaignMessageBlocker = Readonly<{
   fileId?: string;
 }>;
 
+export type CampaignSequenceFixedMaterialInput = Readonly<{
+  workspaceId: string;
+  campaignId: string;
+  workflowVersionId: string;
+  orderedMessageIds: readonly string[];
+  authContext: UserWorkspaceAuthContext;
+}>;
+
+export type CampaignSequenceFixedMaterialResult =
+  | Readonly<{
+      kind: 'READY';
+      value: Readonly<{
+        workspaceId: string;
+        campaignId: string;
+        workflowVersionId: string;
+        signatureDigest: string | null;
+        messages: readonly Readonly<{
+          messageId: string;
+          subject: string;
+          body: string;
+          replyToThread: boolean;
+          orderedFileRefs: readonly CampaignSequenceEmailFile[];
+          orderedAttachmentProofs: readonly CampaignAttachmentProof[];
+        }>[];
+      }>;
+    }>
+  | Readonly<{
+      kind: 'BLOCKED';
+      blockers: readonly CampaignMessageBlocker[];
+    }>;
+
 export type CampaignMessageMaterialResult =
   | Readonly<{ kind: 'READY'; material: CampaignMessageMaterial }>
   | Readonly<{
@@ -345,8 +376,9 @@ export interface CampaignCreatorMaterialPort {
 export interface CampaignSignatureMaterialPort {
   load(
     input: Readonly<{
-      coordinates: CampaignMessageRenderCoordinates;
-      context: CampaignMessageRenderContext;
+      workspaceId: string;
+      campaignId: string;
+      authContext: UserWorkspaceAuthContext;
     }>,
   ): Promise<
     CampaignMaterialPortResult<Readonly<{ html: string | null }> | null>

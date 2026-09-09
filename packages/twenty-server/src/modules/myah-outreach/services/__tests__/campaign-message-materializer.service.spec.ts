@@ -264,6 +264,7 @@ const makeHarness = (overrides?: {
   return {
     service,
     loadEmailByVersion,
+    signaturePort,
     attachmentPort,
   };
 };
@@ -281,7 +282,8 @@ const blockerCodes = async (
 
 describe('CampaignMessageMaterializerService', () => {
   it('loads the exact historical email and derives ordered authorized byte proof', async () => {
-    const { service, loadEmailByVersion, attachmentPort } = makeHarness();
+    const { service, loadEmailByVersion, signaturePort, attachmentPort } =
+      makeHarness();
 
     const result = await service.load(coordinates, context);
 
@@ -290,6 +292,11 @@ describe('CampaignMessageMaterializerService', () => {
       campaignId,
       workflowVersionId,
       messageId,
+      authContext,
+    });
+    expect(signaturePort.load).toHaveBeenCalledWith({
+      workspaceId,
+      campaignId,
       authContext,
     });
     expect(attachmentPort.load).toHaveBeenCalledWith({
@@ -474,6 +481,35 @@ describe('CampaignMessageMaterializerService', () => {
     await expect(
       service.load(coordinates, dispatchContext({ kind: 'NEW_THREAD' })),
     ).resolves.toMatchObject({ kind: 'READY' });
+  });
+
+  it('rejects changed dispatch signature material against the fixed proof', async () => {
+    const { service } = makeHarness({
+      signatureHtml: '<p>Changed signature</p>',
+      senderOverrides: { isPreviewProjection: false },
+    });
+
+    expect(
+      await blockerCodes(service, dispatchContext({ kind: 'NEW_THREAD' })),
+    ).toContain('MATERIAL_STALE');
+  });
+
+  it('rejects same-length changed dispatch attachment bytes against the fixed proof', async () => {
+    const { service } = makeHarness({
+      attachmentResult: {
+        kind: 'READY',
+        value: {
+          filename: authoredFile.name,
+          contentType: authoredFile.type,
+          bytes: Buffer.from('world'),
+        },
+      },
+      senderOverrides: { isPreviewProjection: false },
+    });
+
+    expect(
+      await blockerCodes(service, dispatchContext({ kind: 'NEW_THREAD' })),
+    ).toContain('MATERIAL_STALE');
   });
 
   it.each([
