@@ -272,6 +272,21 @@ export class CampaignAccountService {
           }
           hasDefault ||= isDefault;
         }
+
+        if (!hasDefault && selectedIds.length > 0) {
+          const promoted = await this.queryRows<{ id: string }>(
+            context.queryRunner,
+            `UPDATE ${this.campaignAccountTable(context.schemaName)}
+                SET "isDefault" = true, "updatedAt" = CURRENT_TIMESTAMP
+              WHERE "campaignId" = $1 AND "connectedAccountId" = $2
+                AND "channel" = 'EMAIL' AND "deletedAt" IS NULL
+                AND "isDefault" = false
+          RETURNING id`,
+            [context.campaignId, selectedIds[0]],
+          );
+          if (promoted.length !== 1)
+            throw new Error('Could not establish Campaign email pool default');
+        }
       },
     );
     return mutation.snapshot;
