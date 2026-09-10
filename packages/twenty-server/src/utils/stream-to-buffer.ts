@@ -8,77 +8,98 @@ export const streamToBuffer = async (
   let totalSize = 0;
 
   return new Promise((resolve, reject) => {
-    if (stream.readableEnded) {
-      reject(new Error('Stream has already ended'));
+    let isSettled = false;
 
-      return;
-    }
+    const onLateError = () => undefined;
+    const onGuardClose = () => {
+      queueMicrotask(() => {
+        stream.removeListener('error', onLateError);
+      });
+    };
 
-    if (!stream.readable) {
-      reject(new Error('Stream is not readable'));
-
-      return;
-    }
-
-    let isResolved = false;
-
-    const cleanup = () => {
+    const cleanupConsumptionListeners = () => {
       stream.removeListener('data', onData);
       stream.removeListener('end', onEnd);
       stream.removeListener('error', onError);
       stream.removeListener('close', onClose);
     };
 
+    const settleResolve = (buffer: Buffer) => {
+      if (isSettled) {
+        return;
+      }
+
+      isSettled = true;
+      cleanupConsumptionListeners();
+      resolve(buffer);
+    };
+
+    const settleReject = (error: Error) => {
+      if (isSettled) {
+        return;
+      }
+
+      isSettled = true;
+      cleanupConsumptionListeners();
+      reject(error);
+    };
+
     const onData = (chunk: Buffer) => {
-      if (!isResolved) {
-        totalSize += chunk.length;
+      if (isSettled) {
+        return;
+      }
 
-        if (maxSizeBytes !== undefined && totalSize > maxSizeBytes) {
-          isResolved = true;
-          cleanup();
+      totalSize += chunk.length;
+
+      if (maxSizeBytes !== undefined && totalSize > maxSizeBytes) {
+        settleReject(
+          new Error(
+            `Stream exceeds maximum allowed size of ${maxSizeBytes} bytes`,
+          ),
+        );
+
+        try {
           stream.destroy();
-          reject(
-            new Error(
-              `Stream exceeds maximum allowed size of ${maxSizeBytes} bytes`,
-            ),
-          );
-
-          return;
+        } catch {
+          // Rejection is authoritative even if stream destruction fails.
         }
 
-        chunks.push(chunk);
+        return;
       }
+
+      chunks.push(chunk);
     };
 
     const onEnd = () => {
-      if (!isResolved) {
-        isResolved = true;
-        cleanup();
-        resolve(Buffer.concat(chunks));
-      }
+      settleResolve(Buffer.concat(chunks));
     };
 
     const onError = (error: Error) => {
-      if (!isResolved) {
-        isResolved = true;
-        cleanup();
-        reject(error);
-      }
+      settleReject(error);
     };
 
     const onClose = () => {
-      if (!isResolved) {
-        if (stream.readableEnded) {
-          isResolved = true;
-          cleanup();
-          resolve(Buffer.concat(chunks));
-        } else {
-          isResolved = true;
-          cleanup();
-          reject(new Error('Stream closed before end'));
-        }
+      if (stream.readableEnded) {
+        settleResolve(Buffer.concat(chunks));
+      } else {
+        settleReject(new Error('Stream closed before end'));
       }
     };
+
+    stream.on('error', onLateError);
+    stream.once('close', onGuardClose);
+
+    if (stream.readableEnded) {
+      settleReject(new Error('Stream has already ended'));
+
+      return;
+    }
+
+    if (!stream.readable) {
+      settleReject(new Error('Stream is not readable'));
+
+      return;
+    }
 
     stream.on('data', onData);
     stream.on('end', onEnd);
