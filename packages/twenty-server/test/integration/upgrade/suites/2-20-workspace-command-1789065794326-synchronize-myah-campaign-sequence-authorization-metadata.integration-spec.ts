@@ -238,7 +238,14 @@ describe('SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand (integrati
         `ALTER TABLE "${workspaceSchemaName}"."${campaignTableName}"
            ADD COLUMN IF NOT EXISTS "${SEQUENCE_AUTHORIZATION_COLUMN_NAME}" jsonb`,
       );
-      await invalidateMetadataCache();
+      const cacheInvalidation = await invalidateMetadataCache();
+
+      expect(cacheInvalidation.stderr).not.toContain(
+        `Error in workspace ${SEED_YCOMBINATOR_WORKSPACE_ID}`,
+      );
+      expect(cacheInvalidation.stdout).toContain(
+        `Successfully invalidated cache for workspace: ${SEED_YCOMBINATOR_WORKSPACE_ID}`,
+      );
 
       expect(await readCampaign()).toEqual([seededCampaign]);
       expect(await readField()).toEqual([seededField]);
