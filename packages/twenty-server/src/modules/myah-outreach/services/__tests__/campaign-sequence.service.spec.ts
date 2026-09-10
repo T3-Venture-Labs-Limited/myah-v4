@@ -54,6 +54,26 @@ const sequence = {
   delaysSeconds: [],
 };
 
+const MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES = 1_048_576;
+
+const executableSequence = {
+  ...sequence,
+  messages: [
+    sequence.messages[0],
+    {
+      ...sequence.messages[0],
+      id: secondMessageId,
+      files: [],
+      replyToThread: true,
+      subject: 'Follow up',
+    },
+  ],
+  delaysSeconds: [17],
+};
+
+const serializedBytes = (value: unknown): number =>
+  Buffer.byteLength(JSON.stringify(value), 'utf8');
+
 let canUpdateCampaign = true;
 
 jest.mock(
@@ -89,6 +109,107 @@ jest.mock(
   'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager',
   () => ({ GlobalWorkspaceOrmManager: class {} }),
 );
+
+const createTrapCountingProxy = <T extends object>(target: T) => {
+  let structuralTrapCount = 0;
+  let thenTrapCount = 0;
+  const countStructuralTrap = () => {
+    structuralTrapCount += 1;
+  };
+  const proxy = new Proxy(target, {
+    get(targetValue, property, receiver) {
+      if (property === 'then') {
+        thenTrapCount += 1;
+      } else {
+        countStructuralTrap();
+      }
+      return Reflect.get(targetValue, property, receiver);
+    },
+    getOwnPropertyDescriptor(...parameters) {
+      countStructuralTrap();
+      return Reflect.getOwnPropertyDescriptor(...parameters);
+    },
+    getPrototypeOf(value) {
+      countStructuralTrap();
+      return Reflect.getPrototypeOf(value);
+    },
+    ownKeys(value) {
+      countStructuralTrap();
+      return Reflect.ownKeys(value);
+    },
+  });
+
+  return {
+    proxy,
+    structuralTrapCount: () => structuralTrapCount,
+    thenTrapCount: () => thenTrapCount,
+  };
+};
+
+const createExecutionContext = ({
+  campaignRows = [{ id: campaignId }],
+  campaignResult = campaignRows,
+  workflowRows = [
+    {
+      id: workflowId,
+      outreachCampaignId: campaignId,
+      lastPublishedVersionId: versionId,
+    },
+  ],
+  versionRows = [
+    {
+      id: versionId,
+      workflowId,
+      status: WorkflowVersionStatus.ACTIVE,
+      campaignSequenceBytes: serializedBytes(executableSequence),
+      campaignSequence: executableSequence,
+    },
+  ],
+  workflowResult = workflowRows,
+  versionResult = versionRows,
+}: {
+  campaignRows?: unknown[];
+  campaignResult?: unknown;
+  workflowRows?: unknown[];
+  workflowResult?: unknown;
+  versionRows?: unknown[];
+  versionResult?: unknown;
+} = {}) => {
+  const queryRunner = {
+    isReleased: false,
+    isTransactionActive: true,
+    query: jest.fn<Promise<unknown>, [string, unknown[]?]>(async (query) => {
+      if (query.includes('"campaign"')) return campaignResult;
+      if (query.includes('"workflowVersion"')) return versionResult;
+      if (query.includes('"workflow"')) return workflowResult;
+
+      throw new Error('Unexpected execution-plan query');
+    }),
+  };
+  const manager = {
+    getRepository: jest.fn(),
+    queryRunner,
+    transaction: jest.fn(),
+  };
+  const globalWorkspaceOrmManager = {
+    executeInWorkspaceContext: jest.fn(),
+    getGlobalWorkspaceDataSource: jest.fn(),
+    getRepository: jest.fn(),
+  };
+  const workflowQueue = { add: jest.fn() };
+  const service = new CampaignSequenceService(
+    globalWorkspaceOrmManager as never,
+    workflowQueue as never,
+  );
+
+  return {
+    globalWorkspaceOrmManager,
+    manager,
+    queryRunner,
+    service,
+    workflowQueue,
+  };
+};
 
 const createContext = () => {
   const queryRunner = {
@@ -486,6 +607,956 @@ describe('CampaignSequenceService', () => {
 
       await expect(service.loadEmailByVersion(loadArgs)).rejects.toEqual(
         new InternalServerErrorException('Campaign sequence data is invalid'),
+      );
+    });
+  });
+
+  describe('loadExecutionPlanInTransaction', () => {
+    const args = { campaignId, workflowVersionId: versionId, workspaceId };
+
+    it.each([
+      ['missing', undefined],
+      [
+        'inactive',
+        { isReleased: false, isTransactionActive: false, query: jest.fn() },
+      ],
+      [
+        'released',
+        { isReleased: true, isTransactionActive: true, query: jest.fn() },
+      ],
+    ])(
+      'requires a non-released active query runner (%s)',
+      async (_, runner) => {
+        const { service } = createExecutionContext();
+        const manager = { queryRunner: runner };
+
+        await expect(
+          service.loadExecutionPlanInTransaction(
+            { ...args, workspaceId: 'not-a-uuid' },
+            manager as never,
+          ),
+        ).rejects.toEqual(
+          new InternalServerErrorException(
+            'Campaign sequence execution plan requires an active transaction',
+          ),
+        );
+        if (runner) expect(runner.query).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      ['workspaceId', 'not-a-workspace'],
+      ['campaignId', 'not-a-campaign'],
+      ['workflowVersionId', 'not-a-version'],
+    ])('rejects malformed %s before issuing a query', async (field, value) => {
+      const { manager, queryRunner, service } = createExecutionContext();
+
+      await expect(
+        service.loadExecutionPlanInTransaction(
+          { ...args, [field]: value },
+          manager as never,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(queryRunner.query).not.toHaveBeenCalled();
+    });
+
+    it('returns a canonical, authored-order, deeply frozen execution plan using only the supplied manager runner', async () => {
+      const {
+        globalWorkspaceOrmManager,
+        manager,
+        queryRunner,
+        service,
+        workflowQueue,
+      } = createExecutionContext();
+
+      const result = await service.loadExecutionPlanInTransaction(
+        args,
+        manager as never,
+      );
+
+      expect(result).toEqual({
+        kind: 'READY',
+        workspaceId,
+        campaignId,
+        workflowId,
+        workflowVersionId: versionId,
+        nodes: [
+          { messageId, channel: 'EMAIL', replyToThread: false },
+          { messageId: secondMessageId, channel: 'EMAIL', replyToThread: true },
+        ],
+        delaysSeconds: [17],
+      });
+      expect(Object.isFrozen(result)).toBe(true);
+      if (result.kind !== 'READY') throw new Error('Expected READY');
+      expect(Object.isFrozen(result.nodes)).toBe(true);
+      expect(result.nodes.every(Object.isFrozen)).toBe(true);
+      expect(Object.isFrozen(result.delaysSeconds)).toBe(true);
+      expect(queryRunner.query).toHaveBeenCalledTimes(3);
+      expect(
+        queryRunner.query.mock.calls.map(([, parameters]) => parameters),
+      ).toEqual([
+        [campaignId],
+        [campaignId],
+        [versionId, workflowId, MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES],
+      ]);
+      expect(
+        queryRunner.query.mock.calls.some(([query]) =>
+          /\b(INSERT|UPDATE|DELETE|FOR\s+UPDATE|LOCK)\b|pg_advisory/i.test(
+            query,
+          ),
+        ),
+      ).toBe(false);
+      expect(manager.getRepository).not.toHaveBeenCalled();
+      expect(manager.transaction).not.toHaveBeenCalled();
+      expect(globalWorkspaceOrmManager.getRepository).not.toHaveBeenCalled();
+      expect(
+        globalWorkspaceOrmManager.getGlobalWorkspaceDataSource,
+      ).not.toHaveBeenCalled();
+      expect(
+        globalWorkspaceOrmManager.executeInWorkspaceContext,
+      ).not.toHaveBeenCalled();
+      expect(workflowQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('accepts the strict PostgreSQL tuple result shape and null-prototype rows', async () => {
+      const campaignRow = Object.assign(Object.create(null), {
+        id: campaignId,
+      });
+      const { manager, service } = createExecutionContext({
+        campaignResult: [[campaignRow], 1],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual(expect.objectContaining({ kind: 'READY' }));
+    });
+
+    it.each([
+      [
+        'just below',
+        MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES - 1,
+        executableSequence,
+        'READY',
+      ],
+      [
+        'equal to',
+        MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES,
+        executableSequence,
+        'READY',
+      ],
+      [
+        'above',
+        MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES + 1,
+        null,
+        'BLOCKED_DEPENDENCY_INTEGRITY',
+      ],
+    ] as const)(
+      'applies the SQL byte gate when sequence size is %s the limit',
+      async (_, campaignSequenceBytes, campaignSequence, expectedKind) => {
+        const { manager, queryRunner, service } = createExecutionContext({
+          versionRows: [
+            {
+              id: versionId,
+              workflowId,
+              status: WorkflowVersionStatus.ACTIVE,
+              campaignSequenceBytes,
+              campaignSequence,
+            },
+          ],
+        });
+
+        const result = await service.loadExecutionPlanInTransaction(
+          args,
+          manager as never,
+        );
+
+        expect(result.kind).toBe(expectedKind);
+        if (campaignSequenceBytes > MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES) {
+          expect(result).toEqual({
+            kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+            reason: 'SEQUENCE_MALFORMED',
+          });
+        }
+        expect(queryRunner.query).toHaveBeenNthCalledWith(
+          3,
+          expect.stringMatching(
+            /octet_length\("campaignSequence"::text\)[\s\S]+CASE[\s\S]+<= \$3/,
+          ),
+          [versionId, workflowId, MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES],
+        );
+      },
+    );
+
+    it('canonicalizes every UUID input and returned database UUID', async () => {
+      const canonicalWorkspaceId = 'aaaaaaaa-1111-4111-8111-111111111111';
+      const canonicalCampaignId = 'bbbbbbbb-3333-4333-8333-333333333333';
+      const canonicalWorkflowId = 'cccccccc-4444-4444-8444-444444444444';
+      const canonicalVersionId = 'dddddddd-5555-4555-8555-555555555555';
+      const { manager, queryRunner, service } = createExecutionContext({
+        campaignRows: [{ id: canonicalCampaignId.toUpperCase() }],
+        workflowRows: [
+          {
+            id: canonicalWorkflowId.toUpperCase(),
+            outreachCampaignId: canonicalCampaignId.toUpperCase(),
+            lastPublishedVersionId: canonicalVersionId.toUpperCase(),
+          },
+        ],
+        versionRows: [
+          {
+            id: canonicalVersionId.toUpperCase(),
+            workflowId: canonicalWorkflowId.toUpperCase(),
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: serializedBytes(executableSequence),
+            campaignSequence: executableSequence,
+          },
+        ],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(
+          {
+            campaignId: canonicalCampaignId.toUpperCase(),
+            workflowVersionId: canonicalVersionId.toUpperCase(),
+            workspaceId: canonicalWorkspaceId.toUpperCase(),
+          },
+          manager as never,
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          kind: 'READY',
+          workspaceId: canonicalWorkspaceId,
+          campaignId: canonicalCampaignId,
+          workflowId: canonicalWorkflowId,
+          workflowVersionId: canonicalVersionId,
+        }),
+      );
+      expect(queryRunner.query).toHaveBeenNthCalledWith(1, expect.any(String), [
+        canonicalCampaignId,
+      ]);
+      expect(queryRunner.query).toHaveBeenNthCalledWith(3, expect.any(String), [
+        canonicalVersionId,
+        canonicalWorkflowId,
+        MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES,
+      ]);
+    });
+
+    it.each([
+      ['campaign', { campaignRows: [] }, 'CAMPAIGN_NOT_FOUND'],
+      ['workflow', { workflowRows: [] }, 'WORKFLOW_NOT_FOUND'],
+      [
+        'workflow ownership',
+        {
+          workflowRows: [
+            {
+              id: workflowId,
+              outreachCampaignId: otherWorkspaceId,
+              lastPublishedVersionId: versionId,
+            },
+          ],
+        },
+        'WORKFLOW_NOT_FOUND',
+      ],
+      ['workflow version', { versionRows: [] }, 'WORKFLOW_VERSION_NOT_FOUND'],
+      [
+        'workflow version ownership',
+        {
+          versionRows: [
+            {
+              id: versionId,
+              workflowId: otherWorkspaceId,
+              status: WorkflowVersionStatus.ACTIVE,
+              campaignSequence: executableSequence,
+            },
+          ],
+        },
+        'WORKFLOW_VERSION_NOT_FOUND',
+      ],
+    ])(
+      'returns a scoped dependency blocker for missing or mismatched %s',
+      async (_, overrides, reason) => {
+        const { manager, service } = createExecutionContext(overrides);
+
+        await expect(
+          service.loadExecutionPlanInTransaction(args, manager as never),
+        ).resolves.toEqual({
+          kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+          reason,
+        });
+      },
+    );
+
+    it.each([
+      [
+        'published pointer mismatch',
+        {
+          workflowRows: [
+            {
+              id: workflowId,
+              outreachCampaignId: campaignId,
+              lastPublishedVersionId: nextVersionId,
+            },
+          ],
+        },
+      ],
+      [
+        'non-active exact version',
+        {
+          versionRows: [
+            {
+              id: versionId,
+              workflowId,
+              status: WorkflowVersionStatus.DEACTIVATED,
+              campaignSequence: executableSequence,
+            },
+          ],
+        },
+      ],
+    ])('coalesces %s into the current-active blocker', async (_, overrides) => {
+      const { manager, service } = createExecutionContext(overrides);
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+        reason: 'WORKFLOW_VERSION_NOT_CURRENT_ACTIVE',
+      });
+    });
+
+    it.each([
+      ['null', null],
+      ['absent', undefined],
+    ])('blocks a %s unauthored sequence', async (_, campaignSequence) => {
+      const version = {
+        id: versionId,
+        workflowId,
+        status: WorkflowVersionStatus.ACTIVE,
+        ...(campaignSequence === undefined ? {} : { campaignSequence }),
+      };
+      const { manager, service } = createExecutionContext({
+        versionRows: [version],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+        reason: 'SEQUENCE_NOT_AUTHORED',
+      });
+    });
+
+    it.each([
+      ['extra keys', { ...executableSequence, unexpected: true }],
+      [
+        'nonplain objects',
+        Object.assign(Object.create({ inherited: true }), executableSequence),
+      ],
+    ])(
+      'blocks malformed sequence data with %s',
+      async (_, campaignSequence) => {
+        const { manager, service } = createExecutionContext({
+          versionRows: [
+            {
+              id: versionId,
+              workflowId,
+              status: WorkflowVersionStatus.ACTIVE,
+              campaignSequenceBytes: MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES,
+              campaignSequence,
+            },
+          ],
+        });
+
+        await expect(
+          service.loadExecutionPlanInTransaction(args, manager as never),
+        ).resolves.toEqual({
+          kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+          reason: 'SEQUENCE_MALFORMED',
+        });
+      },
+    );
+
+    it.each(['sequence', 'message'] as const)(
+      'rejects more than 10k undeclared %s properties without allocating a descriptor map',
+      async (location) => {
+        const oversized =
+          location === 'sequence'
+            ? { ...executableSequence }
+            : { ...executableSequence.messages[0] };
+
+        for (let index = 0; index < 10_001; index += 1) {
+          Object.defineProperty(oversized, `unexpected${index}`, {
+            enumerable: true,
+            value: index,
+          });
+        }
+
+        const campaignSequence =
+          location === 'sequence'
+            ? oversized
+            : { ...executableSequence, messages: [oversized] };
+        const descriptorSpy = jest.spyOn(Object, 'getOwnPropertyDescriptors');
+
+        try {
+          const { manager, service } = createExecutionContext({
+            versionRows: [
+              {
+                id: versionId,
+                workflowId,
+                status: WorkflowVersionStatus.ACTIVE,
+                campaignSequenceBytes: MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES,
+                campaignSequence,
+              },
+            ],
+          });
+
+          await expect(
+            service.loadExecutionPlanInTransaction(args, manager as never),
+          ).resolves.toEqual({
+            kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+            reason: 'SEQUENCE_MALFORMED',
+          });
+          expect(descriptorSpy).not.toHaveBeenCalled();
+        } finally {
+          descriptorSpy.mockRestore();
+        }
+      },
+    );
+
+    it('rejects a query row with more than 10k undeclared properties without allocating a descriptor map', async () => {
+      const campaignRow: Record<string, unknown> = { id: campaignId };
+
+      for (let index = 0; index < 10_001; index += 1) {
+        Object.defineProperty(campaignRow, `unexpected${index}`, {
+          enumerable: true,
+          value: index,
+        });
+      }
+
+      const descriptorSpy = jest.spyOn(Object, 'getOwnPropertyDescriptors');
+
+      try {
+        const { manager, service } = createExecutionContext({
+          campaignRows: [campaignRow],
+        });
+
+        await expect(
+          service.loadExecutionPlanInTransaction(args, manager as never),
+        ).rejects.toEqual(
+          new InternalServerErrorException(
+            'Campaign sequence execution plan could not be loaded',
+          ),
+        );
+        expect(descriptorSpy).not.toHaveBeenCalled();
+      } finally {
+        descriptorSpy.mockRestore();
+      }
+    });
+
+    it('rejects JSON-parsed own __proto__ keys at every strict object level', async () => {
+      const withOwnProto = (value: object): Record<string, unknown> =>
+        JSON.parse(
+          `${JSON.stringify(value).slice(0, -1)},"__proto__":{"polluted":true}}`,
+        ) as Record<string, unknown>;
+      const sequenceWithOwnProto = withOwnProto(executableSequence);
+      const messageWithOwnProto = withOwnProto(executableSequence.messages[0]);
+      const fileWithOwnProto = withOwnProto({
+        id: firstFileId,
+        name: 'proof.txt',
+        size: 5,
+        type: 'text/plain',
+        createdAt: '2026-09-08T00:00:00.000Z',
+      });
+      const payloads = [
+        sequenceWithOwnProto,
+        {
+          ...sequence,
+          messages: [messageWithOwnProto],
+        },
+        {
+          ...sequence,
+          messages: [
+            {
+              ...sequence.messages[0],
+              files: [fileWithOwnProto],
+            },
+          ],
+        },
+      ];
+
+      expect(
+        Object.prototype.hasOwnProperty.call(sequenceWithOwnProto, '__proto__'),
+      ).toBe(true);
+      expect(
+        Object.prototype.hasOwnProperty.call(messageWithOwnProto, '__proto__'),
+      ).toBe(true);
+      expect(
+        Object.prototype.hasOwnProperty.call(fileWithOwnProto, '__proto__'),
+      ).toBe(true);
+
+      for (const campaignSequence of payloads) {
+        const { manager, service } = createExecutionContext({
+          versionRows: [
+            {
+              id: versionId,
+              workflowId,
+              status: WorkflowVersionStatus.ACTIVE,
+              campaignSequenceBytes: serializedBytes(campaignSequence),
+              campaignSequence,
+            },
+          ],
+        });
+
+        await expect(
+          service.loadExecutionPlanInTransaction(args, manager as never),
+        ).resolves.toEqual({
+          kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+          reason: 'SEQUENCE_MALFORMED',
+        });
+      }
+
+      expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+    });
+
+    it('rejects repeated references instead of expanding a compact DAG', async () => {
+      const sharedFile = {
+        id: firstFileId,
+        name: 'shared.txt',
+        size: 5,
+        type: 'text/plain',
+        createdAt: '2026-09-08T00:00:00.000Z',
+      };
+      const { manager, service } = createExecutionContext({
+        versionRows: [
+          {
+            id: versionId,
+            workflowId,
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES,
+            campaignSequence: {
+              ...sequence,
+              messages: [
+                {
+                  ...sequence.messages[0],
+                  files: [sharedFile, sharedFile],
+                },
+              ],
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+        reason: 'SEQUENCE_MALFORMED',
+      });
+    });
+
+    it('rejects a 30-level shared DAG before descending into undeclared data', async () => {
+      const leafAccessor = jest.fn(() => 'not reached');
+      const leaf = {};
+      Object.defineProperty(leaf, 'value', { get: leafAccessor });
+      let sharedDag: object = leaf;
+
+      for (let depth = 0; depth < 30; depth += 1) {
+        sharedDag = { left: sharedDag, right: sharedDag };
+      }
+
+      const { manager, service } = createExecutionContext({
+        versionRows: [
+          {
+            id: versionId,
+            workflowId,
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES,
+            campaignSequence: {
+              ...executableSequence,
+              unexpected: sharedDag,
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+        reason: 'SEQUENCE_MALFORMED',
+      });
+      expect(leafAccessor).not.toHaveBeenCalled();
+    });
+
+    it('rejects oversized authored arrays before allocating all descriptors', async () => {
+      const messages = new Array(10_000).fill(sequence.messages[0]);
+      const descriptorSpy = jest.spyOn(Object, 'getOwnPropertyDescriptors');
+      const { manager, service } = createExecutionContext({
+        versionRows: [
+          {
+            id: versionId,
+            workflowId,
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES,
+            campaignSequence: {
+              ...sequence,
+              messages,
+              delaysSeconds: new Array(messages.length - 1).fill(1),
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+        reason: 'SEQUENCE_MALFORMED',
+      });
+      expect(
+        descriptorSpy.mock.calls.some(([value]) => value === messages),
+      ).toBe(false);
+      descriptorSpy.mockRestore();
+    });
+
+    it('blocks a mock/runtime TipTap body that exceeds the traversal byte budget before semantic validation', async () => {
+      const campaignSequence = {
+        ...sequence,
+        messages: [
+          {
+            ...sequence.messages[0],
+            body: 'a'.repeat(MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES + 1),
+          },
+        ],
+      };
+      const { manager, service } = createExecutionContext({
+        versionRows: [
+          {
+            id: versionId,
+            workflowId,
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES,
+            campaignSequence,
+          },
+        ],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+        reason: 'SEQUENCE_MALFORMED',
+      });
+    });
+
+    it('does not invoke persisted accessors while rejecting them as malformed', async () => {
+      const getter = jest.fn(() => executableSequence);
+      const version = {
+        id: versionId,
+        workflowId,
+        status: WorkflowVersionStatus.ACTIVE,
+        campaignSequenceBytes: 1,
+      };
+
+      Object.defineProperty(version, 'campaignSequence', { get: getter });
+      const { manager, service } = createExecutionContext({
+        versionRows: [version],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+        reason: 'SEQUENCE_MALFORMED',
+      });
+      expect(getter).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'nonstandard array prototype',
+        Object.setPrototypeOf([{ id: campaignId }], null),
+      ],
+      ['sparse result array', new Array(1)],
+      [
+        'accessor result array',
+        Object.defineProperty([], '0', {
+          configurable: true,
+          enumerable: true,
+          get: jest.fn(() => ({ id: campaignId })),
+        }),
+      ],
+      ['nonplain row', [Object.create({ id: campaignId })]],
+    ])(
+      'sanitizes malformed query data with a %s',
+      async (_, campaignResult) => {
+        const { manager, service } = createExecutionContext({ campaignResult });
+
+        await expect(
+          service.loadExecutionPlanInTransaction(args, manager as never),
+        ).rejects.toEqual(
+          new InternalServerErrorException(
+            'Campaign sequence execution plan could not be loaded',
+          ),
+        );
+      },
+    );
+
+    it.each(['query result', 'tuple rows', 'row', 'campaignSequence'] as const)(
+      'rejects a live Proxy at the %s boundary without structural reflection after resolution',
+      async (location) => {
+        const target =
+          location === 'row'
+            ? { id: campaignId }
+            : location === 'campaignSequence'
+              ? executableSequence
+              : [{ id: campaignId }];
+        const { proxy, structuralTrapCount, thenTrapCount } =
+          createTrapCountingProxy(target);
+        const overrides =
+          location === 'query result'
+            ? { campaignResult: proxy }
+            : location === 'tuple rows'
+              ? { campaignResult: [proxy, 1] }
+              : location === 'row'
+                ? { campaignResult: [proxy] }
+                : {
+                    versionRows: [
+                      {
+                        id: versionId,
+                        workflowId,
+                        status: WorkflowVersionStatus.ACTIVE,
+                        campaignSequenceBytes: 1,
+                        campaignSequence: proxy,
+                      },
+                    ],
+                  };
+        const { manager, queryRunner, service } =
+          createExecutionContext(overrides);
+        const loading = service.loadExecutionPlanInTransaction(
+          args,
+          manager as never,
+        );
+
+        if (location === 'campaignSequence') {
+          await expect(loading).resolves.toEqual({
+            kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+            reason: 'SEQUENCE_MALFORMED',
+          });
+        } else {
+          await expect(loading).rejects.toEqual(
+            new InternalServerErrorException(
+              'Campaign sequence execution plan could not be loaded',
+            ),
+          );
+        }
+        expect(structuralTrapCount()).toBe(0);
+        expect(thenTrapCount()).toBe(location === 'query result' ? 1 : 0);
+        expect(queryRunner.query).toHaveBeenCalledTimes(
+          location === 'campaignSequence' ? 3 : 1,
+        );
+      },
+    );
+
+    it('rejects a revoked query-result Proxy without exposing its error', async () => {
+      const { proxy, revoke } = Proxy.revocable([{ id: campaignId }], {});
+
+      revoke();
+      const { manager, service } = createExecutionContext({
+        campaignResult: proxy,
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).rejects.toEqual(
+        new InternalServerErrorException(
+          'Campaign sequence execution plan could not be loaded',
+        ),
+      );
+    });
+
+    it.each(['tuple rows', 'row'] as const)(
+      'rejects a revoked Proxy at the %s boundary without reflection',
+      async (location) => {
+        const target =
+          location === 'tuple rows' ? [{ id: campaignId }] : { id: campaignId };
+        const { proxy, revoke } = Proxy.revocable(target, {});
+
+        revoke();
+        const { manager, service } = createExecutionContext({
+          campaignResult: location === 'tuple rows' ? [proxy, 1] : [proxy],
+        });
+
+        await expect(
+          service.loadExecutionPlanInTransaction(args, manager as never),
+        ).rejects.toEqual(
+          new InternalServerErrorException(
+            'Campaign sequence execution plan could not be loaded',
+          ),
+        );
+      },
+    );
+
+    it('fails closed on a revoked campaignSequence Proxy without leaking its error', async () => {
+      const { proxy, revoke } = Proxy.revocable(executableSequence, {});
+
+      revoke();
+      const { manager, service } = createExecutionContext({
+        versionRows: [
+          {
+            id: versionId,
+            workflowId,
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: 1,
+            campaignSequence: proxy,
+          },
+        ],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_DEPENDENCY_INTEGRITY',
+        reason: 'SEQUENCE_MALFORMED',
+      });
+    });
+
+    it('never returns an empty READY plan', async () => {
+      const { manager, service } = createExecutionContext({
+        versionRows: [
+          {
+            id: versionId,
+            workflowId,
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: serializedBytes({
+              schemaVersion: 1,
+              messages: [],
+              delaysSeconds: [],
+            }),
+            campaignSequence: {
+              schemaVersion: 1,
+              messages: [],
+              delaysSeconds: [],
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).resolves.toEqual({
+        kind: 'BLOCKED_SEQUENCE_INVALID',
+        issues: [expect.objectContaining({ code: 'EMPTY_SEQUENCE' })],
+      });
+    });
+
+    it('returns detached frozen issues and no executable plan for semantic invalidity', async () => {
+      const invalidSequence = {
+        schemaVersion: 1 as const,
+        messages: [
+          sequence.messages[0],
+          { id: secondMessageId, channel: 'INSTAGRAM' as const, text: 'Hi' },
+        ],
+        delaysSeconds: [null],
+      };
+      const { manager, service } = createExecutionContext({
+        versionRows: [
+          {
+            id: versionId,
+            workflowId,
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: serializedBytes(invalidSequence),
+            campaignSequence: invalidSequence,
+          },
+        ],
+      });
+
+      const result = await service.loadExecutionPlanInTransaction(
+        args,
+        manager as never,
+      );
+
+      expect(result).toEqual({
+        kind: 'BLOCKED_SEQUENCE_INVALID',
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: 'DELAY_REQUIRED' }),
+          expect.objectContaining({
+            code: 'INSTAGRAM_UNAVAILABLE',
+            messageId: secondMessageId,
+            path: 'messages.1.channel',
+          }),
+        ]),
+      });
+      expect(result).not.toHaveProperty('nodes');
+      expect(result).not.toHaveProperty('delaysSeconds');
+      expect(Object.isFrozen(result)).toBe(true);
+      if (result.kind !== 'BLOCKED_SEQUENCE_INVALID') {
+        throw new Error('Expected sequence blocker');
+      }
+      expect(Object.isFrozen(result.issues)).toBe(true);
+      expect(result.issues.every(Object.isFrozen)).toBe(true);
+      invalidSequence.messages.length = 0;
+      invalidSequence.delaysSeconds.length = 0;
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'DELAY_REQUIRED' }),
+        ]),
+      );
+    });
+
+    it('detaches a READY plan from later persisted-value mutation', async () => {
+      const mutableSequence = {
+        ...executableSequence,
+        messages: executableSequence.messages.map((message) => ({
+          ...message,
+          files: [...message.files],
+        })),
+        delaysSeconds: [...executableSequence.delaysSeconds],
+      };
+      const { manager, service } = createExecutionContext({
+        versionRows: [
+          {
+            id: versionId,
+            workflowId,
+            status: WorkflowVersionStatus.ACTIVE,
+            campaignSequenceBytes: serializedBytes(mutableSequence),
+            campaignSequence: mutableSequence,
+          },
+        ],
+      });
+      const result = await service.loadExecutionPlanInTransaction(
+        args,
+        manager as never,
+      );
+
+      mutableSequence.messages[1].replyToThread = false;
+      mutableSequence.delaysSeconds[0] = 999;
+      expect(result).toEqual(
+        expect.objectContaining({
+          nodes: [
+            { messageId, channel: 'EMAIL', replyToThread: false },
+            {
+              messageId: secondMessageId,
+              channel: 'EMAIL',
+              replyToThread: true,
+            },
+          ],
+          delaysSeconds: [17],
+        }),
+      );
+    });
+
+    it('sanitizes database errors', async () => {
+      const { manager, queryRunner, service } = createExecutionContext();
+
+      queryRunner.query.mockRejectedValueOnce(
+        new Error('password=secret host=private-db'),
+      );
+
+      await expect(
+        service.loadExecutionPlanInTransaction(args, manager as never),
+      ).rejects.toEqual(
+        new InternalServerErrorException(
+          'Campaign sequence execution plan could not be loaded',
+        ),
       );
     });
   });

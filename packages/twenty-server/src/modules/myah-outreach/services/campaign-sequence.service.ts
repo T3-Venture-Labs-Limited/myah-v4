@@ -1,3 +1,5 @@
+import { types as nodeUtilTypes } from 'node:util';
+
 import {
   BadRequestException,
   ConflictException,
@@ -43,6 +45,50 @@ import {
 const INTERNAL_REPOSITORY_OPTIONS = {
   shouldBypassPermissionChecks: true,
 } as const;
+
+const EXECUTION_SEQUENCE_MAX_DEPTH = 12;
+const EXECUTION_SEQUENCE_MAX_VISITS = 10_000;
+// Execution accepts at most 1 MiB of UTF-8 serialized authored sequence data.
+// Aligning the authoring UX/schema limit is intentionally deferred.
+const MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES = 1_048_576;
+
+const EXECUTION_SEQUENCE_KEYS = [
+  'schemaVersion',
+  'messages',
+  'delaysSeconds',
+] as const;
+const EXECUTION_EMAIL_KEYS = [
+  'id',
+  'channel',
+  'subject',
+  'body',
+  'files',
+  'replyToThread',
+] as const;
+const EXECUTION_INSTAGRAM_KEYS = ['id', 'channel', 'text'] as const;
+const EXECUTION_FILE_KEYS = [
+  'id',
+  'name',
+  'size',
+  'type',
+  'createdAt',
+] as const;
+
+type ExecutionSequenceDataShape =
+  | 'SEQUENCE'
+  | 'MESSAGES'
+  | 'MESSAGE'
+  | 'FILES'
+  | 'FILE'
+  | 'DELAYS'
+  | 'VALUE';
+
+type ExecutionSequenceVisitBudget = {
+  count: number;
+  codeUnits: number;
+  maxBytes: number;
+  utf8Bytes: number;
+};
 
 const EMPTY_CAMPAIGN_SEQUENCE: CampaignSequence = {
   schemaVersion: 1,
@@ -102,6 +148,52 @@ export type ValidatedCampaignSequenceEmail = {
   replyToThread: boolean;
   issues: CampaignSequenceIssue[];
 };
+
+export type LoadCampaignSequenceExecutionPlanArgs = {
+  workspaceId: string;
+  campaignId: string;
+  workflowVersionId: string;
+};
+
+export type CampaignSequenceExecutionPlanNode =
+  | Readonly<{
+      messageId: string;
+      channel: 'EMAIL';
+      replyToThread: boolean;
+    }>
+  | Readonly<{
+      messageId: string;
+      channel: 'INSTAGRAM';
+    }>;
+
+export type CampaignSequenceExecutionDependencyIntegrityReason =
+  | 'CAMPAIGN_NOT_FOUND'
+  | 'WORKFLOW_NOT_FOUND'
+  | 'WORKFLOW_VERSION_NOT_FOUND'
+  | 'WORKFLOW_VERSION_NOT_CURRENT_ACTIVE'
+  | 'SEQUENCE_NOT_AUTHORED'
+  | 'SEQUENCE_MALFORMED';
+
+export type CampaignSequenceExecutionPlan = Readonly<{
+  kind: 'READY';
+  workspaceId: string;
+  campaignId: string;
+  workflowId: string;
+  workflowVersionId: string;
+  nodes: readonly CampaignSequenceExecutionPlanNode[];
+  delaysSeconds: readonly number[];
+}>;
+
+export type CampaignSequenceExecutionPlanLoadResult =
+  | CampaignSequenceExecutionPlan
+  | Readonly<{
+      kind: 'BLOCKED_SEQUENCE_INVALID';
+      issues: readonly Readonly<CampaignSequenceIssue>[];
+    }>
+  | Readonly<{
+      kind: 'BLOCKED_DEPENDENCY_INTEGRITY';
+      reason: CampaignSequenceExecutionDependencyIntegrityReason;
+    }>;
 
 type CampaignRecord = {
   id: string;
@@ -281,6 +373,214 @@ export class CampaignSequenceService {
         issues: validateCampaignSequence(sequence),
       };
     });
+  }
+
+  async loadExecutionPlanInTransaction(
+    args: LoadCampaignSequenceExecutionPlanArgs,
+    manager: WorkspaceEntityManager,
+  ): Promise<CampaignSequenceExecutionPlanLoadResult> {
+    const queryRunner = manager.queryRunner;
+
+    if (
+      !queryRunner ||
+      queryRunner.isTransactionActive !== true ||
+      queryRunner.isReleased !== false
+    ) {
+      throw new InternalServerErrorException(
+        'Campaign sequence execution plan requires an active transaction',
+      );
+    }
+
+    const workspaceId = this.canonicalUuid('workspaceId', args.workspaceId);
+    const campaignId = this.canonicalUuid('campaignId', args.campaignId);
+    const workflowVersionId = this.canonicalUuid(
+      'workflowVersionId',
+      args.workflowVersionId,
+    );
+    const schemaName = getWorkspaceSchemaName(workspaceId);
+
+    try {
+      const campaignRows = await this.queryExecutionRows(
+        queryRunner,
+        `SELECT "id"
+           FROM ${escapeIdentifier(schemaName)}.${escapeIdentifier('campaign')}
+          WHERE "id" = $1 AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [campaignId],
+        ['id'],
+        1,
+      );
+      const campaignRow = this.singleExecutionRecord(campaignRows);
+
+      if (
+        campaignRow === null ||
+        this.canonicalOwnUuid(campaignRow, 'id') !== campaignId
+      ) {
+        return this.executionDependencyBlocker('CAMPAIGN_NOT_FOUND');
+      }
+
+      const workflowRows = await this.queryExecutionRows(
+        queryRunner,
+        `SELECT "id", "outreachCampaignId", "lastPublishedVersionId"
+           FROM ${this.workflowTable(schemaName)}
+          WHERE "outreachCampaignId" = $1 AND "deletedAt" IS NULL
+          LIMIT 2`,
+        [campaignId],
+        ['id', 'outreachCampaignId', 'lastPublishedVersionId'],
+        2,
+      );
+
+      if (workflowRows.length === 0) {
+        return this.executionDependencyBlocker('WORKFLOW_NOT_FOUND');
+      }
+      if (workflowRows.length !== 1) {
+        return this.executionDependencyBlocker('SEQUENCE_MALFORMED');
+      }
+
+      const workflow = this.singleExecutionRecord(workflowRows);
+      const workflowId = this.canonicalOwnUuid(workflow, 'id');
+      const ownedCampaignId = this.canonicalOwnUuid(
+        workflow,
+        'outreachCampaignId',
+      );
+
+      if (workflowId === null || ownedCampaignId !== campaignId) {
+        return this.executionDependencyBlocker('WORKFLOW_NOT_FOUND');
+      }
+
+      const versionRows = await this.queryExecutionRows(
+        queryRunner,
+        `SELECT "id", "workflowId", "status",
+                octet_length("campaignSequence"::text) AS "campaignSequenceBytes",
+                CASE
+                  WHEN "campaignSequence" IS NOT NULL
+                   AND octet_length("campaignSequence"::text) <= $3
+                    THEN "campaignSequence"
+                  ELSE NULL
+                END AS "campaignSequence"
+           FROM ${this.workflowVersionTable(schemaName)}
+          WHERE "id" = $1 AND "workflowId" = $2 AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [workflowVersionId, workflowId, MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES],
+        [
+          'id',
+          'workflowId',
+          'status',
+          'campaignSequenceBytes',
+          'campaignSequence',
+        ],
+        1,
+        ['campaignSequenceBytes', 'campaignSequence'],
+      );
+      const version = this.singleExecutionRecord(versionRows);
+
+      if (
+        version === null ||
+        this.canonicalOwnUuid(version, 'id') !== workflowVersionId ||
+        this.canonicalOwnUuid(version, 'workflowId') !== workflowId
+      ) {
+        return this.executionDependencyBlocker('WORKFLOW_VERSION_NOT_FOUND');
+      }
+
+      const lastPublishedVersionId = this.canonicalOwnUuid(
+        workflow,
+        'lastPublishedVersionId',
+      );
+      const status = this.ownDataProperty(version, 'status');
+
+      if (
+        lastPublishedVersionId !== workflowVersionId ||
+        status?.value !== WorkflowVersionStatus.ACTIVE
+      ) {
+        return this.executionDependencyBlocker(
+          'WORKFLOW_VERSION_NOT_CURRENT_ACTIVE',
+        );
+      }
+
+      const storedSequenceBytes = this.ownDataProperty(
+        version,
+        'campaignSequenceBytes',
+      )?.value;
+      const storedSequence = Object.getOwnPropertyDescriptor(
+        version,
+        'campaignSequence',
+      );
+      const sequenceIsAbsent =
+        storedSequence === undefined ||
+        ('value' in storedSequence &&
+          (storedSequence.value === null ||
+            storedSequence.value === undefined));
+
+      if (
+        (storedSequenceBytes === null || storedSequenceBytes === undefined) &&
+        sequenceIsAbsent
+      ) {
+        return this.executionDependencyBlocker('SEQUENCE_NOT_AUTHORED');
+      }
+      if (
+        typeof storedSequenceBytes !== 'number' ||
+        !Number.isSafeInteger(storedSequenceBytes) ||
+        storedSequenceBytes <= 0 ||
+        storedSequenceBytes > MAX_CAMPAIGN_SEQUENCE_EXECUTION_BYTES ||
+        sequenceIsAbsent ||
+        !storedSequence ||
+        !('value' in storedSequence)
+      ) {
+        return this.executionDependencyBlocker('SEQUENCE_MALFORMED');
+      }
+
+      const sequence = this.parseExecutionSequence(
+        storedSequence.value,
+        storedSequenceBytes,
+      );
+
+      if (sequence === null) {
+        return this.executionDependencyBlocker('SEQUENCE_MALFORMED');
+      }
+
+      const issues = validateCampaignSequence(sequence);
+
+      if (issues.length > 0) {
+        return Object.freeze({
+          kind: 'BLOCKED_SEQUENCE_INVALID' as const,
+          issues: Object.freeze(
+            issues.map((sequenceIssue) => Object.freeze({ ...sequenceIssue })),
+          ),
+        });
+      }
+
+      const nodes = Object.freeze(
+        sequence.messages.map(
+          (message): CampaignSequenceExecutionPlanNode =>
+            Object.freeze(
+              message.channel === 'EMAIL'
+                ? {
+                    messageId: message.id,
+                    channel: message.channel,
+                    replyToThread: message.replyToThread,
+                  }
+                : { messageId: message.id, channel: message.channel },
+            ),
+        ),
+      );
+      const delaysSeconds = Object.freeze(
+        sequence.delaysSeconds.map((delay) => delay as number),
+      );
+
+      return Object.freeze({
+        kind: 'READY' as const,
+        workspaceId,
+        campaignId,
+        workflowId,
+        workflowVersionId,
+        nodes,
+        delaysSeconds,
+      });
+    } catch {
+      throw new InternalServerErrorException(
+        'Campaign sequence execution plan could not be loaded',
+      );
+    }
   }
 
   async assertCampaignSequenceReplacementAllowed(
@@ -636,6 +936,425 @@ export class CampaignSequenceService {
       editable: lifecycleStatus === 'DRAFT' && canUpdate,
       issues: validateCampaignSequence(sequence),
     };
+  }
+
+  private async queryExecutionRows(
+    queryRunner: QueryRunner,
+    query: string,
+    parameters: unknown[],
+    expectedRowKeys: readonly string[],
+    maximumRows: number,
+    optionalRowKeys: readonly string[] = [],
+  ): Promise<Record<string, unknown>[]> {
+    // QueryRunner and Promise resolution are trusted infrastructure. JavaScript
+    // may read an outer Proxy's `then` before this awaited boundary; every
+    // resolved value is rejected as a Proxy before structural reflection.
+    const result: unknown = await queryRunner.query(query, parameters);
+    const outerValues = this.executionArrayValues(
+      result,
+      Math.max(maximumRows, 2),
+    );
+    const firstValue = outerValues[0];
+    const hasTupleRows = this.isExecutionArray(firstValue);
+    let rowValues = outerValues;
+
+    if (hasTupleRows) {
+      if (
+        outerValues.length !== 2 ||
+        typeof outerValues[1] !== 'number' ||
+        !Number.isSafeInteger(outerValues[1]) ||
+        outerValues[1] < 0
+      ) {
+        throw new TypeError('Campaign sequence query result tuple is invalid');
+      }
+
+      rowValues = this.executionArrayValues(firstValue, maximumRows);
+    }
+
+    if (rowValues.length > maximumRows) {
+      throw new TypeError('Campaign sequence query returned too many rows');
+    }
+
+    return rowValues.map((row) =>
+      this.normalizeExecutionRow(row, expectedRowKeys, optionalRowKeys),
+    );
+  }
+
+  private isExecutionArray(value: unknown): boolean {
+    if (nodeUtilTypes.isProxy(value)) {
+      throw new TypeError('Campaign sequence query data must not be a Proxy');
+    }
+
+    return Array.isArray(value);
+  }
+
+  private executionArrayValues(
+    value: unknown,
+    maximumLength: number,
+  ): unknown[] {
+    if (nodeUtilTypes.isProxy(value)) {
+      throw new TypeError('Campaign sequence arrays must not be Proxies');
+    }
+    if (
+      !Array.isArray(value) ||
+      Object.getPrototypeOf(value) !== Array.prototype
+    ) {
+      throw new TypeError('Campaign sequence query data must be an array');
+    }
+
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+    const length = lengthDescriptor?.value;
+
+    if (
+      !lengthDescriptor ||
+      !('value' in lengthDescriptor) ||
+      typeof length !== 'number' ||
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      length > maximumLength
+    ) {
+      throw new TypeError('Campaign sequence array length is invalid');
+    }
+
+    const values: unknown[] = [];
+
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+
+      if (!descriptor || !('value' in descriptor) || !descriptor.enumerable) {
+        throw new TypeError('Campaign sequence arrays must be dense data');
+      }
+
+      values.push(descriptor.value);
+    }
+
+    return values;
+  }
+
+  private normalizeExecutionRow(
+    value: unknown,
+    expectedKeys: readonly string[],
+    optionalKeys: readonly string[],
+  ): Record<string, unknown> {
+    if (nodeUtilTypes.isProxy(value)) {
+      throw new TypeError('Campaign sequence rows must not be Proxies');
+    }
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new TypeError('Campaign sequence query row is invalid');
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError('Campaign sequence query row must be plain');
+    }
+
+    const actualKeys = Reflect.ownKeys(value);
+    const allowedKeys = new Set([...expectedKeys, ...optionalKeys]);
+
+    if (actualKeys.length > allowedKeys.size) {
+      throw new TypeError('Campaign sequence query row has too many fields');
+    }
+    if (actualKeys.some((key) => typeof key === 'symbol')) {
+      throw new TypeError('Campaign sequence query row must use string keys');
+    }
+
+    const stringKeys = actualKeys as string[];
+    const optionalKeySet = new Set(optionalKeys);
+
+    if (
+      stringKeys.some((key) => !allowedKeys.has(key)) ||
+      expectedKeys.some(
+        (key) => !optionalKeySet.has(key) && !stringKeys.includes(key),
+      )
+    ) {
+      throw new TypeError('Campaign sequence query row has invalid fields');
+    }
+
+    const row: Record<string, unknown> = Object.create(null);
+
+    for (const key of stringKeys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+
+      if (!descriptor) {
+        throw new TypeError('Campaign sequence query row field is missing');
+      }
+      if (!('value' in descriptor)) {
+        if (key !== 'campaignSequence') {
+          throw new TypeError(
+            'Campaign sequence query row must use data fields',
+          );
+        }
+
+        Object.defineProperty(row, key, descriptor);
+        continue;
+      }
+
+      Object.defineProperty(row, key, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true,
+      });
+    }
+
+    return row;
+  }
+
+  private assertExactExecutionKeys(
+    actualKeys: readonly string[],
+    expectedKeys: readonly string[],
+  ): void {
+    const expectedKeySet = new Set(expectedKeys);
+
+    if (
+      actualKeys.length !== expectedKeys.length ||
+      actualKeys.some((key) => !expectedKeySet.has(key))
+    ) {
+      throw new TypeError('Campaign sequence data has undeclared fields');
+    }
+  }
+
+  private executionDependencyBlocker(
+    reason: CampaignSequenceExecutionDependencyIntegrityReason,
+  ): CampaignSequenceExecutionPlanLoadResult {
+    return Object.freeze({
+      kind: 'BLOCKED_DEPENDENCY_INTEGRITY' as const,
+      reason,
+    });
+  }
+
+  private singleExecutionRecord(
+    rows: Record<string, unknown>[],
+  ): Record<string, unknown> | null {
+    return rows.length === 1 ? rows[0] : null;
+  }
+
+  private ownDataProperty(
+    record: Record<string, unknown> | null,
+    key: string,
+  ): PropertyDescriptor | null {
+    if (record === null) return null;
+
+    const descriptor = Object.getOwnPropertyDescriptor(record, key);
+
+    return descriptor && 'value' in descriptor ? descriptor : null;
+  }
+
+  private canonicalOwnUuid(
+    record: Record<string, unknown> | null,
+    key: string,
+  ): string | null {
+    const value = this.ownDataProperty(record, key)?.value;
+
+    if (typeof value !== 'string') return null;
+
+    try {
+      return stringifyUuid(parseUuid(value));
+    } catch {
+      return null;
+    }
+  }
+
+  private parseExecutionSequence(
+    value: unknown,
+    serializedBytes: number,
+  ): CampaignSequence | null {
+    try {
+      const detachedValue = this.clonePlainExecutionData(
+        value,
+        'SEQUENCE',
+        new WeakSet(),
+        {
+          count: 0,
+          codeUnits: 0,
+          maxBytes: serializedBytes,
+          utf8Bytes: 0,
+        },
+        0,
+      );
+      const result = campaignSequenceSchema.safeParse(detachedValue);
+
+      return result.success ? result.data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private clonePlainExecutionData(
+    value: unknown,
+    shape: ExecutionSequenceDataShape,
+    seen: WeakSet<object>,
+    budget: ExecutionSequenceVisitBudget,
+    depth: number,
+  ): unknown {
+    if (nodeUtilTypes.isProxy(value)) {
+      throw new TypeError('Campaign sequence data must not be a Proxy');
+    }
+    if (depth > EXECUTION_SEQUENCE_MAX_DEPTH) {
+      throw new TypeError('Campaign sequence data is too deep');
+    }
+
+    budget.count += 1;
+
+    if (budget.count > EXECUTION_SEQUENCE_MAX_VISITS) {
+      throw new TypeError('Campaign sequence data is too large');
+    }
+    if (typeof value === 'string') {
+      budget.codeUnits += value.length;
+
+      if (budget.codeUnits > budget.maxBytes) {
+        throw new TypeError('Campaign sequence string data is too large');
+      }
+
+      budget.utf8Bytes += Buffer.byteLength(value, 'utf8');
+
+      if (budget.utf8Bytes > budget.maxBytes) {
+        throw new TypeError('Campaign sequence string data is too large');
+      }
+
+      return value;
+    }
+    if (typeof value !== 'object' || value === null) return value;
+    if (seen.has(value)) {
+      throw new TypeError('Campaign sequence data must be a tree');
+    }
+
+    seen.add(value);
+
+    if (this.executionShapeIsArray(shape)) {
+      const remainingVisits = EXECUTION_SEQUENCE_MAX_VISITS - budget.count;
+      const values = this.executionArrayValues(value, remainingVisits);
+      const elementShape = this.executionArrayElementShape(shape);
+      const clone: unknown[] = [];
+
+      for (const element of values) {
+        clone.push(
+          this.clonePlainExecutionData(
+            element,
+            elementShape,
+            seen,
+            budget,
+            depth + 1,
+          ),
+        );
+      }
+
+      return clone;
+    }
+    if (shape === 'VALUE' || Array.isArray(value)) {
+      throw new TypeError('Campaign sequence data shape is invalid');
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError('Campaign sequence data must be plain JSON');
+    }
+
+    const actualKeys = Reflect.ownKeys(value);
+    const maximumKeys = this.executionObjectMaximumKeys(shape);
+
+    if (actualKeys.length > maximumKeys) {
+      throw new TypeError('Campaign sequence data has too many fields');
+    }
+    if (budget.count + actualKeys.length > EXECUTION_SEQUENCE_MAX_VISITS) {
+      throw new TypeError('Campaign sequence data is too large');
+    }
+
+    budget.count += actualKeys.length;
+
+    if (actualKeys.some((key) => typeof key === 'symbol')) {
+      throw new TypeError('Campaign sequence data must use string keys');
+    }
+
+    const stringKeys = actualKeys as string[];
+    const expectedKeys = this.executionObjectKeys(shape, value);
+
+    this.assertExactExecutionKeys(stringKeys, expectedKeys);
+
+    const clone: Record<string, unknown> = Object.create(null);
+
+    for (const key of expectedKeys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+
+      if (!descriptor || !('value' in descriptor)) {
+        throw new TypeError('Campaign sequence data must not use accessors');
+      }
+
+      Object.defineProperty(clone, key, {
+        configurable: true,
+        enumerable: true,
+        value: this.clonePlainExecutionData(
+          descriptor.value,
+          this.executionChildShape(shape, key),
+          seen,
+          budget,
+          depth + 1,
+        ),
+        writable: true,
+      });
+    }
+
+    return clone;
+  }
+
+  private executionShapeIsArray(shape: ExecutionSequenceDataShape): boolean {
+    return shape === 'MESSAGES' || shape === 'FILES' || shape === 'DELAYS';
+  }
+
+  private executionArrayElementShape(
+    shape: ExecutionSequenceDataShape,
+  ): ExecutionSequenceDataShape {
+    if (shape === 'MESSAGES') return 'MESSAGE';
+    if (shape === 'FILES') return 'FILE';
+    if (shape === 'DELAYS') return 'VALUE';
+
+    throw new TypeError('Campaign sequence array shape is invalid');
+  }
+
+  private executionObjectMaximumKeys(
+    shape: ExecutionSequenceDataShape,
+  ): number {
+    if (shape === 'SEQUENCE') return EXECUTION_SEQUENCE_KEYS.length;
+    if (shape === 'FILE') return EXECUTION_FILE_KEYS.length;
+    if (shape === 'MESSAGE') return EXECUTION_EMAIL_KEYS.length;
+
+    throw new TypeError('Campaign sequence object shape is invalid');
+  }
+
+  private executionObjectKeys(
+    shape: ExecutionSequenceDataShape,
+    value: object,
+  ): readonly string[] {
+    if (shape === 'SEQUENCE') return EXECUTION_SEQUENCE_KEYS;
+    if (shape === 'FILE') return EXECUTION_FILE_KEYS;
+    if (shape !== 'MESSAGE') {
+      throw new TypeError('Campaign sequence object shape is invalid');
+    }
+
+    const channel = Object.getOwnPropertyDescriptor(value, 'channel');
+
+    if (!channel || !('value' in channel)) {
+      throw new TypeError('Campaign sequence channel must be a data field');
+    }
+    if (channel.value === 'EMAIL') return EXECUTION_EMAIL_KEYS;
+    if (channel.value === 'INSTAGRAM') return EXECUTION_INSTAGRAM_KEYS;
+
+    throw new TypeError('Campaign sequence channel is invalid');
+  }
+
+  private executionChildShape(
+    shape: ExecutionSequenceDataShape,
+    key: string,
+  ): ExecutionSequenceDataShape {
+    if (shape === 'SEQUENCE') {
+      if (key === 'messages') return 'MESSAGES';
+      if (key === 'delaysSeconds') return 'DELAYS';
+    }
+    if (shape === 'MESSAGE' && key === 'files') return 'FILES';
+
+    return 'VALUE';
   }
 
   private parseInputSequence(value: unknown): CampaignSequence {
