@@ -1,6 +1,26 @@
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  type CampaignSequenceAuthorizationBinding as CanonicalCampaignSequenceAuthorizationBinding,
+  type CampaignSequenceAuthorizationPreparedProof as CanonicalCampaignSequencePreparedProof,
+  type CampaignSequenceAuthorizationRecord as CanonicalCampaignSequenceAuthorizationRecord,
+  type CampaignSequenceAuthorizationRequest as CanonicalCampaignSequenceAuthorizationRequest,
+  type CampaignSequenceAuthorizationRequestLookupResult as CanonicalCampaignSequenceAuthorityLookupResult,
+  type CampaignSequenceAuthorizationStructureResult as CanonicalCampaignSequenceAuthorityStructureResult,
+  type CampaignSequenceAuthorizationTransactionContext as CanonicalCampaignSequenceAuthorityTransactionContext,
+  type CreateCampaignSequenceAuthorizationResult as CanonicalCampaignSequenceAuthorityCreateResult,
+  type RevokeCampaignSequenceAuthorizationResult as CanonicalCampaignSequenceAuthorityRevokeResult,
+} from 'src/engine/core-modules/campaign-sequence-authority/types/campaign-sequence-authorization.type';
+import {
+  type CampaignEnrollmentState as CanonicalCampaignEnrollmentState,
+  type CampaignOccurrenceState as CanonicalCampaignOccurrenceState,
+} from 'src/engine/core-modules/campaign-execution/types/campaign-execution-persistence.type';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { type LockedCampaignLifecycleContext } from 'src/modules/campaign-execution/types/campaign-lifecycle-transaction.type';
+import {
+  type CampaignSequenceExecutionPlan as CanonicalCampaignSequenceExecutionPlan,
+  type CampaignSequenceExecutionPlanLoadResult as CanonicalCampaignSequenceExecutionPlanResult,
+  type CampaignSequenceExecutionPlanNode as CanonicalCampaignSequenceExecutionPlanNode,
+} from 'src/modules/myah-outreach/services/campaign-sequence.service';
 import {
   type CampaignProgressionHistoryResult,
   type CampaignProgressionHistoryScope,
@@ -18,42 +38,10 @@ export type CampaignSendingWindow = Readonly<{
   endLocalTime: string;
 }>;
 
-export type CampaignSequencePreparedProof = Readonly<{
-  kind: 'PREPARED';
-  workspaceId: string;
-  campaignId: string;
-  workflowId: string;
-  workflowVersionId: string;
-  initiatingUserWorkspaceId: string;
-  initiatingUserId: string;
-  initiatingWorkspaceMemberId: string;
-  orderedMessageIds: readonly string[];
-  usedChannels: readonly ['EMAIL'];
-  sequenceDigest: string;
-  fixedMaterialDigest: string;
-  senderAuthorityDigest: string;
-  preparedFingerprint: string;
-  signatureDigest: string | null;
-  fixedMaterialProofs: readonly Readonly<{
-    messageId: string;
-    orderedAttachmentProofs: readonly Readonly<{
-      fileId: string;
-      filename: string;
-      contentType: string;
-      size: number;
-      contentDigest: string;
-    }>[];
-  }>[];
-  senderPoolFingerprint: string;
-  senderPoolSerializationRevision: string;
-  senderPoolRotationPolicyId: string;
-}>;
-
-export type CampaignSequenceAuthorizationRequest = Readonly<{
-  preparedProof: CampaignSequencePreparedProof;
-  reviewedWindow: CampaignSendingWindow;
-  campaignCapacityTimeZone: string;
-}>;
+export type CampaignSequencePreparedProof =
+  CanonicalCampaignSequencePreparedProof;
+export type CampaignSequenceAuthorizationRequest =
+  CanonicalCampaignSequenceAuthorizationRequest;
 
 export type CampaignExecutionScopeInput = Readonly<{
   workspaceId: string;
@@ -177,123 +165,27 @@ export type CampaignActivationRecord = Readonly<{
   createdOccurrenceCount: number;
 }>;
 
-export type CampaignSequenceAuthorizationBinding = Readonly<{
-  schemaVersion: 1;
-  authorizationId: string;
-  generation: number;
-  startIdempotencyKey: string;
-  workspaceId: string;
-  campaignId: string;
-  campaignExecutionId: string;
-  workflowVersionId: string;
-  request: CampaignSequenceAuthorizationRequest;
-  futureEligibleCampaignCreatorsAuthorized: true;
-  authorizedAt: string;
-}>;
-
-export type CampaignSequenceAuthorizationRecord = Readonly<{
-  authorizationId: string;
-  workspaceId: string;
-  campaignId: string;
-  campaignExecutionId: string;
-  generation: number;
-  startIdempotencyKey: string;
-  preparedFingerprint: string;
-  workflowId: string;
-  workflowVersionId: string;
-  initiatingUserWorkspaceId: string;
-  state: 'ACTIVE' | 'REVOKED';
-  authorizedAt: string;
-  revokedAt: string | null;
-  revocationReason: 'CAMPAIGN_PAUSED' | 'CAMPAIGN_COMPLETED' | null;
-  binding: CampaignSequenceAuthorizationBinding;
-  createdAt: string;
-  updatedAt: string;
-}>;
-
+export type CampaignSequenceAuthorizationBinding =
+  CanonicalCampaignSequenceAuthorizationBinding;
+export type CampaignSequenceAuthorizationRecord =
+  CanonicalCampaignSequenceAuthorizationRecord;
 export type CampaignSequenceAuthorityStructureResult =
-  | Readonly<{ kind: 'NO_CURRENT_AUTHORITY' }>
-  | Readonly<{
-      kind: 'CURRENT_ACTIVE';
-      authorization: CampaignSequenceAuthorizationRecord;
-    }>
-  | Readonly<{
-      kind: 'CURRENT_REVOKED';
-      authorization: CampaignSequenceAuthorizationRecord;
-    }>
-  | Readonly<{
-      kind: 'INCONSISTENT_CURRENT_AUTHORITY';
-      blockerCode: string;
-    }>;
-
+  CanonicalCampaignSequenceAuthorityStructureResult;
 export type CampaignSequenceAuthorityLookupResult =
-  | Readonly<{ kind: 'NOT_FOUND' }>
-  | Readonly<{
-      kind: 'EXACT_MATCH';
-      authorization: CampaignSequenceAuthorizationRecord;
-    }>
-  | Readonly<{ kind: 'IDEMPOTENCY_KEY_CONFLICT' }>;
-
-export type CampaignSequenceAuthorityCreateResult = Readonly<{
-  kind: 'CREATED';
-  authorization: CampaignSequenceAuthorizationRecord;
-}>;
-
+  CanonicalCampaignSequenceAuthorityLookupResult;
+export type CampaignSequenceAuthorityCreateResult =
+  CanonicalCampaignSequenceAuthorityCreateResult;
 export type CampaignSequenceAuthorityRevokeResult =
-  | Readonly<{
-      kind: 'REVOKED' | 'ALREADY_REVOKED';
-      authorization: CampaignSequenceAuthorizationRecord;
-    }>
-  | Readonly<{ kind: 'NO_CURRENT_AUTHORITY' }>;
-
-export type CampaignSequenceAuthorityTransactionContext = Readonly<{
-  manager: WorkspaceEntityManager;
-  workspaceId: string;
-  campaignId: string;
-  lockedCampaign: Readonly<{
-    id: string;
-    lifecycleStatus: CampaignLifecycleState;
-    currentAuthorityProjection: unknown;
-  }>;
-}>;
+  CanonicalCampaignSequenceAuthorityRevokeResult;
+export type CampaignSequenceAuthorityTransactionContext =
+  CanonicalCampaignSequenceAuthorityTransactionContext;
 
 export type CampaignSequenceExecutionPlanNode =
-  | Readonly<{
-      messageId: string;
-      channel: 'EMAIL';
-      replyToThread: boolean;
-    }>
-  | Readonly<{
-      messageId: string;
-      channel: 'INSTAGRAM';
-    }>;
-
-export type CampaignSequenceExecutionPlan = Readonly<{
-  kind: 'READY';
-  workspaceId: string;
-  campaignId: string;
-  workflowId: string;
-  workflowVersionId: string;
-  nodes: readonly CampaignSequenceExecutionPlanNode[];
-  delaysSeconds: readonly number[];
-}>;
-
+  CanonicalCampaignSequenceExecutionPlanNode;
+export type CampaignSequenceExecutionPlan =
+  CanonicalCampaignSequenceExecutionPlan;
 export type CampaignSequenceExecutionPlanResult =
-  | CampaignSequenceExecutionPlan
-  | Readonly<{
-      kind: 'BLOCKED_SEQUENCE_INVALID';
-      issues: readonly unknown[];
-    }>
-  | Readonly<{
-      kind: 'BLOCKED_DEPENDENCY_INTEGRITY';
-      reason:
-        | 'CAMPAIGN_NOT_FOUND'
-        | 'WORKFLOW_NOT_FOUND'
-        | 'WORKFLOW_VERSION_NOT_FOUND'
-        | 'WORKFLOW_VERSION_NOT_CURRENT_ACTIVE'
-        | 'SEQUENCE_NOT_AUTHORED'
-        | 'SEQUENCE_MALFORMED';
-    }>;
+  CanonicalCampaignSequenceExecutionPlanResult;
 
 export type CampaignEligibleCreator = Readonly<{
   campaignCreatorId: string;
@@ -311,20 +203,8 @@ export type CampaignNewActivationReviewResult =
       reason: string;
     }>;
 
-export type CampaignEnrollmentState =
-  | 'ACTIVE'
-  | 'REPLIED'
-  | 'EXCLUDED'
-  | 'FINISHED';
-
-export type CampaignOccurrenceState =
-  | 'PENDING'
-  | 'IN_FLIGHT'
-  | 'SUCCEEDED'
-  | 'SKIPPED'
-  | 'HELD'
-  | 'UNKNOWN'
-  | 'CANCELLED';
+export type CampaignEnrollmentState = CanonicalCampaignEnrollmentState;
+export type CampaignOccurrenceState = CanonicalCampaignOccurrenceState;
 
 export type CampaignPlannedEnrollment = Readonly<{
   enrollmentId: string;

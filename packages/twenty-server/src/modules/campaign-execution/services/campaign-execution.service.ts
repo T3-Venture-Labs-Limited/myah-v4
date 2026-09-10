@@ -445,9 +445,7 @@ const snapshotStartInput = (input: StartCampaignInput): StartCampaignInput => {
     record === null ||
     !isCanonicalUuid(record.workspaceId) ||
     !isCanonicalUuid(record.campaignId) ||
-    typeof record.startIdempotencyKey !== 'string' ||
-    record.startIdempotencyKey.length === 0 ||
-    record.startIdempotencyKey !== record.startIdempotencyKey.trim()
+    !isCanonicalUuid(record.startIdempotencyKey)
   ) {
     throw new Error('Campaign Start input was invalid');
   }
@@ -627,8 +625,7 @@ const parseAuthority = (
     !isCanonicalUuid(record.campaignExecutionId) ||
     !Number.isSafeInteger(record.generation) ||
     (record.generation as number) <= 0 ||
-    typeof record.startIdempotencyKey !== 'string' ||
-    record.startIdempotencyKey.length === 0 ||
+    !isCanonicalUuid(record.startIdempotencyKey) ||
     typeof record.preparedFingerprint !== 'string' ||
     record.preparedFingerprint.length === 0 ||
     !isCanonicalUuid(record.workflowId) ||

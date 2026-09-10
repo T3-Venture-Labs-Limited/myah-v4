@@ -1,6 +1,8 @@
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 import { z } from 'zod';
 
+import { IANA_TIME_ZONES } from '../constants/IanaTimeZones';
+
 const SHA_256_DIGEST = /^[0-9a-f]{64}$/;
 const LOCAL_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
 
@@ -12,18 +14,10 @@ const isCanonicalUuid = (value: string): boolean => {
   }
 };
 
-const isCanonicalIanaTimeZone = (value: string): boolean => {
-  if (value.length === 0) return false;
+const IANA_TIME_ZONE_SET = new Set<string>(IANA_TIME_ZONES);
 
-  try {
-    return (
-      new Intl.DateTimeFormat('en-US', { timeZone: value }).resolvedOptions()
-        .timeZone === value
-    );
-  } catch {
-    return false;
-  }
-};
+const isCanonicalIanaTimeZone = (value: string): boolean =>
+  IANA_TIME_ZONE_SET.has(value);
 
 const isCanonicalInstant = (value: string): boolean => {
   const date = new Date(value);

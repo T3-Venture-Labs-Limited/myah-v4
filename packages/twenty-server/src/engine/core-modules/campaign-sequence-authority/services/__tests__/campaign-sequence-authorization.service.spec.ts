@@ -340,6 +340,38 @@ describe('CampaignSequenceAuthorizationService', () => {
     ).resolves.toEqual({ kind: 'IDEMPOTENCY_KEY_CONFLICT' });
   });
 
+  it('uses exact shared IANA membership, including listed aliases', async () => {
+    const aliasRequest = {
+      ...request,
+      reviewedWindow: { ...request.reviewedWindow, timeZone: 'US/Eastern' },
+      campaignCapacityTimeZone: 'US/Eastern',
+    };
+    const aliasManager = managerWith([
+      row({ binding: binding({ request: aliasRequest }) }),
+    ]);
+    const invalidManager = managerWith();
+
+    await expect(
+      service().lookupStartRequestInTransaction(
+        contextWith(aliasManager, 'PAUSED', projection()),
+        { startIdempotencyKey: IDS.startKey, request: aliasRequest },
+      ),
+    ).resolves.toMatchObject({ kind: 'EXACT_MATCH' });
+    await expect(
+      service().lookupStartRequestInTransaction(
+        contextWith(invalidManager, 'PAUSED', projection()),
+        {
+          startIdempotencyKey: IDS.startKey,
+          request: {
+            ...request,
+            campaignCapacityTimeZone: 'Mars/Olympus',
+          },
+        },
+      ),
+    ).rejects.toThrow('request');
+    expect(invalidManager.queryRunner.query).not.toHaveBeenCalled();
+  });
+
   it('preserves whitespace-bearing request identity through lookup and replay', async () => {
     const whitespaceRequest = {
       ...request,

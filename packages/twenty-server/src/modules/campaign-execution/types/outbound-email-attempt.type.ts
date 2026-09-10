@@ -1,33 +1,19 @@
+import {
+  OUTBOUND_EMAIL_ATTEMPT_STATES,
+  type OutboundEmailAttemptSource,
+  type OutboundEmailAttemptState,
+  type OutboundEmailCapacityState,
+  type OutboundEmailSelectionConstraintKind,
+} from 'src/engine/core-modules/campaign-execution/types/outbound-email-attempt-persistence.type';
 import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
 
-export const OUTBOUND_EMAIL_ATTEMPT_STATES = [
-  'RESERVED',
-  'PROCESSING',
-  'BLOCKED',
-  'ACCEPTED',
-  'DEFINITELY_UNACCEPTED',
-  'UNKNOWN',
-] as const;
-
-export type OutboundEmailAttemptState =
-  (typeof OUTBOUND_EMAIL_ATTEMPT_STATES)[number];
-
-export type OutboundEmailAttemptSource =
-  | 'CAMPAIGN_SEQUENCE'
-  | 'CAMPAIGN_TEST'
-  | 'INBOX'
-  | 'AUTOMATED_REPLY';
-
-export type OutboundEmailCapacityState =
-  | 'RESERVED'
-  | 'CONSUMED'
-  | 'RELEASED'
-  | 'PROVISIONAL_UNKNOWN';
-
-export type OutboundEmailSelectionConstraintKind =
-  | 'ROTATE'
-  | 'PINNED_REPLY'
-  | 'EXPLICIT';
+export {
+  OUTBOUND_EMAIL_ATTEMPT_STATES,
+  type OutboundEmailAttemptSource,
+  type OutboundEmailAttemptState,
+  type OutboundEmailCapacityState,
+  type OutboundEmailSelectionConstraintKind,
+};
 
 type CommonReservationIdentity = {
   attemptId: string;
