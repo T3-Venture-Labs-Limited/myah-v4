@@ -1,3 +1,5 @@
+import { runInNewContext } from 'node:vm';
+
 import { MODULE_METADATA } from '@nestjs/common/constants';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { type EntityManager, getMetadataArgsStorage } from 'typeorm';
@@ -153,6 +155,37 @@ const columnOptions = (target: Function, propertyName: string) =>
   )?.options;
 
 describe('MailboxCapacityService', () => {
+  it('accepts genuine cross-realm database dates while rejecting Date lookalikes', async () => {
+    const observedAt = runInNewContext(
+      `new Date('2026-03-10T14:00:00.000Z')`,
+    ) as Date;
+    const nextLocalMidnightAt = runInNewContext(
+      `new Date('2026-03-11T04:00:00.000Z')`,
+    ) as Date;
+    expect(observedAt).not.toBeInstanceOf(Date);
+    const validHarness = createHarness({ observedAt, nextLocalMidnightAt });
+
+    await expect(
+      validHarness.service.lockAndRankForReservation(
+        rotateInput([candidate(accountA, channelA)]),
+        validHarness.manager,
+      ),
+    ).resolves.toMatchObject({ status: 'ELIGIBLE_NOW' });
+
+    const invalidHarness = createHarness({
+      observedAt: { getTime: () => observedAt.getTime() } as unknown as Date,
+    });
+    await expect(
+      invalidHarness.service.lockAndRankForReservation(
+        rotateInput([candidate(accountA, channelA)]),
+        invalidHarness.manager,
+      ),
+    ).resolves.toEqual({
+      reason: 'INVALID_CAPACITY_INPUT',
+      status: 'BLOCKED',
+    });
+  });
+
   it('revalidates from a final post-new-day-lock sample before choosing the decisive winner', async () => {
     const first = new Date('2026-03-11T03:59:59.000Z');
     const crossed = new Date('2026-03-11T04:00:01.000Z');

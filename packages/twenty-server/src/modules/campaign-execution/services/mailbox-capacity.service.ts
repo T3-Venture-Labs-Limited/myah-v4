@@ -134,14 +134,21 @@ const isValidTimeZone = (timeZone: string): boolean => {
 };
 
 const toValidDate = (value: unknown): Date | null => {
-  if (!(value instanceof Date) && typeof value !== 'string') {
+  if (typeof value === 'string') {
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  let milliseconds: number;
+
+  try {
+    milliseconds = Date.prototype.getTime.call(value);
+  } catch {
     return null;
   }
 
-  const date =
-    value instanceof Date ? new Date(value.getTime()) : new Date(value);
-
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(milliseconds) ? null : new Date(milliseconds);
 };
 
 const compareAccountId = (
