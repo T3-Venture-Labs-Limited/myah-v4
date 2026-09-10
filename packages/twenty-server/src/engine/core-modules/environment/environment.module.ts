@@ -7,6 +7,7 @@ import {
 } from 'src/engine/core-modules/twenty-config/config-variables';
 import { CONFIG_VARIABLES_INSTANCE_TOKEN } from 'src/engine/core-modules/twenty-config/constants/config-variables-instance-tokens.constants';
 import { EnvironmentConfigDriver } from 'src/engine/core-modules/twenty-config/drivers/environment-config.driver';
+import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';
 
 @Global()
 @Module({
@@ -15,7 +16,7 @@ import { EnvironmentConfigDriver } from 'src/engine/core-modules/twenty-config/d
       isGlobal: true,
       expandVariables: true,
       validate,
-      envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
+      envFilePath: getServerEnvFilePath(),
     }),
   ],
   providers: [
