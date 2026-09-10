@@ -152,6 +152,36 @@ describe('InstanceCommandGenerationService', () => {
     expect(result).toMatchSnapshot();
   });
 
+  it('should escape multiline SQL without changing its decoded bytes', async () => {
+    const multilineQuery =
+      "CREATE TABLE test (\r\n  value text CHECK (value <> '')\n)";
+    const service = await buildService(
+      [{ query: multilineQuery }],
+      [{ query: 'DROP TABLE test' }],
+    );
+
+    const result = await service.generateInstanceCommand({
+      migrationName: 'multiline-query',
+      version: VERSION_A,
+      timestamp: FIXED_TIMESTAMP,
+    });
+    const encodedQuery = result?.fileTemplate.match(
+      /queryRunner\.query\('((?:\\.|[^'\\])*)'\)/,
+    )?.[1];
+    const decodedQuery = encodedQuery
+      ?.replace(/\\'/g, "'")
+      .replace(/\\r/g, '\r')
+      .replace(/\\n/g, '\n')
+      .replace(/\\\\/g, '\\');
+
+    expect(encodedQuery).toBe(
+      "CREATE TABLE test (\\r\\n  value text CHECK (value <> \\'\\')\\n)",
+    );
+    expect(Buffer.from(decodedQuery ?? '')).toEqual(
+      Buffer.from(multilineQuery),
+    );
+  });
+
   it('should use default migration name in class and file names', async () => {
     const service = await buildService(
       [{ query: 'ALTER TABLE "core"."user" ADD "bar" integer' }],
