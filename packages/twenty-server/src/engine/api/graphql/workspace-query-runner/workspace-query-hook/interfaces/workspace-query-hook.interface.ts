@@ -8,8 +8,19 @@ export type WorkspacePreQueryHookTransactionContext = {
   entityManager: WorkspaceEntityManager;
 };
 
+export type WorkspaceRawInputPreQueryHookContext = {
+  objectMetadataId: string;
+  objectMetadataUniversalIdentifier: string;
+};
+
 export interface WorkspacePreQueryHookInstance {
   readonly shouldRunInTransaction?: true;
+  validateRawInput?(
+    authContext: WorkspaceAuthContext,
+    objectName: string,
+    payload: ResolverArgs,
+    context: WorkspaceRawInputPreQueryHookContext,
+  ): Promise<void> | void;
   execute(
     authContext: WorkspaceAuthContext,
     objectName: string,

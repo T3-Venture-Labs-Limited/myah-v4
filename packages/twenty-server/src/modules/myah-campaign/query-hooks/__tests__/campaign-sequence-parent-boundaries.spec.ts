@@ -18,20 +18,32 @@ const authContext = {
 const entityManager = { queryRunner: { isTransactionActive: true } };
 const transactionContext = { entityManager: entityManager as never };
 
+const expectMetadata = (Hook: object, key: string) => {
+  expect(Reflect.getMetadata(WORKSPACE_QUERY_HOOK_METADATA, Hook)).toEqual({
+    key,
+    type: WorkspaceQueryHookType.PRE_HOOK,
+  });
+};
+
 describe('Campaign sequence parent deletion boundaries', () => {
   it.each([
-    [
-      'campaign.deleteOne',
-      MyahCampaignDeleteOnePreQueryHook,
-      { id: 'campaign-a' },
-      ['campaign-a'],
-    ],
-    [
-      'campaign.deleteMany',
-      MyahCampaignDeleteManyPreQueryHook,
-      { filter: { id: { in: ['campaign-a', 'campaign-b'] } } },
-      ['campaign-a', 'campaign-b'],
-    ],
+    ['campaign.deleteOne', MyahCampaignDeleteOnePreQueryHook],
+    ['campaign.deleteMany', MyahCampaignDeleteManyPreQueryHook],
+  ] as const)(
+    '%s rejects unconditionally without entering workflow deletion policy',
+    async (decoratorKey, Hook) => {
+      const hook = new Hook();
+
+      await expect(
+        hook.execute(authContext, 'campaign', {} as never),
+      ).rejects.toThrow(
+        'Campaign lifecycle and execution authority require a dedicated operation.',
+      );
+      expectMetadata(Hook, decoratorKey);
+    },
+  );
+
+  it.each([
     [
       'campaign.destroyOne',
       MyahCampaignDestroyOnePreQueryHook,
@@ -45,7 +57,7 @@ describe('Campaign sequence parent deletion boundaries', () => {
       ['campaign-a', 'campaign-b'],
     ],
   ] as const)(
-    '%s opts into the transaction envelope and rejects outreach before parent mutation',
+    '%s retains its transaction envelope and workflow deletion policy',
     async (decoratorKey, Hook, payload, campaignIds) => {
       const lifecycle = {
         assertCampaignDeletionAllowedInTransaction: jest
@@ -69,7 +81,6 @@ describe('Campaign sequence parent deletion boundaries', () => {
       ).rejects.toThrow(
         'Campaigns with outreach definitions cannot be deleted.',
       );
-
       expect(
         lifecycle.assertCampaignDeletionAllowedInTransaction,
       ).toHaveBeenCalledWith({
@@ -78,16 +89,16 @@ describe('Campaign sequence parent deletion boundaries', () => {
         entityManager,
         workspaceId: 'workspace-a',
       });
-      expect(Reflect.getMetadata(WORKSPACE_QUERY_HOOK_METADATA, Hook)).toEqual({
-        key: decoratorKey,
-        type: WorkspaceQueryHookType.PRE_HOOK,
-      });
+      expectMetadata(Hook, decoratorKey);
     },
   );
 
   it.each([
-    [MyahCampaignDeleteOnePreQueryHook, { id: 'campaign-a' }],
     [MyahCampaignDestroyOnePreQueryHook, { id: 'campaign-a' }],
+    [
+      MyahCampaignDestroyManyPreQueryHook,
+      { filter: { id: { eq: 'campaign-a' } } },
+    ],
   ] as const)(
     '%s fails closed when invoked outside the common mutation transaction',
     async (Hook, payload) => {

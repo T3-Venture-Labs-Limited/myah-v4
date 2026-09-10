@@ -1,4 +1,7 @@
-import { type WorkspacePreQueryHookInstance } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
+import {
+  type WorkspacePreQueryHookInstance,
+  type WorkspaceRawInputPreQueryHookContext,
+} from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import {
@@ -11,6 +14,15 @@ export class MyahCampaignUpdateManyPreQueryHook implements WorkspacePreQueryHook
   constructor(
     private readonly campaignLifecycleService: CampaignLifecycleService,
   ) {}
+
+  validateRawInput(
+    _authContext: WorkspaceAuthContext,
+    _objectName: string,
+    payload: CampaignUpdateManyArgs,
+    context: WorkspaceRawInputPreQueryHookContext,
+  ): void {
+    this.campaignLifecycleService.validateRawUpdate(context, payload);
+  }
 
   async execute(
     authContext: WorkspaceAuthContext,

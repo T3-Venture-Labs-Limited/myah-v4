@@ -25,6 +25,8 @@ import {
   MyahCampaignDestroyManyPreQueryHook,
   MyahCampaignDestroyOnePreQueryHook,
 } from 'src/modules/myah-campaign/query-hooks/myah-campaign-destroy.pre-query.hooks';
+import { MyahCampaignRestoreManyPreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-restore-many.pre-query.hook';
+import { MyahCampaignRestoreOnePreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-restore-one.pre-query.hook';
 import {
   MyahCreatorListMemberCreateManyPreQueryHook,
   MyahCreatorListMemberCreateOnePreQueryHook,
@@ -50,6 +52,8 @@ import {
     MyahCampaignUpdateOnePreQueryHook,
     MyahCampaignDeleteOnePreQueryHook,
     MyahCampaignDeleteManyPreQueryHook,
+    MyahCampaignRestoreOnePreQueryHook,
+    MyahCampaignRestoreManyPreQueryHook,
     MyahCampaignDestroyOnePreQueryHook,
     MyahCampaignDestroyManyPreQueryHook,
     MyahCreatorListMemberCreateOnePreQueryHook,
