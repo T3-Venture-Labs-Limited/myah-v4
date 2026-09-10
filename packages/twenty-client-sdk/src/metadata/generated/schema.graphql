@@ -1725,6 +1725,8 @@ type ConnectedAccountPublicDTO {
   applicationId: UUID
   name: String
   visibility: String!
+  dailySendLimit: Int!
+  minimumSendIntervalMs: Int!
   createdAt: DateTime!
   updatedAt: DateTime!
   connectionParameters: PublicImapSmtpCaldavConnectionParameters
@@ -2078,6 +2080,43 @@ type ObjectFieldsConnection {
   edges: [FieldEdge!]!
 }
 
+type CampaignSenderReadinessDTO {
+  bindingStatus: String!
+  campaignAccountId: UUID!
+  connectedAccountId: UUID!
+  messageChannelId: UUID!
+  senderHandle: String
+  provider: String
+  status: String!
+  reason: String
+  recoveryPath: String
+  dailySendLimit: Int
+  minimumSendIntervalMs: Int
+  missingBinding: String
+}
+
+type CampaignSenderPoolSnapshotDTO {
+  rotationPolicyId: String!
+  serializationRevision: String!
+  mailboxes: [CampaignSenderReadinessDTO!]!
+  senderPoolFingerprint: String!
+}
+
+type ExactCampaignEmailSenderResultDTO {
+  status: String!
+  sender: CampaignSenderReadinessDTO
+  reason: String
+}
+
+type CampaignSenderCandidateReadinessDTO {
+  rotationPolicyId: String!
+  connectedAccountId: UUID!
+  messageChannelId: UUID!
+  senderHandle: String!
+  status: String!
+  reason: String
+}
+
 type CampaignEmailAccountDTO {
   id: UUID!
   connectedAccountId: UUID!
@@ -2087,6 +2126,7 @@ type CampaignEmailAccountDTO {
   label: String!
   isDefault: Boolean!
   health: CampaignEmailAccountHealth!
+  senderReadiness: CampaignSenderCandidateReadinessDTO
 }
 
 enum CampaignEmailAccountHealth {
@@ -3052,6 +3092,29 @@ type ToolIndexEntry {
   inputSchema: JSON
 }
 
+type MyahE2eCampaignMailboxFixtureDTO {
+  id: UUID!
+  availableAccountIds: [UUID!]!
+  unavailableAccountId: UUID!
+  approvalThreadId: UUID!
+  approvalThreadTitle: String!
+  actionApprovalBindingId: UUID!
+  expectedFrom: String!
+  expectedTo: String!
+  expectedSubject: String!
+  expectedBody: String!
+}
+
+type MyahE2eCampaignMailboxFixtureStatusDTO {
+  providerSendAttemptCount: Float!
+  providerDraftPreparationCount: Float!
+}
+
+type MyahE2eCallbackFixtureDTO {
+  connectedAccountId: UUID!
+  callbackPath: String!
+}
+
 type WorkspaceMailboxConnectionStatus {
   connectedAccountId: UUID!
   errorCode: String
@@ -3517,6 +3580,8 @@ type Query {
   creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
   campaignEmailAccounts(input: CampaignEmailAccountCampaignInput!): [CampaignEmailAccountDTO!]!
   campaignEmailAccountCandidates(input: CampaignEmailAccountCampaignInput!): [CampaignEmailAccountDTO!]!
+  campaignEmailSenderPool(input: CampaignEmailAccountCampaignInput!): CampaignSenderPoolSnapshotDTO!
+  exactCampaignEmailSender(input: ResolveExactCampaignEmailSenderInput!): ExactCampaignEmailSenderResultDTO!
   previewMessageCampaignAudience(input: PreviewMessageCampaignAudienceInput!): CampaignAudiencePreviewDTO!
   unsubscribeTopics: [UnsubscribeTopic!]!
   unsubscribePagePreviewUrl: String!
@@ -3566,6 +3631,7 @@ type Query {
   pieChartData(input: PieChartDataInput!): PieChartData!
   lineChartData(input: LineChartDataInput!): LineChartData!
   barChartData(input: BarChartDataInput!): BarChartData!
+  getMyahE2eCampaignMailboxFixtureStatus(input: MyahE2eFixtureIdInput!): MyahE2eCampaignMailboxFixtureStatusDTO!
   getAutoCompleteAddress(address: String!, token: String!, country: String, isFieldCity: Boolean): [AutocompleteResult!]!
   getAddressDetails(placeId: String!, token: String!): PlaceDetailsResult!
   getUsageAnalytics(input: UsageAnalyticsInput): UsageAnalytics!
@@ -3634,6 +3700,12 @@ input CampaignEmailAccountCampaignInput {
   campaignId: UUID!
 }
 
+input ResolveExactCampaignEmailSenderInput {
+  campaignId: UUID!
+  connectedAccountId: UUID!
+  expectedSenderPoolFingerprint: String!
+}
+
 input PreviewMessageCampaignAudienceInput {
   listId: String!
   unsubscribeTopicId: String
@@ -3690,6 +3762,10 @@ input LineChartDataInput {
 input BarChartDataInput {
   objectMetadataId: UUID!
   configuration: JSON!
+}
+
+input MyahE2eFixtureIdInput {
+  fixtureId: UUID!
 }
 
 input UsageAnalyticsInput {
@@ -3847,6 +3923,7 @@ type Mutation {
   createApprovedAccessDomain(input: CreateApprovedAccessDomainInput!): ApprovedAccessDomain!
   deleteApprovedAccessDomain(input: DeleteApprovedAccessDomainInput!): Boolean!
   validateApprovedAccessDomain(input: ValidateApprovedAccessDomainInput!): ApprovedAccessDomain!
+  updateConnectedAccountSendingPolicy(input: UpdateConnectedAccountSendingPolicyInput!): ConnectedAccountPublicDTO!
   deleteConnectedAccount(id: UUID!): ConnectedAccountPublicDTO!
   activateWorkspace(data: ActivateWorkspaceInput!): Workspace!
   updateWorkspace(data: UpdateWorkspaceInput!): Workspace!
@@ -3863,6 +3940,7 @@ type Mutation {
   addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
   addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
   removeCreatorListMemberIntent(input: RemoveCreatorListMemberIntentInput!): Boolean!
+  replaceCampaignEmailPool(input: ReplaceCampaignEmailPoolInput!): CampaignSenderPoolSnapshotDTO!
   linkCampaignEmailAccount(input: LinkCampaignEmailAccountInput!): [CampaignEmailAccountDTO!]!
   setDefaultCampaignEmailAccount(input: CampaignEmailAccountLinkInput!): [CampaignEmailAccountDTO!]!
   removeCampaignEmailAccount(input: CampaignEmailAccountLinkInput!): [CampaignEmailAccountDTO!]!
@@ -3951,6 +4029,9 @@ type Mutation {
   trackAnalytics(type: AnalyticsType!, name: String, event: String, properties: JSON): Analytics!
   duplicateDashboard(id: UUID!): DuplicatedDashboard!
   impersonate(userId: UUID!, workspaceId: UUID!): Impersonate!
+  createMyahE2eCampaignMailboxFixture(input: CreateMyahE2eCampaignMailboxFixtureInput!): MyahE2eCampaignMailboxFixtureDTO!
+  createMyahE2eCampaignCallbackFixture(input: CreateMyahE2eCallbackFixtureInput!): MyahE2eCallbackFixtureDTO!
+  cleanupMyahE2eCampaignMailboxFixture(input: MyahE2eFixtureIdInput!): Boolean!
   createCalendarEvent(input: CreateCalendarEventInput!): CreateCalendarEventOutput!
   sendEmail(input: SendEmailInput!): SendEmailOutput!
   startChannelSync(connectedAccountId: UUID!): ChannelSyncSuccess!
@@ -4615,6 +4696,12 @@ input ValidateApprovedAccessDomainInput {
   approvedAccessDomainId: UUID!
 }
 
+input UpdateConnectedAccountSendingPolicyInput {
+  connectedAccountId: UUID!
+  dailySendLimit: Int!
+  minimumSendIntervalMs: Int!
+}
+
 input ActivateWorkspaceInput {
   """
   Deprecated: the workspace name is set at creation (signUpInNewWorkspace) and this field is ignored during activation. Kept for backward compatibility.
@@ -4700,6 +4787,11 @@ input RemoveCreatorListMemberIntentInput {
   creatorId: UUID!
   confirmedCampaignIds: [UUID!]!
   confirmationToken: String
+}
+
+input ReplaceCampaignEmailPoolInput {
+  campaignId: UUID!
+  connectedAccountIds: [UUID!]!
 }
 
 input LinkCampaignEmailAccountInput {
@@ -5191,6 +5283,16 @@ input UpdateSkillInput {
 enum AnalyticsType {
   PAGEVIEW
   TRACK
+}
+
+input CreateMyahE2eCampaignMailboxFixtureInput {
+  campaignId: UUID!
+}
+
+input CreateMyahE2eCallbackFixtureInput {
+  fixtureId: UUID!
+  campaignId: UUID!
+  operationsTabId: UUID!
 }
 
 input CreateCalendarEventInput {

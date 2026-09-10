@@ -1381,6 +1381,8 @@ export interface ConnectedAccountPublicDTO {
     applicationId?: Scalars['UUID']
     name?: Scalars['String']
     visibility: Scalars['String']
+    dailySendLimit: Scalars['Int']
+    minimumSendIntervalMs: Scalars['Int']
     createdAt: Scalars['DateTime']
     updatedAt: Scalars['DateTime']
     connectionParameters?: PublicImapSmtpCaldavConnectionParameters
@@ -1694,6 +1696,47 @@ export interface ObjectFieldsConnection {
     __typename: 'ObjectFieldsConnection'
 }
 
+export interface CampaignSenderReadinessDTO {
+    bindingStatus: Scalars['String']
+    campaignAccountId: Scalars['UUID']
+    connectedAccountId: Scalars['UUID']
+    messageChannelId: Scalars['UUID']
+    senderHandle?: Scalars['String']
+    provider?: Scalars['String']
+    status: Scalars['String']
+    reason?: Scalars['String']
+    recoveryPath?: Scalars['String']
+    dailySendLimit?: Scalars['Int']
+    minimumSendIntervalMs?: Scalars['Int']
+    missingBinding?: Scalars['String']
+    __typename: 'CampaignSenderReadinessDTO'
+}
+
+export interface CampaignSenderPoolSnapshotDTO {
+    rotationPolicyId: Scalars['String']
+    serializationRevision: Scalars['String']
+    mailboxes: CampaignSenderReadinessDTO[]
+    senderPoolFingerprint: Scalars['String']
+    __typename: 'CampaignSenderPoolSnapshotDTO'
+}
+
+export interface ExactCampaignEmailSenderResultDTO {
+    status: Scalars['String']
+    sender?: CampaignSenderReadinessDTO
+    reason?: Scalars['String']
+    __typename: 'ExactCampaignEmailSenderResultDTO'
+}
+
+export interface CampaignSenderCandidateReadinessDTO {
+    rotationPolicyId: Scalars['String']
+    connectedAccountId: Scalars['UUID']
+    messageChannelId: Scalars['UUID']
+    senderHandle: Scalars['String']
+    status: Scalars['String']
+    reason?: Scalars['String']
+    __typename: 'CampaignSenderCandidateReadinessDTO'
+}
+
 export interface CampaignEmailAccountDTO {
     id: Scalars['UUID']
     connectedAccountId: Scalars['UUID']
@@ -1703,6 +1746,7 @@ export interface CampaignEmailAccountDTO {
     label: Scalars['String']
     isDefault: Scalars['Boolean']
     health: CampaignEmailAccountHealth
+    senderReadiness?: CampaignSenderCandidateReadinessDTO
     __typename: 'CampaignEmailAccountDTO'
 }
 
@@ -2748,6 +2792,32 @@ export interface ToolIndexEntry {
     __typename: 'ToolIndexEntry'
 }
 
+export interface MyahE2eCampaignMailboxFixtureDTO {
+    id: Scalars['UUID']
+    availableAccountIds: Scalars['UUID'][]
+    unavailableAccountId: Scalars['UUID']
+    approvalThreadId: Scalars['UUID']
+    approvalThreadTitle: Scalars['String']
+    actionApprovalBindingId: Scalars['UUID']
+    expectedFrom: Scalars['String']
+    expectedTo: Scalars['String']
+    expectedSubject: Scalars['String']
+    expectedBody: Scalars['String']
+    __typename: 'MyahE2eCampaignMailboxFixtureDTO'
+}
+
+export interface MyahE2eCampaignMailboxFixtureStatusDTO {
+    providerSendAttemptCount: Scalars['Float']
+    providerDraftPreparationCount: Scalars['Float']
+    __typename: 'MyahE2eCampaignMailboxFixtureStatusDTO'
+}
+
+export interface MyahE2eCallbackFixtureDTO {
+    connectedAccountId: Scalars['UUID']
+    callbackPath: Scalars['String']
+    __typename: 'MyahE2eCallbackFixtureDTO'
+}
+
 export interface WorkspaceMailboxConnectionStatus {
     connectedAccountId: Scalars['UUID']
     errorCode?: Scalars['String']
@@ -3163,6 +3233,8 @@ export interface Query {
     creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
     campaignEmailAccounts: CampaignEmailAccountDTO[]
     campaignEmailAccountCandidates: CampaignEmailAccountDTO[]
+    campaignEmailSenderPool: CampaignSenderPoolSnapshotDTO
+    exactCampaignEmailSender: ExactCampaignEmailSenderResultDTO
     previewMessageCampaignAudience: CampaignAudiencePreviewDTO
     unsubscribeTopics: UnsubscribeTopic[]
     unsubscribePagePreviewUrl: Scalars['String']
@@ -3212,6 +3284,7 @@ export interface Query {
     pieChartData: PieChartData
     lineChartData: LineChartData
     barChartData: BarChartData
+    getMyahE2eCampaignMailboxFixtureStatus: MyahE2eCampaignMailboxFixtureStatusDTO
     getAutoCompleteAddress: AutocompleteResult[]
     getAddressDetails: PlaceDetailsResult
     getUsageAnalytics: UsageAnalytics
@@ -3361,6 +3434,7 @@ export interface Mutation {
     createApprovedAccessDomain: ApprovedAccessDomain
     deleteApprovedAccessDomain: Scalars['Boolean']
     validateApprovedAccessDomain: ApprovedAccessDomain
+    updateConnectedAccountSendingPolicy: ConnectedAccountPublicDTO
     deleteConnectedAccount: ConnectedAccountPublicDTO
     activateWorkspace: Workspace
     updateWorkspace: Workspace
@@ -3377,6 +3451,7 @@ export interface Mutation {
     addCreatorListMemberIntent: CreatorListMemberDTO
     addCreatorListMembersIntent: CreatorListMemberDTO[]
     removeCreatorListMemberIntent: Scalars['Boolean']
+    replaceCampaignEmailPool: CampaignSenderPoolSnapshotDTO
     linkCampaignEmailAccount: CampaignEmailAccountDTO[]
     setDefaultCampaignEmailAccount: CampaignEmailAccountDTO[]
     removeCampaignEmailAccount: CampaignEmailAccountDTO[]
@@ -3466,6 +3541,9 @@ export interface Mutation {
     trackAnalytics: Analytics
     duplicateDashboard: DuplicatedDashboard
     impersonate: Impersonate
+    createMyahE2eCampaignMailboxFixture: MyahE2eCampaignMailboxFixtureDTO
+    createMyahE2eCampaignCallbackFixture: MyahE2eCallbackFixtureDTO
+    cleanupMyahE2eCampaignMailboxFixture: Scalars['Boolean']
     createCalendarEvent: CreateCalendarEventOutput
     sendEmail: SendEmailOutput
     startChannelSync: ChannelSyncSuccess
@@ -4927,6 +5005,8 @@ export interface ConnectedAccountPublicDTOGenqlSelection{
     applicationId?: boolean | number
     name?: boolean | number
     visibility?: boolean | number
+    dailySendLimit?: boolean | number
+    minimumSendIntervalMs?: boolean | number
     createdAt?: boolean | number
     updatedAt?: boolean | number
     connectionParameters?: PublicImapSmtpCaldavConnectionParametersGenqlSelection
@@ -5241,6 +5321,51 @@ export interface ObjectFieldsConnectionGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface CampaignSenderReadinessDTOGenqlSelection{
+    bindingStatus?: boolean | number
+    campaignAccountId?: boolean | number
+    connectedAccountId?: boolean | number
+    messageChannelId?: boolean | number
+    senderHandle?: boolean | number
+    provider?: boolean | number
+    status?: boolean | number
+    reason?: boolean | number
+    recoveryPath?: boolean | number
+    dailySendLimit?: boolean | number
+    minimumSendIntervalMs?: boolean | number
+    missingBinding?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignSenderPoolSnapshotDTOGenqlSelection{
+    rotationPolicyId?: boolean | number
+    serializationRevision?: boolean | number
+    mailboxes?: CampaignSenderReadinessDTOGenqlSelection
+    senderPoolFingerprint?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ExactCampaignEmailSenderResultDTOGenqlSelection{
+    status?: boolean | number
+    sender?: CampaignSenderReadinessDTOGenqlSelection
+    reason?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignSenderCandidateReadinessDTOGenqlSelection{
+    rotationPolicyId?: boolean | number
+    connectedAccountId?: boolean | number
+    messageChannelId?: boolean | number
+    senderHandle?: boolean | number
+    status?: boolean | number
+    reason?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface CampaignEmailAccountDTOGenqlSelection{
     id?: boolean | number
     connectedAccountId?: boolean | number
@@ -5250,6 +5375,7 @@ export interface CampaignEmailAccountDTOGenqlSelection{
     label?: boolean | number
     isDefault?: boolean | number
     health?: boolean | number
+    senderReadiness?: CampaignSenderCandidateReadinessDTOGenqlSelection
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6396,6 +6522,35 @@ export interface ToolIndexEntryGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface MyahE2eCampaignMailboxFixtureDTOGenqlSelection{
+    id?: boolean | number
+    availableAccountIds?: boolean | number
+    unavailableAccountId?: boolean | number
+    approvalThreadId?: boolean | number
+    approvalThreadTitle?: boolean | number
+    actionApprovalBindingId?: boolean | number
+    expectedFrom?: boolean | number
+    expectedTo?: boolean | number
+    expectedSubject?: boolean | number
+    expectedBody?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahE2eCampaignMailboxFixtureStatusDTOGenqlSelection{
+    providerSendAttemptCount?: boolean | number
+    providerDraftPreparationCount?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahE2eCallbackFixtureDTOGenqlSelection{
+    connectedAccountId?: boolean | number
+    callbackPath?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface WorkspaceMailboxConnectionStatusGenqlSelection{
     connectedAccountId?: boolean | number
     errorCode?: boolean | number
@@ -6853,6 +7008,8 @@ export interface QueryGenqlSelection{
     creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     campaignEmailAccounts?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: CampaignEmailAccountCampaignInput} })
     campaignEmailAccountCandidates?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: CampaignEmailAccountCampaignInput} })
+    campaignEmailSenderPool?: (CampaignSenderPoolSnapshotDTOGenqlSelection & { __args: {input: CampaignEmailAccountCampaignInput} })
+    exactCampaignEmailSender?: (ExactCampaignEmailSenderResultDTOGenqlSelection & { __args: {input: ResolveExactCampaignEmailSenderInput} })
     previewMessageCampaignAudience?: (CampaignAudiencePreviewDTOGenqlSelection & { __args: {input: PreviewMessageCampaignAudienceInput} })
     unsubscribeTopics?: UnsubscribeTopicGenqlSelection
     unsubscribePagePreviewUrl?: boolean | number
@@ -6902,6 +7059,7 @@ export interface QueryGenqlSelection{
     pieChartData?: (PieChartDataGenqlSelection & { __args: {input: PieChartDataInput} })
     lineChartData?: (LineChartDataGenqlSelection & { __args: {input: LineChartDataInput} })
     barChartData?: (BarChartDataGenqlSelection & { __args: {input: BarChartDataInput} })
+    getMyahE2eCampaignMailboxFixtureStatus?: (MyahE2eCampaignMailboxFixtureStatusDTOGenqlSelection & { __args: {input: MyahE2eFixtureIdInput} })
     getAutoCompleteAddress?: (AutocompleteResultGenqlSelection & { __args: {address: Scalars['String'], token: Scalars['String'], country?: (Scalars['String'] | null), isFieldCity?: (Scalars['Boolean'] | null)} })
     getAddressDetails?: (PlaceDetailsResultGenqlSelection & { __args: {placeId: Scalars['String'], token: Scalars['String']} })
     getUsageAnalytics?: (UsageAnalyticsGenqlSelection & { __args?: {input?: (UsageAnalyticsInput | null)} })
@@ -6936,6 +7094,8 @@ export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'
 
 export interface CampaignEmailAccountCampaignInput {campaignId: Scalars['UUID']}
 
+export interface ResolveExactCampaignEmailSenderInput {campaignId: Scalars['UUID'],connectedAccountId: Scalars['UUID'],expectedSenderPoolFingerprint: Scalars['String']}
+
 export interface PreviewMessageCampaignAudienceInput {listId: Scalars['String'],unsubscribeTopicId?: (Scalars['String'] | null)}
 
 export interface LogicFunctionIdInput {
@@ -6957,6 +7117,8 @@ export interface PieChartDataInput {objectMetadataId: Scalars['UUID'],configurat
 export interface LineChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
 
 export interface BarChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
+
+export interface MyahE2eFixtureIdInput {fixtureId: Scalars['UUID']}
 
 export interface UsageAnalyticsInput {periodStart?: (Scalars['DateTime'] | null),periodEnd?: (Scalars['DateTime'] | null),userWorkspaceId?: (Scalars['String'] | null),operationTypes?: (UsageOperationType[] | null)}
 
@@ -7098,6 +7260,7 @@ export interface MutationGenqlSelection{
     createApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: CreateApprovedAccessDomainInput} })
     deleteApprovedAccessDomain?: { __args: {input: DeleteApprovedAccessDomainInput} }
     validateApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: ValidateApprovedAccessDomainInput} })
+    updateConnectedAccountSendingPolicy?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {input: UpdateConnectedAccountSendingPolicyInput} })
     deleteConnectedAccount?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {id: Scalars['UUID']} })
     activateWorkspace?: (WorkspaceGenqlSelection & { __args: {data: ActivateWorkspaceInput} })
     updateWorkspace?: (WorkspaceGenqlSelection & { __args: {data: UpdateWorkspaceInput} })
@@ -7114,6 +7277,7 @@ export interface MutationGenqlSelection{
     addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
     removeCreatorListMemberIntent?: { __args: {input: RemoveCreatorListMemberIntentInput} }
+    replaceCampaignEmailPool?: (CampaignSenderPoolSnapshotDTOGenqlSelection & { __args: {input: ReplaceCampaignEmailPoolInput} })
     linkCampaignEmailAccount?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: LinkCampaignEmailAccountInput} })
     setDefaultCampaignEmailAccount?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: CampaignEmailAccountLinkInput} })
     removeCampaignEmailAccount?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: CampaignEmailAccountLinkInput} })
@@ -7203,6 +7367,9 @@ export interface MutationGenqlSelection{
     trackAnalytics?: (AnalyticsGenqlSelection & { __args: {type: AnalyticsType, name?: (Scalars['String'] | null), event?: (Scalars['String'] | null), properties?: (Scalars['JSON'] | null)} })
     duplicateDashboard?: (DuplicatedDashboardGenqlSelection & { __args: {id: Scalars['UUID']} })
     impersonate?: (ImpersonateGenqlSelection & { __args: {userId: Scalars['UUID'], workspaceId: Scalars['UUID']} })
+    createMyahE2eCampaignMailboxFixture?: (MyahE2eCampaignMailboxFixtureDTOGenqlSelection & { __args: {input: CreateMyahE2eCampaignMailboxFixtureInput} })
+    createMyahE2eCampaignCallbackFixture?: (MyahE2eCallbackFixtureDTOGenqlSelection & { __args: {input: CreateMyahE2eCallbackFixtureInput} })
+    cleanupMyahE2eCampaignMailboxFixture?: { __args: {input: MyahE2eFixtureIdInput} }
     createCalendarEvent?: (CreateCalendarEventOutputGenqlSelection & { __args: {input: CreateCalendarEventInput} })
     sendEmail?: (SendEmailOutputGenqlSelection & { __args: {input: SendEmailInput} })
     startChannelSync?: (ChannelSyncSuccessGenqlSelection & { __args: {connectedAccountId: Scalars['UUID']} })
@@ -7467,6 +7634,8 @@ export interface DeleteApprovedAccessDomainInput {id: Scalars['UUID']}
 
 export interface ValidateApprovedAccessDomainInput {validationToken: Scalars['String'],approvedAccessDomainId: Scalars['UUID']}
 
+export interface UpdateConnectedAccountSendingPolicyInput {connectedAccountId: Scalars['UUID'],dailySendLimit: Scalars['Int'],minimumSendIntervalMs: Scalars['Int']}
+
 export interface ActivateWorkspaceInput {
 /** Deprecated: the workspace name is set at creation (signUpInNewWorkspace) and this field is ignored during activation. Kept for backward compatibility. */
 displayName?: (Scalars['String'] | null)}
@@ -7488,6 +7657,8 @@ export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],cre
 export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
 
 export interface RemoveCreatorListMemberIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID'],confirmedCampaignIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+
+export interface ReplaceCampaignEmailPoolInput {campaignId: Scalars['UUID'],connectedAccountIds: Scalars['UUID'][]}
 
 export interface LinkCampaignEmailAccountInput {campaignId: Scalars['UUID'],connectedAccountId: Scalars['UUID']}
 
@@ -7626,6 +7797,10 @@ export interface AgentChatApprovalDecisionInput {decision: Scalars['String'],com
 export interface CreateSkillInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],label: Scalars['String'],icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content: Scalars['String']}
 
 export interface UpdateSkillInput {id: Scalars['UUID'],name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null)}
+
+export interface CreateMyahE2eCampaignMailboxFixtureInput {campaignId: Scalars['UUID']}
+
+export interface CreateMyahE2eCallbackFixtureInput {fixtureId: Scalars['UUID'],campaignId: Scalars['UUID'],operationsTabId: Scalars['UUID']}
 
 export interface CreateCalendarEventInput {connectedAccountId: Scalars['String'],title: Scalars['String'],description?: (Scalars['String'] | null),location?: (Scalars['String'] | null),startsAt: Scalars['String'],endsAt: Scalars['String'],isFullDay?: (Scalars['Boolean'] | null),timeZone?: (Scalars['String'] | null),attendees?: (Scalars['String'] | null),sendInvitations?: (Scalars['Boolean'] | null),addConferencing?: (Scalars['Boolean'] | null)}
 
@@ -8765,6 +8940,38 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
+    const CampaignSenderReadinessDTO_possibleTypes: string[] = ['CampaignSenderReadinessDTO']
+    export const isCampaignSenderReadinessDTO = (obj?: { __typename?: any } | null): obj is CampaignSenderReadinessDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSenderReadinessDTO"')
+      return CampaignSenderReadinessDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignSenderPoolSnapshotDTO_possibleTypes: string[] = ['CampaignSenderPoolSnapshotDTO']
+    export const isCampaignSenderPoolSnapshotDTO = (obj?: { __typename?: any } | null): obj is CampaignSenderPoolSnapshotDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSenderPoolSnapshotDTO"')
+      return CampaignSenderPoolSnapshotDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ExactCampaignEmailSenderResultDTO_possibleTypes: string[] = ['ExactCampaignEmailSenderResultDTO']
+    export const isExactCampaignEmailSenderResultDTO = (obj?: { __typename?: any } | null): obj is ExactCampaignEmailSenderResultDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isExactCampaignEmailSenderResultDTO"')
+      return ExactCampaignEmailSenderResultDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignSenderCandidateReadinessDTO_possibleTypes: string[] = ['CampaignSenderCandidateReadinessDTO']
+    export const isCampaignSenderCandidateReadinessDTO = (obj?: { __typename?: any } | null): obj is CampaignSenderCandidateReadinessDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSenderCandidateReadinessDTO"')
+      return CampaignSenderCandidateReadinessDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
     const CampaignEmailAccountDTO_possibleTypes: string[] = ['CampaignEmailAccountDTO']
     export const isCampaignEmailAccountDTO = (obj?: { __typename?: any } | null): obj is CampaignEmailAccountDTO => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignEmailAccountDTO"')
@@ -9729,6 +9936,30 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isToolIndexEntry = (obj?: { __typename?: any } | null): obj is ToolIndexEntry => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isToolIndexEntry"')
       return ToolIndexEntry_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const MyahE2eCampaignMailboxFixtureDTO_possibleTypes: string[] = ['MyahE2eCampaignMailboxFixtureDTO']
+    export const isMyahE2eCampaignMailboxFixtureDTO = (obj?: { __typename?: any } | null): obj is MyahE2eCampaignMailboxFixtureDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCampaignMailboxFixtureDTO"')
+      return MyahE2eCampaignMailboxFixtureDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const MyahE2eCampaignMailboxFixtureStatusDTO_possibleTypes: string[] = ['MyahE2eCampaignMailboxFixtureStatusDTO']
+    export const isMyahE2eCampaignMailboxFixtureStatusDTO = (obj?: { __typename?: any } | null): obj is MyahE2eCampaignMailboxFixtureStatusDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCampaignMailboxFixtureStatusDTO"')
+      return MyahE2eCampaignMailboxFixtureStatusDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const MyahE2eCallbackFixtureDTO_possibleTypes: string[] = ['MyahE2eCallbackFixtureDTO']
+    export const isMyahE2eCallbackFixtureDTO = (obj?: { __typename?: any } | null): obj is MyahE2eCallbackFixtureDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCallbackFixtureDTO"')
+      return MyahE2eCallbackFixtureDTO_possibleTypes.includes(obj.__typename)
     }
     
 
