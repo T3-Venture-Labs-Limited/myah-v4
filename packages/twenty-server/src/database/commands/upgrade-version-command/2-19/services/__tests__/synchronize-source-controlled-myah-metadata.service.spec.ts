@@ -15,6 +15,11 @@ const STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER =
   TWENTY_STANDARD_APPLICATION.universalIdentifier;
 const INBOX_FIELD_UNIVERSAL_IDENTIFIER =
   MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.creator;
+const CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER =
+  MYAH_STANDARD_OBJECTS.campaign.universalIdentifier;
+const CAMPAIGN_SEQUENCE_AUTHORIZATION_FIELD_UNIVERSAL_IDENTIFIER =
+  MYAH_STANDARD_OBJECTS.campaign.fields.sequenceAuthorization
+    .universalIdentifier;
 const INBOX_RELATION_FIELD_UNIVERSAL_IDENTIFIERS = [
   MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.creator,
   MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.myahCampaign,
@@ -241,7 +246,120 @@ describe('SynchronizeSourceControlledMyahMetadataService', () => {
     expect(incrementMetadataVersion).not.toHaveBeenCalled();
   });
 
-  it('creates a selected missing source-controlled field without inferring deletion', async () => {
+  it('creates a missing field under an existing object without selecting or diffing its parent', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        now: '2026-08-04T00:00:00.000Z',
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+      });
+    const metadataWithoutSequenceAuthorization =
+      structuredClone(allFlatEntityMaps);
+    const campaign =
+      metadataWithoutSequenceAuthorization.flatObjectMetadataMaps
+        .byUniversalIdentifier[CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER];
+
+    if (!campaign) {
+      throw new Error('Campaign object metadata is required by the fixture');
+    }
+
+    campaign.labelSingular = 'Workspace-specific Campaign Label';
+    delete metadataWithoutSequenceAuthorization.flatFieldMetadataMaps
+      .byUniversalIdentifier[
+      CAMPAIGN_SEQUENCE_AUTHORIZATION_FIELD_UNIVERSAL_IDENTIFIER
+    ];
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService({
+        ...metadataWithoutSequenceAuthorization,
+        featureFlagsMap: {},
+      });
+
+    await service.synchronizeWorkspace(createArgs(), {
+      fieldMetadata: new Set([
+        CAMPAIGN_SEQUENCE_AUTHORIZATION_FIELD_UNIVERSAL_IDENTIFIER,
+      ]),
+    });
+
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).toHaveBeenCalledTimes(1);
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.from
+        .byUniversalIdentifier,
+    ).toEqual({});
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier,
+    ).toEqual({});
+    expect(
+      migrationInput.dependencyAllFlatEntityMaps.flatObjectMetadataMaps
+        .byUniversalIdentifier[CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER],
+    ).toMatchObject({ labelSingular: 'Workspace-specific Campaign Label' });
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.from
+        .byUniversalIdentifier[
+        CAMPAIGN_SEQUENCE_AUTHORIZATION_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toBeUndefined();
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+        .byUniversalIdentifier[
+        CAMPAIGN_SEQUENCE_AUTHORIZATION_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toMatchObject({
+      universalIdentifier:
+        CAMPAIGN_SEQUENCE_AUTHORIZATION_FIELD_UNIVERSAL_IDENTIFIER,
+    });
+  });
+
+  it('retains explicit selection semantics for an existing object', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        now: '2026-08-04T00:00:00.000Z',
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+      });
+    const customizedMetadata = structuredClone(allFlatEntityMaps);
+    const campaign =
+      customizedMetadata.flatObjectMetadataMaps.byUniversalIdentifier[
+        CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER
+      ];
+    const canonicalCampaign =
+      allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+        CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER
+      ];
+
+    if (!campaign || !canonicalCampaign) {
+      throw new Error('Campaign object metadata is required by the fixture');
+    }
+
+    campaign.labelSingular = 'Workspace-specific Campaign Label';
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService({ ...customizedMetadata, featureFlagsMap: {} });
+
+    await service.synchronizeWorkspace(
+      createArgs(),
+      {
+        objectMetadata: new Set([CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER]),
+      },
+      { synchronizeExistingSelectedMetadata: true },
+    );
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.from
+        .byUniversalIdentifier[CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER],
+    ).toMatchObject({ labelSingular: 'Workspace-specific Campaign Label' });
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier[CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER],
+    ).toMatchObject({ labelSingular: canonicalCampaign.labelSingular });
+  });
+
+  it('creates a selected missing source-controlled field and its missing parent without inferring deletion', async () => {
     const {
       service,
       invalidateAndRecompute,
