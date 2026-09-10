@@ -742,6 +742,9 @@ export const MYAH_STANDARD_OBJECTS = {
       lifecycleStatus: {
         universalIdentifier: 'e169ef65-ded7-4060-9c7a-c9b92d359c8a',
       },
+      sequenceAuthorization: {
+        universalIdentifier: '737eefd4-349b-4944-9f8c-4a6a7f942c94',
+      },
       objective: {
         universalIdentifier: 'e22687bb-2633-573f-bd80-c4b13e80d966',
       },
