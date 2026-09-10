@@ -8,6 +8,24 @@
  */
 
 export type {
+  CampaignSequenceAuthorizationPreparedProof,
+  CampaignSequenceAuthorizationReviewedWindow,
+  CampaignSequenceAuthorizationRequest,
+  CampaignSequenceAuthorizationBinding,
+  CampaignSequenceAuthorizationCurrentProjection,
+} from './campaign-sequence-launch-authority';
+export {
+  campaignSequenceAuthorizationPreparedProofSchema,
+  campaignSequenceAuthorizationReviewedWindowSchema,
+  campaignSequenceAuthorizationRequestSchema,
+  campaignSequenceAuthorizationBindingSchema,
+  campaignSequenceAuthorizationCurrentProjectionSchema,
+  parseCampaignSequenceAuthorizationPreparedProof,
+  parseCampaignSequenceAuthorizationRequest,
+  parseCampaignSequenceAuthorizationBinding,
+  parseCampaignSequenceAuthorizationCurrentProjection,
+} from './campaign-sequence-launch-authority';
+export type {
   CampaignSequence,
   CampaignSequenceMessage,
   CampaignSequenceIssue,
