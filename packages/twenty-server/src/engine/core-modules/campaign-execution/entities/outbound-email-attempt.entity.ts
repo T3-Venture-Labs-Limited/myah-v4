@@ -3,18 +3,77 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  ForeignKey,
   Index,
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
+import { CampaignTestPreparationProofEntity } from 'src/engine/core-modules/campaign-test-authority/entities/campaign-test-preparation-proof.entity';
+import { CampaignActivationEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-activation.entity';
+import { CampaignEnrollmentEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-enrollment.entity';
+import { CampaignOccurrenceEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-occurrence.entity';
 import {
   type OutboundEmailAttemptSource,
   type OutboundEmailAttemptState,
   type OutboundEmailCapacityState,
   type OutboundEmailSelectionConstraintKind,
-} from 'src/modules/campaign-execution/types/outbound-email-attempt.type';
+} from 'src/engine/core-modules/campaign-execution/types/outbound-email-attempt-persistence.type';
 
+@ForeignKey(
+  () => CampaignOccurrenceEntity,
+  [
+    'workspaceId',
+    'campaignId',
+    'enrollmentId',
+    'occurrenceId',
+    'workflowVersionId',
+    'messageId',
+  ],
+  [
+    'workspaceId',
+    'campaignId',
+    'enrollmentId',
+    'id',
+    'workflowVersionId',
+    'messageId',
+  ],
+  {
+    name: 'FK_OEA_OCCURRENCE_BINDING',
+    onDelete: 'NO ACTION',
+    onUpdate: 'NO ACTION',
+  },
+)
+@ForeignKey(
+  () => CampaignActivationEntity,
+  ['workspaceId', 'campaignId', 'authorizationId', 'workflowVersionId'],
+  ['workspaceId', 'campaignId', 'authorizationId', 'workflowVersionId'],
+  {
+    name: 'FK_OEA_ACTIVATION_BINDING',
+    onDelete: 'NO ACTION',
+    onUpdate: 'NO ACTION',
+  },
+)
+@ForeignKey(
+  () => CampaignEnrollmentEntity,
+  ['workspaceId', 'campaignId', 'authorizationId', 'enrollmentId'],
+  ['workspaceId', 'campaignId', 'authorizationId', 'id'],
+  {
+    name: 'FK_OEA_ENROLLMENT_AUTHORIZATION_SCOPE',
+    onDelete: 'NO ACTION',
+    onUpdate: 'NO ACTION',
+  },
+)
+@ForeignKey(
+  () => CampaignTestPreparationProofEntity,
+  ['workspaceId', 'attemptId', 'testPreparationProofId'],
+  ['workspaceId', 'attemptId', 'testPreparationProofId'],
+  {
+    name: 'FK_OEA_TEST_PREPARATION_PROOF',
+    onDelete: 'NO ACTION',
+    onUpdate: 'NO ACTION',
+  },
+)
 @Index(
   'IDX_OUTBOUND_EMAIL_ATTEMPT_RECONCILIATION',
   ['attemptState', 'unknownAfter'],

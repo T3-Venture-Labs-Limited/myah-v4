@@ -1,7 +1,7 @@
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { type EntityManager, getMetadataArgsStorage } from 'typeorm';
 
-import { OutboundEmailAttemptEntity } from 'src/modules/campaign-execution/entities/outbound-email-attempt.entity';
+import { OutboundEmailAttemptEntity } from 'src/engine/core-modules/campaign-execution/entities/outbound-email-attempt.entity';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
 import {

@@ -38,6 +38,7 @@ const previousOccurrenceId = '12121212-1212-4212-8212-121212121212';
 const acceptedAt = '2026-09-10T12:00:00.000Z';
 const authorizedAt = '2026-09-11T09:00:00.000Z';
 const dueAt = '2026-09-11T13:00:00.000Z';
+const startIdempotencyKey = '19191919-1919-4919-8919-191919191919';
 
 const window: CampaignSendingWindow = Object.freeze({
   timeZone: 'Europe/Paris',
@@ -81,7 +82,7 @@ const startInput = (): StartCampaignInput => ({
   workspaceId,
   campaignId,
   authContext,
-  startIdempotencyKey: 'start-key-1',
+  startIdempotencyKey,
   request,
 });
 
@@ -93,7 +94,7 @@ const authorityRecord = (
   campaignId,
   campaignExecutionId,
   generation: 1,
-  startIdempotencyKey: 'start-key-1',
+  startIdempotencyKey,
   preparedFingerprint: request.preparedProof.preparedFingerprint,
   workflowId,
   workflowVersionId,
@@ -106,7 +107,7 @@ const authorityRecord = (
     schemaVersion: 1,
     authorizationId,
     generation: 1,
-    startIdempotencyKey: 'start-key-1',
+    startIdempotencyKey,
     workspaceId,
     campaignId,
     campaignExecutionId,
@@ -1296,7 +1297,7 @@ describe('CampaignExecutionService', () => {
         workspaceId,
         campaignId,
         authContext,
-        startIdempotencyKey: 'start-key-1',
+        startIdempotencyKey,
       },
       'request',
       {
