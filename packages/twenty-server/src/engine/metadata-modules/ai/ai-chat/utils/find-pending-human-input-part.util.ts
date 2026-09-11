@@ -64,5 +64,3 @@ export const findPendingHumanInputPart = (
   parts: ExtendedUIMessagePart[],
 ): HumanInputToolPartWithOutput | undefined =>
   findPendingHumanInputParts(parts)[0];
-
-export const findPendingQuestionPart = findPendingHumanInputPart;
