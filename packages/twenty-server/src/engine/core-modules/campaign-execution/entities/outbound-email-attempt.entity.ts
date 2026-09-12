@@ -6,6 +6,7 @@ import {
   ForeignKey,
   Index,
   PrimaryColumn,
+  Unique,
   UpdateDateColumn,
 } from 'typeorm';
 
@@ -76,9 +77,22 @@ import {
 )
 @Index(
   'IDX_OUTBOUND_EMAIL_ATTEMPT_RECONCILIATION',
-  ['attemptState', 'unknownAfter'],
-  { where: "\"attemptState\" IN ('PROCESSING', 'UNKNOWN')" },
+  ['attemptState', 'unknownAfter', 'updatedAt', 'attemptId'],
+  {
+    where: `"attemptState" IN ('RESERVED', 'PROCESSING', 'UNKNOWN', 'ACCEPTED')`,
+  },
 )
+@Unique('UQ_OEA_EXACT_CAMPAIGN_ATTEMPT', [
+  'workspaceId',
+  'campaignId',
+  'enrollmentId',
+  'occurrenceId',
+  'authorizationId',
+  'workflowVersionId',
+  'messageId',
+  'attemptId',
+  'renderDigest',
+])
 @Index(
   'UQ_OUTBOUND_EMAIL_ATTEMPT_ACCEPTED_OCCURRENCE',
   ['workspaceId', 'occurrenceId'],
@@ -107,6 +121,19 @@ import {
   { unique: true, where: '"projectedMessageId" IS NOT NULL' },
 )
 @Index(
+  'UQ_OEA_CAMPAIGN_MICROSOFT_EXTERNAL',
+  [
+    'workspaceId',
+    'connectedAccountId',
+    'messageChannelId',
+    'providerMessageExternalId',
+  ],
+  {
+    unique: true,
+    where: `"source" = 'CAMPAIGN_SEQUENCE' AND "provider" = 'microsoft' AND "providerMessageExternalId" IS NOT NULL`,
+  },
+)
+@Index(
   'UQ_OUTBOUND_EMAIL_ATTEMPT_PROVIDER_MESSAGE',
   ['workspaceId', 'connectedAccountId', 'provider', 'providerMessageId'],
   { unique: true, where: '"providerMessageId" IS NOT NULL' },
@@ -132,6 +159,14 @@ import {
     OR ("attemptState" = 'DEFINITELY_UNACCEPTED' AND "capacityState" = 'RELEASED')
     OR ("attemptState" = 'UNKNOWN' AND "capacityState" = 'PROVISIONAL_UNKNOWN')
   )`,
+)
+@Check(
+  'CHK_OEA_CAMPAIGN_ACCEPTED_EVIDENCE',
+  `COALESCE("source" <> 'CAMPAIGN_SEQUENCE' OR ("attemptState" = 'ACCEPTED' AND "capacityState" = 'CONSUMED' AND "providerAcceptedAt" IS NOT NULL AND "providerAcceptedAt" <> 'infinity'::timestamptz AND "providerAcceptedAt" <> '-infinity'::timestamptz AND NULLIF(btrim("providerMessageId"),'') IS NOT NULL AND "finalEvidenceDigest" ~ '^[0-9a-f]{64}$' AND "safeOutcomeReason" IS NULL AND "retryable" IS FALSE AND (NULLIF(btrim("providerHeaderMessageId"),'') IS NOT NULL OR NULLIF(btrim("providerMessageExternalId"),'') IS NOT NULL) AND ("providerThreadExternalId" IS NULL OR NULLIF(btrim("providerThreadExternalId"),'') IS NOT NULL) AND NULLIF(btrim("resolvedThreadExternalId"),'') IS NOT NULL AND ("reconciledProviderHeaderMessageId" IS NULL OR NULLIF(btrim("reconciledProviderHeaderMessageId"),'') IS NOT NULL) AND ("providerDeliveredRecipients" IS NULL OR (jsonb_typeof("providerDeliveredRecipients")='object' AND "providerDeliveredRecipients" ?& ARRAY['to','cc','bcc'] AND "providerDeliveredRecipients" - 'to' - 'cc' - 'bcc' = '{}'::jsonb AND jsonb_typeof("providerDeliveredRecipients"->'to')='array' AND jsonb_typeof("providerDeliveredRecipients"->'cc')='array' AND jsonb_typeof("providerDeliveredRecipients"->'bcc')='array' AND NOT jsonb_path_exists("providerDeliveredRecipients", '$.*[*] ? (@.type() != "string" || @ == "" || !(@ like_regex "^[^A-Z\\s](?:.*[^\\s])?$"))'))) AND (("projectedMessageId" IS NULL AND "projectedMessageThreadId" IS NULL) OR ("projectedMessageId" IS NOT NULL AND "projectedMessageThreadId" IS NOT NULL))) OR ("attemptState" <> 'ACCEPTED' AND "providerHeaderMessageId" IS NULL AND "providerMessageExternalId" IS NULL AND "reconciledProviderHeaderMessageId" IS NULL AND "providerThreadExternalId" IS NULL AND "resolvedThreadExternalId" IS NULL AND "providerDeliveredRecipients" IS NULL AND "projectedMessageId" IS NULL AND "projectedMessageThreadId" IS NULL), FALSE)`,
+)
+@Check(
+  'CHK_OEA_LEGACY_NEW_EVIDENCE_NULL',
+  `COALESCE("source" = 'CAMPAIGN_SEQUENCE' OR ("providerHeaderMessageId" IS NULL AND "providerMessageExternalId" IS NULL AND "reconciledProviderHeaderMessageId" IS NULL AND "providerThreadExternalId" IS NULL AND "resolvedThreadExternalId" IS NULL AND "providerDeliveredRecipients" IS NULL AND "projectedMessageThreadId" IS NULL), FALSE)`,
 )
 @Check(
   'CHK_OUTBOUND_EMAIL_ATTEMPT_SOURCE_SHAPE',
@@ -293,6 +328,28 @@ export class OutboundEmailAttemptEntity {
   providerAcceptedAt: Date | null;
 
   @Column({ nullable: true, type: 'text' })
+  providerHeaderMessageId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  providerMessageExternalId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  reconciledProviderHeaderMessageId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  providerThreadExternalId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  resolvedThreadExternalId: string | null;
+
+  @Column({ nullable: true, type: 'jsonb' })
+  providerDeliveredRecipients: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+  } | null;
+
+  @Column({ nullable: true, type: 'text' })
   safeOutcomeReason: string | null;
 
   @Column({ nullable: true, type: 'boolean' })
@@ -300,6 +357,9 @@ export class OutboundEmailAttemptEntity {
 
   @Column({ nullable: true, type: 'uuid' })
   projectedMessageId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  projectedMessageThreadId: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

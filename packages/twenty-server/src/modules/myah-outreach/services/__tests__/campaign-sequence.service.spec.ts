@@ -229,6 +229,9 @@ const createContext = () => {
       if (query.includes('UPDATE') && query.includes('"workflowVersion"')) {
         return [{ id: versionId }];
       }
+      if (query.includes('UPDATE') && query.includes('"workflow"')) {
+        return [{ id: workflowId }];
+      }
       return [];
     }),
   };
@@ -306,6 +309,112 @@ beforeEach(() => {
 });
 
 describe('CampaignSequenceService', () => {
+  it('publishes the current email draft and reconciles status after commit', async () => {
+    const { service, queryRunner, workflowQueue } = createContext();
+
+    await expect(
+      service.publish({
+        authContext,
+        campaignId,
+        expectedVersionId: versionId,
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({
+      versionId,
+      versionStatus: WorkflowVersionStatus.ACTIVE,
+    });
+    expect(
+      queryRunner.query.mock.calls.some(([sql]) =>
+        sql.includes('"lastPublishedVersionId"'),
+      ),
+    ).toBe(true);
+    expect(workflowQueue.add).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats same-version publication as idempotent only for the published active version', async () => {
+    const {
+      service,
+      workflowRepository,
+      workflowVersionRepository,
+      queryRunner,
+    } = createContext();
+    workflowRepository.findOne.mockResolvedValue({
+      id: workflowId,
+      name: 'Campaign Outreach',
+      outreachCampaignId: campaignId,
+      lastPublishedVersionId: versionId,
+    });
+    workflowVersionRepository.find.mockResolvedValue([
+      {
+        id: versionId,
+        workflowId,
+        name: 'v1',
+        position: 0,
+        status: WorkflowVersionStatus.ACTIVE,
+        campaignSequence: sequence,
+      },
+    ]);
+
+    await expect(
+      service.publish({
+        authContext,
+        campaignId,
+        expectedVersionId: versionId,
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({ versionStatus: WorkflowVersionStatus.ACTIVE });
+    expect(
+      queryRunner.query.mock.calls.some(([sql]) =>
+        sql.includes('SET "status" = \'ACTIVE\''),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects stale and unauthorized publication', async () => {
+    const { service } = createContext();
+    await expect(
+      service.publish({
+        authContext,
+        campaignId,
+        expectedVersionId: nextVersionId,
+        workspaceId,
+      }),
+    ).rejects.toThrow('Reload before publishing');
+
+    canUpdateCampaign = false;
+    await expect(
+      service.publish({
+        authContext,
+        campaignId,
+        expectedVersionId: versionId,
+        workspaceId,
+      }),
+    ).rejects.toThrow('Campaign update permission is required');
+  });
+
+  it('rejects unsupported Campaign publication material', async () => {
+    const { service, workflowVersionRepository } = createContext();
+    workflowVersionRepository.find.mockResolvedValue([
+      {
+        id: versionId,
+        workflowId,
+        name: 'v1',
+        position: 0,
+        status: WorkflowVersionStatus.DRAFT,
+        campaignSequence: { ...sequence, messages: [] },
+      },
+    ]);
+
+    await expect(
+      service.publish({
+        authContext,
+        campaignId,
+        expectedVersionId: versionId,
+        workspaceId,
+      }),
+    ).rejects.toThrow('email-only sequence');
+  });
+
   it('loads ABSENT without creating a workflow', async () => {
     const { service, workflowRepository, workflowVersionRepository } =
       createContext();
@@ -356,6 +465,7 @@ describe('CampaignSequenceService', () => {
         versionId,
         sequence,
         lifecycleStatus: 'DRAFT',
+        versionStatus: WorkflowVersionStatus.DRAFT,
         editable: true,
         issues: [],
       },
@@ -1610,7 +1720,7 @@ describe('CampaignSequenceService', () => {
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
-  it.each([null, 'UNKNOWN', 'ACTIVE', 'PAUSED', 'COMPLETED', 'DEACTIVATED'])(
+  it.each([null, 'UNKNOWN', 'ACTIVE', 'COMPLETED', 'DEACTIVATED'])(
     'rejects save while Campaign lifecycle is %p',
     async (lifecycleStatus) => {
       const { campaignRepository, service, workflowVersionRepository } =
@@ -1633,11 +1743,11 @@ describe('CampaignSequenceService', () => {
     },
   );
 
-  it('fails closed for STOPPED until a trusted lifecycle integration supplies it', async () => {
+  it('treats trusted internal PAUSED lifecycle as stopped and editable', async () => {
     const { campaignRepository, service } = createContext();
     campaignRepository.findOne.mockResolvedValue({
       id: campaignId,
-      lifecycleStatus: 'STOPPED',
+      lifecycleStatus: 'PAUSED',
     });
 
     await expect(
@@ -1648,7 +1758,12 @@ describe('CampaignSequenceService', () => {
         sequence,
         workspaceId,
       }),
-    ).rejects.toThrow('Stop Campaign outreach before editing.');
+    ).resolves.toEqual(
+      expect.objectContaining({
+        lifecycleStatus: 'PAUSED',
+        editable: true,
+      }),
+    );
   });
 
   it('saves a new immutable draft with same-runner SQL and archives only the superseded authoring version', async () => {
@@ -1681,6 +1796,7 @@ describe('CampaignSequenceService', () => {
         versionId: nextVersionId,
         sequence: edited,
         lifecycleStatus: 'DRAFT',
+        versionStatus: WorkflowVersionStatus.DRAFT,
         editable: true,
         issues: [expect.objectContaining({ code: 'CONTENT_REQUIRED' })],
       }),

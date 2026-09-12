@@ -8,6 +8,7 @@ import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspac
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { type ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
 import { ConnectedAccountResolver } from 'src/engine/metadata-modules/connected-account/resolvers/connected-account.resolver';
+import { type ConnectedAccountSendingPolicyService } from 'src/engine/metadata-modules/connected-account/services/connected-account-sending-policy.service';
 import { type ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { type ImapSmtpCalDavAPIService } from 'src/modules/connected-account/services/imap-smtp-caldav-apis.service';
 
@@ -27,8 +28,10 @@ describe('workspace mailbox generic mutation boundaries', () => {
       delete: jest.fn(),
       verifyOwnership: jest.fn().mockResolvedValue(myahAccount),
     };
+    const policyService = { update: jest.fn() };
     const resolver = new ConnectedAccountResolver(
       metadataService as unknown as ConnectedAccountMetadataService,
+      policyService as unknown as ConnectedAccountSendingPolicyService,
     );
 
     await expect(
@@ -40,6 +43,7 @@ describe('workspace mailbox generic mutation boundaries', () => {
     ).rejects.toThrow('Connected account not found');
 
     expect(metadataService.delete).not.toHaveBeenCalled();
+    expect(policyService.update).not.toHaveBeenCalled();
   });
 
   it('rejects legacy personal-account updates of the shared mailbox', async () => {

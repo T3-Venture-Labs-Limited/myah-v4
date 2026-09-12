@@ -55,6 +55,14 @@ export type CampaignProgressionHistoryBlockedReason =
   | 'MALFORMED_HISTORY'
   | 'UNRECONCILED_HISTORY';
 
+export const CAMPAIGN_PROGRESSION_HISTORY_BLOCKER_PRECEDENCE = Object.freeze([
+  'MALFORMED_HISTORY',
+  'UNKNOWN_OUTCOME',
+  'AMBIGUOUS_HISTORY',
+  'UNRECONCILED_HISTORY',
+  'UNRESOLVED_HISTORY',
+] as const satisfies readonly CampaignProgressionHistoryBlockedReason[]);
+
 export type CampaignProgressionHistoryResult =
   | Readonly<{
       status: 'COMPLETE';
@@ -169,7 +177,33 @@ export type CampaignProgressionHistoryResult =
  * scheduling. This port proves no cross-version equivalence and returns no
  * content hash, fallback timestamp, synthetic occurrence, or inferred skip.
  */
+export type CampaignVersionSupersessionPreparation =
+  | Readonly<{
+      status: 'READY';
+      pendingOccurrenceIds: readonly string[];
+    }>
+  | Readonly<{ status: 'BLOCKED' }>;
+
 export interface CampaignProgressionHistoryReaderPort {
+  preparePriorVersionSupersessionInTransaction(
+    input: Readonly<{
+      workspaceId: string;
+      campaignId: string;
+      targetWorkflowVersionId: string;
+    }>,
+    manager: EntityManager,
+  ): Promise<CampaignVersionSupersessionPreparation>;
+
+  applyPriorVersionSupersessionInTransaction(
+    input: Readonly<{
+      workspaceId: string;
+      campaignId: string;
+      targetWorkflowVersionId: string;
+      pendingOccurrenceIds: readonly string[];
+    }>,
+    manager: EntityManager,
+  ): Promise<void>;
+
   readSameWorkflowVersionHistoryInTransaction(
     input: CampaignProgressionHistoryScope,
     manager: EntityManager,

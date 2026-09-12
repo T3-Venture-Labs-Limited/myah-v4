@@ -28,6 +28,8 @@ type Row = {
   creatorListId?: string;
   campaignCreatorId?: string;
   isDirectlyAdded?: boolean;
+  assignedManagedMailboxId?: string | null;
+  stage?: string;
   deletedAt?: string;
 };
 
@@ -42,6 +44,13 @@ type TestRepository = {
   upsert: jest.Mock;
   softDelete: jest.Mock;
   restore: jest.Mock;
+  createQueryBuilder: jest.Mock;
+};
+type TestInsertBuilder = {
+  insert: jest.Mock<TestInsertBuilder>;
+  values: jest.Mock<TestInsertBuilder>;
+  orIgnore: jest.Mock<TestInsertBuilder>;
+  execute: jest.Mock<Promise<void>>;
 };
 
 const createRepository = (rows: Row[]) => ({
@@ -92,6 +101,30 @@ const createRepository = (rows: Row[]) => ({
     const row = rows.find((candidate) => candidate.id === id);
     if (row) row.deletedAt = undefined;
   }),
+  createQueryBuilder: jest.fn(() => {
+    let values: Row[] = [];
+    const builder = {} as TestInsertBuilder;
+
+    builder.insert = jest.fn(() => builder);
+    builder.values = jest.fn((input: Row[]) => {
+      values = input;
+      return builder;
+    });
+    builder.orIgnore = jest.fn(() => builder);
+    builder.execute = jest.fn(async () => {
+      for (const value of values) {
+        const conflict = rows.some(
+          (row) =>
+            !row.deletedAt &&
+            row.campaignId === value.campaignId &&
+            row.creatorId === value.creatorId,
+        );
+        if (!conflict)
+          rows.push({ ...value, id: value.id ?? `inserted-${rows.length}` });
+      }
+    });
+    return builder;
+  }),
 });
 
 const createHarness = (
@@ -134,7 +167,10 @@ const createHarness = (
       createRepository(callerVisibleRows[name] ?? values),
     ]),
   ) as Record<string, TestRepository>;
-  const transactionManager = { id: 'transaction-manager' };
+  const transactionManager = {
+    id: 'transaction-manager',
+    queryRunner: { id: 'query-runner' },
+  };
   const manager = {
     executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
       withWorkspaceContext(testWorkspaceContext, callback),
@@ -682,22 +718,92 @@ describe('CampaignInfluencerService retained List admissions', () => {
     );
   });
 
-  it('re-reads once after a dependent Creator write conflict', async () => {
+  it('starts new direct and List-derived admissions at READY', async () => {
+    const harness = createHarness({
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorOneId },
+      ],
+    });
+
+    await harness.service.attachCampaignCreatorLists(
+      { campaignId, creatorListIds: [listOneId] },
+      authContext,
+    );
+    await harness.service.addDirectCampaignCreators(
+      { campaignId, creatorIds: [creatorTwoId] },
+      authContext,
+    );
+
+    expect(harness.rows.campaignCreator).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ creatorId: creatorOneId, stage: 'READY' }),
+        expect.objectContaining({ creatorId: creatorTwoId, stage: 'READY' }),
+      ]),
+    );
+  });
+
+  it('preserves progressed and unknown stages on restore and later direct upsert', async () => {
+    const harness = createHarness({
+      campaignCreator: [
+        {
+          id: 'creator-row-1',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+          stage: 'POSTED',
+        },
+        {
+          id: 'creator-row-2',
+          campaignId,
+          creatorId: creatorTwoId,
+          isDirectlyAdded: false,
+          stage: 'LEGACY_UNKNOWN',
+          deletedAt: 'deleted',
+        },
+      ],
+    });
+
+    await harness.service.addDirectCampaignCreators(
+      {
+        campaignId,
+        creatorIds: [creatorOneId, creatorTwoId],
+        assignedManagedMailboxId: 'mailbox-1',
+      },
+      authContext,
+    );
+
+    expect(harness.rows.campaignCreator).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ creatorId: creatorOneId, stage: 'POSTED' }),
+        expect.objectContaining({
+          creatorId: creatorTwoId,
+          stage: 'LEGACY_UNKNOWN',
+        }),
+      ]),
+    );
+    expect(
+      harness.repositories.campaignCreator.upsert.mock.calls.flat(),
+    ).not.toContainEqual(expect.objectContaining({ stage: expect.anything() }));
+  });
+
+  it('preserves the stage of a concurrent List-admission conflict winner', async () => {
     const harness = createHarness({
       creatorListMember: [
         { id: 'member-1', creatorListId: listOneId, creatorId: creatorOneId },
       ],
     });
     const creators = harness.repositories.campaignCreator;
-    creators.upsert.mockImplementationOnce(async () => {
+    const insertBuilder = creators.createQueryBuilder();
+    insertBuilder.execute.mockImplementationOnce(async () => {
       harness.rows.campaignCreator.push({
         id: 'creator-row-1',
         campaignId,
         creatorId: creatorOneId,
-        isDirectlyAdded: false,
+        isDirectlyAdded: true,
+        stage: 'NEGOTIATING',
       });
-      throw Object.assign(new Error('duplicate key'), { code: '23505' });
     });
+    creators.createQueryBuilder.mockReturnValue(insertBuilder);
 
     await expect(
       harness.service.attachCampaignCreatorLists(
@@ -705,7 +811,12 @@ describe('CampaignInfluencerService retained List admissions', () => {
         authContext,
       ),
     ).resolves.toBeDefined();
-    expect(harness.rows.campaignCreator).toHaveLength(1);
+    expect(harness.rows.campaignCreator).toContainEqual(
+      expect.objectContaining({
+        id: 'creator-row-1',
+        stage: 'NEGOTIATING',
+      }),
+    );
     expect(harness.rows.campaignCreatorListSource).toContainEqual(
       expect.objectContaining({
         campaignCreatorId: 'creator-row-1',

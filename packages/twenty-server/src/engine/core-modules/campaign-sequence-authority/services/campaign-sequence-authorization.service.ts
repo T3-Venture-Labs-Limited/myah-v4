@@ -57,11 +57,14 @@ const exactKeys = (value: JsonRecord, expected: readonly string[]): boolean => {
   );
 };
 
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === 'object' &&
-  value !== null &&
-  !Array.isArray(value) &&
-  Object.getPrototypeOf(value) === Object.prototype;
+const isRecord = (value: unknown): value is JsonRecord => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false;
+
+  const prototype = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+};
 
 const isPlainFiniteData = (
   value: unknown,
@@ -81,7 +84,9 @@ const isPlainFiniteData = (
 
   if (
     (Array.isArray(value) && prototype !== Array.prototype) ||
-    (!Array.isArray(value) && prototype !== Object.prototype)
+    (!Array.isArray(value) &&
+      prototype !== Object.prototype &&
+      prototype !== null)
   ) {
     return false;
   }
@@ -634,6 +639,32 @@ export class CampaignSequenceAuthorizationService {
     }
 
     return { kind: 'CURRENT_REVOKED', authorization: latest };
+  }
+
+  async lookupStartKeyInTransaction(
+    context: CampaignSequenceAuthorizationTransactionContext,
+    input: Readonly<{ startIdempotencyKey: string }>,
+  ) {
+    this.assertContext(context);
+    const startIdempotencyKey = this.requireUuid(
+      input.startIdempotencyKey,
+      'start idempotency key',
+    );
+    const rawRows = await context.manager.queryRunner!.query(
+      `SELECT * FROM core."campaignSequenceAuthorization"
+       WHERE "workspaceId" = $1 AND "campaignId" = $2
+         AND "startIdempotencyKey" = $3`,
+      [context.workspaceId, context.campaignId, startIdempotencyKey],
+    );
+
+    if (!Array.isArray(rawRows) || rawRows.length > 1) {
+      throw new Error(
+        'Campaign sequence authorization history integrity failure',
+      );
+    }
+    if (rawRows.length === 0) return { kind: 'NOT_FOUND' } as const;
+
+    return { kind: 'FOUND', authorization: parseRecord(rawRows[0]) } as const;
   }
 
   async lookupStartRequestInTransaction(

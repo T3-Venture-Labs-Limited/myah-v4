@@ -15,6 +15,7 @@ import { CampaignOutreachWorkflowDTO } from 'src/modules/myah-outreach/dtos/camp
 import {
   CampaignSequenceLoadResultDTO,
   CampaignSequenceSnapshotDTO,
+  PublishCampaignSequenceInput,
   ReplaceLegacyCampaignSequenceInput,
   SaveCampaignSequenceInput,
 } from 'src/modules/myah-outreach/dtos/campaign-sequence.dto';
@@ -80,6 +81,18 @@ export class CampaignOutreachWorkflowResolver {
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
   ): Promise<CampaignSequenceSnapshotDTO> {
     return this.campaignSequenceService.save({
+      ...input,
+      authContext: getWorkspaceAuthContext(),
+      workspaceId,
+    });
+  }
+
+  @Mutation(() => CampaignSequenceSnapshotDTO)
+  async publishCampaignSequence(
+    @Args('input') input: PublishCampaignSequenceInput,
+    @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
+  ): Promise<CampaignSequenceSnapshotDTO> {
+    return this.campaignSequenceService.publish({
       ...input,
       authContext: getWorkspaceAuthContext(),
       workspaceId,

@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
-import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  type SystemWorkspaceAuthContext,
+  type UserWorkspaceAuthContext,
+} from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import {
   type CampaignAttachmentStoragePort,
   type CampaignCreatorMaterialPort,
@@ -81,13 +85,31 @@ const replyEvidence = {
   providerThreadId: 'provider-thread-id',
 };
 
+const transactionManager = (() => {
+  const manager = {} as WorkspaceEntityManager;
+  Object.assign(manager, {
+    queryRunner: {
+      isTransactionActive: true,
+      isReleased: false,
+      manager,
+    },
+  });
+  return manager;
+})();
+
+const systemAuthContext = {
+  type: 'system',
+  workspace: { id: workspaceId },
+} as SystemWorkspaceAuthContext;
+
 const dispatchContext = (
   evidence:
     | typeof replyEvidence
     | Readonly<{ kind: 'NEW_THREAD' }> = replyEvidence,
 ): CampaignMessageRenderContext => ({
   kind: 'DISPATCH',
-  authContext,
+  authContext: systemAuthContext,
+  transactionManager,
   rolePermissionConfig: {} as never,
   renderContext: {
     kind: 'CAMPAIGN_SEQUENCE_RENDER',
@@ -134,6 +156,26 @@ const dispatchContext = (
     ],
   },
 });
+
+const attachmentFreeDispatchContext = (
+  evidence:
+    | typeof replyEvidence
+    | Readonly<{ kind: 'NEW_THREAD' }> = replyEvidence,
+): Extract<CampaignMessageRenderContext, { kind: 'DISPATCH' }> => {
+  const value = dispatchContext(evidence);
+
+  if (value.kind !== 'DISPATCH') {
+    throw new Error('Expected dispatch context');
+  }
+
+  return {
+    ...value,
+    fixedMaterialProof: {
+      ...value.fixedMaterialProof,
+      orderedAttachmentProofs: [],
+    },
+  };
+};
 
 const testFinalizationContext = (): CampaignMessageRenderContext => ({
   kind: 'TEST_FINALIZATION',
@@ -253,7 +295,10 @@ const makeHarness = (overrides?: {
     }),
   };
   const service = new CampaignMessageMaterializerService(
-    { loadEmailByVersion } as unknown as CampaignSequenceService,
+    {
+      loadEmailByVersion,
+      loadEmailByVersionInTransaction: loadEmailByVersion,
+    } as unknown as CampaignSequenceService,
     creatorPort,
     signaturePort,
     senderPort,
@@ -425,6 +470,8 @@ describe('CampaignMessageMaterializerService', () => {
         kind === 'PREVIEW' ? context : testFinalizationContext(),
       );
 
+      if (mismatchedContext.authContext.type !== 'user')
+        throw new Error('Expected user context');
       mismatchedContext.authContext.user.id = 'different-user-id';
       const { service } = makeHarness({
         ...(kind === 'TEST_FINALIZATION'
@@ -463,39 +510,47 @@ describe('CampaignMessageMaterializerService', () => {
 
   it('accepts exact dispatch reply evidence without thread-port substitution', async () => {
     const { service } = makeHarness({
-      selectedEmailOverrides: { replyToThread: true },
+      selectedEmailOverrides: { files: [], replyToThread: true },
       senderOverrides: { isPreviewProjection: false },
       thread: { kind: 'REPLY', evidence: replyEvidence },
     });
 
     await expect(
-      service.load(coordinates, dispatchContext()),
+      service.load(coordinates, attachmentFreeDispatchContext()),
     ).resolves.toMatchObject({ kind: 'READY' });
   });
 
   it('accepts an authored dispatch new thread only with explicit new-thread scope', async () => {
     const { service } = makeHarness({
+      selectedEmailOverrides: { files: [] },
       senderOverrides: { isPreviewProjection: false },
     });
 
     await expect(
-      service.load(coordinates, dispatchContext({ kind: 'NEW_THREAD' })),
+      service.load(
+        coordinates,
+        attachmentFreeDispatchContext({ kind: 'NEW_THREAD' }),
+      ),
     ).resolves.toMatchObject({ kind: 'READY' });
   });
 
   it('rejects changed dispatch signature material against the fixed proof', async () => {
     const { service } = makeHarness({
       signatureHtml: '<p>Changed signature</p>',
+      selectedEmailOverrides: { files: [] },
       senderOverrides: { isPreviewProjection: false },
     });
 
     expect(
-      await blockerCodes(service, dispatchContext({ kind: 'NEW_THREAD' })),
+      await blockerCodes(
+        service,
+        attachmentFreeDispatchContext({ kind: 'NEW_THREAD' }),
+      ),
     ).toContain('MATERIAL_STALE');
   });
 
-  it('rejects same-length changed dispatch attachment bytes against the fixed proof', async () => {
-    const { service } = makeHarness({
+  it('rejects dispatch attachments before loading bytes', async () => {
+    const { service, attachmentPort } = makeHarness({
       attachmentResult: {
         kind: 'READY',
         value: {
@@ -509,7 +564,8 @@ describe('CampaignMessageMaterializerService', () => {
 
     expect(
       await blockerCodes(service, dispatchContext({ kind: 'NEW_THREAD' })),
-    ).toContain('MATERIAL_STALE');
+    ).toContain('ATTACHMENT_FORBIDDEN');
+    expect(attachmentPort.load).not.toHaveBeenCalled();
   });
 
   it.each([

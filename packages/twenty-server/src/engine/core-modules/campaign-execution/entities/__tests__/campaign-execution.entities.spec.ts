@@ -5,6 +5,7 @@ import { CampaignActivationEntity } from 'src/engine/core-modules/campaign-execu
 import { CampaignEnrollmentEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-enrollment.entity';
 import { CampaignExecutionEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-execution.entity';
 import { CampaignOccurrenceEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-occurrence.entity';
+import { CampaignOutboundRenderEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-outbound-render.entity';
 import { OutboundEmailAttemptEntity } from 'src/engine/core-modules/campaign-execution/entities/outbound-email-attempt.entity';
 
 const entities = [
@@ -121,7 +122,7 @@ describe('campaign execution core entity metadata', () => {
     }
   });
 
-  it('declares the exact unique/check contract without inventing reason vocabulary', () => {
+  it('declares the exact unique/check and typed reason contract', () => {
     const metadata = getMetadataArgsStorage();
     const uniqueNames = metadata.uniques
       .filter((candidate) => entities.includes(candidate.target as never))
@@ -161,26 +162,22 @@ describe('campaign execution core entity metadata', () => {
         'CHK_CO_TERMINAL_SHAPE',
       ].sort(),
     );
-    expect(checks.map(({ expression }) => expression).join('\n')).not.toContain(
-      'NO_USABLE_AUTHORED_MESSAGE',
-    );
-    expect(
-      checks.find(({ name }) => name === 'CHK_CEN_TERMINAL_SHAPE')?.expression,
-    ).toContain('"terminalReason" IS NOT NULL');
-    expect(
-      checks.find(({ name }) => name === 'CHK_CO_TERMINAL_SHAPE')?.expression,
-    ).toEqual(expect.stringContaining('"holdReason" IS NOT NULL'));
-    expect(
-      checks.find(({ name }) => name === 'CHK_CO_TERMINAL_SHAPE')?.expression,
-    ).toEqual(expect.stringContaining('"terminalReason" IS NOT NULL'));
+    const reasonContract = checks
+      .map(({ expression }) => expression)
+      .join('\n');
+    expect(reasonContract).toContain('NO_USABLE_AUTHORED_MESSAGE');
+    expect(reasonContract).toContain('WORKSPACE_NOT_ACTIVE');
+    expect(reasonContract).toContain('PROVIDER_ACCEPTED');
   });
 
   it('uses immediate non-cascading composite foreign keys including proof-first test evidence', () => {
     const metadata = getMetadataArgsStorage();
     const foreignKeys = metadata.foreignKeys.filter((candidate) =>
-      [...entities, OutboundEmailAttemptEntity].includes(
-        candidate.target as never,
-      ),
+      [
+        ...entities,
+        OutboundEmailAttemptEntity,
+        CampaignOutboundRenderEntity,
+      ].includes(candidate.target as never),
     );
     const byName = (name: string) =>
       foreignKeys.find((candidate) => candidate.name === name);
@@ -232,6 +229,30 @@ describe('campaign execution core entity metadata', () => {
         ['workspaceId', 'campaignId', 'authorizationId', 'enrollmentId'],
         ['workspaceId', 'campaignId', 'authorizationId', 'id'],
       ],
+      FK_COR_EXACT_ATTEMPT: [
+        [
+          'workspaceId',
+          'campaignId',
+          'enrollmentId',
+          'occurrenceId',
+          'authorizationId',
+          'workflowVersionId',
+          'messageId',
+          'attemptId',
+          'renderDigest',
+        ],
+        [
+          'workspaceId',
+          'campaignId',
+          'enrollmentId',
+          'occurrenceId',
+          'authorizationId',
+          'workflowVersionId',
+          'messageId',
+          'attemptId',
+          'renderDigest',
+        ],
+      ],
       FK_OEA_TEST_PREPARATION_PROOF: [
         ['workspaceId', 'attemptId', 'testPreparationProofId'],
         ['workspaceId', 'attemptId', 'testPreparationProofId'],
@@ -260,7 +281,7 @@ describe('campaign execution core entity metadata', () => {
     ).toBe(true);
   });
 
-  it('keeps reason columns opaque nullable text and Workspace timezone DB-only', () => {
+  it('keeps typed reason storage nullable text and Workspace timezone DB-only', () => {
     const metadata = getMetadataArgsStorage();
     for (const entity of [CampaignEnrollmentEntity, CampaignOccurrenceEntity]) {
       for (const propertyName of ['holdReason', 'terminalReason']) {

@@ -17,6 +17,7 @@ import { SynchronizeMyahCampaignAccountMetadataCommand } from 'src/database/comm
 import { SynchronizeCampaignSequenceMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788696000000-synchronize-campaign-sequence-metadata.command';
 import { RepairOrphanedObjectNavigationCommandsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788766265947-repair-orphaned-object-navigation-commands.command';
 import { SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789065794326-synchronize-myah-campaign-sequence-authorization-metadata.command';
+import { UpgradeMyahCampaignCreatorStageCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789066000000-upgrade-myah-campaign-creator-stage.command';
 
 import { MigrateMyahCreatorSocialLinksService } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
 import { RemoveReplacedTwentyCrmMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302002-remove-replaced-twenty-crm-metadata.command';
@@ -55,6 +56,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     RemoveReplacedTwentyCrmMetadataCommand,
     RepairOrphanedObjectNavigationCommandsCommand,
     SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand,
+    UpgradeMyahCampaignCreatorStageCommand,
   ],
   exports: [
     SynchronizeMyahStandardMetadataCommand,

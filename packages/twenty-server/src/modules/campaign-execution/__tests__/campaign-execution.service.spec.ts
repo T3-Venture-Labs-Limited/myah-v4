@@ -317,6 +317,9 @@ const createHarness = (overrides?: {
               : { kind: 'NO_CURRENT_AUTHORITY' }
       ) as never;
     }),
+    lookupStartKeyInTransaction: jest.fn(async () => ({
+      kind: 'NOT_FOUND' as const,
+    })),
     lookupStartRequestInTransaction: jest.fn(async () => {
       order.push('lookup-start');
       return (
@@ -400,6 +403,11 @@ const createHarness = (overrides?: {
   };
 
   const history: CampaignExecutionHistoryPort = {
+    preparePriorVersionSupersessionInTransaction: jest.fn(async () => ({
+      status: 'READY' as const,
+      pendingOccurrenceIds: [],
+    })),
+    applyPriorVersionSupersessionInTransaction: jest.fn(async () => undefined),
     readSameWorkflowVersionHistoryInTransaction: jest.fn(
       async (_input, usedManager) => {
         order.push('history');
@@ -703,7 +711,7 @@ describe('CampaignExecutionService', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('blocks changed-version continuation from PAUSED before current-version checks or writes', async () => {
+  it('performs ordinary validation before changed-version supersession', async () => {
     const changedWorkflowVersionId = '25252525-2525-4525-8525-252525252525';
     const changedRequest: CampaignSequenceAuthorizationRequest = {
       ...request,
@@ -721,11 +729,11 @@ describe('CampaignExecutionService', () => {
       }),
     ).resolves.toEqual({
       status: 'BLOCKED',
-      reason: 'CHANGED_WORKFLOW_VERSION_UNMAPPED',
+      reason: 'SEQUENCE_UNAVAILABLE',
     });
     expect(
       harness.planReader.loadExecutionPlanInTransaction,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledTimes(1);
     expect(
       harness.history.readSameWorkflowVersionHistoryInTransaction,
     ).not.toHaveBeenCalled();
@@ -735,6 +743,132 @@ describe('CampaignExecutionService', () => {
     expect(
       harness.persistence.createActivationGraphInTransaction,
     ).not.toHaveBeenCalled();
+  });
+
+  it('supersedes exhaustive unattempted history before activating a changed version', async () => {
+    const changedWorkflowVersionId = '25252525-2525-4525-8525-252525252525';
+    const changedRequest: CampaignSequenceAuthorizationRequest = {
+      ...request,
+      preparedProof: {
+        ...request.preparedProof,
+        workflowVersionId: changedWorkflowVersionId,
+      },
+    };
+    const changedAuthority = authorityRecord({
+      workflowVersionId: changedWorkflowVersionId,
+      binding: {
+        ...authorityRecord().binding,
+        workflowVersionId: changedWorkflowVersionId,
+        request: changedRequest,
+      },
+    });
+    const harness = createHarness({
+      lifecycleStatus: 'PAUSED',
+      plan: {
+        kind: 'READY',
+        workspaceId,
+        campaignId,
+        workflowId,
+        workflowVersionId: changedWorkflowVersionId,
+        nodes: [
+          {
+            messageId: firstMessageId,
+            channel: 'EMAIL',
+            replyToThread: false,
+          },
+          { messageId: secondMessageId, channel: 'INSTAGRAM' },
+        ],
+        delaysSeconds: [3600],
+      },
+      createdAuthority: { kind: 'CREATED', authorization: changedAuthority },
+    });
+
+    await expect(
+      harness.service.startCampaign({
+        ...startInput(),
+        request: changedRequest,
+      }),
+    ).resolves.toMatchObject({ status: 'ACTIVATED', mayActivate: true });
+    expect(
+      harness.history.preparePriorVersionSupersessionInTransaction,
+    ).toHaveBeenCalledWith(
+      {
+        workspaceId,
+        campaignId,
+        targetWorkflowVersionId: changedWorkflowVersionId,
+      },
+      harness.manager,
+    );
+    expect(
+      harness.history.applyPriorVersionSupersessionInTransaction,
+    ).toHaveBeenCalledWith(
+      {
+        workspaceId,
+        campaignId,
+        targetWorkflowVersionId: changedWorkflowVersionId,
+        pendingOccurrenceIds: [],
+      },
+      harness.manager,
+    );
+    expect(harness.order.indexOf('history')).toBeLessThan(
+      harness.order.indexOf('create-authority'),
+    );
+  });
+
+  it('returns BLOCKED after the transaction rejects a post-supersession activation failure', async () => {
+    const changedWorkflowVersionId = '25252525-2525-4525-8525-252525252525';
+    const changedRequest: CampaignSequenceAuthorizationRequest = {
+      ...request,
+      preparedProof: {
+        ...request.preparedProof,
+        workflowVersionId: changedWorkflowVersionId,
+      },
+    };
+    const changedAuthority = authorityRecord({
+      workflowVersionId: changedWorkflowVersionId,
+      binding: {
+        ...authorityRecord().binding,
+        workflowVersionId: changedWorkflowVersionId,
+        request: changedRequest,
+      },
+    });
+    const harness = createHarness({
+      lifecycleStatus: 'PAUSED',
+      plan: {
+        kind: 'READY',
+        workspaceId,
+        campaignId,
+        workflowId,
+        workflowVersionId: changedWorkflowVersionId,
+        nodes: [
+          {
+            messageId: firstMessageId,
+            channel: 'EMAIL',
+            replyToThread: false,
+          },
+          { messageId: secondMessageId, channel: 'INSTAGRAM' },
+        ],
+        delaysSeconds: [3600],
+      },
+      createdAuthority: { kind: 'CREATED', authorization: changedAuthority },
+      persistedGraph: { inconsistent: true },
+    });
+
+    await expect(
+      harness.service.startCampaign({
+        ...startInput(),
+        request: changedRequest,
+      }),
+    ).resolves.toEqual({
+      status: 'BLOCKED',
+      reason: 'CHANGED_WORKFLOW_VERSION_UNMAPPED',
+    });
+    expect(
+      harness.history.applyPriorVersionSupersessionInTransaction,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      harness.persistence.createActivationGraphInTransaction,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it.each([

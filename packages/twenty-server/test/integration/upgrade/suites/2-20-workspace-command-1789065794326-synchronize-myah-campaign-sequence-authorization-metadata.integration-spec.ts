@@ -261,9 +261,9 @@ describe('SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand (integrati
     }
 
     if (primaryError !== undefined && cleanupError !== undefined) {
-      throw new AggregateError(
-        [primaryError, cleanupError],
-        'Integration assertions and fixture cleanup both failed',
+      throw Object.assign(
+        new Error('Integration assertions and fixture cleanup both failed'),
+        { errors: [primaryError, cleanupError] },
       );
     }
 

@@ -1,11 +1,12 @@
 import { types as nodeUtilTypes } from 'node:util';
 
+import { Inject, Injectable } from '@nestjs/common';
 import { IANA_TIME_ZONES } from 'twenty-shared/constants';
 import { type EntityManager, type QueryRunner } from 'typeorm';
 import { validate as uuidValidate } from 'uuid';
 
 import {
-  type WorkspaceCampaignCapacityTimeZoneAuthorizationPort,
+  WorkspaceCampaignCapacityTimeZoneAuthorizationPort,
   type WorkspaceCampaignCapacityTimeZoneMutationInput,
   type WorkspaceCampaignCapacityTimeZoneMutationResult,
   type WorkspaceCampaignCapacityTimeZoneReadInput,
@@ -336,8 +337,10 @@ const parseStructuredWorkspaceUpdate = (
     : null;
 };
 
+@Injectable()
 export class WorkspaceCampaignCapacityTimeZoneService {
   constructor(
+    @Inject(WorkspaceCampaignCapacityTimeZoneAuthorizationPort)
     private readonly authorization: WorkspaceCampaignCapacityTimeZoneAuthorizationPort,
   ) {}
 

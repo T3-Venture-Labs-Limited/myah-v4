@@ -4,8 +4,10 @@ import { IsNull } from 'typeorm';
 
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
+import { normalizeCampaignCreatorEmail } from 'src/modules/myah-outreach/utils/normalize-campaign-creator-email.util';
 import {
   type CampaignCreatorMaterialPort,
   type CampaignMaterialPortResult,
@@ -65,6 +67,44 @@ export class CampaignCreatorMaterialAdapter implements CampaignCreatorMaterialPo
     }
 
     try {
+      if (input.transactionManager) {
+        const runner = input.transactionManager.queryRunner;
+        if (
+          !runner?.isTransactionActive ||
+          runner.isReleased ||
+          runner.manager !== input.transactionManager
+        )
+          return creatorUnavailable();
+        const schemaName = getWorkspaceSchemaName(coordinates.workspaceId);
+        const rows = await runner.query(
+          `SELECT cc."creatorId", c.id, c.name, c.email
+             FROM "${schemaName}"."campaignCreator" cc
+             JOIN "${schemaName}".creator c ON c.id=cc."creatorId" AND c."deletedAt" IS NULL
+            WHERE cc.id=$1 AND cc."campaignId"=$2 AND cc."deletedAt" IS NULL`,
+          [coordinates.campaignCreatorId, coordinates.campaignId],
+        );
+        if (!Array.isArray(rows) || rows.length !== 1)
+          return creatorUnavailable();
+        const creator = rows[0];
+        if (typeof creator.name !== 'string' || creator.name.trim() === '')
+          return missingVariable('creator.name');
+        const normalizedRecipient = normalizeCampaignCreatorEmail(
+          creator.email,
+        );
+        if (normalizedRecipient === null) return creatorUnavailable();
+        return {
+          kind: 'READY',
+          value: {
+            creatorId: creator.id,
+            normalizedRecipient,
+            variables: {
+              'creator.name': creator.name,
+              'creator.email': normalizedRecipient,
+            },
+          },
+        };
+      }
+      if (authContext.type !== 'user') return creatorUnavailable();
       return await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         () => this.loadInWorkspaceContext(authContext, coordinates),
         authContext,
@@ -138,11 +178,9 @@ export class CampaignCreatorMaterialAdapter implements CampaignCreatorMaterialPo
       return missingVariable('creator.email');
     }
 
-    const normalizedRecipient = creator.email.trim().toLowerCase();
+    const normalizedRecipient = normalizeCampaignCreatorEmail(creator.email);
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedRecipient)) {
-      return creatorUnavailable();
-    }
+    if (normalizedRecipient === null) return creatorUnavailable();
 
     return {
       kind: 'READY',

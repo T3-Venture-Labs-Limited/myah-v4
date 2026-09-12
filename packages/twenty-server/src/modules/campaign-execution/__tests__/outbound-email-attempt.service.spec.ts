@@ -23,6 +23,7 @@ import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/typ
 
 const ids = {
   account: '22222222-2222-4222-8222-222222222222',
+  activation: '13131313-1313-4313-8313-131313131313',
   attempt: '11111111-1111-4111-8111-111111111111',
   authorization: '33333333-3333-4333-8333-333333333333',
   campaign: '44444444-4444-4444-8444-444444444444',
@@ -30,6 +31,7 @@ const ids = {
   channel: '66666666-6666-4666-8666-666666666666',
   enrollment: '77777777-7777-4777-8777-777777777777',
   evidence: '88888888-8888-4888-8888-888888888888',
+  execution: '14141414-1414-4414-8414-141414141414',
   message: '99999999-9999-4999-8999-999999999999',
   otherAccount: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
   otherChannel: '12121212-1212-4212-8212-121212121212',
@@ -160,7 +162,14 @@ const receiptFrom = (
   createdAt: new Date('2026-03-10T14:00:00.000Z'),
   finalEvidenceDigest: null,
   projectedMessageId: null,
+  projectedMessageThreadId: null,
   providerAcceptedAt: null,
+  providerHeaderMessageId: null,
+  providerMessageExternalId: null,
+  reconciledProviderHeaderMessageId: null,
+  providerThreadExternalId: null,
+  resolvedThreadExternalId: null,
+  providerDeliveredRecipients: null,
   providerMessageId: null,
   retryable: null,
   safeOutcomeReason: null,
@@ -168,9 +177,30 @@ const receiptFrom = (
   ...overrides,
 });
 
+const acceptedEvidence = (
+  providerMessageId: string,
+  projectedMessageId: string | null = null,
+) => ({
+  projectedMessageId,
+  projectedMessageThreadId: projectedMessageId === null ? null : ids.evidence,
+  providerDeliveredRecipients: {
+    to: ['recipient@example.com'],
+    cc: [],
+    bcc: [],
+  },
+  providerHeaderMessageId: `<${providerMessageId}@example.com>`,
+  providerMessageExternalId: providerMessageId,
+  providerMessageId,
+  providerThreadExternalId: 'provider-thread-1',
+  resolvedThreadExternalId: 'provider-thread-1',
+});
+
 const sequenceSubmission = (): CampaignSequenceSubmissionInput => ({
+  activationId: ids.activation,
   attemptId: ids.attempt,
+  authorizationGeneration: 1,
   authorizationId: ids.authorization,
+  campaignExecutionId: ids.execution,
   campaignId: ids.campaign,
   connectedAccountId: ids.account,
   enrollmentId: ids.enrollment,
@@ -184,7 +214,10 @@ const sequenceSubmission = (): CampaignSequenceSubmissionInput => ({
   renderDigest: digest,
   source: 'CAMPAIGN_SEQUENCE',
   submissionCapability: {
+    activationId: ids.activation,
     attemptId: ids.attempt,
+    authorizationGeneration: 1,
+    campaignExecutionId: ids.execution,
     kind: 'CAMPAIGN_SEQUENCE_SUBMISSION',
     reservationBinding: {
       attemptNumber: 1,
@@ -197,7 +230,10 @@ const sequenceSubmission = (): CampaignSequenceSubmissionInput => ({
       unknownAfter,
     },
     renderContext: {
+      activationId: ids.activation,
+      authorizationGeneration: 1,
       authorizationId: ids.authorization,
+      campaignExecutionId: ids.execution,
       campaignId: ids.campaign,
       connectedAccountId: ids.account,
       enrollmentId: ids.enrollment,
@@ -577,9 +613,16 @@ describe('OutboundEmailAttempt entity contract', () => {
       'finalEvidenceDigest',
       'providerMessageId',
       'providerAcceptedAt',
+      'providerHeaderMessageId',
+      'providerMessageExternalId',
+      'reconciledProviderHeaderMessageId',
+      'providerThreadExternalId',
+      'resolvedThreadExternalId',
+      'providerDeliveredRecipients',
       'safeOutcomeReason',
       'retryable',
       'projectedMessageId',
+      'projectedMessageThreadId',
       'createdAt',
       'updatedAt',
     ]);
@@ -1617,6 +1660,7 @@ describe('frozen outcome semantics', () => {
       'insertReservedAttempt',
       'beginSubmission',
       'blockReservedAttemptBeforeProvider',
+      'recheckProcessingWindowBeforeProvider',
       'recordAccepted',
       'recordDefinitelyUnaccepted',
       'markUnknownAfterDeadline',
@@ -1906,8 +1950,7 @@ describe('OutboundEmailAttemptService atomic capacity composition', () => {
   it('records accepted only after identity, final-digest, day-lock, and post-lock DB time fences', async () => {
     const input = {
       ...sequenceSubmission(),
-      projectedMessageId: null,
-      providerMessageId: 'provider-1',
+      ...acceptedEvidence('provider-1'),
     };
     let row = receiptFrom(sequenceReservation(), {
       attemptState: 'PROCESSING',
@@ -1945,8 +1988,18 @@ describe('OutboundEmailAttemptService atomic capacity composition', () => {
             attemptState: 'ACCEPTED',
             capacityState: 'CONSUMED',
             projectedMessageId: params[4] as null,
+            projectedMessageThreadId: params[10] as null,
             providerAcceptedAt: params[3] as Date,
+            providerDeliveredRecipients: params[9] as {
+              to: string[];
+              cc: string[];
+              bcc: string[];
+            },
+            providerHeaderMessageId: params[5] as string,
+            providerMessageExternalId: params[6] as string,
             providerMessageId: params[2] as string,
+            providerThreadExternalId: params[7] as string,
+            resolvedThreadExternalId: params[8] as string,
             retryable: false,
             safeOutcomeReason: null,
             updatedAt: params[3] as Date,
@@ -1977,8 +2030,7 @@ describe('OutboundEmailAttemptService atomic capacity composition', () => {
   it('rejects a changed winning final digest before reservation-day SQL', async () => {
     const input = {
       ...sequenceSubmission(),
-      projectedMessageId: null,
-      providerMessageId: 'provider-1',
+      ...acceptedEvidence('provider-1'),
     };
     const row = receiptFrom(sequenceReservation(), {
       attemptState: 'PROCESSING',
@@ -2063,8 +2115,8 @@ describe('OutboundEmailAttemptService atomic capacity composition', () => {
             attemptState: 'BLOCKED',
             capacityState: 'RELEASED',
             retryable: false,
-            safeOutcomeReason: 'STALE_FINAL_EVIDENCE',
-            updatedAt: _params[2] as Date,
+            safeOutcomeReason: _params[2] as string,
+            updatedAt: _params[3] as Date,
           };
           return { affected: 1, records: [row] };
         }
@@ -2078,13 +2130,17 @@ describe('OutboundEmailAttemptService atomic capacity composition', () => {
       queryRunner: { isTransactionActive: true, query },
     } as unknown as EntityManager;
     const input = {
-      reason: 'STALE_FINAL_EVIDENCE' as const,
+      reason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL' as const,
       reservation: sequenceReservation(),
     };
 
     expect(
       await service.blockReservedAttemptBeforeProvider(input, manager),
     ).toMatchObject({
+      receipt: {
+        capacityState: 'RELEASED',
+        safeOutcomeReason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL',
+      },
       status: 'RECORDED',
     });
     expect(
@@ -2119,10 +2175,9 @@ describe('OutboundEmailAttemptService atomic capacity composition', () => {
     const accepted = receiptFrom(sequenceReservation(), {
       attemptState: 'ACCEPTED',
       capacityState: 'CONSUMED',
+      ...acceptedEvidence('provider-1'),
       finalEvidenceDigest: digestB,
       providerAcceptedAt: new Date('invalid'),
-      providerMessageId: 'provider-1',
-      projectedMessageId: null,
       retryable: false,
     });
     const acceptedQuery = jest.fn(async () => [accepted]);
@@ -2132,8 +2187,7 @@ describe('OutboundEmailAttemptService atomic capacity composition', () => {
       ).recordAccepted(
         {
           ...sequenceSubmission(),
-          projectedMessageId: null,
-          providerMessageId: 'provider-1',
+          ...acceptedEvidence('provider-1'),
         },
         {
           queryRunner: { isTransactionActive: true, query: acceptedQuery },
@@ -2164,8 +2218,7 @@ describe('OutboundEmailAttemptService atomic capacity composition', () => {
       ).recordAccepted(
         {
           ...sequenceSubmission(),
-          projectedMessageId: null,
-          providerMessageId: 'provider-1',
+          ...acceptedEvidence('provider-1'),
         },
         {
           queryRunner: { isTransactionActive: true, query: invalidSampleQuery },
@@ -2578,23 +2631,45 @@ const createStatefulCompositionHarness = (options?: {
               attemptState: 'BLOCKED',
               capacityState: 'RELEASED',
               retryable: false,
-              safeOutcomeReason: 'STALE_FINAL_EVIDENCE',
-              updatedAt: params[2] as Date,
+              safeOutcomeReason: params[2] as string,
+              updatedAt: params[3] as Date,
             };
           }
         } else if (sql.includes('SET "attemptState" = \'ACCEPTED\'')) {
           family = 'acceptedCas';
           if (
-            row.attemptState === params[5] &&
-            row.capacityState === params[6]
+            row.attemptState === params[11] &&
+            row.capacityState === params[12]
           ) {
+            const campaignEvidence = row.source === 'CAMPAIGN_SEQUENCE';
+
             updated = {
               ...row,
               attemptState: 'ACCEPTED',
               capacityState: 'CONSUMED',
-              projectedMessageId: params[4] as string | null,
+              projectedMessageId: null,
+              projectedMessageThreadId: null,
               providerAcceptedAt: params[3] as Date,
+              providerDeliveredRecipients: campaignEvidence
+                ? (params[9] as {
+                    to: string[];
+                    cc: string[];
+                    bcc: string[];
+                  } | null)
+                : null,
+              providerHeaderMessageId: campaignEvidence
+                ? (params[5] as string | null)
+                : null,
+              providerMessageExternalId: campaignEvidence
+                ? (params[6] as string | null)
+                : null,
               providerMessageId: params[2] as string,
+              providerThreadExternalId: campaignEvidence
+                ? (params[7] as string | null)
+                : null,
+              resolvedThreadExternalId: campaignEvidence
+                ? (params[8] as string | null)
+                : null,
               retryable: false,
               safeOutcomeReason: null,
               updatedAt: params[3] as Date,
@@ -3174,8 +3249,7 @@ describe('real-service stateful Task4B outcomes and failures', () => {
       harness.service.resolveUnknownAccepted(
         {
           ...submission,
-          projectedMessageId: null,
-          providerMessageId: 'provider-unknown-accepted',
+          ...acceptedEvidence('provider-unknown-accepted'),
         },
         harness.manager,
       ),
@@ -3199,8 +3273,7 @@ describe('real-service stateful Task4B outcomes and failures', () => {
       await harness.service.resolveUnknownAccepted(
         {
           ...submission,
-          projectedMessageId: null,
-          providerMessageId: 'provider-unknown-accepted',
+          ...acceptedEvidence('provider-unknown-accepted'),
         },
         harness.manager,
       ),
@@ -3251,7 +3324,7 @@ describe('real-service stateful Task4B outcomes and failures', () => {
     },
   );
 
-  it('returns accepted replay and rejects changed provider/projection evidence before day SQL', async () => {
+  it('returns accepted replay and rejects changed provider or premature projection evidence', async () => {
     const harness = createStatefulCompositionHarness({
       samples: sameDaySamples(3),
     });
@@ -3260,8 +3333,7 @@ describe('real-service stateful Task4B outcomes and failures', () => {
     pushStatefulSample(harness, new Date('2026-03-10T14:00:30.000Z'));
     const input = {
       ...submission,
-      projectedMessageId: ids.message,
-      providerMessageId: 'provider-accepted',
+      ...acceptedEvidence('provider-accepted'),
     };
     expect(
       await harness.transaction(() =>
@@ -3283,18 +3355,57 @@ describe('real-service stateful Task4B outcomes and failures', () => {
         harness.manager,
       ),
     ).toMatchObject({ status: 'EVIDENCE_CONFLICT' });
-    expect(
-      await harness.service.recordAccepted(
-        { ...input, projectedMessageId: ids.evidence },
+    await expect(
+      harness.service.recordAccepted(
+        {
+          ...input,
+          projectedMessageId: ids.evidence,
+          projectedMessageThreadId: ids.message,
+        },
         harness.manager,
       ),
-    ).toMatchObject({ status: 'EVIDENCE_CONFLICT' });
+    ).rejects.toThrow('Invalid accepted outcome input');
     expect(
       harness.calls.filter(({ sql }) =>
         sql.includes('FROM "core"."mailboxCapacityDay"'),
       ),
     ).toHaveLength(dayLocksBefore);
   });
+
+  it.each(['CAMPAIGN_TEST', 'INBOX'] as const)(
+    'preserves legacy accepted shape and exact replay for %s',
+    async (source) => {
+      const harness = createStatefulCompositionHarness({
+        samples: sameDaySamples(3),
+      });
+      const { submission } = await reserveAndBeginStatefully(harness, source);
+
+      pushStatefulSample(harness, new Date('2026-03-10T14:00:30.000Z'));
+      const input = {
+        ...submission,
+        ...acceptedEvidence(`provider-${source.toLowerCase()}`),
+      };
+      const recorded = await harness.transaction(() =>
+        harness.service.recordAccepted(input, harness.manager),
+      );
+
+      expect(recorded).toMatchObject({
+        receipt: {
+          projectedMessageId: null,
+          projectedMessageThreadId: null,
+          providerDeliveredRecipients: null,
+          providerHeaderMessageId: null,
+          providerMessageExternalId: null,
+          providerThreadExternalId: null,
+          resolvedThreadExternalId: null,
+        },
+        status: 'RECORDED',
+      });
+      await expect(
+        harness.service.recordAccepted(input, harness.manager),
+      ).resolves.toMatchObject({ status: 'EXACT_REPLAY' });
+    },
+  );
 
   it.each(['CAMPAIGN_SEQUENCE', 'CAMPAIGN_TEST', 'INBOX'] as const)(
     'rejects a %s persisted winning-final-digest mismatch before day SQL',
@@ -3317,8 +3428,7 @@ describe('real-service stateful Task4B outcomes and failures', () => {
       const result = await harness.service.recordAccepted(
         {
           ...mismatched,
-          projectedMessageId: null,
-          providerMessageId: 'provider-mismatch',
+          ...acceptedEvidence('provider-mismatch'),
         },
         harness.manager,
       );
@@ -3338,8 +3448,7 @@ describe('real-service stateful Task4B outcomes and failures', () => {
       await empty.service.recordAccepted(
         {
           ...sequenceSubmission(),
-          projectedMessageId: null,
-          providerMessageId: 'missing',
+          ...acceptedEvidence('missing'),
         },
         empty.manager,
       ),
@@ -3377,8 +3486,7 @@ describe('real-service stateful Task4B outcomes and failures', () => {
       harness.service.recordAccepted(
         {
           ...submission,
-          projectedMessageId: null,
-          providerMessageId: 'accepted-first',
+          ...acceptedEvidence('accepted-first'),
         },
         harness.manager,
       ),
@@ -3757,8 +3865,7 @@ describe('real-service aggregate rollback after successful outcome CAS', () => {
           return harness.service.recordAccepted(
             {
               ...submission,
-              projectedMessageId: null,
-              providerMessageId: 'provider-aggregate',
+              ...acceptedEvidence('provider-aggregate'),
             },
             harness.manager,
           );
@@ -3776,8 +3883,7 @@ describe('real-service aggregate rollback after successful outcome CAS', () => {
           return harness.service.resolveUnknownAccepted(
             {
               ...submission,
-              projectedMessageId: null,
-              providerMessageId: 'provider-resolved-aggregate',
+              ...acceptedEvidence('provider-resolved-aggregate'),
             },
             harness.manager,
           );
@@ -3919,8 +4025,7 @@ describe('real-service outcome structured-result validation', () => {
             return harness.service.recordAccepted(
               {
                 ...submission,
-                projectedMessageId: null,
-                providerMessageId: 'provider-structured',
+                ...acceptedEvidence('provider-structured'),
               },
               harness.manager,
             );
@@ -3938,8 +4043,7 @@ describe('real-service outcome structured-result validation', () => {
             return harness.service.resolveUnknownAccepted(
               {
                 ...submission,
-                projectedMessageId: null,
-                providerMessageId: 'provider-resolved-structured',
+                ...acceptedEvidence('provider-resolved-structured'),
               },
               harness.manager,
             );
@@ -4031,9 +4135,8 @@ describe('real-service composed selection and readiness exits', () => {
       harness.service.recordAccepted(
         {
           ...submission,
+          ...acceptedEvidence('pinned-test-mismatch'),
           finalEvidenceDigest: digest,
-          projectedMessageId: null,
-          providerMessageId: 'pinned-test-mismatch',
         },
         harness.manager,
       ),
@@ -4044,8 +4147,7 @@ describe('real-service composed selection and readiness exits', () => {
         harness.service.recordAccepted(
           {
             ...submission,
-            projectedMessageId: null,
-            providerMessageId: 'pinned-test-accepted',
+            ...acceptedEvidence('pinned-test-accepted'),
           },
           harness.manager,
         ),

@@ -1,10 +1,21 @@
 import { types as nodeUtilTypes } from 'node:util';
 
+import { Inject, Injectable } from '@nestjs/common';
 import { IANA_TIME_ZONES } from 'twenty-shared/constants';
 import { validate as uuidValidate } from 'uuid';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { type CampaignLifecycleTransactionService } from 'src/modules/campaign-execution/services/campaign-lifecycle-transaction.service';
+import {
+  CAMPAIGN_CAPACITY_TIME_ZONE_READER_PORT,
+  CAMPAIGN_EXECUTION_HISTORY_PORT,
+  CAMPAIGN_EXECUTION_IDENTITY_PORT,
+  CAMPAIGN_EXECUTION_PERSISTENCE_PORT,
+  CAMPAIGN_EXECUTION_PLAN_READER_PORT,
+  CAMPAIGN_INITIAL_DUE_TIME_PORT,
+  CAMPAIGN_NEW_ACTIVATION_REVIEW_PORT,
+  CAMPAIGN_SEQUENCE_AUTHORITY_PORT,
+} from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
+import { CampaignLifecycleTransactionService } from 'src/modules/campaign-execution/services/campaign-lifecycle-transaction.service';
 import { type LockedCampaignLifecycleContext } from 'src/modules/campaign-execution/types/campaign-lifecycle-transaction.type';
 import {
   type CampaignActivationGraph,
@@ -20,6 +31,7 @@ import {
   type CampaignExecutionScopeInput,
   type CampaignInitialDueTimePort,
   type CampaignNewActivationReviewPort,
+  type LookupStartReplayInput,
   type CampaignPlannedEnrollment,
   type CampaignSendingWindow,
   type CampaignSequenceAuthorizationRecord,
@@ -55,6 +67,8 @@ type PreparedEnrollment = Readonly<{
   anchorAt: string | null;
   delaySeconds: number;
 }>;
+
+class CampaignChangedVersionStartRollbackError extends Error {}
 
 type ConsistentLifecycle = Readonly<{
   structure: CampaignSequenceAuthorityStructureResult;
@@ -1189,30 +1203,157 @@ const prepareEnrollment = (
   });
 };
 
+@Injectable()
 export class CampaignExecutionService {
   constructor(
     private readonly transaction: CampaignLifecycleTransactionService,
+    @Inject(CAMPAIGN_SEQUENCE_AUTHORITY_PORT)
     private readonly authority: CampaignSequenceAuthorityPort,
+    @Inject(CAMPAIGN_EXECUTION_PERSISTENCE_PORT)
     private readonly persistence: CampaignExecutionPersistencePort,
+    @Inject(CAMPAIGN_CAPACITY_TIME_ZONE_READER_PORT)
     private readonly capacityTimeZone: CampaignCapacityTimeZoneReaderPort,
+    @Inject(CAMPAIGN_EXECUTION_PLAN_READER_PORT)
     private readonly planReader: CampaignExecutionPlanReaderPort,
+    @Inject(CAMPAIGN_NEW_ACTIVATION_REVIEW_PORT)
     private readonly review: CampaignNewActivationReviewPort,
+    @Inject(CAMPAIGN_EXECUTION_HISTORY_PORT)
     private readonly history: CampaignExecutionHistoryPort,
+    @Inject(CAMPAIGN_INITIAL_DUE_TIME_PORT)
     private readonly dueTime: CampaignInitialDueTimePort,
+    @Inject(CAMPAIGN_EXECUTION_IDENTITY_PORT)
     private readonly identity: CampaignExecutionIdentityPort,
   ) {}
+
+  async lookupStartReplay(
+    input: LookupStartReplayInput,
+  ): Promise<StartCampaignResult | null> {
+    const raw = readExactRecord(input, [
+      'workspaceId',
+      'campaignId',
+      'authContext',
+      'startIdempotencyKey',
+    ]);
+    if (
+      raw === null ||
+      typeof raw.workspaceId !== 'string' ||
+      typeof raw.campaignId !== 'string' ||
+      typeof raw.startIdempotencyKey !== 'string' ||
+      !isCanonicalUuid(raw.startIdempotencyKey)
+    ) {
+      throw new Error('Campaign Start replay lookup input was invalid');
+    }
+
+    const startIdempotencyKey = raw.startIdempotencyKey;
+    return this.transaction.run(
+      {
+        workspaceId: raw.workspaceId,
+        campaignId: raw.campaignId,
+        authContext: raw.authContext as WorkspaceAuthContext,
+      },
+      async (context) => {
+        const lifecycle = lifecycleState(context);
+        if (lifecycle === null) {
+          return Object.freeze({
+            status: 'BLOCKED',
+            reason: 'INCONSISTENT_CURRENT_AUTHORITY',
+          });
+        }
+        const consistency = await this.inspectLifecycle(context, lifecycle);
+        if (consistency === null) {
+          return Object.freeze({
+            status: 'BLOCKED',
+            reason: 'INCONSISTENT_CURRENT_AUTHORITY',
+          });
+        }
+        const lookup = readDataRecord(
+          await this.authority.lookupStartKeyInTransaction(
+            authorityContext(context),
+            Object.freeze({ startIdempotencyKey }),
+          ),
+        );
+        if (lookup?.kind === 'NOT_FOUND' && Object.keys(lookup).length === 1)
+          return null;
+        if (lookup?.kind !== 'FOUND' || Object.keys(lookup).length !== 2) {
+          throw new Error('Campaign Start replay lookup was inconsistent');
+        }
+        const matchedAuthority = parseAuthority(lookup.authorization, context);
+        if (
+          matchedAuthority === null ||
+          matchedAuthority.startIdempotencyKey !== startIdempotencyKey
+        ) {
+          throw new Error('Campaign Start replay authority was inconsistent');
+        }
+        const activation = parseActivation(
+          await this.persistence.loadActivationByAuthorizationInTransaction(
+            context,
+            matchedAuthority.authorizationId,
+          ),
+          context,
+        );
+        const execution =
+          consistency.execution ??
+          parseExecution(
+            await this.persistence.loadExecutionInTransaction(context),
+            context,
+          );
+        if (
+          activation === null ||
+          execution === null ||
+          !authorityMatchesActivation(matchedAuthority, activation, execution)
+        ) {
+          return Object.freeze({
+            status: 'BLOCKED',
+            reason: 'INCONSISTENT_CURRENT_AUTHORITY',
+          });
+        }
+        const currentAuthority =
+          consistency.structure.kind === 'CURRENT_ACTIVE'
+            ? consistency.structure.authorization
+            : null;
+        const sameCurrentAuthorization =
+          lifecycle === 'ACTIVE' &&
+          currentAuthority?.authorizationId ===
+            matchedAuthority.authorizationId;
+        if (
+          sameCurrentAuthorization &&
+          !jsonEqual(currentAuthority, matchedAuthority)
+        ) {
+          return Object.freeze({
+            status: 'BLOCKED',
+            reason: 'INCONSISTENT_CURRENT_AUTHORITY',
+          });
+        }
+        return Object.freeze({
+          status: 'REPLAYED',
+          mayActivate: sameCurrentAuthorization,
+          activation: activationResult(activation),
+        });
+      },
+    );
+  }
 
   async startCampaign(input: StartCampaignInput): Promise<StartCampaignResult> {
     const detachedInput = snapshotStartInput(input);
 
-    return this.transaction.run(
-      {
-        workspaceId: detachedInput.workspaceId,
-        campaignId: detachedInput.campaignId,
-        authContext: detachedInput.authContext,
-      },
-      async (context) => this.startInTransaction(detachedInput, context),
-    );
+    try {
+      return await this.transaction.run(
+        {
+          workspaceId: detachedInput.workspaceId,
+          campaignId: detachedInput.campaignId,
+          authContext: detachedInput.authContext,
+        },
+        async (context) => this.startInTransaction(detachedInput, context),
+      );
+    } catch (error) {
+      if (error instanceof CampaignChangedVersionStartRollbackError) {
+        return Object.freeze({
+          status: 'BLOCKED',
+          reason: 'CHANGED_WORKFLOW_VERSION_UNMAPPED',
+        });
+      }
+      throw error;
+    }
   }
 
   async pauseCampaign(
@@ -1606,17 +1747,13 @@ export class CampaignExecutionService {
       });
     }
 
-    if (
+    const changedPriorVersionId =
       lifecycle === 'PAUSED' &&
       consistency.structure.kind === 'CURRENT_REVOKED' &&
       consistency.structure.authorization.workflowVersionId !==
         input.request.preparedProof.workflowVersionId
-    ) {
-      return Object.freeze({
-        status: 'BLOCKED',
-        reason: 'CHANGED_WORKFLOW_VERSION_UNMAPPED',
-      });
-    }
+        ? consistency.structure.authorization.workflowVersionId
+        : null;
 
     const execution = parseExecution(
       await this.persistence.loadExecutionInTransaction(context),
@@ -1741,54 +1878,101 @@ export class CampaignExecutionService {
       preparedEnrollments.push(prepared);
     }
 
-    const created = readExactRecord(
-      await this.authority.createNewAuthorizationInTransaction(
-        authorityContext(context),
-        Object.freeze({
-          startIdempotencyKey: input.startIdempotencyKey,
-          campaignExecutionId: execution.campaignExecutionId,
-          request: input.request,
-        }),
-      ),
-      ['kind', 'authorization'],
-    );
-    const createdAuthority =
-      created?.kind === 'CREATED'
-        ? parseAuthority(created.authorization, context)
-        : null;
+    let supersessionStarted = false;
 
-    if (
-      createdAuthority === null ||
-      createdAuthority.state !== 'ACTIVE' ||
-      createdAuthority.campaignExecutionId !== execution.campaignExecutionId ||
-      createdAuthority.startIdempotencyKey !== input.startIdempotencyKey ||
-      createdAuthority.workflowVersionId !== plan.workflowVersionId ||
-      !jsonEqual(createdAuthority.binding.request, input.request)
-    ) {
-      throw new Error('Created Campaign authority was inconsistent');
+    try {
+      if (changedPriorVersionId !== null) {
+        const supersession =
+          await this.history.preparePriorVersionSupersessionInTransaction(
+            Object.freeze({
+              workspaceId: context.workspaceId,
+              campaignId: context.campaignId,
+              targetWorkflowVersionId: plan.workflowVersionId,
+            }),
+            context.manager,
+          );
+        if (
+          supersession.status !== 'READY' ||
+          !Array.isArray(supersession.pendingOccurrenceIds) ||
+          supersession.pendingOccurrenceIds.some((id) => !isCanonicalUuid(id))
+        ) {
+          return Object.freeze({
+            status: 'BLOCKED',
+            reason: 'CHANGED_WORKFLOW_VERSION_UNMAPPED',
+          });
+        }
+        supersessionStarted = true;
+        await this.history.applyPriorVersionSupersessionInTransaction(
+          Object.freeze({
+            workspaceId: context.workspaceId,
+            campaignId: context.campaignId,
+            targetWorkflowVersionId: plan.workflowVersionId,
+            pendingOccurrenceIds: Object.freeze([
+              ...supersession.pendingOccurrenceIds,
+            ]),
+          }),
+          context.manager,
+        );
+      }
+
+      const created = readExactRecord(
+        await this.authority.createNewAuthorizationInTransaction(
+          authorityContext(context),
+          Object.freeze({
+            startIdempotencyKey: input.startIdempotencyKey,
+            campaignExecutionId: execution.campaignExecutionId,
+            request: input.request,
+          }),
+        ),
+        ['kind', 'authorization'],
+      );
+      const createdAuthority =
+        created?.kind === 'CREATED'
+          ? parseAuthority(created.authorization, context)
+          : null;
+
+      if (
+        createdAuthority === null ||
+        createdAuthority.state !== 'ACTIVE' ||
+        createdAuthority.campaignExecutionId !==
+          execution.campaignExecutionId ||
+        createdAuthority.startIdempotencyKey !== input.startIdempotencyKey ||
+        createdAuthority.workflowVersionId !== plan.workflowVersionId ||
+        !jsonEqual(createdAuthority.binding.request, input.request)
+      ) {
+        throw new Error('Created Campaign authority was inconsistent');
+      }
+
+      const graph = this.buildActivationGraph(
+        context,
+        execution,
+        createdAuthority,
+        plan,
+        preparedEnrollments,
+      );
+      const persisted =
+        await this.persistence.createActivationGraphInTransaction(
+          context,
+          graph,
+        );
+
+      if (!jsonEqual(persisted, graph)) {
+        throw new Error('Created Campaign activation graph was inconsistent');
+      }
+
+      return Object.freeze({
+        status: 'ACTIVATED',
+        mayActivate: true,
+        activation: activationResult(graph.activation),
+      });
+    } catch (error) {
+      if (supersessionStarted) {
+        throw new CampaignChangedVersionStartRollbackError(
+          `Changed-version Start rolled back after supersession: ${error instanceof Error ? error.message : 'unknown failure'}`,
+        );
+      }
+      throw error;
     }
-
-    const graph = this.buildActivationGraph(
-      context,
-      execution,
-      createdAuthority,
-      plan,
-      preparedEnrollments,
-    );
-    const persisted = await this.persistence.createActivationGraphInTransaction(
-      context,
-      graph,
-    );
-
-    if (!jsonEqual(persisted, graph)) {
-      throw new Error('Created Campaign activation graph was inconsistent');
-    }
-
-    return Object.freeze({
-      status: 'ACTIVATED',
-      mayActivate: true,
-      activation: activationResult(graph.activation),
-    });
   }
 
   private async inspectLifecycle(

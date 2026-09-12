@@ -143,6 +143,8 @@ export const CampaignOutreachWorkflowEditor = ({
     reloadGeneration,
     save,
     saving,
+    publish,
+    publishing,
     selectedMessageId,
     selectMessage,
     setDraft,
@@ -161,11 +163,12 @@ export const CampaignOutreachWorkflowEditor = ({
       ? null
       : (draft?.messages[selectedMessageIndex] ?? null);
   const editable = snapshot?.editable === true;
-  const lifecycleLabel = editable
-    ? snapshot?.lifecycleStatus === 'STOPPED'
+  const lifecycleLabel =
+    snapshot?.lifecycleStatus === 'PAUSED'
       ? 'Stopped'
-      : 'Draft'
-    : (snapshot?.lifecycleStatus ?? 'Read only');
+      : editable
+        ? 'Draft'
+        : (snapshot?.lifecycleStatus ?? 'Read only');
   const saveAllowed =
     draft !== null && campaignSequenceSchema.safeParse(draft).success;
 
@@ -193,6 +196,18 @@ export const CampaignOutreachWorkflowEditor = ({
                 onReload={reload}
                 onReview={() => setShowReview(true)}
                 onSave={save}
+                onPublish={publish}
+                publishAllowed={
+                  !dirty &&
+                  snapshot.versionStatus === 'DRAFT' &&
+                  issues.length === 0 &&
+                  draft.messages.length > 0 &&
+                  draft.messages.every(
+                    (message) =>
+                      message.channel === 'EMAIL' && message.files.length === 0,
+                  )
+                }
+                publishing={publishing}
                 reviewAllowed={draft.messages.length > 0}
                 saveAllowed={saveAllowed}
                 saving={saving}
@@ -231,8 +246,8 @@ export const CampaignOutreachWorkflowEditor = ({
                     : `${issues.length} authoring issue${issues.length === 1 ? '' : 's'} must be corrected before launch.`}
                 </p>
                 <p>
-                  Canonical Creator preview and audience readiness are
-                  unavailable; Start remains disabled.
+                  Review the authoritative eligible and excluded Creator
+                  audience in Campaign Operations before Start.
                 </p>
                 <ul>
                   {issues.map((issue) => (

@@ -193,13 +193,20 @@ export class CampaignMessageMaterializerService {
     let email: ValidatedCampaignSequenceEmail;
 
     try {
-      email = await this.campaignSequenceService.loadEmailByVersion({
+      const loadInput = {
         workspaceId: coordinates.workspaceId,
         campaignId: coordinates.campaignId,
         workflowVersionId: coordinates.workflowVersionId,
         messageId: coordinates.messageId,
         authContext: context.authContext,
-      });
+      };
+      email =
+        context.kind === 'DISPATCH'
+          ? await this.campaignSequenceService.loadEmailByVersionInTransaction(
+              loadInput,
+              context.transactionManager,
+            )
+          : await this.campaignSequenceService.loadEmailByVersion(loadInput);
     } catch (error) {
       return {
         kind: 'BLOCKED',
@@ -251,6 +258,9 @@ export class CampaignMessageMaterializerService {
         this.creatorPort.load({
           coordinates,
           authContext: context.authContext,
+          ...(context.kind === 'DISPATCH'
+            ? { transactionManager: context.transactionManager }
+            : {}),
         }),
         this.fixedMaterialService.loadMessageFixedMaterial({
           workspaceId: coordinates.workspaceId,
@@ -258,6 +268,9 @@ export class CampaignMessageMaterializerService {
           messageId: coordinates.messageId,
           files: email.files,
           authContext: context.authContext,
+          ...(context.kind === 'DISPATCH'
+            ? { transactionManager: context.transactionManager }
+            : {}),
         }),
         this.senderPort.load({ coordinates, context }),
       ]);
@@ -356,12 +369,16 @@ export class CampaignMessageMaterializerService {
   ): CampaignMessageBlocker[] {
     if (
       context.authContext.workspace.id !== coordinates.workspaceId ||
-      context.authContext.userWorkspaceId !==
-        (context.kind === 'DISPATCH'
-          ? context.renderContext.initiatorUserWorkspaceId
-          : context.requesterUserWorkspaceId) ||
-      (context.kind !== 'DISPATCH' &&
-        context.authContext.user.id !== context.requesterUserId)
+      (context.kind === 'DISPATCH'
+        ? context.authContext.type !== 'system' ||
+          context.transactionManager.queryRunner?.manager !==
+            context.transactionManager ||
+          !context.transactionManager.queryRunner.isTransactionActive ||
+          context.transactionManager.queryRunner.isReleased
+        : context.authContext.type !== 'user' ||
+          context.authContext.userWorkspaceId !==
+            context.requesterUserWorkspaceId ||
+          context.authContext.user.id !== context.requesterUserId)
     ) {
       return [
         blocker('MATERIAL_STALE', 'Render authority does not match the email'),

@@ -29,6 +29,7 @@ const CAMPAIGN_SEQUENCE_SNAPSHOT_FIELDS = gql`
     versionId
     sequence
     lifecycleStatus
+    versionStatus
     editable
     issues {
       code
@@ -67,6 +68,15 @@ export const SAVE_CAMPAIGN_SEQUENCE = gql`
   ${CAMPAIGN_SEQUENCE_SNAPSHOT_FIELDS}
   mutation SaveCampaignSequence($input: SaveCampaignSequenceInput!) {
     saveCampaignSequence(input: $input) {
+      ...CampaignSequenceSnapshotFields
+    }
+  }
+`;
+
+export const PUBLISH_CAMPAIGN_SEQUENCE = gql`
+  ${CAMPAIGN_SEQUENCE_SNAPSHOT_FIELDS}
+  mutation PublishCampaignSequence($input: PublishCampaignSequenceInput!) {
+    publishCampaignSequence(input: $input) {
       ...CampaignSequenceSnapshotFields
     }
   }

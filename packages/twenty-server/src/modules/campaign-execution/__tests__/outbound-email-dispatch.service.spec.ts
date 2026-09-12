@@ -21,6 +21,7 @@ import { type MessagingMessageOutboundService } from 'src/modules/messaging/mess
 
 const ids = {
   account: '11111111-1111-4111-8111-111111111111',
+  activation: '13131313-1313-4313-8313-131313131313',
   attempt: '22222222-2222-4222-8222-222222222222',
   authorization: '33333333-3333-4333-8333-333333333333',
   campaign: '44444444-4444-4444-8444-444444444444',
@@ -28,6 +29,7 @@ const ids = {
   channel: '66666666-6666-4666-8666-666666666666',
   enrollment: '77777777-7777-4777-8777-777777777777',
   evidence: '88888888-8888-4888-8888-888888888888',
+  execution: '14141414-1414-4414-8414-141414141414',
   message: '99999999-9999-4999-8999-999999999999',
   occurrence: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   proof: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
@@ -43,9 +45,23 @@ const transportDigest = 'e'.repeat(64);
 const updatedAt = new Date('2026-09-09T12:00:00.000Z');
 const unknownAfter = new Date('2026-09-09T12:01:00.000Z');
 
+const acceptedEvidence = {
+  projectedMessageId: null,
+  projectedMessageThreadId: null,
+  providerDeliveredRecipients: null,
+  providerHeaderMessageId: '<header@example.com>',
+  providerMessageExternalId: 'provider-123',
+  providerMessageId: 'provider-123',
+  providerThreadExternalId: null,
+  resolvedThreadExternalId: '<header@example.com>',
+};
+
 const sequenceSubmission = (): CampaignSequenceSubmissionInput => ({
+  activationId: ids.activation,
   attemptId: ids.attempt,
+  authorizationGeneration: 1,
   authorizationId: ids.authorization,
+  campaignExecutionId: ids.execution,
   campaignId: ids.campaign,
   connectedAccountId: ids.account,
   enrollmentId: ids.enrollment,
@@ -59,10 +75,16 @@ const sequenceSubmission = (): CampaignSequenceSubmissionInput => ({
   renderDigest,
   source: 'CAMPAIGN_SEQUENCE',
   submissionCapability: {
+    activationId: ids.activation,
     attemptId: ids.attempt,
+    authorizationGeneration: 1,
+    campaignExecutionId: ids.execution,
     kind: 'CAMPAIGN_SEQUENCE_SUBMISSION',
     renderContext: {
+      activationId: ids.activation,
+      authorizationGeneration: 1,
       authorizationId: ids.authorization,
+      campaignExecutionId: ids.execution,
       campaignId: ids.campaign,
       connectedAccountId: ids.account,
       enrollmentId: ids.enrollment,
@@ -252,7 +274,14 @@ const receipt = (
     localDate: '2026-09-09',
     priorAcceptedEvidenceId: null,
     projectedMessageId: null,
+    projectedMessageThreadId: null,
     providerAcceptedAt: null,
+    providerHeaderMessageId: null,
+    providerMessageExternalId: null,
+    reconciledProviderHeaderMessageId: null,
+    providerThreadExternalId: null,
+    resolvedThreadExternalId: null,
+    providerDeliveredRecipients: null,
     providerMessageId: null,
     reservationEvidence: undefined,
     retryable: null,
@@ -281,6 +310,9 @@ const createHarness = () => {
   ] as unknown as EntityManager[];
   let transactionIndex = 0;
   const transactionPort: OutboundEmailDispatchTransactionPort = {
+    runPreProviderTransaction: async <Result>(
+      work: (manager: EntityManager) => Promise<Result>,
+    ) => work(managers[1]),
     runInTransaction: jest.fn(async (work) => {
       const index = transactionIndex++;
       events.push(`transaction:${index}:start`);
@@ -303,11 +335,19 @@ const createHarness = () => {
     now: jest.fn().mockReturnValueOnce(10_000).mockReturnValueOnce(10_000),
   };
   const attemptService = {
+    blockReservedAttemptBeforeProvider: jest.fn(async () => ({
+      receipt: receipt(),
+      status: 'RECORDED' as const,
+    })),
     beginSubmission: jest.fn(async () => {
       events.push('beginSubmission');
       return { receipt: receipt(), status: 'PROCESSING_ACQUIRED' as const };
     }),
     getReceipt: jest.fn(),
+    recheckProcessingWindowBeforeProvider: jest.fn(async () => ({
+      receipt: receipt(),
+      status: 'SAFE' as const,
+    })),
     markUnknownAfterDeadline: jest.fn(async () => recorded('UNKNOWN')),
     recordAccepted: jest.fn(async () => {
       events.push('recordAccepted');
@@ -371,6 +411,21 @@ describe('OutboundEmailDispatchService', () => {
       expect(harness.outboundService.sendMessage).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('re-reads the committed PROCESSING deadline and never calls the provider when unsafe', async () => {
+    const harness = createHarness();
+    harness.attemptService.recheckProcessingWindowBeforeProvider.mockResolvedValue(
+      { status: 'UNSAFE', receipt: receipt() },
+    );
+
+    await expect(
+      harness.service.dispatch(dispatchInput()),
+    ).resolves.toMatchObject({ status: 'DEFINITELY_UNACCEPTED_RECORDED' });
+    expect(
+      harness.attemptService.recheckProcessingWindowBeforeProvider,
+    ).toHaveBeenCalledTimes(1);
+    expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
+  });
 
   it.each([
     ['kind mismatch', (input: any) => (input.kind = 'DIRECT_FINAL')],
@@ -502,8 +557,23 @@ describe('OutboundEmailDispatchService', () => {
     );
   });
 
-  it.each(['DENIED', 'STALE', 'SUPPRESSED'] as const)(
-    'rolls back before CAS/provider for %s authority',
+  it.each([
+    'WORKSPACE_NOT_ACTIVE',
+    'CAMPAIGN_PAUSED',
+    'CAMPAIGN_STOPPED',
+    'AUTHORIZATION_STALE',
+    'ENROLLMENT_REPLIED',
+    'OCCURRENCE_CANCELLED',
+    'RECIPIENT_SUPPRESSED',
+    'AUDIENCE_DUPLICATE',
+    'AUDIENCE_STAGE_INVALID',
+    'AUDIENCE_CONTACT_INVALID',
+    'MATERIAL_STALE',
+    'SENDER_NOT_READY',
+    'THREAD_EVIDENCE_INVALID',
+    'DISPATCH_CONTRACT_CONFLICT',
+  ] as const)(
+    'commits exact block reason before CAS/provider for %s authority',
     async (reason) => {
       const harness = createHarness();
       harness.revalidator.revalidate = jest.fn(async () => ({
@@ -515,6 +585,12 @@ describe('OutboundEmailDispatchService', () => {
         reason,
         status: 'AUTHORITY_REJECTED',
       });
+      expect(
+        harness.attemptService.blockReservedAttemptBeforeProvider,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ reason }),
+        expect.anything(),
+      );
       expect(harness.attemptService.beginSubmission).not.toHaveBeenCalled();
       expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
     },
@@ -590,7 +666,7 @@ describe('OutboundEmailDispatchService', () => {
     },
   );
 
-  it('rejects a nonfinite clock anchor before opening a transaction', async () => {
+  it('blocks and releases for a nonfinite initial clock anchor', async () => {
     const harness = createHarness();
     (harness.clock.now as jest.Mock)
       .mockReset()
@@ -599,7 +675,12 @@ describe('OutboundEmailDispatchService', () => {
     await expect(harness.service.dispatch(dispatchInput())).resolves.toEqual({
       status: 'CONTRACT_CONFLICT',
     });
-    expect(harness.transactionPort.runInTransaction).not.toHaveBeenCalled();
+    expect(
+      harness.attemptService.blockReservedAttemptBeforeProvider,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'DISPATCH_CONTRACT_CONFLICT' }),
+      expect.anything(),
+    );
     expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -616,7 +697,7 @@ describe('OutboundEmailDispatchService', () => {
     expect(harness.outboundService.sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects a driver timeout other than the fixed 30 seconds before SQL', async () => {
+  it('blocks and releases for a driver timeout other than fixed 30 seconds', async () => {
     const harness = createHarness();
     harness.outboundService.getProviderRequestTimeoutMs.mockReturnValueOnce(
       29_999,
@@ -625,7 +706,12 @@ describe('OutboundEmailDispatchService', () => {
     await expect(harness.service.dispatch(dispatchInput())).resolves.toEqual({
       status: 'CONTRACT_CONFLICT',
     });
-    expect(harness.transactionPort.runInTransaction).not.toHaveBeenCalled();
+    expect(
+      harness.attemptService.blockReservedAttemptBeforeProvider,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'DISPATCH_CONTRACT_CONFLICT' }),
+      expect.anything(),
+    );
     expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -648,7 +734,7 @@ describe('OutboundEmailDispatchService', () => {
 
       expect(harness.attemptService.recordAccepted).toHaveBeenCalledWith(
         expect.objectContaining({
-          projectedMessageId: ids.message,
+          projectedMessageId: null,
           providerMessageId: expectedId,
         }),
         expect.anything(),
@@ -812,7 +898,7 @@ describe('OutboundEmailDispatchService', () => {
     expect(result).toMatchObject({
       evidence: {
         kind: 'ACCEPTED_EVIDENCE',
-        projectedMessageId: ids.message,
+        projectedMessageId: null,
         providerMessageId: 'provider-123',
       },
       status: 'OUTCOME_RECOVERY_REQUIRED',
@@ -835,8 +921,7 @@ describe('OutboundEmailDispatchService', () => {
     await expect(
       harness.service.recover({
         kind: 'ACCEPTED_EVIDENCE',
-        projectedMessageId: ids.message,
-        providerMessageId: 'provider-123',
+        ...acceptedEvidence,
         submission: sequenceSubmission(),
       }),
     ).resolves.toMatchObject({ status: 'ACCEPTED_RECORDED' });
@@ -884,8 +969,7 @@ describe('OutboundEmailDispatchService', () => {
     await expect(
       harness.service.recover({
         kind: 'ACCEPTED_EVIDENCE',
-        projectedMessageId: ids.message,
-        providerMessageId: 'provider-123',
+        ...acceptedEvidence,
         submission: sequenceSubmission(),
       }),
     ).resolves.toMatchObject({ status: 'OUTCOME_RECOVERY_REQUIRED' });
@@ -991,7 +1075,7 @@ describe('OutboundEmailDispatchService', () => {
     );
   });
 
-  it('retains verified projectedMessageId while provider execution is pending', async () => {
+  it('defers projected Message coordinates until reconciliation', async () => {
     const harness = createHarness();
     let resolveProvider:
       | ((value: { headerMessageId: string }) => void)
@@ -1015,7 +1099,7 @@ describe('OutboundEmailDispatchService', () => {
     await pending;
 
     expect(harness.attemptService.recordAccepted).toHaveBeenCalledWith(
-      expect.objectContaining({ projectedMessageId: ids.message }),
+      expect.objectContaining({ projectedMessageId: null }),
       expect.anything(),
     );
   });
@@ -1301,8 +1385,7 @@ describe('OutboundEmailDispatchService', () => {
         await expect(
           harness.service.recover({
             kind: 'ACCEPTED_EVIDENCE',
-            projectedMessageId: ids.message,
-            providerMessageId: 'provider-123',
+            ...acceptedEvidence,
             submission: sequenceSubmission(),
           }),
         ).resolves.toMatchObject({ status: 'ACCEPTED_RECORDED' });
@@ -1325,7 +1408,7 @@ describe('OutboundEmailDispatchService', () => {
   it.each([
     [
       { headerMessageId: '<header@example.com>', messageExternalId: 42 },
-      'ACCEPTED_RECORDED',
+      'OUTCOME_RECOVERY_REQUIRED',
     ],
     [
       { headerMessageId: 42, messageExternalId: null },
@@ -1334,7 +1417,7 @@ describe('OutboundEmailDispatchService', () => {
     [null, 'OUTCOME_RECOVERY_REQUIRED'],
     [42, 'OUTCOME_RECOVERY_REQUIRED'],
   ])(
-    'keeps malformed fulfilled output accepted: %#',
+    'treats malformed fulfilled output as unpersistable: %#',
     async (providerResult, status) => {
       const harness = createHarness();
       harness.outboundService.sendMessage.mockResolvedValueOnce(
@@ -1526,7 +1609,7 @@ describe('OutboundEmailDispatchService', () => {
         )),
     ],
   ])(
-    'blocks malformed IMAP material before authority/CAS/provider: %s',
+    'transactionally blocks malformed IMAP material before authority/provider: %s',
     async (_name, mutate) => {
       const harness = createHarness();
       const input = imapDispatchInput();
@@ -1539,6 +1622,20 @@ describe('OutboundEmailDispatchService', () => {
         status: 'BLOCKED',
       });
       expect(JSON.stringify(result)).not.toContain('secret');
+      expect(harness.transactionPort.runInTransaction).toHaveBeenCalledTimes(1);
+      expect(
+        harness.attemptService.blockReservedAttemptBeforeProvider,
+      ).toHaveBeenCalledWith(
+        {
+          reason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL',
+          reservation: expect.objectContaining({
+            attemptId: ids.attempt,
+            source: 'CAMPAIGN_SEQUENCE',
+            workspaceId: ids.workspace,
+          }),
+        },
+        expect.anything(),
+      );
       expect(harness.revalidator.revalidate).not.toHaveBeenCalled();
       expect(harness.attemptService.beginSubmission).not.toHaveBeenCalled();
       expect(
@@ -1547,6 +1644,25 @@ describe('OutboundEmailDispatchService', () => {
       expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
     },
   );
+
+  it('does not mutate when invalid IMAP material has no exact reservation identity', async () => {
+    const harness = createHarness();
+    const input = imapDispatchInput();
+
+    delete (input.material.connectedAccount as any).connectionParameters;
+    input.submission.attemptId = 'not-a-uuid';
+
+    await expect(harness.service.dispatch(input)).resolves.toEqual({
+      reason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL',
+      status: 'BLOCKED',
+    });
+    expect(harness.transactionPort.runInTransaction).not.toHaveBeenCalled();
+    expect(
+      harness.attemptService.blockReservedAttemptBeforeProvider,
+    ).not.toHaveBeenCalled();
+    expect(harness.revalidator.revalidate).not.toHaveBeenCalled();
+    expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
+  });
 
   it('isolates IMAP passwords from caller mutation across authority and provider awaits', async () => {
     const harness = createHarness();
@@ -1720,7 +1836,17 @@ describe('OutboundEmailDispatchService', () => {
           harness.outboundService.getProviderRequestTimeoutMs,
         ).not.toHaveBeenCalled();
         expect(harness.revalidator.revalidate).not.toHaveBeenCalled();
-        expect(harness.transactionPort.runInTransaction).not.toHaveBeenCalled();
+        expect(harness.transactionPort.runInTransaction).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(
+          harness.attemptService.blockReservedAttemptBeforeProvider,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL',
+          }),
+          expect.anything(),
+        );
         expect(harness.attemptService.beginSubmission).not.toHaveBeenCalled();
         expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
       }
@@ -1838,7 +1964,15 @@ describe('OutboundEmailDispatchService', () => {
       status: 'BLOCKED',
     });
     expect(hook).not.toHaveBeenCalled();
-    expect(harness.transactionPort.runInTransaction).not.toHaveBeenCalled();
+    expect(harness.transactionPort.runInTransaction).toHaveBeenCalledTimes(1);
+    expect(
+      harness.attemptService.blockReservedAttemptBeforeProvider,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL',
+      }),
+      expect.anything(),
+    );
     expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -2259,7 +2393,16 @@ describe('OutboundEmailDispatchService', () => {
       ).resolves.toEqual({ status: 'CONTRACT_CONFLICT' });
       expect(authority.hook).not.toHaveBeenCalled();
       expect(Object.isFrozen(authority.target)).toBe(false);
-      expect(authorityHarness.events).toEqual(['transaction:0:start']);
+      expect(authorityHarness.events).toEqual([
+        'transaction:0:start',
+        'transaction:0:commit',
+      ]);
+      expect(
+        authorityHarness.attemptService.blockReservedAttemptBeforeProvider,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'DISPATCH_CONTRACT_CONFLICT' }),
+        expect.anything(),
+      );
       expect(
         authorityHarness.attemptService.beginSubmission,
       ).not.toHaveBeenCalled();
@@ -2496,7 +2639,21 @@ describe('OutboundEmailDispatchService', () => {
         harness.outboundService.getProviderRequestTimeoutMs,
       ).not.toHaveBeenCalled();
       expect(harness.revalidator.revalidate).not.toHaveBeenCalled();
-      expect(harness.transactionPort.runInTransaction).not.toHaveBeenCalled();
+      if ('reason' in expected) {
+        expect(harness.transactionPort.runInTransaction).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(
+          harness.attemptService.blockReservedAttemptBeforeProvider,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL',
+          }),
+          expect.anything(),
+        );
+      } else {
+        expect(harness.transactionPort.runInTransaction).not.toHaveBeenCalled();
+      }
       expect(harness.attemptService.beginSubmission).not.toHaveBeenCalled();
       expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
     },

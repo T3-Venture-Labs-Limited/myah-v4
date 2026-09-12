@@ -4,6 +4,7 @@ import {
   CreateDateColumn,
   Entity,
   ForeignKey,
+  Index,
   PrimaryColumn,
   Unique,
   UpdateDateColumn,
@@ -17,6 +18,12 @@ import {
 } from 'src/engine/core-modules/campaign-execution/types/campaign-execution-persistence.type';
 
 @Entity({ name: 'campaignOccurrence', schema: 'core' })
+@Index('IDX_CO_DUE_PENDING', ['dueAt', 'workspaceId', 'campaignId', 'id'], {
+  where: `"state" = 'PENDING'`,
+})
+@Index('IDX_CO_UNRESOLVED', ['state', 'updatedAt', 'id'], {
+  where: `"state" IN ('IN_FLIGHT', 'UNKNOWN', 'HELD')`,
+})
 @Unique('UQ_CO_ENROLLMENT_VERSION_MESSAGE', [
   'enrollmentId',
   'workflowVersionId',
@@ -58,15 +65,13 @@ import {
     AND "terminalAt" IS NULL
   ) OR (
     "state" = 'HELD'
-    AND "holdReason" IS NOT NULL
-    AND btrim("holdReason") <> ''
+    AND "holdReason" IN ('WORKSPACE_NOT_ACTIVE', 'ATTACHMENTS_UNAVAILABLE', 'MATERIAL_STALE', 'SENDER_POOL_STALE', 'SENDER_NOT_READY', 'CAPACITY_CONFIGURATION_INVALID', 'THREAD_EVIDENCE_MISSING', 'THREAD_EVIDENCE_AMBIGUOUS', 'THREAD_SENDER_CHANGED', 'DEFINITELY_UNACCEPTED_REVIEW', 'PROJECTION_RECONCILIATION_REQUIRED', 'DISPATCH_CONTRACT_CONFLICT')
     AND "terminalReason" IS NULL
     AND "terminalAt" IS NULL
   ) OR (
     "state" IN ('SUCCEEDED', 'SKIPPED', 'CANCELLED')
     AND "holdReason" IS NULL
-    AND "terminalReason" IS NOT NULL
-    AND btrim("terminalReason") <> ''
+    AND "terminalReason" IN ('PROVIDER_ACCEPTED', 'CREATOR_MISSING', 'CREATOR_DELETED', 'CAMPAIGN_CREATOR_MISSING', 'CAMPAIGN_CREATOR_DELETED', 'INVALID_STAGE', 'NON_EMAIL_CONTACT_METHOD', 'INVALID_EMAIL', 'DUPLICATE_CREATOR_EMAIL', 'SUPPRESSED_EMAIL', 'CAMPAIGN_PAUSED', 'CAMPAIGN_COMPLETED', 'AUTHORIZATION_REVOKED', 'ENROLLMENT_REPLIED', 'SUPERSEDED_BY_WORKFLOW_VERSION')
     AND "terminalAt" IS NOT NULL
   )`,
 )

@@ -31,7 +31,7 @@ describe('CampaignOutreachWorkflowActionBar', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('allows local review while launch and test integrations remain disabled', () => {
+  it('allows local review while publication and test remain gated', () => {
     const onReview = jest.fn();
     render(
       <CampaignOutreachWorkflowActionBar
@@ -48,11 +48,8 @@ describe('CampaignOutreachWorkflowActionBar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
     expect(onReview).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Send test' })).toBeDisabled();
-    expect(
-      screen.getByText('Campaign launch integration unavailable'),
-    ).toBeVisible();
     expect(
       screen.getByText('Campaign test integration unavailable'),
     ).toBeVisible();

@@ -109,6 +109,21 @@ const mutationResult = (records: unknown[], affected = records.length) => ({
   affected,
 });
 
+const nullPrototypeClone = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(nullPrototypeClone);
+  if (value === null || typeof value !== 'object') return value;
+
+  return Object.assign(
+    Object.create(null) as Record<string, unknown>,
+    Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        nullPrototypeClone(item),
+      ]),
+    ),
+  );
+};
+
 const managerWith = (...results: unknown[]) => {
   const query = jest.fn();
 
@@ -311,6 +326,20 @@ describe('CampaignSequenceAuthorizationService', () => {
       'startIdempotencyKey',
     );
     expect(manager.transaction).not.toHaveBeenCalled();
+  });
+
+  it('accepts the null-prototype request snapshot produced by CampaignExecutionService', async () => {
+    const manager = managerWith([]);
+
+    await expect(
+      service().lookupStartRequestInTransaction(
+        contextWith(manager, 'DRAFT', null),
+        {
+          startIdempotencyKey: IDS.startKey,
+          request: nullPrototypeClone(request) as typeof request,
+        },
+      ),
+    ).resolves.toEqual({ kind: 'NOT_FOUND' });
   });
 
   it('distinguishes not found from same-key structural request conflict', async () => {

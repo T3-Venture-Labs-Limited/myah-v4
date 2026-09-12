@@ -21,8 +21,57 @@ export const CAMPAIGN_OCCURRENCE_STATES = [
 export type CampaignOccurrenceState =
   (typeof CAMPAIGN_OCCURRENCE_STATES)[number];
 
-// Reasons remain opaque persisted evidence until progression freezes vocabulary.
-export type CampaignEnrollmentHoldReason = string;
-export type CampaignEnrollmentTerminalReason = string;
-export type CampaignOccurrenceHoldReason = string;
-export type CampaignOccurrenceTerminalReason = string;
+export const CAMPAIGN_OCCURRENCE_HOLD_REASONS = [
+  'WORKSPACE_NOT_ACTIVE',
+  'ATTACHMENTS_UNAVAILABLE',
+  'MATERIAL_STALE',
+  'SENDER_POOL_STALE',
+  'SENDER_NOT_READY',
+  'CAPACITY_CONFIGURATION_INVALID',
+  'THREAD_EVIDENCE_MISSING',
+  'THREAD_EVIDENCE_AMBIGUOUS',
+  'THREAD_SENDER_CHANGED',
+  'DEFINITELY_UNACCEPTED_REVIEW',
+  'PROJECTION_RECONCILIATION_REQUIRED',
+  'DISPATCH_CONTRACT_CONFLICT',
+] as const;
+export type CampaignOccurrenceHoldReason =
+  (typeof CAMPAIGN_OCCURRENCE_HOLD_REASONS)[number];
+
+export const CAMPAIGN_OCCURRENCE_TERMINAL_REASONS = [
+  'PROVIDER_ACCEPTED',
+  'CREATOR_MISSING',
+  'CREATOR_DELETED',
+  'CAMPAIGN_CREATOR_MISSING',
+  'CAMPAIGN_CREATOR_DELETED',
+  'INVALID_STAGE',
+  'NON_EMAIL_CONTACT_METHOD',
+  'INVALID_EMAIL',
+  'DUPLICATE_CREATOR_EMAIL',
+  'SUPPRESSED_EMAIL',
+  'CAMPAIGN_PAUSED',
+  'CAMPAIGN_COMPLETED',
+  'AUTHORIZATION_REVOKED',
+  'ENROLLMENT_REPLIED',
+  'SUPERSEDED_BY_WORKFLOW_VERSION',
+] as const;
+export type CampaignOccurrenceTerminalReason =
+  (typeof CAMPAIGN_OCCURRENCE_TERMINAL_REASONS)[number];
+
+export const CAMPAIGN_ENROLLMENT_TERMINAL_REASONS = [
+  'REPLY_RECEIVED',
+  'CREATOR_MISSING',
+  'CREATOR_DELETED',
+  'CAMPAIGN_CREATOR_MISSING',
+  'CAMPAIGN_CREATOR_DELETED',
+  'INVALID_STAGE',
+  'NON_EMAIL_CONTACT_METHOD',
+  'INVALID_EMAIL',
+  'DUPLICATE_CREATOR_EMAIL',
+  'SUPPRESSED_EMAIL',
+  'SEQUENCE_COMPLETED',
+  'NO_USABLE_AUTHORED_MESSAGE',
+] as const;
+export type CampaignEnrollmentTerminalReason =
+  (typeof CAMPAIGN_ENROLLMENT_TERMINAL_REASONS)[number];
+export type CampaignEnrollmentHoldReason = CampaignOccurrenceHoldReason;

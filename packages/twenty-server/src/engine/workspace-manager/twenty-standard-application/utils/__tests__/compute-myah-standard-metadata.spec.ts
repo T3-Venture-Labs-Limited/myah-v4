@@ -1,4 +1,5 @@
 import {
+  MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS,
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
@@ -1108,6 +1109,21 @@ describe('Myah standard metadata contract', () => {
         );
       }
     }
+  });
+
+  it('materializes Campaign Creator stage as the approved SELECT contract', () => {
+    const stage =
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaignCreator.fields.stage.universalIdentifier
+      ];
+
+    expect(stage).toMatchObject({
+      name: 'stage',
+      type: FieldMetadataType.SELECT,
+      isNullable: true,
+      defaultValue: "'READY'",
+      options: MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS,
+    });
   });
 
   it('materializes retained Campaign Creator List sources as read-only provenance', () => {

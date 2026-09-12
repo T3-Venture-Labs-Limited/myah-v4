@@ -1,7 +1,12 @@
 import { type CampaignSequence } from 'twenty-shared/workflow';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
-import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import {
+  type SystemWorkspaceAuthContext,
+  type UserWorkspaceAuthContext,
+  type WorkspaceAuthContext,
+} from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type ComposedEmail } from 'src/engine/core-modules/tool/tools/email-tool/types/composed-email.type';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
@@ -133,7 +138,8 @@ export type CampaignSequenceFixedMaterialProof = Readonly<{
 
 export type CampaignMessageDispatchContext = Readonly<{
   kind: 'DISPATCH';
-  authContext: UserWorkspaceAuthContext;
+  authContext: SystemWorkspaceAuthContext;
+  transactionManager: WorkspaceEntityManager;
   rolePermissionConfig: RolePermissionConfig;
   renderContext: AuthorizedCampaignSequenceRenderContext;
   senderBinding: VerifiedCampaignSenderBinding;
@@ -268,7 +274,7 @@ export type CampaignSequenceFixedMaterialInput = Readonly<{
   campaignId: string;
   workflowVersionId: string;
   orderedMessageIds: readonly string[];
-  authContext: UserWorkspaceAuthContext;
+  authContext: WorkspaceAuthContext;
 }>;
 
 export type CampaignSequenceFixedMaterialResult =
@@ -368,7 +374,8 @@ export interface CampaignCreatorMaterialPort {
   load(
     input: Readonly<{
       coordinates: CampaignMessageRenderCoordinates;
-      authContext: UserWorkspaceAuthContext;
+      authContext: WorkspaceAuthContext;
+      transactionManager?: WorkspaceEntityManager;
     }>,
   ): Promise<CampaignMaterialPortResult<CampaignCreatorMaterial>>;
 }
@@ -378,7 +385,8 @@ export interface CampaignSignatureMaterialPort {
     input: Readonly<{
       workspaceId: string;
       campaignId: string;
-      authContext: UserWorkspaceAuthContext;
+      authContext: WorkspaceAuthContext;
+      transactionManager?: WorkspaceEntityManager;
     }>,
   ): Promise<
     CampaignMaterialPortResult<Readonly<{ html: string | null }> | null>
@@ -412,7 +420,7 @@ export interface CampaignAttachmentStoragePort {
     input: Readonly<{
       workspaceId: string;
       file: CampaignSequenceEmailFile;
-      authContext: UserWorkspaceAuthContext;
+      authContext: WorkspaceAuthContext;
     }>,
   ): Promise<CampaignAttachmentLoadResult>;
 }

@@ -8,6 +8,7 @@ import {
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
 import {
+  type AcceptedOutcomeEvidence,
   type AttemptOutcomeResult,
   type BeginOutboundEmailSubmissionInput,
   type BlockReservedAttemptBeforeProviderInput,
@@ -93,9 +94,9 @@ const BLOCK_RESERVED_SQL = `
   UPDATE "core"."outboundEmailAttempt"
   SET "attemptState" = 'BLOCKED',
       "capacityState" = 'RELEASED',
-      "safeOutcomeReason" = 'STALE_FINAL_EVIDENCE',
+      "safeOutcomeReason" = $3,
       "retryable" = false,
-      "updatedAt" = $3
+      "updatedAt" = $4
   WHERE "workspaceId" = $1 AND "attemptId" = $2
     AND "attemptState" = 'RESERVED' AND "capacityState" = 'RESERVED'
   RETURNING *
@@ -109,10 +110,16 @@ const ACCEPT_SQL = `
       "providerAcceptedAt" = $4,
       "safeOutcomeReason" = NULL,
       "retryable" = false,
-      "projectedMessageId" = $5,
+      "projectedMessageId" = $5::uuid,
+      "providerHeaderMessageId" = CASE WHEN source = 'CAMPAIGN_SEQUENCE' THEN $6 ELSE NULL END,
+      "providerMessageExternalId" = CASE WHEN source = 'CAMPAIGN_SEQUENCE' THEN $7 ELSE NULL END,
+      "providerThreadExternalId" = CASE WHEN source = 'CAMPAIGN_SEQUENCE' THEN $8 ELSE NULL END,
+      "resolvedThreadExternalId" = CASE WHEN source = 'CAMPAIGN_SEQUENCE' THEN $9 ELSE NULL END,
+      "providerDeliveredRecipients" = CASE WHEN source = 'CAMPAIGN_SEQUENCE' THEN $10::jsonb ELSE NULL END,
+      "projectedMessageThreadId" = $11::uuid,
       "updatedAt" = $4
   WHERE "workspaceId" = $1 AND "attemptId" = $2
-    AND "attemptState" = $6 AND "capacityState" = $7
+    AND "attemptState" = $12 AND "capacityState" = $13
   RETURNING *
 `;
 
@@ -226,6 +233,9 @@ const isNormalizedText = (value: unknown): value is string =>
   typeof value === 'string' &&
   value.length > 0 &&
   value === value.trim().toLowerCase();
+
+const isNullish = (value: unknown): value is null | undefined =>
+  value === null || value === undefined;
 
 const isValidDate = (value: unknown): value is Date =>
   value instanceof Date && !Number.isNaN(value.getTime());
@@ -502,9 +512,16 @@ const isValidReservedReceipt = (
     receipt.finalEvidenceDigest === null &&
     receipt.providerMessageId === null &&
     receipt.providerAcceptedAt === null &&
+    isNullish(receipt.providerHeaderMessageId) &&
+    isNullish(receipt.providerMessageExternalId) &&
+    isNullish(receipt.reconciledProviderHeaderMessageId) &&
+    isNullish(receipt.providerThreadExternalId) &&
+    isNullish(receipt.resolvedThreadExternalId) &&
+    isNullish(receipt.providerDeliveredRecipients) &&
     receipt.safeOutcomeReason === null &&
     receipt.retryable === null &&
     receipt.projectedMessageId === null &&
+    isNullish(receipt.projectedMessageThreadId) &&
     toMillis(receipt.createdAt) !== null &&
     toMillis(receipt.updatedAt) !== null &&
     isExactPersistedIdentity(expected, receipt)
@@ -634,14 +651,20 @@ const isValidSubmissionInput = (
       capability.kind === 'CAMPAIGN_SEQUENCE_SUBMISSION' &&
       [
         input.campaignId,
+        input.campaignExecutionId,
+        input.activationId,
         input.enrollmentId,
         input.occurrenceId,
         input.authorizationId,
         input.workflowVersionId,
         input.messageId,
         capability.attemptId,
+        capability.campaignExecutionId,
+        capability.activationId,
         context.workspaceId,
         context.campaignId,
+        context.campaignExecutionId,
+        context.activationId,
         context.enrollmentId,
         context.occurrenceId,
         context.authorizationId,
@@ -650,6 +673,14 @@ const isValidSubmissionInput = (
         context.connectedAccountId,
         context.messageChannelId,
       ].every(isCanonicalUuid) &&
+      Number.isSafeInteger(input.authorizationGeneration) &&
+      input.authorizationGeneration > 0 &&
+      capability.authorizationGeneration === input.authorizationGeneration &&
+      context.authorizationGeneration === input.authorizationGeneration &&
+      capability.campaignExecutionId === input.campaignExecutionId &&
+      capability.activationId === input.activationId &&
+      context.campaignExecutionId === input.campaignExecutionId &&
+      context.activationId === input.activationId &&
       isNormalizedText(context.provider) &&
       isNormalizedText(context.normalizedSenderHandle) &&
       isNormalizedText(context.normalizedRecipient) &&
@@ -770,9 +801,15 @@ const matchesSubmission = (
       stored.senderPoolFingerprint ===
         capability.reservationBinding.senderPoolFingerprint &&
       capability.attemptId === input.attemptId &&
+      capability.campaignExecutionId === input.campaignExecutionId &&
+      capability.authorizationGeneration === input.authorizationGeneration &&
+      capability.activationId === input.activationId &&
       capability.renderDigest === input.renderDigest &&
       context.workspaceId === input.workspaceId &&
       context.campaignId === input.campaignId &&
+      context.campaignExecutionId === input.campaignExecutionId &&
+      context.authorizationGeneration === input.authorizationGeneration &&
+      context.activationId === input.activationId &&
       context.enrollmentId === input.enrollmentId &&
       context.occurrenceId === input.occurrenceId &&
       context.authorizationId === input.authorizationId &&
@@ -847,11 +884,81 @@ const matchesOutcomeSubmission = (
   matchesSubmission(input, receipt) &&
   receipt.finalEvidenceDigest === input.finalEvidenceDigest;
 
+const isNullableNonblankText = (value: unknown): boolean =>
+  value === null ||
+  (typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value === value.trim());
+
+const isDeliveredRecipients = (
+  value: AcceptedOutcomeEvidence['providerDeliveredRecipients'],
+): boolean =>
+  value === null ||
+  (value !== undefined &&
+    Object.keys(value).length === 3 &&
+    ['to', 'cc', 'bcc'].every((key) =>
+      (value[key as keyof typeof value] as unknown[]).every(
+        (recipient) =>
+          typeof recipient === 'string' &&
+          recipient.length > 0 &&
+          recipient === recipient.trim(),
+      ),
+    ));
+
+const sameDeliveredRecipients = (
+  first: AcceptedOutcomeEvidence['providerDeliveredRecipients'] | undefined,
+  second: AcceptedOutcomeEvidence['providerDeliveredRecipients'],
+): boolean =>
+  first == null || second == null
+    ? (first ?? null) === (second ?? null)
+    : (['to', 'cc', 'bcc'] as const).every(
+        (key) =>
+          first[key].length === second[key].length &&
+          first[key].every((value, index) => value === second[key][index]),
+      );
+
+const acceptedEvidenceForSource = (input: RecordAcceptedInput) =>
+  input.source === 'CAMPAIGN_SEQUENCE'
+    ? {
+        projectedMessageId: null,
+        projectedMessageThreadId: null,
+        providerDeliveredRecipients: input.providerDeliveredRecipients,
+        providerHeaderMessageId: input.providerHeaderMessageId,
+        providerMessageExternalId: input.providerMessageExternalId,
+        providerThreadExternalId: input.providerThreadExternalId,
+        resolvedThreadExternalId: input.resolvedThreadExternalId,
+      }
+    : {
+        projectedMessageId: null,
+        projectedMessageThreadId: null,
+        providerDeliveredRecipients: null,
+        providerHeaderMessageId: null,
+        providerMessageExternalId: null,
+        providerThreadExternalId: null,
+        resolvedThreadExternalId: null,
+      };
+
 const isValidAcceptedEvidence = (input: RecordAcceptedInput): boolean =>
   typeof input.providerMessageId === 'string' &&
   input.providerMessageId.trim().length > 0 &&
+  input.providerMessageId === input.providerMessageId.trim() &&
+  [
+    input.providerHeaderMessageId,
+    input.providerMessageExternalId,
+    input.providerThreadExternalId,
+    input.resolvedThreadExternalId,
+  ].every(isNullableNonblankText) &&
+  isDeliveredRecipients(input.providerDeliveredRecipients) &&
   (input.projectedMessageId === null ||
-    isCanonicalUuid(input.projectedMessageId));
+    isCanonicalUuid(input.projectedMessageId)) &&
+  (input.projectedMessageThreadId === null ||
+    isCanonicalUuid(input.projectedMessageThreadId)) &&
+  input.projectedMessageId === null &&
+  input.projectedMessageThreadId === null &&
+  (input.source !== 'CAMPAIGN_SEQUENCE' ||
+    ((input.providerHeaderMessageId !== null ||
+      input.providerMessageExternalId !== null) &&
+      input.resolvedThreadExternalId !== null));
 
 const DEFINITE_OUTCOME_RETRYABILITY = {
   DEFINITELY_UNACCEPTED_NON_RETRYABLE: false,
@@ -873,7 +980,14 @@ const hasNoProviderAcceptanceEvidence = (
 ): boolean =>
   receipt.providerMessageId === null &&
   receipt.providerAcceptedAt === null &&
-  receipt.projectedMessageId === null;
+  isNullish(receipt.providerHeaderMessageId) &&
+  isNullish(receipt.providerMessageExternalId) &&
+  isNullish(receipt.reconciledProviderHeaderMessageId) &&
+  isNullish(receipt.providerThreadExternalId) &&
+  isNullish(receipt.resolvedThreadExternalId) &&
+  isNullish(receipt.providerDeliveredRecipients) &&
+  receipt.projectedMessageId === null &&
+  isNullish(receipt.projectedMessageThreadId);
 
 const hasValidOutcomeMetadata = (
   updated: OutboundEmailAttemptReceipt,
@@ -1190,10 +1304,7 @@ export class OutboundEmailAttemptService {
   ): Promise<BlockReservedAttemptBeforeProviderResult> {
     const queryRunner = requireRunner(manager);
 
-    if (
-      input.reason !== 'STALE_FINAL_EVIDENCE' ||
-      !isValidReservationIdentity(input.reservation)
-    ) {
+    if (!isValidReservationIdentity(input.reservation)) {
       throw new Error('Invalid pre-provider block input');
     }
 
@@ -1207,7 +1318,7 @@ export class OutboundEmailAttemptService {
     if (receipt.attemptState === 'BLOCKED') {
       return receipt.capacityState === 'RELEASED' &&
         receipt.finalEvidenceDigest === null &&
-        receipt.safeOutcomeReason === 'STALE_FINAL_EVIDENCE' &&
+        receipt.safeOutcomeReason === input.reason &&
         receipt.retryable === false &&
         hasNoProviderAcceptanceEvidence(receipt)
         ? { receipt, status: 'EXACT_REPLAY' }
@@ -1232,7 +1343,7 @@ export class OutboundEmailAttemptService {
     const observedAt = await this.sampleObservedAt(queryRunner);
     const result = await queryRunner.query(
       BLOCK_RESERVED_SQL,
-      [receipt.workspaceId, receipt.attemptId, observedAt],
+      [receipt.workspaceId, receipt.attemptId, input.reason, observedAt],
       true,
     );
     const updated = structuredReceipt(
@@ -1241,7 +1352,7 @@ export class OutboundEmailAttemptService {
         value.attemptState === 'BLOCKED' &&
         value.capacityState === 'RELEASED' &&
         value.finalEvidenceDigest === null &&
-        value.safeOutcomeReason === 'STALE_FINAL_EVIDENCE' &&
+        value.safeOutcomeReason === input.reason &&
         value.retryable === false &&
         hasNoProviderAcceptanceEvidence(value) &&
         hasValidOutcomeMetadata(value, receipt, observedAt) &&
@@ -1252,6 +1363,37 @@ export class OutboundEmailAttemptService {
     await this.mailboxCapacityService.releaseReserved(lockedDay, manager);
 
     return { receipt: updated, status: 'RECORDED' };
+  }
+
+  async recheckProcessingWindowBeforeProvider(
+    input: BeginOutboundEmailSubmissionInput,
+    manager: EntityManager,
+  ): Promise<
+    | { status: 'SAFE'; receipt: OutboundEmailAttemptReceipt }
+    | { status: 'UNSAFE'; receipt: OutboundEmailAttemptReceipt }
+    | { status: 'IDENTITY_CONFLICT' }
+  > {
+    const queryRunner = requireRunner(manager);
+    if (!isValidSubmissionInput(input)) {
+      throw new Error('Invalid outbound email submission input');
+    }
+    const receipt = await lockAttempt(queryRunner, input.attemptId);
+    if (receipt === null || !matchesOutcomeSubmission(input, receipt)) {
+      return { status: 'IDENTITY_CONFLICT' };
+    }
+    const sampleRows = (await queryRunner.query(
+      TIME_SAMPLE_SQL,
+    )) as TimeSampleRow[];
+    const observedAt =
+      sampleRows.length === 1 ? toMillis(sampleRows[0].observedAt) : null;
+    const unknownAfter = receiptUnknownAfter(receipt)?.getTime() ?? null;
+    return receipt.attemptState === 'PROCESSING' &&
+      receipt.capacityState === 'RESERVED' &&
+      observedAt !== null &&
+      unknownAfter !== null &&
+      observedAt + OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS < unknownAfter
+      ? { receipt, status: 'SAFE' }
+      : { receipt, status: 'UNSAFE' };
   }
 
   async recordAccepted(
@@ -1415,10 +1557,26 @@ export class OutboundEmailAttemptService {
     if (!matchesOutcomeSubmission(input, receipt)) {
       return { status: 'IDENTITY_CONFLICT' };
     }
+    const expectedEvidence = acceptedEvidenceForSource(input);
+
     if (receipt.attemptState === 'ACCEPTED') {
       return receipt.capacityState === 'CONSUMED' &&
         receipt.providerMessageId === input.providerMessageId &&
-        receipt.projectedMessageId === input.projectedMessageId &&
+        receipt.projectedMessageId === expectedEvidence.projectedMessageId &&
+        receipt.projectedMessageThreadId ===
+          expectedEvidence.projectedMessageThreadId &&
+        receipt.providerHeaderMessageId ===
+          expectedEvidence.providerHeaderMessageId &&
+        receipt.providerMessageExternalId ===
+          expectedEvidence.providerMessageExternalId &&
+        receipt.providerThreadExternalId ===
+          expectedEvidence.providerThreadExternalId &&
+        receipt.resolvedThreadExternalId ===
+          expectedEvidence.resolvedThreadExternalId &&
+        sameDeliveredRecipients(
+          receipt.providerDeliveredRecipients,
+          expectedEvidence.providerDeliveredRecipients,
+        ) &&
         toMillis(receipt.providerAcceptedAt) !== null &&
         receipt.safeOutcomeReason === null &&
         receipt.retryable === false
@@ -1450,6 +1608,12 @@ export class OutboundEmailAttemptService {
         input.providerMessageId,
         observedAt,
         input.projectedMessageId,
+        input.providerHeaderMessageId,
+        input.providerMessageExternalId,
+        input.providerThreadExternalId,
+        input.resolvedThreadExternalId,
+        input.providerDeliveredRecipients,
+        input.projectedMessageThreadId,
         expectedAttemptState,
         expectedCapacityState,
       ],
@@ -1462,7 +1626,21 @@ export class OutboundEmailAttemptService {
         value.capacityState === 'CONSUMED' &&
         value.providerMessageId === input.providerMessageId &&
         toMillis(value.providerAcceptedAt) === observedAt.getTime() &&
-        value.projectedMessageId === input.projectedMessageId &&
+        value.projectedMessageId === expectedEvidence.projectedMessageId &&
+        value.projectedMessageThreadId ===
+          expectedEvidence.projectedMessageThreadId &&
+        value.providerHeaderMessageId ===
+          expectedEvidence.providerHeaderMessageId &&
+        value.providerMessageExternalId ===
+          expectedEvidence.providerMessageExternalId &&
+        value.providerThreadExternalId ===
+          expectedEvidence.providerThreadExternalId &&
+        value.resolvedThreadExternalId ===
+          expectedEvidence.resolvedThreadExternalId &&
+        sameDeliveredRecipients(
+          value.providerDeliveredRecipients,
+          expectedEvidence.providerDeliveredRecipients,
+        ) &&
         value.safeOutcomeReason === null &&
         value.retryable === false &&
         hasValidOutcomeMetadata(value, receipt, observedAt) &&

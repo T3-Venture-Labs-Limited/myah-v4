@@ -198,15 +198,13 @@ export class CampaignMessageRenderService {
         {
           workspaceId: coordinates.workspaceId,
           ...(context.kind === 'DISPATCH'
-            ? {
-                userId: context.authContext.user.id,
-                userWorkspaceId: context.renderContext.initiatorUserWorkspaceId,
-              }
+            ? {}
             : {
                 userId: context.requesterUserId,
                 userWorkspaceId: context.requesterUserWorkspaceId,
               }),
         },
+        context.kind === 'DISPATCH' ? context.transactionManager : undefined,
       );
     } catch {
       return invalidContent('Canonical email composition failed');

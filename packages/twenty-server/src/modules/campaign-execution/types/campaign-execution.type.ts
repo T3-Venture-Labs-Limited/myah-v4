@@ -4,6 +4,7 @@ import {
   type CampaignSequenceAuthorizationPreparedProof as CanonicalCampaignSequencePreparedProof,
   type CampaignSequenceAuthorizationRecord as CanonicalCampaignSequenceAuthorizationRecord,
   type CampaignSequenceAuthorizationRequest as CanonicalCampaignSequenceAuthorizationRequest,
+  type CampaignSequenceAuthorizationKeyLookupResult as CanonicalCampaignSequenceAuthorityKeyLookupResult,
   type CampaignSequenceAuthorizationRequestLookupResult as CanonicalCampaignSequenceAuthorityLookupResult,
   type CampaignSequenceAuthorizationStructureResult as CanonicalCampaignSequenceAuthorityStructureResult,
   type CampaignSequenceAuthorizationTransactionContext as CanonicalCampaignSequenceAuthorityTransactionContext,
@@ -48,6 +49,9 @@ export type CampaignExecutionScopeInput = Readonly<{
   campaignId: string;
   authContext: WorkspaceAuthContext;
 }>;
+
+export type LookupStartReplayInput = CampaignExecutionScopeInput &
+  Readonly<{ startIdempotencyKey: string }>;
 
 /** Internal server-composed input; this is not a public/GraphQL DTO. */
 export type StartCampaignInput = CampaignExecutionScopeInput &
@@ -173,6 +177,8 @@ export type CampaignSequenceAuthorityStructureResult =
   CanonicalCampaignSequenceAuthorityStructureResult;
 export type CampaignSequenceAuthorityLookupResult =
   CanonicalCampaignSequenceAuthorityLookupResult;
+export type CampaignSequenceAuthorityKeyLookupResult =
+  CanonicalCampaignSequenceAuthorityKeyLookupResult;
 export type CampaignSequenceAuthorityCreateResult =
   CanonicalCampaignSequenceAuthorityCreateResult;
 export type CampaignSequenceAuthorityRevokeResult =
@@ -251,6 +257,11 @@ export interface CampaignSequenceAuthorityPort {
   inspectCurrentAuthorityInTransaction(
     context: CampaignSequenceAuthorityTransactionContext,
   ): Promise<CampaignSequenceAuthorityStructureResult>;
+
+  lookupStartKeyInTransaction(
+    context: CampaignSequenceAuthorityTransactionContext,
+    input: Readonly<{ startIdempotencyKey: string }>,
+  ): Promise<CampaignSequenceAuthorityKeyLookupResult>;
 
   lookupStartRequestInTransaction(
     context: CampaignSequenceAuthorityTransactionContext,
@@ -393,11 +404,32 @@ export interface CampaignExecutionPersistencePort {
 }
 
 /**
- * Existing W5 same-manager exact-version history contract consumed through
- * injection; no inference, fallback timing, cross-version mapping, or I/O is
- * permitted.
+ * Existing W5 same-manager exact-version history plus bounded pre-delivery
+ * supersession; no inference, fallback timing, content mapping, or external I/O.
  */
 export interface CampaignExecutionHistoryPort {
+  preparePriorVersionSupersessionInTransaction(
+    input: Readonly<{
+      workspaceId: string;
+      campaignId: string;
+      targetWorkflowVersionId: string;
+    }>,
+    manager: WorkspaceEntityManager,
+  ): Promise<
+    | Readonly<{ status: 'READY'; pendingOccurrenceIds: readonly string[] }>
+    | Readonly<{ status: 'BLOCKED' }>
+  >;
+
+  applyPriorVersionSupersessionInTransaction(
+    input: Readonly<{
+      workspaceId: string;
+      campaignId: string;
+      targetWorkflowVersionId: string;
+      pendingOccurrenceIds: readonly string[];
+    }>,
+    manager: WorkspaceEntityManager,
+  ): Promise<void>;
+
   readSameWorkflowVersionHistoryInTransaction(
     input: CampaignProgressionHistoryScope,
     manager: WorkspaceEntityManager,

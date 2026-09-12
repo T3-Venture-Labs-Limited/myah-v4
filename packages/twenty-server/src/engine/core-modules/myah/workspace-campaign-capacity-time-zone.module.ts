@@ -1,9 +1,18 @@
 import { Module } from '@nestjs/common';
 
-/**
- * Deliberately unconfigured source leaf. A later reviewed integration must bind
- * the trusted operation-specific authorization port before exposing the
- * timezone service; this candidate does not invent or register that provider.
- */
-@Module({})
+import { WorkspaceCampaignCapacityTimeZoneAuthorizationService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone-authorization.service';
+import { WorkspaceCampaignCapacityTimeZoneService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone.service';
+import { WorkspaceCampaignCapacityTimeZoneAuthorizationPort } from 'src/engine/core-modules/myah/types/workspace-campaign-capacity-time-zone.type';
+
+@Module({
+  providers: [
+    WorkspaceCampaignCapacityTimeZoneAuthorizationService,
+    {
+      provide: WorkspaceCampaignCapacityTimeZoneAuthorizationPort,
+      useExisting: WorkspaceCampaignCapacityTimeZoneAuthorizationService,
+    },
+    WorkspaceCampaignCapacityTimeZoneService,
+  ],
+  exports: [WorkspaceCampaignCapacityTimeZoneService],
+})
 export class WorkspaceCampaignCapacityTimeZoneModule {}

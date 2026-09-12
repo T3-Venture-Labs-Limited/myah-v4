@@ -81,6 +81,28 @@ const createHarness = (rows = [readyRow()]) => {
 };
 
 describe('CampaignSenderReadinessService', () => {
+  it('compares core UUID bindings to workspace text identifiers without casting untrusted text', async () => {
+    const harness = createHarness();
+
+    await harness.service.getCampaignEmailSenderPoolInTransaction(
+      { workspaceId, campaignId },
+      harness.manager as never,
+    );
+
+    const sql = harness.query.mock.calls[0]?.[0] as string;
+
+    expect(sql).toContain('account.id::text = ca."connectedAccountId"');
+    expect(sql).toContain('channel.id::text = ca."messageChannelId"');
+    expect(sql).toContain(
+      'managed."connectedAccountId"::text = ca."connectedAccountId"',
+    );
+    expect(sql).toContain(
+      'managed."messageChannelId"::text = ca."messageChannelId"',
+    );
+    expect(sql).not.toContain('ca."connectedAccountId"::uuid');
+    expect(sql).not.toContain('ca."messageChannelId"::uuid');
+  });
+
   it('builds an order-stable, secret-free canonical fingerprint over exact static bindings', async () => {
     const first = createHarness([
       readyRow({

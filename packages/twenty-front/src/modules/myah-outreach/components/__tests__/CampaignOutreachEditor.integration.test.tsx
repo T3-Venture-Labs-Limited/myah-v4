@@ -75,14 +75,16 @@ const initialSequence: CampaignSequence = {
 const snapshot = (
   versionId: string,
   sequence: CampaignSequence = initialSequence,
+  lifecycleStatus = 'DRAFT',
+  editable = true,
 ) => ({
   __typename: 'CampaignSequenceSnapshot',
   campaignId,
   workflowId,
   versionId,
   sequence,
-  lifecycleStatus: 'DRAFT',
-  editable: true,
+  lifecycleStatus,
+  editable,
   issues: [],
 });
 
@@ -159,6 +161,63 @@ describe('Campaign Outreach assembled editor', () => {
       configurable: true,
       value: () => undefined,
     });
+  });
+
+  it('renders trusted PAUSED lifecycle as Stopped and keeps authoring enabled', async () => {
+    const pausedLoad: MockedResponse = {
+      request: { query: CAMPAIGN_SEQUENCE, variables: { campaignId } },
+      result: {
+        data: {
+          campaignSequence: {
+            __typename: 'CampaignSequencePresent',
+            kind: 'SEQUENCE',
+            snapshot: snapshot(versionOne, initialSequence, 'PAUSED', true),
+          },
+        },
+      },
+    };
+
+    renderEditor([pausedLoad]);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Stopped' }),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole('group', { name: 'Subject' })).getByRole(
+        'textbox',
+      ),
+    ).not.toBeDisabled();
+    expect(
+      screen.queryByText(
+        'Stop Campaign outreach before editing this saved sequence.',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders PAUSED as Stopped for read-only users', async () => {
+    const pausedLoad: MockedResponse = {
+      request: { query: CAMPAIGN_SEQUENCE, variables: { campaignId } },
+      result: {
+        data: {
+          campaignSequence: {
+            __typename: 'CampaignSequencePresent',
+            kind: 'SEQUENCE',
+            snapshot: snapshot(versionOne, initialSequence, 'PAUSED', false),
+          },
+        },
+      },
+    };
+
+    renderEditor([pausedLoad]);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Stopped' }),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole('group', { name: 'Subject' })).getByRole(
+        'textbox',
+      ),
+    ).toHaveAttribute('contenteditable', 'false');
   });
 
   it('isolates real JSON editors across selection and reload and serializes their save payload', async () => {

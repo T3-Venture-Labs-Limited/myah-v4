@@ -1,6 +1,7 @@
 import { types as nodeUtilTypes } from 'node:util';
 
 import { isEmail } from 'class-validator';
+import { type EntityManager } from 'typeorm';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { EmailConnectionSecurity } from 'src/engine/core-modules/imap-smtp-caldav-connection/enums/email-connection-security.enum';
@@ -10,12 +11,14 @@ import {
   type AttemptOutcomeResult,
   type BeginOutboundEmailSubmissionInput,
   type OutboundEmailAttemptReceipt,
+  type OutboundEmailAttemptReservationIdentity,
 } from 'src/modules/campaign-execution/types/outbound-email-attempt.type';
 import {
   type AcceptedOutboundEmailRecoveryEvidence,
   type AmbiguousOutboundEmailRecoveryEvidence,
   type DefinitelyUnacceptedOutboundEmailRecoveryEvidence,
   type DispatchTrustedOutboundEmailInput,
+  type FinalSubmissionAuthorityRejectionReason,
   type FinalSubmissionAuthorityRevalidationResult,
   type FinalSubmissionAuthorityRevalidator,
   type OutboundEmailDispatchResult,
@@ -30,6 +33,7 @@ import {
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { classifyMessageOutboundError } from 'src/modules/messaging/message-outbound-manager/utils/classify-message-outbound-error.util';
+import { resolveOutboundThreadExternalId } from 'src/modules/messaging/message-outbound-manager/utils/resolve-outbound-thread-external-id.util';
 
 const intrinsicIsProxy = nodeUtilTypes.isProxy;
 const intrinsicObjectGetPrototypeOf = Object.getPrototypeOf;
@@ -123,7 +127,7 @@ const classifyTrapSafeObject = (
 
 const hasExactDirectPrototype = (
   value: unknown,
-  expectedPrototype: object,
+  expectedPrototype: Error | WinnerTransactionExit,
 ): boolean => {
   try {
     return classifyTrapSafeObject(value).prototype === expectedPrototype;
@@ -328,6 +332,25 @@ const snapshotArray = <Result>(
   return result;
 };
 
+const snapshotProviderDeliveredRecipients = (
+  value: unknown,
+): { to: string[]; cc: string[]; bcc: string[] } => {
+  const seen = new WeakSet<object>();
+  const record = readStrictRecord(value, ['to', 'cc', 'bcc'], [], seen);
+  const recipientList = (list: unknown): string[] =>
+    snapshotArray(list, seen, (recipient) => {
+      const normalized = snapshotString(recipient).trim();
+      if (normalized.length === 0) return unsafeSnapshot();
+      return normalized;
+    });
+
+  return {
+    to: recipientList(record.to),
+    cc: recipientList(record.cc),
+    bcc: recipientList(record.bcc),
+  };
+};
+
 const snapshotBuffer = (
   value: unknown,
   classified?: TrapSafeObjectClassification,
@@ -399,6 +422,11 @@ const snapshotBuffer = (
 
 const snapshotString = (value: unknown): string =>
   typeof value === 'string' ? value : unsafeSnapshot();
+
+const snapshotPositiveInteger = (value: unknown): number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : unsafeSnapshot();
 
 const snapshotNullableString = (value: unknown): string | null =>
   value === null ? null : snapshotString(value);
@@ -490,6 +518,9 @@ const snapshotRenderContext = (
   const keys = [
     'workspaceId',
     'campaignId',
+    'campaignExecutionId',
+    'authorizationGeneration',
+    'activationId',
     'enrollmentId',
     'occurrenceId',
     'authorizationId',
@@ -504,7 +535,12 @@ const snapshotRenderContext = (
   const record = readStrictRecord(value, keys, [], seen);
 
   return Object.fromEntries(
-    keys.map((key) => [key, snapshotString(record[key])]),
+    keys.map((key) => [
+      key,
+      key === 'authorizationGeneration'
+        ? snapshotPositiveInteger(record[key])
+        : snapshotString(record[key]),
+    ]),
   );
 };
 
@@ -531,6 +567,9 @@ const snapshotSubmission = (
     [
       ...COMMON_SUBMISSION_KEYS.filter((key) => key !== 'source'),
       'campaignId',
+      'campaignExecutionId',
+      'authorizationGeneration',
+      'activationId',
       'enrollmentId',
       'occurrenceId',
       'authorizationId',
@@ -550,6 +589,9 @@ const snapshotSubmission = (
     source === 'CAMPAIGN_SEQUENCE'
       ? [
           'campaignId',
+          'campaignExecutionId',
+          'authorizationGeneration',
+          'activationId',
           'enrollmentId',
           'occurrenceId',
           'authorizationId',
@@ -589,6 +631,9 @@ const snapshotSubmission = (
       [
         'kind',
         'attemptId',
+        'campaignExecutionId',
+        'authorizationGeneration',
+        'activationId',
         'renderDigest',
         'reservationBinding',
         'renderContext',
@@ -597,9 +642,16 @@ const snapshotSubmission = (
       seen,
     );
 
+    // SAFETY: every common and Campaign-sequence-specific field was copied
+    // from exact-key, trap-safe snapshots immediately above.
     return {
       ...common,
+      activationId: snapshotString(record.activationId),
+      authorizationGeneration: snapshotPositiveInteger(
+        record.authorizationGeneration,
+      ),
       authorizationId: snapshotString(record.authorizationId),
+      campaignExecutionId: snapshotString(record.campaignExecutionId),
       campaignId: snapshotString(record.campaignId),
       enrollmentId: snapshotString(record.enrollmentId),
       messageId: snapshotString(record.messageId),
@@ -607,7 +659,12 @@ const snapshotSubmission = (
       renderDigest: snapshotString(record.renderDigest),
       source,
       submissionCapability: {
+        activationId: snapshotString(capability.activationId),
         attemptId: snapshotString(capability.attemptId),
+        authorizationGeneration: snapshotPositiveInteger(
+          capability.authorizationGeneration,
+        ),
+        campaignExecutionId: snapshotString(capability.campaignExecutionId),
         kind: snapshotString(capability.kind) as 'CAMPAIGN_SEQUENCE_SUBMISSION',
         renderContext: snapshotRenderContext(
           capability.renderContext,
@@ -1124,7 +1181,13 @@ const snapshotRecoveryEvidence = (
     [
       'submission',
       'providerMessageId',
+      'providerHeaderMessageId',
+      'providerMessageExternalId',
+      'providerThreadExternalId',
+      'resolvedThreadExternalId',
+      'providerDeliveredRecipients',
       'projectedMessageId',
+      'projectedMessageThreadId',
       'safeOutcomeReason',
     ],
     new WeakSet<object>(),
@@ -1132,7 +1195,18 @@ const snapshotRecoveryEvidence = (
   const kind = snapshotString(statusRecord.kind);
   const keys =
     kind === 'ACCEPTED_EVIDENCE'
-      ? ['kind', 'submission', 'providerMessageId', 'projectedMessageId']
+      ? [
+          'kind',
+          'submission',
+          'providerMessageId',
+          'providerHeaderMessageId',
+          'providerMessageExternalId',
+          'providerThreadExternalId',
+          'resolvedThreadExternalId',
+          'providerDeliveredRecipients',
+          'projectedMessageId',
+          'projectedMessageThreadId',
+        ]
       : kind === 'DEFINITELY_UNACCEPTED_EVIDENCE'
         ? ['kind', 'submission', 'safeOutcomeReason']
         : kind === 'AMBIGUOUS_EVIDENCE'
@@ -1145,7 +1219,28 @@ const snapshotRecoveryEvidence = (
     return {
       kind,
       projectedMessageId: snapshotNullableString(record.projectedMessageId),
+      projectedMessageThreadId: snapshotNullableString(
+        record.projectedMessageThreadId,
+      ),
+      providerDeliveredRecipients:
+        record.providerDeliveredRecipients === null
+          ? null
+          : (snapshotProviderDeliveredRecipients(
+              record.providerDeliveredRecipients,
+            ) as { to: string[]; cc: string[]; bcc: string[] }),
+      providerHeaderMessageId: snapshotNullableString(
+        record.providerHeaderMessageId,
+      ),
+      providerMessageExternalId: snapshotNullableString(
+        record.providerMessageExternalId,
+      ),
       providerMessageId: snapshotString(record.providerMessageId),
+      providerThreadExternalId: snapshotNullableString(
+        record.providerThreadExternalId,
+      ),
+      resolvedThreadExternalId: snapshotNullableString(
+        record.resolvedThreadExternalId,
+      ),
       submission,
     };
   }
@@ -1359,6 +1454,8 @@ const validSequenceSubmission = (
   >,
 ): boolean => {
   const capability = submission.submissionCapability;
+  // SAFETY: this validator intentionally inspects the persisted binding by
+  // canonical field names rather than trusting its nominal capability type.
   const binding = capability.reservationBinding as unknown as Record<
     string,
     unknown
@@ -1368,6 +1465,8 @@ const validSequenceSubmission = (
   return (
     [
       submission.campaignId,
+      submission.campaignExecutionId,
+      submission.activationId,
       submission.enrollmentId,
       submission.occurrenceId,
       submission.authorizationId,
@@ -1376,7 +1475,12 @@ const validSequenceSubmission = (
     ].every(isCanonicalUuid) &&
     isDigest(submission.renderDigest) &&
     capability.kind === 'CAMPAIGN_SEQUENCE_SUBMISSION' &&
+    Number.isSafeInteger(submission.authorizationGeneration) &&
+    submission.authorizationGeneration > 0 &&
     capability.attemptId === submission.attemptId &&
+    capability.campaignExecutionId === submission.campaignExecutionId &&
+    capability.authorizationGeneration === submission.authorizationGeneration &&
+    capability.activationId === submission.activationId &&
     capability.renderDigest === submission.renderDigest &&
     validReservationBinding(binding, ['ROTATE', 'PINNED_REPLY']) &&
     typeof binding.attemptNumber === 'number' &&
@@ -1385,6 +1489,9 @@ const validSequenceSubmission = (
     isDigest(binding.senderPoolFingerprint) &&
     context.workspaceId === submission.workspaceId &&
     context.campaignId === submission.campaignId &&
+    context.campaignExecutionId === submission.campaignExecutionId &&
+    context.authorizationGeneration === submission.authorizationGeneration &&
+    context.activationId === submission.activationId &&
     context.enrollmentId === submission.enrollmentId &&
     context.occurrenceId === submission.occurrenceId &&
     context.authorizationId === submission.authorizationId &&
@@ -1405,6 +1512,8 @@ const validTestSubmission = (
   >,
 ): boolean => {
   const capability = submission.submissionCapability;
+  // SAFETY: this validator intentionally inspects the persisted binding by
+  // canonical field names rather than trusting its nominal capability type.
   const binding = capability.reservationBinding as unknown as Record<
     string,
     unknown
@@ -1453,6 +1562,8 @@ const validDirectSubmission = (
   >,
 ): boolean => {
   const capability = submission.submissionCapability;
+  // SAFETY: this validator intentionally inspects the persisted binding by
+  // canonical field names rather than trusting its nominal capability type.
   const binding = capability.reservationBinding as unknown as Record<
     string,
     unknown
@@ -1476,6 +1587,73 @@ const validDirectSubmission = (
     binding.directReservationCapabilityId ===
       submission.directReservationCapabilityId
   );
+};
+
+const reservationIdentityFromSubmission = (
+  submission: BeginOutboundEmailSubmissionInput,
+): OutboundEmailAttemptReservationIdentity => {
+  const binding = submission.submissionCapability.reservationBinding;
+  const common = {
+    attemptId: submission.attemptId,
+    workspaceId: submission.workspaceId,
+    connectedAccountId: submission.connectedAccountId,
+    messageChannelId: submission.messageChannelId,
+    provider: submission.provider,
+    normalizedSenderHandle: submission.normalizedSenderHandle,
+    normalizedRecipient: submission.normalizedRecipient,
+    localDate: binding.localDate,
+    claimedAt: binding.claimedAt,
+    slotAt: binding.slotAt,
+    unknownAfter: binding.unknownAfter,
+    selectionConstraintKind: binding.selectionConstraintKind,
+    priorAcceptedEvidenceId: binding.priorAcceptedEvidenceId,
+  };
+  if (submission.source === 'CAMPAIGN_SEQUENCE') {
+    const sequenceBinding = submission.submissionCapability.reservationBinding;
+    return {
+      ...common,
+      source: submission.source,
+      campaignId: submission.campaignId,
+      enrollmentId: submission.enrollmentId,
+      occurrenceId: submission.occurrenceId,
+      authorizationId: submission.authorizationId,
+      workflowVersionId: submission.workflowVersionId,
+      messageId: submission.messageId,
+      attemptNumber: sequenceBinding.attemptNumber,
+      senderPoolFingerprint: sequenceBinding.senderPoolFingerprint,
+      renderDigest: submission.renderDigest,
+      reservationEvidence: { kind: 'CAMPAIGN_SEQUENCE_RESERVATION' },
+    } as OutboundEmailAttemptReservationIdentity;
+  }
+  if (submission.source === 'CAMPAIGN_TEST') {
+    const testBinding = submission.submissionCapability.reservationBinding;
+    return {
+      ...common,
+      source: submission.source,
+      campaignId: submission.campaignId,
+      workflowVersionId: submission.workflowVersionId,
+      messageId: submission.messageId,
+      senderPoolFingerprint: testBinding.senderPoolFingerprint,
+      renderDigest: submission.renderDigest,
+      previewDigest: submission.previewDigest,
+      testTransportDigest: submission.testTransportDigest,
+      requesterUserWorkspaceId: submission.requesterUserWorkspaceId,
+      reservationEvidence: {
+        kind: 'TEST_PREPARATION_PROOF',
+        testPreparationProofId: submission.testPreparationProofId,
+        maySubmit: false,
+      },
+    } as OutboundEmailAttemptReservationIdentity;
+  }
+  return {
+    ...common,
+    source: submission.source,
+    directReservationCapabilityId: submission.directReservationCapabilityId,
+    reservationEvidence: {
+      kind: 'DIRECT_RESERVATION_CAPABILITY',
+      directReservationCapabilityId: submission.directReservationCapabilityId,
+    },
+  } as OutboundEmailAttemptReservationIdentity;
 };
 
 const isValidSubmission = (
@@ -1585,12 +1763,51 @@ class WinnerTransactionExit {
   constructor(readonly result: OutboundEmailDispatchResult) {}
 }
 
+const snapshotValidReservationSubmissionFromDispatchInput = (
+  value: unknown,
+): BeginOutboundEmailSubmissionInput | null => {
+  try {
+    const envelope = readStrictRecord(
+      value,
+      ['kind', 'material', 'submission'],
+      [],
+      new WeakSet<object>(),
+    );
+    const submission = snapshotSubmission(envelope.submission);
+
+    if (!isValidSubmission(submission)) return null;
+    reservationIdentityFromSubmission(submission);
+
+    return deepFreezeSnapshot(submission);
+  } catch {
+    return null;
+  }
+};
+
 const isRecorded = (
   result: AttemptOutcomeResult,
 ): result is Extract<
   AttemptOutcomeResult,
   { status: 'RECORDED' | 'EXACT_REPLAY' }
 > => result.status === 'RECORDED' || result.status === 'EXACT_REPLAY';
+
+const FINAL_AUTHORITY_REJECTION_REASONS =
+  new Set<FinalSubmissionAuthorityRejectionReason>([
+    'WORKSPACE_NOT_ACTIVE',
+    'CAMPAIGN_PAUSED',
+    'CAMPAIGN_STOPPED',
+    'AUTHORIZATION_STALE',
+    'ENROLLMENT_REPLIED',
+    'OCCURRENCE_CANCELLED',
+    'RECIPIENT_SUPPRESSED',
+    'AUDIENCE_DUPLICATE',
+    'AUDIENCE_STAGE_INVALID',
+    'AUDIENCE_CONTACT_INVALID',
+    'MATERIAL_STALE',
+    'SENDER_NOT_READY',
+    'THREAD_EVIDENCE_INVALID',
+    'DISPATCH_CONTRACT_CONFLICT',
+  ]);
 
 export class OutboundEmailDispatchService {
   constructor(
@@ -1607,6 +1824,8 @@ export class OutboundEmailDispatchService {
     let baseline: DispatchTrustedOutboundEmailInput;
     let providerAccount: ConnectedAccountEntity | null;
     let providerInput: SendMessageInput | null;
+    const reservationSubmission =
+      snapshotValidReservationSubmissionFromDispatchInput(input);
 
     try {
       const snapshot = snapshotDispatchInput(input);
@@ -1624,10 +1843,18 @@ export class OutboundEmailDispatchService {
             InvalidImapSmtpTransportMaterialError.prototype,
           )
         ) {
-          return {
-            reason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL',
-            status: 'BLOCKED',
+          const blockedResult = {
+            reason: 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL' as const,
+            status: 'BLOCKED' as const,
           };
+
+          return reservationSubmission === null
+            ? blockedResult
+            : this.blockReservedInNewTransaction(
+                reservationSubmission,
+                'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL',
+                blockedResult,
+              );
         }
         if (
           hasExactDirectPrototype(
@@ -1654,10 +1881,18 @@ export class OutboundEmailDispatchService {
         } as ConnectedAccountEntity) !==
         OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS
       ) {
-        return { status: 'CONTRACT_CONFLICT' };
+        return this.blockReservedInNewTransaction(
+          baseline.submission,
+          'DISPATCH_CONTRACT_CONFLICT',
+          { status: 'CONTRACT_CONFLICT' },
+        );
       }
     } catch {
-      return { status: 'CONTRACT_CONFLICT' };
+      return this.blockReservedInNewTransaction(
+        baseline.submission,
+        'DISPATCH_CONTRACT_CONFLICT',
+        { status: 'CONTRACT_CONFLICT' },
+      );
     }
 
     let monotonicBeforeBegin: number;
@@ -1665,10 +1900,18 @@ export class OutboundEmailDispatchService {
     try {
       monotonicBeforeBegin = this.elapsedClock.now();
     } catch {
-      return { status: 'CONTRACT_CONFLICT' };
+      return this.blockReservedInNewTransaction(
+        baseline.submission,
+        'DISPATCH_CONTRACT_CONFLICT',
+        { status: 'CONTRACT_CONFLICT' },
+      );
     }
     if (!Number.isFinite(monotonicBeforeBegin)) {
-      return { status: 'CONTRACT_CONFLICT' };
+      return this.blockReservedInNewTransaction(
+        baseline.submission,
+        'DISPATCH_CONTRACT_CONFLICT',
+        { status: 'CONTRACT_CONFLICT' },
+      );
     }
 
     let winner:
@@ -1677,6 +1920,27 @@ export class OutboundEmailDispatchService {
 
     try {
       winner = await this.transactionPort.runInTransaction(async (manager) => {
+        const blockReserved = async (
+          reason: Parameters<
+            OutboundEmailAttemptService['blockReservedAttemptBeforeProvider']
+          >[0]['reason'],
+          result: OutboundEmailDispatchResult,
+        ): Promise<OutboundEmailDispatchResult> => {
+          const blocked =
+            await this.attemptService.blockReservedAttemptBeforeProvider(
+              {
+                reason,
+                reservation: reservationIdentityFromSubmission(
+                  baseline.submission,
+                ),
+              },
+              manager,
+            );
+          return blocked.status === 'RECORDED' ||
+            blocked.status === 'EXACT_REPLAY'
+            ? result
+            : { status: 'CONTRACT_CONFLICT' };
+        };
         let authority: FinalSubmissionAuthorityRevalidationResult;
 
         try {
@@ -1684,6 +1948,10 @@ export class OutboundEmailDispatchService {
             await this.authorityRevalidator.revalidate(
               deepFreezeSnapshot({
                 kind: baseline.kind,
+                materialEvidence: {
+                  projectedMessageId: baseline.material.projectedMessageId,
+                  sendMessageInput: baseline.material.sendMessageInput,
+                },
                 submission: deepFreezeSnapshot(
                   snapshotSubmission(baseline.submission),
                 ),
@@ -1692,14 +1960,18 @@ export class OutboundEmailDispatchService {
             ),
           );
         } catch {
-          throw new WinnerTransactionExit({ status: 'CONTRACT_CONFLICT' });
+          return blockReserved('DISPATCH_CONTRACT_CONFLICT', {
+            status: 'CONTRACT_CONFLICT',
+          });
         }
 
         if (authority.status === 'REJECTED') {
-          if (!['DENIED', 'STALE', 'SUPPRESSED'].includes(authority.reason)) {
-            throw new WinnerTransactionExit({ status: 'CONTRACT_CONFLICT' });
+          if (!FINAL_AUTHORITY_REJECTION_REASONS.has(authority.reason)) {
+            return blockReserved('DISPATCH_CONTRACT_CONFLICT', {
+              status: 'CONTRACT_CONFLICT',
+            });
           }
-          throw new WinnerTransactionExit({
+          return blockReserved(authority.reason, {
             reason: authority.reason,
             status: 'AUTHORITY_REJECTED',
           });
@@ -1708,7 +1980,9 @@ export class OutboundEmailDispatchService {
           !exactValue(authority.submission, baseline.submission) ||
           authority.projectedMessageId !== baseline.material.projectedMessageId
         ) {
-          throw new WinnerTransactionExit({ status: 'CONTRACT_CONFLICT' });
+          return blockReserved('DISPATCH_CONTRACT_CONFLICT', {
+            status: 'CONTRACT_CONFLICT',
+          });
         }
 
         const begin = await this.attemptService.beginSubmission(
@@ -1724,13 +1998,15 @@ export class OutboundEmailDispatchService {
           };
         }
         if (begin.status === 'RESERVATION_WINDOW_EXPIRED') {
-          return {
+          return blockReserved('RESERVATION_EXPIRED', {
             receipt: begin.receipt,
             status: 'RESERVATION_WINDOW_EXPIRED' as const,
-          };
+          });
         }
 
-        throw new WinnerTransactionExit({ status: 'CONTRACT_CONFLICT' });
+        return blockReserved('DISPATCH_CONTRACT_CONFLICT', {
+          status: 'CONTRACT_CONFLICT',
+        });
       });
     } catch (error) {
       try {
@@ -1757,6 +2033,60 @@ export class OutboundEmailDispatchService {
       evidence: this.snapshotAmbiguousEvidence(baseline.submission),
       status: 'UNKNOWN_PENDING_DEADLINE',
     });
+    try {
+      const committedWindow = snapshotReceiptWindowDates(winner.receipt);
+      if (
+        intrinsicReflectApply(
+          intrinsicDateGetTime,
+          committedWindow.unknownAfter,
+          [],
+        ) -
+          intrinsicReflectApply(
+            intrinsicDateGetTime,
+            committedWindow.updatedAt,
+            [],
+          ) <
+        0
+      )
+        return ambiguousCommittedFence();
+    } catch {
+      return ambiguousCommittedFence();
+    }
+
+    let preProviderWindow!: Awaited<
+      ReturnType<
+        OutboundEmailAttemptService['recheckProcessingWindowBeforeProvider']
+      >
+    >;
+    try {
+      const runPreProvider =
+        this.transactionPort.runPreProviderTransaction?.bind(
+          this.transactionPort,
+        ) ?? this.transactionPort.runInTransaction.bind(this.transactionPort);
+      preProviderWindow = await runPreProvider((manager: EntityManager) =>
+        this.attemptService.recheckProcessingWindowBeforeProvider(
+          deepFreezeSnapshot(snapshotSubmission(baseline.submission)),
+          manager,
+        ),
+      );
+    } catch {
+      return ambiguousCommittedFence();
+    }
+    if (preProviderWindow.status === 'IDENTITY_CONFLICT') {
+      return ambiguousCommittedFence();
+    }
+    if (preProviderWindow.status === 'UNSAFE') {
+      return this.persistDefiniteOutcome({
+        kind: 'DEFINITELY_UNACCEPTED_EVIDENCE',
+        safeOutcomeReason: 'DEFINITELY_UNACCEPTED_RETRYABLE',
+        submission: baseline.submission,
+      });
+    }
+    winner = {
+      status: 'PROCESSING_ACQUIRED',
+      receipt: preProviderWindow.receipt,
+    };
+
     let reservationWindowMs: number;
 
     try {
@@ -1841,10 +2171,12 @@ export class OutboundEmailDispatchService {
       providerAccount = null;
     }
 
-    const providerMessageId =
-      this.readFulfilledProviderMessageId(providerResult);
+    const providerEvidence = this.readFulfilledProviderEvidence(
+      providerResult,
+      baseline.material.sendMessageInput,
+    );
 
-    if (providerMessageId === null) {
+    if (providerEvidence === null) {
       return {
         evidence: deepFreezeSnapshot({
           attemptId: baseline.submission.attemptId,
@@ -1859,8 +2191,9 @@ export class OutboundEmailDispatchService {
 
     return this.persistAcceptedOutcome({
       kind: 'ACCEPTED_EVIDENCE',
-      projectedMessageId: baseline.material.projectedMessageId,
-      providerMessageId,
+      ...providerEvidence,
+      projectedMessageId: null,
+      projectedMessageThreadId: null,
       submission: baseline.submission,
     });
   }
@@ -1933,7 +2266,13 @@ export class OutboundEmailDispatchService {
             deepFreezeSnapshot({
               ...snapshotSubmission(baseline.submission),
               projectedMessageId: baseline.projectedMessageId,
+              projectedMessageThreadId: baseline.projectedMessageThreadId,
+              providerDeliveredRecipients: baseline.providerDeliveredRecipients,
+              providerHeaderMessageId: baseline.providerHeaderMessageId,
+              providerMessageExternalId: baseline.providerMessageExternalId,
               providerMessageId: baseline.providerMessageId,
+              providerThreadExternalId: baseline.providerThreadExternalId,
+              resolvedThreadExternalId: baseline.resolvedThreadExternalId,
             }),
             manager,
           );
@@ -1946,7 +2285,14 @@ export class OutboundEmailDispatchService {
               deepFreezeSnapshot({
                 ...snapshotSubmission(baseline.submission),
                 projectedMessageId: baseline.projectedMessageId,
+                projectedMessageThreadId: baseline.projectedMessageThreadId,
+                providerDeliveredRecipients:
+                  baseline.providerDeliveredRecipients,
+                providerHeaderMessageId: baseline.providerHeaderMessageId,
+                providerMessageExternalId: baseline.providerMessageExternalId,
                 providerMessageId: baseline.providerMessageId,
+                providerThreadExternalId: baseline.providerThreadExternalId,
+                resolvedThreadExternalId: baseline.resolvedThreadExternalId,
               }),
               manager,
             );
@@ -2020,6 +2366,34 @@ export class OutboundEmailDispatchService {
     }
   }
 
+  private async blockReservedInNewTransaction(
+    submission: BeginOutboundEmailSubmissionInput,
+    reason: Parameters<
+      OutboundEmailAttemptService['blockReservedAttemptBeforeProvider']
+    >[0]['reason'],
+    result: OutboundEmailDispatchResult,
+  ): Promise<OutboundEmailDispatchResult> {
+    try {
+      return await this.transactionPort.runInTransaction(async (manager) => {
+        const blocked =
+          await this.attemptService.blockReservedAttemptBeforeProvider(
+            {
+              reason,
+              reservation: reservationIdentityFromSubmission(submission),
+            },
+            manager,
+          );
+
+        return blocked.status === 'RECORDED' ||
+          blocked.status === 'EXACT_REPLAY'
+          ? result
+          : { status: 'CONTRACT_CONFLICT' };
+      });
+    } catch {
+      return { status: 'CONTRACT_CONFLICT' };
+    }
+  }
+
   private snapshotAmbiguousEvidence(
     submission: BeginOutboundEmailSubmissionInput,
   ): AmbiguousOutboundEmailRecoveryEvidence {
@@ -2042,29 +2416,61 @@ export class OutboundEmailDispatchService {
     };
   }
 
-  private readFulfilledProviderMessageId(value: unknown): string | null {
+  private readFulfilledProviderEvidence(
+    value: unknown,
+    sendInput: SendMessageInput,
+  ): null | {
+    providerMessageId: string;
+    providerHeaderMessageId: string | null;
+    providerMessageExternalId: string | null;
+    providerThreadExternalId: string | null;
+    resolvedThreadExternalId: string;
+    providerDeliveredRecipients: {
+      to: string[];
+      cc: string[];
+      bcc: string[];
+    } | null;
+  } {
     try {
-      const classification = classifyTrapSafeObject(value);
-
-      if (classification.kind !== 'PLAIN_RECORD') return null;
-      const keys = intrinsicReflectOwnKeys(classification.value);
-
-      if (keys.some((key) => typeof key !== 'string')) return null;
-      const descriptors = intrinsicObjectGetOwnPropertyDescriptors(
-        classification.value,
+      const record = readStrictRecord(
+        value,
+        ['headerMessageId'],
+        ['messageExternalId', 'threadExternalId', 'deliveredRecipients'],
+        new WeakSet<object>(),
       );
-      const readUsable = (key: string): string | null => {
-        const descriptor = descriptors[key];
-
-        if (descriptor === undefined) return null;
-        if (!('value' in descriptor)) throw new UnsafeSnapshotError();
-        if (typeof descriptor.value !== 'string') return null;
-        const trimmed = descriptor.value.trim();
-
-        return trimmed.length > 0 ? trimmed : null;
+      const optionalText = (candidate: unknown): string | null => {
+        if (candidate === undefined) return null;
+        const normalized = snapshotString(candidate).trim();
+        return normalized.length === 0 ? null : normalized;
       };
+      const providerHeaderMessageId = optionalText(record.headerMessageId);
+      const providerMessageExternalId = optionalText(record.messageExternalId);
+      const providerThreadExternalId = optionalText(record.threadExternalId);
+      const providerMessageId =
+        providerMessageExternalId ?? providerHeaderMessageId;
+      if (providerMessageId === null) return null;
+      const resolvedThreadExternalId = resolveOutboundThreadExternalId({
+        sendResult: {
+          headerMessageId: providerHeaderMessageId ?? '',
+          messageExternalId: providerMessageExternalId ?? undefined,
+          threadExternalId: providerThreadExternalId ?? undefined,
+        },
+        parentThreadExternalId: sendInput.threadExternalId,
+        inReplyTo: sendInput.inReplyTo,
+      }).trim();
+      if (resolvedThreadExternalId.length === 0) return null;
 
-      return readUsable('messageExternalId') ?? readUsable('headerMessageId');
+      return {
+        providerDeliveredRecipients:
+          record.deliveredRecipients === undefined
+            ? null
+            : snapshotProviderDeliveredRecipients(record.deliveredRecipients),
+        providerHeaderMessageId,
+        providerMessageExternalId,
+        providerMessageId,
+        providerThreadExternalId,
+        resolvedThreadExternalId,
+      };
     } catch {
       return null;
     }

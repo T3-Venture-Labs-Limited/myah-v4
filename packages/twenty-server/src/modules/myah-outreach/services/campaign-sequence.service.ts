@@ -74,6 +74,15 @@ const EXECUTION_FILE_KEYS = [
   'createdAt',
 ] as const;
 
+type ExecutionPlainValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ExecutionPlainValue[]
+  | { [key: string]: ExecutionPlainValue };
+
 type ExecutionSequenceDataShape =
   | 'SEQUENCE'
   | 'MESSAGES'
@@ -102,6 +111,7 @@ export type CampaignSequenceSnapshot = {
   versionId: string;
   sequence: CampaignSequence;
   lifecycleStatus: string | null;
+  versionStatus: WorkflowVersionStatus;
   editable: boolean;
   issues: CampaignSequenceIssue[];
 };
@@ -123,6 +133,10 @@ export type SaveCampaignSequenceArgs = CampaignSequenceScope & {
 };
 
 export type ValidateCampaignSequenceArgs = CampaignSequenceScope & {
+  expectedVersionId: string;
+};
+
+export type PublishCampaignSequenceArgs = CampaignSequenceScope & {
   expectedVersionId: string;
 };
 
@@ -373,6 +387,64 @@ export class CampaignSequenceService {
         issues: validateCampaignSequence(sequence),
       };
     });
+  }
+
+  async loadEmailByVersionInTransaction(
+    args: LoadCampaignSequenceEmailByVersionArgs,
+    manager: WorkspaceEntityManager,
+  ): Promise<ValidatedCampaignSequenceEmail> {
+    const runner = manager.queryRunner;
+    if (
+      !runner?.isTransactionActive ||
+      runner.isReleased ||
+      runner.manager !== manager
+    )
+      throw new InternalServerErrorException(
+        'Campaign sequence material requires the supplied active transaction',
+      );
+    const normalized = this.normalizeScope(args);
+    const workflowVersionId = this.canonicalUuid(
+      'workflowVersionId',
+      args.workflowVersionId,
+    );
+    const messageId = this.canonicalUuid('messageId', args.messageId);
+    const schemaName = getWorkspaceSchemaName(normalized.workspaceId);
+    const rows = await runner.query(
+      `SELECT workflow.id AS "workflowId", version."campaignSequence"
+         FROM ${this.workflowTable(schemaName)} workflow
+         JOIN ${this.workflowVersionTable(schemaName)} version
+           ON version.id=$2 AND version."workflowId"=workflow.id
+        WHERE workflow."outreachCampaignId"=$1
+          AND workflow."deletedAt" IS NULL AND version."deletedAt" IS NULL
+        FOR KEY SHARE OF workflow, version`,
+      [normalized.campaignId, workflowVersionId],
+    );
+    if (!Array.isArray(rows) || rows.length !== 1)
+      throw new NotFoundException('Campaign sequence version not found');
+    const workflowId = rows[0].workflowId;
+    if (typeof workflowId !== 'string' || rows[0].campaignSequence === null)
+      throw new ConflictException('Campaign sequence version is legacy');
+    const sequence = this.parseStoredSequence(rows[0].campaignSequence);
+    const matches = sequence.messages.filter(
+      (message) => message.id === messageId && message.channel === 'EMAIL',
+    );
+    if (matches.length !== 1)
+      throw new ConflictException('Campaign sequence email is invalid');
+    const message = matches[0];
+    if (message.channel !== 'EMAIL')
+      throw new ConflictException('Campaign sequence email is invalid');
+    return {
+      workspaceId: normalized.workspaceId,
+      campaignId: normalized.campaignId,
+      workflowId,
+      workflowVersionId,
+      messageId,
+      subject: message.subject,
+      body: message.body,
+      files: message.files,
+      replyToThread: message.replyToThread,
+      issues: validateCampaignSequence(sequence),
+    };
   }
 
   async loadExecutionPlanInTransaction(
@@ -745,6 +817,104 @@ export class CampaignSequenceService {
     return persisted.snapshot;
   }
 
+  async publish(
+    args: PublishCampaignSequenceArgs,
+  ): Promise<CampaignSequenceSnapshot> {
+    const normalized = this.normalizeScope(args);
+    const expectedVersionId = this.canonicalUuid(
+      'expectedVersionId',
+      args.expectedVersionId,
+    );
+    const persisted = await this.withLockedCampaign(
+      normalized,
+      async (context): Promise<PersistedSequenceSnapshot> => {
+        this.assertEditableLifecycle(context.campaign.lifecycleStatus);
+        const { workflow, version } = await this.lockedDefinition(context);
+
+        if (version.id !== expectedVersionId) {
+          throw new ConflictException(
+            'Sequence changed. Reload before publishing.',
+          );
+        }
+        const sequence = this.parseStoredSequence(version.campaignSequence);
+        const issues = validateCampaignSequence(sequence);
+        if (
+          issues.length > 0 ||
+          sequence.messages.length === 0 ||
+          sequence.messages.some(
+            (message) =>
+              message.channel !== 'EMAIL' ||
+              (message.channel === 'EMAIL' && message.files.length > 0),
+          )
+        ) {
+          throw new ConflictException(
+            'Only a valid nonempty email-only sequence without attachments can be published.',
+          );
+        }
+
+        if (version.status === WorkflowVersionStatus.ACTIVE) {
+          if (workflow.lastPublishedVersionId !== expectedVersionId) {
+            throw new ConflictException(
+              'Sequence changed. Reload before publishing.',
+            );
+          }
+        } else if (version.status === WorkflowVersionStatus.DRAFT) {
+          await context.queryRunner.query(
+            `UPDATE ${this.workflowVersionTable(context.schemaName)}
+                SET "status" = 'DEACTIVATED', "updatedAt" = CURRENT_TIMESTAMP
+              WHERE "workflowId" = $1 AND "status" = 'ACTIVE' AND "deletedAt" IS NULL`,
+            [workflow.id],
+          );
+          const activated = await this.queryRows<{ id: string }>(
+            context.queryRunner,
+            `UPDATE ${this.workflowVersionTable(context.schemaName)}
+                SET "status" = 'ACTIVE', "updatedAt" = CURRENT_TIMESTAMP
+              WHERE "id" = $1 AND "workflowId" = $2 AND "status" = 'DRAFT'
+              RETURNING "id"`,
+            [expectedVersionId, workflow.id],
+          );
+          if (activated.length !== 1 || activated[0].id !== expectedVersionId) {
+            throw new ConflictException(
+              'Sequence changed. Reload before publishing.',
+            );
+          }
+          const workflowRows = await this.queryRows<{ id: string }>(
+            context.queryRunner,
+            `UPDATE ${this.workflowTable(context.schemaName)}
+                SET "lastPublishedVersionId" = $2, "updatedAt" = CURRENT_TIMESTAMP
+              WHERE "id" = $1
+              RETURNING "id"`,
+            [workflow.id, expectedVersionId],
+          );
+          if (workflowRows.length !== 1 || workflowRows[0].id !== workflow.id) {
+            throw new Error('Campaign sequence publication was inconsistent');
+          }
+        } else {
+          throw new ConflictException(
+            'Sequence changed. Reload before publishing.',
+          );
+        }
+
+        await this.synchronizeWorkflowStatusProjection(context, workflow.id);
+        return {
+          snapshot: this.toSnapshot({
+            campaignId: context.campaignId,
+            workflowId: workflow.id,
+            version: { ...version, status: WorkflowVersionStatus.ACTIVE },
+            lifecycleStatus: context.campaign.lifecycleStatus,
+            canUpdate: true,
+          }),
+          synchronizedWorkflowId: workflow.id,
+        };
+      },
+    );
+    await this.synchronizeWorkflowAfterCommit(
+      normalized.workspaceId,
+      persisted.synchronizedWorkflowId,
+    );
+    return persisted.snapshot;
+  }
+
   async validate(
     args: ValidateCampaignSequenceArgs,
   ): Promise<CampaignSequenceSnapshot> {
@@ -933,7 +1103,10 @@ export class CampaignSequenceService {
       versionId: this.canonicalUuid('versionId', version.id),
       sequence,
       lifecycleStatus,
-      editable: lifecycleStatus === 'DRAFT' && canUpdate,
+      versionStatus: version.status,
+      editable:
+        (lifecycleStatus === 'DRAFT' || lifecycleStatus === 'PAUSED') &&
+        canUpdate,
       issues: validateCampaignSequence(sequence),
     };
   }
@@ -1187,7 +1360,7 @@ export class CampaignSequenceService {
     seen: WeakSet<object>,
     budget: ExecutionSequenceVisitBudget,
     depth: number,
-  ): unknown {
+  ): ExecutionPlainValue {
     if (nodeUtilTypes.isProxy(value)) {
       throw new TypeError('Campaign sequence data must not be a Proxy');
     }
@@ -1215,7 +1388,15 @@ export class CampaignSequenceService {
 
       return value;
     }
-    if (typeof value !== 'object' || value === null) return value;
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    )
+      return value;
+    if (typeof value !== 'object')
+      throw new TypeError('Campaign sequence data must be plain JSON');
     if (seen.has(value)) {
       throw new TypeError('Campaign sequence data must be a tree');
     }
@@ -1226,7 +1407,7 @@ export class CampaignSequenceService {
       const remainingVisits = EXECUTION_SEQUENCE_MAX_VISITS - budget.count;
       const values = this.executionArrayValues(value, remainingVisits);
       const elementShape = this.executionArrayElementShape(shape);
-      const clone: unknown[] = [];
+      const clone: ExecutionPlainValue[] = [];
 
       for (const element of values) {
         clone.push(
@@ -1269,11 +1450,14 @@ export class CampaignSequenceService {
     }
 
     const stringKeys = actualKeys as string[];
-    const expectedKeys = this.executionObjectKeys(shape, value);
+    const expectedKeys = this.executionObjectKeys(
+      shape,
+      value as Record<string, unknown>,
+    );
 
     this.assertExactExecutionKeys(stringKeys, expectedKeys);
 
-    const clone: Record<string, unknown> = Object.create(null);
+    const clone: Record<string, ExecutionPlainValue> = Object.create(null);
 
     for (const key of expectedKeys) {
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
@@ -1325,7 +1509,7 @@ export class CampaignSequenceService {
 
   private executionObjectKeys(
     shape: ExecutionSequenceDataShape,
-    value: object,
+    value: Record<string, unknown>,
   ): readonly string[] {
     if (shape === 'SEQUENCE') return EXECUTION_SEQUENCE_KEYS;
     if (shape === 'FILE') return EXECUTION_FILE_KEYS;
@@ -1439,9 +1623,9 @@ export class CampaignSequenceService {
   }
 
   private assertEditableLifecycle(lifecycleStatus: string | null): void {
-    // STOPPED is intentionally not inferred from PAUSED/DEACTIVATED. Task 7 may
-    // add a trusted STOPPED authority; until then, authoring fails closed.
-    if (lifecycleStatus !== 'DRAFT') {
+    // The dedicated Campaign Stop operation is the only trusted path to PAUSED;
+    // user-facing outreach authoring represents that internal state as stopped.
+    if (lifecycleStatus !== 'DRAFT' && lifecycleStatus !== 'PAUSED') {
       throw new ConflictException('Stop Campaign outreach before editing.');
     }
   }

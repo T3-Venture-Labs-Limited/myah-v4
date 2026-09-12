@@ -39,6 +39,9 @@ export class CampaignSequenceSnapshotDTO {
   @Field(() => String, { nullable: true })
   lifecycleStatus: string | null;
 
+  @Field(() => String)
+  versionStatus: string;
+
   @Field(() => Boolean)
   editable: boolean;
 
@@ -56,6 +59,15 @@ export class SaveCampaignSequenceInput {
 
   @Field(() => GraphQLJSON)
   sequence: CampaignSequence;
+}
+
+@InputType('PublishCampaignSequenceInput')
+export class PublishCampaignSequenceInput {
+  @Field(() => UUIDScalarType)
+  campaignId: string;
+
+  @Field(() => UUIDScalarType)
+  expectedVersionId: string;
 }
 
 @InputType('ReplaceLegacyCampaignSequenceInput')

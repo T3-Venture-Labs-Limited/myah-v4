@@ -5,6 +5,7 @@ import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/type
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import {
   type CampaignMaterialPortResult,
   type CampaignSignatureMaterialPort,
@@ -45,6 +46,27 @@ export class CampaignSignatureMaterialAdapter implements CampaignSignatureMateri
     }
 
     try {
+      if (input.transactionManager) {
+        const runner = input.transactionManager.queryRunner;
+        if (
+          !runner?.isTransactionActive ||
+          runner.isReleased ||
+          runner.manager !== input.transactionManager
+        )
+          return signatureUnavailable();
+        const rows = await runner.query(
+          `SELECT "emailSignature" FROM "${getWorkspaceSchemaName(workspaceId)}".campaign
+            WHERE id=$1 AND "deletedAt" IS NULL FOR KEY SHARE`,
+          [campaignId],
+        );
+        if (!Array.isArray(rows) || rows.length !== 1)
+          return signatureUnavailable();
+        const html = rows[0].emailSignature;
+        if (html !== null && typeof html !== 'string')
+          return signatureUnavailable();
+        return { kind: 'READY', value: { html } };
+      }
+      if (authContext.type !== 'user') return signatureUnavailable();
       return await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         () => this.loadInWorkspaceContext(authContext, workspaceId, campaignId),
         authContext,

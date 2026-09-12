@@ -1,9 +1,13 @@
-import { MODULE_METADATA } from '@nestjs/common/constants';
+import {
+  MODULE_METADATA,
+  SELF_DECLARED_DEPS_METADATA,
+} from '@nestjs/common/constants';
 import { type EntityManager } from 'typeorm';
 
 import { WorkspaceCampaignCapacityTimeZoneModule } from 'src/engine/core-modules/myah/workspace-campaign-capacity-time-zone.module';
+import { WorkspaceCampaignCapacityTimeZoneAuthorizationService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone-authorization.service';
 import { WorkspaceCampaignCapacityTimeZoneService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone.service';
-import { type WorkspaceCampaignCapacityTimeZoneAuthorizationPort } from 'src/engine/core-modules/myah/types/workspace-campaign-capacity-time-zone.type';
+import { WorkspaceCampaignCapacityTimeZoneAuthorizationPort } from 'src/engine/core-modules/myah/types/workspace-campaign-capacity-time-zone.type';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const otherWorkspaceId = '22222222-2222-4222-8222-222222222222';
@@ -690,7 +694,18 @@ describe('WorkspaceCampaignCapacityTimeZoneService', () => {
 });
 
 describe('WorkspaceCampaignCapacityTimeZoneModule', () => {
-  it('remains an unconfigured leaf until a trusted authorization adapter is approved', () => {
+  it('injects the registered authorization port into the timezone service', () => {
+    const dependencies = Reflect.getMetadata(
+      SELF_DECLARED_DEPS_METADATA,
+      WorkspaceCampaignCapacityTimeZoneService,
+    ) as Array<{ index: number; param: unknown }> | undefined;
+
+    expect(dependencies?.find(({ index }) => index === 0)?.param).toBe(
+      WorkspaceCampaignCapacityTimeZoneAuthorizationPort,
+    );
+  });
+
+  it('exports the configured trusted read-only timezone leaf', () => {
     expect(
       Reflect.getMetadata(
         MODULE_METADATA.IMPORTS,
@@ -702,12 +717,19 @@ describe('WorkspaceCampaignCapacityTimeZoneModule', () => {
         MODULE_METADATA.PROVIDERS,
         WorkspaceCampaignCapacityTimeZoneModule,
       ) ?? [],
-    ).toEqual([]);
+    ).toEqual([
+      WorkspaceCampaignCapacityTimeZoneAuthorizationService,
+      {
+        provide: WorkspaceCampaignCapacityTimeZoneAuthorizationPort,
+        useExisting: WorkspaceCampaignCapacityTimeZoneAuthorizationService,
+      },
+      WorkspaceCampaignCapacityTimeZoneService,
+    ]);
     expect(
       Reflect.getMetadata(
         MODULE_METADATA.EXPORTS,
         WorkspaceCampaignCapacityTimeZoneModule,
       ) ?? [],
-    ).toEqual([]);
+    ).toEqual([WorkspaceCampaignCapacityTimeZoneService]);
   });
 });

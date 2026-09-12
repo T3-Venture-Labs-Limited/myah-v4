@@ -34,6 +34,7 @@ import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-
 import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
 import { ManagedEmailModule } from 'src/engine/core-modules/managed-email/managed-email.module';
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
+import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public-domain.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
@@ -90,6 +91,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     ManagedEmailModule,
     CustomerAccountModule,
     MyahModule,
+    CampaignExecutionOrchestrationModule,
     EventLogEmitterModule,
     FeatureFlagModule,
     WorkspaceCleanerModule,

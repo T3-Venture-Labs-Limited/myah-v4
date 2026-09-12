@@ -474,8 +474,11 @@ describe('campaign execution relational PostgreSQL contract', () => {
       unknownAfter,
     };
     const input: CampaignSequenceSubmissionInput = {
+      activationId: g.activationId,
       attemptId,
+      authorizationGeneration: 1,
       authorizationId: g.authorizationId,
+      campaignExecutionId: g.executionId,
       campaignId: g.campaignId,
       connectedAccountId: sender.connectedAccountId,
       enrollmentId: g.enrollmentId,
@@ -489,10 +492,16 @@ describe('campaign execution relational PostgreSQL contract', () => {
       renderDigest: digest('1'),
       source: 'CAMPAIGN_SEQUENCE',
       submissionCapability: {
+        activationId: g.activationId,
         attemptId,
+        authorizationGeneration: 1,
+        campaignExecutionId: g.executionId,
         kind: 'CAMPAIGN_SEQUENCE_SUBMISSION',
         renderContext: {
+          activationId: g.activationId,
+          authorizationGeneration: 1,
           authorizationId: g.authorizationId,
+          campaignExecutionId: g.executionId,
           campaignId: g.campaignId,
           connectedAccountId: sender.connectedAccountId,
           enrollmentId: g.enrollmentId,

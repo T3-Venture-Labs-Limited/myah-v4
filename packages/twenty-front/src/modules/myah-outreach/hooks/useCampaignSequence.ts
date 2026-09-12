@@ -8,6 +8,7 @@ import {
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import {
   CAMPAIGN_SEQUENCE,
+  PUBLISH_CAMPAIGN_SEQUENCE,
   SAVE_CAMPAIGN_SEQUENCE,
 } from '@/myah-outreach/graphql/operations';
 
@@ -17,6 +18,7 @@ export type CampaignSequenceSnapshot = {
   versionId: string;
   sequence: CampaignSequence;
   lifecycleStatus: string | null;
+  versionStatus: 'DRAFT' | 'ACTIVE' | 'DEACTIVATED' | 'ARCHIVED';
   editable: boolean;
   issues: CampaignSequenceIssue[];
 };
@@ -47,6 +49,10 @@ type SaveCampaignSequenceData = {
   saveCampaignSequence: CampaignSequenceSnapshot;
 };
 
+type PublishCampaignSequenceData = {
+  publishCampaignSequence: CampaignSequenceSnapshot;
+};
+
 const errorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message;
@@ -68,6 +74,7 @@ export const useCampaignSequence = (campaignId: string) => {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadGeneration, setReloadGeneration] = useState(0);
@@ -89,6 +96,13 @@ export const useCampaignSequence = (campaignId: string) => {
     requestIdentity: number;
   } | null>(null);
   // oxlint-disable-next-line twenty/no-state-useref
+  const publishRequestIdentityRef = useRef(0);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const activePublishRequestRef = useRef<{
+    campaignSessionGeneration: number;
+    requestIdentity: number;
+  } | null>(null);
+  // oxlint-disable-next-line twenty/no-state-useref
   const editGenerationRef = useRef(0);
   // oxlint-disable-next-line twenty/no-state-useref
   const snapshotRef = useRef<CampaignSequenceSnapshot | null>(null);
@@ -98,6 +112,8 @@ export const useCampaignSequence = (campaignId: string) => {
   const dirtyRef = useRef(false);
   // oxlint-disable-next-line twenty/no-state-useref
   const savingRef = useRef(false);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const publishingRef = useRef(false);
 
   campaignIdRef.current = campaignId;
   snapshotRef.current = snapshot;
@@ -196,6 +212,7 @@ export const useCampaignSequence = (campaignId: string) => {
     requestGenerationRef.current += 1;
     campaignSessionGenerationRef.current += 1;
     activeSaveRequestRef.current = null;
+    activePublishRequestRef.current = null;
     snapshotRef.current = null;
     draftRef.current = null;
     dirtyRef.current = false;
@@ -207,6 +224,8 @@ export const useCampaignSequence = (campaignId: string) => {
     setError(null);
     setSaving(false);
     savingRef.current = false;
+    setPublishing(false);
+    publishingRef.current = false;
     void load(campaignId);
 
     return () => {
@@ -287,6 +306,7 @@ export const useCampaignSequence = (campaignId: string) => {
       !capturedSnapshot ||
       !capturedDraft ||
       savingRef.current ||
+      publishingRef.current ||
       !dirtyRef.current
     ) {
       return;
@@ -314,6 +334,7 @@ export const useCampaignSequence = (campaignId: string) => {
     try {
       const { data } = await apolloCoreClient.mutate<SaveCampaignSequenceData>({
         mutation: SAVE_CAMPAIGN_SEQUENCE,
+        refetchQueries: ['CampaignOutreachAudienceReview'],
         variables: {
           input: {
             campaignId: capturedCampaignId,
@@ -355,7 +376,69 @@ export const useCampaignSequence = (campaignId: string) => {
     }
   }, [apolloCoreClient]);
 
+  const publish = useCallback(async (): Promise<void> => {
+    const capturedCampaignId = campaignIdRef.current;
+    const capturedCampaignSessionGeneration =
+      campaignSessionGenerationRef.current;
+    const current = snapshotRef.current;
+    if (
+      !current ||
+      dirtyRef.current ||
+      publishingRef.current ||
+      savingRef.current ||
+      current.versionStatus !== 'DRAFT'
+    )
+      return;
+
+    const requestIdentity = ++publishRequestIdentityRef.current;
+    const ownsCurrentPublishRequest = () =>
+      mountedRef.current &&
+      campaignIdRef.current === capturedCampaignId &&
+      campaignSessionGenerationRef.current ===
+        capturedCampaignSessionGeneration &&
+      activePublishRequestRef.current?.campaignSessionGeneration ===
+        capturedCampaignSessionGeneration &&
+      activePublishRequestRef.current.requestIdentity === requestIdentity;
+
+    activePublishRequestRef.current = {
+      campaignSessionGeneration: capturedCampaignSessionGeneration,
+      requestIdentity,
+    };
+    publishingRef.current = true;
+    setPublishing(true);
+    setError(null);
+    try {
+      const { data } =
+        await apolloCoreClient.mutate<PublishCampaignSequenceData>({
+          mutation: PUBLISH_CAMPAIGN_SEQUENCE,
+          refetchQueries: ['CampaignOutreachAudienceReview'],
+          variables: {
+            input: {
+              campaignId: capturedCampaignId,
+              expectedVersionId: current.versionId,
+            },
+          },
+        });
+      if (!data)
+        throw new Error('Campaign sequence publication returned no data.');
+      if (!ownsCurrentPublishRequest()) return;
+      const published = data.publishCampaignSequence;
+      setSnapshot(published);
+      snapshotRef.current = published;
+      setLoadResult({ kind: 'SEQUENCE', snapshot: published });
+    } catch (publishError) {
+      if (ownsCurrentPublishRequest()) setError(errorMessage(publishError));
+    } finally {
+      if (ownsCurrentPublishRequest()) {
+        activePublishRequestRef.current = null;
+        publishingRef.current = false;
+        setPublishing(false);
+      }
+    }
+  }, [apolloCoreClient]);
+
   const reload = useCallback(async (): Promise<void> => {
+    if (publishingRef.current) return;
     if (
       dirtyRef.current &&
       !window.confirm(
@@ -374,6 +457,7 @@ export const useCampaignSequence = (campaignId: string) => {
     selectedMessageId,
     loading,
     saving,
+    publishing,
     dirty,
     error,
     loadResult,
@@ -382,6 +466,7 @@ export const useCampaignSequence = (campaignId: string) => {
     addAttachments,
     selectMessage,
     save,
+    publish,
     reload,
   };
 };

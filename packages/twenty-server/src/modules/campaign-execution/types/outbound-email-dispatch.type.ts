@@ -35,9 +35,20 @@ export type DispatchTrustedOutboundEmailInput =
     };
 
 export type FinalSubmissionAuthorityRejectionReason =
-  | 'DENIED'
-  | 'STALE'
-  | 'SUPPRESSED';
+  | 'WORKSPACE_NOT_ACTIVE'
+  | 'CAMPAIGN_PAUSED'
+  | 'CAMPAIGN_STOPPED'
+  | 'AUTHORIZATION_STALE'
+  | 'ENROLLMENT_REPLIED'
+  | 'OCCURRENCE_CANCELLED'
+  | 'RECIPIENT_SUPPRESSED'
+  | 'AUDIENCE_DUPLICATE'
+  | 'AUDIENCE_STAGE_INVALID'
+  | 'AUDIENCE_CONTACT_INVALID'
+  | 'MATERIAL_STALE'
+  | 'SENDER_NOT_READY'
+  | 'THREAD_EVIDENCE_INVALID'
+  | 'DISPATCH_CONTRACT_CONFLICT';
 
 export type FinalSubmissionAuthorityRevalidationResult =
   | {
@@ -56,6 +67,10 @@ export type FinalSubmissionAuthorityRevalidator = {
     input: {
       kind: DispatchTrustedOutboundEmailInput['kind'];
       submission: BeginOutboundEmailSubmissionInput;
+      materialEvidence: Readonly<{
+        sendMessageInput: SendMessageInput;
+        projectedMessageId: string | null;
+      }>;
     },
     manager: EntityManager,
   ): Promise<FinalSubmissionAuthorityRevalidationResult>;
@@ -63,6 +78,10 @@ export type FinalSubmissionAuthorityRevalidator = {
 
 export type OutboundEmailDispatchTransactionPort = {
   runInTransaction<Result>(
+    work: (manager: EntityManager) => Promise<Result>,
+  ): Promise<Result>;
+  /** A distinct committed-visibility transaction immediately before provider I/O. */
+  runPreProviderTransaction?<Result>(
     work: (manager: EntityManager) => Promise<Result>,
   ): Promise<Result>;
 };
@@ -80,7 +99,17 @@ export type AcceptedOutboundEmailRecoveryEvidence = {
   kind: 'ACCEPTED_EVIDENCE';
   submission: BeginOutboundEmailSubmissionInput;
   providerMessageId: string;
+  providerHeaderMessageId: string | null;
+  providerMessageExternalId: string | null;
+  providerThreadExternalId: string | null;
+  resolvedThreadExternalId: string | null;
+  providerDeliveredRecipients: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+  } | null;
   projectedMessageId: string | null;
+  projectedMessageThreadId: string | null;
 };
 
 export type DefinitelyUnacceptedOutboundEmailRecoveryEvidence = {

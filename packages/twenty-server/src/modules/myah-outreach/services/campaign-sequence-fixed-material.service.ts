@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 
-import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import {
   type CampaignAttachmentLoadResult,
   type CampaignAttachmentProof,
@@ -97,6 +98,7 @@ export class CampaignSequenceFixedMaterialService {
 
   async loadSequenceFixedMaterial(
     input: CampaignSequenceFixedMaterialInput,
+    transactionManager?: WorkspaceEntityManager,
   ): Promise<CampaignSequenceFixedMaterialResult> {
     const inputBlockers = this.validateInput(input);
 
@@ -110,13 +112,19 @@ export class CampaignSequenceFixedMaterialService {
       let email: ValidatedCampaignSequenceEmail;
 
       try {
-        email = await this.campaignSequenceService.loadEmailByVersion({
+        const coordinates = {
           workspaceId: input.workspaceId,
           campaignId: input.campaignId,
           workflowVersionId: input.workflowVersionId,
           messageId,
           authContext: input.authContext,
-        });
+        };
+        email = transactionManager
+          ? await this.campaignSequenceService.loadEmailByVersionInTransaction(
+              coordinates,
+              transactionManager,
+            )
+          : await this.campaignSequenceService.loadEmailByVersion(coordinates);
       } catch (error) {
         return {
           kind: 'BLOCKED',
@@ -137,6 +145,7 @@ export class CampaignSequenceFixedMaterialService {
       workspaceId: input.workspaceId,
       campaignId: input.campaignId,
       authContext: input.authContext,
+      transactionManager,
     });
     const blockers = [...signatureResult.blockers];
     const cache: AttachmentCache = new Map();
@@ -188,14 +197,29 @@ export class CampaignSequenceFixedMaterialService {
       campaignId: string;
       messageId: string;
       files: readonly CampaignSequenceEmailFile[];
-      authContext: UserWorkspaceAuthContext;
+      authContext: WorkspaceAuthContext;
+      transactionManager?: WorkspaceEntityManager;
     }>,
   ): Promise<CampaignMessageFixedMaterialLoadResult> {
+    if (input.transactionManager !== undefined && input.files.length > 0) {
+      return {
+        signature: null,
+        attachments: null,
+        blockers: [
+          blocker(
+            'ATTACHMENT_FORBIDDEN',
+            'Campaign transactional attachments are unavailable in v1',
+            { messageId: input.messageId },
+          ),
+        ],
+      };
+    }
     const [signatureResult, attachmentResult] = await Promise.all([
       this.loadSignature({
         workspaceId: input.workspaceId,
         campaignId: input.campaignId,
         authContext: input.authContext,
+        transactionManager: input.transactionManager,
       }),
       this.loadAttachments({
         workspaceId: input.workspaceId,
@@ -245,14 +269,15 @@ export class CampaignSequenceFixedMaterialService {
 
     if (
       !isJsonRecord(input.authContext) ||
-      input.authContext.type !== 'user' ||
+      !['user', 'system'].includes(String(input.authContext.type)) ||
       !isJsonRecord(input.authContext.workspace) ||
       input.authContext.workspace.id !== input.workspaceId ||
-      !isJsonRecord(input.authContext.user) ||
-      typeof input.authContext.user.id !== 'string' ||
-      input.authContext.user.id.trim().length === 0 ||
-      typeof input.authContext.userWorkspaceId !== 'string' ||
-      input.authContext.userWorkspaceId.trim().length === 0
+      (input.authContext.type === 'user' &&
+        (!isJsonRecord(input.authContext.user) ||
+          typeof input.authContext.user.id !== 'string' ||
+          input.authContext.user.id.trim().length === 0 ||
+          typeof input.authContext.userWorkspaceId !== 'string' ||
+          input.authContext.userWorkspaceId.trim().length === 0))
     ) {
       return [
         blocker(
@@ -323,7 +348,8 @@ export class CampaignSequenceFixedMaterialService {
     input: Readonly<{
       workspaceId: string;
       campaignId: string;
-      authContext: UserWorkspaceAuthContext;
+      authContext: WorkspaceAuthContext;
+      transactionManager?: WorkspaceEntityManager;
     }>,
   ): Promise<
     Readonly<{
@@ -393,7 +419,7 @@ export class CampaignSequenceFixedMaterialService {
       workspaceId: string;
       messageId: string;
       files: readonly unknown[];
-      authContext: UserWorkspaceAuthContext;
+      authContext: WorkspaceAuthContext;
       cache: AttachmentCache;
     }>,
   ): Promise<
@@ -406,15 +432,16 @@ export class CampaignSequenceFixedMaterialService {
     const blockers: CampaignMessageBlocker[] = [];
 
     for (const file of input.files) {
+      const candidateFileId =
+        isJsonRecord(file) && typeof file.id === 'string' ? file.id : null;
+
       if (!this.isValidFileReference(file)) {
         blockers.push(
           blocker(
             'ATTACHMENT_CHANGED',
             'Campaign attachment metadata changed',
             {
-              ...(isJsonRecord(file) && typeof file.id === 'string'
-                ? { fileId: file.id }
-                : {}),
+              ...(candidateFileId === null ? {} : { fileId: candidateFileId }),
               messageId: input.messageId,
             },
           ),

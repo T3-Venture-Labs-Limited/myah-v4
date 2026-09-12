@@ -7,6 +7,7 @@ import { type CampaignSequence } from 'twenty-shared/workflow';
 
 import {
   CAMPAIGN_SEQUENCE,
+  PUBLISH_CAMPAIGN_SEQUENCE,
   SAVE_CAMPAIGN_SEQUENCE,
 } from '@/myah-outreach/graphql/operations';
 import { useCampaignSequence } from '@/myah-outreach/hooks/useCampaignSequence';
@@ -54,6 +55,7 @@ const snapshot = (
   versionId,
   sequence: nextSequence,
   lifecycleStatus: 'DRAFT',
+  versionStatus: 'DRAFT',
   editable: true,
   issues: [],
 });
@@ -82,6 +84,55 @@ const wrapperFor = (mocks: MockedResponse[]) =>
   };
 
 describe('useCampaignSequence', () => {
+  it('ignores a late Publish response after switching Campaigns', async () => {
+    const publishedA = {
+      ...snapshot(campaignA, versionOne),
+      versionStatus: 'ACTIVE',
+    };
+    const mocks: MockedResponse[] = [
+      loadMock(campaignA),
+      {
+        request: {
+          query: PUBLISH_CAMPAIGN_SEQUENCE,
+          variables: {
+            input: {
+              campaignId: campaignA,
+              expectedVersionId: versionOne,
+            },
+          },
+        },
+        delay: 40,
+        result: { data: { publishCampaignSequence: publishedA } },
+      },
+      loadMock(campaignB, versionTwo),
+    ];
+    const { result, rerender } = renderHook(
+      ({ campaignId }) => useCampaignSequence(campaignId),
+      {
+        initialProps: { campaignId: campaignA },
+        wrapper: wrapperFor(mocks),
+      },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let publishPromise: Promise<void> = Promise.resolve();
+    act(() => {
+      publishPromise = result.current.publish();
+    });
+    rerender({ campaignId: campaignB });
+    await waitFor(() =>
+      expect(result.current.snapshot?.campaignId).toBe(campaignB),
+    );
+    await act(async () => publishPromise);
+
+    expect(result.current.snapshot?.campaignId).toBe(campaignB);
+    expect(result.current.snapshot?.versionId).toBe(versionTwo);
+    expect(result.current.draft?.messages[0]).toMatchObject({
+      channel: 'EMAIL',
+      subject: 'Original',
+    });
+  });
+
   it('keeps failed saves recoverable and retries with the same persisted token', async () => {
     const edited = sequenceWithSubject('Local edit');
     const mutationVariables = {

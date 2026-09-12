@@ -167,14 +167,14 @@ export class CampaignSenderReadinessService {
           EXISTS (
             SELECT 1 FROM core."managedEmailMailbox" managed
              WHERE managed."workspaceId" = $2
-               AND (managed."connectedAccountId" = ca."connectedAccountId"
-                 OR managed."messageChannelId" = ca."messageChannelId")
+               AND (managed."connectedAccountId"::text = ca."connectedAccountId"
+                 OR managed."messageChannelId"::text = ca."messageChannelId")
           ) AS "isManaged"
         FROM ${this.campaignAccountTable(schemaName)} ca
         LEFT JOIN core."connectedAccount" account
-          ON account.id = ca."connectedAccountId"
+          ON account.id::text = ca."connectedAccountId"
         LEFT JOIN core."messageChannel" channel
-          ON channel.id = ca."messageChannelId"
+          ON channel.id::text = ca."messageChannelId"
        WHERE ca."campaignId" = $1
          AND ca.channel = 'EMAIL'
          AND ca."deletedAt" IS NULL

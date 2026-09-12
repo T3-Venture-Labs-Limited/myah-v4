@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AppOAuthRefreshModule } from 'src/engine/core-modules/application/connection-provider/refresh/app-oauth-refresh.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
+import { CampaignMailboxDeletionFenceService } from 'src/engine/core-modules/campaign-execution/services/campaign-mailbox-deletion-fence.service';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -28,12 +29,14 @@ import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
   ],
   providers: [
+    CampaignMailboxDeletionFenceService,
     ConnectedAccountMetadataService,
     ConnectedAccountResolver,
     ConnectedAccountGraphqlApiExceptionInterceptor,
     ConnectedAccountSendingPolicyService,
   ],
   exports: [
+    CampaignMailboxDeletionFenceService,
     ConnectedAccountMetadataService,
     ConnectedAccountSendingPolicyService,
   ],

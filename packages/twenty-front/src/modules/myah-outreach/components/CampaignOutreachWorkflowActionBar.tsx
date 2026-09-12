@@ -16,6 +16,9 @@ type CampaignOutreachWorkflowActionBarProps = {
   onReload: () => Promise<void>;
   onReview: () => void;
   onSave: () => Promise<void>;
+  onPublish?: () => Promise<void>;
+  publishAllowed?: boolean;
+  publishing?: boolean;
   reviewAllowed: boolean;
   saveAllowed: boolean;
   saving: boolean;
@@ -27,6 +30,9 @@ export const CampaignOutreachWorkflowActionBar = ({
   onReload,
   onReview,
   onSave,
+  onPublish = async () => undefined,
+  publishAllowed = false,
+  publishing = false,
   reviewAllowed,
   saveAllowed,
   saving,
@@ -35,7 +41,7 @@ export const CampaignOutreachWorkflowActionBar = ({
     <Button
       accent="brand"
       ariaLabel="Save draft"
-      disabled={!editable || !dirty || !saveAllowed || saving}
+      disabled={!editable || !dirty || !saveAllowed || saving || publishing}
       isLoading={saving}
       onClick={() => void onSave()}
       title="Save draft"
@@ -43,22 +49,25 @@ export const CampaignOutreachWorkflowActionBar = ({
     />
     <Button
       ariaLabel="Reload from server"
-      disabled={saving}
+      disabled={saving || publishing}
       onClick={() => void onReload()}
       title="Reload from server"
       variant="secondary"
     />
     <Button
       ariaLabel="Review"
-      disabled={!reviewAllowed || saving}
+      disabled={!reviewAllowed || saving || publishing}
       onClick={onReview}
       title="Review sequence"
       variant="secondary"
     />
     <Button
-      ariaLabel="Start"
-      disabled
-      title="Campaign launch integration unavailable"
+      accent="brand"
+      ariaLabel="Publish"
+      disabled={!publishAllowed || saving || publishing}
+      isLoading={publishing}
+      onClick={() => void onPublish()}
+      title="Publish"
       variant="primary"
     />
     <Button

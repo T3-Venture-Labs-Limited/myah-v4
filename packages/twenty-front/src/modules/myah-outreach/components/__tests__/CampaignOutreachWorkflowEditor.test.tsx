@@ -84,6 +84,7 @@ const makeState = ({ dirty = false, editable = true } = {}) => {
     versionId: 'd0000000-0000-4000-8000-000000000004',
     sequence,
     lifecycleStatus: editable ? 'DRAFT' : 'ACTIVE',
+    versionStatus: 'DRAFT',
     editable,
     issues: [],
   };
@@ -94,6 +95,7 @@ const makeState = ({ dirty = false, editable = true } = {}) => {
     selectedMessageId: messageId,
     loading: false,
     saving: false,
+    publishing: false,
     dirty,
     error: null,
     loadResult: { kind: 'SEQUENCE' as const, snapshot },
@@ -102,6 +104,7 @@ const makeState = ({ dirty = false, editable = true } = {}) => {
     addAttachments: jest.fn(),
     selectMessage: jest.fn(),
     save: jest.fn().mockResolvedValue(undefined),
+    publish: jest.fn().mockResolvedValue(undefined),
     reload: jest.fn().mockResolvedValue(undefined),
   };
 };

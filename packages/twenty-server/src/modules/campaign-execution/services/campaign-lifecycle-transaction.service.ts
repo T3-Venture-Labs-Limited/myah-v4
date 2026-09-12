@@ -1,12 +1,17 @@
 import { types as nodeUtilTypes } from 'node:util';
 
+import { Inject, Injectable } from '@nestjs/common';
 import { validate as uuidValidate } from 'uuid';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
-import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import {
+  CAMPAIGN_LIFECYCLE_ACTOR_PERMISSION_RESOLVER_PORT,
+  CAMPAIGN_LIFECYCLE_WRITE_AUTHORIZATION_PORT,
+} from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
 import {
   type CampaignLifecycleActorPermissionResolverPort,
   type CampaignLifecycleTransactionInput,
@@ -574,10 +579,13 @@ const assertActiveTransactionManager = (manager: WorkspaceEntityManager) => {
   return queryRunner;
 };
 
+@Injectable()
 export class CampaignLifecycleTransactionService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    @Inject(CAMPAIGN_LIFECYCLE_ACTOR_PERMISSION_RESOLVER_PORT)
     private readonly actorPermissionResolver: CampaignLifecycleActorPermissionResolverPort,
+    @Inject(CAMPAIGN_LIFECYCLE_WRITE_AUTHORIZATION_PORT)
     private readonly writeAuthorization: CampaignLifecycleWriteAuthorizationPort,
   ) {}
 

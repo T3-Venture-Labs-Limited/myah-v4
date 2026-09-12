@@ -157,6 +157,9 @@ type CommonSubmissionInput = {
 export type CampaignSequenceSubmissionInput = CommonSubmissionInput & {
   source: 'CAMPAIGN_SEQUENCE';
   campaignId: string;
+  campaignExecutionId: string;
+  authorizationGeneration: number;
+  activationId: string;
   enrollmentId: string;
   occurrenceId: string;
   authorizationId: string;
@@ -166,11 +169,17 @@ export type CampaignSequenceSubmissionInput = CommonSubmissionInput & {
   submissionCapability: {
     kind: 'CAMPAIGN_SEQUENCE_SUBMISSION';
     attemptId: string;
+    campaignExecutionId: string;
+    authorizationGeneration: number;
+    activationId: string;
     renderDigest: string;
     reservationBinding: CampaignSequenceReservationBinding;
     renderContext: {
       workspaceId: string;
       campaignId: string;
+      campaignExecutionId: string;
+      authorizationGeneration: number;
+      activationId: string;
       enrollmentId: string;
       occurrenceId: string;
       authorizationId: string;
@@ -250,12 +259,40 @@ type WithSubmission<Input extends object> =
 
 export type BlockReservedAttemptBeforeProviderInput = {
   reservation: OutboundEmailAttemptReservationIdentity;
-  reason: 'STALE_FINAL_EVIDENCE';
+  reason:
+    | 'STALE_FINAL_EVIDENCE'
+    | 'AUTHORITY_STALE'
+    | 'RECIPIENT_SUPPRESSED'
+    | 'WORKSPACE_NOT_ACTIVE'
+    | 'CAMPAIGN_PAUSED'
+    | 'CAMPAIGN_STOPPED'
+    | 'AUTHORIZATION_STALE'
+    | 'ENROLLMENT_REPLIED'
+    | 'OCCURRENCE_CANCELLED'
+    | 'AUDIENCE_DUPLICATE'
+    | 'AUDIENCE_STAGE_INVALID'
+    | 'AUDIENCE_CONTACT_INVALID'
+    | 'MATERIAL_STALE'
+    | 'SENDER_NOT_READY'
+    | 'THREAD_EVIDENCE_INVALID'
+    | 'DISPATCH_CONTRACT_CONFLICT'
+    | 'INVALID_IMAP_SMTP_TRANSPORT_MATERIAL'
+    | 'RESERVATION_EXPIRED';
 };
 
 export type AcceptedOutcomeEvidence = {
   providerMessageId: string;
   projectedMessageId: string | null;
+  projectedMessageThreadId?: string | null;
+  providerHeaderMessageId?: string | null;
+  providerMessageExternalId?: string | null;
+  providerThreadExternalId?: string | null;
+  resolvedThreadExternalId?: string | null;
+  providerDeliveredRecipients?: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+  } | null;
 };
 
 export type DefiniteOutcomeEvidence = {
@@ -297,9 +334,20 @@ type ReceiptOutcomeFields = {
   finalEvidenceDigest: string | null;
   providerMessageId: string | null;
   providerAcceptedAt: Date | null;
+  providerHeaderMessageId?: string | null;
+  providerMessageExternalId?: string | null;
+  reconciledProviderHeaderMessageId?: string | null;
+  providerThreadExternalId?: string | null;
+  resolvedThreadExternalId?: string | null;
+  providerDeliveredRecipients?: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+  } | null;
   safeOutcomeReason: string | null;
   retryable: boolean | null;
   projectedMessageId: string | null;
+  projectedMessageThreadId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

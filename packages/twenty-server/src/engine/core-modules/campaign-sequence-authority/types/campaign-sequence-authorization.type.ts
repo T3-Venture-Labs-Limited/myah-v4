@@ -123,6 +123,13 @@ export type CampaignSequenceAuthorizationRequestLookupResult =
     }>
   | Readonly<{ kind: 'IDEMPOTENCY_KEY_CONFLICT' }>;
 
+export type CampaignSequenceAuthorizationKeyLookupResult =
+  | Readonly<{ kind: 'NOT_FOUND' }>
+  | Readonly<{
+      kind: 'FOUND';
+      authorization: CampaignSequenceAuthorizationRecord;
+    }>;
+
 export type CreateCampaignSequenceAuthorizationResult = Readonly<{
   kind: 'CREATED';
   authorization: CampaignSequenceAuthorizationRecord;
