@@ -8945,7 +8945,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSenderReadinessDTO"')
       return CampaignSenderReadinessDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CampaignSenderPoolSnapshotDTO_possibleTypes: string[] = ['CampaignSenderPoolSnapshotDTO']
@@ -8953,7 +8953,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSenderPoolSnapshotDTO"')
       return CampaignSenderPoolSnapshotDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ExactCampaignEmailSenderResultDTO_possibleTypes: string[] = ['ExactCampaignEmailSenderResultDTO']
@@ -8961,7 +8961,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isExactCampaignEmailSenderResultDTO"')
       return ExactCampaignEmailSenderResultDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CampaignSenderCandidateReadinessDTO_possibleTypes: string[] = ['CampaignSenderCandidateReadinessDTO']
@@ -8969,7 +8969,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSenderCandidateReadinessDTO"')
       return CampaignSenderCandidateReadinessDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CampaignEmailAccountDTO_possibleTypes: string[] = ['CampaignEmailAccountDTO']
@@ -9945,7 +9945,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCampaignMailboxFixtureDTO"')
       return MyahE2eCampaignMailboxFixtureDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const MyahE2eCampaignMailboxFixtureStatusDTO_possibleTypes: string[] = ['MyahE2eCampaignMailboxFixtureStatusDTO']
@@ -9953,7 +9953,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCampaignMailboxFixtureStatusDTO"')
       return MyahE2eCampaignMailboxFixtureStatusDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const MyahE2eCallbackFixtureDTO_possibleTypes: string[] = ['MyahE2eCallbackFixtureDTO']
@@ -9961,7 +9961,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMyahE2eCallbackFixtureDTO"')
       return MyahE2eCallbackFixtureDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WorkspaceMailboxConnectionStatus_possibleTypes: string[] = ['WorkspaceMailboxConnectionStatus']
