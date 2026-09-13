@@ -32,7 +32,7 @@ import { AgentChatStreamHeartbeatService } from 'src/engine/metadata-modules/ai/
 import { AgentChatStreamingService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-streaming.service';
 import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
 import { ChatExecutionService } from 'src/engine/metadata-modules/ai/ai-chat/services/chat-execution.service';
-import { findPendingQuestionPart } from 'src/engine/metadata-modules/ai/ai-chat/utils/find-pending-question-part.util';
+import { findPendingHumanInputPart } from 'src/engine/metadata-modules/ai/ai-chat/utils/find-pending-human-input-part.util';
 import { AGENT_CHAT_CHECKPOINT_INTERVAL_MS } from 'src/engine/metadata-modules/ai/ai-chat/constants/agent-chat-checkpoint-interval-ms.constant';
 import { getCancelChannel } from 'src/engine/metadata-modules/ai/ai-chat/utils/get-cancel-channel.util';
 import { mapErrorToStreamError } from 'src/engine/metadata-modules/ai/ai-chat/utils/map-error-to-stream-error.util';
@@ -656,7 +656,9 @@ export class StreamAgentChatJob {
       (part) => part.type === 'text' && isNonEmptyString(part.text),
     );
 
-    const pendingQuestionPart = findPendingQuestionPart(responseMessage.parts);
+    const pendingQuestionPart = findPendingHumanInputPart(
+      responseMessage.parts,
+    );
 
     if ((isAborted || !hasText) && !isDefined(pendingQuestionPart)) {
       this.logAssistantTurnWithoutText({
