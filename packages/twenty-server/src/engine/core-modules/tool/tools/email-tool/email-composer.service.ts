@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { toPlainText } from '@react-email/render';
@@ -29,6 +29,7 @@ import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspac
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 import { type MessageAttachment } from 'src/modules/messaging/message-import-manager/types/message';
@@ -41,8 +42,6 @@ type ParentThreadContext = {
 
 @Injectable()
 export class EmailComposerService {
-  private readonly logger = new Logger(EmailComposerService.name);
-
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(ConnectedAccountEntity)
@@ -55,6 +54,7 @@ export class EmailComposerService {
   private async getConnectedAccountOrThrow(
     connectedAccountId: string,
     workspaceId: string,
+    transactionManager?: WorkspaceEntityManager,
   ): Promise<ConnectedAccountEntity> {
     if (!isValidUuid(connectedAccountId)) {
       throw new EmailToolException(
@@ -63,54 +63,55 @@ export class EmailComposerService {
       );
     }
 
-    const authContext = buildSystemAuthContext(workspaceId);
-
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const connectedAccount = await this.connectedAccountRepository.findOne({
-          where: { id: connectedAccountId, workspaceId },
-          relations: {
-            messageChannels: {
-              messageFolders: true,
-            },
+    const find = (repository: Repository<ConnectedAccountEntity>) =>
+      repository.findOne({
+        where: { id: connectedAccountId, workspaceId },
+        relations: {
+          messageChannels: {
+            messageFolders: true,
           },
-        });
+        },
+      });
+    const connectedAccount = transactionManager
+      ? await find(transactionManager.getRepository(ConnectedAccountEntity))
+      : await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          () => find(this.connectedAccountRepository),
+          buildSystemAuthContext(workspaceId),
+        );
 
-        if (!isDefined(connectedAccount)) {
-          throw new EmailToolException(
-            `No connected account found for id '${connectedAccountId}'`,
-            EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
-          );
-        }
+    if (!isDefined(connectedAccount)) {
+      throw new EmailToolException(
+        `No connected account found for id '${connectedAccountId}'`,
+        EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      );
+    }
 
-        return connectedAccount;
-      },
-      authContext,
-    );
+    return connectedAccount;
   }
 
   private async getOrThrowFirstConnectedAccountId(
     workspaceId: string,
+    transactionManager?: WorkspaceEntityManager,
   ): Promise<string> {
-    const authContext = buildSystemAuthContext(workspaceId);
+    const find = (repository: Repository<ConnectedAccountEntity>) =>
+      repository.find({
+        where: { workspaceId, archivedAt: IsNull() },
+      });
+    const allAccounts = transactionManager
+      ? await find(transactionManager.getRepository(ConnectedAccountEntity))
+      : await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          () => find(this.connectedAccountRepository),
+          buildSystemAuthContext(workspaceId),
+        );
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const allAccounts = await this.connectedAccountRepository.find({
-          where: { workspaceId, archivedAt: IsNull() },
-        });
+    if (!allAccounts || allAccounts.length === 0) {
+      throw new EmailToolException(
+        'No connected accounts found for this workspace',
+        EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      );
+    }
 
-        if (!allAccounts || allAccounts.length === 0) {
-          throw new EmailToolException(
-            'No connected accounts found for this workspace',
-            EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
-          );
-        }
-
-        return allAccounts[0].id;
-      },
-      authContext,
-    );
+    return allAccounts[0].id;
   }
 
   private normalizeRecipients(parameters: ComposeEmailParams): {
@@ -185,9 +186,16 @@ export class EmailComposerService {
   private async getAttachments(
     files: Array<EmailAttachment>,
     workspaceId: string,
+    transactionManager?: WorkspaceEntityManager,
   ): Promise<MessageAttachment[]> {
     if (files.length === 0) {
       return [];
+    }
+    if (transactionManager) {
+      throw new EmailToolException(
+        'Campaign transaction attachments are unavailable',
+        EmailToolExceptionCode.FILE_NOT_FOUND,
+      );
     }
 
     const fileIds = files.map((file) => file.id);
@@ -251,67 +259,87 @@ export class EmailComposerService {
     workspaceId: string,
     inReplyTo: string,
     messageChannelId: string,
+    transactionManager?: WorkspaceEntityManager,
   ): Promise<ParentThreadContext> {
-    const authContext = buildSystemAuthContext(workspaceId);
+    const load = async () => {
+      const messageRepository =
+        await this.globalWorkspaceOrmManager.getRepository<MessageWorkspaceEntity>(
+          workspaceId,
+          'message',
+        );
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const messageRepository =
-          await this.globalWorkspaceOrmManager.getRepository<MessageWorkspaceEntity>(
-            workspaceId,
-            'message',
-          );
+      const parentMessage = await messageRepository.findOne(
+        { where: { headerMessageId: inReplyTo } },
+        transactionManager,
+      );
 
-        const parentMessage = await messageRepository.findOne({
-          where: { headerMessageId: inReplyTo },
-        });
+      if (
+        !isDefined(parentMessage) ||
+        !isDefined(parentMessage.messageThreadId) ||
+        !isDefined(parentMessage.receivedAt)
+      ) {
+        return {};
+      }
 
-        if (
-          !isDefined(parentMessage) ||
-          !isDefined(parentMessage.messageThreadId) ||
-          !isDefined(parentMessage.receivedAt)
-        ) {
-          return {};
-        }
+      const associationRepository =
+        await this.globalWorkspaceOrmManager.getRepository<MessageChannelMessageAssociationWorkspaceEntity>(
+          workspaceId,
+          'messageChannelMessageAssociation',
+        );
 
-        const associationRepository =
-          await this.globalWorkspaceOrmManager.getRepository<MessageChannelMessageAssociationWorkspaceEntity>(
-            workspaceId,
-            'messageChannelMessageAssociation',
-          );
-
-        const [association, ancestorMessages] = await Promise.all([
-          associationRepository.findOne({
+      const [association, ancestorMessages] = await Promise.all([
+        associationRepository.findOne(
+          {
             where: { messageId: parentMessage.id, messageChannelId },
             select: { messageThreadExternalId: true },
-          }),
-          messageRepository.find({
+          },
+          transactionManager,
+        ),
+        messageRepository.find(
+          {
             where: {
               messageThreadId: parentMessage.messageThreadId,
               receivedAt: LessThanOrEqual(parentMessage.receivedAt),
             },
             select: { headerMessageId: true },
             order: { receivedAt: 'ASC' },
-          }),
-        ]);
+          },
+          transactionManager,
+        ),
+      ]);
 
-        const references = ancestorMessages
-          .map((message) => message.headerMessageId)
-          .filter(isNonEmptyString);
+      const references = ancestorMessages
+        .map((message) => message.headerMessageId)
+        .filter(isNonEmptyString);
 
-        return {
-          threadExternalId: association?.messageThreadExternalId ?? undefined,
-          references: references.length > 0 ? references : undefined,
-        };
-      },
-      authContext,
-    );
+      return {
+        threadExternalId: association?.messageThreadExternalId ?? undefined,
+        references: references.length > 0 ? references : undefined,
+      };
+    };
+
+    return transactionManager
+      ? load()
+      : this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          load,
+          buildSystemAuthContext(workspaceId),
+        );
   }
 
   async composeEmail(
     parameters: ComposeEmailParams,
     context: ToolExecutionContext,
+    transactionManager?: WorkspaceEntityManager,
   ): Promise<EmailComposerResult> {
+    if (transactionManager) {
+      const runner = transactionManager.queryRunner;
+      if (
+        !runner?.isTransactionActive ||
+        runner.isReleased ||
+        runner.manager !== transactionManager
+      )
+        throw new Error('Email composer requires the supplied active manager');
+    }
     const { workspaceId } = context;
     const { subject, body, files, inReplyTo } = parameters;
     let { connectedAccountId } = parameters;
@@ -351,13 +379,16 @@ export class EmailComposerService {
     const toRecipientsDisplay = recipients.to.join(', ');
 
     if (!connectedAccountId) {
-      connectedAccountId =
-        await this.getOrThrowFirstConnectedAccountId(workspaceId);
+      connectedAccountId = await this.getOrThrowFirstConnectedAccountId(
+        workspaceId,
+        transactionManager,
+      );
     }
 
     const connectedAccount = await this.getConnectedAccountOrThrow(
       connectedAccountId,
       workspaceId,
+      transactionManager,
     );
 
     const messageChannel =
@@ -388,7 +419,11 @@ export class EmailComposerService {
       );
     }
 
-    const attachments = await this.getAttachments(files || [], workspaceId);
+    const attachments = await this.getAttachments(
+      files || [],
+      workspaceId,
+      transactionManager,
+    );
 
     const { JSDOM } = await import('jsdom');
     const window = new JSDOM('').window;
@@ -404,6 +439,7 @@ export class EmailComposerService {
             workspaceId,
             inReplyTo,
             messageChannel.id,
+            transactionManager,
           )
         : {};
 

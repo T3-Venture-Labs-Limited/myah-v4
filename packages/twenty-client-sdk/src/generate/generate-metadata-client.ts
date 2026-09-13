@@ -1,4 +1,4 @@
-import { appendFile } from 'node:fs/promises';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { DEFAULT_API_URL_NAME } from 'twenty-shared/application';
@@ -37,6 +37,12 @@ export const generateMetadataClient = async ({
       Upload: 'File',
     },
   });
+
+  const schemaPath = join(outputPath, 'schema.ts');
+  await writeFile(
+    schemaPath,
+    (await readFile(schemaPath, 'utf8')).replace(/[ \t]+$/gm, ''),
+  );
 
   const clientContent = buildClientWrapperSource(templateSource, {
     apiClientName: 'MetadataApiClient',

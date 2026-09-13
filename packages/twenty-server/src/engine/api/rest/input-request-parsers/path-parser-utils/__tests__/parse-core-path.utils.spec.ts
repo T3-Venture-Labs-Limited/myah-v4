@@ -73,4 +73,44 @@ describe('parseCorePath', () => {
       id: undefined,
     });
   });
+
+  it('should parse a restore many path', () => {
+    const request: any = { path: '/rest/restore/companies' };
+
+    expect(parseCorePath(request)).toEqual({
+      object: 'companies',
+      id: undefined,
+    });
+  });
+
+  it('should parse a restore one path', () => {
+    const request: any = {
+      path: `/rest/restore/companies/${testUUID}`,
+    };
+
+    expect(parseCorePath(request)).toEqual({
+      object: 'companies',
+      id: testUUID,
+    });
+  });
+
+  it('should reject a malformed restore one UUID', () => {
+    const request: any = {
+      path: '/rest/restore/companies/malformed-uuid',
+    };
+
+    expect(() => parseCorePath(request)).toThrow(
+      "'malformed-uuid' is not a valid UUID",
+    );
+  });
+
+  it('should reject a fourth restore path segment', () => {
+    const request: any = {
+      path: `/rest/restore/companies/${testUUID}/extra`,
+    };
+
+    expect(() => parseCorePath(request)).toThrow(
+      `Query path '/rest/restore/companies/${testUUID}/extra' invalid. Valid examples: /rest/companies/id or /rest/companies or /rest/batch/companies`,
+    );
+  });
 });

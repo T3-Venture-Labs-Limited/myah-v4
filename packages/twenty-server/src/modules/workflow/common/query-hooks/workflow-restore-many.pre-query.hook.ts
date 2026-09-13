@@ -50,11 +50,12 @@ export class WorkflowRestoreManyPreQueryHook implements WorkspacePreQueryHookIns
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
 
     for (const workflowId of getWorkflowIds(payload.filter)) {
-      await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
-        authContext,
-        workflowId,
-        workspaceId: workspace.id,
-      });
+      await this.workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed(
+        {
+          workflowId,
+          workspaceId: workspace.id,
+        },
+      );
     }
 
     return payload;

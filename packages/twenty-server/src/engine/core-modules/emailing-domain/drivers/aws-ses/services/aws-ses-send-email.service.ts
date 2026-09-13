@@ -5,6 +5,7 @@ import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
 
 import { type EmailingDomainSendEmailInput } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-send-email-input.type';
 import { type EmailingDomainSendEmailResult } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-send-email-result.type';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 
 import { AwsSesClientProvider } from 'src/engine/core-modules/emailing-domain/drivers/aws-ses/providers/aws-ses-client.provider';
 import { AwsSesHandleErrorService } from 'src/engine/core-modules/emailing-domain/drivers/aws-ses/services/aws-ses-handle-error.service';
@@ -41,49 +42,71 @@ export class AwsSesSendEmailService {
     try {
       const sesClient = this.awsSesClientProvider.getSESClient();
 
-      const response = await sesClient.send(
-        new SendEmailCommand({
-          FromEmailAddress: input.from,
-          Destination: {
-            ToAddresses: input.to,
-            CcAddresses: input.cc,
-            BccAddresses: input.bcc,
-          },
-          ReplyToAddresses: input.replyTo,
-          Content: {
-            Simple: {
-              Headers: isNonEmptyArray(input.headers)
-                ? input.headers.map((header) => ({
-                    Name: header.name,
-                    Value: header.value,
-                  }))
-                : undefined,
-              Subject: { Data: input.subject, Charset: 'UTF-8' },
-              Body: {
-                Text: { Data: input.text, Charset: 'UTF-8' },
-                Html: isDefined(input.html)
-                  ? { Data: input.html, Charset: 'UTF-8' }
-                  : undefined,
-              },
-              Attachments: isNonEmptyArray(input.attachments)
-                ? input.attachments.map((attachment) => ({
-                    FileName: attachment.filename,
-                    RawContent: attachment.content,
-                    ContentType: attachment.contentType,
-                    ContentDisposition: 'ATTACHMENT',
-                  }))
+      const command = new SendEmailCommand({
+        FromEmailAddress: input.from,
+        Destination: {
+          ToAddresses: input.to,
+          CcAddresses: input.cc,
+          BccAddresses: input.bcc,
+        },
+        ReplyToAddresses: input.replyTo,
+        Content: {
+          Simple: {
+            Headers: isNonEmptyArray(input.headers)
+              ? input.headers.map((header) => ({
+                  Name: header.name,
+                  Value: header.value,
+                }))
+              : undefined,
+            Subject: { Data: input.subject, Charset: 'UTF-8' },
+            Body: {
+              Text: { Data: input.text, Charset: 'UTF-8' },
+              Html: isDefined(input.html)
+                ? { Data: input.html, Charset: 'UTF-8' }
                 : undefined,
             },
+            Attachments: isNonEmptyArray(input.attachments)
+              ? input.attachments.map((attachment) => ({
+                  FileName: attachment.filename,
+                  RawContent: attachment.content,
+                  ContentType: attachment.contentType,
+                  ContentDisposition: 'ATTACHMENT',
+                }))
+              : undefined,
           },
-          ConfigurationSetName: context.configurationSetName,
-          TenantName: context.tenantName,
-          EmailTags: [
-            { Name: 'workspace', Value: input.workspaceId },
-            { Name: 'domain', Value: input.domain },
-            { Name: 'tenant_id', Value: input.workspaceId },
-          ],
-        }),
-      );
+        },
+        ConfigurationSetName: context.configurationSetName,
+        TenantName: context.tenantName,
+        EmailTags: [
+          { Name: 'workspace', Value: input.workspaceId },
+          { Name: 'domain', Value: input.domain },
+          { Name: 'tenant_id', Value: input.workspaceId },
+        ],
+      });
+      const abortController = new AbortController();
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<never>((_resolve, reject) => {
+        deadlineTimer = setTimeout(() => {
+          const timeoutError = new Error(
+            `SES request exceeded ${OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS}ms`,
+          );
+
+          abortController.abort(timeoutError);
+          reject(timeoutError);
+        }, OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS);
+      });
+      let response;
+
+      try {
+        response = await Promise.race([
+          sesClient.send(command, { abortSignal: abortController.signal }),
+          deadline,
+        ]);
+      } finally {
+        if (isDefined(deadlineTimer)) {
+          clearTimeout(deadlineTimer);
+        }
+      }
 
       if (!isDefined(response.MessageId)) {
         throw new EmailingDomainDriverException(

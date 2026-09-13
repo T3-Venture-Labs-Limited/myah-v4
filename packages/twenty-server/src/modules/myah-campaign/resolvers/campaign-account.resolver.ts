@@ -11,6 +11,12 @@ import {
   CampaignEmailAccountDTO,
   CampaignEmailAccountLinkInput,
   LinkCampaignEmailAccountInput,
+  ReplaceCampaignEmailPoolInput,
+  ResolveExactCampaignEmailSenderInput,
+  CampaignSenderPoolSnapshotDTO,
+  ExactCampaignEmailSenderResultDTO,
+  toCampaignSenderPoolSnapshotDTO,
+  toExactCampaignEmailSenderResultDTO,
 } from 'src/modules/myah-campaign/dtos/campaign-account.dto';
 import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 
@@ -32,6 +38,42 @@ export class CampaignAccountResolver {
     @Args('input') input: CampaignEmailAccountCampaignInput,
   ): Promise<CampaignEmailAccountDTO[]> {
     return this.service.candidates(input.campaignId, getWorkspaceAuthContext());
+  }
+
+  @Query(() => CampaignSenderPoolSnapshotDTO)
+  async campaignEmailSenderPool(
+    @Args('input') input: CampaignEmailAccountCampaignInput,
+  ): Promise<CampaignSenderPoolSnapshotDTO> {
+    return toCampaignSenderPoolSnapshotDTO(
+      await this.service.getCampaignEmailSenderPool(
+        input,
+        getWorkspaceAuthContext(),
+      ),
+    );
+  }
+
+  @Query(() => ExactCampaignEmailSenderResultDTO)
+  async exactCampaignEmailSender(
+    @Args('input') input: ResolveExactCampaignEmailSenderInput,
+  ): Promise<ExactCampaignEmailSenderResultDTO> {
+    return toExactCampaignEmailSenderResultDTO(
+      await this.service.resolveExactCampaignEmailSender(
+        input,
+        getWorkspaceAuthContext(),
+      ),
+    );
+  }
+
+  @Mutation(() => CampaignSenderPoolSnapshotDTO)
+  async replaceCampaignEmailPool(
+    @Args('input') input: ReplaceCampaignEmailPoolInput,
+  ): Promise<CampaignSenderPoolSnapshotDTO> {
+    return toCampaignSenderPoolSnapshotDTO(
+      await this.service.replaceCampaignEmailPool(
+        input,
+        getWorkspaceAuthContext(),
+      ),
+    );
   }
 
   @Mutation(() => [CampaignEmailAccountDTO])

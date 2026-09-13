@@ -1,0 +1,58 @@
+export const MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS = [
+  {
+    id: 'fac8d7a9-7c6e-5864-ba8a-90c4c2d2d50f',
+    value: 'READY',
+    label: 'Not contacted',
+    color: 'gray',
+    position: 0,
+  },
+  {
+    id: '8fb20399-c0c6-59ed-b347-06886e4fc305',
+    value: 'CONTACTED',
+    label: 'Contacted',
+    color: 'blue',
+    position: 1,
+  },
+  {
+    id: 'dbbee93d-106d-5961-9907-949ac9948844',
+    value: 'NEGOTIATING',
+    label: 'Negotiating',
+    color: 'orange',
+    position: 2,
+  },
+  {
+    id: '13209f5b-f520-423f-add0-e70ae33f164f',
+    value: 'ONBOARDED',
+    label: 'Onboarded',
+    color: 'yellow',
+    position: 3,
+  },
+  {
+    id: '8a6e2ae2-9bef-4996-9eaf-b89fe432fd70',
+    value: 'PRODUCT_SENT',
+    label: 'Product sent',
+    color: 'turquoise',
+    position: 4,
+  },
+  {
+    id: 'dd1d8f50-53b4-460f-b68d-a24670f8f9fc',
+    value: 'WAITING_FOR_POST',
+    label: 'Waiting on post',
+    color: 'purple',
+    position: 5,
+  },
+  {
+    id: '4f8fdc53-77ae-499c-a022-e7be4e279b18',
+    value: 'POSTED',
+    label: 'Posted',
+    color: 'green',
+    position: 6,
+  },
+  {
+    id: 'b03a494e-e909-50a1-8c41-1c7e1644a334',
+    value: 'DROPPED',
+    label: 'Dropped',
+    color: 'red',
+    position: 7,
+  },
+] as const;

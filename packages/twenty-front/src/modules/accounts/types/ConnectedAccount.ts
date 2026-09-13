@@ -3,7 +3,12 @@ import { type ImapSmtpCaldavAccountInput } from '@/accounts/types/ImapSmtpCaldav
 import { type ConnectedAccountProvider } from 'twenty-shared/types';
 import { type MessageChannel } from './MessageChannel';
 
-export type ConnectedAccount = {
+export type ConnectedAccountSendingPolicy = {
+  dailySendLimit: number;
+  minimumSendIntervalMs: number;
+};
+
+export type ConnectedAccount = ConnectedAccountSendingPolicy & {
   id: string;
   handle: string;
   provider: ConnectedAccountProvider;

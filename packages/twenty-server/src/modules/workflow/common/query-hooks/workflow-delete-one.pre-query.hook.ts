@@ -23,11 +23,12 @@ export class WorkflowDeleteOnePreQueryHook implements WorkspacePreQueryHookInsta
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
 
-    await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
-      authContext,
-      workflowId: payload.id,
-      workspaceId: workspace.id,
-    });
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed(
+      {
+        workflowId: payload.id,
+        workspaceId: workspace.id,
+      },
+    );
 
     return payload;
   }

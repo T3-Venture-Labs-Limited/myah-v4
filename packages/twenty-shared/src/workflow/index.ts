@@ -7,6 +7,36 @@
  *                              |___/
  */
 
+export type {
+  CampaignSequenceAuthorizationPreparedProof,
+  CampaignSequenceAuthorizationReviewedWindow,
+  CampaignSequenceAuthorizationRequest,
+  CampaignSequenceAuthorizationBinding,
+  CampaignSequenceAuthorizationCurrentProjection,
+} from './campaign-sequence-launch-authority';
+export {
+  campaignSequenceAuthorizationPreparedProofSchema,
+  campaignSequenceAuthorizationReviewedWindowSchema,
+  campaignSequenceAuthorizationRequestSchema,
+  campaignSequenceAuthorizationBindingSchema,
+  campaignSequenceAuthorizationCurrentProjectionSchema,
+  parseCampaignSequenceAuthorizationPreparedProof,
+  parseCampaignSequenceAuthorizationRequest,
+  parseCampaignSequenceAuthorizationBinding,
+  parseCampaignSequenceAuthorizationCurrentProjection,
+} from './campaign-sequence-launch-authority';
+export type {
+  CampaignSequence,
+  CampaignSequenceMessage,
+  CampaignSequenceIssue,
+} from './campaign-sequence';
+export {
+  campaignSequenceSchema,
+  validateCampaignSequence,
+  insertCampaignSequenceMessage,
+  moveCampaignSequenceMessage,
+  removeCampaignSequenceMessage,
+} from './campaign-sequence';
 export { CAPTURE_ALL_VARIABLE_TAG_INNER_REGEX } from './constants/CaptureAllVariableTagInnerRegex';
 export { CONTENT_TYPE_VALUES_HTTP_REQUEST } from './constants/ContentTypeValuesHttpRequest';
 export { IF_ELSE_BRANCH_POSITION_OFFSETS } from './constants/IfElseBranchPositionOffsets';

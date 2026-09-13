@@ -788,7 +788,7 @@ export const cleanupMyahInboxTask7Fixture = async ({
   }
 
   if (channelService) {
-    for (const { id } of [...channelFixtures].reverse()) {
+    for (const { id, connectedAccountId } of [...channelFixtures].reverse()) {
       await collectCleanupError(
         cleanupErrors,
         `destroy MessageChannel ${id}`,
@@ -800,7 +800,8 @@ export const cleanupMyahInboxTask7Fixture = async ({
             })
           ) {
             await channelService.delete({
-              id,
+              messageChannelId: id,
+              connectedAccountId,
               workspaceId: SEED_APPLE_WORKSPACE_ID,
             });
           }

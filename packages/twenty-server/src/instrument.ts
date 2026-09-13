@@ -17,9 +17,10 @@ import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interface
 
 import { ExceptionHandlerDriver } from 'src/engine/core-modules/exception-handler/interfaces';
 import { MeterDriver } from 'src/engine/core-modules/metrics/types/meter-driver.type';
+import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';
 import { parseArrayEnvVar } from 'src/utils/parse-array-env-var';
 dotenv.config({
-  path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
+  path: getServerEnvFilePath(),
 });
 
 const meterDrivers = parseArrayEnvVar(

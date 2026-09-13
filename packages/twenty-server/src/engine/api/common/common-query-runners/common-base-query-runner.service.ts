@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { type PermissionFlagType } from 'twenty-shared/constants';
 
@@ -16,6 +16,7 @@ import {
   CommonQueryRunnerExceptionCode,
 } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
 import { STANDARD_ERROR_MESSAGE } from 'src/engine/api/common/common-query-runners/errors/standard-error-message.constant';
+import { executeCommonQueryTransactionEnvelope } from 'src/engine/api/common/common-query-runners/utils/execute-common-query-transaction-envelope.util';
 import { CommonResultGettersService } from 'src/engine/api/common/common-result-getters/common-result-getters.service';
 import { CommonBaseQueryRunnerContext } from 'src/engine/api/common/types/common-base-query-runner-context.type';
 import { CommonExtendedQueryRunnerContext } from 'src/engine/api/common/types/common-extended-query-runner-context.type';
@@ -32,6 +33,7 @@ import {
 import { CommonSelectedFieldsResult } from 'src/engine/api/common/types/common-selected-fields-result.type';
 import { OBJECTS_WITH_SETTINGS_PERMISSIONS_REQUIREMENTS } from 'src/engine/api/graphql/graphql-query-runner/constants/objects-with-settings-permissions-requirements';
 import { GraphqlQueryParser } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query.parser';
+import { type WorkspacePreQueryHookTransactionContext } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
 import { WorkspacePreQueryHookPayload } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/types/workspace-query-hook.type';
 import { WorkspaceQueryHookService } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/workspace-query-hook.service';
 import { isApiKeyAuthContext } from 'src/engine/core-modules/auth/guards/is-api-key-auth-context.guard';
@@ -51,10 +53,12 @@ import {
   PermissionsExceptionMessage,
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { runWithWorkspaceDatabaseEventBuffer } from 'src/engine/workspace-event-emitter/utils/workspace-database-event-buffer';
 
 @Injectable()
 export abstract class CommonBaseQueryRunnerService<
@@ -98,6 +102,8 @@ export abstract class CommonBaseQueryRunnerService<
 
   protected readonly isReadOnly: boolean = false;
 
+  private readonly logger = new Logger(CommonBaseQueryRunnerService.name);
+
   public async execute(
     args: CommonInput<Args>,
     queryRunnerContext: CommonBaseQueryRunnerContext,
@@ -110,6 +116,15 @@ export abstract class CommonBaseQueryRunnerService<
     } = queryRunnerContext;
 
     await this.throttleQueryExecution(authContext);
+
+    if (
+      this.workspaceQueryHookService.shouldRunPreQueryHooksInTransaction?.(
+        flatObjectMetadata.nameSingular,
+        this.operationName,
+      ) === true
+    ) {
+      return this.executeWithTransactionEnvelope(args, queryRunnerContext);
+    }
 
     await this.validate(args, queryRunnerContext);
 
@@ -158,6 +173,103 @@ export abstract class CommonBaseQueryRunnerService<
     };
   }
 
+  private async executeWithTransactionEnvelope(
+    args: CommonInput<Args>,
+    queryRunnerContext: CommonBaseQueryRunnerContext,
+  ): Promise<CommonQueryExecutionResult<Output, Args>> {
+    const {
+      authContext,
+      flatObjectMetadata,
+      flatObjectMetadataMaps,
+      flatFieldMetadataMaps,
+    } = queryRunnerContext;
+
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const workspaceDataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        const { result } = await runWithWorkspaceDatabaseEventBuffer(
+          async (flushBufferedEvents) =>
+            executeCommonQueryTransactionEnvelope(
+              workspaceDataSource,
+              async (transactionManager) => {
+                await this.validate(args, queryRunnerContext);
+
+                if (flatObjectMetadata.isSystem === true) {
+                  await this.validateSettingsPermissionsOnObjectOrThrow(
+                    authContext,
+                    queryRunnerContext,
+                  );
+                }
+
+                const commonQueryParser = new GraphqlQueryParser(
+                  flatObjectMetadata,
+                  flatObjectMetadataMaps,
+                  flatFieldMetadataMaps,
+                );
+                const selectedFieldsResult =
+                  commonQueryParser.parseSelectedFields(args.selectedFields);
+
+                const processedArgs = {
+                  ...(await this.processArgs(
+                    args,
+                    queryRunnerContext,
+                    this.operationName,
+                    { entityManager: transactionManager },
+                  )),
+                  selectedFieldsResult,
+                } as CommonExtendedInput<Args>;
+
+                this.validateQueryComplexity(
+                  selectedFieldsResult,
+                  processedArgs,
+                  queryRunnerContext,
+                );
+
+                const extendedQueryRunnerContext =
+                  await this.prepareExtendedQueryRunnerContextWithGlobalDatasource(
+                    queryRunnerContext,
+                    transactionManager,
+                  );
+                const results = await this.run(processedArgs, {
+                  ...extendedQueryRunnerContext,
+                  commonQueryParser,
+                });
+
+                return { processedArgs, results };
+              },
+              () =>
+                flushBufferedEvents((error) => {
+                  this.logger.error(
+                    'Failed to emit a committed Campaign deletion database event',
+                    error instanceof Error ? error.stack : String(error),
+                  );
+                }),
+              ({ error, stage, transactionCommitted }) => {
+                this.logger.error(
+                  `Failed to ${stage} Campaign deletion transaction (committed: ${transactionCommitted})`,
+                  error instanceof Error ? error.stack : String(error),
+                );
+              },
+            ),
+        );
+
+        const { processedArgs, results } = result;
+        const enrichedResults = await this.enrichResultsWithGettersAndHooks({
+          results,
+          operationName: this.operationName,
+          authContext,
+          flatObjectMetadata,
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+        });
+
+        return { results: enrichedResults, args: processedArgs };
+      },
+      authContext,
+    );
+  }
+
   protected abstract run(
     args: CommonExtendedInput<Args>,
     queryRunnerContext: CommonExtendedQueryRunnerContext,
@@ -197,8 +309,21 @@ export abstract class CommonBaseQueryRunnerService<
     args: CommonInput<Args>,
     queryRunnerContext: CommonBaseQueryRunnerContext,
     operationName: CommonQueryNames,
+    transactionContext?: WorkspacePreQueryHookTransactionContext,
   ): Promise<CommonInput<Args>> {
     const { authContext, flatObjectMetadata } = queryRunnerContext;
+
+    await this.workspaceQueryHookService.executeRawInputPreQueryHooks(
+      authContext,
+      flatObjectMetadata.nameSingular,
+      operationName,
+      args as WorkspacePreQueryHookPayload<CommonQueryNames>,
+      {
+        objectMetadataId: flatObjectMetadata.id,
+        objectMetadataUniversalIdentifier:
+          flatObjectMetadata.universalIdentifier,
+      },
+    );
 
     const computedArgs = await this.computeArgs(args, queryRunnerContext);
 
@@ -208,6 +333,7 @@ export abstract class CommonBaseQueryRunnerService<
         flatObjectMetadata.nameSingular,
         operationName,
         computedArgs as WorkspacePreQueryHookPayload<CommonQueryNames>,
+        transactionContext,
       )) as CommonInput<Args>;
 
     return hookedArgs;
@@ -312,6 +438,7 @@ export abstract class CommonBaseQueryRunnerService<
 
   private async prepareExtendedQueryRunnerContextWithGlobalDatasource(
     queryRunnerContext: CommonBaseQueryRunnerContext,
+    transactionManager?: WorkspaceEntityManager,
   ): Promise<Omit<CommonExtendedQueryRunnerContext, 'commonQueryParser'>> {
     const context = getWorkspaceContext();
 
@@ -333,7 +460,9 @@ export abstract class CommonBaseQueryRunnerService<
       ? await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSourceReplica()
       : await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
 
-    const repository = globalWorkspaceDataSource.getRepository(
+    const repository = (
+      transactionManager ?? globalWorkspaceDataSource
+    ).getRepository(
       queryRunnerContext.flatObjectMetadata.nameSingular,
       rolePermissionConfig,
     );

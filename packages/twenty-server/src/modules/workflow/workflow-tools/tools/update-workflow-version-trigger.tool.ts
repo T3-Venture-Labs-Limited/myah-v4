@@ -7,6 +7,10 @@ import {
   type WorkflowToolDependencies,
 } from 'src/modules/workflow/workflow-tools/types/workflow-tool-dependencies.type';
 
+export const AUTHORIZED_CAMPAIGN_OUTREACH_TRIGGER_MUTATION = Symbol(
+  'AUTHORIZED_CAMPAIGN_OUTREACH_TRIGGER_MUTATION',
+);
+
 const updateWorkflowVersionTriggerSchema = z.object({
   workflowVersionId: z
     .string()
@@ -37,6 +41,12 @@ export const createUpdateWorkflowVersionTriggerTool = (
           workspaceId: context.workspaceId,
           workflowVersionId: parameters.workflowVersionId,
           trigger: parameters.trigger,
+          authorizedCampaignOutreachMutation:
+            (
+              parameters as UpdateWorkflowVersionTriggerInput & {
+                [AUTHORIZED_CAMPAIGN_OUTREACH_TRIGGER_MUTATION]?: true;
+              }
+            )[AUTHORIZED_CAMPAIGN_OUTREACH_TRIGGER_MUTATION] === true,
         },
       );
 

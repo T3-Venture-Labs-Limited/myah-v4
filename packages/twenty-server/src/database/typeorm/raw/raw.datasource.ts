@@ -1,7 +1,9 @@
 import { config } from 'dotenv';
 import { DataSource, type DataSourceOptions } from 'typeorm';
+
+import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';
 config({
-  path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
+  path: getServerEnvFilePath(),
   override: true,
 });
 

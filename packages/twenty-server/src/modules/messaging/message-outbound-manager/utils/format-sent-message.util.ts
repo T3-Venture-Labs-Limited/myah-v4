@@ -37,12 +37,19 @@ export const formatSentMessage = (
     })),
   ];
 
-  const headerMessageId = input.sendResult.headerMessageId;
+  const headerMessageId = isNonEmptyString(input.sendResult.headerMessageId)
+    ? input.sendResult.headerMessageId
+    : null;
+  const externalId = isNonEmptyString(input.sendResult.messageExternalId)
+    ? input.sendResult.messageExternalId
+    : headerMessageId;
+
+  if (externalId === null) {
+    throw new Error('Sent message has no stable provider identity');
+  }
 
   return {
-    externalId: isNonEmptyString(input.sendResult.messageExternalId)
-      ? input.sendResult.messageExternalId
-      : headerMessageId,
+    externalId,
     headerMessageId,
     messageThreadExternalId: resolveOutboundThreadExternalId({
       sendResult: input.sendResult,
@@ -51,10 +58,13 @@ export const formatSentMessage = (
     }),
     subject: input.subject,
     text: input.body,
-    receivedAt: new Date(),
+    receivedAt: input.providerAcceptedAt ?? new Date(),
     direction: MessageDirection.OUTGOING,
     attachments: [],
     participants,
     isDraft: false,
+    ...(input.expectedMessageId === undefined
+      ? {}
+      : { expectedMessageId: input.expectedMessageId }),
   };
 };

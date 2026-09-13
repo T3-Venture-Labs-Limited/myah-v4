@@ -2,15 +2,12 @@ import dotenv from 'dotenv';
 import { type JestConfigWithTsJest, pathsToModuleNameMapper } from 'ts-jest';
 
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
+import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';
 
 import testTokens from './test/integration/constants/test-tokens.json';
 
 // Load .env vars at jest boot time
-if (process.env.NODE_ENV === 'test') {
-  dotenv.config({ path: '.env.test', override: true });
-} else {
-  dotenv.config({ path: '.env', override: true });
-}
+dotenv.config({ path: getServerEnvFilePath(), override: true });
 
 const isBillingEnabled = process.env.IS_BILLING_ENABLED === 'true';
 const isClickhouseEnabled = process.env.CLICKHOUSE_URL !== undefined;

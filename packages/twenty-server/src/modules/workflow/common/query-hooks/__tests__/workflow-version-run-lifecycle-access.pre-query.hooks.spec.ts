@@ -47,8 +47,12 @@ describe.each([
 ])('%s', (_operation, Hook, idKey) => {
   it('authorizes the owning Campaign before the lifecycle mutation', async () => {
     const guard = {
-      assertWorkflowVersionIsAccessible: jest.fn().mockResolvedValue(undefined),
-      assertWorkflowRunIsAccessible: jest.fn().mockResolvedValue(undefined),
+      assertGenericWorkflowVersionMutationAllowed: jest
+        .fn()
+        .mockResolvedValue(undefined),
+      assertGenericWorkflowRunMutationAllowed: jest
+        .fn()
+        .mockResolvedValue(undefined),
     } as unknown as WorkflowOutreachAccessGuardService;
     const hook = new (Hook as new (
       guard: WorkflowOutreachAccessGuardService,
@@ -58,11 +62,10 @@ describe.each([
 
     const authorization =
       idKey === 'workflowVersionId'
-        ? guard.assertWorkflowVersionIsAccessible
-        : guard.assertWorkflowRunIsAccessible;
+        ? guard.assertGenericWorkflowVersionMutationAllowed
+        : guard.assertGenericWorkflowRunMutationAllowed;
 
     expect(authorization).toHaveBeenCalledWith({
-      authContext,
       [idKey]: 'record-a',
       workspaceId: 'workspace-a',
     });

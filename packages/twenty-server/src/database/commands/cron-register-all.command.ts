@@ -21,6 +21,7 @@ import { TrashCleanupCronCommand } from 'src/engine/trash-cleanup/commands/trash
 import { CleanOnboardingWorkspacesCronCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/clean-onboarding-workspaces.cron.command';
 import { CleanSuspendedWorkspacesCronCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/clean-suspended-workspaces.cron.command';
 import { CalendarEventListFetchCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-event-list-fetch.cron.command';
+import { CampaignEmailRuntimeCronCommand } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.command';
 import { CalendarEventsImportCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-import.cron.command';
 import { CalendarOngoingStaleCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-ongoing-stale.cron.command';
 import { CalendarRelaunchFailedCalendarChannelsCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-relaunch-failed-calendar-channels.cron.command';
@@ -41,6 +42,7 @@ export class CronRegisterAllCommand extends CommandRunner {
   private readonly logger = new Logger(CronRegisterAllCommand.name);
 
   constructor(
+    private readonly campaignEmailRuntimeCronCommand: CampaignEmailRuntimeCronCommand,
     private readonly messagingMessagesImportCronCommand: MessagingMessagesImportCronCommand,
     private readonly messagingMessageListFetchCronCommand: MessagingMessageListFetchCronCommand,
     private readonly messagingOngoingStaleCronCommand: MessagingOngoingStaleCronCommand,
@@ -94,6 +96,10 @@ export class CronRegisterAllCommand extends CommandRunner {
       this.twentyConfigService.get('METRONOME_ENABLED');
 
     const allCommands = [
+      {
+        name: 'CampaignEmailRuntime',
+        command: this.campaignEmailRuntimeCronCommand,
+      },
       {
         name: 'MessagingMessagesImport',
         command: this.messagingMessagesImportCronCommand,

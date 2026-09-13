@@ -1,12 +1,10 @@
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties } from 'react';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
-import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
 import { Status } from 'twenty-ui/data-display';
 import { InlineBanner, Loader } from 'twenty-ui/feedback';
 import {
@@ -15,25 +13,15 @@ import {
   IconCircleX,
   IconLock,
 } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
 import { type ThemeType, useTheme } from 'twenty-ui/theme-constants';
 
 type CampaignLifecycleStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETED';
-
 type CampaignReadinessRecord = ObjectRecord & {
   name: string | null;
   objective: string | null;
   lifecycleStatus: CampaignLifecycleStatus | null;
 };
-
-type CampaignCreatorRecord = ObjectRecord & {
-  campaignId: string;
-};
-
-type CampaignReadinessFeedback = {
-  kind: 'conflict' | 'error';
-  message: string;
-};
+type CampaignCreatorRecord = ObjectRecord & { campaignId: string };
 
 const statusPresentationByStatus: Record<
   CampaignLifecycleStatus,
@@ -41,97 +29,27 @@ const statusPresentationByStatus: Record<
 > = {
   DRAFT: { color: 'gray', text: 'Draft' },
   ACTIVE: { color: 'green', text: 'Active' },
-  PAUSED: { color: 'orange', text: 'Paused' },
+  PAUSED: { color: 'orange', text: 'Stopped' },
   COMPLETED: { color: 'blue', text: 'Completed' },
 };
-
-const lifecycleActionsByStatus: Record<
-  CampaignLifecycleStatus,
-  ReadonlyArray<{ label: string; targetStatus: CampaignLifecycleStatus }>
-> = {
-  DRAFT: [{ label: 'Activate', targetStatus: 'ACTIVE' }],
-  ACTIVE: [
-    { label: 'Pause', targetStatus: 'PAUSED' },
-    { label: 'Complete', targetStatus: 'COMPLETED' },
-  ],
-  PAUSED: [
-    { label: 'Resume', targetStatus: 'ACTIVE' },
-    { label: 'Complete', targetStatus: 'COMPLETED' },
-  ],
-  COMPLETED: [],
-};
-
-const hasContent = (value: string | null) => (value?.trim().length ?? 0) > 0;
-
-const isCampaignLifecycleStatus = (
-  value: CampaignReadinessRecord['lifecycleStatus'],
-): value is CampaignLifecycleStatus =>
+const isStatus = (value: unknown): value is CampaignLifecycleStatus =>
   value === 'DRAFT' ||
   value === 'ACTIVE' ||
   value === 'PAUSED' ||
   value === 'COMPLETED';
+const hasContent = (value: string | null) => (value?.trim().length ?? 0) > 0;
 
-const MyahCampaignReadinessContent = ({
+const ReadinessData = ({
   campaignId,
+  metadataId,
+  theme,
 }: {
   campaignId: string;
-}) => {
-  const theme = useTheme();
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUpdateRestricted, setIsUpdateRestricted] = useState(false);
-  const [feedback, setFeedback] = useState<CampaignReadinessFeedback | null>(
-    null,
-  );
-  const { objectMetadataItem } = useObjectMetadataItem({
-    objectNameSingular: 'campaign',
-  });
-
-  return (
-    <MyahCampaignReadinessData
-      campaignId={campaignId}
-      campaignMetadataId={objectMetadataItem.id}
-      isSaving={isSaving}
-      isUpdateRestricted={isUpdateRestricted}
-      setIsSaving={setIsSaving}
-      setIsUpdateRestricted={setIsUpdateRestricted}
-      feedback={feedback}
-      setFeedback={setFeedback}
-      theme={theme}
-    />
-  );
-};
-
-type MyahCampaignReadinessDataProps = {
-  campaignId: string;
-  campaignMetadataId: string;
-  isSaving: boolean;
-  isUpdateRestricted: boolean;
-  setIsSaving: (isSaving: boolean) => void;
-  setIsUpdateRestricted: (isUpdateRestricted: boolean) => void;
-  feedback: CampaignReadinessFeedback | null;
-  setFeedback: (feedback: CampaignReadinessFeedback | null) => void;
+  metadataId: string;
   theme: ThemeType;
-};
-
-const MyahCampaignReadinessData = ({
-  campaignId,
-  campaignMetadataId,
-  isSaving,
-  setIsSaving,
-  isUpdateRestricted,
-  feedback,
-  setIsUpdateRestricted,
-  setFeedback,
-  theme,
-}: MyahCampaignReadinessDataProps) => {
-  const campaignPermissions = useObjectPermissionsForObject(campaignMetadataId);
-  const { updateOneRecord } = useUpdateOneRecord();
-  const {
-    record: campaign,
-    loading: isCampaignLoading,
-    error: campaignError,
-    refetch: refetchCampaign,
-  } = useFindOneRecord<CampaignReadinessRecord>({
+}) => {
+  const permissions = useObjectPermissionsForObject(metadataId);
+  const campaignQuery = useFindOneRecord<CampaignReadinessRecord>({
     objectNameSingular: 'campaign',
     objectRecordId: campaignId,
     recordGqlFields: {
@@ -140,15 +58,9 @@ const MyahCampaignReadinessData = ({
       objective: true,
       lifecycleStatus: true,
     },
-    skip: !campaignPermissions.canReadObjectRecords,
+    skip: !permissions.canReadObjectRecords,
   });
-  const {
-    totalCount: effectiveAudienceCount,
-    loading: isAudienceLoading,
-    error: audienceError,
-    hasReadPermission: canReadCampaignCreators,
-    refetch: refetchAudience,
-  } = useFindManyRecords<CampaignCreatorRecord>({
+  const audienceQuery = useFindManyRecords<CampaignCreatorRecord>({
     objectNameSingular: 'campaignCreator',
     filter: {
       and: [
@@ -159,44 +71,38 @@ const MyahCampaignReadinessData = ({
     },
     recordGqlFields: { id: true },
     limit: 1,
-    skip: !campaignPermissions.canReadObjectRecords,
+    skip: !permissions.canReadObjectRecords,
   });
-
-  const retry = () => {
-    void refetchCampaign();
-    void refetchAudience();
-  };
-
-  const quietStateStyle: CSSProperties = {
+  const quiet: CSSProperties = {
     alignItems: 'center',
     color: theme.font.color.secondary,
     display: 'flex',
     gap: theme.spacing[2],
   };
+  const retry = () => {
+    void campaignQuery.refetch();
+    void audienceQuery.refetch();
+  };
 
-  if (!campaignPermissions.canReadObjectRecords) {
+  if (!permissions.canReadObjectRecords)
     return (
-      <div style={quietStateStyle}>
-        <IconLock
-          aria-hidden="true"
-          color={theme.font.color.tertiary}
-          size={theme.icon.size.md}
-        />
+      <div style={quiet}>
+        <IconLock aria-hidden="true" />
         <span>You don't have permission to view this Campaign.</span>
       </div>
     );
-  }
-
-  if (isCampaignLoading || isAudienceLoading) {
+  if (campaignQuery.loading || audienceQuery.loading)
     return (
-      <div aria-label="Loading Campaign readiness" style={quietStateStyle}>
+      <div aria-label="Loading Campaign readiness" style={quiet}>
         <Loader />
         <span>Loading Campaign readiness</span>
       </div>
     );
-  }
-
-  if (campaignError || audienceError || !canReadCampaignCreators) {
+  if (
+    campaignQuery.error ||
+    audienceQuery.error ||
+    !audienceQuery.hasReadPermission
+  )
     return (
       <InlineBanner
         color="danger"
@@ -205,20 +111,9 @@ const MyahCampaignReadinessData = ({
         button={{ title: 'Retry', onClick: retry }}
       />
     );
-  }
-
-  if (!campaign) {
-    return <div style={quietStateStyle}>This Campaign is unavailable.</div>;
-  }
-
-  const hasName = hasContent(campaign.name);
-  const hasObjective = hasContent(campaign.objective);
-  const audienceCount = effectiveAudienceCount ?? 0;
-  const hasAudience = audienceCount > 0;
-  const isActivationReady = hasName && hasObjective && hasAudience;
-  const lifecycleStatus = campaign.lifecycleStatus;
-
-  if (!isCampaignLifecycleStatus(lifecycleStatus)) {
+  const campaign = campaignQuery.record;
+  if (!campaign) return <div style={quiet}>This Campaign is unavailable.</div>;
+  if (!isStatus(campaign.lifecycleStatus))
     return (
       <InlineBanner
         color="danger"
@@ -227,69 +122,26 @@ const MyahCampaignReadinessData = ({
         button={{ title: 'Retry', onClick: retry }}
       />
     );
-  }
 
-  const statusPresentation = statusPresentationByStatus[lifecycleStatus];
-  const lifecycleActions = lifecycleActionsByStatus[lifecycleStatus];
-  const blockers = [
-    !hasName ? 'Campaign name is required before activation.' : null,
-    !hasObjective ? 'Campaign objective is required before activation.' : null,
-    !hasAudience
-      ? 'Add at least one creator before activating this campaign.'
-      : null,
-  ].filter((blocker): blocker is string => blocker !== null);
-
-  const changeStatus = async (targetStatus: CampaignLifecycleStatus) => {
-    if (isSaving || !campaignPermissions.canUpdateObjectRecords) {
-      return;
-    }
-
-    setIsSaving(true);
-    setFeedback(null);
-
-    try {
-      const updatedCampaign = await updateOneRecord<CampaignReadinessRecord>({
-        objectNameSingular: 'campaign',
-        idToUpdate: campaignId,
-        updateOneRecordInput: { lifecycleStatus: targetStatus },
-      });
-
-      if (updatedCampaign === null) {
-        void refetchCampaign();
-        setFeedback({
-          kind: 'conflict',
-          message: 'This Campaign changed. Review it and try again.',
-        });
-      }
-    } catch (error) {
-      if (isGraphqlErrorOfType(error, 'FORBIDDEN')) {
-        setIsUpdateRestricted(true);
-      } else {
-        setFeedback({
-          kind: 'error',
-          message:
-            error instanceof Error
-              ? error.message
-              : 'Campaign status could not be changed.',
-        });
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const rootStyle: CSSProperties = {
-    color: theme.font.color.primary,
-    display: 'grid',
-    fontFamily: theme.font.family,
-    fontSize: theme.font.size.md,
-    gap: theme.spacing[4],
-    lineHeight: theme.text.lineHeight.md,
-    padding: theme.spacing[2],
-  };
-
+  const audienceCount = audienceQuery.totalCount ?? 0;
+  const checks = [
+    { label: 'Name', complete: hasContent(campaign.name) },
+    { label: 'Objective', complete: hasContent(campaign.objective) },
+    { label: 'Audience', complete: audienceCount > 0 },
+  ];
+  const status = statusPresentationByStatus[campaign.lifecycleStatus];
   return (
-    <div style={rootStyle}>
+    <div
+      style={{
+        color: theme.font.color.primary,
+        display: 'grid',
+        fontFamily: theme.font.family,
+        fontSize: theme.font.size.md,
+        gap: theme.spacing[4],
+        lineHeight: theme.text.lineHeight.md,
+        padding: theme.spacing[2],
+      }}
+    >
       <div
         style={{
           alignItems: 'center',
@@ -301,108 +153,50 @@ const MyahCampaignReadinessData = ({
         <span style={{ fontWeight: theme.font.weight.medium }}>
           Campaign readiness
         </span>
-        <Status
-          color={statusPresentation.color}
-          text={statusPresentation.text}
-          weight="medium"
-        />
+        <Status color={status.color} text={status.text} weight="medium" />
       </div>
-
-      <div style={{ display: 'grid', gap: theme.spacing[1] }}>
-        <span style={{ color: theme.font.color.secondary }}>
-          {audienceCount} {audienceCount === 1 ? 'creator' : 'creators'}
-        </span>
-        {[
-          { label: 'Name', complete: hasName },
-          { label: 'Objective', complete: hasObjective },
-          { label: 'Audience', complete: hasAudience },
-        ].map(({ label, complete }) => {
-          const ChecklistIcon = complete ? IconCheck : IconCircleX;
-
-          return (
-            <div
-              key={label}
-              style={{
-                alignItems: 'center',
-                color: complete
-                  ? theme.font.color.primary
-                  : theme.font.color.danger,
-                display: 'flex',
-                gap: theme.spacing[1],
-                minHeight: theme.spacing[6],
-              }}
-            >
-              <ChecklistIcon
-                aria-hidden="true"
-                color={
-                  complete ? theme.accent.primary : theme.font.color.danger
-                }
-                size={theme.icon.size.md}
-              />
-              <span>{`${label} ${complete ? 'complete' : 'incomplete'}`}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {blockers.map((blocker) => (
-        <InlineBanner key={blocker} color="danger" message={blocker} />
-      ))}
-
-      {feedback ? (
-        <InlineBanner
-          color={feedback.kind === 'error' ? 'danger' : 'blue'}
-          LeftIcon={feedback.kind === 'error' ? IconAlertTriangle : undefined}
-          message={feedback.message}
-        />
-      ) : null}
-
-      {isUpdateRestricted || !campaignPermissions.canUpdateObjectRecords ? (
-        <div style={quietStateStyle}>
-          <IconLock
-            aria-hidden="true"
-            color={theme.font.color.tertiary}
-            size={theme.icon.size.md}
-          />
-          <span>
-            You don't have permission to change this Campaign's status.
-          </span>
-        </div>
-      ) : lifecycleActions.length > 0 ? (
-        <div
-          style={{ display: 'flex', flexWrap: 'wrap', gap: theme.spacing[2] }}
-        >
-          {lifecycleActions.map((action) => (
-            <Button
-              key={action.targetStatus}
-              disabled={
-                isSaving ||
-                (action.targetStatus === 'ACTIVE' && !isActivationReady)
-              }
-              isLoading={isSaving}
-              onClick={() => void changeStatus(action.targetStatus)}
-              size="small"
-              title={action.label}
-              type="button"
-              variant="secondary"
-            />
-          ))}
-        </div>
-      ) : null}
+      <span style={{ color: theme.font.color.secondary }}>
+        {audienceCount} {audienceCount === 1 ? 'creator' : 'creators'}
+      </span>
+      {checks.map(({ label, complete }) => {
+        const Icon = complete ? IconCheck : IconCircleX;
+        return (
+          <div
+            key={label}
+            style={{
+              alignItems: 'center',
+              color: complete
+                ? theme.font.color.primary
+                : theme.font.color.danger,
+              display: 'flex',
+              gap: theme.spacing[1],
+            }}
+          >
+            <Icon aria-hidden="true" />
+            <span>{`${label} ${complete ? 'complete' : 'incomplete'}`}</span>
+          </div>
+        );
+      })}
+      <span style={quiet}>Use Start and Stop in Campaign Operations.</span>
     </div>
   );
 };
 
-type MyahCampaignReadinessProps = {
-  campaignId: string | undefined;
-};
-
 export const MyahCampaignReadiness = ({
   campaignId,
-}: MyahCampaignReadinessProps) => {
-  if (!campaignId) {
-    return null;
-  }
-
-  return <MyahCampaignReadinessContent campaignId={campaignId} />;
+}: {
+  campaignId: string | undefined;
+}) => {
+  const theme = useTheme();
+  const { objectMetadataItem } = useObjectMetadataItem({
+    objectNameSingular: 'campaign',
+  });
+  if (!campaignId) return null;
+  return (
+    <ReadinessData
+      campaignId={campaignId}
+      metadataId={objectMetadataItem.id}
+      theme={theme}
+    />
+  );
 };

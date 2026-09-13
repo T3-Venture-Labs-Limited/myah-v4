@@ -35,6 +35,10 @@ export type ConnectedAccountEncryptedTokens = {
 // the database or freshly re-encrypted after a refresh round-trip).
 export type ConnectedAccountTokens = ConnectedAccountEncryptedTokens;
 
+export type ConnectedAccountTokenResolutionOptions = {
+  abortSignal?: AbortSignal;
+};
+
 const CONNECTED_ACCOUNT_ACCESS_TOKEN_EXPIRATION = 1000 * 60 * 60;
 
 @Injectable()
@@ -55,9 +59,14 @@ export class ConnectedAccountRefreshTokensService {
   async resolveTokens(
     connectedAccount: ConnectedAccountEntity,
     workspaceId: string,
+    options?: ConnectedAccountTokenResolutionOptions,
   ): Promise<ConnectedAccountTokens> {
+    options?.abortSignal?.throwIfAborted();
+
     const isAccessTokenValid =
       await this.isAccessTokenStillValid(connectedAccount);
+
+    options?.abortSignal?.throwIfAborted();
 
     if (isAccessTokenValid) {
       this.logger.debug(
@@ -84,6 +93,7 @@ export class ConnectedAccountRefreshTokensService {
       connectedAccount,
       encryptedRefreshToken,
       workspaceId,
+      options,
     );
   }
 
@@ -108,6 +118,7 @@ export class ConnectedAccountRefreshTokensService {
     connectedAccount: ConnectedAccountEntity,
     encryptedRefreshToken: EncryptedString,
     workspaceId: string,
+    options?: ConnectedAccountTokenResolutionOptions,
   ): Promise<ConnectedAccountTokens> {
     const decryptedRefreshToken =
       this.connectedAccountTokenEncryptionService.decrypt({
@@ -119,7 +130,10 @@ export class ConnectedAccountRefreshTokensService {
       connectedAccount,
       decryptedRefreshToken,
       workspaceId,
+      options,
     );
+
+    options?.abortSignal?.throwIfAborted();
 
     const {
       encryptedAccessToken,
@@ -130,6 +144,8 @@ export class ConnectedAccountRefreshTokensService {
       workspaceId,
     });
 
+    options?.abortSignal?.throwIfAborted();
+
     await this.connectedAccountRepository.update(
       { id: connectedAccount.id, workspaceId },
       {
@@ -138,6 +154,8 @@ export class ConnectedAccountRefreshTokensService {
         lastCredentialsRefreshedAt: new Date(),
       },
     );
+
+    options?.abortSignal?.throwIfAborted();
 
     return {
       accessToken: encryptedAccessToken,
@@ -183,17 +201,28 @@ export class ConnectedAccountRefreshTokensService {
     connectedAccount: ConnectedAccountEntity,
     refreshToken: PlaintextString,
     workspaceId: string,
+    options?: ConnectedAccountTokenResolutionOptions,
   ): Promise<ConnectedAccountPlaintextTokens> {
     try {
       switch (connectedAccount.provider) {
         case ConnectedAccountProvider.GOOGLE:
-          return await this.googleAPIRefreshAccessTokenService.refreshTokens(
-            refreshToken,
-          );
+          return await (options
+            ? this.googleAPIRefreshAccessTokenService.refreshTokens(
+                refreshToken,
+                options,
+              )
+            : this.googleAPIRefreshAccessTokenService.refreshTokens(
+                refreshToken,
+              ));
         case ConnectedAccountProvider.MICROSOFT:
-          return await this.microsoftAPIRefreshAccessTokenService.refreshTokens(
-            refreshToken,
-          );
+          return await (options
+            ? this.microsoftAPIRefreshAccessTokenService.refreshTokens(
+                refreshToken,
+                options,
+              )
+            : this.microsoftAPIRefreshAccessTokenService.refreshTokens(
+                refreshToken,
+              ));
         case ConnectedAccountProvider.APP:
           return await this.appOAuthRefreshAccessTokenService.refreshTokens(
             connectedAccount,

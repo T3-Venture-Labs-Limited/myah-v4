@@ -12,6 +12,7 @@ import { CampaignOutreachToolAccessGuardService } from 'src/modules/myah-outreac
 import { getWorkflowToolOutreachAccessGuardTargets } from 'src/modules/workflow/workflow-tools/services/get-workflow-tool-outreach-access-guard-targets.util';
 import { type WorkflowToolWorkspaceService } from 'src/modules/workflow/workflow-tools/services/workflow-tool.workspace-service';
 import { type ListWorkflowRunsInput } from 'src/modules/workflow/workflow-tools/tools/list-workflow-runs.tool';
+import { AUTHORIZED_CAMPAIGN_OUTREACH_TRIGGER_MUTATION } from 'src/modules/workflow/workflow-tools/tools/update-workflow-version-trigger.tool';
 
 export type CampaignOutreachToolContext = {
   authContext: UserWorkspaceAuthContext;
@@ -197,7 +198,12 @@ export class CampaignOutreachToolWorkspaceService {
                 );
               }
 
-              args[0] = workflowParameters as never;
+              args[0] = {
+                ...workflowParameters,
+                ...(workflowToolName === 'update_workflow_version_trigger'
+                  ? { [AUTHORIZED_CAMPAIGN_OUTREACH_TRIGGER_MUTATION]: true }
+                  : {}),
+              } as never;
 
               return rewriteCampaignNextStepInstructions(
                 await execute(...args),

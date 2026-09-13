@@ -28,6 +28,12 @@ jest.mock('@/page-layout/components/MyahCampaignEmailAccounts', () => ({
   ),
 }));
 
+jest.mock('@/page-layout/components/MyahCampaignExecutionControls', () => ({
+  MyahCampaignExecutionControls: ({ campaignId }: { campaignId: string }) => (
+    <div data-testid="execution-controls" data-campaign-id={campaignId} />
+  ),
+}));
+
 jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
   MyahCampaignRichTextSettings: ({
     campaignId,
@@ -148,9 +154,19 @@ describe('MyahCampaignOperations', () => {
         .compareDocumentPosition(screen.getByTestId('email-accounts')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    expect(screen.getByTestId('execution-controls')).toHaveAttribute(
+      'data-campaign-id',
+      'campaign-1',
+    );
     expect(
       screen
         .getByTestId('email-accounts')
+        .compareDocumentPosition(screen.getByTestId('execution-controls')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByTestId('execution-controls')
         .compareDocumentPosition(screen.getByTestId('settings-adapter')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

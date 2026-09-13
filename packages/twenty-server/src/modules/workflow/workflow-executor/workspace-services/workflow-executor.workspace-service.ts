@@ -24,6 +24,7 @@ import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
 import { type UsageEvent } from 'src/engine/core-modules/usage/types/usage-event.type';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkflowRunStatus } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import { workflowHasRunningSteps } from 'src/modules/workflow/common/utils/workflow-has-running-steps.util';
 import {
@@ -66,6 +67,7 @@ export class WorkflowExecutorWorkspaceService {
     private readonly metricsService: MetricsService,
     @InjectMessageQueue(MessageQueue.workflowQueue)
     private readonly messageQueueService: MessageQueueService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async executeFromSteps({
@@ -75,6 +77,10 @@ export class WorkflowExecutorWorkspaceService {
     shouldComputeWorkflowRunStatus = true,
     executedStepsCount = 0,
   }: WorkflowExecutorInput) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     await Promise.all(
       stepIds.map(async (stepIdToExecute) => {
         return this.executeFromStep({
@@ -509,6 +515,10 @@ export class WorkflowExecutorWorkspaceService {
     workspaceId: string;
     executedStepsCount: number;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     const stepInfos: Record<string, WorkflowRunStepInfo> = {};
 
     for (const stepId of stepIdsToSkip) {

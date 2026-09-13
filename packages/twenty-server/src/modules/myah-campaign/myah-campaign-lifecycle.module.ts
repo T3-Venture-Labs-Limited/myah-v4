@@ -12,6 +12,7 @@ import { WorkflowCommonModule } from 'src/modules/workflow/common/workflow-commo
 import { CampaignAccountResolver } from 'src/modules/myah-campaign/resolvers/campaign-account.resolver';
 import { CampaignInfluencerResolver } from 'src/modules/myah-campaign/resolvers/campaign-influencer.resolver';
 import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
+import { CampaignSenderReadinessService } from 'src/modules/myah-campaign/services/campaign-sender-readiness.service';
 import { CampaignInfluencerService } from 'src/modules/myah-campaign/services/campaign-influencer.service';
 import { CampaignLifecycleService } from 'src/modules/myah-campaign/services/campaign-lifecycle.service';
 import { CampaignOutreachWorkflowLifecycleWorkspaceService } from 'src/modules/myah-campaign/services/campaign-outreach-workflow-lifecycle.workspace-service';
@@ -31,6 +32,7 @@ import { MyahCreatorOpsToolWorkspaceService } from 'src/modules/myah-campaign/to
   providers: [
     provideWorkspaceScopedRepository(ManagedEmailMailboxEntity),
     CampaignLifecycleService,
+    CampaignSenderReadinessService,
     CampaignAccountService,
     CampaignOutreachWorkflowLifecycleWorkspaceService,
     CampaignInfluencerService,
@@ -44,6 +46,7 @@ import { MyahCreatorOpsToolWorkspaceService } from 'src/modules/myah-campaign/to
   ],
   exports: [
     CampaignLifecycleService,
+    CampaignSenderReadinessService,
     CampaignAccountService,
     CampaignOutreachWorkflowLifecycleWorkspaceService,
     CampaignInfluencerService,
