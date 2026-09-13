@@ -6,7 +6,7 @@ import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import type { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
 import { SynchronizeMyahCampaignAccountMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788537600000-synchronize-myah-campaign-account-metadata.command';
-import { SynchronizeCampaignSequenceMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788696000000-synchronize-campaign-sequence-metadata.command';
+import { SynchronizeCampaignSequenceMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789281428333-synchronize-campaign-sequence-metadata.command';
 import type { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
@@ -92,7 +92,7 @@ describe('SynchronizeCampaignSequenceMetadataCommand', () => {
       getRegisteredWorkspaceCommandMetadata(
         SynchronizeCampaignSequenceMetadataCommand,
       ),
-    ).toMatchObject({ version: '2.20.0', timestamp: 1788696000000 });
+    ).toMatchObject({ version: '2.20.0', timestamp: 1789281428333 });
 
     const providers = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
@@ -160,7 +160,7 @@ describe('SynchronizeCampaignSequenceMetadataCommand', () => {
       options: dryRunArgs.options,
       workspaceCommands: [
         {
-          name: '2-20-workspace-command-1788696000000-synchronize-campaign-sequence-metadata',
+          name: '2-20-workspace-command-1789281428333-synchronize-campaign-sequence-metadata',
           command,
         },
       ],
@@ -190,7 +190,7 @@ describe('SynchronizeCampaignSequenceMetadataCommand', () => {
         options: args.options,
         workspaceCommands: [
           {
-            name: '2-20-workspace-command-1788696000000-synchronize-campaign-sequence-metadata',
+            name: '2-20-workspace-command-1789281428333-synchronize-campaign-sequence-metadata',
             command,
           },
         ],

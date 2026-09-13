@@ -1,9 +1,9 @@
+import { MYAH_CAMPAIGN_CREATOR_OUTREACH_ELIGIBLE_STAGES } from '../myah-campaign-creator-outreach-eligible-stages.constant';
+import { MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS } from '../myah-campaign-creator-stage-options.constant';
 import {
   MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE,
-  MYAH_CAMPAIGN_CREATOR_OUTREACH_ELIGIBLE_STAGES,
-  MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS,
   MYAH_CAMPAIGN_CREATOR_STAGES,
-} from 'twenty-shared/metadata';
+} from '../myah-campaign-creator-stage.constant';
 
 describe('Campaign Creator journey-stage contract', () => {
   it('exposes the approved values, labels, order, and stable retained ids', () => {

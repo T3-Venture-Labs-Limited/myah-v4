@@ -1,5 +1,4 @@
 import {
-  MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS,
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
@@ -1111,7 +1110,7 @@ describe('Myah standard metadata contract', () => {
     }
   });
 
-  it('materializes Campaign Creator stage as the approved SELECT contract', () => {
+  it('keeps Campaign Creator stage API-compatible as text', () => {
     const stage =
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
         MYAH_STANDARD_OBJECTS.campaignCreator.fields.stage.universalIdentifier
@@ -1119,10 +1118,10 @@ describe('Myah standard metadata contract', () => {
 
     expect(stage).toMatchObject({
       name: 'stage',
-      type: FieldMetadataType.SELECT,
+      type: FieldMetadataType.TEXT,
       isNullable: true,
       defaultValue: "'READY'",
-      options: MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS,
+      options: null,
     });
   });
 

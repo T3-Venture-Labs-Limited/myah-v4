@@ -16,6 +16,7 @@ const authContext = {
 describe('WorkflowDestroyOnePreQueryHook', () => {
   it('authorizes the owning Campaign before destroying an Outreach workflow', async () => {
     const workflowOutreachAccessGuardService = {
+      assertGenericWorkflowMutationAllowed: jest.fn(),
       assertWorkflowIsAccessible: jest.fn(),
       handleWorkflowSubEntities: jest.fn(),
     } as unknown as WorkflowOutreachAccessGuardService;
@@ -31,9 +32,8 @@ describe('WorkflowDestroyOnePreQueryHook', () => {
     await hook.execute(authContext, 'workflow', { id: 'workflow-a' });
 
     expect(
-      workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
+      workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed,
     ).toHaveBeenCalledWith({
-      authContext,
       workflowId: 'workflow-a',
       workspaceId: 'workspace-a',
     });

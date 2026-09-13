@@ -433,6 +433,7 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
          FROM pg_constraint
         WHERE connamespace = 'core'::regnamespace
           AND conrelid = ANY($1::regclass[])
+          AND contype <> 'n'
         ORDER BY conname`,
       [TABLES.map((table) => `core."${table}"`)],
     );

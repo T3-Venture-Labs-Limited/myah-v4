@@ -17,21 +17,23 @@ const ids = {
 describe('CampaignEmailRuntimeService', () => {
   const setup = (
     projectionResult: 'PROJECTED' | 'EXACT_REPLAY' | 'DEFERRED' = 'PROJECTED',
+    work: Record<string, unknown>[] = [],
   ) => {
-    const query = jest.fn(async () => [
-      {
-        ...ids,
-        campaignExecutionId: ids.executionId,
-        authorizationGeneration: 1,
-        authorizationId: ids.authorizationId,
-        activationId: ids.activationId,
-        workflowVersionId: ids.versionId,
-        enrollmentId: ids.enrollmentId,
-        occurrenceId: ids.occurrenceId,
-        connectedAccountId: ids.accountId,
-        messageChannelId: ids.channelId,
-      },
-    ]);
+    const routingRow = {
+      ...ids,
+      campaignExecutionId: ids.executionId,
+      authorizationGeneration: 1,
+      authorizationId: ids.authorizationId,
+      activationId: ids.activationId,
+      workflowVersionId: ids.versionId,
+      enrollmentId: ids.enrollmentId,
+      occurrenceId: ids.occurrenceId,
+      connectedAccountId: ids.accountId,
+      messageChannelId: ids.channelId,
+    };
+    const query = jest.fn(async (sql: string) =>
+      sql.includes('WITH pending') ? work : [routingRow],
+    );
     const manager = { queryRunner: { isTransactionActive: true } };
     const dataSource = {
       query,
@@ -43,15 +45,17 @@ describe('CampaignEmailRuntimeService', () => {
       reconcileUnknownInTransaction: jest.fn(),
     };
     const projection = { reconcile: jest.fn(async () => projectionResult) };
+    const dispatch = { dispatch: jest.fn() };
     return {
       service: new CampaignEmailRuntimeService(
         {
           getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
         } as never,
         progression as never,
-        { dispatch: jest.fn() } as never,
+        dispatch as never,
         projection as never,
       ),
+      dispatch,
       progression,
       projection,
     };
@@ -84,5 +88,20 @@ describe('CampaignEmailRuntimeService', () => {
       ids.attemptId,
     );
     expect(progression.reconcileAcceptedInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('routes persisted definite and unknown outcomes without provider redispatch', async () => {
+    const { service, dispatch, progression } = setup('PROJECTED', [
+      { ...ids, kind: 'DEFINITELY_UNACCEPTED' },
+      { ...ids, kind: 'UNKNOWN' },
+    ]);
+
+    await service.runDueOccurrences();
+
+    expect(
+      progression.reconcileDefinitelyUnacceptedInTransaction,
+    ).toHaveBeenCalledTimes(1);
+    expect(progression.reconcileUnknownInTransaction).toHaveBeenCalledTimes(1);
+    expect(dispatch.dispatch).not.toHaveBeenCalled();
   });
 });

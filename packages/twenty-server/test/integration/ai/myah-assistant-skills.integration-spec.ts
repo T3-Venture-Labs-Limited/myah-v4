@@ -20,7 +20,6 @@ const {
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { USER_WORKSPACE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-user-workspaces.util';
-import { CampaignLifecycleService } from 'src/modules/myah-campaign/services/campaign-lifecycle.service';
 import { activateWorkspace } from 'test/integration/graphql/utils/activate-workspace.util';
 import { deleteUser } from 'test/integration/graphql/utils/delete-user.util';
 import { getAuthTokensFromLoginToken } from 'test/integration/graphql/utils/get-auth-tokens-from-login-token.util';
@@ -40,12 +39,6 @@ import { waitForAllJobsToFinish } from 'test/integration/utils/wait-for-all-jobs
 type ScriptedCall = {
   toolName: string;
   input: Record<string, unknown>;
-};
-
-type ScriptedChatExecution = {
-  chunks: unknown[];
-  modelToolCalls: string[];
-  resolvedToolInputs: Record<string, unknown>[];
 };
 
 type Fixture = {
@@ -927,7 +920,7 @@ describe('Myah assistant skills scripted model integration', () => {
     expect(configuredVersion.trigger?.type).toBe('MANUAL');
   });
 
-  it('drives Campaign lifecycle readiness, audience provenance, and stale lifecycle recovery', async () => {
+  it('enforces dedicated Campaign lifecycle authority and maintains audience provenance', async () => {
     if (!fixture) {
       throw new Error('Expected dynamic workspace fixture');
     }
@@ -1164,23 +1157,7 @@ describe('Myah assistant skills scripted model integration', () => {
         },
       ],
     });
-    const pauseLifecycleExecution = await runScriptedChat({
-      approvedToolName: 'update_many_campaigns',
-      fixture,
-      calls: [
-        {
-          toolName: 'execute_tool',
-          input: {
-            toolName: 'update_many_campaigns',
-            arguments: {
-              data: { lifecycleStatus: 'PAUSED' },
-              filter: { id: { eq: fixture.campaignId } },
-            },
-          },
-        },
-      ],
-    });
-    const [pausedCampaign] = await global.testDataSource.query<
+    const [unchangedCampaign] = await global.testDataSource.query<
       { lifecycleStatus: string }[]
     >(
       `SELECT "lifecycleStatus"
@@ -1194,108 +1171,10 @@ describe('Myah assistant skills scripted model integration', () => {
       'learn_tools',
       'execute_tool',
     ]);
-    expect(pauseLifecycleExecution.modelToolCalls).toEqual(['execute_tool']);
-    expect(pausedCampaign.lifecycleStatus).toBe('PAUSED');
-
-    const fixtureForConcurrentUpdate = fixture;
-
-    const lifecycleService = getDomainService<CampaignLifecycleService>(
-      'CampaignLifecycleService',
+    expect(JSON.stringify(lifecycleExecution.chunks)).toContain(
+      'success":false',
     );
-    const prepareUpdateMany =
-      lifecycleService.prepareUpdateMany.bind(lifecycleService);
-    const prepareUpdateManySpy = jest
-      .spyOn(lifecycleService, 'prepareUpdateMany')
-      .mockImplementation(async (...args) => {
-        const prepared = await prepareUpdateMany(...args);
-
-        await global.testDataSource.query(
-          `UPDATE "${fixtureForConcurrentUpdate.schemaName}"."campaign"
-              SET "lifecycleStatus" = 'COMPLETED'
-            WHERE id = $1`,
-          [fixtureForConcurrentUpdate.campaignId],
-        );
-
-        return prepared;
-      });
-    let staleLifecycleExecution: ScriptedChatExecution;
-
-    try {
-      staleLifecycleExecution = await runScriptedChat({
-        approvedToolName: 'update_many_campaigns',
-        fixture,
-        calls: [
-          {
-            toolName: 'load_skills',
-            input: { skillNames: ['myah-campaigns'] },
-          },
-          {
-            toolName: 'learn_tools',
-            input: {
-              toolNames: ['update_many_campaigns', 'find_one_campaign'],
-              aspects: ['schema'],
-            },
-          },
-          {
-            toolName: 'execute_tool',
-            input: {
-              toolName: 'update_many_campaigns',
-              arguments: {
-                data: { lifecycleStatus: 'ACTIVE' },
-                filter: { id: { eq: fixture.campaignId } },
-              },
-            },
-          },
-          {
-            toolName: 'execute_tool',
-            input: {
-              toolName: 'find_one_campaign',
-              arguments: {
-                id: fixture.campaignId,
-                select: ['id', 'lifecycleStatus'],
-              },
-            },
-          },
-        ],
-      });
-    } finally {
-      prepareUpdateManySpy.mockRestore();
-    }
-    const [staleCampaign] = await global.testDataSource.query<
-      { lifecycleStatus: string }[]
-    >(
-      `SELECT "lifecycleStatus"
-       FROM "${fixture.schemaName}"."campaign"
-       WHERE id = $1`,
-      [fixture.campaignId],
-    );
-
-    expect(staleLifecycleExecution.modelToolCalls).toEqual([
-      'load_skills',
-      'learn_tools',
-      'execute_tool',
-      'execute_tool',
-    ]);
-    const staleToolResults = staleLifecycleExecution.chunks.flatMap((chunk) =>
-      typeof chunk === 'object' &&
-      chunk !== null &&
-      'type' in chunk &&
-      chunk.type === 'tool-result' &&
-      'toolName' in chunk &&
-      chunk.toolName === 'execute_tool' &&
-      'output' in chunk
-        ? [chunk.output]
-        : [],
-    );
-
-    if (!JSON.stringify(staleToolResults).includes('Updated 0')) {
-      throw new Error(
-        `Stale lifecycle write did not return a zero-row result: ${JSON.stringify(
-          staleToolResults,
-        )}`,
-      );
-    }
-    expect(staleCampaign.lifecycleStatus).toBe('COMPLETED');
+    expect(unchangedCampaign.lifecycleStatus).toBe('DRAFT');
 
     const removalExecution = await runScriptedChat({
       approvedToolName: 'remove_creator_from_creator_list',

@@ -1419,16 +1419,6 @@ export type CreateLogicFunctionFromSourceInput = {
   workflowActionTriggerSettings?: InputMaybe<Scalars['JSON']['input']>;
 };
 
-export type CreateMyahE2eCallbackFixtureInput = {
-  campaignId: Scalars['UUID']['input'];
-  fixtureId: Scalars['UUID']['input'];
-  operationsTabId: Scalars['UUID']['input'];
-};
-
-export type CreateMyahE2eCampaignMailboxFixtureInput = {
-  campaignId: Scalars['UUID']['input'];
-};
-
 export type CreateNavigationMenuItemInput = {
   color?: InputMaybe<Scalars['String']['input']>;
   folderId?: InputMaybe<Scalars['UUID']['input']>;
@@ -3133,7 +3123,6 @@ export type Mutation = {
   checkCustomDomainValidRecords?: Maybe<DomainValidRecords>;
   checkPublicDomainValidRecords?: Maybe<DomainValidRecords>;
   checkoutSession: BillingSession;
-  cleanupMyahE2eCampaignMailboxFixture: Scalars['Boolean']['output'];
   completeFileUpload: FileWithSignedUrl;
   completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus;
   completeManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod;
@@ -3157,8 +3146,6 @@ export type Mutation = {
   createManyViewFieldGroups: Array<ViewFieldGroup>;
   createManyViewFields: Array<ViewField>;
   createManyViewGroups: Array<ViewGroup>;
-  createMyahE2eCampaignCallbackFixture: MyahE2eCallbackFixtureDto;
-  createMyahE2eCampaignMailboxFixture: MyahE2eCampaignMailboxFixtureDto;
   createNavigationMenuItem: NavigationMenuItem;
   createOIDCIdentityProvider: SetupSso;
   createObjectEvent: Analytics;
@@ -3480,11 +3467,6 @@ export type MutationCheckoutSessionArgs = {
 };
 
 
-export type MutationCleanupMyahE2eCampaignMailboxFixtureArgs = {
-  input: MyahE2eFixtureIdInput;
-};
-
-
 export type MutationCompleteFileUploadArgs = {
   fileId: Scalars['String']['input'];
 };
@@ -3601,16 +3583,6 @@ export type MutationCreateManyViewFieldsArgs = {
 
 export type MutationCreateManyViewGroupsArgs = {
   inputs: Array<CreateViewGroupInput>;
-};
-
-
-export type MutationCreateMyahE2eCampaignCallbackFixtureArgs = {
-  input: CreateMyahE2eCallbackFixtureInput;
-};
-
-
-export type MutationCreateMyahE2eCampaignMailboxFixtureArgs = {
-  input: CreateMyahE2eCampaignMailboxFixtureInput;
 };
 
 
@@ -4707,36 +4679,6 @@ export type MutationVerifyTwoFactorAuthenticationMethodForAuthenticatedUserArgs 
   otp: Scalars['String']['input'];
 };
 
-export type MyahE2eCallbackFixtureDto = {
-  __typename?: 'MyahE2eCallbackFixtureDTO';
-  callbackPath: Scalars['String']['output'];
-  connectedAccountId: Scalars['UUID']['output'];
-};
-
-export type MyahE2eCampaignMailboxFixtureDto = {
-  __typename?: 'MyahE2eCampaignMailboxFixtureDTO';
-  actionApprovalBindingId: Scalars['UUID']['output'];
-  approvalThreadId: Scalars['UUID']['output'];
-  approvalThreadTitle: Scalars['String']['output'];
-  availableAccountIds: Array<Scalars['UUID']['output']>;
-  expectedBody: Scalars['String']['output'];
-  expectedFrom: Scalars['String']['output'];
-  expectedSubject: Scalars['String']['output'];
-  expectedTo: Scalars['String']['output'];
-  id: Scalars['UUID']['output'];
-  unavailableAccountId: Scalars['UUID']['output'];
-};
-
-export type MyahE2eCampaignMailboxFixtureStatusDto = {
-  __typename?: 'MyahE2eCampaignMailboxFixtureStatusDTO';
-  providerDraftPreparationCount: Scalars['Float']['output'];
-  providerSendAttemptCount: Scalars['Float']['output'];
-};
-
-export type MyahE2eFixtureIdInput = {
-  fixtureId: Scalars['UUID']['input'];
-};
-
 export type NativeModelCapabilities = {
   __typename?: 'NativeModelCapabilities';
   twitterSearch?: Maybe<Scalars['Boolean']['output']>;
@@ -5281,7 +5223,6 @@ export type Query = {
   getEmailingDomains: Array<EmailingDomain>;
   getInviteSuggestions: Array<InviteSuggestion>;
   getLogicFunctionSourceCode?: Maybe<Scalars['String']['output']>;
-  getMyahE2eCampaignMailboxFixtureStatus: MyahE2eCampaignMailboxFixtureStatusDto;
   getPageLayout?: Maybe<PageLayout>;
   getPageLayoutTab: PageLayoutTab;
   getPageLayoutTabs: Array<PageLayoutTab>;
@@ -5590,11 +5531,6 @@ export type QueryGetConnectedImapSmtpCaldavAccountArgs = {
 
 export type QueryGetLogicFunctionSourceCodeArgs = {
   input: LogicFunctionIdInput;
-};
-
-
-export type QueryGetMyahE2eCampaignMailboxFixtureStatusArgs = {
-  input: MyahE2eFixtureIdInput;
 };
 
 

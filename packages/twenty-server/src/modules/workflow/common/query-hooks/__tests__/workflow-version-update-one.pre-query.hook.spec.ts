@@ -19,6 +19,7 @@ describe('WorkflowVersionUpdateOnePreQueryHook', () => {
       validateWorkflowVersionForUpdateOne: jest.fn(),
     } as unknown as WorkflowVersionValidationWorkspaceService;
     const workflowOutreachAccessGuardService = {
+      assertGenericWorkflowVersionMutationAllowed: jest.fn(),
       assertWorkflowVersionIsAccessible: jest.fn(),
       validateWorkflowVersionForUpdateOne: jest.fn(),
     } as unknown as WorkflowOutreachAccessGuardService;
@@ -32,9 +33,8 @@ describe('WorkflowVersionUpdateOnePreQueryHook', () => {
     await hook.execute(authContext, 'workflowVersion', payload as never);
 
     expect(
-      workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible,
+      workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed,
     ).toHaveBeenCalledWith({
-      authContext,
       workflowVersionId: 'workflow-version-a',
       workspaceId: 'workspace-a',
     });

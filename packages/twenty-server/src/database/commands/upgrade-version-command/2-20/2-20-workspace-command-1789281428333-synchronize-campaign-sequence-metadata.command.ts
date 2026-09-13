@@ -8,7 +8,7 @@ import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/com
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
-@RegisteredWorkspaceCommand('2.20.0', 1788696000000)
+@RegisteredWorkspaceCommand('2.20.0', 1789281428333)
 @Command({
   name: 'upgrade:2-20:synchronize-campaign-sequence-metadata',
   description:

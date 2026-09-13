@@ -499,6 +499,7 @@ export class CampaignInfluencerService {
         // READY is insert-only. A concurrent restore/conflict winner retains
         // its current stage rather than receiving an admission-stage reset.
         .orIgnore()
+        .returning(['id'])
         .execute();
     const resolved = (
       await campaignCreators.find(
@@ -791,6 +792,7 @@ export class CampaignInfluencerService {
           )
           // A concurrent restore wins without READY entering an update.
           .orIgnore()
+          .returning(['id'])
           .execute();
       }
       if (ids.length > 0) {

@@ -5,7 +5,6 @@ import {
 } from 'twenty-shared/types';
 import {
   MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE,
-  MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS,
   MYAH_STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
@@ -2691,13 +2690,10 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           workspaceId: args.workspaceId,
           context: {
             fieldName: 'stage',
-            type: FieldMetadataType.SELECT,
+            type: FieldMetadataType.TEXT,
             label: 'Stage',
             description: 'Campaign outreach stage',
             icon: 'IconProgress',
-            options: MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS.map((option) => ({
-              ...option,
-            })),
             isNullable: true,
             defaultValue: `'${MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE}'`,
           },

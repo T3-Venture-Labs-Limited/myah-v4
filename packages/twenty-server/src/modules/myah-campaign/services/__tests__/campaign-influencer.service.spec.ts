@@ -50,6 +50,7 @@ type TestInsertBuilder = {
   insert: jest.Mock<TestInsertBuilder>;
   values: jest.Mock<TestInsertBuilder>;
   orIgnore: jest.Mock<TestInsertBuilder>;
+  returning: jest.Mock<TestInsertBuilder>;
   execute: jest.Mock<Promise<void>>;
 };
 
@@ -111,6 +112,7 @@ const createRepository = (rows: Row[]) => ({
       return builder;
     });
     builder.orIgnore = jest.fn(() => builder);
+    builder.returning = jest.fn(() => builder);
     builder.execute = jest.fn(async () => {
       for (const value of values) {
         const conflict = rows.some(
