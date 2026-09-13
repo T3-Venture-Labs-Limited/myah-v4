@@ -4,6 +4,7 @@ import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { DataSource, type QueryRunner } from 'typeorm';
 
 import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065457681-create-campaign-execution-authority-foundation';
+import { AddCampaignDispatchEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789066100000-add-campaign-dispatch-evidence';
 import { setPgDateTypeParser } from 'src/database/pg/set-pg-date-type-parser';
 import { CampaignTestPreparationProofService } from 'src/engine/core-modules/campaign-test-authority/services/campaign-test-preparation-proof.service';
 import { WorkspaceCampaignCapacityTimeZoneService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone.service';
@@ -57,6 +58,8 @@ const EXPECTED_CONSTRAINTS = [
   'CHK_OUTBOUND_EMAIL_ATTEMPT_SOURCE_SHAPE',
   'CHK_OUTBOUND_EMAIL_ATTEMPT_STATE_CAPACITY_SHAPE',
   'CHK_OUTBOUND_EMAIL_ATTEMPT_UNKNOWN_AFTER',
+  'CHK_OEA_CAMPAIGN_ACCEPTED_EVIDENCE',
+  'CHK_OEA_LEGACY_NEW_EVIDENCE_NULL',
   'FK_CA_AUTHORIZATION_SCOPE',
   'FK_CA_EXECUTION_SCOPE',
   'FK_CEN_AUTHORIZATION_SCOPE',
@@ -94,9 +97,12 @@ const EXPECTED_CONSTRAINTS = [
   'UQ_CTP_SCOPE_ATTEMPT_PROOF',
   'UQ_MAILBOX_CAPACITY_DAY_WORKSPACE_ACCOUNT_LOCAL_DATE',
   'UQ_MAILBOX_DISPATCH_CLOCK_WORKSPACE_ACCOUNT',
+  'UQ_OEA_EXACT_CAMPAIGN_ATTEMPT',
 ].sort();
 
 const EXPECTED_INDEXES = [
+  'IDX_CO_DUE_PENDING',
+  'IDX_CO_UNRESOLVED',
   'IDX_OUTBOUND_EMAIL_ATTEMPT_RECONCILIATION',
   'UQ_CSA_ONE_ACTIVE_SCOPE',
   'UQ_CTP_SUBMISSION_CAPABILITY',
@@ -105,6 +111,7 @@ const EXPECTED_INDEXES = [
   'UQ_OUTBOUND_EMAIL_ATTEMPT_PROJECTED_MESSAGE',
   'UQ_OUTBOUND_EMAIL_ATTEMPT_PROVIDER_MESSAGE',
   'UQ_OUTBOUND_EMAIL_ATTEMPT_UNRESOLVED_OCCURRENCE',
+  'UQ_OEA_CAMPAIGN_MICROSOFT_EXTERNAL',
 ].sort();
 
 const digest = (character: string) => character.repeat(64);
@@ -640,7 +647,7 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
       for (const vector of [
         {
           state: 'ACTIVE',
-          hold: 'temporary',
+          hold: 'WORKSPACE_NOT_ACTIVE',
           reason: null,
           terminal: null,
           cursor: 0,
@@ -648,21 +655,21 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
         {
           state: 'REPLIED',
           hold: null,
-          reason: 'reply',
+          reason: 'REPLY_RECEIVED',
           terminal: new Date(),
           cursor: 0,
         },
         {
           state: 'EXCLUDED',
           hold: null,
-          reason: 'excluded',
+          reason: 'INVALID_STAGE',
           terminal: new Date(),
           cursor: 0,
         },
         {
           state: 'FINISHED',
           hold: null,
-          reason: 'done',
+          reason: 'SEQUENCE_COMPLETED',
           terminal: new Date(),
           cursor: 1,
         },
@@ -689,18 +696,28 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
         { state: 'PENDING', hold: null, reason: null, terminal: null },
         { state: 'IN_FLIGHT', hold: null, reason: null, terminal: null },
         { state: 'UNKNOWN', hold: null, reason: null, terminal: null },
-        { state: 'HELD', hold: 'pause', reason: null, terminal: null },
+        {
+          state: 'HELD',
+          hold: 'WORKSPACE_NOT_ACTIVE',
+          reason: null,
+          terminal: null,
+        },
         {
           state: 'SUCCEEDED',
           hold: null,
-          reason: 'sent',
+          reason: 'PROVIDER_ACCEPTED',
           terminal: new Date(),
         },
-        { state: 'SKIPPED', hold: null, reason: 'skip', terminal: new Date() },
+        {
+          state: 'SKIPPED',
+          hold: null,
+          reason: 'CREATOR_MISSING',
+          terminal: new Date(),
+        },
         {
           state: 'CANCELLED',
           hold: null,
-          reason: 'cancel',
+          reason: 'CAMPAIGN_PAUSED',
           terminal: new Date(),
         },
       ]) {
@@ -964,8 +981,8 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
       [TABLES.map((table) => `core."${table}"`)],
     );
     expect({ checkCount, uniqueCount }).toEqual({
-      checkCount: '29',
-      uniqueCount: '28',
+      checkCount: '31',
+      uniqueCount: '29',
     });
   });
 
@@ -2351,6 +2368,9 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
       );
       const command =
         new CreateCampaignExecutionAuthorityFoundationFastInstanceCommand();
+      const dispatchEvidenceCommand =
+        new AddCampaignDispatchEvidenceFastInstanceCommand();
+      await dispatchEvidenceCommand.down(runner);
       await command.down(runner);
       expect(
         await runner.query(`SELECT * FROM core.w13_unrelated_catalog_probe`),
@@ -2379,6 +2399,7 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
         await readUnaffectedParentCatalog((sql) => runner.query(sql)),
       ).toEqual(unaffectedCatalog);
       await command.up(runner);
+      await dispatchEvidenceCommand.up(runner);
       expect(
         await runner.query(
           `SELECT jsonb_agg(jsonb_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull)

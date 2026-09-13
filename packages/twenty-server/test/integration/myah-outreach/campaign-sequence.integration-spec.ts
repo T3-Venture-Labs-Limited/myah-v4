@@ -593,7 +593,7 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
   });
 
   it.each([null, 'ACTIVE', 'PAUSED', 'COMPLETED'])(
-    'rejects authoring when persisted lifecycle is %p',
+    'allows authoring only when persisted lifecycle is PAUSED or DRAFT (%p)',
     async (status) => {
       const campaignId = campaignIds[3];
       const existing = await global.testDataSource.query<Array<{ id: string }>>(
@@ -615,15 +615,20 @@ describe('CampaignSequenceService and API (PostgreSQL)', () => {
         campaignId,
         status,
       ]);
-      await expect(
-        service.save({
-          authContext,
-          campaignId,
-          expectedVersionId: initial.versionId,
-          sequence: editedSequence(String(status)),
-          workspaceId,
-        }),
-      ).rejects.toThrow('Stop Campaign outreach before editing.');
+      const save = service.save({
+        authContext,
+        campaignId,
+        expectedVersionId: initial.versionId,
+        sequence: editedSequence(String(status)),
+        workspaceId,
+      });
+      if (status === 'PAUSED') {
+        await expect(save).resolves.toMatchObject({ editable: true });
+      } else {
+        await expect(save).rejects.toThrow(
+          'Stop Campaign outreach before editing.',
+        );
+      }
       const resetLifecycleStatement = `UPDATE "${schemaName}"."campaign" SET "lifecycleStatus" = 'DRAFT' WHERE "id" = $1`;
       await global.testDataSource.query(resetLifecycleStatement, [campaignId]);
     },

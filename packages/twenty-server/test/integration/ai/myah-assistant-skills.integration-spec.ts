@@ -921,6 +921,9 @@ describe('Myah assistant skills scripted model integration', () => {
       'learn_tools',
       'execute_tool',
     ]);
+    expect(JSON.stringify(configurationExecution.chunks)).not.toContain(
+      'Failed to update workflow version trigger',
+    );
     expect(configuredVersion.trigger?.type).toBe('MANUAL');
   });
 
@@ -1068,6 +1071,16 @@ describe('Myah assistant skills scripted model integration', () => {
         },
       ],
     });
+    expect(attachExecution.modelToolCalls).toEqual([
+      'load_skills',
+      'learn_tools',
+      'execute_tool',
+      'execute_tool',
+    ]);
+    expect(JSON.stringify(attachExecution.chunks)).not.toContain(
+      'success":false',
+    );
+
     const [campaignCreator] = await global.testDataSource.query<
       { id: string }[]
     >(
@@ -1076,6 +1089,9 @@ describe('Myah assistant skills scripted model integration', () => {
        WHERE "campaignId" = $1 AND "creatorId" = $2`,
       [fixture.campaignId, fixture.creatorId],
     );
+
+    expect(campaignCreator).toBeDefined();
+
     const [campaignCreatorListSource] = await global.testDataSource.query<
       { id: string }[]
     >(
@@ -1085,13 +1101,6 @@ describe('Myah assistant skills scripted model integration', () => {
       [campaignCreator.id, fixture.creatorListId],
     );
 
-    expect(attachExecution.modelToolCalls).toEqual([
-      'load_skills',
-      'learn_tools',
-      'execute_tool',
-      'execute_tool',
-    ]);
-    expect(campaignCreator).toBeDefined();
     expect(campaignCreatorListSource).toBeDefined();
 
     const stageExecution = await runScriptedChat({

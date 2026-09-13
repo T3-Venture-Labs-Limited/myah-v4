@@ -13,7 +13,10 @@ describe('2.20 fast command 1789066100000 (postgres)', () => {
     runner = global.testDataSource.createQueryRunner();
     await runner.connect();
     await runner.startTransaction();
-    await runner.query(`CREATE SCHEMA IF NOT EXISTS core`);
+    await runner.query(
+      `ALTER SCHEMA core RENAME TO core_dispatch_evidence_original`,
+    );
+    await runner.query(`CREATE SCHEMA core`);
     await runner.query(`CREATE TABLE core."campaignOccurrence" (
       id uuid PRIMARY KEY, "workspaceId" uuid NOT NULL, "campaignId" uuid NOT NULL,
       "enrollmentId" uuid NOT NULL, "workflowVersionId" uuid NOT NULL, "messageId" uuid NOT NULL,
@@ -32,8 +35,9 @@ describe('2.20 fast command 1789066100000 (postgres)', () => {
       "connectedAccountId" uuid NOT NULL, "messageChannelId" uuid NOT NULL, provider text NOT NULL,
       "providerMessageId" text, "providerAcceptedAt" timestamptz, "projectedMessageId" uuid,
       "finalEvidenceDigest" text, "safeOutcomeReason" text, retryable boolean,
-      "campaignId" uuid, "enrollmentId" uuid, "occurrenceId" uuid, "authorizationId" uuid,
-      "workflowVersionId" uuid, "messageId" uuid, "renderDigest" text,
+      "campaignId" uuid, "campaignExecutionId" uuid, "activationId" uuid,
+      "authorizationGeneration" integer, "enrollmentId" uuid, "occurrenceId" uuid,
+      "authorizationId" uuid, "workflowVersionId" uuid, "messageId" uuid, "renderDigest" text,
       "unknownAfter" timestamptz NOT NULL, "updatedAt" timestamptz NOT NULL DEFAULT now()
     )`);
     await runner.query(`CREATE INDEX "IDX_OUTBOUND_EMAIL_ATTEMPT_RECONCILIATION"
@@ -49,7 +53,7 @@ describe('2.20 fast command 1789066100000 (postgres)', () => {
   it('atomically authors evidence and rejects render updates', async () => {
     await new AddCampaignDispatchEvidenceFastInstanceCommand().up(runner);
     const names = await runner.query(
-      `SELECT conname FROM pg_constraint WHERE conname IN
+      `SELECT conname FROM pg_constraint WHERE connamespace = 'core'::regnamespace AND conname IN
         ('CHK_OEA_CAMPAIGN_ACCEPTED_EVIDENCE','FK_COR_EXACT_ATTEMPT','CHK_CO_TERMINAL_SHAPE')
         ORDER BY conname`,
     );
@@ -300,6 +304,9 @@ describe('2.20 fast command 1789066100000 (postgres)', () => {
       const connectedAccountId = randomUUID();
       const messageChannelId = randomUUID();
       const campaignId = randomUUID();
+      const campaignExecutionId = randomUUID();
+      const activationId = randomUUID();
+      const authorizationGeneration = 1;
       const enrollmentId = randomUUID();
       const occurrenceId = randomUUID();
       const authorizationId = randomUUID();
@@ -322,11 +329,12 @@ describe('2.20 fast command 1789066100000 (postgres)', () => {
           "unknownAfter","campaignId","enrollmentId","occurrenceId","authorizationId",
           "workflowVersionId","messageId","attemptNumber","renderDigest",
           "testPreparationProofId","requesterUserWorkspaceId","previewDigest",
-          "testTransportDigest","directReservationCapabilityId","finalEvidenceDigest"
+          "testTransportDigest","directReservationCapabilityId","finalEvidenceDigest",
+          "campaignExecutionId","activationId","authorizationGeneration"
         ) VALUES (
           $1,$2,$3,'PROCESSING','RESERVED',$4,$5,'google','sender@example.com',
           'recipient@example.com',$6,$7,NULL,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
-          $18,$19,$20,$21,$22,$23,$24,$25
+          $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28
         )`,
         [
           attemptId,
@@ -354,6 +362,9 @@ describe('2.20 fast command 1789066100000 (postgres)', () => {
           testSource ? renderDigest : null,
           directSource ? directCapabilityId : null,
           digest,
+          campaignSource ? campaignExecutionId : null,
+          campaignSource ? activationId : null,
+          campaignSource ? authorizationGeneration : null,
         ],
       );
       await runner.query(
@@ -388,18 +399,27 @@ describe('2.20 fast command 1789066100000 (postgres)', () => {
       const submission = campaignSource
         ? {
             ...common,
+            activationId,
+            authorizationGeneration,
             authorizationId,
             campaignId,
+            campaignExecutionId,
             enrollmentId,
             messageId,
             occurrenceId,
             renderDigest,
             submissionCapability: {
               attemptId,
+              activationId,
+              authorizationGeneration,
+              campaignExecutionId,
               kind: 'CAMPAIGN_SEQUENCE_SUBMISSION',
               renderContext: {
+                activationId,
+                authorizationGeneration,
                 authorizationId,
                 campaignId,
+                campaignExecutionId,
                 connectedAccountId,
                 enrollmentId,
                 messageChannelId,

@@ -960,6 +960,16 @@ export type CampaignEmailAccountLinkInput = {
   campaignId: Scalars['UUID']['input'];
 };
 
+export type CampaignExecutionMutationResultDto = {
+  __typename?: 'CampaignExecutionMutationResultDTO';
+  changed: Scalars['Boolean']['output'];
+  inFlightCount?: Maybe<Scalars['Int']['output']>;
+  lifecycleStatus?: Maybe<Scalars['String']['output']>;
+  reason?: Maybe<Scalars['String']['output']>;
+  replayed: Scalars['Boolean']['output'];
+  status: Scalars['String']['output'];
+};
+
 export type CampaignInfluencerCampaignInput = {
   campaignId: Scalars['UUID']['input'];
 };
@@ -969,6 +979,47 @@ export type CampaignInfluencerSnapshotDto = {
   campaignCreatorLists: Array<CampaignCreatorListDto>;
   campaignCreators: Array<CampaignCreatorDto>;
 };
+
+export type CampaignOutreachAudienceCreator = {
+  __typename?: 'CampaignOutreachAudienceCreator';
+  campaignCreatorId: Scalars['UUID']['output'];
+  creatorId: Scalars['UUID']['output'];
+  creatorName: Scalars['String']['output'];
+};
+
+export type CampaignOutreachAudienceExcludedCreator = {
+  __typename?: 'CampaignOutreachAudienceExcludedCreator';
+  campaignCreatorId: Scalars['UUID']['output'];
+  creatorId?: Maybe<Scalars['UUID']['output']>;
+  creatorName?: Maybe<Scalars['String']['output']>;
+  reasons: Array<CampaignOutreachAudienceExclusionReason>;
+};
+
+export enum CampaignOutreachAudienceExclusionReason {
+  DUPLICATE_CREATOR_EMAIL = 'DUPLICATE_CREATOR_EMAIL',
+  INVALID_EMAIL = 'INVALID_EMAIL',
+  INVALID_MEMBERSHIP = 'INVALID_MEMBERSHIP',
+  INVALID_STAGE = 'INVALID_STAGE',
+  MISSING_CREATOR = 'MISSING_CREATOR',
+  NON_EMAIL_CONTACT_METHOD = 'NON_EMAIL_CONTACT_METHOD',
+  SUPPRESSED_EMAIL = 'SUPPRESSED_EMAIL'
+}
+
+export type CampaignOutreachAudienceReview = {
+  __typename?: 'CampaignOutreachAudienceReview';
+  campaignId: Scalars['UUID']['output'];
+  eligibleCount: Scalars['Int']['output'];
+  eligibleCreators: Array<CampaignOutreachAudienceCreator>;
+  errorCode?: Maybe<Scalars['String']['output']>;
+  excludedCount: Scalars['Int']['output'];
+  excludedCreators: Array<CampaignOutreachAudienceExcludedCreator>;
+  state: CampaignOutreachAudienceReviewState;
+};
+
+export enum CampaignOutreachAudienceReviewState {
+  ERROR = 'ERROR',
+  LOADED = 'LOADED'
+}
 
 export type CampaignSenderCandidateReadinessDto = {
   __typename?: 'CampaignSenderCandidateReadinessDTO';
@@ -1001,6 +1052,12 @@ export type CampaignSenderReadinessDto = {
   reason?: Maybe<Scalars['String']['output']>;
   recoveryPath?: Maybe<Scalars['String']['output']>;
   senderHandle?: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
+};
+
+export type CampaignSendingWindowMutationResultDto = {
+  __typename?: 'CampaignSendingWindowMutationResultDTO';
+  reason?: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
 };
 
@@ -3242,8 +3299,10 @@ export type Mutation = {
   signUpInWorkspace: SignUp;
   skipBookOnboardingStep: OnboardingStepSuccess;
   skipSyncEmailOnboardingStep: OnboardingStepSuccess;
+  startCampaignExecution: CampaignExecutionMutationResultDto;
   startChannelSync: ChannelSyncSuccess;
   stopAgentChatStream: Scalars['Boolean']['output'];
+  stopCampaignExecution: CampaignExecutionMutationResultDto;
   stopManagedEmailMailbox: ManagedEmailActionResult;
   switchBillingPlan: BillingUpdate;
   switchSubscriptionInterval: BillingUpdate;
@@ -3258,6 +3317,7 @@ export type Mutation = {
   updateApplicationRegistration: ApplicationRegistration;
   updateApplicationRegistrationVariable: ApplicationRegistrationVariable;
   updateCalendarChannel: CalendarChannel;
+  updateCampaignSendingWindow: CampaignSendingWindowMutationResultDto;
   updateCommandMenuItem: CommandMenuItem;
   updateConnectedAccountSendingPolicy: ConnectedAccountPublicDto;
   updateFrontComponent: FrontComponent;
@@ -4254,6 +4314,11 @@ export type MutationSignUpInWorkspaceArgs = {
 };
 
 
+export type MutationStartCampaignExecutionArgs = {
+  input: StartCampaignExecutionInput;
+};
+
+
 export type MutationStartChannelSyncArgs = {
   connectedAccountId: Scalars['UUID']['input'];
 };
@@ -4261,6 +4326,11 @@ export type MutationStartChannelSyncArgs = {
 
 export type MutationStopAgentChatStreamArgs = {
   threadId: Scalars['UUID']['input'];
+};
+
+
+export type MutationStopCampaignExecutionArgs = {
+  input: StopCampaignExecutionInput;
 };
 
 
@@ -4321,6 +4391,11 @@ export type MutationUpdateApplicationRegistrationVariableArgs = {
 
 export type MutationUpdateCalendarChannelArgs = {
   input: UpdateCalendarChannelInput;
+};
+
+
+export type MutationUpdateCampaignSendingWindowArgs = {
+  input: UpdateCampaignSendingWindowInput;
 };
 
 
@@ -5155,6 +5230,7 @@ export type Query = {
   campaignEmailAccounts: Array<CampaignEmailAccountDto>;
   campaignEmailSenderPool: CampaignSenderPoolSnapshotDto;
   campaignInfluencerSnapshot: CampaignInfluencerSnapshotDto;
+  campaignOutreachAudienceReview: CampaignOutreachAudienceReview;
   chatMessages: Array<AgentMessage>;
   chatStreamCatchupChunks: ChatStreamCatchupChunks;
   chatThread: AgentChatThread;
@@ -5342,6 +5418,11 @@ export type QueryCampaignEmailSenderPoolArgs = {
 
 export type QueryCampaignInfluencerSnapshotArgs = {
   input: CampaignInfluencerCampaignInput;
+};
+
+
+export type QueryCampaignOutreachAudienceReviewArgs = {
+  campaignId: Scalars['UUID']['input'];
 };
 
 
@@ -6120,6 +6201,15 @@ export type StandaloneRichTextConfiguration = {
   configurationType: WidgetConfigurationType;
 };
 
+export type StartCampaignExecutionInput = {
+  campaignId: Scalars['UUID']['input'];
+  startIdempotencyKey: Scalars['UUID']['input'];
+};
+
+export type StopCampaignExecutionInput = {
+  campaignId: Scalars['UUID']['input'];
+};
+
 export type SubdomainAvailabilityDto = {
   __typename?: 'SubdomainAvailabilityDTO';
   available: Scalars['Boolean']['output'];
@@ -6303,6 +6393,13 @@ export type UpdateCalendarChannelInputUpdates = {
   isContactAutoCreationEnabled?: InputMaybe<Scalars['Boolean']['input']>;
   isSyncEnabled?: InputMaybe<Scalars['Boolean']['input']>;
   visibility?: InputMaybe<CalendarChannelVisibility>;
+};
+
+export type UpdateCampaignSendingWindowInput = {
+  campaignId: Scalars['UUID']['input'];
+  endLocalTime: Scalars['String']['input'];
+  startLocalTime: Scalars['String']['input'];
+  timeZone: Scalars['String']['input'];
 };
 
 export type UpdateCommandMenuItemInput = {

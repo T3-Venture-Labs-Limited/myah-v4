@@ -286,6 +286,7 @@ describe('CampaignMessageRenderService', () => {
         userId: 'requester-user-id',
         userWorkspaceId: 'user-workspace-id',
       },
+      undefined,
     );
     const composedBody = composeEmail.mock.calls[0][0].body;
 

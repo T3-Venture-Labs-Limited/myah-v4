@@ -40,15 +40,19 @@ export class WorkflowVersionStepHelpersWorkspaceService {
     workflowVersionId,
     steps,
     trigger,
+    authorizedCampaignOutreachMutation,
   }: {
     workspaceId: string;
     workflowVersionId: string;
     steps?: WorkflowAction[] | null;
     trigger?: WorkflowTrigger | null;
+    authorizedCampaignOutreachMutation?: boolean;
   }): Promise<void> {
-    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
-      { workflowVersionId, workspaceId },
-    );
+    if (!authorizedCampaignOutreachMutation) {
+      await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+        { workflowVersionId, workspaceId },
+      );
+    }
 
     const authContext = buildSystemAuthContext(workspaceId);
 

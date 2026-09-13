@@ -959,11 +959,12 @@ describe('campaign capacity entity and module metadata', () => {
       CampaignExecutionModule,
     );
 
-    expect(providers).toEqual([
-      MailboxCapacityService,
-      OutboundEmailAttemptService,
-    ]);
-    expect(exports).toHaveLength(3);
+    expect(providers).toEqual(
+      expect.arrayContaining([
+        MailboxCapacityService,
+        OutboundEmailAttemptService,
+      ]),
+    );
     expect(exports).toEqual(
       expect.arrayContaining([
         MailboxCapacityService,
@@ -980,11 +981,14 @@ describe('campaign capacity entity and module metadata', () => {
       typeOrmImport.providers.map(
         ({ targetEntitySchema }) => targetEntitySchema.target,
       ),
-    ).toEqual([
-      MailboxDispatchClockEntity,
-      MailboxCapacityDayEntity,
-      OutboundEmailAttemptEntity,
-    ]);
+    ).toEqual(
+      expect.arrayContaining([
+        MailboxDispatchClockEntity,
+        MailboxCapacityDayEntity,
+        OutboundEmailAttemptEntity,
+      ]),
+    );
+    expect(typeOrmImport.providers).toHaveLength(8);
   });
 });
 

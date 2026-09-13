@@ -3,10 +3,6 @@ import { type QueryRunner } from 'typeorm';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { type FastInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/fast-instance-command.interface';
 
-const OCCURRENCE_HOLDS = `'WORKSPACE_NOT_ACTIVE', 'ATTACHMENTS_UNAVAILABLE', 'MATERIAL_STALE', 'SENDER_POOL_STALE', 'SENDER_NOT_READY', 'CAPACITY_CONFIGURATION_INVALID', 'THREAD_EVIDENCE_MISSING', 'THREAD_EVIDENCE_AMBIGUOUS', 'THREAD_SENDER_CHANGED', 'DEFINITELY_UNACCEPTED_REVIEW', 'PROJECTION_RECONCILIATION_REQUIRED', 'DISPATCH_CONTRACT_CONFLICT'`;
-const OCCURRENCE_TERMINALS = `'PROVIDER_ACCEPTED', 'CREATOR_MISSING', 'CREATOR_DELETED', 'CAMPAIGN_CREATOR_MISSING', 'CAMPAIGN_CREATOR_DELETED', 'INVALID_STAGE', 'NON_EMAIL_CONTACT_METHOD', 'INVALID_EMAIL', 'DUPLICATE_CREATOR_EMAIL', 'SUPPRESSED_EMAIL', 'CAMPAIGN_PAUSED', 'CAMPAIGN_COMPLETED', 'AUTHORIZATION_REVOKED', 'ENROLLMENT_REPLIED', 'SUPERSEDED_BY_WORKFLOW_VERSION'`;
-const ENROLLMENT_TERMINALS = `'REPLY_RECEIVED', 'CREATOR_MISSING', 'CREATOR_DELETED', 'CAMPAIGN_CREATOR_MISSING', 'CAMPAIGN_CREATOR_DELETED', 'INVALID_STAGE', 'NON_EMAIL_CONTACT_METHOD', 'INVALID_EMAIL', 'DUPLICATE_CREATOR_EMAIL', 'SUPPRESSED_EMAIL', 'SEQUENCE_COMPLETED', 'NO_USABLE_AUTHORED_MESSAGE'`;
-
 @RegisteredInstanceCommand('2.20.0', 1789066100000)
 export class AddCampaignDispatchEvidenceFastInstanceCommand implements FastInstanceCommand {
   async up(queryRunner: QueryRunner): Promise<void> {
@@ -21,12 +17,12 @@ export class AddCampaignDispatchEvidenceFastInstanceCommand implements FastInsta
           AND "projectedMessageId" IS NOT NULL
        UNION ALL
        SELECT 'OCCURRENCE_REASON', id::text FROM core."campaignOccurrence"
-        WHERE ("holdReason" IS NOT NULL AND "holdReason" NOT IN (${OCCURRENCE_HOLDS}))
-           OR ("terminalReason" IS NOT NULL AND "terminalReason" NOT IN (${OCCURRENCE_TERMINALS}))
+        WHERE ("holdReason" IS NOT NULL AND "holdReason" NOT IN ('WORKSPACE_NOT_ACTIVE', 'ATTACHMENTS_UNAVAILABLE', 'MATERIAL_STALE', 'SENDER_POOL_STALE', 'SENDER_NOT_READY', 'CAPACITY_CONFIGURATION_INVALID', 'THREAD_EVIDENCE_MISSING', 'THREAD_EVIDENCE_AMBIGUOUS', 'THREAD_SENDER_CHANGED', 'DEFINITELY_UNACCEPTED_REVIEW', 'PROJECTION_RECONCILIATION_REQUIRED', 'DISPATCH_CONTRACT_CONFLICT'))
+           OR ("terminalReason" IS NOT NULL AND "terminalReason" NOT IN ('PROVIDER_ACCEPTED', 'CREATOR_MISSING', 'CREATOR_DELETED', 'CAMPAIGN_CREATOR_MISSING', 'CAMPAIGN_CREATOR_DELETED', 'INVALID_STAGE', 'NON_EMAIL_CONTACT_METHOD', 'INVALID_EMAIL', 'DUPLICATE_CREATOR_EMAIL', 'SUPPRESSED_EMAIL', 'CAMPAIGN_PAUSED', 'CAMPAIGN_COMPLETED', 'AUTHORIZATION_REVOKED', 'ENROLLMENT_REPLIED', 'SUPERSEDED_BY_WORKFLOW_VERSION'))
        UNION ALL
        SELECT 'ENROLLMENT_REASON', id::text FROM core."campaignEnrollment"
-        WHERE ("holdReason" IS NOT NULL AND "holdReason" NOT IN (${OCCURRENCE_HOLDS}))
-           OR ("terminalReason" IS NOT NULL AND "terminalReason" NOT IN (${ENROLLMENT_TERMINALS}))
+        WHERE ("holdReason" IS NOT NULL AND "holdReason" NOT IN ('WORKSPACE_NOT_ACTIVE', 'ATTACHMENTS_UNAVAILABLE', 'MATERIAL_STALE', 'SENDER_POOL_STALE', 'SENDER_NOT_READY', 'CAPACITY_CONFIGURATION_INVALID', 'THREAD_EVIDENCE_MISSING', 'THREAD_EVIDENCE_AMBIGUOUS', 'THREAD_SENDER_CHANGED', 'DEFINITELY_UNACCEPTED_REVIEW', 'PROJECTION_RECONCILIATION_REQUIRED', 'DISPATCH_CONTRACT_CONFLICT'))
+           OR ("terminalReason" IS NOT NULL AND "terminalReason" NOT IN ('REPLY_RECEIVED', 'CREATOR_MISSING', 'CREATOR_DELETED', 'CAMPAIGN_CREATOR_MISSING', 'CAMPAIGN_CREATOR_DELETED', 'INVALID_STAGE', 'NON_EMAIL_CONTACT_METHOD', 'INVALID_EMAIL', 'DUPLICATE_CREATOR_EMAIL', 'SUPPRESSED_EMAIL', 'SEQUENCE_COMPLETED', 'NO_USABLE_AUTHORED_MESSAGE'))
        ORDER BY kind, id
        LIMIT 25`,
     );
@@ -39,22 +35,17 @@ export class AddCampaignDispatchEvidenceFastInstanceCommand implements FastInsta
 
     await queryRunner.query(`ALTER TABLE core."campaignOccurrence" DROP CONSTRAINT "CHK_CO_TERMINAL_SHAPE"`);
     await queryRunner.query(`ALTER TABLE core."campaignEnrollment" DROP CONSTRAINT "CHK_CEN_TERMINAL_SHAPE"`);
-    await queryRunner.query(`ALTER TABLE core."campaignOccurrence" ADD CONSTRAINT "CHK_CO_TERMINAL_SHAPE" CHECK (((state IN ('PENDING','IN_FLIGHT','UNKNOWN')) AND "holdReason" IS NULL AND "terminalReason" IS NULL AND "terminalAt" IS NULL) OR (state='HELD' AND "holdReason" IN (${OCCURRENCE_HOLDS}) AND "terminalReason" IS NULL AND "terminalAt" IS NULL) OR (state IN ('SUCCEEDED','SKIPPED','CANCELLED') AND "holdReason" IS NULL AND "terminalReason" IN (${OCCURRENCE_TERMINALS}) AND "terminalAt" IS NOT NULL))`);
-    await queryRunner.query(`ALTER TABLE core."campaignEnrollment" ADD CONSTRAINT "CHK_CEN_TERMINAL_SHAPE" CHECK ((state='ACTIVE' AND ("holdReason" IS NULL OR "holdReason" IN (${OCCURRENCE_HOLDS})) AND "terminalReason" IS NULL AND "terminalAt" IS NULL) OR (state IN ('REPLIED','EXCLUDED','FINISHED') AND "holdReason" IS NULL AND "terminalReason" IN (${ENROLLMENT_TERMINALS}) AND "terminalAt" IS NOT NULL AND (state <> 'FINISHED' OR "nextAuthoredMessageIndex"="authoredMessageCount")))`);
+    await queryRunner.query(`ALTER TABLE core."campaignOccurrence" ADD CONSTRAINT "CHK_CO_TERMINAL_SHAPE" CHECK (COALESCE(((state IN ('PENDING','IN_FLIGHT','UNKNOWN')) AND "holdReason" IS NULL AND "terminalReason" IS NULL AND "terminalAt" IS NULL) OR (state='HELD' AND "holdReason" IN ('WORKSPACE_NOT_ACTIVE', 'ATTACHMENTS_UNAVAILABLE', 'MATERIAL_STALE', 'SENDER_POOL_STALE', 'SENDER_NOT_READY', 'CAPACITY_CONFIGURATION_INVALID', 'THREAD_EVIDENCE_MISSING', 'THREAD_EVIDENCE_AMBIGUOUS', 'THREAD_SENDER_CHANGED', 'DEFINITELY_UNACCEPTED_REVIEW', 'PROJECTION_RECONCILIATION_REQUIRED', 'DISPATCH_CONTRACT_CONFLICT') AND "terminalReason" IS NULL AND "terminalAt" IS NULL) OR (state IN ('SUCCEEDED','SKIPPED','CANCELLED') AND "holdReason" IS NULL AND "terminalReason" IN ('PROVIDER_ACCEPTED', 'CREATOR_MISSING', 'CREATOR_DELETED', 'CAMPAIGN_CREATOR_MISSING', 'CAMPAIGN_CREATOR_DELETED', 'INVALID_STAGE', 'NON_EMAIL_CONTACT_METHOD', 'INVALID_EMAIL', 'DUPLICATE_CREATOR_EMAIL', 'SUPPRESSED_EMAIL', 'CAMPAIGN_PAUSED', 'CAMPAIGN_COMPLETED', 'AUTHORIZATION_REVOKED', 'ENROLLMENT_REPLIED', 'SUPERSEDED_BY_WORKFLOW_VERSION') AND "terminalAt" IS NOT NULL), FALSE))`);
+    await queryRunner.query(`ALTER TABLE core."campaignEnrollment" ADD CONSTRAINT "CHK_CEN_TERMINAL_SHAPE" CHECK (COALESCE((state='ACTIVE' AND ("holdReason" IS NULL OR "holdReason" IN ('WORKSPACE_NOT_ACTIVE', 'ATTACHMENTS_UNAVAILABLE', 'MATERIAL_STALE', 'SENDER_POOL_STALE', 'SENDER_NOT_READY', 'CAPACITY_CONFIGURATION_INVALID', 'THREAD_EVIDENCE_MISSING', 'THREAD_EVIDENCE_AMBIGUOUS', 'THREAD_SENDER_CHANGED', 'DEFINITELY_UNACCEPTED_REVIEW', 'PROJECTION_RECONCILIATION_REQUIRED', 'DISPATCH_CONTRACT_CONFLICT')) AND "terminalReason" IS NULL AND "terminalAt" IS NULL) OR (state IN ('REPLIED','EXCLUDED','FINISHED') AND "holdReason" IS NULL AND "terminalReason" IN ('REPLY_RECEIVED', 'CREATOR_MISSING', 'CREATOR_DELETED', 'CAMPAIGN_CREATOR_MISSING', 'CAMPAIGN_CREATOR_DELETED', 'INVALID_STAGE', 'NON_EMAIL_CONTACT_METHOD', 'INVALID_EMAIL', 'DUPLICATE_CREATOR_EMAIL', 'SUPPRESSED_EMAIL', 'SEQUENCE_COMPLETED', 'NO_USABLE_AUTHORED_MESSAGE') AND "terminalAt" IS NOT NULL AND (state <> 'FINISHED' OR "nextAuthoredMessageIndex"="authoredMessageCount")), FALSE))`);
 
-    for (const [name, type] of [
-      ['providerHeaderMessageId', 'text'],
-      ['providerMessageExternalId', 'text'],
-      ['reconciledProviderHeaderMessageId', 'text'],
-      ['providerThreadExternalId', 'text'],
-      ['resolvedThreadExternalId', 'text'],
-      ['providerDeliveredRecipients', 'jsonb'],
-      ['projectedMessageThreadId', 'uuid'],
-    ] as const) {
-      await queryRunner.query(
-        `ALTER TABLE core."outboundEmailAttempt" ADD "${name}" ${type}`,
-      );
-    }
+    await queryRunner.query(`ALTER TABLE core."outboundEmailAttempt"
+      ADD "providerHeaderMessageId" text,
+      ADD "providerMessageExternalId" text,
+      ADD "reconciledProviderHeaderMessageId" text,
+      ADD "providerThreadExternalId" text,
+      ADD "resolvedThreadExternalId" text,
+      ADD "providerDeliveredRecipients" jsonb,
+      ADD "projectedMessageThreadId" uuid`);
 
     await queryRunner.query(`ALTER TABLE core."outboundEmailAttempt" ADD CONSTRAINT "UQ_OEA_EXACT_CAMPAIGN_ATTEMPT" UNIQUE ("workspaceId", "campaignId", "enrollmentId", "occurrenceId", "authorizationId", "workflowVersionId", "messageId", "attemptId", "renderDigest")`);
     await queryRunner.query(`ALTER TABLE core."outboundEmailAttempt" ADD CONSTRAINT "CHK_OEA_CAMPAIGN_ACCEPTED_EVIDENCE" CHECK (COALESCE(source <> 'CAMPAIGN_SEQUENCE' OR ("attemptState" = 'ACCEPTED' AND "capacityState" = 'CONSUMED' AND "providerAcceptedAt" IS NOT NULL AND "providerAcceptedAt" <> 'infinity'::timestamptz AND "providerAcceptedAt" <> '-infinity'::timestamptz AND NULLIF(btrim("providerMessageId"),'') IS NOT NULL AND "finalEvidenceDigest" ~ '^[0-9a-f]{64}$' AND "safeOutcomeReason" IS NULL AND "retryable" IS FALSE AND (NULLIF(btrim("providerHeaderMessageId"),'') IS NOT NULL OR NULLIF(btrim("providerMessageExternalId"),'') IS NOT NULL) AND ("providerThreadExternalId" IS NULL OR NULLIF(btrim("providerThreadExternalId"),'') IS NOT NULL) AND NULLIF(btrim("resolvedThreadExternalId"),'') IS NOT NULL AND ("reconciledProviderHeaderMessageId" IS NULL OR NULLIF(btrim("reconciledProviderHeaderMessageId"),'') IS NOT NULL) AND ("providerDeliveredRecipients" IS NULL OR (jsonb_typeof("providerDeliveredRecipients")='object' AND "providerDeliveredRecipients" ?& ARRAY['to','cc','bcc'] AND "providerDeliveredRecipients" - 'to' - 'cc' - 'bcc' = '{}'::jsonb AND jsonb_typeof("providerDeliveredRecipients"->'to')='array' AND jsonb_typeof("providerDeliveredRecipients"->'cc')='array' AND jsonb_typeof("providerDeliveredRecipients"->'bcc')='array' AND NOT jsonb_path_exists("providerDeliveredRecipients", '$.*[*] ? (@.type() != "string" || @ == "" || !(@ like_regex "^[^A-Z\\s](?:.*[^\\s])?$"))'))) AND (("projectedMessageId" IS NULL AND "projectedMessageThreadId" IS NULL) OR ("projectedMessageId" IS NOT NULL AND "projectedMessageThreadId" IS NOT NULL))) OR ("attemptState" <> 'ACCEPTED' AND "providerHeaderMessageId" IS NULL AND "providerMessageExternalId" IS NULL AND "reconciledProviderHeaderMessageId" IS NULL AND "providerThreadExternalId" IS NULL AND "resolvedThreadExternalId" IS NULL AND "providerDeliveredRecipients" IS NULL AND "projectedMessageId" IS NULL AND "projectedMessageThreadId" IS NULL), FALSE))`);
@@ -82,7 +73,14 @@ export class AddCampaignDispatchEvidenceFastInstanceCommand implements FastInsta
     await queryRunner.query(`ALTER TABLE core."outboundEmailAttempt" DROP CONSTRAINT "CHK_OEA_LEGACY_NEW_EVIDENCE_NULL"`);
     await queryRunner.query(`ALTER TABLE core."outboundEmailAttempt" DROP CONSTRAINT "CHK_OEA_CAMPAIGN_ACCEPTED_EVIDENCE"`);
     await queryRunner.query(`ALTER TABLE core."outboundEmailAttempt" DROP CONSTRAINT "UQ_OEA_EXACT_CAMPAIGN_ATTEMPT"`);
-    for (const name of ['projectedMessageThreadId','providerDeliveredRecipients','resolvedThreadExternalId','providerThreadExternalId','reconciledProviderHeaderMessageId','providerMessageExternalId','providerHeaderMessageId']) await queryRunner.query(`ALTER TABLE core."outboundEmailAttempt" DROP COLUMN "${name}"`);
+    await queryRunner.query(`ALTER TABLE core."outboundEmailAttempt"
+      DROP COLUMN "projectedMessageThreadId",
+      DROP COLUMN "providerDeliveredRecipients",
+      DROP COLUMN "resolvedThreadExternalId",
+      DROP COLUMN "providerThreadExternalId",
+      DROP COLUMN "reconciledProviderHeaderMessageId",
+      DROP COLUMN "providerMessageExternalId",
+      DROP COLUMN "providerHeaderMessageId"`);
     await queryRunner.query(`ALTER TABLE core."campaignEnrollment" DROP CONSTRAINT "CHK_CEN_TERMINAL_SHAPE"`);
     await queryRunner.query(`ALTER TABLE core."campaignOccurrence" DROP CONSTRAINT "CHK_CO_TERMINAL_SHAPE"`);
     await queryRunner.query(`ALTER TABLE core."campaignEnrollment" ADD CONSTRAINT "CHK_CEN_TERMINAL_SHAPE" CHECK ((state='ACTIVE' AND ("holdReason" IS NULL OR btrim("holdReason") <> '') AND "terminalReason" IS NULL AND "terminalAt" IS NULL) OR (state IN ('REPLIED','EXCLUDED','FINISHED') AND "holdReason" IS NULL AND "terminalReason" IS NOT NULL AND btrim("terminalReason") <> '' AND "terminalAt" IS NOT NULL AND (state <> 'FINISHED' OR "nextAuthoredMessageIndex"="authoredMessageCount")))`);

@@ -1318,13 +1318,30 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
     ).toEqual(before);
   });
 
+  it('rejects generic soft deletion before Campaign lifecycle mutation', async () => {
+    eventSpy.mockClear();
+    const [single, batch] = await Promise.all([
+      api(deleteCampaign, { id: CAMPAIGNS.softCreate }),
+      api(deleteCampaigns, { ids: [CAMPAIGNS.softManyControl] }),
+    ]);
+
+    expect(errorText(single)).toContain(
+      'Campaign lifecycle and execution authority require a dedicated operation',
+    );
+    expect(errorText(batch)).toContain(
+      'Campaign lifecycle and execution authority require a dedicated operation',
+    );
+    const campaigns = await q<{ deletedAt: string | null }>(
+      `SELECT "deletedAt" FROM "${schema}"."campaign" WHERE "id" = ANY($1::uuid[])`,
+      [[CAMPAIGNS.softCreate, CAMPAIGNS.softManyControl]],
+    );
+
+    expect(campaigns).toHaveLength(2);
+    expect(campaigns.every(({ deletedAt }) => deletedAt === null)).toBe(true);
+    expect(eventSpy).not.toHaveBeenCalled();
+  });
+
   it.each([
-    [
-      'soft create-first',
-      CAMPAIGNS.softCreate,
-      WORKFLOWS.softCreate,
-      deleteCampaign,
-    ],
     [
       'hard create-first',
       CAMPAIGNS.hardCreate,
@@ -1360,7 +1377,6 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
   );
 
   it.each([
-    ['soft delete-first', CAMPAIGNS.softDelete, deleteCampaign, false],
     ['hard delete-first', CAMPAIGNS.hardDelete, destroyCampaign, true],
   ] as const)(
     '%s commits parent mutation before creation rechecks and leaves no orphan',
@@ -1395,14 +1411,6 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
   );
 
   it.each([
-    [
-      'soft many',
-      CAMPAIGNS.softManyOutreach,
-      CAMPAIGNS.softManyControl,
-      WORKFLOWS.softMany,
-      deleteCampaigns,
-      false,
-    ],
     [
       'hard many',
       CAMPAIGNS.hardManyOutreach,
@@ -1465,14 +1473,6 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
   );
 
   it.each([
-    [
-      'soft many delete-first',
-      CAMPAIGNS.softManyOutreach,
-      CAMPAIGNS.softManyControl,
-      WORKFLOWS.softMany,
-      deleteCampaigns,
-      false,
-    ],
     [
       'hard many delete-first',
       CAMPAIGNS.hardManyOutreach,
@@ -1541,13 +1541,13 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
   );
 
   it('cancels an advisory-held creation and its transitive deletion on forced assertion failure without committing or leaking', async () => {
-    const campaignId = CAMPAIGNS.softCreate;
+    const campaignId = CAMPAIGNS.hardCreate;
 
     await q(`DELETE FROM "${schema}"."workflowVersion" WHERE "workflowId"=$1`, [
-      WORKFLOWS.softCreate,
+      WORKFLOWS.hardCreate,
     ]);
     await q(`DELETE FROM "${schema}"."workflow" WHERE "id"=$1`, [
-      WORKFLOWS.softCreate,
+      WORKFLOWS.hardCreate,
     ]);
     await q(
       `INSERT INTO "${schema}"."campaign" ("id", "name", "lifecycleStatus", "deletedAt") VALUES ($1, $2, 'DRAFT', NULL) ON CONFLICT ("id") DO UPDATE SET "deletedAt"=NULL`,
@@ -1562,7 +1562,7 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
     const creation = createSequence(campaignId);
 
     await waitForBarrier();
-    const deletion = api(deleteCampaign, { id: campaignId });
+    const deletion = api(destroyCampaign, { id: campaignId });
 
     await waitForCampaignLockWaiters(campaignId, 1);
     await expect(
@@ -1596,9 +1596,7 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
   });
 
   it.each([
-    ['soft commit', CAMPAIGNS.softManyControl, deleteCampaign, false, false],
     ['hard commit', CAMPAIGNS.hardManyControl, destroyCampaign, true, false],
-    ['soft rollback', CAMPAIGNS.softDelete, deleteCampaign, false, true],
     ['hard rollback', CAMPAIGNS.hardDelete, destroyCampaign, true, true],
   ] as const)(
     '%s holds after the real builder before commit and publishes or discards the buffered event with SQL outcome',
@@ -1682,7 +1680,7 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
   );
 
   it('aborts a held postbuilder operation after a caught assertion failure and drains before cleanup', async () => {
-    const campaignId = CAMPAIGNS.softManyControl;
+    const campaignId = CAMPAIGNS.hardManyControl;
 
     await q(
       `INSERT INTO "${schema}"."campaign" ("id", "name", "lifecycleStatus", "deletedAt") VALUES ($1, $2, 'DRAFT', NULL) ON CONFLICT ("id") DO UPDATE SET "deletedAt"=NULL`,
@@ -1690,7 +1688,7 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
     );
     const commonMutationRunner = resolveProviderByName<{
       processNestedRelationsHelper: ProcessNestedRelationsHelper;
-    }>('CommonDeleteManyQueryRunnerService');
+    }>('CommonDestroyManyQueryRunnerService');
     const nestedRelationsHelper =
       commonMutationRunner.processNestedRelationsHelper;
     const originalProcessNestedRelations =
@@ -1717,7 +1715,7 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
     gate.setCleanup(() => interception.mockRestore());
     eventSpy.mockClear();
     queueSpy.mockClear();
-    const request = api(deleteCampaign, { id: campaignId }).then(
+    const request = api(destroyCampaign, { id: campaignId }).then(
       (response) => response,
     );
 
@@ -1755,13 +1753,7 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
   });
 
   it.each([
-    ['deleteOne', [CAMPAIGNS.softDelete], deleteCampaign],
     ['destroyOne', [CAMPAIGNS.hardDelete], destroyCampaign],
-    [
-      'deleteMany',
-      [CAMPAIGNS.softManyOutreach, CAMPAIGNS.softManyControl],
-      deleteCampaigns,
-    ],
     [
       'destroyMany',
       [CAMPAIGNS.hardManyOutreach, CAMPAIGNS.hardManyControl],
@@ -2161,7 +2153,7 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
     const rejectedHardDelete = api(destroyCampaign, {
       id: CAMPAIGNS.replacement,
     }).then((response) => response);
-    await waitForCampaignLockWaiters(CAMPAIGNS.replacement, 4);
+    await waitForCampaignLockWaiters(CAMPAIGNS.replacement, 3);
     await releaseBarrier();
     const [
       replacement,
@@ -2185,7 +2177,7 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
     expect(replacement.workflowId).toBe(WORKFLOWS.replacementCreated);
     expect(replacement.versionId).toBe(VERSIONS.replacementCreated);
     expect(errorText(softDelete)).toContain(
-      'Campaigns with outreach definitions cannot be deleted',
+      'Campaign lifecycle and execution authority require a dedicated operation',
     );
     expect(errorText(hardDelete)).toContain(
       'Campaigns with outreach definitions cannot be deleted',
@@ -2243,6 +2235,9 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
       id: CAMPAIGNS.replacement,
     }).then((response) => response);
 
+    const hardDeletion = api(destroyCampaign, {
+      id: CAMPAIGNS.replacement,
+    }).then((response) => response);
     await waitFor('delete-first Campaign advisory lock owner', async () => {
       const [row] = await q<{ count: string }>(
         `SELECT count(*)::text AS count FROM pg_locks WHERE locktype='advisory' AND granted AND classid=hashtext(($1::uuid)::text)::oid AND objid=hashtext(($2::uuid)::text)::oid`,
@@ -2250,19 +2245,16 @@ describe('MYAH-319 Task 4 behavioral closure (PostgreSQL)', () => {
       );
       return Number(row.count) > 0;
     });
-    const hardDeletion = api(destroyCampaign, {
-      id: CAMPAIGNS.replacement,
-    }).then((response) => response);
     const firstRetry = replaceLegacyViaApi();
     const secondRetry = replaceLegacyViaApi();
-    await waitForCampaignLockWaiters(CAMPAIGNS.replacement, 3);
+    await waitForCampaignLockWaiters(CAMPAIGNS.replacement, 2);
     await deleteFirstBarrier.finish(true);
 
     const [softDelete, hardDelete, replacement, concurrentReplacement] =
       await Promise.all([softDeletion, hardDeletion, firstRetry, secondRetry]);
 
     expect(errorText(softDelete)).toContain(
-      'Campaigns with outreach definitions cannot be deleted',
+      'Campaign lifecycle and execution authority require a dedicated operation',
     );
     expect(errorText(hardDelete)).toContain(
       'Campaigns with outreach definitions cannot be deleted',

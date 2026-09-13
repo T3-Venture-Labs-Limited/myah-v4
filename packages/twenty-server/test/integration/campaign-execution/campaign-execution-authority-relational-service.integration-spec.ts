@@ -881,8 +881,12 @@ describe('campaign execution relational PostgreSQL contract', () => {
     await runner.query('RELEASE SAVEPOINT source_shape');
     await runner.query(
       `UPDATE core."outboundEmailAttempt" SET "attemptState"='ACCEPTED',"capacityState"='CONSUMED',
-        "providerMessageId"='provider-accepted',"projectedMessageId"=$2 WHERE "attemptId"=$1`,
-      [acceptedAttemptId, randomUUID()],
+        "providerAcceptedAt"=now(),"providerMessageId"='provider-accepted',
+        "finalEvidenceDigest"=repeat('a', 64),"retryable"=FALSE,
+        "providerHeaderMessageId"='<provider-accepted@example.test>',
+        "resolvedThreadExternalId"='provider-thread-accepted',
+        "projectedMessageId"=$2,"projectedMessageThreadId"=$3 WHERE "attemptId"=$1`,
+      [acceptedAttemptId, randomUUID(), randomUUID()],
     );
     await expectFailure(
       runner,
@@ -899,7 +903,11 @@ describe('campaign execution relational PostgreSQL contract', () => {
       'UQ_OUTBOUND_EMAIL_ATTEMPT_ACCEPTED_OCCURRENCE',
       () =>
         runner.query(
-          `UPDATE core."outboundEmailAttempt" SET "attemptState"='ACCEPTED',"capacityState"='CONSUMED'
+          `UPDATE core."outboundEmailAttempt" SET "attemptState"='ACCEPTED',"capacityState"='CONSUMED',
+            "providerAcceptedAt"=now(),"providerMessageId"='provider-conflict',
+            "finalEvidenceDigest"=repeat('b', 64),"retryable"=FALSE,
+            "providerHeaderMessageId"='<provider-conflict@example.test>',
+            "resolvedThreadExternalId"='provider-thread-conflict'
           WHERE "attemptId"=$1`,
           [unresolvedAttemptId],
         ),
@@ -939,7 +947,11 @@ describe('campaign execution relational PostgreSQL contract', () => {
     });
     expect(
       await runner.query(
-        `UPDATE core."outboundEmailAttempt" SET "attemptState"='ACCEPTED',"capacityState"='CONSUMED'
+        `UPDATE core."outboundEmailAttempt" SET "attemptState"='ACCEPTED',"capacityState"='CONSUMED',
+          "providerAcceptedAt"=now(),"providerMessageId"='provider-control',
+          "finalEvidenceDigest"=repeat('c', 64),"retryable"=FALSE,
+          "providerHeaderMessageId"='<provider-control@example.test>',
+          "resolvedThreadExternalId"='provider-thread-control'
           WHERE "attemptId"=$1 RETURNING "attemptId"`,
         [acceptedControlId],
       ),

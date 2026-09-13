@@ -15,6 +15,7 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { CreateCompanyAndContactJob } from 'src/modules/contact-creation-manager/jobs/create-company-and-contact.job';
+import { CAMPAIGN_REPLY_EVIDENCE_PORT } from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 import { MessagingMessageFolderAssociationService } from 'src/modules/messaging/message-import-manager/services/messaging-message-folder-association.service';
 import { MessagingMessageService } from 'src/modules/messaging/message-import-manager/services/messaging-message.service';
@@ -151,6 +152,12 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
                 { id: 'db-message-id-2' },
               ],
             }),
+          },
+        },
+        {
+          provide: CAMPAIGN_REPLY_EVIDENCE_PORT,
+          useValue: {
+            reconcileInboundMessageInTransaction: jest.fn(),
           },
         },
         {
