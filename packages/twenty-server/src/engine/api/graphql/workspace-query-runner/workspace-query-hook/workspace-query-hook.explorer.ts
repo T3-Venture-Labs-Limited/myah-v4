@@ -166,10 +166,18 @@ export class WorkspaceQueryHookExplorer implements OnModuleInit {
     const contextId = createContextId();
 
     if (this.moduleRef.registerRequestByContextId) {
-      this.moduleRef.registerRequestByContextId({ req: { workspaceId } }, contextId);
+      this.moduleRef.registerRequestByContextId(
+        { req: { workspaceId } },
+        contextId,
+      );
     }
 
-    return this.injector.loadPerContext(instance, host, host.providers, contextId);
+    return this.injector.loadPerContext(
+      instance,
+      host,
+      host.providers,
+      contextId,
+    );
   }
 
   private transformPayload(payload: QueryResultFieldValue): ObjectRecord[] {

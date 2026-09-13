@@ -20,7 +20,10 @@ export class MyahCampaignCreateOnePreQueryHook implements WorkspacePreQueryHookI
     payload: CreateOneResolverArgs<CampaignMutationData>,
     context: WorkspaceRawInputPreQueryHookContext,
   ): void {
-    this.campaignLifecycleService.validateRawCampaignMutation(context, payload.data);
+    this.campaignLifecycleService.validateRawCampaignMutation(
+      context,
+      payload.data,
+    );
   }
 
   async execute(

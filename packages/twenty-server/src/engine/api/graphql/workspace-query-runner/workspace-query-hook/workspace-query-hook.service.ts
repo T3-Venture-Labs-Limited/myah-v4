@@ -31,7 +31,9 @@ export class WorkspaceQueryHookService {
   ): Promise<void> {
     const key: WorkspaceQueryHookKey = `${objectName}.${methodName}`;
 
-    for (const preHookInstance of this.workspaceQueryHookStorage.getWorkspaceQueryPreHookInstances(key)) {
+    for (const preHookInstance of this.workspaceQueryHookStorage.getWorkspaceQueryPreHookInstances(
+      key,
+    )) {
       await this.workspaceQueryHookExplorer.handleRawInputPreHook(
         [authContext, objectName, payload, context],
         preHookInstance.instance,

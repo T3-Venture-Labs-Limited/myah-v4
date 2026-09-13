@@ -131,7 +131,8 @@ export class CampaignLifecycleService {
         : hasOwnSequenceAuthorization(data))
     ) {
       throwBadRequest({
-        message: 'Campaign sequence authorization requires a dedicated operation.',
+        message:
+          'Campaign sequence authorization requires a dedicated operation.',
         userFriendlyMessage: msg`Campaign sequence authorization requires a dedicated operation.`,
       });
     }
