@@ -19,15 +19,3 @@ export const getTypeMappedAlias = (
     const map = { ...knownTypes, ...(ctx?.config?.scalarTypes || {}) }
     return map?.[type.name] || 'any'
 }
-
-// export const renderTypeMappedAlias = (
-//     type: GraphQLNamedType,
-//     ctx: RenderContext,
-// ) => {
-//     const mappedType = getTypeMappedAlias(type, ctx)
-//     if (mappedType) {
-//         ctx.addCodeBlock(
-//             `${typeComment(type)}export type ${type.name} = ${mappedType}`,
-//         )
-//     }
-// }
