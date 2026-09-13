@@ -301,12 +301,52 @@ describe('CampaignTestPreparationProofService', () => {
     ]);
   });
 
+  it('returns finalization conflict before writing when the capability belongs to another proof', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce(queryResult([{ locked: true }]))
+      .mockResolvedValueOnce(
+        queryResult([
+          proof({
+            testPreparationProofId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+            finalEvidenceDigest: 'c'.repeat(64),
+            testSubmissionCapabilityId: ids.capability,
+          }),
+        ]),
+      );
+
+    await expect(
+      service.finalizeInTransaction(
+        {
+          attemptId: ids.attempt,
+          finalEvidenceDigest: 'b'.repeat(64),
+          testPreparationProofId: ids.proof,
+          testSubmissionCapabilityId: ids.capability,
+          workspaceId: ids.workspace,
+        },
+        activeManager(query).manager,
+      ),
+    ).resolves.toEqual({ status: 'FINALIZATION_CONFLICT' });
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[0][0]).toContain('pg_advisory_xact_lock');
+    expect(query.mock.calls[0][1][0]).toContain(ids.capability);
+    expect(query.mock.calls[1][0]).toContain(
+      '"testSubmissionCapabilityId" = $1',
+    );
+    expect(query.mock.calls.every((call) => call[2] === true)).toBe(true);
+  });
+
   it('finalizes by one write-once pair CAS and reports the winner', async () => {
     const finalized = proof({
       finalEvidenceDigest: 'b'.repeat(64),
       testSubmissionCapabilityId: ids.capability,
     });
-    const query = jest.fn().mockResolvedValueOnce(queryResult([finalized], 1));
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce(queryResult([{ locked: true }]))
+      .mockResolvedValueOnce(queryResult([]))
+      .mockResolvedValueOnce(queryResult([finalized], 1));
     const { manager, transaction } = activeManager(query);
 
     await expect(
@@ -322,18 +362,18 @@ describe('CampaignTestPreparationProofService', () => {
       ),
     ).resolves.toEqual({ proof: finalized, status: 'FINALIZED' });
 
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[2][0]).toContain(
       '"testSubmissionCapabilityId" IS NULL',
     );
-    expect(query.mock.calls[0][0]).toContain('"finalEvidenceDigest" IS NULL');
-    expect(query.mock.calls[0][1]).toEqual([
+    expect(query.mock.calls[2][0]).toContain('"finalEvidenceDigest" IS NULL');
+    expect(query.mock.calls[2][1]).toEqual([
       ids.workspace,
       ids.attempt,
       ids.proof,
       ids.capability,
       'b'.repeat(64),
     ]);
-    expect(query.mock.calls[0][2]).toBe(true);
+    expect(query.mock.calls[2][2]).toBe(true);
     expect(transaction).not.toHaveBeenCalled();
   });
 
@@ -344,7 +384,11 @@ describe('CampaignTestPreparationProofService', () => {
   ])(
     'fails closed for a malformed successful finalization result: %s',
     async (_label, result) => {
-      const query = jest.fn().mockResolvedValueOnce(result);
+      const query = jest
+        .fn()
+        .mockResolvedValueOnce(queryResult([{ locked: true }]))
+        .mockResolvedValueOnce(queryResult([]))
+        .mockResolvedValueOnce(result);
 
       await expect(
         service.finalizeInTransaction(
@@ -358,8 +402,8 @@ describe('CampaignTestPreparationProofService', () => {
           activeManager(query).manager,
         ),
       ).resolves.toEqual({ status: 'INVALID_PERSISTED_PROOF' });
-      expect(query).toHaveBeenCalledTimes(1);
-      expect(query.mock.calls[0][2]).toBe(true);
+      expect(query).toHaveBeenCalledTimes(3);
+      expect(query.mock.calls[2][2]).toBe(true);
     },
   );
 
@@ -370,10 +414,14 @@ describe('CampaignTestPreparationProofService', () => {
     });
     const exactQuery = jest
       .fn()
+      .mockResolvedValueOnce(queryResult([{ locked: true }]))
+      .mockResolvedValueOnce(queryResult([]))
       .mockResolvedValueOnce(queryResult([], 0))
       .mockResolvedValueOnce(queryResult([finalized], 1));
     const conflictQuery = jest
       .fn()
+      .mockResolvedValueOnce(queryResult([{ locked: true }]))
+      .mockResolvedValueOnce(queryResult([]))
       .mockResolvedValueOnce(queryResult([], 0))
       .mockResolvedValueOnce(
         queryResult(
@@ -417,6 +465,8 @@ describe('CampaignTestPreparationProofService', () => {
   it('returns not found after a finalization CAS loser when the exact scoped proof is absent', async () => {
     const query = jest
       .fn()
+      .mockResolvedValueOnce(queryResult([{ locked: true }]))
+      .mockResolvedValueOnce(queryResult([]))
       .mockResolvedValueOnce(queryResult([], 0))
       .mockResolvedValueOnce(queryResult([], 0));
 
