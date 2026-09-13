@@ -106,7 +106,7 @@ const attachmentProofSchema = z.strictObject({
   fileId: canonicalUuidSchema,
   filename: nonEmptyStringSchema,
   contentType: nonEmptyStringSchema,
-  size: z.number().int().nonnegative().finite(),
+  size: z.number().refine(Number.isSafeInteger).nonnegative(),
   contentDigest: digestSchema,
 });
 
@@ -198,7 +198,7 @@ const bindingSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
     authorizationId: canonicalUuidSchema,
-    generation: z.number().int().positive().finite(),
+    generation: z.number().refine(Number.isSafeInteger).positive(),
     startIdempotencyKey: canonicalUuidSchema,
     workspaceId: canonicalUuidSchema,
     campaignId: canonicalUuidSchema,
@@ -235,7 +235,7 @@ export const campaignSequenceAuthorizationBindingSchema =
 const projectionBaseSchema = z.strictObject({
   schemaVersion: z.literal(1),
   authorizationId: canonicalUuidSchema,
-  generation: z.number().int().positive().finite(),
+  generation: z.number().refine(Number.isSafeInteger).positive(),
   workflowVersionId: canonicalUuidSchema,
   preparedFingerprint: digestSchema,
   authorizedAt: canonicalInstantSchema,

@@ -10,6 +10,7 @@ import { type QueryResultFieldValue } from 'src/engine/api/graphql/workspace-que
 import {
   type WorkspacePostQueryHookInstance,
   type WorkspacePreQueryHookInstance,
+  type WorkspaceRawInputPreQueryHookContext,
 } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
 
 import { isApiKeyAuthContext } from 'src/engine/core-modules/auth/guards/is-api-key-auth-context.guard';
@@ -28,6 +29,7 @@ import { WorkspaceQueryHookStorage } from 'src/engine/api/graphql/workspace-quer
 import { WorkspaceQueryHookType } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/types/workspace-query-hook.type';
 import { WorkspaceQueryHookMetadataAccessor } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/workspace-query-hook-metadata.accessor';
 import { WorkspaceNotFoundDefaultError } from 'src/engine/core-modules/workspace/workspace.exception';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 
 @Injectable()
 export class WorkspaceQueryHookExplorer implements OnModuleInit {
@@ -129,6 +131,45 @@ export class WorkspaceQueryHookExplorer implements OnModuleInit {
       // @ts-expect-error legacy noImplicitAny
       return instance[methodName].call(instance, ...executeParams);
     }
+  }
+
+  async handleRawInputPreHook(
+    executeParams: [
+      WorkspaceAuthContext,
+      string,
+      Parameters<WorkspacePreQueryHookInstance['execute']>[2],
+      WorkspaceRawInputPreQueryHookContext,
+    ],
+    instance: object,
+    host: Module,
+    isRequestScoped: boolean,
+  ): Promise<void> {
+    const workspace = executeParams[0].workspace;
+
+    assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
+    const contextInstance = isRequestScoped
+      ? await this.loadRequestScopedInstance(instance, host, workspace.id)
+      : instance;
+    const validateRawInput = (contextInstance as WorkspacePreQueryHookInstance)
+      .validateRawInput;
+
+    if (typeof validateRawInput === 'function') {
+      await validateRawInput.call(contextInstance, ...executeParams);
+    }
+  }
+
+  private async loadRequestScopedInstance(
+    instance: object,
+    host: Module,
+    workspaceId: string,
+  ): Promise<object> {
+    const contextId = createContextId();
+
+    if (this.moduleRef.registerRequestByContextId) {
+      this.moduleRef.registerRequestByContextId({ req: { workspaceId } }, contextId);
+    }
+
+    return this.injector.loadPerContext(instance, host, host.providers, contextId);
   }
 
   private transformPayload(payload: QueryResultFieldValue): ObjectRecord[] {

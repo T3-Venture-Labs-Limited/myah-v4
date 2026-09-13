@@ -167,6 +167,22 @@ describe('CampaignLifecycleService', () => {
     );
   });
 
+  it.each([
+    { data: { sequenceAuthorization: undefined } },
+    { data: { sequenceAuthorization: { authorizationId: 'forged' } } },
+  ])('rejects caller-owned sequenceAuthorization at the raw mutation boundary', (payload) => {
+    expect(() =>
+      service.validateRawCampaignMutation(
+        {
+          objectMetadataId: campaignObjectMetadata.id,
+          objectMetadataUniversalIdentifier:
+            MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
+        },
+        payload.data,
+      ),
+    ).toThrow('Campaign sequence authorization requires a dedicated operation.');
+  });
+
   describe('app-object isolation', () => {
     it('returns every payload unchanged before defaults, rejections, or repositories for a foreign same-named object', async () => {
       getWorkspaceContextMock.mockReturnValue(

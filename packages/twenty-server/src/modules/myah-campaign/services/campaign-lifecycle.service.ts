@@ -15,6 +15,7 @@ import {
   type UpdateManyResolverArgs,
   type UpdateOneResolverArgs,
 } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
+import { type WorkspaceRawInputPreQueryHookContext } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -107,11 +108,34 @@ const hasRequiredText = (value: string | null | undefined): boolean =>
 const hasOwn = (value: object, key: PropertyKey): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
 
+const hasOwnSequenceAuthorization = (data: unknown): boolean =>
+  data !== null &&
+  (typeof data === 'object' || typeof data === 'function') &&
+  Object.prototype.hasOwnProperty.call(data, 'sequenceAuthorization');
+
 @Injectable()
 export class CampaignLifecycleService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
+
+  validateRawCampaignMutation(
+    context: WorkspaceRawInputPreQueryHookContext,
+    data: unknown | unknown[],
+  ): void {
+    if (
+      context.objectMetadataUniversalIdentifier ===
+        MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER &&
+      (Array.isArray(data)
+        ? data.some(hasOwnSequenceAuthorization)
+        : hasOwnSequenceAuthorization(data))
+    ) {
+      throwBadRequest({
+        message: 'Campaign sequence authorization requires a dedicated operation.',
+        userFriendlyMessage: msg`Campaign sequence authorization requires a dedicated operation.`,
+      });
+    }
+  }
 
   async prepareCreateOne(
     authContext: WorkspaceAuthContext,

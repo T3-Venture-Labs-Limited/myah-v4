@@ -3,7 +3,18 @@ import { type ResolverArgs } from 'src/engine/api/graphql/workspace-resolver-bui
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 
+export type WorkspaceRawInputPreQueryHookContext = {
+  objectMetadataId: string;
+  objectMetadataUniversalIdentifier: string;
+};
+
 export interface WorkspacePreQueryHookInstance {
+  validateRawInput?(
+    authContext: WorkspaceAuthContext,
+    objectName: string,
+    payload: ResolverArgs,
+    context: WorkspaceRawInputPreQueryHookContext,
+  ): Promise<void> | void;
   execute(
     authContext: WorkspaceAuthContext,
     objectName: string,
