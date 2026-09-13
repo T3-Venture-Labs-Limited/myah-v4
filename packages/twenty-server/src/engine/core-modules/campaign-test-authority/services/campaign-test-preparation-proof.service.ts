@@ -16,6 +16,8 @@ import {
 
 const PROOF_ADVISORY_NAMESPACE = 320322;
 const PROOF_ADVISORY_PREFIX = 'campaign-test-preparation-proof:';
+const FINALIZATION_ADVISORY_PREFIX =
+  'campaign-test-preparation-proof-finalization:';
 
 const PROOF_ADVISORY_LOCK_SQL = `
   SELECT pg_advisory_xact_lock(hashtextextended($1, $2)) AS locked
@@ -63,6 +65,12 @@ const PROOF_IDENTITY_READ_SQL = `
   WHERE "workspaceId" = $1
     AND "attemptId" = $2
     AND "testPreparationProofId" = $3
+`;
+
+const FINALIZATION_CAPABILITY_READ_SQL = `
+  SELECT *
+  FROM "core"."campaignTestPreparationProof"
+  WHERE "testSubmissionCapabilityId" = $1
 `;
 
 const FINALIZE_PROOF_SQL = `
@@ -472,6 +480,33 @@ export class CampaignTestPreparationProofService {
       !isDigest(input.finalEvidenceDigest)
     ) {
       return { status: 'INVALID_INPUT' };
+    }
+
+    const fence = await oneOrNone(queryRunner, PROOF_ADVISORY_LOCK_SQL, [
+      `${FINALIZATION_ADVISORY_PREFIX}${input.testSubmissionCapabilityId}`,
+      PROOF_ADVISORY_NAMESPACE,
+    ]);
+
+    if (fence.kind !== 'ONE') return { status: 'INVALID_PERSISTED_PROOF' };
+
+    const capabilityOwner = await oneOrNone(
+      queryRunner,
+      FINALIZATION_CAPABILITY_READ_SQL,
+      [input.testSubmissionCapabilityId],
+    );
+
+    if (capabilityOwner.kind === 'INVALID') {
+      return { status: 'INVALID_PERSISTED_PROOF' };
+    }
+    if (capabilityOwner.kind === 'ONE') {
+      if (!isValidPersistedProof(capabilityOwner.value)) {
+        return { status: 'INVALID_PERSISTED_PROOF' };
+      }
+
+      return this.matchesIdentity(input, capabilityOwner.value) &&
+        capabilityOwner.value.finalEvidenceDigest === input.finalEvidenceDigest
+        ? { proof: capabilityOwner.value, status: 'EXACT_REPLAY' }
+        : { status: 'FINALIZATION_CONFLICT' };
     }
 
     const updated = await oneOrNone(queryRunner, FINALIZE_PROOF_SQL, [

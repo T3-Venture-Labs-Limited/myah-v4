@@ -231,6 +231,38 @@ describe('campaign sequence launch authority contract', () => {
     ]);
   });
 
+  it('rejects unsafe attachment size and authorization generation integers', () => {
+    const unsafeAttachmentSize = {
+      ...request,
+      preparedProof: {
+        ...request.preparedProof,
+        fixedMaterialProofs: [
+          {
+            ...request.preparedProof.fixedMaterialProofs[0],
+            orderedAttachmentProofs: [
+              {
+                ...request.preparedProof.fixedMaterialProofs[0]
+                  .orderedAttachmentProofs[0],
+                size: Number.MAX_SAFE_INTEGER + 1,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    expect(
+      campaignSequenceAuthorizationRequestSchema.safeParse(unsafeAttachmentSize)
+        .success,
+    ).toBe(false);
+    expect(
+      campaignSequenceAuthorizationBindingSchema.safeParse({
+        ...binding,
+        generation: Number.MAX_SAFE_INTEGER + 1,
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects malformed non-null ACTIVE projection revocation evidence', () => {
     expect(
       campaignSequenceAuthorizationCurrentProjectionSchema.safeParse({
