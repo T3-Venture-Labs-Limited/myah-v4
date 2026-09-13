@@ -184,7 +184,8 @@ const readUnaffectedParentCatalog = (
       AND column_name NOT IN ('campaignCapacityTimeZone', 'dailySendLimit', 'minimumSendIntervalMs')),
     'constraints', (SELECT jsonb_agg(jsonb_build_array(con.conname,
       pg_get_constraintdef(con.oid, true)) ORDER BY con.conname)
-      FROM pg_constraint con WHERE con.conrelid IN ('core.workspace'::regclass, 'core."connectedAccount"'::regclass)),
+      FROM pg_constraint con WHERE con.conrelid IN ('core.workspace'::regclass, 'core."connectedAccount"'::regclass)
+AND con.contype <> 'n'),
     'indexes', (SELECT jsonb_agg(jsonb_build_array(indexname, indexdef) ORDER BY indexname)
       FROM pg_indexes WHERE schemaname = 'core' AND tablename IN ('workspace', 'connectedAccount'))
   ) AS catalog`);
