@@ -2967,6 +2967,27 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        sequenceAuthorization: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            // The generated shared metadata barrel/type surface is linked in W8.
+            fieldName: 'sequenceAuthorization' as never,
+            type: FieldMetadataType.RAW_JSON,
+            label: 'Sequence authorization',
+            description:
+              'System-managed current Campaign sequence authorization projection',
+            icon: 'IconLockAccess',
+            isSystem: true,
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         objective: createMyahStandardFieldFlatMetadata({
           objectName: 'campaign',
           workspaceId: args.workspaceId,

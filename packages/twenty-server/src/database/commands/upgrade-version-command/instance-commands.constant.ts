@@ -122,6 +122,7 @@ import { CreateManagedEmailOfferFastInstanceCommand } from 'src/database/command
 import { AddManagedEmailPaymentReceiptsColumnFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000004000-add-managed-email-payment-receipts-column';
 import { MigrateManagedEmailPaymentReceiptsSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1786000004001-migrate-managed-email-payment-receipts';
 import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1788163457871-extend-managed-provider-funding-action';
+import { CreateCampaignSequenceAuthorizationSchemaFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065457681-create-campaign-sequence-authorization-schema';
 import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619348-create-unipile-instagram-foundation';
 import { AddUnipileInstagramSyncStateFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619352-add-unipile-instagram-sync-state';
 import { CreateInstagramActionBudgetFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619356-create-instagram-action-budget';
@@ -250,6 +251,7 @@ export const INSTANCE_COMMANDS = [
   AddManagedEmailPaymentReceiptsColumnFastInstanceCommand,
   MigrateManagedEmailPaymentReceiptsSlowInstanceCommand,
   ExtendManagedProviderFundingActionFastInstanceCommand,
+  CreateCampaignSequenceAuthorizationSchemaFastInstanceCommand,
   CreateUnipileInstagramFoundationFastInstanceCommand,
   AddUnipileInstagramSyncStateFastInstanceCommand,
   CreateInstagramActionBudgetFastInstanceCommand,

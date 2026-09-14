@@ -3,7 +3,6 @@ import { type ExtendedUIMessagePart } from 'twenty-shared/ai';
 import {
   findPendingHumanInputPart,
   findPendingHumanInputParts,
-  findPendingQuestionPart,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/find-pending-human-input-part.util';
 
 const askQuestionsPart = (
@@ -62,16 +61,6 @@ describe('findPendingHumanInputPart', () => {
 
     expect(part).toBeDefined();
     expect(part?.toolCallId).toBe('approval-call');
-  });
-
-  it('returns a pending question part through the compatibility wrapper', () => {
-    const part = findPendingQuestionPart([
-      textPart('hello'),
-      askQuestionsPart('pending'),
-    ]);
-
-    expect(part).toBeDefined();
-    expect(part?.toolCallId).toBe('question-call');
   });
 
   it('ignores resolved approvals and answered questions', () => {

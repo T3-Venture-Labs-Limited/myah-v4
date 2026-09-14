@@ -12,9 +12,6 @@ import { DropdownMenuSkeletonItem } from '@/ui/input/relation-picker/components/
 
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent';
-// TEMP_DISABLED_TEST: Commented out unused imports due to commented tests
-// import { Modal } from '@/ui/layout/modal/components/Modal';
-// import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { DropdownMenuHeader } from '@/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader';
 import { DropdownMenuInput } from '@/ui/layout/dropdown/components/DropdownMenuInput';
@@ -154,73 +151,6 @@ const optionsMock = [
   },
 ];
 
-// TEMP_DISABLED_TEST: Commented out unused component
-// const FakeSelectableMenuItemList = ({ hasAvatar }: { hasAvatar?: boolean }) => {
-//   const [selectedItem, setSelectedItem] = useState<string | null>(null);
-
-//   return (
-//     <DropdownContent>
-//       <DropdownMenuItemsContainer hasMaxHeight>
-//         {optionsMock.map((item) => (
-//           <MenuItemSelectAvatar
-//             key={item.id}
-//             selected={selectedItem === item.id}
-//             onClick={() => setSelectedItem(item.id)}
-//             avatar={
-//               hasAvatar ? (
-//                 <Avatar
-//                   placeholder="A"
-//                   avatarUrl={item.avatarUrl}
-//                   size="md"
-//                   type="squared"
-//                 />
-//               ) : undefined
-//             }
-//             text={item.name}
-//           />
-//         ))}
-//       </DropdownMenuItemsContainer>
-//     </DropdownContent>
-//   );
-// };
-
-// TEMP_DISABLED_TEST: Commented out unused component
-// const FakeCheckableMenuItemList = ({ hasAvatar }: { hasAvatar?: boolean }) => {
-//   const [selectedItemsById, setSelectedItemsById] = useState<
-//     Record<string, boolean>
-//   >({});
-
-//   return (
-//     <DropdownContent>
-//       <DropdownMenuItemsContainer hasMaxHeight>
-//         {optionsMock.map((item) => (
-//           <MenuItemMultiSelectAvatar
-//             key={item.id}
-//             selected={selectedItemsById[item.id]}
-//             onSelectChange={(checked) =>
-//               setSelectedItemsById((previous) => ({
-//                 ...previous,
-//                 [item.id]: checked,
-//               }))
-//             }
-//             avatar={
-//               hasAvatar ? (
-//                 <Avatar
-//                   placeholder="A"
-//                   avatarUrl={item.avatarUrl}
-//                   size="md"
-//                   type="squared"
-//                 />
-//               ) : undefined
-//             }
-//             text={item.name}
-//           />
-//         ))}
-//       </DropdownMenuItemsContainer>
-//     </DropdownContent>
-//   );
-// };
-
 const playInteraction: PlayFunction<any, any> = async ({ canvasElement }) => {
   const canvas = within(canvasElement.ownerDocument.body);
 
@@ -323,107 +253,6 @@ export const WithInput: Story = {
   },
   play: playInteraction,
 };
-
-// TEMP_DISABLED_TEST: Temporarily commented out due to test failure
-// export const SelectableMenuItemWithAvatar: Story = {
-//   decorators: [WithContentBelowDecorator],
-//   args: {
-//     dropdownComponents: <FakeSelectableMenuItemList hasAvatar />,
-//   },
-//   play: playInteraction,
-// };
-
-// TEMP_DISABLED_TEST: Temporarily commented out due to test failure
-// export const CheckableMenuItemWithAvatar: Story = {
-//   decorators: [WithContentBelowDecorator],
-//   args: {
-//     dropdownComponents: <FakeCheckableMenuItemList hasAvatar />,
-//   },
-//   play: playInteraction,
-// };
-
-// TEMP_DISABLED_TEST: Commented out unused variable
-// const modalId = 'dropdown-modal-test';
-
-// TEMP_DISABLED_TEST: Commented out unused component
-// const ModalWithDropdown = () => {
-//   return (
-//     <>
-//       <Modal modalId={modalId} size="medium" padding="medium" isClosable={true}>
-//         <Modal.Header>Modal with Dropdown Test</Modal.Header>
-//         <Modal.Content>
-//           <p>
-//             This modal contains a dropdown that should appear above the modal
-//             (higher z-index).
-//           </p>
-//           <div style={{ marginTop: '20px' }}>
-//             <Dropdown
-//               clickableComponent={
-//                 <Button
-//                   dataTestId="dropdown-button"
-//                   title="Open Dropdown in Modal"
-//                 />
-//               }
-//               dropdownOffset={{ x: 0, y: 8 }}
-//               dropdownId="modal-dropdown-test"
-//               isDropdownInModal={true}
-//               dropdownComponents={
-//                 <div data-testid="dropdown-content">
-//                   <FakeSelectableMenuItemList hasAvatar />
-//                 </div>
-//               }
-//             />
-//           </div>
-//         </Modal.Content>
-//       </Modal>
-//     </>
-//   );
-// };
-
-// TEMP_DISABLED_TEST: Commented out unused function
-// const initializeModalState = ({ set }: { set: (atom: any, value: any) => void }) => {
-//   set(
-//     isModalOpenedComponentState.atomFamily({
-//       instanceId: modalId,
-//     }),
-//     true,
-//   );
-
-//   set(focusStackState, [
-//     {
-//       focusId: modalId,
-//       componentInstance: {
-//         componentType: FocusComponentType.MODAL,
-//         componentInstanceId: modalId,
-//       },
-//       globalHotkeysConfig: {
-//         enableGlobalHotkeysWithModifiers: true,
-//         enableGlobalHotkeysConflictingWithKeyboard: true,
-//       },
-//     },
-//   ]);
-// };
-
-// TEMP_DISABLED_TEST: Temporarily commented out due to test failure
-// export const DropdownInsideModal: Story = {
-//   decorators: [RootDecorator, ComponentDecorator],
-//   parameters: {
-//     initializeState: initializeModalState,
-//     disableHotkeyInitialization: true,
-//   },
-//   render: () => <ModalWithDropdown />,
-//   play: async () => {
-//     const canvas = within(document.body);
-
-//     const dropdownButton = await canvas.findByTestId('dropdown-button');
-
-//     await userEvent.click(dropdownButton);
-
-//     const dropdownContent = await canvas.findByTestId('dropdown-content');
-
-//     expect(dropdownContent).toBeVisible();
-//   },
-// };
 
 const onSelectVerifiedDomain = fn();
 const onSelectUnavailableDomain = fn();
