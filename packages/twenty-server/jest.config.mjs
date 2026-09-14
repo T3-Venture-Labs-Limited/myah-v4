@@ -9,10 +9,9 @@ const jestConfig = {
   prettierPath: null,
   // to enable logs, comment out the following line
   silent: true,
-  // Temporary CI diagnostics for PR #135; remove after the failing suite is identified.
   ...(isCI && {
-    reporters: ['default', './jest-failures-only-reporter.js'],
-    logHeapUsage: true,
+    reporters: ['./jest-failures-only-reporter.js'],
+    workerIdleMemoryLimit: '1GB',
   }),
   errorOnDeprecated: true,
   clearMocks: true,
