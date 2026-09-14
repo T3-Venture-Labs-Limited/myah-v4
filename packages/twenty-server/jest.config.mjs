@@ -9,7 +9,11 @@ const jestConfig = {
   prettierPath: null,
   // to enable logs, comment out the following line
   silent: true,
-  ...(isCI && { reporters: ['./jest-failures-only-reporter.js'] }),
+  // Temporary CI diagnostics for PR #135; remove after the failing suite is identified.
+  ...(isCI && {
+    reporters: ['default', './jest-failures-only-reporter.js'],
+    logHeapUsage: true,
+  }),
   errorOnDeprecated: true,
   clearMocks: true,
   displayName: 'twenty-server',
