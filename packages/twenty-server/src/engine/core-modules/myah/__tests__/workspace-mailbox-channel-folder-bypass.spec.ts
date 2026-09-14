@@ -115,6 +115,7 @@ describe('workspace mailbox channel and folder mutation boundaries', () => {
       {} as TwentyConfigService,
       {} as EmailingDomainService,
       {} as WorkspaceEventEmitter,
+      {} as never,
     );
 
     await expect(
@@ -149,6 +150,7 @@ describe('workspace mailbox channel and folder mutation boundaries', () => {
       {} as TwentyConfigService,
       {} as EmailingDomainService,
       {} as WorkspaceEventEmitter,
+      {} as never,
     );
 
     await expect(

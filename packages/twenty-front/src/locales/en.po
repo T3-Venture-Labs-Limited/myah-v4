@@ -6877,6 +6877,11 @@ msgstr "Daily campaign cap"
 msgid "Daily campaign capacity"
 msgstr "Daily campaign capacity"
 
+#. js-lingui-id: nKH9wt
+#: src/modules/settings/accounts/components/SettingsAccountSendingPolicy.tsx
+msgid "Daily send limit"
+msgstr "Daily send limit"
+
 #. js-lingui-id: KXQkvT
 #: src/modules/settings/usage/components/SettingsUsageAnalyticsSection.tsx
 #: src/pages/settings/billing/SettingsUsageUserDetail.tsx
@@ -9933,6 +9938,11 @@ msgstr "Failed to update resource credits."
 #: src/modules/settings/members/components/MemberPermissionsTab.tsx
 msgid "Failed to update role"
 msgstr "Failed to update role"
+
+#. js-lingui-id: mEdfc0
+#: src/modules/settings/accounts/components/SettingsAccountSendingPolicy.tsx
+msgid "Failed to update sending policy"
+msgstr "Failed to update sending policy"
 
 #. js-lingui-id: ahCOdw
 #: src/modules/settings/admin-panel/components/SettingsAdminServerAdminAccess.tsx
@@ -13716,6 +13726,11 @@ msgstr "Min"
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
 msgid "Min range"
 msgstr "Min range"
+
+#. js-lingui-id: B2ITHM
+#: src/modules/settings/accounts/components/SettingsAccountSendingPolicy.tsx
+msgid "Minimum send interval (milliseconds)"
+msgstr "Minimum send interval (milliseconds)"
 
 #. js-lingui-id: 5IrCQY
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
@@ -18976,6 +18991,11 @@ msgstr "Save payment details"
 msgid "Save payment method"
 msgstr "Save payment method"
 
+#. js-lingui-id: MLJTcw
+#: src/modules/settings/accounts/components/SettingsAccountSendingPolicy.tsx
+msgid "Save sending policy"
+msgstr "Save sending policy"
+
 #. js-lingui-id: 1TUp4/
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
 msgid "Saved order recovery paused"
@@ -19890,6 +19910,16 @@ msgstr "Sending domain"
 msgid "Sending email"
 msgstr "Sending email"
 
+#. js-lingui-id: rC1Lxr
+#: src/modules/settings/accounts/components/SettingsAccountSendingPolicy.tsx
+msgid "Sending policy"
+msgstr "Sending policy"
+
+#. js-lingui-id: bQg2zw
+#: src/modules/settings/accounts/components/SettingsAccountSendingPolicy.tsx
+msgid "Sending policy updated"
+msgstr "Sending policy updated"
+
 #. js-lingui-id: asU5VT
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestExecutionResult.tsx
 msgid "Sending request..."
@@ -19998,6 +20028,11 @@ msgstr "Set global workspace preferences"
 #: src/pages/auth/PasswordReset.tsx
 msgid "Set Password"
 msgstr "Set Password"
+
+#. js-lingui-id: m96BY9
+#: src/modules/settings/accounts/components/SettingsAccountSendingPolicy.tsx
+msgid "Set the daily limit and minimum interval for outbound email from this account."
+msgstr "Set the daily limit and minimum interval for outbound email from this account."
 
 #. js-lingui-id: qNbuWB
 #: src/modules/settings/domains/components/SettingsCustomDomain.tsx

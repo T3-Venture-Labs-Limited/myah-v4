@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { In } from 'typeorm';
 import { v4 } from 'uuid';
@@ -7,7 +8,9 @@ import { v4 } from 'uuid';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
+import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
 import { type MessageThreadWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-thread.workspace-entity';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
@@ -80,16 +83,59 @@ export class MessagingMessageService {
             workspaceId,
             'messageThread',
           );
+        const messageParticipantRepository =
+          await this.globalWorkspaceOrmManager.getRepository<MessageParticipantWorkspaceEntity>(
+            workspaceId,
+            'messageParticipant',
+          );
 
         const messageAccumulatorMap = new Map<string, MessageAccumulator>();
-
-        const existingMessagesInDB = await messageRepository.find({
-          where: {
-            headerMessageId: In(
-              messages.map((message) => message.headerMessageId),
-            ),
-          },
-        });
+        const expectedMessageIds = messages
+          .map((message) => message.expectedMessageId)
+          .filter(isDefined);
+        if (
+          expectedMessageIds.some(
+            (id) =>
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+                id,
+              ),
+          ) ||
+          new Set(expectedMessageIds).size !== expectedMessageIds.length
+        ) {
+          throw new Error('Expected Message identities are invalid');
+        }
+        const [messagesByHeader, messagesByExpectedId] = await Promise.all([
+          messageRepository.find(
+            {
+              where: {
+                headerMessageId: In(
+                  messages
+                    .map((message) => message.headerMessageId)
+                    .filter(
+                      (headerMessageId) =>
+                        typeof headerMessageId === 'string' &&
+                        headerMessageId.trim().length > 0,
+                    ),
+                ),
+              },
+            },
+            transactionManager,
+          ),
+          expectedMessageIds.length === 0
+            ? Promise.resolve([])
+            : messageRepository.find(
+                { where: { id: In(expectedMessageIds) } },
+                transactionManager,
+              ),
+        ]);
+        const existingMessagesInDB = [
+          ...new Map(
+            [...messagesByHeader, ...messagesByExpectedId].map((message) => [
+              message.id,
+              message,
+            ]),
+          ).values(),
+        ];
 
         const messageChannelMessageAssociationsReferencingMessageThread =
           await messageChannelMessageAssociationRepository.find(
@@ -106,12 +152,35 @@ export class MessagingMessageService {
           );
 
         const existingMessageChannelMessageAssociations =
-          await messageChannelMessageAssociationRepository.find({
-            where: {
-              messageId: In(existingMessagesInDB.map((message) => message.id)),
-              messageChannelId,
+          await messageChannelMessageAssociationRepository.find(
+            {
+              where: {
+                messageId: In(
+                  existingMessagesInDB.map((message) => message.id),
+                ),
+                messageChannelId,
+              },
             },
-          });
+            transactionManager,
+          );
+        const existingParticipants = await messageParticipantRepository.find(
+          {
+            where: {
+              messageId: In(messagesByExpectedId.map((message) => message.id)),
+            },
+          },
+          transactionManager,
+        );
+
+        this.requireExactDeterministicReplayEvidence({
+          associations: existingMessageChannelMessageAssociations,
+          messages,
+          messagesByExpectedId,
+          messagesByHeader,
+          participants: existingParticipants,
+          threadAssociations:
+            messageChannelMessageAssociationsReferencingMessageThread,
+        });
 
         await this.enrichMessageAccumulatorWithExistingMessages(
           messages,
@@ -161,7 +230,7 @@ export class MessagingMessageService {
           let newOrExistingMessageId: string;
 
           if (!isDefined(messageAccumulator.existingMessageInDB)) {
-            newOrExistingMessageId = v4();
+            newOrExistingMessageId = message.expectedMessageId ?? v4();
 
             const messageToCreate = {
               id: newOrExistingMessageId,
@@ -331,16 +400,264 @@ export class MessagingMessageService {
     );
   }
 
+  public async reconcileMicrosoftCampaignHeaderInTransaction(
+    input: {
+      workspaceId: string;
+      connectedAccountId: string;
+      messageChannelId: string;
+      providerMessageExternalId: string;
+      trustedHeaderMessageId: string;
+    },
+    transactionManager: WorkspaceEntityManager,
+  ): Promise<'UPDATED' | 'EXACT_REPLAY' | 'DEFERRED'> {
+    const runner = transactionManager.queryRunner;
+    if (!runner?.isTransactionActive || runner.manager !== transactionManager) {
+      throw new Error(
+        'Microsoft header reconciliation requires active manager',
+      );
+    }
+    const providerExternalId = input.providerMessageExternalId.trim();
+    const trustedHeader = input.trustedHeaderMessageId.trim();
+    if (providerExternalId.length === 0 || trustedHeader.length === 0) {
+      throw new Error('Microsoft header reconciliation evidence is invalid');
+    }
+    const attempts = await runner.query(
+      `SELECT "attemptId", "projectedMessageId", "providerHeaderMessageId",
+              "reconciledProviderHeaderMessageId"
+         FROM core."outboundEmailAttempt"
+        WHERE "workspaceId"=$1 AND "connectedAccountId"=$2
+          AND "messageChannelId"=$3 AND provider=$4
+          AND "providerMessageExternalId"=$5
+          AND source='CAMPAIGN_SEQUENCE' AND "attemptState"='ACCEPTED'
+        FOR UPDATE`,
+      [
+        input.workspaceId,
+        input.connectedAccountId,
+        input.messageChannelId,
+        ConnectedAccountProvider.MICROSOFT,
+        providerExternalId,
+      ],
+    );
+    if (!Array.isArray(attempts) || attempts.length !== 1) return 'DEFERRED';
+    const attempt = attempts[0];
+    if (typeof attempt.projectedMessageId !== 'string') return 'DEFERRED';
+
+    const workspaceSchema = getWorkspaceSchemaName(input.workspaceId);
+    const associations = await runner.query(
+      `SELECT id,"messageId","messageChannelId","messageExternalId"
+         FROM "${workspaceSchema}"."messageChannelMessageAssociation"
+        WHERE "messageChannelId"=$1 AND "messageExternalId"=$2
+        ORDER BY id FOR UPDATE`,
+      [input.messageChannelId, providerExternalId],
+    );
+    if (
+      !Array.isArray(associations) ||
+      associations.length !== 1 ||
+      associations[0].messageId !== attempt.projectedMessageId ||
+      associations[0].messageChannelId !== input.messageChannelId ||
+      associations[0].messageExternalId !== providerExternalId
+    )
+      return 'DEFERRED';
+    const projectedRows = await runner.query(
+      `SELECT id,"headerMessageId" FROM "${workspaceSchema}".message
+        WHERE id=$1 FOR UPDATE`,
+      [attempt.projectedMessageId],
+    );
+    if (!Array.isArray(projectedRows) || projectedRows.length !== 1)
+      return 'DEFERRED';
+    const collisions = await runner.query(
+      `SELECT id FROM "${workspaceSchema}".message
+        WHERE "headerMessageId"=$1 ORDER BY id FOR UPDATE`,
+      [trustedHeader],
+    );
+    if (
+      !Array.isArray(collisions) ||
+      collisions.some((message) => message.id !== attempt.projectedMessageId)
+    )
+      throw new Error('Trusted Microsoft header collides with another Message');
+    const projected = projectedRows[0];
+    if (
+      typeof projected.headerMessageId === 'string' &&
+      projected.headerMessageId.trim().length > 0
+    ) {
+      if (
+        projected.headerMessageId === trustedHeader &&
+        attempt.reconciledProviderHeaderMessageId === trustedHeader
+      )
+        return 'EXACT_REPLAY';
+      throw new Error(
+        'Trusted Microsoft header conflicts with stored evidence',
+      );
+    }
+    const messageUpdateResult = await runner.query(
+      `UPDATE "${workspaceSchema}".message SET "headerMessageId"=$2
+        WHERE id=$1 AND ("headerMessageId" IS NULL OR btrim("headerMessageId")='')
+        RETURNING id`,
+      [attempt.projectedMessageId, trustedHeader],
+      true,
+    );
+    const messageUpdates = Array.isArray(messageUpdateResult)
+      ? messageUpdateResult
+      : messageUpdateResult.records;
+    if (!Array.isArray(messageUpdates) || messageUpdates.length !== 1)
+      throw new Error('Microsoft header evidence CAS failed');
+    const attemptUpdateResult = await runner.query(
+      `UPDATE core."outboundEmailAttempt"
+          SET "reconciledProviderHeaderMessageId"=$2, "updatedAt"=CURRENT_TIMESTAMP
+        WHERE "attemptId"=$1 AND ("reconciledProviderHeaderMessageId" IS NULL OR btrim("reconciledProviderHeaderMessageId")='')
+        RETURNING "attemptId"`,
+      [attempt.attemptId, trustedHeader],
+      true,
+    );
+    const attemptUpdates = Array.isArray(attemptUpdateResult)
+      ? attemptUpdateResult
+      : attemptUpdateResult.records;
+    if (!Array.isArray(attemptUpdates) || attemptUpdates.length !== 1)
+      throw new Error('Microsoft header evidence CAS failed');
+    return 'UPDATED';
+  }
+
+  private requireExactDeterministicReplayEvidence(input: {
+    messages: MessageWithParticipants[];
+    messagesByHeader: MessageWorkspaceEntity[];
+    messagesByExpectedId: MessageWorkspaceEntity[];
+    associations: MessageChannelMessageAssociationWorkspaceEntity[];
+    threadAssociations: Pick<
+      MessageChannelMessageAssociationWorkspaceEntity,
+      'messageThreadExternalId' | 'message'
+    >[];
+    participants: MessageParticipantWorkspaceEntity[];
+  }): void {
+    const participantKey = (participant: {
+      role: unknown;
+      handle: unknown;
+      displayName: unknown;
+    }) =>
+      JSON.stringify([
+        participant.role,
+        participant.handle ?? null,
+        participant.displayName ?? null,
+      ]);
+
+    for (const message of input.messages) {
+      if (message.expectedMessageId === undefined) continue;
+      const headerOwners = input.messagesByHeader.filter(
+        (persisted) => persisted.headerMessageId === message.headerMessageId,
+      );
+      if (
+        headerOwners.some(
+          (persisted) => persisted.id !== message.expectedMessageId,
+        )
+      ) {
+        throw new Error(
+          'Expected Message identity conflicts with header identity',
+        );
+      }
+      const expectedRows = input.messagesByExpectedId.filter(
+        (persisted) => persisted.id === message.expectedMessageId,
+      );
+      if (expectedRows.length === 0) continue;
+      if (expectedRows.length !== 1) {
+        throw new Error('Expected Message identity is not unique');
+      }
+      const expected = expectedRows[0];
+      if (
+        expected.headerMessageId !== message.headerMessageId ||
+        expected.subject !== message.subject ||
+        expected.text !== message.text ||
+        expected.isDraft !== message.isDraft ||
+        expected.receivedAt?.getTime() !== message.receivedAt?.getTime()
+      ) {
+        throw new Error(
+          'Expected Message exact replay conflicts with persisted content',
+        );
+      }
+      const associations = input.associations.filter(
+        (association) => association.messageId === message.expectedMessageId,
+      );
+      if (
+        associations.length !== 1 ||
+        associations[0].messageExternalId !== message.externalId ||
+        associations[0].messageThreadExternalId !==
+          message.messageThreadExternalId ||
+        associations[0].direction !== message.direction
+      ) {
+        throw new Error(
+          'Expected Message association conflicts with persisted identity',
+        );
+      }
+      const threadAssociations = input.threadAssociations.filter(
+        (association) =>
+          association.messageThreadExternalId ===
+            message.messageThreadExternalId &&
+          association.message?.id === message.expectedMessageId,
+      );
+      if (
+        threadAssociations.length !== 1 ||
+        threadAssociations[0].message?.messageThreadId !==
+          expected.messageThreadId
+      ) {
+        throw new Error('Expected Message thread evidence conflicts');
+      }
+      const expectedParticipants = message.participants
+        .map(participantKey)
+        .sort();
+      const persistedParticipants = input.participants
+        .filter(
+          (participant) => participant.messageId === message.expectedMessageId,
+        )
+        .map(participantKey)
+        .sort();
+      if (
+        JSON.stringify(expectedParticipants) !==
+        JSON.stringify(persistedParticipants)
+      ) {
+        throw new Error('Expected Message participant evidence conflicts');
+      }
+    }
+  }
+
   private async enrichMessageAccumulatorWithExistingMessages(
     messages: MessageWithParticipants[],
     messageAccumulatorMap: Map<string, MessageAccumulator>,
     existingMessagesInDB: MessageWorkspaceEntity[],
   ) {
     for (const message of messages) {
-      const existingMessage = existingMessagesInDB.find(
+      const expected =
+        message.expectedMessageId === undefined
+          ? undefined
+          : existingMessagesInDB.find(
+              (existingMessage) =>
+                existingMessage.id === message.expectedMessageId,
+            );
+      const byHeader = existingMessagesInDB.find(
         (existingMessage) =>
+          typeof message.headerMessageId === 'string' &&
+          message.headerMessageId.trim().length > 0 &&
           existingMessage.headerMessageId === message.headerMessageId,
       );
+      if (
+        message.expectedMessageId !== undefined &&
+        byHeader !== undefined &&
+        message.expectedMessageId !== byHeader.id
+      ) {
+        throw new Error(
+          'Expected Message identity conflicts with header identity',
+        );
+      }
+      const existingMessage = expected ?? byHeader;
+      if (
+        expected !== undefined &&
+        (expected.headerMessageId !== message.headerMessageId ||
+          expected.subject !== message.subject ||
+          expected.text !== message.text ||
+          expected.isDraft !== message.isDraft ||
+          expected.receivedAt?.getTime() !== message.receivedAt?.getTime())
+      ) {
+        throw new Error(
+          'Expected Message exact replay conflicts with persisted content',
+        );
+      }
 
       if (!isDefined(existingMessage)) {
         messageAccumulatorMap.set(message.externalId, {});
@@ -452,6 +769,17 @@ export class MessagingMessageService {
         );
 
       if (existingMessageChannelMessageAssociation) {
+        if (
+          message.expectedMessageId !== undefined &&
+          (existingMessageChannelMessageAssociation.messageExternalId !==
+            message.externalId ||
+            existingMessageChannelMessageAssociation.messageThreadExternalId !==
+              message.messageThreadExternalId)
+        ) {
+          throw new Error(
+            'Expected Message association conflicts with persisted identity',
+          );
+        }
         messageAccumulator.existingMessageChannelMessageAssociationInDB =
           existingMessageChannelMessageAssociation;
       }

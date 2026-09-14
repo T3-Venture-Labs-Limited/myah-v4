@@ -1,45 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { styled } from '@linaria/react';
+import { InlineBanner, Loader } from 'twenty-ui/feedback';
+import { Button } from 'twenty-ui/input';
 
-import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { CampaignOutreachEmptyState } from '@/myah-outreach/components/CampaignOutreachEmptyState';
 import { CampaignOutreachWorkflowEditor } from '@/myah-outreach/components/CampaignOutreachWorkflowEditor';
 import {
   CREATE_CAMPAIGN_OUTREACH_WORKFLOW,
-  FIND_CAMPAIGN_OUTREACH_WORKFLOW,
+  REPLACE_LEGACY_CAMPAIGN_SEQUENCE,
 } from '@/myah-outreach/graphql/operations';
+import { useCampaignSequence } from '@/myah-outreach/hooks/useCampaignSequence';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
-import { InlineBanner, Loader } from 'twenty-ui/feedback';
-import { styled } from '@linaria/react';
-
-type CampaignOutreachWorkflow = {
-  campaignId: string;
-  currentVersionId: string | null;
-  name: string | null;
-  workflowId: string;
-};
-
-type FindCampaignOutreachWorkflowResult = {
-  findCampaignOutreachWorkflow: CampaignOutreachWorkflow | null;
-};
-
-type CreateCampaignOutreachWorkflowResult = {
-  createCampaignOutreachWorkflow: CampaignOutreachWorkflow;
-};
-
-type CampaignOutreachTabProps = {
-  campaignId: string;
-};
-
-type CampaignOutreachTabState = {
-  campaignId: string;
-  creationError?: boolean;
-} & (
-  | { kind: 'loading' }
-  | { kind: 'loaded'; workflow: CampaignOutreachWorkflow | null }
-  | { kind: 'permission-error' }
-  | { kind: 'request-error' }
-);
 
 const StyledCampaignOutreachTab = styled.div`
   display: flex;
@@ -49,134 +21,107 @@ const StyledCampaignOutreachTab = styled.div`
   min-width: 0;
 `;
 
+const StyledLegacyState = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: auto;
+  max-width: 560px;
+`;
+
+type CampaignOutreachTabProps = {
+  campaignId: string;
+  isInSidePanel?: boolean;
+};
+
 export const CampaignOutreachTab = ({
   campaignId,
+  isInSidePanel = false,
 }: CampaignOutreachTabProps) => {
   const apolloCoreClient = useApolloCoreClient();
+  const sequenceState = useCampaignSequence(campaignId);
   const { enqueueErrorSnackBar } = useSnackBar();
-  const [state, setState] = useState<CampaignOutreachTabState>({
-    campaignId,
-    kind: 'loading',
-  });
-  const [creatingCampaignId, setCreatingCampaignId] = useState<string | null>(
-    null,
-  );
-  const [reloadCount, setReloadCount] = useState(0);
+  const [pendingActionCampaignId, setPendingActionCampaignId] = useState<
+    string | null
+  >(null);
+  // Request identity, not render state: prevents an old Campaign mutation from applying.
   // oxlint-disable-next-line twenty/no-state-useref
-  const currentCampaignIdRef = useRef(campaignId);
-  currentCampaignIdRef.current = campaignId;
+  const campaignIdRef = useRef(campaignId);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const mountedRef = useRef(true);
+  campaignIdRef.current = campaignId;
 
   useEffect(() => {
-    let isMounted = true;
-
-    setState({ campaignId, kind: 'loading' });
-
-    const loadCampaignOutreachWorkflow = async () => {
-      try {
-        const { data } =
-          await apolloCoreClient.query<FindCampaignOutreachWorkflowResult>({
-            fetchPolicy: 'network-only',
-            query: FIND_CAMPAIGN_OUTREACH_WORKFLOW,
-            variables: { campaignId },
-          });
-
-        if (!data) {
-          throw new Error('Campaign Outreach query returned no data');
-        }
-
-        if (!isMounted) {
-          return;
-        }
-
-        setState({
-          campaignId,
-          kind: 'loaded',
-          workflow: data.findCampaignOutreachWorkflow,
-        });
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setState(
-          isGraphqlErrorOfType(error, 'FORBIDDEN')
-            ? { campaignId, kind: 'permission-error' }
-            : { campaignId, kind: 'request-error' },
-        );
-      }
-    };
-
-    void loadCampaignOutreachWorkflow();
+    mountedRef.current = true;
 
     return () => {
-      isMounted = false;
+      mountedRef.current = false;
     };
-  }, [apolloCoreClient, campaignId, reloadCount]);
+  }, []);
 
-  useEffect(() => {
-    if (state.campaignId !== campaignId || !state.creationError) {
-      return;
-    }
-
-    enqueueErrorSnackBar({
-      message: 'Unable to create the outreach workflow.',
-    });
-    setState((currentState) =>
-      currentState.campaignId === campaignId && currentState.creationError
-        ? { ...currentState, creationError: false }
-        : currentState,
-    );
-  }, [campaignId, enqueueErrorSnackBar, state.campaignId, state.creationError]);
-  const isCreating = creatingCampaignId === campaignId;
-
-  const createCampaignOutreachWorkflow = useCallback(async () => {
-    if (isCreating) {
-      return;
-    }
-
-    setCreatingCampaignId(campaignId);
-
-    try {
-      const { data } =
-        await apolloCoreClient.mutate<CreateCampaignOutreachWorkflowResult>({
-          mutation: CREATE_CAMPAIGN_OUTREACH_WORKFLOW,
-          variables: { campaignId },
-        });
-
-      if (!data) {
-        throw new Error('Campaign Outreach creation returned no data');
-      }
-
-      if (currentCampaignIdRef.current !== campaignId) {
+  const runDefinitionAction = useCallback(
+    async (action: 'CREATE' | 'REPLACE', expectedWorkflowId?: string) => {
+      if (pendingActionCampaignId === campaignId) {
         return;
       }
 
-      setState((currentState) =>
-        currentState.campaignId === campaignId
-          ? {
-              campaignId,
-              kind: 'loaded',
-              workflow: data.createCampaignOutreachWorkflow,
-            }
-          : currentState,
-      );
-    } catch {
-      if (currentCampaignIdRef.current !== campaignId) {
-        return;
-      }
-      setState((currentState) =>
-        currentState.campaignId === campaignId
-          ? { ...currentState, creationError: true }
-          : currentState,
-      );
-    } finally {
-      setCreatingCampaignId((currentCampaignId) =>
-        currentCampaignId === campaignId ? null : currentCampaignId,
-      );
-    }
-  }, [apolloCoreClient, campaignId, currentCampaignIdRef, isCreating]);
+      const requestCampaignId = campaignId;
+      setPendingActionCampaignId(requestCampaignId);
 
-  if (state.campaignId !== campaignId || state.kind === 'loading') {
+      try {
+        if (action === 'CREATE') {
+          const result = await apolloCoreClient.mutate({
+            mutation: CREATE_CAMPAIGN_OUTREACH_WORKFLOW,
+            variables: { campaignId: requestCampaignId },
+          });
+          if (!result.data) {
+            throw new Error('Campaign sequence creation returned no data.');
+          }
+        } else {
+          const result = await apolloCoreClient.mutate({
+            mutation: REPLACE_LEGACY_CAMPAIGN_SEQUENCE,
+            variables: {
+              input: {
+                campaignId: requestCampaignId,
+                expectedWorkflowId,
+              },
+            },
+          });
+          if (!result.data) {
+            throw new Error('Legacy replacement returned no data.');
+          }
+        }
+
+        if (mountedRef.current && campaignIdRef.current === requestCampaignId) {
+          await sequenceState.reload();
+        }
+      } catch {
+        if (mountedRef.current && campaignIdRef.current === requestCampaignId) {
+          enqueueErrorSnackBar({
+            message:
+              action === 'CREATE'
+                ? 'Unable to create the Campaign sequence.'
+                : 'Unable to replace legacy Campaign outreach.',
+          });
+        }
+      } finally {
+        if (mountedRef.current) {
+          setPendingActionCampaignId((currentCampaignId) =>
+            currentCampaignId === requestCampaignId ? null : currentCampaignId,
+          );
+        }
+      }
+    },
+    [
+      apolloCoreClient,
+      campaignId,
+      enqueueErrorSnackBar,
+      pendingActionCampaignId,
+      sequenceState,
+    ],
+  );
+
+  if (sequenceState.loading) {
     return (
       <div aria-label="Loading Campaign Outreach">
         <Loader />
@@ -184,39 +129,58 @@ export const CampaignOutreachTab = ({
     );
   }
 
-  if (state.kind === 'permission-error') {
+  if (sequenceState.error && sequenceState.loadResult === null) {
     return (
       <InlineBanner
-        color="danger"
-        message="You don't have permission to view Campaign Outreach."
-      />
-    );
-  }
-
-  if (state.kind === 'request-error') {
-    return (
-      <InlineBanner
-        button={{
-          onClick: () => setReloadCount((count) => count + 1),
-          title: 'Retry',
-        }}
+        button={{ onClick: () => void sequenceState.reload(), title: 'Retry' }}
         color="danger"
         message="Campaign Outreach could not load. Retry."
       />
     );
   }
 
+  if (sequenceState.loadResult === null) {
+    return null;
+  }
+
+  const isPending = pendingActionCampaignId === campaignId;
+
   return (
     <StyledCampaignOutreachTab data-testid="campaign-outreach-tab">
-      {state.workflow ? (
+      {sequenceState.loadResult.kind === 'ABSENT' ? (
+        <CampaignOutreachEmptyState
+          isCreating={isPending}
+          onCreate={() => runDefinitionAction('CREATE')}
+        />
+      ) : sequenceState.loadResult.kind === 'LEGACY' ? (
+        <StyledLegacyState aria-label="Legacy Campaign outreach">
+          <h2>Legacy Campaign outreach</h2>
+          <p>
+            This Campaign uses an older generic workflow definition. Viewing
+            this tab does not modify it. Replace it explicitly to start a new
+            restricted sequence; legacy graph content is not migrated.
+          </p>
+          <Button
+            ariaLabel="Replace legacy outreach"
+            disabled={isPending}
+            isLoading={isPending}
+            onClick={() =>
+              void runDefinitionAction(
+                'REPLACE',
+                sequenceState.loadResult?.kind === 'LEGACY'
+                  ? sequenceState.loadResult.workflowId
+                  : undefined,
+              )
+            }
+            title="Replace legacy outreach"
+            variant="secondary"
+          />
+        </StyledLegacyState>
+      ) : (
         <CampaignOutreachWorkflowEditor
           campaignId={campaignId}
-          workflowId={state.workflow.workflowId}
-        />
-      ) : (
-        <CampaignOutreachEmptyState
-          isCreating={isCreating}
-          onCreate={createCampaignOutreachWorkflow}
+          isInSidePanel={isInSidePanel}
+          sequenceState={sequenceState}
         />
       )}
     </StyledCampaignOutreachTab>

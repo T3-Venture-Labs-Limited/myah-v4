@@ -19,7 +19,7 @@ describe('WorkflowUpdateOnePreQueryHook', () => {
   const workflowOutreachAssociationGuardService =
     new WorkflowOutreachAssociationGuardService();
   const workflowOutreachAccessGuardService = {
-    assertWorkflowIsAccessible: jest.fn(),
+    assertGenericWorkflowMutationAllowed: jest.fn(),
   } as unknown as WorkflowOutreachAccessGuardService;
   const hook =
     new (WorkflowUpdateOnePreQueryHook as unknown as WorkflowUpdateOnePreQueryHookConstructor)(
@@ -35,9 +35,8 @@ describe('WorkflowUpdateOnePreQueryHook', () => {
     ).resolves.toBe(payload);
 
     expect(
-      workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
+      workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed,
     ).toHaveBeenCalledWith({
-      authContext,
       workflowId: 'workflow-a',
       workspaceId: 'workspace-a',
     });

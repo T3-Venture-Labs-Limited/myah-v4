@@ -29,6 +29,7 @@ import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomC
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 
 import { PAGE_LAYOUT_TAB_LIST_DROPPABLE_IDS } from '@/page-layout/components/PageLayoutTabListDroppableIds';
+import { requestPageLayoutSidePanelTabChange } from '@/page-layout/constants/PageLayoutSidePanelTabChangeEvent';
 import { PageLayoutTabListNewTabDropdownContent } from '@/page-layout/components/PageLayoutTabListNewTabDropdownContent';
 import { PageLayoutTabListReorderableOverflowDropdown } from '@/page-layout/components/PageLayoutTabListReorderableOverflowDropdown';
 import { PageLayoutTabListVisibleTabs } from '@/page-layout/components/PageLayoutTabListVisibleTabs';
@@ -163,10 +164,20 @@ export const PageLayoutTabList = ({
         return;
       }
 
+      if (
+        activeTabId !== tabId &&
+        !requestPageLayoutSidePanelTabChange({
+          currentTabId: activeTabId,
+          nextTabId: tabId,
+        })
+      ) {
+        return;
+      }
+
       setActiveTabId(tabId);
       onChangeTab?.(tabId);
     },
-    [isInSidePanel, navigate, onChangeTab, setActiveTabId],
+    [activeTabId, isInSidePanel, navigate, onChangeTab, setActiveTabId],
   );
 
   const selectTabFromDropdown = useCallback(

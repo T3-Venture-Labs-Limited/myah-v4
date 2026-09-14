@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
-import { In, Repository } from 'typeorm';
+import { EntityNotFoundError, In, Repository } from 'typeorm';
 
 import {
   ConnectedAccountProvider,
@@ -17,6 +17,11 @@ import {
   MessageChannelVisibility,
 } from 'twenty-shared/types';
 
+import {
+  CAMPAIGN_SEND_EVIDENCE_IN_FLIGHT,
+  CampaignMailboxDeletionFenceError,
+  CampaignMailboxDeletionFenceService,
+} from 'src/engine/core-modules/campaign-execution/services/campaign-mailbox-deletion-fence.service';
 import { EmailingDomainDriver } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-driver.type';
 import { EmailingDomainService } from 'src/engine/core-modules/emailing-domain/services/emailing-domain.service';
 import { StorageDriverType } from 'src/engine/core-modules/file-storage/interfaces/file-storage.interface';
@@ -46,6 +51,7 @@ export class MessageChannelMetadataService {
     private readonly twentyConfigService: TwentyConfigService,
     private readonly emailingDomainService: EmailingDomainService,
     private readonly workspaceEventEmitter: WorkspaceEventEmitter,
+    private readonly campaignMailboxDeletionFence: CampaignMailboxDeletionFenceService,
   ) {}
 
   async findAll(workspaceId: string): Promise<MessageChannelDTO[]> {
@@ -361,21 +367,62 @@ export class MessageChannelMetadataService {
   }
 
   async delete({
-    id,
+    messageChannelId,
+    connectedAccountId,
     workspaceId,
   }: {
-    id: string;
+    messageChannelId: string;
+    connectedAccountId: string;
     workspaceId: string;
   }): Promise<MessageChannelDTO> {
-    const messageChannel = await this.repository.findOneOrFail({
-      where: { id, workspaceId },
-    });
-
-    await this.repository.delete({ id, workspaceId });
+    let messageChannel!: MessageChannelEntity;
+    try {
+      await this.repository.manager.transaction(async (manager) => {
+        await this.campaignMailboxDeletionFence.assertDeletionAllowedInTransaction(
+          {
+            workspaceId,
+            connectedAccountId,
+            messageChannelIds: [messageChannelId],
+          },
+          manager,
+        );
+        const repository = manager.getRepository(MessageChannelEntity);
+        messageChannel = await repository.findOneOrFail({
+          where: {
+            id: messageChannelId,
+            connectedAccountId,
+            workspaceId,
+          },
+        });
+        const deleted = await repository.delete({
+          id: messageChannelId,
+          connectedAccountId,
+          workspaceId,
+        });
+        if (deleted.affected !== 1)
+          throw new EntityNotFoundError(MessageChannelEntity, {
+            id: messageChannelId,
+            connectedAccountId,
+            workspaceId,
+          });
+      });
+    } catch (error) {
+      if (error instanceof CampaignMailboxDeletionFenceError)
+        throw new MessageChannelException(
+          CAMPAIGN_SEND_EVIDENCE_IN_FLIGHT,
+          MessageChannelExceptionCode.INVALID_MESSAGE_CHANNEL_INPUT,
+        );
+      if (error instanceof EntityNotFoundError)
+        throw new MessageChannelException(
+          'Message channel not found',
+          MessageChannelExceptionCode.MESSAGE_CHANNEL_NOT_FOUND,
+        );
+      throw error;
+    }
 
     this.workspaceEventEmitter.emitCustomBatchEvent<MessageChannelDeletedEvent>(
       MESSAGE_CHANNEL_DELETED_EVENT,
-      [{ messageChannelId: id }],
+      [{ messageChannelId }],
       workspaceId,
     );
 

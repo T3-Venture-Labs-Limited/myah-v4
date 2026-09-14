@@ -10,6 +10,7 @@ import {
 import {
   type CampaignSequenceAuthorizationBinding,
   type CampaignSequenceAuthorizationCurrentProjection,
+  type CampaignSequenceAuthorizationKeyLookupResult,
   type CampaignSequenceAuthorizationRecord,
   type CampaignSequenceAuthorizationRequest,
   type CampaignSequenceAuthorizationRequestLookupResult,
@@ -642,6 +643,32 @@ export class CampaignSequenceAuthorizationService {
     }
 
     return { kind: 'CURRENT_REVOKED', authorization: latest };
+  }
+
+  async lookupStartKeyInTransaction(
+    context: CampaignSequenceAuthorizationTransactionContext,
+    input: Readonly<{ startIdempotencyKey: string }>,
+  ): Promise<CampaignSequenceAuthorizationKeyLookupResult> {
+    this.assertContext(context);
+    const startIdempotencyKey = this.requireUuid(
+      input.startIdempotencyKey,
+      'start idempotency key',
+    );
+    const rawRows = await context.manager.queryRunner!.query(
+      `SELECT * FROM core."campaignSequenceAuthorization"
+       WHERE "workspaceId" = $1 AND "campaignId" = $2
+         AND "startIdempotencyKey" = $3`,
+      [context.workspaceId, context.campaignId, startIdempotencyKey],
+    );
+
+    if (!Array.isArray(rawRows) || rawRows.length > 1) {
+      throw new Error(
+        'Campaign sequence authorization history integrity failure',
+      );
+    }
+    if (rawRows.length === 0) return { kind: 'NOT_FOUND' };
+
+    return { kind: 'FOUND', authorization: parseRecord(rawRows[0]) };
   }
 
   async lookupStartRequestInTransaction(

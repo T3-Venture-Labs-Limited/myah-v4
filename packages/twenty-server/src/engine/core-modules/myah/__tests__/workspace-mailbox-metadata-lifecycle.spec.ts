@@ -9,6 +9,8 @@ import { ConnectedAccountExceptionCode } from 'src/engine/metadata-modules/conne
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { type WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 
+type TestManager = { update: jest.Mock; getRepository: jest.Mock };
+
 describe('workspace mailbox metadata lifecycle', () => {
   const myahAccount = {
     connectionParameters: { encrypted: true },
@@ -25,20 +27,38 @@ describe('workspace mailbox metadata lifecycle', () => {
     visibility: 'user',
     workspaceId: 'workspace-id',
   } as ConnectedAccountEntity;
-  const entityManager = { update: jest.fn() };
-  const repository = {
+  const entityManager: TestManager = {
+    update: jest.fn(),
+    getRepository: jest.fn((entity) =>
+      entity === ConnectedAccountEntity
+        ? repository
+        : entity === CalendarChannelEntity
+          ? calendarChannelRepository
+          : messageChannelRepository,
+    ),
+  };
+  const repository: {
+    delete: jest.Mock;
+    find: jest.Mock;
+    findOneOrFail: jest.Mock;
+    manager: { transaction: jest.Mock };
+  } = {
     delete: jest.fn(),
     find: jest.fn(),
     findOneOrFail: jest.fn(),
     manager: {
       transaction: jest.fn(
-        async (operation: (manager: typeof entityManager) => unknown) =>
+        async (operation: (manager: TestManager) => unknown) =>
           operation(entityManager),
       ),
     },
   };
-  const messageChannelRepository = { find: jest.fn().mockResolvedValue([]) };
-  const calendarChannelRepository = { find: jest.fn().mockResolvedValue([]) };
+  const messageChannelRepository: { find: jest.Mock } = {
+    find: jest.fn().mockResolvedValue([]),
+  };
+  const calendarChannelRepository: { find: jest.Mock } = {
+    find: jest.fn().mockResolvedValue([]),
+  };
   const appOAuthRevokeService = { revokeIfApp: jest.fn() };
   const workspaceEventEmitter = { emitCustomBatchEvent: jest.fn() };
   const service = new ConnectedAccountMetadataService(
@@ -47,12 +67,16 @@ describe('workspace mailbox metadata lifecycle', () => {
     messageChannelRepository as unknown as Repository<MessageChannelEntity>,
     appOAuthRevokeService as unknown as AppOAuthRevokeService,
     workspaceEventEmitter as unknown as WorkspaceEventEmitter,
+    {
+      assertDeletionAllowedInTransaction: jest.fn().mockResolvedValue([]),
+    } as never,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     calendarChannelRepository.find.mockResolvedValue([]);
     messageChannelRepository.find.mockResolvedValue([]);
+    repository.delete.mockResolvedValue({ affected: 1, raw: [] });
   });
 
   it('denies generic deletion but allows dedicated guarded revocation', async () => {

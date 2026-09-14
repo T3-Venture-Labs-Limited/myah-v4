@@ -86,6 +86,7 @@ export class WorkflowThrottlingWorkspaceService {
 
           return workflowRunRepository.count({
             where: NOT_STARTED_RUNS_FIND_OPTIONS,
+            withDeleted: true,
           });
         },
         authContext,
@@ -117,6 +118,7 @@ export class WorkflowThrottlingWorkspaceService {
 
         return workflowRunRepository.count({
           where: NOT_STARTED_RUNS_FIND_OPTIONS,
+          withDeleted: true,
         });
       },
       authContext,

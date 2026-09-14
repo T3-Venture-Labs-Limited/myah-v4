@@ -122,7 +122,10 @@ export const PageLayoutMainContent = ({
           viewId={campaignInfluencersViewId}
         />
       ) : shouldRenderCampaignOutreach ? (
-        <CampaignOutreachTab campaignId={targetRecordIdentifier.id} />
+        <CampaignOutreachTab
+          campaignId={targetRecordIdentifier.id}
+          isInSidePanel={isInSidePanel}
+        />
       ) : shouldRenderCampaignAgent ? (
         <MyahCampaignAgent
           campaignId={targetRecordIdentifier.id}

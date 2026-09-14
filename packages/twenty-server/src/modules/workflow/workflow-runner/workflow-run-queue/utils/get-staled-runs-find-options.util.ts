@@ -11,7 +11,9 @@ export const getStaledRunsFindOptions =
     const thresholdDate = new Date(Date.now() - STALED_RUNS_THRESHOLD_MS);
 
     return {
+      deletedAt: IsNull(),
       status: WorkflowRunStatus.ENQUEUED,
       enqueuedAt: Or(LessThan(thresholdDate), IsNull()),
+      workflow: { outreachCampaignId: IsNull() },
     };
   };

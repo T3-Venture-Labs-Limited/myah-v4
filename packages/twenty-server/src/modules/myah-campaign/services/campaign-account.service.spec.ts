@@ -10,6 +10,7 @@ import {
   withWorkspaceContext,
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
+import { CampaignSenderReadinessService } from 'src/modules/myah-campaign/services/campaign-sender-readiness.service';
 
 const workspaceId = '11111111-1111-4111-8111-111111111110';
 const otherWorkspaceId = '22222222-2222-4222-8222-222222222220';
@@ -23,6 +24,8 @@ const authContext = {
   type: 'system',
   workspace: { id: workspaceId },
 } as never;
+const GOOGLE_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+
 const workspaceContext = {
   authContext,
   userWorkspaceRoleMap: {},
@@ -102,6 +105,9 @@ const connectedAccount = (overrides: Partial<Row> = {}): Row => ({
   archivedAt: null,
   authFailedAt: null,
   visibility: 'workspace',
+  scopes: [GOOGLE_SEND_SCOPE],
+  dailySendLimit: 50,
+  minimumSendIntervalMs: 300_000,
   accessToken: 'secret-token',
   refreshToken: 'secret-refresh-token',
   ...overrides,
@@ -128,10 +134,9 @@ const createHarness = (
   options: { testWorkspaceContext?: ORMWorkspaceContext } = {},
 ) => {
   const rows = {
-    campaign: [
-      { id: campaignId },
-      { id: secondCampaignId },
-      ...(seed.campaigns ?? []),
+    campaign: seed.campaigns ?? [
+      { id: campaignId, lifecycleStatus: 'DRAFT' },
+      { id: secondCampaignId, lifecycleStatus: 'DRAFT' },
     ],
     campaignAccount: seed.campaignAccounts ?? [],
     connectedAccount: seed.connectedAccounts ?? [connectedAccount()],
@@ -204,10 +209,16 @@ const createHarness = (
       return [];
     }
     if (sql.includes('SET "isDefault" = true')) {
+      const promotesByConnectedAccount = sql.includes(
+        'AND "connectedAccountId" = $2',
+      );
       const account = rows.campaignAccount.find(
         (row) =>
-          row.id === parameters[0] &&
-          row.campaignId === parameters[1] &&
+          (promotesByConnectedAccount
+            ? row.campaignId === parameters[0] &&
+              row.connectedAccountId === parameters[1] &&
+              row.isDefault === false
+            : row.id === parameters[0] && row.campaignId === parameters[1]) &&
           row.channel === 'EMAIL' &&
           row.deletedAt == null,
       );
@@ -225,12 +236,33 @@ const createHarness = (
       if (account) account.deletedAt = 'deleted';
       return account ? [{ id: account.id }] : [];
     }
+    if (sql.includes('SET "deletedAt" = NULL')) {
+      const account = rows.campaignAccount.find(
+        (row) =>
+          row.id === parameters[0] &&
+          row.campaignId === parameters[1] &&
+          row.channel === 'EMAIL' &&
+          row.deletedAt != null,
+      );
+      if (account) {
+        account.deletedAt = undefined;
+        account.messageChannelId = parameters[2];
+        account.isDefault = Boolean(parameters[3]);
+      }
+      return account ? [{ id: account.id }] : [];
+    }
     if (sql.includes('FROM') && sql.includes('"campaignAccount"')) {
       const [first, second] = parameters;
       return rows.campaignAccount.filter((account) => {
-        if (account.deletedAt != null || account.channel !== 'EMAIL')
+        const wantsDeleted = sql.includes('"deletedAt" IS NOT NULL');
+        if (
+          (wantsDeleted
+            ? account.deletedAt == null
+            : account.deletedAt != null) ||
+          account.channel !== 'EMAIL'
+        )
           return false;
-        if (sql.includes('"connectedAccountId"'))
+        if (sql.includes('AND "connectedAccountId" = $2'))
           return (
             account.campaignId === first &&
             account.connectedAccountId === second
@@ -300,12 +332,33 @@ const createHarness = (
         ),
     ),
   };
+  const candidateEvaluator = new CampaignSenderReadinessService(orm);
+  const senderReadinessService = {
+    evaluateCandidateSenderReadiness: jest.fn(
+      (
+        input: Parameters<
+          CampaignSenderReadinessService['evaluateCandidateSenderReadiness']
+        >[0],
+      ) => candidateEvaluator.evaluateCandidateSenderReadiness(input),
+    ),
+    getCampaignEmailSenderPool: jest.fn(),
+    resolveExactCampaignEmailSender: jest.fn(),
+    getCampaignEmailSenderPoolInTransaction: jest.fn().mockResolvedValue({
+      rotationPolicyId:
+        'EARLIEST_ELIGIBLE_LOWEST_DAILY_USAGE_STABLE_ACCOUNT_V1',
+      serializationRevision: 'CAMPAIGN_SENDER_POOL_V2',
+      mailboxes: [],
+      senderPoolFingerprint: 'canonical-fingerprint',
+    }),
+    resolveExactCampaignEmailSenderInTransaction: jest.fn(),
+  };
   const service = new CampaignAccountService(
     orm,
     coreRepositories.connectedAccount as never,
     coreRepositories.messageChannel as never,
     managedEmailMailboxRepository as never,
     messageOutboundService as never,
+    senderReadinessService as never,
   );
   return {
     service,
@@ -315,6 +368,7 @@ const createHarness = (
     transactionManager,
     messageOutboundService,
     managedEmailMailboxRepository,
+    senderReadinessService,
     transaction,
     orm,
     queryImplementation: query.getMockImplementation(),
@@ -346,7 +400,10 @@ describe('CampaignAccountService', () => {
     // The locked mutation's Campaign read retains row-level permissions and
     // receives the same transaction manager as the raw writes.
     expect(harness.workspaceRepositories.campaign.findOne).toHaveBeenCalledWith(
-      { where: { id: campaignId } },
+      {
+        where: { id: campaignId },
+        lock: { mode: 'pessimistic_write' },
+      },
       harness.transactionManager,
     );
     expect(harness.orm.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
@@ -452,6 +509,73 @@ describe('CampaignAccountService', () => {
         isDefault: false,
       }),
     ]);
+  });
+
+  it('keeps missing-permission and managed candidates selectable but canonically blocked without secrets', async () => {
+    const harness = createHarness({
+      connectedAccounts: [
+        connectedAccount({ scopes: [], providerError: 'raw-provider-error' }),
+        connectedAccount({
+          id: secondAccountId,
+          handle: 'team@brand.test',
+          accessToken: 'second-secret-token',
+        }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+      managedEmailMailboxes: [
+        {
+          id: 'managed-mailbox-id',
+          workspaceId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+        },
+      ],
+    });
+
+    const candidates = await harness.service.candidates(
+      campaignId,
+      authContext,
+    );
+
+    expect(candidates).toHaveLength(2);
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        connectedAccountId: accountId,
+        health: 'AVAILABLE',
+        senderReadiness: {
+          rotationPolicyId:
+            'EARLIEST_ELIGIBLE_LOWEST_DAILY_USAGE_STABLE_ACCOUNT_V1',
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          senderHandle: 'hello@brand.test',
+          status: 'BLOCKED',
+          reason: 'MISSING_PERMISSION',
+        },
+      }),
+      expect.objectContaining({
+        connectedAccountId: secondAccountId,
+        health: 'AVAILABLE',
+        senderReadiness: {
+          rotationPolicyId:
+            'EARLIEST_ELIGIBLE_LOWEST_DAILY_USAGE_STABLE_ACCOUNT_V1',
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          senderHandle: 'team@brand.test',
+          status: 'BLOCKED',
+          reason: 'UNAUTHORIZED',
+        },
+      }),
+    ]);
+    expect(JSON.stringify(candidates)).not.toContain('secret-token');
+    expect(JSON.stringify(candidates)).not.toContain('raw-provider-error');
+    expect(JSON.stringify(candidates)).not.toContain('campaignAccountId');
   });
 
   it('keeps hard-deleted account and channel links visible as removable unavailable placeholders', async () => {
@@ -639,7 +763,10 @@ describe('CampaignAccountService', () => {
       expect(
         harness.workspaceRepositories.campaign.findOne,
       ).toHaveBeenCalledWith(
-        { where: { id: campaignId } },
+        {
+          where: { id: campaignId },
+          lock: { mode: 'pessimistic_write' },
+        },
         harness.transactionManager,
       );
     }
@@ -1104,6 +1231,12 @@ describe('CampaignAccountService', () => {
         readOnlyAuthContext,
       ),
     ).rejects.toThrow('Campaign update permission is required');
+    await expect(
+      harness.service.replaceCampaignEmailPool(
+        { campaignId, connectedAccountIds: [secondAccountId] },
+        readOnlyAuthContext,
+      ),
+    ).rejects.toThrow('Campaign update permission is required');
   });
 
   it('does not cross workspace boundaries', async () => {
@@ -1119,5 +1252,517 @@ describe('CampaignAccountService', () => {
         authContext,
       ),
     ).rejects.toThrow();
+  });
+
+  it('replaces the sole plural pool atomically, collapses duplicate IDs, and restores prior links', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'active-first',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'removed-second',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+          deletedAt: 'deleted',
+        },
+      ],
+      connectedAccounts: [
+        connectedAccount(),
+        connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+    });
+
+    await expect(
+      harness.service.replaceCampaignEmailPool(
+        {
+          campaignId,
+          connectedAccountIds: [secondAccountId, accountId, secondAccountId],
+        },
+        authContext,
+      ),
+    ).resolves.toMatchObject({
+      senderPoolFingerprint: 'canonical-fingerprint',
+    });
+
+    const activeRows = () =>
+      harness.rows.campaignAccount.filter((row) => row.deletedAt == null);
+    expect(activeRows()).toEqual([
+      expect.objectContaining({
+        id: 'active-first',
+        connectedAccountId: accountId,
+        isDefault: true,
+      }),
+      expect.objectContaining({
+        id: 'removed-second',
+        connectedAccountId: secondAccountId,
+        messageChannelId: secondChannelId,
+        isDefault: false,
+      }),
+    ]);
+    expect(
+      activeRows().filter((row) => row.connectedAccountId === accountId),
+    ).toHaveLength(1);
+    expect(
+      activeRows().filter((row) => row.connectedAccountId === secondAccountId),
+    ).toHaveLength(1);
+
+    const rowsAfterFirstReplacement = harness.rows.campaignAccount.map(
+      (row) => ({ ...row }),
+    );
+    await harness.service.replaceCampaignEmailPool(
+      { campaignId, connectedAccountIds: [accountId, secondAccountId] },
+      authContext,
+    );
+    expect(harness.rows.campaignAccount).toEqual(rowsAfterFirstReplacement);
+    expect(activeRows()).toHaveLength(2);
+    expect(
+      activeRows().filter((row) => row.connectedAccountId === accountId),
+    ).toHaveLength(1);
+    expect(
+      activeRows().filter((row) => row.connectedAccountId === secondAccountId),
+    ).toHaveLength(1);
+
+    await harness.service.replaceCampaignEmailPool(
+      { campaignId, connectedAccountIds: [secondAccountId] },
+      authContext,
+    );
+    expect(activeRows()).toEqual([
+      expect.objectContaining({
+        id: 'removed-second',
+        connectedAccountId: secondAccountId,
+        isDefault: true,
+      }),
+    ]);
+    expect(
+      activeRows().filter((row) => row.connectedAccountId === accountId),
+    ).toHaveLength(0);
+    expect(
+      activeRows().filter((row) => row.connectedAccountId === secondAccountId),
+    ).toHaveLength(1);
+    expect(activeRows().filter((row) => row.isDefault)).toHaveLength(1);
+
+    const rowsAfterPromotion = harness.rows.campaignAccount.map((row) => ({
+      ...row,
+    }));
+    await harness.service.replaceCampaignEmailPool(
+      { campaignId, connectedAccountIds: [secondAccountId] },
+      authContext,
+    );
+    expect(harness.rows.campaignAccount).toEqual(rowsAfterPromotion);
+    expect(activeRows().filter((row) => row.isDefault)).toHaveLength(1);
+
+    await harness.service.replaceCampaignEmailPool(
+      { campaignId, connectedAccountIds: [] },
+      authContext,
+    );
+    expect(activeRows()).toEqual([]);
+    expect(activeRows().filter((row) => row.isDefault)).toHaveLength(0);
+    expect(
+      harness.senderReadinessService.getCampaignEmailSenderPoolInTransaction,
+    ).toHaveBeenCalledWith(
+      { workspaceId, campaignId },
+      harness.transactionManager,
+    );
+  });
+
+  it('rolls back the exact prior pool when deterministic default promotion loses', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'active-first',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'active-second',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+        },
+      ],
+      connectedAccounts: [
+        connectedAccount(),
+        connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+    });
+    const priorRows = harness.rows.campaignAccount.map((row) => ({ ...row }));
+    harness.transactionManager.queryRunner.query.mockImplementation(
+      async (sql: string, parameters: unknown[]) => {
+        if (
+          sql.includes('SET "isDefault" = true') &&
+          sql.includes('AND "connectedAccountId" = $2')
+        )
+          return [];
+        return (await harness.queryImplementation?.(sql, parameters)) ?? [];
+      },
+    );
+
+    await expect(
+      harness.service.replaceCampaignEmailPool(
+        { campaignId, connectedAccountIds: [secondAccountId] },
+        authContext,
+      ),
+    ).rejects.toThrow('Could not establish Campaign email pool default');
+
+    expect(harness.rows.campaignAccount).toEqual(priorRows);
+    expect(
+      harness.senderReadinessService.getCampaignEmailSenderPoolInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rolls back replacement when any selected account is ineligible', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'existing',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+      ],
+      connectedAccounts: [
+        connectedAccount(),
+        connectedAccount({
+          id: secondAccountId,
+          handle: 'team@brand.test',
+          provider: ConnectedAccountProvider.EMAIL_GROUP,
+        }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+    });
+
+    await expect(
+      harness.service.replaceCampaignEmailPool(
+        { campaignId, connectedAccountIds: [secondAccountId] },
+        authContext,
+      ),
+    ).rejects.toThrow('not eligible');
+    expect(harness.rows.campaignAccount).toEqual([
+      expect.objectContaining({ id: 'existing' }),
+    ]);
+    expect(harness.rows.campaignAccount[0].deletedAt).toBeUndefined();
+    expect(
+      harness.senderReadinessService.getCampaignEmailSenderPoolInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rolls back exact prior rows when snapshot derivation fails after replacement writes', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'active-first',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'removed-second',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+          deletedAt: 'deleted',
+        },
+      ],
+      connectedAccounts: [
+        connectedAccount(),
+        connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+    });
+    const priorRows = harness.rows.campaignAccount.map((row) => ({ ...row }));
+    harness.senderReadinessService.getCampaignEmailSenderPoolInTransaction.mockRejectedValueOnce(
+      new Error('snapshot failed'),
+    );
+
+    await expect(
+      harness.service.replaceCampaignEmailPool(
+        { campaignId, connectedAccountIds: [secondAccountId] },
+        authContext,
+      ),
+    ).rejects.toThrow('snapshot failed');
+
+    expect(
+      harness.transactionManager.queryRunner.query.mock.calls.some(
+        ([sql]) =>
+          typeof sql === 'string' && sql.includes('SET "deletedAt" = NOW()'),
+      ),
+    ).toBe(true);
+    expect(
+      harness.transactionManager.queryRunner.query.mock.calls.some(
+        ([sql]) =>
+          typeof sql === 'string' && sql.includes('SET "deletedAt" = NULL'),
+      ),
+    ).toBe(true);
+    expect(harness.rows.campaignAccount).toEqual(priorRows);
+  });
+
+  it('rolls back exact prior rows when a replacement write fails after earlier writes', async () => {
+    const harness = createHarness({
+      campaignAccounts: [
+        {
+          id: 'active-first',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+        {
+          id: 'removed-second',
+          campaignId,
+          connectedAccountId: secondAccountId,
+          messageChannelId: secondChannelId,
+          channel: 'EMAIL',
+          isDefault: false,
+          deletedAt: 'deleted',
+        },
+      ],
+      connectedAccounts: [
+        connectedAccount(),
+        connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
+      ],
+      messageChannels: [
+        messageChannel(),
+        messageChannel({
+          id: secondChannelId,
+          connectedAccountId: secondAccountId,
+          handle: 'team@brand.test',
+        }),
+      ],
+    });
+    const priorRows = harness.rows.campaignAccount.map((row) => ({ ...row }));
+    harness.transactionManager.queryRunner.query.mockImplementation(
+      async (sql: string, parameters: unknown[]) => {
+        const result =
+          (await harness.queryImplementation?.(sql, parameters)) ?? [];
+        if (sql.includes('SET "deletedAt" = NULL'))
+          throw new Error('replacement write failed');
+        return result;
+      },
+    );
+
+    await expect(
+      harness.service.replaceCampaignEmailPool(
+        { campaignId, connectedAccountIds: [secondAccountId] },
+        authContext,
+      ),
+    ).rejects.toThrow('replacement write failed');
+
+    expect(harness.rows.campaignAccount).toEqual(priorRows);
+    expect(
+      harness.senderReadinessService.getCampaignEmailSenderPoolInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it.each(['DRAFT', 'PAUSED'])(
+    'rejects a replacement lifecycle race from %s to Active at the locked Campaign read without writes',
+    async (initialLifecycleStatus) => {
+      const harness = createHarness({
+        campaigns: [
+          { id: campaignId, lifecycleStatus: initialLifecycleStatus },
+        ],
+        campaignAccounts: [
+          {
+            id: 'linked',
+            campaignId,
+            connectedAccountId: accountId,
+            messageChannelId: channelId,
+            channel: 'EMAIL',
+            isDefault: true,
+          },
+        ],
+      });
+      const priorRows = harness.rows.campaignAccount.map((row) => ({ ...row }));
+      harness.transactionManager.queryRunner.query.mockImplementation(
+        async (sql: string, parameters: unknown[]) => {
+          const result =
+            (await harness.queryImplementation?.(sql, parameters)) ?? [];
+          if (sql.includes('pg_advisory_xact_lock'))
+            harness.rows.campaign[0].lifecycleStatus = 'ACTIVE';
+          return result;
+        },
+      );
+
+      await expect(
+        harness.service.replaceCampaignEmailPool(
+          { campaignId, connectedAccountIds: [accountId] },
+          authContext,
+        ),
+      ).rejects.toThrow('Draft or Stopped');
+
+      expect(harness.rows.campaignAccount).toEqual(priorRows);
+      expect(
+        harness.transactionManager.queryRunner.query.mock.calls.some(
+          ([sql]) =>
+            typeof sql === 'string' &&
+            (sql.includes('INSERT INTO') || sql.includes('UPDATE')),
+        ),
+      ).toBe(false);
+      expect(
+        harness.transactionManager.queryRunner.query.mock
+          .invocationCallOrder[0],
+      ).toBeLessThan(
+        harness.workspaceRepositories.campaign.findOne.mock
+          .invocationCallOrder[0],
+      );
+    },
+  );
+
+  it.each([
+    'link',
+    'setDefault',
+    'remove',
+    'replaceCampaignEmailPool',
+  ] as const)(
+    'rejects %s while Active after advisory lock and Campaign row lock but before writes',
+    async (operation) => {
+      const harness = createHarness({
+        campaigns: [{ id: campaignId, lifecycleStatus: 'ACTIVE' }],
+        campaignAccounts: [
+          {
+            id: 'linked',
+            campaignId,
+            connectedAccountId: accountId,
+            messageChannelId: channelId,
+            channel: 'EMAIL',
+            isDefault: true,
+          },
+        ],
+      });
+      const calls = {
+        link: () =>
+          harness.service.link(
+            { campaignId, connectedAccountId: accountId },
+            authContext,
+          ),
+        setDefault: () =>
+          harness.service.setDefault(
+            { campaignId, campaignAccountId: 'linked' },
+            authContext,
+          ),
+        remove: () =>
+          harness.service.remove(
+            { campaignId, campaignAccountId: 'linked' },
+            authContext,
+          ),
+        replaceCampaignEmailPool: () =>
+          harness.service.replaceCampaignEmailPool(
+            { campaignId, connectedAccountIds: [accountId] },
+            authContext,
+          ),
+      };
+
+      await expect(calls[operation]()).rejects.toThrow('Draft or Stopped');
+      expect(harness.rows.campaignAccount).toEqual([
+        expect.objectContaining({ id: 'linked' }),
+      ]);
+      expect(harness.rows.campaignAccount[0].deletedAt).toBeUndefined();
+      const advisoryOrder =
+        harness.transactionManager.queryRunner.query.mock
+          .invocationCallOrder[0];
+      const rowLockOrder =
+        harness.workspaceRepositories.campaign.findOne.mock
+          .invocationCallOrder[0];
+      expect(advisoryOrder).toBeLessThan(rowLockOrder);
+    },
+  );
+
+  it('allows replacement while Stopped using the existing PAUSED lifecycle value', async () => {
+    const harness = createHarness({
+      campaigns: [{ id: campaignId, lifecycleStatus: 'PAUSED' }],
+    });
+
+    await expect(
+      harness.service.replaceCampaignEmailPool(
+        { campaignId, connectedAccountIds: [] },
+        authContext,
+      ),
+    ).resolves.toMatchObject({
+      senderPoolFingerprint: 'canonical-fingerprint',
+    });
+  });
+
+  it('delegates public and supplied-manager canonical readers without caller workspace authority', async () => {
+    const harness = createHarness();
+    const expected = { senderPoolFingerprint: 'fingerprint' };
+    harness.senderReadinessService.getCampaignEmailSenderPool.mockResolvedValue(
+      expected,
+    );
+    harness.senderReadinessService.resolveExactCampaignEmailSender.mockResolvedValue(
+      {
+        status: 'STALE_POOL',
+      },
+    );
+
+    await expect(
+      harness.service.getCampaignEmailSenderPool({ campaignId }, authContext),
+    ).resolves.toBe(expected);
+    await expect(
+      harness.service.resolveExactCampaignEmailSender(
+        {
+          campaignId,
+          connectedAccountId: accountId,
+          expectedSenderPoolFingerprint: 'old',
+        },
+        authContext,
+      ),
+    ).resolves.toEqual({ status: 'STALE_POOL' });
+    await harness.service.getCampaignEmailSenderPoolInTransaction(
+      { workspaceId, campaignId },
+      harness.transactionManager as never,
+    );
+    expect(
+      harness.senderReadinessService.getCampaignEmailSenderPool,
+    ).toHaveBeenCalledWith({ campaignId }, authContext);
   });
 });

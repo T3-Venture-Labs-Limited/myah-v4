@@ -72,6 +72,67 @@ describe('EmailComposerService connected account resolution', () => {
     );
   });
 
+  it('uses only the supplied active manager and preserves composed bytes', async () => {
+    const account = buildAccount(CONNECTED_ACCOUNT_ID);
+    connectedAccountRepository.findOne.mockResolvedValue(account);
+    const ambient = await service.composeEmail(
+      { ...baseParams, connectedAccountId: CONNECTED_ACCOUNT_ID },
+      context,
+    );
+    connectedAccountRepository.findOne.mockClear();
+    globalWorkspaceOrmManager.executeInWorkspaceContext.mockClear();
+    const transactionRepository = {
+      findOne: jest.fn().mockResolvedValue(account),
+    };
+    const transactionManager = {
+      getRepository: jest.fn(() => transactionRepository),
+      queryRunner: {
+        isTransactionActive: true,
+        isReleased: false,
+      },
+    } as any;
+    transactionManager.queryRunner.manager = transactionManager;
+
+    const transactional = await service.composeEmail(
+      { ...baseParams, connectedAccountId: CONNECTED_ACCOUNT_ID },
+      context,
+      transactionManager,
+    );
+
+    expect(transactional).toEqual(ambient);
+    expect(transactionRepository.findOne).toHaveBeenCalledTimes(1);
+    expect(connectedAccountRepository.findOne).not.toHaveBeenCalled();
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects transactional attachments before ambient metadata or byte loading', async () => {
+    const transactionRepository = {
+      findOne: jest.fn().mockResolvedValue(buildAccount(CONNECTED_ACCOUNT_ID)),
+    };
+    const transactionManager = {
+      getRepository: jest.fn(() => transactionRepository),
+      queryRunner: { isTransactionActive: true, isReleased: false },
+    } as any;
+    transactionManager.queryRunner.manager = transactionManager;
+
+    await expect(
+      service.composeEmail(
+        {
+          ...baseParams,
+          connectedAccountId: CONNECTED_ACCOUNT_ID,
+          files: [{ id: 'file', name: 'file.txt' }],
+        } as never,
+        context,
+        transactionManager,
+      ),
+    ).rejects.toThrow('attachments are unavailable');
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).not.toHaveBeenCalled();
+  });
+
   it('throws when the id is not a valid UUID', async () => {
     await expect(
       service.composeEmail(

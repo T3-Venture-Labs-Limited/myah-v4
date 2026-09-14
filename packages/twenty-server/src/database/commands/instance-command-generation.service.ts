@@ -97,7 +97,11 @@ export class InstanceCommandGenerationService {
   }
 
   private escapeForSingleQuotedString(query: string): string {
-    return query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return query
+      .replace(/\\/g, '\\\\')
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n')
+      .replace(/'/g, "\\'");
   }
 
   private buildFastMigrationFileContent({

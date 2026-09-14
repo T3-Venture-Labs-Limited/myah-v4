@@ -13,6 +13,7 @@ import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connect
 import { type ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { ImapClientProvider } from 'src/modules/messaging/message-import-manager/drivers/imap/providers/imap-client.provider';
 import { SmtpClientProvider } from 'src/modules/messaging/message-import-manager/drivers/smtp/providers/smtp-client.provider';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 
 jest.mock('imapflow', () => ({ ImapFlow: jest.fn() }));
 jest.mock('nodemailer', () => ({ createTransport: jest.fn() }));
@@ -63,6 +64,7 @@ describe('workspace mailbox runtime transport security', () => {
   const mockImapConnect = jest.fn().mockResolvedValue(undefined);
   const mockImapLogout = jest.fn().mockResolvedValue(undefined);
   const mockImapOn = jest.fn();
+  const mockSmtpVerify = jest.fn().mockResolvedValue(true);
   const imapClientProvider = new ImapClientProvider(
     secureHttpClientService as unknown as SecureHttpClientService,
     encryptionService as unknown as ConnectedAccountTokenEncryptionService,
@@ -83,12 +85,15 @@ describe('workspace mailbox runtime transport security', () => {
       on: mockImapOn,
     }));
     mockImapConnect.mockResolvedValue(undefined);
-    (createTransport as jest.Mock).mockReturnValue({});
+    mockSmtpVerify.mockResolvedValue(true);
+    (createTransport as jest.Mock).mockReturnValue({ verify: mockSmtpVerify });
   });
 
   it('enforces certificate verification and STARTTLS for Myah runtime clients', async () => {
     await imapClientProvider.getClient(myahAccount.id);
-    await smtpClientProvider.getClient(myahAccount.id);
+    const smtpClient = await smtpClientProvider.getClient(myahAccount.id);
+
+    await smtpClient.verify();
 
     expect(ImapFlow).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -106,6 +111,9 @@ describe('workspace mailbox runtime transport security', () => {
         host: '203.0.113.11',
         requireTLS: true,
         secure: false,
+        connectionTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        greetingTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        socketTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
         tls: {
           rejectUnauthorized: true,
           servername: 'smtp.example.com',
@@ -122,13 +130,20 @@ describe('workspace mailbox runtime transport security', () => {
     } as ConnectedAccountEntity);
 
     await imapClientProvider.getClient(myahAccount.id);
-    await smtpClientProvider.getClient(myahAccount.id);
+    const smtpClient = await smtpClientProvider.getClient(myahAccount.id);
+
+    await smtpClient.verify();
 
     expect(ImapFlow).toHaveBeenCalledWith(
       expect.objectContaining({ tls: { rejectUnauthorized: false } }),
     );
     expect(createTransport).toHaveBeenCalledWith(
-      expect.objectContaining({ tls: { rejectUnauthorized: false } }),
+      expect.objectContaining({
+        connectionTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        greetingTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        socketTimeout: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+        tls: { rejectUnauthorized: false },
+      }),
     );
   });
 

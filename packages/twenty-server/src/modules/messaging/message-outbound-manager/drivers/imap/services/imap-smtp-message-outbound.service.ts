@@ -6,6 +6,7 @@ import MailComposer from 'nodemailer/lib/mail-composer';
 import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
 
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
@@ -24,6 +25,9 @@ import { toMailComposerOptions } from 'src/modules/messaging/message-outbound-ma
 
 @Injectable()
 export class ImapSmtpMessageOutboundService implements MessageOutboundDriver {
+  readonly providerRequestTimeoutMs =
+    OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS;
+
   private readonly logger = new Logger(ImapSmtpMessageOutboundService.name);
 
   constructor(

@@ -1,6 +1,7 @@
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { type EmailGroupMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/email-group/services/email-group-message-outbound.service';
 import { type GmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/gmail-message-outbound.service';
 import { type ImapSmtpMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/imap/services/imap-smtp-message-outbound.service';
@@ -24,15 +25,19 @@ describe('MessagingMessageOutboundService sendability assertion', () => {
   const service = new MessagingMessageOutboundService(
     {
       assertSendable: assertGmailSendable,
+      providerRequestTimeoutMs: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
     } as unknown as GmailMessageOutboundService,
     {
       assertSendable: assertMicrosoftSendable,
+      providerRequestTimeoutMs: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
     } as unknown as MicrosoftMessageOutboundService,
     {
       assertSendable: assertImapSmtpSendable,
+      providerRequestTimeoutMs: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
     } as unknown as ImapSmtpMessageOutboundService,
     {
       assertSendable: assertEmailGroupSendable,
+      providerRequestTimeoutMs: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
     } as unknown as EmailGroupMessageOutboundService,
   );
 
@@ -55,6 +60,17 @@ describe('MessagingMessageOutboundService sendability assertion', () => {
       expect(assertSendable).toHaveBeenCalledWith(connectedAccount);
     },
   );
+
+  it.each([
+    ConnectedAccountProvider.GOOGLE,
+    ConnectedAccountProvider.MICROSOFT,
+    ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+    ConnectedAccountProvider.EMAIL_GROUP,
+  ])('reads the fixed timeout from the selected %s driver', (provider) => {
+    expect(
+      service.getProviderRequestTimeoutMs(buildConnectedAccount(provider)),
+    ).toBe(OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS);
+  });
 
   it.each([
     ConnectedAccountProvider.APP,

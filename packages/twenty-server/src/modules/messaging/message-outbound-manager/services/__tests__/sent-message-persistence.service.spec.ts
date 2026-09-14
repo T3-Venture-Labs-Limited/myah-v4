@@ -28,7 +28,7 @@ describe('SentMessagePersistenceService', () => {
     };
     const saveMessagesAndEnqueueContactCreation = jest.fn().mockResolvedValue({
       messageExternalIdsAndIdsMap: new Map([
-        ['provider-message-id', 'message-id'],
+        ['provider-message-id', '00000000-0000-4000-8000-000000000104'],
       ]),
       messageExternalIdToMessageThreadIdMap: new Map([
         ['provider-message-id', 'message-thread-id'],
@@ -38,6 +38,8 @@ describe('SentMessagePersistenceService', () => {
       messageChannelRepository as never,
       { saveMessagesAndEnqueueContactCreation } as never,
     );
+    const providerAcceptedAt = new Date('2026-09-11T10:00:00.000Z');
+    const expectedMessageId = '00000000-0000-4000-8000-000000000104';
 
     await expect(
       service.persistSentMessage({
@@ -52,9 +54,11 @@ describe('SentMessagePersistenceService', () => {
         messageChannelId,
         inReplyTo: '<incoming@example.com>',
         workspaceId,
+        expectedMessageId,
+        providerAcceptedAt,
       }),
     ).resolves.toEqual({
-      messageId: 'message-id',
+      messageId: '00000000-0000-4000-8000-000000000104',
       messageThreadId: 'message-thread-id',
     });
 
@@ -62,6 +66,8 @@ describe('SentMessagePersistenceService', () => {
       [
         expect.objectContaining({
           subject: '',
+          expectedMessageId,
+          receivedAt: providerAcceptedAt,
           participants: expect.arrayContaining([
             expect.objectContaining({
               role: MessageParticipantRole.FROM,
@@ -73,6 +79,53 @@ describe('SentMessagePersistenceService', () => {
       expect.objectContaining({ id: messageChannelId }),
       primaryAccount,
       workspaceId,
+      undefined,
+    );
+  });
+
+  it('rejects a deterministic Message collision returned by the canonical save chain', async () => {
+    const workspaceId = '00000000-0000-4000-8000-000000000101';
+    const connectedAccount = {
+      id: '00000000-0000-4000-8000-000000000103',
+      workspaceId,
+      handle: 'sender@brand.com',
+      handleAliases: [],
+    } as unknown as ConnectedAccountEntity;
+    const saveMessagesAndEnqueueContactCreation = jest
+      .fn()
+      .mockRejectedValue(
+        new Error('Expected Message identity conflicts with header identity'),
+      );
+    const service = new SentMessagePersistenceService(
+      {
+        findOneOrFail: jest.fn().mockResolvedValue({
+          id: '00000000-0000-4000-8000-000000000102',
+          workspaceId,
+          connectedAccountId: connectedAccount.id,
+          handle: connectedAccount.handle,
+          connectedAccount,
+        }),
+      } as never,
+      { saveMessagesAndEnqueueContactCreation } as never,
+    );
+
+    await expect(
+      service.persistSentMessage({
+        sendResult: {
+          headerMessageId: '<sent@example.com>',
+          messageExternalId: 'provider-message-id',
+        },
+        subject: 'Subject',
+        body: 'Body',
+        recipients: { to: ['creator@example.com'], cc: [], bcc: [] },
+        connectedAccount,
+        messageChannelId: '00000000-0000-4000-8000-000000000102',
+        workspaceId,
+        expectedMessageId: '00000000-0000-4000-8000-000000000104',
+        providerAcceptedAt: new Date('2026-09-11T10:00:00.000Z'),
+      }),
+    ).rejects.toThrow(
+      'Expected Message identity conflicts with header identity',
     );
   });
 
@@ -168,6 +221,7 @@ describe('SentMessagePersistenceService', () => {
       expect.anything(),
       connectedAccount,
       workspaceId,
+      undefined,
     );
   });
 });

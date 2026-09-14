@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { isDefined } from 'twenty-shared/utils';
 
 import { WorkflowActionDTO } from 'src/engine/core-modules/workflow/dtos/workflow-action.dto';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import {
   WorkflowVersionStepException,
   WorkflowVersionStepExceptionCode,
@@ -18,6 +19,7 @@ export class WorkflowVersionStepUpdateWorkspaceService {
     private readonly workflowSchemaWorkspaceService: WorkflowSchemaWorkspaceService,
     private readonly workflowVersionStepOperationsWorkspaceService: WorkflowVersionStepOperationsWorkspaceService,
     private readonly workflowVersionStepHelpersWorkspaceService: WorkflowVersionStepHelpersWorkspaceService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async updateWorkflowVersionStep({
@@ -29,6 +31,10 @@ export class WorkflowVersionStepUpdateWorkspaceService {
     workflowVersionId: string;
     step: WorkflowAction;
   }): Promise<WorkflowActionDTO> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const workflowVersion =
       await this.workflowVersionStepHelpersWorkspaceService.getValidatedDraftWorkflowVersion(
         {

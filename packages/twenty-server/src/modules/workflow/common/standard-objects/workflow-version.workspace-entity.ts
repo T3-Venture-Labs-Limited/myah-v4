@@ -1,3 +1,5 @@
+import { type CampaignSequence } from 'twenty-shared/workflow';
+
 import { BaseWorkspaceEntity } from 'src/engine/twenty-orm/base.workspace-entity';
 import { type EntityRelation } from 'src/engine/workspace-manager/workspace-migration/types/entity-relation.interface';
 import { type TimelineActivityWorkspaceEntity } from 'src/modules/timeline/standard-objects/timeline-activity.workspace-entity';
@@ -17,6 +19,7 @@ export class WorkflowVersionWorkspaceEntity extends BaseWorkspaceEntity {
   name: string | null;
   trigger: WorkflowTrigger | null;
   steps: WorkflowAction[] | null;
+  campaignSequence: CampaignSequence | null;
   status: WorkflowVersionStatus;
   position: number;
   searchVector: string;

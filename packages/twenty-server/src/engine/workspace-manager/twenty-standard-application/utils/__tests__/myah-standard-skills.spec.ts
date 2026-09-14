@@ -218,17 +218,17 @@ describe('Myah standard skills', () => {
     );
   });
 
-  it('transitions campaign lifecycle by exact ID with approval and readback', () => {
+  it('reserves campaign lifecycle transitions for dedicated controls', () => {
     const myahCampaigns = buildSkill('myah-campaigns');
 
     expect(myahCampaigns.content).toEqual(
       expect.stringContaining(
-        'read the exact Campaign ID and observed lifecycleStatus',
+        'Campaign lifecycle transitions require the dedicated Start and Stop controls',
       ),
     );
     expect(myahCampaigns.content).toEqual(
       expect.stringContaining(
-        'call update_many_campaigns for exactly that Campaign ID, then find_one_campaign to read back lifecycleStatus',
+        'Never use update_one_campaign or update_many_campaigns to mutate lifecycleStatus',
       ),
     );
   });

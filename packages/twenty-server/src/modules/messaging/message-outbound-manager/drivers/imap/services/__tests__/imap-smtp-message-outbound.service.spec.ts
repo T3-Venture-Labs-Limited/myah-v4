@@ -8,6 +8,7 @@ import { type MessageFolderEntity } from 'src/engine/metadata-modules/message-fo
 import { type ImapClientProvider } from 'src/modules/messaging/message-import-manager/drivers/imap/providers/imap-client.provider';
 import { type ImapFindDraftsFolderService } from 'src/modules/messaging/message-import-manager/drivers/imap/services/imap-find-drafts-folder.service';
 import { type SmtpClientProvider } from 'src/modules/messaging/message-import-manager/drivers/smtp/providers/smtp-client.provider';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { ImapSmtpMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/imap/services/imap-smtp-message-outbound.service';
 
 const MOCKED_EMAIL_BUFFER = Buffer.from(
@@ -44,8 +45,9 @@ describe('ImapSmtpMessageOutboundService', () => {
   } as unknown as ImapClientProvider;
   const sendMail = jest.fn();
   const verify = jest.fn();
+  const smtpClient = { sendMail, verify };
   const smtpClientProvider = {
-    getClient: jest.fn().mockResolvedValue({ sendMail, verify }),
+    getClient: jest.fn().mockResolvedValue(smtpClient),
   } as unknown as SmtpClientProvider;
   const draftsFolderService = {
     findOrCreateDraftsFolder: jest.fn().mockResolvedValue({ path: 'Drafts' }),
@@ -80,6 +82,12 @@ describe('ImapSmtpMessageOutboundService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('exposes the fixed provider request timeout', () => {
+    expect(service.providerRequestTimeoutMs).toBe(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
   });
 
   it('preflights SMTP credentials without sending or creating a draft', async () => {

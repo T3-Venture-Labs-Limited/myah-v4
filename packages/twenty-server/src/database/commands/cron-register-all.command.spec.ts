@@ -4,6 +4,8 @@ import { Test } from '@nestjs/testing';
 
 import { ManagedEmailReconciliationCronCommand } from 'src/engine/core-modules/managed-email/crons/commands/managed-email-reconciliation.cron.command';
 import { ManagedEmailModule } from 'src/engine/core-modules/managed-email/managed-email.module';
+import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
+import { CampaignEmailRuntimeCronCommand } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.command';
 
 import { CronRegisterAllCommand } from './cron-register-all.command';
 import { DatabaseCommandModule } from './database-command.module';
@@ -21,6 +23,9 @@ const runAggregate = async (
   managedEmailEnabled = false,
 ) => {
   const otherCronCommand = { run: jest.fn().mockResolvedValue(undefined) };
+  const campaignEmailRuntimeCronCommand = {
+    run: jest.fn().mockResolvedValue(undefined),
+  };
   const managedProviderBillingRecoveryCronCommand = {
     run: jest.fn().mockResolvedValue(undefined),
   };
@@ -44,13 +49,15 @@ const runAggregate = async (
       ...dependencies.map((provide, index) => ({
         provide,
         useValue:
-          index === dependencies.length - 3
-            ? managedProviderBillingRecoveryCronCommand
-            : index === dependencies.length - 2
-              ? managedEmailReconciliationCronCommand
-              : index === dependencies.length - 1
-                ? twentyConfigService
-                : otherCronCommand,
+          index === 0
+            ? campaignEmailRuntimeCronCommand
+            : index === dependencies.length - 3
+              ? managedProviderBillingRecoveryCronCommand
+              : index === dependencies.length - 2
+                ? managedEmailReconciliationCronCommand
+                : index === dependencies.length - 1
+                  ? twentyConfigService
+                  : otherCronCommand,
       })),
     ],
   }).compile();
@@ -61,12 +68,18 @@ const runAggregate = async (
   await module.close();
 
   return {
+    campaignEmailRuntimeCronCommand,
     managedEmailReconciliationCronCommand,
     managedProviderBillingRecoveryCronCommand,
   };
 };
 
 describe('CronRegisterAllCommand', () => {
+  it('registers Campaign email runtime', async () => {
+    const { campaignEmailRuntimeCronCommand } = await runAggregate(false);
+    expect(campaignEmailRuntimeCronCommand.run).toHaveBeenCalledTimes(1);
+  });
+
   it('registers managed-provider billing recovery when Metronome is enabled', async () => {
     const { managedProviderBillingRecoveryCronCommand } =
       await runAggregate(true);
@@ -101,6 +114,20 @@ describe('CronRegisterAllCommand', () => {
     );
 
     expect(managedEmailReconciliationCronCommand.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('imports the Campaign runtime command through the real database command module', () => {
+    const databaseImports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      DatabaseCommandModule,
+    ) as unknown[];
+    const campaignExports = Reflect.getMetadata(
+      MODULE_METADATA.EXPORTS,
+      CampaignExecutionOrchestrationModule,
+    ) as unknown[];
+
+    expect(databaseImports).toContain(CampaignExecutionOrchestrationModule);
+    expect(campaignExports).toContain(CampaignEmailRuntimeCronCommand);
   });
 
   it('wires managed-email recovery into the real database command module', () => {

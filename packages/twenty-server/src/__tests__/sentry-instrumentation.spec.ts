@@ -42,14 +42,15 @@ describe('Sentry backend instrumentation', () => {
       'utf8',
     );
     const dotenvConfigIndex = instrumentSource.indexOf('dotenv.config(');
+    const resolverCallIndex = instrumentSource.indexOf(
+      'path: getServerEnvFilePath(),',
+    );
     const instrumentationConfigIndex =
       instrumentSource.indexOf('const meterDrivers');
 
     expect(dotenvConfigIndex).toBeGreaterThanOrEqual(0);
-    expect(dotenvConfigIndex).toBeLessThan(instrumentationConfigIndex);
-    expect(instrumentSource).toContain(
-      "process.env.NODE_ENV === 'test' ? '.env.test' : '.env'",
-    );
+    expect(resolverCallIndex).toBeGreaterThan(dotenvConfigIndex);
+    expect(resolverCallIndex).toBeLessThan(instrumentationConfigIndex);
   });
 
   it('leaves Vercel AI payload recording to each call policy', () => {
