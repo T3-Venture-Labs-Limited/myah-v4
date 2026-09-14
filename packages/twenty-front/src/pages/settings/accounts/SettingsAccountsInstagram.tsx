@@ -117,9 +117,10 @@ export const SettingsAccountsInstagram = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [account, setAccount] = useState<InstagramAccount | null>(null);
-  const attemptId = new URLSearchParams(window.location.search).get(
-    'attemptId',
-  );
+  const isDisconnectPending = account?.status === 'DELETE_UNKNOWN';
+  const hostedAuthReturn = new URLSearchParams(window.location.search);
+  const attemptId = hostedAuthReturn.get('attemptId');
+  const didHostedAuthFail = hostedAuthReturn.get('connection') === 'failed';
 
   const loadAccounts = async () => {
     const token = getAccessToken();
@@ -147,7 +148,10 @@ export const SettingsAccountsInstagram = () => {
         throw new Error('Instagram account status request failed.');
       }
 
-      setAccount((await response.json()) as InstagramAccount | null);
+      const body = await response.text();
+      setAccount(
+        body === '' ? null : (JSON.parse(body) as InstagramAccount | null),
+      );
     } catch {
       enqueueErrorSnackBar({
         message: t`Could not load Instagram connection status.`,
@@ -158,15 +162,15 @@ export const SettingsAccountsInstagram = () => {
   };
 
   useEffect(() => {
-    if (!attemptId) {
+    if (!attemptId || didHostedAuthFail) {
       void loadAccounts();
     }
     // loadAccounts depends on snackbar callbacks; run once on page entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attemptId]);
+  }, [attemptId, didHostedAuthFail]);
 
   useEffect(() => {
-    if (!attemptId) {
+    if (!attemptId || didHostedAuthFail) {
       return;
     }
 
@@ -268,12 +272,16 @@ export const SettingsAccountsInstagram = () => {
     };
     // loadAccounts depends on snackbar callbacks; run once per authorization attempt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attemptId]);
+  }, [attemptId, didHostedAuthFail]);
 
   const handleHostedAuth = async (
     path: 'connect' | 'reconnect',
     errorMessage: string,
   ) => {
+    if (isDisconnectPending) {
+      return;
+    }
+
     const token = getAccessToken();
 
     if (!token) {
@@ -310,6 +318,10 @@ export const SettingsAccountsInstagram = () => {
   };
 
   const handleDisconnectInstagram = async () => {
+    if (isDisconnectPending) {
+      return;
+    }
+
     if (!window.confirm(t`Disconnect this Instagram account?`)) {
       return;
     }
@@ -350,6 +362,11 @@ export const SettingsAccountsInstagram = () => {
       }
 
       if (status === 'PENDING_RECOVERY') {
+        setAccount((currentAccount) =>
+          currentAccount
+            ? { ...currentAccount, status: 'DELETE_UNKNOWN' }
+            : currentAccount,
+        );
         enqueueWarningSnackBar({
           message: t`Instagram disconnect is still being confirmed.`,
         });
@@ -492,6 +509,7 @@ export const SettingsAccountsInstagram = () => {
                 title={t`Disconnect Instagram`}
                 variant="primary"
                 accent="brand"
+                disabled={isDisconnectPending}
                 isLoading={isConnecting}
                 onClick={handleDisconnectInstagram}
               />

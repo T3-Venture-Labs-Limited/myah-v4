@@ -9,14 +9,19 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
+import { type NestExpressApplication } from '@nestjs/platform-express';
+import { Test } from '@nestjs/testing';
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
+import { settings } from 'src/engine/constants/settings';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { JwtAuthGuard } from 'src/engine/guards/jwt-auth.guard';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { redactJsonParserErrorMiddleware } from 'src/engine/middlewares/redact-json-parser-error.middleware';
+import { UnhandledExceptionFilter } from 'src/filters/unhandled-exception.filter';
 import { UnipileHostedAuthAttemptStatus } from 'src/modules/myah-unipile/entities/unipile-hosted-auth-attempt.entity';
 import { UnipileHostedAuthService } from 'src/modules/myah-unipile/services/unipile-hosted-auth.service';
 import { UnipileInstagramAccountService } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
@@ -48,10 +53,7 @@ type MyahUnipileInstagramController = {
 };
 
 type MyahUnipileInstagramPublicController = {
-  notifyHostedAuth(
-    attemptId: string,
-    body: { account_id: string; name: string; status: string },
-  ): Promise<{ ok: true }>;
+  notifyHostedAuth(attemptId: string, body: unknown): Promise<{ ok: true }>;
 };
 
 type MyahUnipileInstagramControllerModule = {
@@ -374,6 +376,235 @@ describe('MyahUnipileInstagramController', () => {
 });
 
 describe('MyahUnipileInstagramPublicController', () => {
+  const attemptId = '97ea42c5-0514-4f29-a2ea-b641f90230ec';
+  const notification = {
+    account_id: 'provider-account-id',
+    name: 'ab'.repeat(32),
+    status: 'CREATION_SUCCESS',
+  };
+
+  const withHttpApp = async (
+    run: (input: {
+      post: (
+        body: string | undefined,
+        pathAttemptId?: string,
+      ) => Promise<Response>;
+      processNotification: jest.Mock;
+    }) => Promise<void>,
+  ) => {
+    jest.useRealTimers();
+
+    const controllerModule = loadControllerModule();
+
+    if (!controllerModule) {
+      throw new Error('Unable to load Instagram controller');
+    }
+
+    const processNotification = jest.fn().mockResolvedValue({
+      attemptId,
+      status: 'COMPLETED',
+    });
+    const module = await Test.createTestingModule({
+      controllers: [controllerModule.MyahUnipileInstagramPublicController],
+      providers: [
+        {
+          provide: UnipileHostedAuthService,
+          useValue: { processNotification },
+        },
+      ],
+    }).compile();
+    const app = module.createNestApplication<NestExpressApplication>({
+      logger: false,
+      rawBody: true,
+    });
+
+    app.useGlobalFilters(new UnhandledExceptionFilter());
+    app.useBodyParser('json', { limit: settings.storage.maxFileSize });
+    app.useBodyParser('urlencoded', {
+      limit: settings.storage.maxFileSize,
+      extended: true,
+    });
+    app.useBodyParser('text', { type: 'text/plain', limit: '1024kb' });
+    app.use(redactJsonParserErrorMiddleware);
+
+    try {
+      await app.listen(0, '127.0.0.1');
+
+      const baseUrl = await app.getUrl();
+
+      await run({
+        post: (body, pathAttemptId = attemptId) =>
+          fetch(
+            `${baseUrl}/rest/myah/unipile/instagram/hosted-auth/${encodeURIComponent(pathAttemptId)}/notify`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+            },
+          ),
+        processNotification,
+      });
+    } finally {
+      await app.close();
+      jest.useFakeTimers();
+    }
+  };
+
+  const invalidNotifications: Array<[string, unknown]> = [
+    ['missing body', undefined],
+    ['empty object', {}],
+    ['array body', []],
+    [
+      'unknown field',
+      { ...notification, untrusted: 'synthetic-private-value' },
+    ],
+    ['unsupported status', { ...notification, status: 'SYNC_SUCCESS' }],
+    ['oversized status', { ...notification, status: 'x'.repeat(513) }],
+    ['short nonce', { ...notification, name: 'ab'.repeat(31) }],
+    ['oversized nonce', { ...notification, name: 'ab'.repeat(33) }],
+    ['nonhex nonce', { ...notification, name: 'z'.repeat(64) }],
+    ['uppercase nonce', { ...notification, name: 'AB'.repeat(32) }],
+    [
+      'nonce with trailing newline',
+      { ...notification, name: `${'a'.repeat(63)}\n` },
+    ],
+    ['oversized account ID', { ...notification, account_id: 'x'.repeat(513) }],
+    ['blank account ID', { ...notification, account_id: '  \t' }],
+  ];
+
+  for (const field of ['account_id', 'name', 'status'] as const) {
+    const { [field]: _omitted, ...missingField } = notification;
+
+    invalidNotifications.push([`missing ${field}`, missingField]);
+
+    for (const [label, value] of [
+      ['null', null],
+      ['object', { secret: 'synthetic-private-value' }],
+      ['array', ['synthetic-private-value']],
+      ['number', 123],
+      ['boolean', true],
+      ['empty', ''],
+    ] as const) {
+      invalidNotifications.push([
+        `${label} ${field}`,
+        { ...notification, [field]: value },
+      ]);
+    }
+  }
+
+  it.each(invalidNotifications)(
+    'rejects %s over HTTP before notification processing with a redacted 400',
+    async (_label, body) => {
+      await withHttpApp(async ({ post, processNotification }) => {
+        const response = await post(JSON.stringify(body));
+
+        expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+        expect(await response.json()).toEqual({
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: 'Invalid Hosted Auth notification',
+          error: 'Bad Request',
+        });
+        expect(processNotification).not.toHaveBeenCalled();
+      });
+    },
+  );
+
+  it.each([
+    ['non-UUID', 'not-a-uuid'],
+    ['compact UUID', attemptId.replace(/-/g, '')],
+    ['braced UUID', `{${attemptId}}`],
+    ['oversized path ID', 'a'.repeat(513)],
+  ])('rejects %s route IDs over HTTP before processing', async (_label, id) => {
+    await withHttpApp(async ({ post, processNotification }) => {
+      const response = await post(JSON.stringify(notification), id);
+
+      expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(await response.json()).toEqual({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Invalid Hosted Auth notification',
+        error: 'Bad Request',
+      });
+      expect(processNotification).not.toHaveBeenCalled();
+    });
+  });
+
+  it.each(['CREATION_SUCCESS', 'RECONNECTED'])(
+    'retains public %s notifications and exact opaque IDs over HTTP',
+    async (status) => {
+      await withHttpApp(async ({ post, processNotification }) => {
+        // Match the existing webhook identifier ceiling without inventing an ID alphabet.
+        const accountId = ` account:/+_%?=é${'x'.repeat(495)} `;
+
+        expect(accountId).toHaveLength(512);
+
+        const response = await post(
+          JSON.stringify({ ...notification, account_id: accountId, status }),
+        );
+
+        expect(response.status).toBe(HttpStatus.OK);
+        expect(await response.json()).toEqual({ ok: true });
+        expect(processNotification).toHaveBeenCalledTimes(1);
+        expect(processNotification).toHaveBeenCalledWith({
+          accountId,
+          attemptId,
+          name: notification.name,
+          status,
+        });
+      });
+    },
+  );
+
+  it.each([
+    ['top-level null', 'null'],
+    ['top-level number', '123'],
+    ['top-level boolean', 'true'],
+    ['top-level string', '"SYN"'],
+    ['malformed JSON', '{"SYN":invalid}'],
+    ['truncated JSON', '{"SYN":'],
+  ] as const)(
+    'redacts %s parser failures over HTTP before notification processing',
+    async (_label, body) => {
+      await withHttpApp(async ({ post, processNotification }) => {
+        const response = await post(body);
+        const error = await response.json();
+
+        expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+        expect(processNotification).not.toHaveBeenCalled();
+        expect(JSON.stringify(error).includes('SYN')).toBe(false);
+        expect(error).toEqual({
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: 'Invalid JSON body',
+          error: 'Bad Request',
+        });
+      });
+    },
+  );
+
+  it('rejects a direct null body before notification processing', async () => {
+    const controllerModule = loadControllerModule();
+
+    if (!controllerModule) {
+      throw new Error('Unable to load Instagram controller');
+    }
+
+    const processNotification = jest.fn();
+    const controller =
+      new controllerModule.MyahUnipileInstagramPublicController({
+        processNotification,
+      } as unknown as UnipileHostedAuthService);
+
+    await expect(
+      controller.notifyHostedAuth(attemptId, null),
+    ).rejects.toMatchObject({
+      response: {
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Invalid Hosted Auth notification',
+        error: 'Bad Request',
+      },
+    });
+    expect(processNotification).not.toHaveBeenCalled();
+  });
+
   it('passes only callback-safe fields to Hosted Auth notification processing', async () => {
     const controllerModule = loadControllerModule();
 
@@ -395,16 +626,12 @@ describe('MyahUnipileInstagramPublicController', () => {
       );
 
     await expect(
-      controller.notifyHostedAuth('attempt-id', {
-        account_id: 'provider-account-id',
-        name: 'callback-proof',
-        status: 'CREATION_SUCCESS',
-      }),
+      controller.notifyHostedAuth(attemptId, notification),
     ).resolves.toEqual({ ok: true });
     expect(hostedAuthService.processNotification).toHaveBeenCalledWith({
       accountId: 'provider-account-id',
-      attemptId: 'attempt-id',
-      name: 'callback-proof',
+      attemptId,
+      name: notification.name,
       status: 'CREATION_SUCCESS',
     });
   });

@@ -169,11 +169,14 @@ export class UnipileHostedAuthService {
 
     await this.attemptRepository.save(attempt);
 
+    const callbackBaseUrl =
+      this.twentyConfigService.get('UNIPILE_INSTAGRAM_CALLBACK_BASE_URL') ||
+      this.twentyConfigService.get('SERVER_URL');
     const input = {
       expiresOn: expiresAt,
       successRedirectUrl: `${this.twentyConfigService.get('FRONTEND_URL')}/settings/accounts/instagram?connection=success&attemptId=${attemptId}`,
       failureRedirectUrl: `${this.twentyConfigService.get('FRONTEND_URL')}/settings/accounts/instagram?connection=failed&attemptId=${attemptId}`,
-      notifyUrl: `${this.twentyConfigService.get('SERVER_URL')}/rest/myah/unipile/instagram/hosted-auth/${attemptId}/notify`,
+      notifyUrl: `${callbackBaseUrl.replace(/\/+$/, '')}/rest/myah/unipile/instagram/hosted-auth/${attemptId}/notify`,
       name: callbackSecret,
     };
     try {
@@ -287,6 +290,33 @@ export class UnipileHostedAuthService {
     }
 
     return { attemptId, status: UnipileHostedAuthAttemptStatus.COMPLETED };
+  }
+
+  async expirePendingAttempt(attemptId: string): Promise<void> {
+    this.availabilityService.assertEnabled();
+
+    await this.attemptRepository.manager.transaction(async (manager) => {
+      const attempt = await manager.findOne(UnipileHostedAuthAttemptEntity, {
+        where: { id: attemptId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const now = new Date();
+
+      if (
+        !attempt ||
+        attempt.status !== UnipileHostedAuthAttemptStatus.PENDING ||
+        attempt.expiresAt > now
+      ) {
+        return;
+      }
+
+      attempt.status = UnipileHostedAuthAttemptStatus.FAILED;
+      attempt.processedAt = now;
+      attempt.failureCode = 'HOSTED_AUTH_EXPIRED';
+      attempt.failureReason = 'Instagram authorization expired';
+
+      await manager.save(attempt);
+    });
   }
 
   async resumeProcessingAttempt(

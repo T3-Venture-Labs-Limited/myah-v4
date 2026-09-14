@@ -1,5 +1,6 @@
 import { useMutation } from '@apollo/client/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { v4 } from 'uuid';
 
 import {
   GET_INSTAGRAM_MESSAGE_DRAFT,
@@ -13,6 +14,7 @@ type InstagramDraftSnapshot = {
   body: string;
   revision: number;
   dirty: boolean;
+  baselineKnown: boolean;
 };
 
 const draftSnapshotsByScope = new Map<string, InstagramDraftSnapshot>();
@@ -33,6 +35,11 @@ export type MyahInboxInstagramDraftConflict = {
 export type MyahInboxInstagramDraftFlushResult = {
   status: 'saved' | 'empty' | 'conflict' | 'error';
   revision: number;
+};
+
+type InstagramDraftSaveOperation = {
+  body: string;
+  promise?: Promise<MyahInboxInstagramDraftFlushResult>;
 };
 
 export type MyahInboxInstagramDraft = {
@@ -98,7 +105,7 @@ const getDraftId = (scope: string) => {
     return existing;
   }
 
-  const draftId = crypto.randomUUID();
+  const draftId = v4();
   draftIdsByScope.set(scope, draftId);
 
   return draftId;
@@ -142,15 +149,34 @@ export const useMyahInboxInstagramDraft = ({
   const bodyRef = useRef(body);
   // oxlint-disable-next-line twenty/no-state-useref
   const revisionRef = useRef(revision);
-  const savePromiseRef =
-    // oxlint-disable-next-line twenty/no-state-useref
-    useRef<Promise<MyahInboxInstagramDraftFlushResult> | null>(null);
+  // Each mounted target lifetime owns its saves, including a return to the same scope.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const scopeLifetimeRef = useRef({
+    scope,
+    active: true,
+    hydrated: false,
+    loadFailed: false,
+    baselineKnown: initialSnapshot?.baselineKnown ?? false,
+    executionLocked: false,
+  });
+  // oxlint-disable-next-line twenty/no-state-useref
+  const saveOperationRef = useRef<InstagramDraftSaveOperation | null>(null);
 
   useEffect(() => {
     const snapshot = scope ? draftSnapshotsByScope.get(scope) : undefined;
     const nextBody = snapshot?.body ?? '';
     const nextRevision = snapshot?.revision ?? 0;
-    const abortController = new AbortController();
+    let isActive = true;
+    const lifetime = {
+      scope,
+      active: true,
+      hydrated: false,
+      loadFailed: false,
+      baselineKnown: snapshot?.baselineKnown ?? false,
+      executionLocked: false,
+    };
+    scopeLifetimeRef.current = lifetime;
+    saveOperationRef.current = null;
 
     setDraftId(scope ? getDraftId(scope) : null);
     bodyRef.current = nextBody;
@@ -164,7 +190,10 @@ export const useMyahInboxInstagramDraft = ({
     setExecutionLocked(false);
 
     if (!scope || !targetId) {
-      return () => abortController.abort();
+      return () => {
+        isActive = false;
+        lifetime.active = false;
+      };
     }
 
     void apolloCoreClient
@@ -179,42 +208,52 @@ export const useMyahInboxInstagramDraft = ({
           },
         },
         fetchPolicy: 'no-cache',
-        context: { fetchOptions: { signal: abortController.signal } },
       })
       .then(({ data }) => {
-        if (abortController.signal.aborted) {
+        if (!isActive) {
           return;
         }
 
         const serverDraft = data?.instagramMessageDraft;
+        const currentSnapshot = draftSnapshotsByScope.get(scope);
+        const hasLocalEdits = currentSnapshot?.dirty === true;
 
-        if (serverDraft) {
-          setExecutionLocked(serverDraft.executionLocked === true);
-          if (!snapshot?.dirty) {
-            draftIdsByScope.set(scope, serverDraft.draftId);
-            draftSnapshotsByScope.set(scope, {
-              body: serverDraft.body,
-              revision: serverDraft.revision,
-              dirty: false,
-            });
-            setDraftId(serverDraft.draftId);
+        lifetime.executionLocked = serverDraft?.executionLocked === true;
+        setExecutionLocked(lifetime.executionLocked);
+        // Only the first hydration can establish a dirty draft's CAS baseline.
+        if (serverDraft && (!hasLocalEdits || !lifetime.baselineKnown)) {
+          draftIdsByScope.set(scope, serverDraft.draftId);
+          setDraftId(serverDraft.draftId);
+          revisionRef.current = serverDraft.revision;
+          setRevision(serverDraft.revision);
+          if (!hasLocalEdits) {
             bodyRef.current = serverDraft.body;
-            revisionRef.current = serverDraft.revision;
             setBodyState(serverDraft.body);
-            setRevision(serverDraft.revision);
-            setDirty(false);
           }
         }
+        lifetime.hydrated = true;
+        lifetime.baselineKnown = true;
+        draftSnapshotsByScope.set(scope, {
+          body: bodyRef.current,
+          revision: revisionRef.current,
+          dirty: hasLocalEdits,
+          baselineKnown: true,
+        });
+        setDirty(hasLocalEdits);
         setStatus('saved');
       })
       .catch(() => {
-        if (!abortController.signal.aborted) {
+        if (isActive) {
+          lifetime.loadFailed = true;
           setStatus('error');
           setError('Could not load the saved Instagram draft.');
         }
       });
 
-    return () => abortController.abort();
+    return () => {
+      isActive = false;
+      lifetime.active = false;
+    };
   }, [
     apolloCoreClient,
     conversationRecordId,
@@ -228,15 +267,19 @@ export const useMyahInboxInstagramDraft = ({
     (nextBody: string) => {
       bodyRef.current = nextBody;
       setBodyState(nextBody);
-      setStatus('saved');
+      const lifetime = scopeLifetimeRef.current;
+      setStatus(
+        lifetime.hydrated ? 'saved' : lifetime.loadFailed ? 'error' : 'loading',
+      );
       setConflict(null);
-      setError(null);
+      if (!lifetime.loadFailed) setError(null);
       setDirty(true);
       if (scope) {
         draftSnapshotsByScope.set(scope, {
           body: nextBody,
           revision: revisionRef.current,
           dirty: true,
+          baselineKnown: lifetime.baselineKnown,
         });
       }
     },
@@ -251,23 +294,55 @@ export const useMyahInboxInstagramDraft = ({
         return { status: 'error', revision: revisionRef.current };
       }
 
+      const lifetime = scopeLifetimeRef.current;
+      const expectedRevision = revisionRef.current;
+      const isCurrent = () =>
+        lifetime.active && scopeLifetimeRef.current === lifetime;
+      const staleResult = (): MyahInboxInstagramDraftFlushResult => ({
+        status: 'error',
+        revision: expectedRevision,
+      });
+
+      if (
+        lifetime.scope !== scope ||
+        !lifetime.hydrated ||
+        lifetime.executionLocked ||
+        (scope && draftIdsByScope.get(scope) !== draftId)
+      ) {
+        return staleResult();
+      }
+
+      const activeOperation = saveOperationRef.current;
+      if (activeOperation?.promise) {
+        const result = await activeOperation.promise;
+        if (!isCurrent()) return staleResult();
+        if (result.status === 'error' || result.status === 'conflict') {
+          return result;
+        }
+        // Flush a newer edit/clear only after the previous CAS has settled.
+        return activeOperation.body !== bodyRef.current ? save() : result;
+      }
+
       const draftBody = bodyRef.current;
-      if (!draftBody.trim()) {
-        return { status: 'empty', revision: revisionRef.current };
+      if (!draftBody.trim() && expectedRevision === 0) {
+        return { status: 'empty', revision: expectedRevision };
       }
 
       if (!dirty) {
-        return { status: 'saved', revision: revisionRef.current };
+        return {
+          status: draftBody.trim() ? 'saved' : 'empty',
+          revision: expectedRevision,
+        };
       }
 
-      if (savePromiseRef.current) {
-        return savePromiseRef.current;
-      }
-
-      const expectedRevision = revisionRef.current;
+      const operation: InstagramDraftSaveOperation = { body: draftBody };
+      saveOperationRef.current = operation;
       const saving = (async () => {
-        setStatus('saving');
-        setError(null);
+        // An unload flush may still persist its captured target, but cannot publish.
+        if (isCurrent()) {
+          setStatus('saving');
+          setError(null);
+        }
 
         try {
           const response = await saveDraftMutation({
@@ -284,6 +359,7 @@ export const useMyahInboxInstagramDraft = ({
               },
             },
           });
+          if (!isCurrent()) return staleResult();
           const result = response.data?.saveInstagramMessageDraft;
 
           if (!result) {
@@ -298,6 +374,7 @@ export const useMyahInboxInstagramDraft = ({
                 body: bodyRef.current,
                 revision: revisionRef.current,
                 dirty: true,
+                baselineKnown: true,
               });
             }
             return { status: 'conflict' as const, revision: result.revision };
@@ -314,22 +391,32 @@ export const useMyahInboxInstagramDraft = ({
               body: bodyRef.current,
               revision: result.revision,
               dirty: stillDirty,
+              baselineKnown: true,
             });
           }
 
-          return { status: 'saved' as const, revision: result.revision };
+          return {
+            status:
+              draftBody.trim() && bodyRef.current.trim()
+                ? ('saved' as const)
+                : ('empty' as const),
+            revision: result.revision,
+          };
         } catch {
+          if (!isCurrent()) return staleResult();
           setError(
             'Could not save the Instagram draft. Your changes are still here.',
           );
           setStatus('error');
           return { status: 'error' as const, revision: revisionRef.current };
         } finally {
-          savePromiseRef.current = null;
+          if (saveOperationRef.current === operation) {
+            saveOperationRef.current = null;
+          }
         }
       })();
 
-      savePromiseRef.current = saving;
+      operation.promise = saving;
       return saving;
     }, [
       conversationRecordId,
@@ -343,7 +430,12 @@ export const useMyahInboxInstagramDraft = ({
     ]);
 
   useEffect(() => {
-    if (!dirty || status !== 'saved' || !body.trim()) {
+    if (
+      !dirty ||
+      status !== 'saved' ||
+      executionLocked ||
+      (!body.trim() && revision === 0)
+    ) {
       return;
     }
 
@@ -352,7 +444,7 @@ export const useMyahInboxInstagramDraft = ({
     }, AUTOSAVE_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [body, dirty, save, status]);
+  }, [body, dirty, executionLocked, revision, save, status]);
 
   const reloadConflict = useCallback(() => {
     if (!conflict) {
@@ -372,6 +464,7 @@ export const useMyahInboxInstagramDraft = ({
         body: conflict.body,
         revision: conflict.revision,
         dirty: false,
+        baselineKnown: true,
       });
     }
   }, [conflict, scope]);
@@ -391,6 +484,8 @@ export const useMyahInboxInstagramDraft = ({
     setDirty(false);
     setDraftId(scope ? getDraftId(scope) : null);
     setExecutionLocked(false);
+    scopeLifetimeRef.current.executionLocked = false;
+    scopeLifetimeRef.current.baselineKnown = true;
   }, [scope]);
 
   return {

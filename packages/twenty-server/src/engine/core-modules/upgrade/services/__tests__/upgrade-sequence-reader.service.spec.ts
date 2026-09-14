@@ -1,3 +1,7 @@
+import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
+import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619348-create-unipile-instagram-foundation';
+import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
+import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619373-backfill-composio-instagram-history.command';
 import 'reflect-metadata';
 
 import { Test } from '@nestjs/testing';
@@ -295,5 +299,160 @@ describe('UpgradeSequenceReaderService', () => {
 
       expect(result).toEqual({ name: 'Ic1', status: 'failed' });
     });
+  });
+});
+
+const INSTAGRAM_FAST_D =
+  '2.20.0_CreateUnipileInstagramFoundationFastInstanceCommand_1799201000000';
+const INSTAGRAM_SLOW_D =
+  '2.20.0_InvalidateComposioInstagramAuthoritiesSlowInstanceCommand_1799201004000';
+const INSTAGRAM_WORKSPACE_D =
+  '2.20.0_BackfillComposioInstagramHistoryWorkspaceCommand_1799201012000';
+
+// Reflect real command prototypes only; these fixtures never invoke production command bodies.
+const buildInstagramSequenceReader = () => {
+  const providers = [
+    CreateUnipileInstagramFoundationFastInstanceCommand,
+    InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
+    BackfillComposioInstagramHistoryWorkspaceCommand,
+  ].map((metatype) => ({
+    metatype,
+    instance: Object.create(metatype.prototype),
+  }));
+  const registry = new UpgradeCommandRegistryService({
+    getProviders: () => providers,
+  } as unknown as DiscoveryService);
+  registry.onModuleInit();
+  const reader = new UpgradeSequenceReaderService(registry);
+  expect(reader.getUpgradeSequence().map(({ timestamp }) => timestamp)).toEqual(
+    [1789307619348, 1789307619363, 1789307619373],
+  );
+  return reader;
+};
+
+describe('Instagram durable sequence cursors', () => {
+  it('resolves old instance/workspace names and rejects corrected source names as history', () => {
+    const reader = buildInstagramSequenceReader();
+    const sequence = reader.getUpgradeSequence();
+    expect(sequence.map(({ name }) => name)).toEqual([
+      INSTAGRAM_FAST_D,
+      INSTAGRAM_SLOW_D,
+      INSTAGRAM_WORKSPACE_D,
+    ]);
+    sequence.forEach((step, index) => {
+      expect(
+        reader.locateStepInSequenceOrThrow({ sequence, stepName: step.name }),
+      ).toBe(index);
+      expect(() =>
+        reader.locateStepInSequenceOrThrow({
+          sequence,
+          stepName: `${step.version}_${step.command.constructor.name}_${step.timestamp}`,
+        }),
+      ).toThrow('not found');
+    });
+    expect(
+      reader.getInitialCursorForNewWorkspace({
+        name: INSTAGRAM_SLOW_D,
+        status: 'completed',
+      }),
+    ).toEqual({ name: INSTAGRAM_WORKSPACE_D, status: 'completed' });
+    expect(
+      reader.getInitialCursorForNewWorkspace({
+        name: INSTAGRAM_SLOW_D,
+        status: 'failed',
+      }),
+    ).toEqual({ name: INSTAGRAM_SLOW_D, status: 'failed' });
+  });
+  it.each(['completed', 'failed'] as const)(
+    'preserves %s workspace pending slices at old D',
+    (status) => {
+      const reader = buildInstagramSequenceReader();
+      const workspaceCommands = reader
+        .getUpgradeSequence()
+        .filter((step) => step.kind === 'workspace');
+      const pending = reader.getPendingWorkspaceCommands({
+        workspaceCommands,
+        workspaceCursor: { name: INSTAGRAM_WORKSPACE_D, status },
+      });
+      expect(pending.map(({ name }) => name)).toEqual(
+        status === 'completed' ? [] : [INSTAGRAM_WORKSPACE_D],
+      );
+    },
+  );
+});
+
+const VERIFIER_E9 =
+  '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534';
+const buildForwardReader = () => {
+  const providers = [
+    CreateUnipileInstagramFoundationFastInstanceCommand,
+    InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
+    BackfillComposioInstagramHistoryWorkspaceCommand,
+    VerifyInstagramSecurityCutoverWorkspaceCommand,
+  ].map((metatype) => ({
+    metatype,
+    instance: Object.create(metatype.prototype),
+  }));
+  const registry = new UpgradeCommandRegistryService({
+    getProviders: () => providers,
+  } as unknown as DiscoveryService);
+  registry.onModuleInit();
+  return new UpgradeSequenceReaderService(registry);
+};
+
+describe('Instagram appended forward verifier cursors', () => {
+  it.each([
+    {
+      name: INSTAGRAM_WORKSPACE_D,
+      status: 'completed' as const,
+      pending: [VERIFIER_E9],
+    },
+    {
+      name: INSTAGRAM_WORKSPACE_D,
+      status: 'failed' as const,
+      pending: [INSTAGRAM_WORKSPACE_D, VERIFIER_E9],
+    },
+    { name: VERIFIER_E9, status: 'failed' as const, pending: [VERIFIER_E9] },
+    { name: VERIFIER_E9, status: 'completed' as const, pending: [] },
+    {
+      name: INSTAGRAM_SLOW_D,
+      status: 'completed' as const,
+      pending: [INSTAGRAM_WORKSPACE_D, VERIFIER_E9],
+    },
+  ])(
+    'resolves $name $status without alias or replay',
+    ({ name, status, pending }) => {
+      const reader = buildForwardReader();
+      expect(
+        reader
+          .getPendingWorkspaceCommands({
+            workspaceCommands: reader
+              .getUpgradeSequence()
+              .filter((step) => step.kind === 'workspace'),
+            workspaceCursor: { name, status },
+          })
+          .map((step) => step.name),
+      ).toEqual(pending);
+      expect(
+        reader.getUpgradeSequence()[reader.getUpgradeSequence().length - 1]
+          ?.timestamp,
+      ).toBe(1789313971534);
+    },
+  );
+
+  it('new initial cursor may skip physical verification, requiring the operational sweep', () => {
+    const reader = buildForwardReader();
+    expect(
+      reader.getInitialCursorForNewWorkspace({
+        name: INSTAGRAM_SLOW_D,
+        status: 'completed',
+      }),
+    ).toEqual({ name: VERIFIER_E9, status: 'completed' });
+    expect(
+      reader.getInitialCursorForNewWorkspace({
+        name: INSTAGRAM_SLOW_D,
+        status: 'failed',
+      }),
+    ).toEqual({ name: INSTAGRAM_SLOW_D, status: 'failed' });
   });
 });

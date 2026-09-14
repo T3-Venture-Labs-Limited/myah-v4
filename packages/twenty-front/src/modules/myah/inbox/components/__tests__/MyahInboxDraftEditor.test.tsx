@@ -1,4 +1,7 @@
 /* oxlint-disable react/jsx-props-no-spreading -- Tests reuse a typed baseline prop fixture. */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import {
   fireEvent,
   render,
@@ -28,8 +31,8 @@ jest.mock('twenty-ui/theme-constants', () => ({
         tertiary: 'gray',
         danger: 'darkred',
       },
-      size: { sm: '13px', xs: '11px' },
-      weight: { semiBold: 600 },
+      size: { md: '16px', sm: '13px', xs: '11px' },
+      weight: { regular: 400, semiBold: 600 },
     },
     spacing: { 2: '8px', 3: '12px' },
   },
@@ -77,6 +80,33 @@ jest.mock(
   },
 );
 
+jest.mock('@/myah/inbox/components/MyahInboxRichDraftEditor', () => ({
+  MyahInboxRichDraftEditor: ({
+    autoFocus,
+    body,
+    disabled,
+    onDraftChange,
+  }: {
+    autoFocus?: boolean;
+    body: MyahInboxRichText;
+    disabled: boolean;
+    onDraftChange: (body: MyahInboxRichText) => void;
+  }) => (
+    <div data-main-reply-editor>
+      <textarea
+        aria-label="Shared reply draft"
+        autoFocus={autoFocus}
+        data-rich-draft={Boolean(body.blocknote)}
+        disabled={disabled}
+        value={body.markdown}
+        onChange={(event) =>
+          onDraftChange({ markdown: event.target.value, blocknote: null })
+        }
+      />
+    </div>
+  ),
+}));
+
 jest.mock('@/ui/input/components/TextArea', () => ({
   TextArea: ({
     ariaLabel,
@@ -107,23 +137,53 @@ jest.mock('@/ui/input/components/TextArea', () => ({
   ),
 }));
 
+const mockAppTooltip = jest.fn((_props: unknown) => null);
+
+jest.mock('twenty-ui/surfaces', () => ({
+  AppTooltip: (props: unknown) => mockAppTooltip(props),
+  TooltipDelay: { shortDelay: '300ms' },
+  TooltipPosition: { Top: 'top' },
+}));
+
 jest.mock('twenty-ui/input', () => ({
   Button: ({
     title,
     onClick,
     disabled,
+    ariaLabel,
+    Icon,
+    accent,
+    variant,
+    dataTestId,
+    ...buttonProps
   }: {
-    title: string;
-    onClick: () => void;
+    title?: string;
+    onClick?: () => void;
     disabled?: boolean;
+    ariaLabel?: string;
+    Icon?: ReactType.ComponentType;
+    accent?: string;
+    variant?: string;
+    dataTestId?: string;
   }) => (
-    <button disabled={disabled} onClick={onClick}>
+    <button
+      {...buttonProps}
+      aria-label={ariaLabel}
+      data-accent={accent}
+      data-testid={dataTestId}
+      data-variant={variant}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {Icon && <Icon />}
       {title}
     </button>
   ),
 }));
 
 const cleanEntry: MyahInboxDraftAutosaveEntry = {
+  operation: null,
+  editorOwner: null,
   localBody: { markdown: 'saved draft', blocknote: null },
   confirmedBody: { markdown: 'saved draft', blocknote: null },
   confirmedRevision: 2,
@@ -147,12 +207,16 @@ const renderEditor = ({
       <button>Send</button>
     </>
   ),
+  presentation = 'default',
+  subject,
 }: {
   draftEntry?: MyahInboxDraftAutosaveEntry;
   onDraftChange?: (body: MyahInboxRichText) => void;
   retry?: () => void;
   reloadConflict?: () => void;
   actions?: ReactType.ReactNode;
+  presentation?: 'default' | 'main';
+  subject?: string;
 } = {}) =>
   render(
     <MyahInboxDraftEditor
@@ -161,6 +225,8 @@ const renderEditor = ({
       onRetry={retry}
       onReloadConflict={reloadConflict}
       actions={actions}
+      presentation={presentation}
+      subject={subject}
     />,
   );
 
@@ -301,4 +367,429 @@ describe('MyahInboxDraftEditor', () => {
       within(actions).queryByRole('button', { name: 'Save draft' }),
     ).not.toBeInTheDocument();
   });
+
+  it('keeps the full long reply in a keyboard-accessible body with its footer outside in both modes', () => {
+    const markdown =
+      'A longer reply paragraph with campaign details.\n\n'.repeat(100);
+    const { rerender } = render(
+      <MyahInboxDraftEditor
+        entry={{ ...cleanEntry, localBody: { markdown, blocknote: null } }}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
+
+    const preview = screen.getByRole('region', { name: 'Reply draft preview' });
+    expect(preview.textContent).toBe(markdown);
+    expect(preview).toHaveAttribute('tabindex', '0');
+    expect(preview).not.toContainElement(
+      screen.getByLabelText('Draft actions'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit reply' }));
+    const editor = screen.getByRole('textbox', { name: 'Shared reply draft' });
+    expect(editor).toHaveValue(markdown);
+    expect(editor).toHaveFocus();
+    const boundedEditor = editor.closest('[data-main-reply-editor]');
+    expect(boundedEditor).not.toBeNull();
+    expect(boundedEditor).not.toContainElement(
+      screen.getByLabelText('Draft actions'),
+    );
+
+    rerender(
+      <MyahInboxDraftEditor
+        entry={cleanEntry}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send</button>}
+      />,
+    );
+    expect(
+      screen.getByRole('textbox').closest('[data-main-reply-editor]'),
+    ).toBeNull();
+  });
+
+  it('shares a viewport-bounded hidden-scrollbar CSS rule between preview and the native main textarea', () => {
+    // JSDOM does not lay out Linaria CSS; guard the scroll contract separately from DOM behavior.
+    const source = readFileSync(
+      resolve(__dirname, '../MyahInboxDraftEditor.tsx'),
+      'utf8',
+    );
+    const scrollStyles = source.match(
+      /const MAIN_REPLY_SCROLL_STYLES = `([\s\S]*?)`;/,
+    )?.[1];
+    expect(scrollStyles).toBeDefined();
+    expect(scrollStyles).toContain('max-height: min(240px, 40vh)');
+    expect(scrollStyles).toContain('overflow-y: auto');
+    expect(scrollStyles).toContain('scrollbar-width: none');
+    expect(scrollStyles).toMatch(/&::-webkit-scrollbar\s*\{\s*display: none/);
+    expect(source).toMatch(
+      /const StyledDraftPreview = styled\.div`[\s\S]*?\$\{MAIN_REPLY_SCROLL_STYLES\}/,
+    );
+    const richEditorSource = readFileSync(
+      resolve(__dirname, '../MyahInboxRichDraftEditor.tsx'),
+      'utf8',
+    );
+    expect(richEditorSource).toContain('&[data-main-reply-editor] {');
+    expect(richEditorSource).toContain('max-height: min(240px, 40vh)');
+  });
+
+  it('separates main reply actions from AI guidance and feedback without changing tab order', () => {
+    render(
+      <MyahInboxDraftEditor
+        entry={cleanEntry}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
+
+    const replyActions = screen.getByRole('group', { name: 'Reply actions' });
+    const aiActions = screen.getByRole('group', { name: 'AI actions' });
+    expect(within(replyActions).getAllByRole('button')).toEqual([
+      screen.getByRole('button', { name: 'Send reply' }),
+      screen.getByRole('button', { name: 'Edit reply' }),
+    ]);
+    expect(within(aiActions).getAllByRole('button')).toEqual([
+      screen.getByRole('button', { name: 'Open AI guidance' }),
+      screen.getByRole('button', { name: 'Thumbs up' }),
+      screen.getByRole('button', { name: 'Thumbs down' }),
+    ]);
+    expect(
+      within(screen.getByLabelText('Draft actions')).getAllByRole('button'),
+    ).toEqual([
+      ...within(replyActions).getAllByRole('button'),
+      ...within(aiActions).getAllByRole('button'),
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit reply' }));
+    expect(
+      within(replyActions).getByRole('button', { name: 'Done editing' }),
+    ).toBeVisible();
+  });
+
+  it('centers the optional main reply subject between reply and AI actions', () => {
+    renderEditor({
+      actions: <button>Send reply</button>,
+      presentation: 'main',
+      subject: 'September partnership',
+    });
+
+    const footer = screen.getByLabelText('Draft actions');
+    const replyActions = screen.getByRole('group', { name: 'Reply actions' });
+    const subject = screen.getByLabelText('Reply subject');
+    const aiActions = screen.getByRole('group', { name: 'AI actions' });
+    expect(subject).toHaveTextContent('September partnership');
+    expect(subject).toHaveAttribute('title', 'September partnership');
+    expect([...footer.children]).toEqual([replyActions, subject, aiActions]);
+
+    expect(screen.getAllByLabelText('Reply subject')).toHaveLength(1);
+  });
+
+  it('uses main-only inherited email typography and a container-responsive balanced footer', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../MyahInboxDraftEditor.tsx'),
+      'utf8',
+    );
+
+    expect(source).toMatch(
+      /const StyledDraftPreview = styled\.div`[\s\S]*?font-size: \$\{themeCssVariables\.font\.size\.md\};[\s\S]*?line-height: inherit/,
+    );
+    const richEditorSource = readFileSync(
+      resolve(__dirname, '../MyahInboxRichDraftEditor.tsx'),
+      'utf8',
+    );
+    expect(richEditorSource).toMatch(
+      /&\[data-main-reply-editor\] \.bn-editor \{[\s\S]*?line-height: inherit/,
+    );
+    expect(source).toContain('&[data-main-reply-card] {');
+    expect(source).toContain('&[data-main-reply-actions] {');
+    expect(source).toContain('container-type: inline-size');
+    expect(source).toContain(
+      'grid-template-columns: repeat(2, minmax(0, 1fr))',
+    );
+    expect(source).toContain('@container (max-width: 480px)');
+    expect(source).toContain("'repeat(3, minmax(0, 1fr))'");
+  });
+
+  it('keeps the main card as an inert draft preview until editing is requested', () => {
+    mockAppTooltip.mockClear();
+    render(
+      <MyahInboxDraftEditor
+        entry={cleanEntry}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
+
+    expect(screen.getByText('saved draft')).toBeVisible();
+    expect(
+      screen.queryByRole('textbox', { name: 'Shared reply draft' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit reply' })).toHaveAttribute(
+      'data-variant',
+      'tertiary',
+    );
+    const guidance = screen.getByRole('button', {
+      name: 'Open AI guidance',
+    });
+    expect(guidance).toBeDisabled();
+    expect(guidance).toHaveAttribute('data-variant', 'tertiary');
+    expect(screen.queryByRole('button', { name: 'Generate Reply' })).toBeNull();
+    expect(mockAppTooltip).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Campaign navigation is not connected yet.',
+      }),
+    );
+    expect(mockAppTooltip).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Feedback is a local preview and is not saved.',
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Thumbs up' })).toHaveAttribute(
+      'aria-describedby',
+    );
+    expect(screen.getByRole('button', { name: 'Thumbs down' })).toHaveAttribute(
+      'aria-describedby',
+    );
+  });
+
+  it('opens and closes main Edit without creating an autosave callback', () => {
+    const onDraftChange = jest.fn();
+    render(
+      <MyahInboxDraftEditor
+        entry={cleanEntry}
+        onDraftChange={onDraftChange}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit reply' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done editing' }));
+
+    expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
+  it('reopens supported structured inline drafts with the rich adapter', () => {
+    renderEditor({
+      draftEntry: {
+        ...cleanEntry,
+        localBody: {
+          markdown: 'formatted draft',
+          blocknote:
+            '[{"type":"paragraph","content":[{"type":"text","text":"formatted draft","styles":{"bold":true}}],"children":[]}]',
+        },
+      },
+    });
+
+    expect(screen.getByLabelText('Shared reply draft')).toHaveAttribute(
+      'data-rich-draft',
+      'true',
+    );
+  });
+
+  it('warns before explicitly recovering unsupported structured drafts as plain text', () => {
+    const onDraftChange = jest.fn();
+    renderEditor({
+      draftEntry: {
+        ...cleanEntry,
+        localBody: { markdown: 'recover me', blocknote: '{"unknown":true}' },
+      },
+      onDraftChange,
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This formatted draft cannot be edited safely.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Use plain text' }));
+    expect(onDraftChange).toHaveBeenCalledWith({
+      markdown: 'recover me',
+      blocknote: null,
+    });
+  });
+
+  it('focuses the existing textarea and returns the updated operator edit to preview without saving', () => {
+    const onDraftChange = jest.fn();
+    const editorProps = {
+      onDraftChange,
+      onRetry: jest.fn(),
+      onReloadConflict: jest.fn(),
+      actions: <button>Send reply</button>,
+      presentation: 'main' as const,
+    };
+    const { rerender } = render(
+      <MyahInboxDraftEditor entry={cleanEntry} {...editorProps} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit reply' }));
+    const editor = screen.getByRole('textbox', { name: 'Shared reply draft' });
+    expect(editor).toHaveFocus();
+    fireEvent.change(editor, { target: { value: 'operator edit' } });
+    expect(onDraftChange).toHaveBeenCalledWith({
+      markdown: 'operator edit',
+      blocknote: null,
+    });
+    rerender(
+      <MyahInboxDraftEditor
+        entry={{
+          ...cleanEntry,
+          localBody: { markdown: 'operator edit', blocknote: null },
+        }}
+        {...editorProps}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Done editing' }));
+    expect(screen.getByText('operator edit')).toBeVisible();
+    expect(onDraftChange).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('textbox', { name: 'Shared reply draft' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps error and conflict recovery visible while the main card previews the draft', () => {
+    const { rerender } = render(
+      <MyahInboxDraftEditor
+        entry={{
+          ...cleanEntry,
+          status: 'error',
+          error: 'Could not save the draft. Your changes are still here.',
+        }}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not save the draft. Your changes are still here.',
+    );
+    rerender(
+      <MyahInboxDraftEditor
+        entry={{
+          ...cleanEntry,
+          status: 'conflict',
+          conflict: {
+            revision: 4,
+            body: { markdown: 'newer server copy', blocknote: null },
+          },
+        }}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
+
+    expect(screen.getByLabelText('Current saved draft')).toHaveTextContent(
+      'newer server copy',
+    );
+    expect(
+      screen.queryByRole('textbox', { name: 'Shared reply draft' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not fabricate an empty main-card draft', () => {
+    render(
+      <MyahInboxDraftEditor
+        entry={{
+          ...cleanEntry,
+          localBody: { markdown: '', blocknote: null },
+          confirmedBody: null,
+        }}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
+
+    expect(screen.getByText('No reply draft yet.')).toBeVisible();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('keeps feedback mutually exclusive, reversible, and local to its draft text', () => {
+    const props = {
+      onDraftChange: jest.fn(),
+      onRetry: jest.fn(),
+      onReloadConflict: jest.fn(),
+      actions: <button>Send reply</button>,
+      presentation: 'main' as const,
+      previewScope: 'workspace-1:thread-1',
+    };
+    const { rerender } = render(
+      <MyahInboxDraftEditor entry={cleanEntry} {...props} />,
+    );
+
+    const up = screen.getByRole('button', { name: 'Thumbs up' });
+    const down = screen.getByRole('button', { name: 'Thumbs down' });
+    fireEvent.click(up);
+    expect(up).toHaveAttribute('aria-pressed', 'true');
+    expect(up).toHaveAttribute('data-selected', 'true');
+    expect(up).toHaveAttribute('data-variant', 'secondary');
+    expect(up).toHaveAttribute('data-accent', 'brand');
+    expect(down).toHaveAttribute('aria-pressed', 'false');
+    expect(down).not.toHaveAttribute('data-selected');
+    expect(down).toHaveAttribute('data-variant', 'tertiary');
+    fireEvent.click(down);
+    expect(up).toHaveAttribute('aria-pressed', 'false');
+    expect(up).not.toHaveAttribute('data-selected');
+    expect(down).toHaveAttribute('aria-pressed', 'true');
+    expect(down).toHaveAttribute('data-selected', 'true');
+    expect(down).toHaveAttribute('data-variant', 'secondary');
+    expect(down).toHaveAttribute('data-accent', 'brand');
+    fireEvent.click(down);
+    expect(down).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(up);
+    rerender(
+      <MyahInboxDraftEditor
+        entry={{
+          ...cleanEntry,
+          localBody: { markdown: 'changed draft', blocknote: null },
+        }}
+        {...props}
+      />,
+    );
+    expect(up).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it.each(['pending', 'unknown'] as const)(
+    'disables every main-card action for a received %s operation lock',
+    (kind) => {
+      const draftEntry = {
+        ...cleanEntry,
+        operation: { token: Symbol(kind), kind },
+      };
+      render(
+        <MyahInboxDraftEditor
+          entry={draftEntry}
+          onDraftChange={jest.fn()}
+          onRetry={jest.fn()}
+          onReloadConflict={jest.fn()}
+          actions={<button disabled>Send reply</button>}
+          disabled={Boolean(draftEntry.operation)}
+          presentation="main"
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: 'Edit reply' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Thumbs up' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Thumbs down' }),
+      ).toBeDisabled();
+    },
+  );
 });

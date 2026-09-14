@@ -360,56 +360,30 @@ describe('MyahInboxContactList', () => {
 });
 
 describe('MyahInboxContactHeader', () => {
-  it('shows the selected contact and changes the exact Email thread target', () => {
-    const onSelectEmailThread = jest.fn();
-
+  it('shows the selected contact alongside its actions without an Email selector', () => {
     render(
       <MyahInboxContactHeader
         contact={contacts[0]}
         channel="EMAIL"
-        selectedEmailThreadId="thread-2"
-        emailThreadOptions={[
-          {
-            id: 'thread-1',
-            subject: 'Spring launch follow-up',
-            detail: 'Ada · Sep 4, 2026',
-          },
-          {
-            id: 'thread-2',
-            subject: 'Spring launch follow-up',
-            detail: 'Brand · Sep 5, 2026',
-          },
-        ]}
-        onSelectEmailThread={onSelectEmailThread}
+        actions={<button>Conversation details</button>}
       />,
     );
 
     expect(screen.getByRole('heading', { name: 'Ada Creator' })).toBeVisible();
-    const target = screen.getByLabelText('Email thread');
-    expect(target).toHaveValue('thread-2');
-    expect(target).toHaveDisplayValue(
-      'Spring launch follow-up · Brand · Sep 5, 2026',
-    );
-
-    fireEvent.change(target, { target: { value: 'thread-1' } });
-    expect(onSelectEmailThread).toHaveBeenCalledWith('thread-1');
+    expect(
+      within(screen.getByLabelText('Contact conversation header')).getByRole(
+        'button',
+        {
+          name: 'Conversation details',
+        },
+      ),
+    ).toBeVisible();
+    expect(screen.queryByLabelText('Email thread')).not.toBeInTheDocument();
   });
 
   it('does not show an Email subject target for Instagram', () => {
     render(
-      <MyahInboxContactHeader
-        contact={contacts[0]}
-        channel="INSTAGRAM"
-        selectedEmailThreadId="thread-2"
-        emailThreadOptions={[
-          {
-            id: 'thread-2',
-            subject: 'Spring launch follow-up',
-            detail: 'Brand · Sep 5, 2026',
-          },
-        ]}
-        onSelectEmailThread={jest.fn()}
-      />,
+      <MyahInboxContactHeader contact={contacts[0]} channel="INSTAGRAM" />,
     );
 
     expect(screen.getByText('Instagram')).toBeVisible();

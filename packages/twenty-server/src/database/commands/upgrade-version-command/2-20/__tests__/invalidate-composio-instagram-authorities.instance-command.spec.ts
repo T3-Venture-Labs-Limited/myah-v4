@@ -2,9 +2,9 @@ import type { DataSource } from 'typeorm';
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 
-import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1799201004000-invalidate-composio-instagram-authorities';
-import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201003000-add-instagram-direct-action-context';
-import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1799201011500-invalidate-composio-instagram-authorities.command';
+import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
+import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619359-add-instagram-direct-action-context';
+import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
 import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -17,7 +17,7 @@ describe('InvalidateComposioInstagramAuthoritiesSlowInstanceCommand', () => {
       ),
     ).toEqual({
       version: '2.20.0',
-      timestamp: 1799201004000,
+      timestamp: 1789307619363,
       type: 'slow',
       runAfterWorkspace: false,
     });
@@ -69,7 +69,7 @@ describe('InvalidateComposioInstagramAuthoritiesWorkspaceCommand', () => {
       getRegisteredWorkspaceCommandMetadata(
         InvalidateComposioInstagramAuthoritiesWorkspaceCommand,
       ),
-    ).toEqual({ version: '2.20.0', timestamp: 1799201011500 });
+    ).toEqual({ version: '2.20.0', timestamp: 1789307619370 });
   });
 
   it('scopes legacy authority invalidation to the current workspace', async () => {
@@ -87,6 +87,22 @@ describe('InvalidateComposioInstagramAuthoritiesWorkspaceCommand', () => {
     expect(query.mock.calls[0][0]).toContain('AND \"workspaceId\" = $1');
     expect(query.mock.calls[0][1]).toEqual([args.workspaceId]);
   });
+
+  it.each([false, true])(
+    'rejects a missing workspace data source (dryRun=%s)',
+    async (dryRun) => {
+      const command =
+        new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
+          {} as WorkspaceIteratorService,
+        );
+
+      await expect(
+        command.runOnWorkspace({ ...args, options: { dryRun } }),
+      ).rejects.toThrow(
+        'Cannot invalidate Composio Instagram authorities: workspace data source is required',
+      );
+    },
+  );
 
   it('never mutates authorities in dry-run mode', async () => {
     const query = jest.fn();

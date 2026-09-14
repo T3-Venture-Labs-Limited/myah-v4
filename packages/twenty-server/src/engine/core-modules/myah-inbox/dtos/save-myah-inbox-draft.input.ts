@@ -33,6 +33,11 @@ export class MyahInboxRichTextInput {
 
 @InputType('SaveMyahInboxDraftInput')
 export class SaveMyahInboxDraftInput {
+  @Field(() => UUIDScalarType, { nullable: true })
+  @IsOptional()
+  @IsUUID()
+  expectedWorkspaceId?: string | null;
+
   @Field(() => UUIDScalarType)
   @IsUUID()
   threadId: string;

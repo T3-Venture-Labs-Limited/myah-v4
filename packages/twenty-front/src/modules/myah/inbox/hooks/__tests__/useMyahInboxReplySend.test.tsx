@@ -1,3 +1,5 @@
+import { getDefaultStore } from 'jotai';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { act, renderHook } from '@testing-library/react';
 import { useMutation, useQuery } from '@apollo/client/react';
 
@@ -32,15 +34,19 @@ const createDeferred = <Value,>() => {
   return { promise, resolve: resolve! };
 };
 
+const workspaceId = 'workspace-1';
 const threadId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const receiptId = '30303030-1c25-4d02-bf25-6aeccf7ea419';
 const renderReplySendHook = () =>
-  renderHook(() => useMyahInboxReplySend(threadId, 4));
+  renderHook(() => useMyahInboxReplySend(workspaceId, threadId, 4));
 
 describe('useMyahInboxReplySend', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    getDefaultStore().set(currentWorkspaceState.atom, {
+      id: workspaceId,
+    } as never);
     mockUseApolloCoreClient.mockReturnValue({ query: statusQuery } as never);
     mockUseMutation.mockReturnValue([
       sendMutation,
@@ -62,6 +68,42 @@ describe('useMyahInboxReplySend', () => {
     jest.useRealTimers();
   });
 
+  it('stops captured-workspace send dispatch even before a rerender on workspace switch', async () => {
+    const { result } = renderReplySendHook();
+    const send = result.current.send;
+    getDefaultStore().set(currentWorkspaceState.atom, {
+      id: 'workspace-2',
+    } as never);
+    await expect(send({ threadId, expectedDraftRevision: 4 })).rejects.toThrow(
+      'target changed',
+    );
+    expect(sendMutation).not.toHaveBeenCalled();
+  });
+
+  it('does not poll an old receipt under a newly selected workspace before rerender', async () => {
+    sendMutation.mockResolvedValue({
+      data: {
+        sendMyahInboxReply: {
+          outcome: 'SENDING',
+          receiptId,
+          revision: 4,
+          body: null,
+        },
+      },
+    });
+    const { result } = renderReplySendHook();
+    let pending!: Promise<MyahInboxReplySendResult>;
+    await act(async () => {
+      pending = result.current.send({ threadId, expectedDraftRevision: 4 });
+    });
+    getDefaultStore().set(currentWorkspaceState.atom, {
+      id: 'workspace-2',
+    } as never);
+    await act(async () => jest.advanceTimersByTimeAsync(1000));
+    expect(statusQuery).not.toHaveBeenCalled();
+    await expect(pending).resolves.toMatchObject({ outcome: 'SENDING' });
+  });
+
   it('maps readiness without starting status polling', () => {
     const { result } = renderReplySendHook();
 
@@ -71,7 +113,7 @@ describe('useMyahInboxReplySend', () => {
       expect.anything(),
       expect.objectContaining({
         fetchPolicy: 'network-only',
-        variables: { threadId },
+        variables: { threadId, expectedWorkspaceId: workspaceId },
       }),
     );
     expect(statusQuery).not.toHaveBeenCalled();
@@ -79,6 +121,7 @@ describe('useMyahInboxReplySend', () => {
 
   it('refetches readiness once when a saved revision changes on the same thread', () => {
     const useReplySend = useMyahInboxReplySend as unknown as (
+      workspace: string,
       thread: string,
       confirmedRevision: number,
     ) => {
@@ -95,7 +138,8 @@ describe('useMyahInboxReplySend', () => {
       refetch: refetchReadiness,
     } as never);
     const { result, rerender } = renderHook(
-      ({ confirmedRevision }) => useReplySend(threadId, confirmedRevision),
+      ({ confirmedRevision }) =>
+        useReplySend(workspaceId, threadId, confirmedRevision),
       { initialProps: { confirmedRevision: 4 } },
     );
 
@@ -146,7 +190,13 @@ describe('useMyahInboxReplySend', () => {
     });
 
     expect(sendMutation).toHaveBeenCalledWith({
-      variables: { input: { threadId, expectedDraftRevision: 4 } },
+      variables: {
+        input: {
+          expectedWorkspaceId: workspaceId,
+          threadId,
+          expectedDraftRevision: 4,
+        },
+      },
     });
     expect(sendResult!.outcome).toBe('SENT');
     expect(statusQuery).not.toHaveBeenCalled();
@@ -205,14 +255,18 @@ describe('useMyahInboxReplySend', () => {
       1,
       expect.objectContaining({
         fetchPolicy: 'network-only',
-        variables: { input: { threadId, receiptId } },
+        variables: {
+          input: { expectedWorkspaceId: workspaceId, threadId, receiptId },
+        },
       }),
     );
     expect(statusQuery).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         fetchPolicy: 'network-only',
-        variables: { input: { threadId, receiptId } },
+        variables: {
+          input: { expectedWorkspaceId: workspaceId, threadId, receiptId },
+        },
       }),
     );
     expect(statusQuery).toHaveBeenCalledTimes(2);
@@ -246,6 +300,9 @@ describe('useMyahInboxReplySend', () => {
 
   it('keeps overlapping send polls independent', async () => {
     const secondThreadId = '50505050-1c25-4d02-bf25-6aeccf7ea419';
+    const secondHook = renderHook(() =>
+      useMyahInboxReplySend(workspaceId, secondThreadId, 8),
+    );
     const secondReceiptId = '60606060-1c25-4d02-bf25-6aeccf7ea419';
     let secondStatusCalls = 0;
     sendMutation
@@ -308,7 +365,7 @@ describe('useMyahInboxReplySend', () => {
       await Promise.resolve();
     });
     await act(async () => {
-      secondSend = result.current.send({
+      secondSend = secondHook.result.current.send({
         threadId: secondThreadId,
         expectedDraftRevision: 8,
       });
@@ -322,13 +379,19 @@ describe('useMyahInboxReplySend', () => {
     await expect(secondSend!).resolves.toMatchObject({ outcome: 'SENT' });
     expect(statusQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        variables: { input: { threadId, receiptId } },
+        variables: {
+          input: { expectedWorkspaceId: workspaceId, threadId, receiptId },
+        },
       }),
     );
     expect(statusQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         variables: {
-          input: { threadId: secondThreadId, receiptId: secondReceiptId },
+          input: {
+            expectedWorkspaceId: workspaceId,
+            threadId: secondThreadId,
+            receiptId: secondReceiptId,
+          },
         },
       }),
     );

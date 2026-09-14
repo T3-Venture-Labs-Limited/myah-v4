@@ -8,8 +8,8 @@ type CreateInstagramActionBudgetFastInstanceCommand = {
   up: (queryRunner: QueryRunner) => Promise<void>;
 };
 
-type CreateInstagramActionBudgetFastInstanceCommandConstructor = new () =>
-  CreateInstagramActionBudgetFastInstanceCommand;
+type CreateInstagramActionBudgetFastInstanceCommandConstructor =
+  new () => CreateInstagramActionBudgetFastInstanceCommand;
 
 type CreateInstagramActionBudgetFastInstanceCommandModule = {
   CreateInstagramActionBudgetFastInstanceCommand: CreateInstagramActionBudgetFastInstanceCommandConstructor;
@@ -24,9 +24,7 @@ const loadCommandModule = ():
   | CreateInstagramActionBudgetFastInstanceCommandModule
   | undefined => {
   try {
-    return require(
-      'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201002000-create-instagram-action-budget',
-    ) as CreateInstagramActionBudgetFastInstanceCommandModule;
+    return require('src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619356-create-instagram-action-budget') as CreateInstagramActionBudgetFastInstanceCommandModule;
   } catch {
     return undefined;
   }
@@ -45,9 +43,7 @@ const getTableNames = (statements: string[]): string[] =>
 const getDroppedTableNames = (statements: string[]): string[] =>
   statements.flatMap((statement) =>
     Array.from(
-      statement.matchAll(
-        /DROP TABLE(?: IF EXISTS)? "core"\."([^"]+)"/g,
-      ),
+      statement.matchAll(/DROP TABLE(?: IF EXISTS)? "core"\."([^"]+)"/g),
       ([, tableName]) => tableName,
     ),
   );
@@ -78,7 +74,7 @@ describe('CreateInstagramActionBudgetFastInstanceCommand', () => {
       ),
     ).toEqual({
       runAfterWorkspace: false,
-      timestamp: 1799201002000,
+      timestamp: 1789307619356,
       type: 'fast',
       version: '2.20.0',
     });
@@ -90,7 +86,9 @@ describe('CreateInstagramActionBudgetFastInstanceCommand', () => {
 
       await getCommand().up({ query } as unknown as QueryRunner);
 
-      const statements = query.mock.calls.map(([statement]) => statement as string);
+      const statements = query.mock.calls.map(
+        ([statement]) => statement as string,
+      );
       const sql = statements.join('\n');
       const reservationCreate = statements.find((statement) =>
         statement.includes(
@@ -211,7 +209,9 @@ describe('CreateInstagramActionBudgetFastInstanceCommand', () => {
 
       await getCommand().down({ query } as unknown as QueryRunner);
 
-      const statements = query.mock.calls.map(([statement]) => statement as string);
+      const statements = query.mock.calls.map(
+        ([statement]) => statement as string,
+      );
       const droppedTables = getDroppedTableNames(statements);
       const firstTableDrop = statements.findIndex((statement) =>
         statement.includes('DROP TABLE'),

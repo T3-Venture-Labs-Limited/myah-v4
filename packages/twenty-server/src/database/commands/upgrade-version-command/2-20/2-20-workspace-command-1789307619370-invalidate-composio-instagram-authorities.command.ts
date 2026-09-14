@@ -6,7 +6,7 @@ import { WorkspaceIteratorService } from 'src/database/commands/command-runners/
 import { invalidateComposioInstagramAuthorities } from 'src/database/commands/upgrade-version-command/2-20/utils/invalidate-composio-instagram-authorities.util';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 
-@RegisteredWorkspaceCommand('2.20.0', 1799201011500)
+@RegisteredWorkspaceCommand('2.20.0', 1789307619370)
 @Command({
   name: 'upgrade:2-20:invalidate-composio-instagram-authorities',
   description:
@@ -18,7 +18,13 @@ export class InvalidateComposioInstagramAuthoritiesWorkspaceCommand extends Acti
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
-    if (!args.dataSource || args.options.dryRun) {
+    if (!args.dataSource) {
+      throw new Error(
+        'Cannot invalidate Composio Instagram authorities: workspace data source is required',
+      );
+    }
+
+    if (args.options.dryRun) {
       return;
     }
 

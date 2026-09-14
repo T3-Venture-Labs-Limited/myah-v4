@@ -8,6 +8,7 @@ type ContactSelectionInput = {
   workspaceId: string;
   contact: MyahInboxContact;
   previousSelection: MyahInboxContactSelection | null;
+  latestOutreachThreadId?: string | null;
 };
 
 type ChannelSelectionInput = ContactSelectionInput & {
@@ -45,6 +46,7 @@ export const getMyahInboxSelectionForChannel = ({
   contact,
   channel,
   previousSelection,
+  latestOutreachThreadId,
 }: ChannelSelectionInput): MyahInboxContactSelection => {
   const selectedChannel = resolveAvailableChannel(contact, channel);
   const canReusePreviousTarget =
@@ -52,11 +54,9 @@ export const getMyahInboxSelectionForChannel = ({
     previousSelection.contactId === contact.id;
   const emailThreadId =
     selectedChannel === 'EMAIL'
-      ? canReusePreviousTarget &&
-        previousSelection.emailThreadId !== null &&
-        contact.email.threadIds.includes(previousSelection.emailThreadId)
+      ? canReusePreviousTarget && previousSelection.emailThreadId !== null
         ? previousSelection.emailThreadId
-        : (contact.email.latestThreadId ?? contact.email.threadIds[0] ?? null)
+        : (latestOutreachThreadId ?? null)
       : null;
   const instagramConversationId =
     selectedChannel === 'INSTAGRAM' &&
@@ -78,6 +78,7 @@ export const getMyahInboxContactSelection = ({
   workspaceId,
   contact,
   previousSelection,
+  latestOutreachThreadId,
 }: ContactSelectionInput): MyahInboxContactSelection => {
   const previousChannel =
     previousSelection?.workspaceId === workspaceId &&
@@ -90,6 +91,7 @@ export const getMyahInboxContactSelection = ({
     contact,
     channel: previousChannel ?? contact.latestChannel,
     previousSelection,
+    latestOutreachThreadId,
   });
 };
 
@@ -97,10 +99,12 @@ export const getMyahInboxRegroupedContactSelection = ({
   workspaceId,
   contact,
   previousSelection,
+  latestOutreachThreadId,
 }: ContactSelectionInput): MyahInboxContactSelection =>
   getMyahInboxContactSelection({
     workspaceId,
     contact,
+    latestOutreachThreadId,
     previousSelection:
       previousSelection?.workspaceId === workspaceId
         ? { ...previousSelection, contactId: contact.id }

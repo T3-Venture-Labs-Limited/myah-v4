@@ -76,6 +76,9 @@ export class InstagramMessageSendService {
       rolePermissionConfig: input.rolePermissionConfig,
       workspaceId: input.workspaceId,
     });
+    if (actionKind === 'START_CHAT') {
+      throw new Error('Instagram first-contact sending is unavailable');
+    }
     const authority = await this.authorityReader.createDirectAuthority({
       workspaceId: input.workspaceId,
       initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
@@ -141,7 +144,13 @@ export class InstagramMessageSendService {
         existingReceipt.id,
         existingReceipt.state,
         input.workspaceId,
+        binding.actionKind,
       );
+    }
+    // START bindings lack verified immutable messaging identity. Receipt recovery
+    // must stay ahead of this fresh-execution boundary.
+    if (binding.actionKind === 'START_CHAT') {
+      throw new Error('Instagram first-contact sending is unavailable');
     }
 
     const accessibleDraft =
@@ -171,6 +180,7 @@ export class InstagramMessageSendService {
         executionReservation.receipt.id,
         executionReservation.receipt.state,
         input.workspaceId,
+        binding.actionKind,
       );
     }
 
@@ -339,7 +349,16 @@ export class InstagramMessageSendService {
     receiptId: string,
     state: string,
     workspaceId: string,
+    actionKind: 'START_CHAT' | 'REPLY',
   ): Promise<InstagramMessageSendResult> {
+    if (actionKind === 'START_CHAT') {
+      if (state === ActionExecutionReceiptState.PROVIDER_ACCEPTED) {
+        return { status: 'PROVIDER_ACCEPTED', receiptId };
+      }
+      if (state === ActionExecutionReceiptState.PROCESSING) {
+        throw new Error('Instagram message execution is pending');
+      }
+    }
     if (state === ActionExecutionReceiptState.PROVIDER_ACCEPTED) {
       try {
         await this.projector.projectReceiptWithWriter(

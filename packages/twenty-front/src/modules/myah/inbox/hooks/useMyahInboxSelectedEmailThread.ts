@@ -13,15 +13,17 @@ type SelectedEmailThreadQuery = {
 export const useMyahInboxSelectedEmailThread = (
   workspaceId: string | null,
   threadId: string | null,
+  authorizationKey = '',
 ) => {
   const apolloCoreClient = useApolloCoreClient();
-  const scopeKey = `${workspaceId ?? ''}:${threadId ?? ''}`;
+  const scopeKey = `${workspaceId ?? ''}:${threadId ?? ''}:${authorizationKey}`;
   // Guards cacheless request completion across exact target changes.
   // oxlint-disable-next-line twenty/no-state-useref
   const scopeKeyRef = useRef(scopeKey);
   // Keeps the callback stable if Apollo republishes an equivalent client.
   // oxlint-disable-next-line twenty/no-state-useref
   const apolloCoreClientRef = useRef(apolloCoreClient);
+  const [resolvedScope, setResolvedScope] = useState<string | null>(null);
   const [thread, setThread] = useState<MyahInboxThread | null>(null);
   const [loading, setLoading] = useState(Boolean(workspaceId && threadId));
   const [error, setError] = useState<Error | null>(null);
@@ -39,8 +41,9 @@ export const useMyahInboxSelectedEmailThread = (
         return null;
       }
 
-      const requestScopeKey = `${workspaceId}:${threadId}`;
+      const requestScopeKey = scopeKey;
 
+      setResolvedScope(null);
       setLoading(true);
       setError(null);
 
@@ -48,8 +51,9 @@ export const useMyahInboxSelectedEmailThread = (
         const { data } =
           await apolloCoreClientRef.current.query<SelectedEmailThreadQuery>({
             query: GET_MYAH_INBOX_THREADS,
-            variables: { first: 1, threadId },
+            variables: { first: 1, threadId, expectedWorkspaceId: workspaceId },
             fetchPolicy: 'no-cache',
+            errorPolicy: 'none',
             context: {
               queryDeduplication: false,
               fetchOptions: { signal: abortController?.signal },
@@ -61,6 +65,10 @@ export const useMyahInboxSelectedEmailThread = (
           return null;
         }
 
+        if (abortController?.signal.aborted) return null;
+        if (nextThread && nextThread.id !== threadId)
+          throw new Error('Exact Email conversation is unavailable.');
+        setResolvedScope(requestScopeKey);
         setThread(nextThread);
 
         return nextThread;
@@ -69,6 +77,8 @@ export const useMyahInboxSelectedEmailThread = (
           return null;
         }
 
+        if (abortController?.signal.aborted) return null;
+        setResolvedScope(requestScopeKey);
         setThread(null);
         setError(
           reason instanceof Error
@@ -83,7 +93,7 @@ export const useMyahInboxSelectedEmailThread = (
         }
       }
     },
-    [threadId, workspaceId],
+    [threadId, workspaceId, scopeKey],
   );
 
   useEffect(() => {
@@ -96,9 +106,12 @@ export const useMyahInboxSelectedEmailThread = (
   }, [load]);
 
   return {
-    thread,
-    loading,
-    error,
+    thread:
+      resolvedScope === scopeKey && thread?.id === threadId ? thread : null,
+    loading:
+      Boolean(workspaceId && threadId) &&
+      (resolvedScope !== scopeKey || loading),
+    error: resolvedScope === scopeKey ? error : null,
     refresh: () => load(),
   };
 };

@@ -1,9 +1,6 @@
 import { EmailThreadMessageBody } from '@/activities/emails/components/EmailThreadMessageBody';
 import { EmailThreadMessageLayout } from '@/activities/emails/components/EmailThreadMessageLayout';
-import {
-  getMyahInboxSafeEmailSubject,
-  MyahInboxEmailSubjectSeparator,
-} from '@/myah/inbox/components/MyahInboxEmailSubjectSeparator';
+import { MyahInboxEmailSubjectSeparator } from '@/myah/inbox/components/MyahInboxEmailSubjectSeparator';
 import { type MyahInboxContactEmailMessage } from '@/myah/inbox/types/MyahInboxContact';
 import { styled } from '@linaria/react';
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
@@ -16,34 +13,6 @@ const StyledTimeline = styled.section`
   flex: 1;
   flex-direction: column;
   min-height: 0;
-`;
-
-const StyledSelectedTarget = styled.header`
-  align-items: baseline;
-  background: ${themeCssVariables.background.transparent.lighter};
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
-`;
-
-const StyledTargetLabel = styled.strong`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.semiBold};
-`;
-
-const StyledTargetType = styled.span`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.xs};
-`;
-
-const StyledTargetId = styled.code`
-  color: ${themeCssVariables.font.color.secondary};
-  font-family: ${themeCssVariables.font.family};
-  font-size: ${themeCssVariables.font.size.xs};
-  overflow-wrap: anywhere;
 `;
 
 const StyledScrollArea = styled.div`
@@ -120,7 +89,6 @@ const StyledLoadMore = styled.div`
 export type MyahInboxContactEmailTimelineProps = {
   messages: MyahInboxContactEmailMessage[];
   selectedEmailThreadId: string | null;
-  selectedEmailThreadSubject: string | null;
   loading: boolean;
   loadingMore: boolean;
   error: { message: string } | undefined;
@@ -189,7 +157,6 @@ const MyahInboxContactEmailTimelineMessage = ({
 export const MyahInboxContactEmailTimeline = ({
   messages,
   selectedEmailThreadId,
-  selectedEmailThreadSubject,
   loading,
   loadingMore,
   error,
@@ -277,18 +244,6 @@ export const MyahInboxContactEmailTimeline = ({
 
   return (
     <StyledTimeline aria-label="Email history">
-      <StyledSelectedTarget
-        aria-label="Selected email thread"
-        data-thread-id={selectedEmailThreadId ?? undefined}
-      >
-        <StyledTargetLabel>Reply target</StyledTargetLabel>
-        <StyledTargetType>Email conversation</StyledTargetType>
-        <StyledTargetId>
-          {selectedEmailThreadId
-            ? getMyahInboxSafeEmailSubject(selectedEmailThreadSubject)
-            : 'No email conversation selected'}
-        </StyledTargetId>
-      </StyledSelectedTarget>
       <StyledScrollArea>{renderBody()}</StyledScrollArea>
     </StyledTimeline>
   );

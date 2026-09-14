@@ -44,6 +44,10 @@ type InstagramAccountRecord = {
   id: string;
 };
 
+type InstagramAccountIdentityRecord = InstagramAccountRecord & {
+  deletedAt: string | Date | null;
+};
+
 const queryOptions = { shouldBypassPermissionChecks: true };
 
 @Injectable()
@@ -60,12 +64,13 @@ export class UnipileInstagramAccountProjectionService {
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(input.workspace.id);
-        const records = await dataSource.query<InstagramAccountRecord[]>(
+        const records = await dataSource.query<
+          InstagramAccountIdentityRecord[]
+        >(
           `
-            SELECT "id"
+            SELECT "id", "deletedAt"
             FROM "${schemaName}"."_myahInstagramAccount"
             WHERE "igUserId" = $1
-              AND "deletedAt" IS NULL
             LIMIT 2
           `,
           [input.account.instagramUserId],
@@ -79,6 +84,31 @@ export class UnipileInstagramAccountProjectionService {
           );
         }
 
+        // Both unique identities remain reserved by soft-deleted records.
+        const providerRecords = await dataSource.query<
+          InstagramAccountRecord[]
+        >(
+          `
+            SELECT "id"
+            FROM "${schemaName}"."_myahInstagramAccount"
+            WHERE "unipileAccountId" = $1
+            LIMIT 2
+          `,
+          [input.account.accountId],
+          undefined,
+          queryOptions,
+        );
+
+        if (providerRecords.some((record) => record.id !== records[0]?.id)) {
+          throw new ConflictException('Instagram account identity conflict');
+        }
+
+        if (records[0]?.deletedAt != null) {
+          throw new ConflictException(
+            'Instagram account requires explicit restore',
+          );
+        }
+
         const lastCheckedAt = new Date().toISOString();
         const displayName = input.account.username
           ? `@${input.account.username}`
@@ -88,7 +118,9 @@ export class UnipileInstagramAccountProjectionService {
         if (records.length === 1) {
           const [record] = records;
 
-          await dataSource.query(
+          const [updatedRecords, affectedCount] = await dataSource.query<
+            [InstagramAccountRecord[], number]
+          >(
             `
               UPDATE "${schemaName}"."_myahInstagramAccount"
               SET
@@ -105,6 +137,8 @@ export class UnipileInstagramAccountProjectionService {
                 "updatedByName" = $10,
                 "updatedByContext" = $11
               WHERE "id" = $12
+                AND "deletedAt" IS NULL
+              RETURNING "id"
             `,
             [
               displayName,
@@ -123,6 +157,16 @@ export class UnipileInstagramAccountProjectionService {
             undefined,
             queryOptions,
           );
+
+          if (
+            affectedCount !== 1 ||
+            updatedRecords.length !== 1 ||
+            updatedRecords[0].id !== record.id
+          ) {
+            throw new ConflictException(
+              'Instagram account verification update failed',
+            );
+          }
 
           return record.id;
         }

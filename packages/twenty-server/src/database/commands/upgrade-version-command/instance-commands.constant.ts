@@ -122,11 +122,11 @@ import { CreateManagedEmailOfferFastInstanceCommand } from 'src/database/command
 import { AddManagedEmailPaymentReceiptsColumnFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000004000-add-managed-email-payment-receipts-column';
 import { MigrateManagedEmailPaymentReceiptsSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1786000004001-migrate-managed-email-payment-receipts';
 import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1788163457871-extend-managed-provider-funding-action';
-import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201000000-create-unipile-instagram-foundation';
-import { AddUnipileInstagramSyncStateFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201001000-add-unipile-instagram-sync-state';
-import { CreateInstagramActionBudgetFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201002000-create-instagram-action-budget';
-import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201003000-add-instagram-direct-action-context';
-import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1799201004000-invalidate-composio-instagram-authorities';
+import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619348-create-unipile-instagram-foundation';
+import { AddUnipileInstagramSyncStateFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619352-add-unipile-instagram-sync-state';
+import { CreateInstagramActionBudgetFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619356-create-instagram-action-budget';
+import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619359-add-instagram-direct-action-context';
+import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,

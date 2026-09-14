@@ -84,6 +84,7 @@ type ContactRaw = {
   identityRecordId: string;
   orderingKey: string;
   lastActivityAt: Date | string;
+  activityCursorTimestamp: string;
   latestChannel: MyahInboxContactLatestChannel;
   displayName: string | null;
   creatorId: string | null;
@@ -669,7 +670,11 @@ contact AS (
     ON instagram."identityKind" = latest."identityKind"
    AND instagram."identityRecordId" = latest."identityRecordId"
 )
-SELECT contact.*
+SELECT contact.*,
+  to_char(
+    contact."lastActivityAt" AT TIME ZONE 'UTC',
+    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+  ) AS "activityCursorTimestamp"
 FROM contact
 ${cursorCondition}
 ORDER BY contact."lastActivityAt" DESC, contact."orderingKey" DESC
@@ -772,7 +777,7 @@ LIMIT ${limit}`;
     return {
       cursor: encodeMyahInboxContactCursor({
         workspaceId,
-        activityAt: lastActivityAt,
+        activityAt: row.activityCursorTimestamp,
         orderingKey: row.orderingKey,
       }),
       node,

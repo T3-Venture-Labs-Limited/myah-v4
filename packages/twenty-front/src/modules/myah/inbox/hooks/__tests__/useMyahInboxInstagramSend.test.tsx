@@ -73,6 +73,17 @@ describe('useMyahInboxInstagramSend', () => {
     expect(statusQuery).not.toHaveBeenCalled();
   });
 
+  it('never sends a persisted empty draft after flush reports empty', async () => {
+    flush.mockResolvedValue({ status: 'empty', revision: 5 });
+    const { result } = renderSend();
+    await act(async () => {
+      expect((await result.current.send()).status).toBe('DRAFT_NOT_SAVED');
+    });
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(sendMutation).not.toHaveBeenCalled();
+    expect(statusQuery).not.toHaveBeenCalled();
+  });
+
   it('surfaces a blocked response without usage counters', async () => {
     sendMutation.mockResolvedValue({
       data: {
@@ -181,6 +192,94 @@ describe('useMyahInboxInstagramSend', () => {
         variables: { input: { receiptId } },
       }),
     );
+  });
+
+  it('keeps polling canonical PROVIDER_ACCEPTED despite a lowercase free-text provider outcome, then returns SENT', async () => {
+    sendMutation.mockResolvedValue({
+      data: {
+        sendInstagramMessage: {
+          status: 'PROVIDER_ACCEPTED',
+          receiptId,
+          code: null,
+          nextEligibleAt: null,
+        },
+      },
+    });
+    statusQuery
+      .mockResolvedValueOnce({
+        data: {
+          instagramMessageSendStatus: {
+            receiptId,
+            state: 'PROVIDER_ACCEPTED',
+            providerCode: 'accepted',
+            outcome: 'accepted',
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          instagramMessageSendStatus: {
+            receiptId,
+            state: 'SENT',
+            providerCode: 'accepted',
+            outcome: 'accepted',
+          },
+        },
+      });
+    const { result } = renderSend();
+    let send: Promise<MyahInboxInstagramSendResult> | undefined;
+
+    act(() => {
+      send = result.current.send();
+    });
+    await act(async () => jest.advanceTimersByTimeAsync(1_000));
+    expect(result.current.lockedUnknown).toBe(false);
+    await act(async () => jest.advanceTimersByTimeAsync(1_000));
+
+    await expect(send!).resolves.toMatchObject({ status: 'SENT', receiptId });
+    expect(statusQuery).toHaveBeenCalledTimes(2);
+    expect(result.current.lockedUnknown).toBe(false);
+  });
+
+  it('locks the draft after polling times out while the canonical receipt remains provider accepted', async () => {
+    sendMutation.mockResolvedValue({
+      data: {
+        sendInstagramMessage: {
+          status: 'PROVIDER_ACCEPTED',
+          receiptId,
+          code: null,
+          nextEligibleAt: null,
+        },
+      },
+    });
+    statusQuery.mockResolvedValue({
+      data: {
+        instagramMessageSendStatus: {
+          receiptId,
+          state: 'PROVIDER_ACCEPTED',
+          providerCode: 'accepted',
+          outcome: 'accepted',
+        },
+      },
+    });
+    const { result } = renderSend();
+    let send: Promise<MyahInboxInstagramSendResult> | undefined;
+
+    act(() => {
+      send = result.current.send();
+    });
+    await act(async () => jest.advanceTimersByTimeAsync(15_000));
+
+    await expect(send!).resolves.toMatchObject({
+      status: 'UNKNOWN',
+      receiptId,
+    });
+    expect(statusQuery).toHaveBeenCalledTimes(15);
+    expect(result.current.lockedUnknown).toBe(true);
+    await expect(result.current.send()).resolves.toMatchObject({
+      status: 'UNKNOWN',
+    });
+    expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 
   it('keeps flush, mutation, and receipt polling single-flight', async () => {

@@ -74,6 +74,7 @@ import {
 
 import { type ManagedEmailCatalog } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 import { IsUnipileApiBaseUrlSafe } from 'src/modules/myah-unipile/validators/is-unipile-api-base-url-safe.validator';
+import { IsUnipileInstagramCallbackBaseUrlSafe } from 'src/modules/myah-unipile/validators/is-unipile-instagram-callback-base-url-safe.validator';
 export class ConfigVariables {
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,
@@ -123,6 +124,18 @@ export class ConfigVariables {
   @IsString()
   @Matches(/^[0-9a-f]{64}$/)
   UNIPILE_WEBHOOK_SECRET = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description: 'Public HTTPS base URL for Unipile Instagram callbacks',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((_env, value) => value !== undefined && value !== '')
+  @IsString()
+  @IsUnipileInstagramCallbackBaseUrlSafe()
+  UNIPILE_INSTAGRAM_CALLBACK_BASE_URL: string | undefined = undefined;
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,

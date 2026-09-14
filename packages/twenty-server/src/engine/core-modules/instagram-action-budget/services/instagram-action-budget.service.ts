@@ -345,8 +345,8 @@ export class InstagramActionBudgetService {
         hourlyRemaining: Math.max(HOURLY_LIMIT - hourlyUsed, 0),
         hourlyUsed,
         nextEligibleAt: this.laterEligibleAt(
-          hourlyNextEligibleAt,
-          dailyNextEligibleAt,
+          hourlyUsed >= HOURLY_LIMIT ? hourlyNextEligibleAt : null,
+          dailyUsed >= DAILY_LIMIT ? dailyNextEligibleAt : null,
         ),
       },
     };

@@ -342,7 +342,10 @@ export const useMyahInboxInstagramSend = ({
             return unknownResult(initialResult.receiptId);
           }
 
-          const status = sendStatus.outcome ?? sendStatus.state;
+          // Receipt state is the canonical typed contract. Provider outcome is
+          // redacted free text (for example, "accepted") and cannot unlock a
+          // pending send or change its no-resend state.
+          const status = sendStatus.state;
 
           if (status === 'PENDING' || status === 'PROVIDER_ACCEPTED') {
             continue;

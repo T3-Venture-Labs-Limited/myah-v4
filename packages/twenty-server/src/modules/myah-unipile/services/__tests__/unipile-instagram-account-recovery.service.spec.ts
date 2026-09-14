@@ -1,4 +1,4 @@
-import { LessThan } from 'typeorm';
+import { LessThan, LessThanOrEqual } from 'typeorm';
 
 type UnipileInstagramAccountRecoveryService = {
   recover: (input: { processingBefore: Date }) => Promise<{
@@ -16,7 +16,10 @@ type UnipileInstagramAccountRecoveryServiceModule = {
       reconcileUnknownDisconnect: jest.Mock;
       reconcileConnectingAccount: jest.Mock;
     },
-    hostedAuthService: { resumeProcessingAttempt: jest.Mock },
+    hostedAuthService: {
+      resumeProcessingAttempt: jest.Mock;
+      expirePendingAttempt: jest.Mock;
+    },
     availability: { assertEnabled: jest.Mock },
   ) => UnipileInstagramAccountRecoveryService;
 };
@@ -54,10 +57,11 @@ describe('UnipileInstagramAccountRecoveryService', () => {
     const hostedAuthAttemptRepository = {
       find: jest
         .fn()
-        .mockResolvedValue([
+        .mockResolvedValueOnce([
           { id: 'hosted-recovered' },
           { id: 'hosted-failed' },
-        ]),
+        ])
+        .mockResolvedValue([]),
     };
     const accountService = {
       reconcileUnknownDisconnect: jest
@@ -192,6 +196,85 @@ describe('UnipileInstagramAccountRecoveryService', () => {
       50,
       'connecting-49',
     );
+  });
+
+  it('sweeps fifty expired PENDING attempts by expiry and id independently of the PROCESSING clock and counts only thrown failures', async () => {
+    jest.useFakeTimers();
+    const now = new Date('2026-09-04T12:00:00.000Z');
+
+    jest.setSystemTime(now);
+    try {
+      const recoveryServiceModule = loadRecoveryServiceModule();
+
+      if (!recoveryServiceModule) {
+        throw new Error('Recovery service unavailable');
+      }
+
+      const candidates = Array.from({ length: 50 }, (_, index) => ({
+        id: `expired-${index}`,
+      }));
+      const bindingRepository = { find: jest.fn().mockResolvedValue([]) };
+      const hostedAuthAttemptRepository = {
+        find: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 'processing' }])
+          .mockResolvedValueOnce(candidates),
+      };
+      const accountService = {
+        reconcileUnknownDisconnect: jest.fn(),
+        reconcileConnectingAccount: jest.fn(),
+      };
+      const hostedAuthService = {
+        resumeProcessingAttempt: jest.fn().mockResolvedValue(undefined),
+        expirePendingAttempt: jest
+          .fn()
+          .mockRejectedValueOnce(new Error('expiry write failed'))
+          .mockResolvedValue(undefined),
+      };
+      const service =
+        new recoveryServiceModule.UnipileInstagramAccountRecoveryService(
+          bindingRepository,
+          hostedAuthAttemptRepository,
+          accountService,
+          hostedAuthService,
+          { assertEnabled: jest.fn().mockResolvedValue(undefined) },
+        );
+      const processingBefore = new Date(now.getTime() - 60_000);
+
+      await expect(service.recover({ processingBefore })).resolves.toEqual({
+        disconnectRecovered: 0,
+        hostedRecovered: 1,
+        failed: 1,
+      });
+      expect(hostedAuthAttemptRepository.find).toHaveBeenCalledTimes(2);
+      expect(hostedAuthAttemptRepository.find).toHaveBeenCalledWith({
+        where: { status: 'PENDING', expiresAt: LessThanOrEqual(now) },
+        order: { expiresAt: 'ASC', id: 'ASC' },
+        take: 50,
+      });
+      expect(hostedAuthAttemptRepository.find).toHaveBeenCalledWith({
+        where: { status: 'PROCESSING', updatedAt: LessThan(processingBefore) },
+        order: { updatedAt: 'ASC', id: 'ASC' },
+        take: 50,
+      });
+      expect(hostedAuthService.expirePendingAttempt).toHaveBeenCalledTimes(50);
+      for (const [index, attempt] of candidates.entries()) {
+        expect(hostedAuthService.expirePendingAttempt).toHaveBeenNthCalledWith(
+          index + 1,
+          attempt.id,
+        );
+      }
+      expect(hostedAuthService.resumeProcessingAttempt).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(hostedAuthService.resumeProcessingAttempt).toHaveBeenCalledWith(
+        'processing',
+      );
+      expect(accountService.reconcileUnknownDisconnect).not.toHaveBeenCalled();
+      expect(accountService.reconcileConnectingAccount).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('asserts Unipile Instagram availability before reading recovery candidates', async () => {

@@ -1,6 +1,9 @@
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import gql from 'graphql-tag';
 
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import {
   cleanupMyahInboxTask7Fixture,
@@ -328,6 +331,153 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       expect.arrayContaining(['CREATOR', 'EMAIL_THREAD']),
     );
   });
+
+  // Requires the parent-owned disposable PostgreSQL gate; never run against UAT.
+  it('pages Contact microseconds and exact-time ID ties exactly once at page size one', async () => {
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    const threadIds = [
+      fixture.threadIds.tiedLinked,
+      fixture.threadIds.tiedUnlinked,
+      fixture.threadIds.sharedFallback,
+    ];
+    const search = 'MYAH314-EXACT-CONTACT-CURSOR';
+    const originalMessages = await global.testDataSource.query<
+      Array<{
+        id: string;
+        receivedAt: string | null;
+        subject: string | null;
+        text: string | null;
+      }>
+    >(
+      `SELECT id, to_char("receivedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "receivedAt", subject, text FROM "${schema}".message WHERE "messageThreadId" = ANY($1::uuid[])`,
+      [threadIds],
+    );
+    const originalThreads = await global.testDataSource.query<
+      Array<{ id: string; creatorId: string | null }>
+    >(
+      `SELECT id, "creatorId" FROM "${schema}"."messageThread" WHERE id = ANY($1::uuid[])`,
+      [threadIds],
+    );
+    try {
+      await global.testDataSource.query(
+        `UPDATE "${schema}"."messageThread" SET "creatorId" = NULL WHERE id = ANY($1::uuid[])`,
+        [threadIds],
+      );
+      for (const [index, threadId] of threadIds.entries()) {
+        await global.testDataSource.query(
+          `UPDATE "${schema}".message SET "receivedAt" = $1::timestamptz, subject = $2, text = $2 WHERE "messageThreadId" = $3::uuid`,
+          [
+            `2099-07-24T12:00:00.${index === 0 ? '000100' : '000900'}Z`,
+            search,
+            threadId,
+          ],
+        );
+      }
+      const seen: string[] = [];
+      const cursors: string[] = [];
+      let after: string | undefined;
+      let hasNextPage = true;
+      for (let page = 0; page < threadIds.length + 1 && hasNextPage; page++) {
+        const connection = await fetchContacts(token, {
+          first: 1,
+          search,
+          after,
+        });
+        expect(connection.edges).toHaveLength(1);
+        const edge = connection.edges[0];
+        expect(edge.node.identityKind).toBe('EMAIL_THREAD');
+        expect(edge.node.email.threadIds).toHaveLength(1);
+        seen.push(edge.node.email.threadIds[0]);
+        cursors.push(edge.cursor);
+        expect(connection.pageInfo.endCursor).toBe(edge.cursor);
+        after = edge.cursor;
+        hasNextPage = connection.pageInfo.hasNextPage;
+      }
+      expect(hasNextPage).toBe(false);
+      expect(seen).toEqual([threadIds[2], threadIds[1], threadIds[0]]);
+      expect(new Set(seen).size).toBe(threadIds.length);
+      expect(new Set(cursors).size).toBe(threadIds.length);
+      expect(
+        (await fetchContacts(token, { first: 1, search, after })).edges,
+      ).toEqual([]);
+    } finally {
+      for (const row of originalMessages) {
+        await global.testDataSource.query(
+          `UPDATE "${schema}".message SET "receivedAt" = $1::timestamptz, subject = $2, text = $3 WHERE id = $4::uuid`,
+          [row.receivedAt, row.subject, row.text, row.id],
+        );
+      }
+      for (const row of originalThreads) {
+        await global.testDataSource.query(
+          `UPDATE "${schema}"."messageThread" SET "creatorId" = $1::uuid WHERE id = $2::uuid`,
+          [row.creatorId, row.id],
+        );
+      }
+    }
+  });
+
+  it('pages legacy Email microseconds and exact-time message ID ties exactly once at page size one', async () => {
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    const contacts = await fetchContacts(token, {
+      first: 20,
+      search: fixture.markers.tied,
+    });
+    const contactId = contacts.edges.find(
+      ({ node }) => node.creator?.id === fixture.creatorId,
+    )?.node.id;
+    expect(contactId).toBeDefined();
+    const timeline = await fetchEmailMessages(token, { contactId, first: 100 });
+    expect(timeline.pageInfo.hasNextPage).toBe(false);
+    const ids = timeline.edges.map(({ node }) => node.id);
+    expect(ids.length).toBeGreaterThanOrEqual(3);
+    const originalMessages = await global.testDataSource.query<
+      Array<{ id: string; receivedAt: string }>
+    >(
+      `SELECT id, to_char("receivedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "receivedAt" FROM "${schema}".message WHERE id = ANY($1::uuid[])`,
+      [ids],
+    );
+    try {
+      for (const [index, id] of ids.entries()) {
+        await global.testDataSource.query(
+          `UPDATE "${schema}".message SET "receivedAt" = $1::timestamptz WHERE id = $2::uuid`,
+          [`2099-07-24T12:00:00.${index === 0 ? '000100' : '000900'}Z`, id],
+        );
+      }
+      const seen: string[] = [];
+      const cursors: string[] = [];
+      let after: string | undefined;
+      let hasNextPage = true;
+      for (let page = 0; page < ids.length + 1 && hasNextPage; page++) {
+        const connection = await fetchEmailMessages(token, {
+          contactId,
+          first: 1,
+          after,
+        });
+        expect(connection.edges).toHaveLength(1);
+        const edge = connection.edges[0];
+        seen.push(edge.node.id);
+        cursors.push(edge.cursor);
+        expect(connection.pageInfo.endCursor).toBe(edge.cursor);
+        after = edge.cursor;
+        hasNextPage = connection.pageInfo.hasNextPage;
+      }
+      expect(hasNextPage).toBe(false);
+      expect(seen).toEqual([ids[0], ...ids.slice(1).sort()]);
+      expect(new Set(seen).size).toBe(ids.length);
+      expect(new Set(cursors).size).toBe(ids.length);
+      expect(
+        (await fetchEmailMessages(token, { contactId, first: 1, after })).edges,
+      ).toEqual([]);
+    } finally {
+      for (const row of originalMessages) {
+        await global.testDataSource.query(
+          `UPDATE "${schema}".message SET "receivedAt" = $1::timestamptz WHERE id = $2::uuid`,
+          [row.receivedAt, row.id],
+        );
+      }
+    }
+  });
+
   it('keeps the outer contact page bounded in the measured PostgreSQL plan', async () => {
     type QueryCall = (
       sql: string,

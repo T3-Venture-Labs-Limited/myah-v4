@@ -1,0 +1,1472 @@
+import {
+  ApolloClient,
+  ApolloLink,
+  InMemoryCache,
+  Observable,
+} from '@apollo/client';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
+import { createStore, Provider } from 'jotai';
+import { type ReactNode } from 'react';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
+import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
+import { myahInboxContactSelectionState } from '@/myah/inbox/states/myahInboxSelectionState';
+import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
+import { type MyahInboxDraftAutosaveEntry } from '@/myah/inbox/types/MyahInboxDraftAutosave';
+import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
+
+let mockClient: ApolloClient;
+jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
+  useApolloCoreClient: () => mockClient,
+}));
+jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
+  useSnackBar: () => ({
+    enqueueSuccessSnackBar: jest.fn(),
+    enqueueWarningSnackBar: jest.fn(),
+    enqueueInfoSnackBar: jest.fn(),
+    enqueueErrorSnackBar: jest.fn(),
+  }),
+}));
+jest.mock('twenty-ui/input', () => ({
+  SegmentedControl: () => null,
+  Button: ({
+    title,
+    ariaLabel,
+    disabled,
+    onClick,
+  }: {
+    title: string;
+    ariaLabel?: string;
+    disabled?: boolean;
+    onClick: () => void;
+  }) => (
+    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
+      {title}
+    </button>
+  ),
+}));
+jest.mock('twenty-ui/layout', () => ({
+  ...jest.requireActual('twenty-ui/layout'),
+  AnimatedCircleLoading: ({ children }: { children: ReactNode }) => (
+    <>{children}</>
+  ),
+}));
+jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
+  MyahInboxDraftEditor: ({
+    entry,
+    disabled,
+    onDraftChange,
+    actions,
+    onRetry,
+  }: {
+    entry: MyahInboxDraftAutosaveEntry;
+    disabled: boolean;
+    onDraftChange: (body: { markdown: string; blocknote: null }) => void;
+    actions: ReactNode;
+    onRetry: () => void;
+  }) => (
+    <div>
+      <input
+        aria-label="Real shared draft"
+        value={entry.localBody.markdown}
+        disabled={disabled}
+        onChange={(event) =>
+          onDraftChange({ markdown: event.target.value, blocknote: null })
+        }
+      />
+      {entry.status === 'error' && (
+        <button onClick={onRetry}>Retry draft save</button>
+      )}
+      {actions}
+    </div>
+  ),
+}));
+
+jest.mock('@/myah/inbox/components/MyahInboxContactList', () => ({
+  MyahInboxContactList: ({
+    contacts,
+    selectedContactId,
+    onSelectContact,
+    onRefresh,
+  }: {
+    contacts: MyahInboxContact[];
+    selectedContactId: string | null;
+    onSelectContact: (
+      id: string,
+      options?: { openConversation?: boolean },
+    ) => void;
+    onRefresh: () => void;
+  }) => (
+    <div aria-label="Contact list">
+      {contacts.map((contact) => (
+        <button
+          key={contact.id}
+          role="option"
+          aria-selected={contact.id === selectedContactId}
+          onClick={() =>
+            onSelectContact(contact.id, { openConversation: true })
+          }
+        >
+          Select {contact.displayName}
+        </button>
+      ))}
+      <button onClick={onRefresh}>Refresh contacts</button>
+    </div>
+  ),
+}));
+
+jest.mock('@/myah/inbox/components/MyahInboxChannelTabs', () => ({
+  MYAH_INBOX_EMAIL_PANEL_ID: 'email-panel',
+  MYAH_INBOX_EMAIL_TAB_ID: 'email-tab',
+  MYAH_INBOX_INSTAGRAM_PANEL_ID: 'instagram-panel',
+  MYAH_INBOX_INSTAGRAM_TAB_ID: 'instagram-tab',
+  MyahInboxChannelTabs: ({
+    onChannelChange,
+  }: {
+    onChannelChange: (channel: 'EMAIL' | 'INSTAGRAM') => void;
+  }) => (
+    <div>
+      <button onClick={() => onChannelChange('EMAIL')}>Email channel</button>
+      <button onClick={() => onChannelChange('INSTAGRAM')}>
+        Instagram channel
+      </button>
+    </div>
+  ),
+}));
+
+jest.mock('@/ui/input/components/Select', () => ({
+  Select: ({
+    label,
+    value,
+    options,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    options: Array<{ label: string; value: string }>;
+    onChange: (value: string) => void;
+  }) => (
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
+jest.mock('@/myah/inbox/components/MyahInboxContactEmailTimeline', () => ({
+  MyahInboxContactEmailTimeline: ({
+    selectedEmailThreadId,
+  }: {
+    selectedEmailThreadId: string | null;
+  }) => <div>Email timeline {selectedEmailThreadId ?? 'none'}</div>,
+}));
+
+jest.mock(
+  '@/myah/inbox/components/MyahInboxInstagramConversationPanel',
+  () => ({
+    MyahInboxInstagramConversationPanel: ({
+      contact,
+    }: {
+      contact: MyahInboxContact;
+    }) => <div>Instagram timeline {contact.displayName}</div>,
+  }),
+);
+
+jest.mock('@/myah/inbox/components/MyahInboxThreadActions', () => ({
+  MyahInboxThreadActions: ({
+    thread,
+    onThreadUpdated,
+  }: {
+    thread: { id: string };
+    onThreadUpdated: (message: string) => void;
+  }) => (
+    <div>
+      Email actions {thread.id}
+      <button onClick={() => onThreadUpdated('Thread updated')}>
+        Simulate thread update
+      </button>
+    </div>
+  ),
+}));
+
+jest.mock('@/myah/inbox/components/MyahInboxContactLinkAction', () => ({
+  MyahInboxContactLinkAction: ({
+    onLinked,
+  }: {
+    onLinked: (id: string) => void;
+  }) => (
+    <button onClick={() => onLinked('contact-linked')}>Link Creator</button>
+  ),
+}));
+
+jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
+  PageCardLayout: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+}));
+
+jest.mock('@/ui/layout/page/components/PageCardHeader', () => ({
+  PageCardHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+}));
+
+jest.mock('@/side-panel/components/SidePanelToggleButton', () => ({
+  SidePanelToggleButton: () => <button>Side panel</button>,
+}));
+
+jest.mock('twenty-ui/icon', () => ({ IconInbox: () => null }));
+
+const contact = (
+  id: string,
+  latestChannel: 'EMAIL' | 'INSTAGRAM',
+  linked = true,
+): MyahInboxContact => ({
+  id,
+  identityKind: linked ? 'CREATOR' : 'EMAIL_THREAD',
+  displayName: id,
+  instagramUsername: linked ? `${id}.ig` : null,
+  creator: linked ? { id: `creator-${id}`, name: id } : null,
+  lastActivityAt: '2026-09-05T12:00:00.000Z',
+  latestChannel,
+  preview: `${id} preview`,
+  sender: id,
+  needsAttention: true,
+  email: {
+    isAvailable: true,
+    threadCount: 2,
+    threadIds: ['thread-1', 'thread-2'],
+    latestThreadId: 'thread-2',
+    needsAttention: true,
+  },
+  instagram: {
+    isAvailable: linked,
+    state: linked ? 'READY' : 'UNAVAILABLE',
+    needsAttention: latestChannel === 'INSTAGRAM',
+    conversations: linked
+      ? [
+          {
+            id: `conversation-${id}`,
+            providerConversationId: `provider-${id}`,
+            provider: 'UNIPILE',
+            lifecycle: 'ACTIVE',
+            recipientUsername: `${id}.ig`,
+            recipientDisplayName: id,
+            lastActivityAt: '2026-09-05T12:00:00.000Z',
+            latestDirection: 'INBOUND',
+          },
+        ]
+      : [],
+  },
+});
+
+const contacts = ['contact-1', 'contact-2'].map((id, index) => ({
+  ...contact(id, 'EMAIL', false),
+  email: {
+    ...contact(id, 'EMAIL', false).email,
+    threadIds: [`thread-${index + 1}`],
+    latestThreadId: `thread-${index + 1}`,
+    threadCount: 1,
+  },
+}));
+let mockContacts: MyahInboxContact[] = contacts;
+let mockRealHistory = false;
+let mockContactRefreshStatus = 'idle';
+const threads = Object.fromEntries(
+  ['thread-1', 'thread-2', 'thread-3'].map((id) => [
+    id,
+    { id, subject: id, state: 'NEEDS_REPLY' },
+  ]),
+);
+const refresh = jest.fn();
+const refreshContacts = jest.fn();
+jest.mock('@/ui/utilities/responsive/hooks/useIsMobile', () => ({
+  useIsMobile: () => false,
+}));
+jest.mock('@/myah/inbox/hooks/useMyahInboxContacts', () => ({
+  useMyahInboxContacts: () => ({
+    contacts: mockContacts,
+    loading: false,
+    refreshStatus: mockContactRefreshStatus,
+    refresh: refreshContacts,
+  }),
+}));
+jest.mock('@/myah/inbox/hooks/useMyahInboxEmailHistory', () => ({
+  useMyahInboxEmailHistory: (_workspace: string, contactId: string | null) => {
+    if (mockRealHistory)
+      return jest
+        .requireActual('@/myah/inbox/hooks/useMyahInboxEmailHistory')
+        .useMyahInboxEmailHistory(_workspace, contactId, 'member-1');
+    const contact = mockContacts.find((contact) => contact.id === contactId);
+    return {
+      segments: contact
+        ? [
+            {
+              id: 'segment',
+              snapshot: 'snapshot',
+              olderCursor: null,
+              requests: [],
+              pages: [
+                {
+                  latestThreadId: contact.email.latestThreadId,
+                  cards: contact.email.threadIds.map((id, index) => ({
+                    threadId: id,
+                    rootMessageId: `${id}-root`,
+                    subject: id,
+                    startTimestamp: `2026-09-0${index + 1}T00:00:00Z`,
+                    historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+                  })),
+                },
+              ],
+            },
+          ]
+        : [],
+      windows: [],
+      detachedCards: [],
+      missingMessageIds: [],
+      status: 'ready',
+      loading: false,
+      openCard: jest.fn(),
+      openDetachedCard: jest.fn(),
+      refresh,
+      setReadingAnchor: jest.fn(),
+    };
+  },
+}));
+jest.mock('@/myah/inbox/hooks/useMyahInboxContactEmailMessages', () => ({
+  useMyahInboxContactEmailMessages: () => ({
+    messages: [],
+    loading: false,
+    refresh,
+  }),
+}));
+jest.mock('@/myah/inbox/hooks/useMyahInboxSelectedEmailThread', () => ({
+  useMyahInboxSelectedEmailThread: (_workspaceId: string, threadId: string) =>
+    mockRealHistory
+      ? jest
+          .requireActual('@/myah/inbox/hooks/useMyahInboxSelectedEmailThread')
+          .useMyahInboxSelectedEmailThread(_workspaceId, threadId)
+      : { thread: threads[threadId] ?? null, loading: false, refresh },
+}));
+
+const key = { workspaceId: 'workspace-1', threadId: 'thread-1' };
+const body = { markdown: 'server draft', blocknote: null };
+type Request = {
+  name: string;
+  variables: Record<string, unknown>;
+  resolve: (data: Record<string, unknown>) => void;
+  reject: () => void;
+};
+let requests: Request[];
+const take = (name: string) => {
+  const index = requests.findIndex((request) => request.name === name);
+  if (index < 0)
+    throw new Error(`Missing ${name}; got ${requests.map(({ name }) => name)}`);
+  return requests.splice(index, 1)[0];
+};
+const completeRead = async (
+  threadId = key.threadId,
+  readinessStatus = 'READY',
+  draftBody = body,
+) => {
+  const read = take('MyahInboxEmailDraft');
+  expect(read.variables).toEqual({
+    expectedWorkspaceId: key.workspaceId,
+    threadId,
+  });
+  await act(async () =>
+    read.resolve({
+      myahInboxEmailDraft: { ...key, threadId, revision: 2, body: draftBody },
+    }),
+  );
+  await act(async () =>
+    take('MyahInboxReplySendReadiness').resolve({
+      myahInboxReplySendReadiness: { status: readinessStatus, reason: null },
+    }),
+  );
+};
+const advance = async () => act(async () => jest.advanceTimersByTimeAsync(750));
+const select = async (id: string) =>
+  act(async () => {
+    fireEvent.click(screen.getByRole('option', { name: `Select ${id}` }));
+  });
+const draftInput = () => screen.getAllByLabelText('Real shared draft')[0];
+const selectThread = async (threadId: string) =>
+  act(async () => {
+    const close = screen.queryByRole('button', { name: 'Close inline reply' });
+    fireEvent.click(
+      threadId === 'thread-2' && close
+        ? close
+        : screen.getByRole('button', { name: `Reply to ${threadId}` }),
+    );
+  });
+const selectChannel = async (channel: 'Email' | 'Instagram') =>
+  act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: `${channel} channel` }));
+  });
+const configureTwoThreadContact = () => {
+  mockContacts = [
+    contact('contact-1', 'EMAIL'),
+    {
+      ...contacts[1],
+      email: {
+        ...contacts[1].email,
+        threadIds: ['thread-3'],
+        latestThreadId: 'thread-3',
+      },
+    },
+  ];
+};
+const setup = () => {
+  const store = createStore();
+  store.set(currentWorkspaceState.atom, { id: key.workspaceId } as never);
+  store.set(currentWorkspaceMemberState.atom, { id: 'member-1' } as never);
+  const mount = () =>
+    render(
+      <Provider store={store}>
+        <MyahInboxPage />
+      </Provider>,
+    );
+  return {
+    store,
+    mount,
+    view: mount(),
+    entry: () => store.get(myahInboxDraftAutosaveFamilyState.atomFamily(key)),
+  };
+};
+
+describe('MyahInboxPage retained recovery navigation with real draft controller', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockContacts = contacts;
+    mockRealHistory = false;
+    mockContactRefreshStatus = 'idle';
+    refreshContacts.mockReset().mockImplementation(async (contactId) => ({
+      status: 'success',
+      selectedContact:
+        mockContacts.find((contact) => contact.id === contactId) ?? null,
+    }));
+    requests = [];
+    mockClient = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: new ApolloLink(
+        (operation) =>
+          new Observable((observer) => {
+            requests.push({
+              name: operation.operationName ?? '',
+              variables: operation.variables,
+              resolve: (data) => {
+                observer.next({ data });
+                observer.complete();
+              },
+              reject: () => observer.error(new Error('Save unavailable')),
+            });
+          }),
+      ),
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    mockClient.stop();
+    jest.useRealTimers();
+  });
+
+  it('integrates the real bounded history and exact summary/draft reads without an exhaustive legacy read', async () => {
+    mockRealHistory = true;
+    mockContacts = [contact('contact-1', 'EMAIL')];
+    setup();
+    expect(screen.queryByLabelText('Real shared draft')).toBeNull();
+    expect(requests.map((request) => request.name)).toEqual([
+      'MyahInboxContactEmailCards',
+    ]);
+    const cards = ['thread-2', 'thread-1'].map((threadId, index) => ({
+      threadId,
+      rootMessageId: `${threadId}-root`,
+      startTimestamp: `2026-09-0${index + 1}T00:00:00Z`,
+      subject: threadId,
+      campaignLabel: 'Same campaign',
+      historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+    }));
+    await act(async () =>
+      take('MyahInboxContactEmailCards').resolve({
+        myahInboxContactEmailCards: {
+          cards,
+          snapshot: 'snapshot',
+          olderCursor: 'older',
+          latestThreadId: 'thread-1',
+        },
+      }),
+    );
+    const summary = take('MyahInboxThreads');
+    expect(summary.variables).toMatchObject({
+      threadId: 'thread-1',
+      first: 1,
+      expectedWorkspaceId: key.workspaceId,
+    });
+    await act(async () =>
+      summary.resolve({
+        myahInboxThreads: { edges: [{ node: threads['thread-1'] }] },
+      }),
+    );
+    await completeRead();
+    for (const card of cards) {
+      const request = take('MyahInboxContactEmailCardMessages');
+      expect(request.variables).toMatchObject({
+        threadId: card.threadId,
+        snapshot: 'snapshot',
+      });
+      const root = {
+        id: card.rootMessageId,
+        messageThreadId: card.threadId,
+        receivedAt: card.startTimestamp,
+        subject: card.subject,
+        text: `Real body ${card.threadId}`,
+        direction: 'INCOMING',
+        visibility: 'FULL',
+        participants: [],
+        attachmentFileIds: [],
+      };
+      await act(async () =>
+        request.resolve({
+          myahInboxContactEmailCardMessages: {
+            threadId: card.threadId,
+            root,
+            messages: [],
+            olderCursor: null,
+            newerCursor: null,
+          },
+        }),
+      );
+    }
+    expect(screen.getByText('Email actions thread-1')).toBeVisible();
+    expect(screen.getByText('Real body thread-2')).toBeVisible();
+    expect(screen.queryByLabelText('Email thread')).toBeNull();
+    expect(requests).toHaveLength(0);
+    await selectThread('thread-2');
+    const olderSummary = take('MyahInboxThreads');
+    expect(olderSummary.variables.threadId).toBe('thread-2');
+    await act(async () =>
+      olderSummary.resolve({
+        myahInboxThreads: { edges: [{ node: threads['thread-2'] }] },
+      }),
+    );
+    await completeRead('thread-2');
+    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(2);
+    expect(screen.getByText('Email actions thread-1')).toBeVisible();
+  });
+
+  it('revalidates both exact summary authorities on thread activity but not ordinary message pagination', async () => {
+    mockRealHistory = true;
+    mockContacts = [contact('contact-1', 'EMAIL')];
+    setup();
+    const historyNames = new Set([
+      'MyahInboxContactEmailCards',
+      'MyahInboxContactEmailCard',
+      'MyahInboxContactEmailCardMessages',
+    ]);
+    const projection = (id: string, restricted: boolean) => ({
+      threadId: id,
+      rootMessageId: `${id}-root`,
+      startTimestamp: `2026-09-0${id === 'thread-1' ? 1 : 2}T12:00:00Z`,
+      subject: restricted ? null : id,
+      campaignLabel: null,
+      historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+    });
+    const answerHistory = async (request: Request, restricted: boolean) => {
+      const id = String(request.variables.threadId ?? 'thread-1');
+      const card = projection(id, restricted);
+      const root = {
+        id: card.rootMessageId,
+        messageThreadId: id,
+        receivedAt: card.startTimestamp,
+        subject: card.subject,
+        text: restricted ? null : 'Readable message body',
+        direction: 'INCOMING',
+        visibility: restricted ? 'METADATA' : 'FULL',
+        participants: [],
+        attachmentFileIds: [],
+      };
+      const data =
+        request.name === 'MyahInboxContactEmailCards'
+          ? {
+              myahInboxContactEmailCards: {
+                cards: ['thread-1', 'thread-2'].map((id) =>
+                  projection(id, restricted),
+                ),
+                snapshot:
+                  request.variables.snapshot ??
+                  (restricted ? 'fresh-restricted' : 'snapshot'),
+                olderCursor: null,
+                latestThreadId: 'thread-2',
+              },
+            }
+          : request.name === 'MyahInboxContactEmailCard'
+            ? { myahInboxContactEmailCard: { snapshot: 'current', card } }
+            : {
+                myahInboxContactEmailCardMessages: {
+                  threadId: id,
+                  root,
+                  messages: [
+                    {
+                      ...root,
+                      id: `${id}-${request.variables.cursor ? 'older' : 'tail'}`,
+                      receivedAt: card.startTimestamp.replace(
+                        '12:00',
+                        request.variables.cursor ? '13:00' : '14:00',
+                      ),
+                    },
+                  ],
+                  olderCursor:
+                    id === 'thread-1' && !request.variables.cursor
+                      ? 'older-replies'
+                      : null,
+                  newerCursor: null,
+                },
+              };
+      await act(async () => request.resolve(data));
+    };
+    const drainHistory = async (restricted: boolean) => {
+      for (let count = 0; count < 20; count++) {
+        const request = requests.find((request) =>
+          historyNames.has(request.name),
+        );
+        if (!request) return;
+        await answerHistory(take(request.name), restricted);
+      }
+      throw Error('Unexpected unbounded history reads');
+    };
+    await answerHistory(take('MyahInboxContactEmailCards'), false);
+    await act(async () =>
+      take('MyahInboxThreads').resolve({
+        myahInboxThreads: {
+          edges: [
+            {
+              node: {
+                ...threads['thread-2'],
+                subject: 'Confidential main subject',
+              },
+            },
+          ],
+        },
+      }),
+    );
+    await completeRead('thread-2');
+    await drainHistory(false);
+    await selectThread('thread-1');
+    await act(async () =>
+      take('MyahInboxThreads').resolve({
+        myahInboxThreads: {
+          edges: [
+            {
+              node: {
+                ...threads['thread-1'],
+                subject: 'Confidential inline subject',
+              },
+            },
+          ],
+        },
+      }),
+    );
+    await completeRead();
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Show replies for thread-1' }),
+      ),
+    );
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Load older replies for thread-1' }),
+      ),
+    );
+    await drainHistory(false);
+    expect(
+      requests.some((request) => request.name === 'MyahInboxThreads'),
+    ).toBe(false);
+    expect(
+      within(screen.getByRole('region', { name: 'Main reply' })).queryByText(
+        'Main reply · Confidential main subject',
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Replying to Confidential inline subject'),
+    ).toBeVisible();
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Simulate thread update' }),
+      ),
+    );
+    await drainHistory(true);
+    expect(screen.queryAllByText(/Confidential main subject/)).toHaveLength(0);
+    expect(screen.queryAllByText(/Confidential inline subject/)).toHaveLength(
+      0,
+    );
+    const summaries = requests.filter(
+      (request) => request.name === 'MyahInboxThreads',
+    );
+    expect(
+      summaries.map((request) => request.variables.threadId).sort(),
+    ).toEqual(['thread-1', 'thread-2', 'thread-2']);
+    for (const request of summaries) {
+      take('MyahInboxThreads');
+      await act(async () =>
+        request.resolve({
+          myahInboxThreads: {
+            edges: [
+              {
+                node: {
+                  ...threads[String(request.variables.threadId)],
+                  subject: null,
+                },
+              },
+            ],
+          },
+        }),
+      );
+    }
+    expect(screen.getByText('Email actions thread-2')).toBeVisible();
+    expect(
+      within(screen.getByRole('region', { name: 'Main reply' })).queryByText(
+        'Main reply · No subject',
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Replying to No subject')).toBeVisible();
+    expect(
+      screen.queryAllByText(/Confidential (main|inline) subject/),
+    ).toHaveLength(0);
+  });
+
+  it.each([
+    'main-card loss',
+    'clean main-card loss',
+    'history failure',
+    'contact refresh failure',
+  ])(
+    'keeps exact draft readiness independent under %s without retargeting the pinned main',
+    async (loss) => {
+      mockRealHistory = true;
+      mockContacts = [contact('contact-1', 'EMAIL')];
+      const { store, entry } = setup();
+      const mainKey = { ...key, threadId: 'thread-2' };
+      const mainEntry = () =>
+        store.get(myahInboxDraftAutosaveFamilyState.atomFamily(mainKey));
+      const historyNames = new Set([
+        'MyahInboxContactEmailCards',
+        'MyahInboxContactEmailCard',
+        'MyahInboxContactEmailCardMessages',
+      ]);
+      const cleanMainCardLoss = loss === 'clean main-card loss';
+      let mainRemoved = false;
+      const card = (threadId: string) => ({
+        threadId,
+        rootMessageId: `${threadId}-root`,
+        startTimestamp: `2026-09-0${threadId === 'thread-1' ? 1 : 2}T12:00:00Z`,
+        subject: threadId,
+        campaignLabel: null,
+        historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+      });
+      const drainHistory = async () => {
+        for (let count = 0; count < 20; count++) {
+          const request = requests.find(({ name }) => historyNames.has(name));
+          if (!request) return;
+          take(request.name);
+          const id = String(request.variables.threadId ?? 'thread-1');
+          const projection = card(id);
+          await act(async () =>
+            request.resolve(
+              request.name === 'MyahInboxContactEmailCards'
+                ? {
+                    myahInboxContactEmailCards: {
+                      cards: (mainRemoved
+                        ? ['thread-1']
+                        : ['thread-1', 'thread-2']
+                      ).map(card),
+                      snapshot: request.variables.snapshot ?? 'snapshot',
+                      olderCursor: null,
+                      latestThreadId: mainRemoved ? 'thread-1' : 'thread-2',
+                    },
+                  }
+                : request.name === 'MyahInboxContactEmailCard'
+                  ? {
+                      myahInboxContactEmailCard:
+                        mainRemoved && id === 'thread-2'
+                          ? null
+                          : { snapshot: 'current', card: projection },
+                    }
+                  : {
+                      myahInboxContactEmailCardMessages: {
+                        threadId: id,
+                        root: {
+                          id: projection.rootMessageId,
+                          messageThreadId: id,
+                          receivedAt: projection.startTimestamp,
+                          subject: id,
+                          text: `Readable ${id}`,
+                          direction: 'INCOMING',
+                          visibility: 'FULL',
+                          participants: [],
+                          attachmentFileIds: [],
+                        },
+                        messages: [],
+                        olderCursor: null,
+                        newerCursor: null,
+                      },
+                    },
+            ),
+          );
+        }
+        throw Error('Unexpected unbounded history reads');
+      };
+      const answerSummary = async (threadId: string) => {
+        const request = take('MyahInboxThreads');
+        expect(request.variables).toMatchObject({
+          threadId,
+          expectedWorkspaceId: key.workspaceId,
+        });
+        await act(async () =>
+          request.resolve({
+            myahInboxThreads: { edges: [{ node: threads[threadId] }] },
+          }),
+        );
+      };
+      const answerDraft = async (threadId: string) => {
+        const request = take('MyahInboxEmailDraft');
+        expect(request.variables).toEqual({
+          threadId,
+          expectedWorkspaceId: key.workspaceId,
+        });
+        await act(async () =>
+          request.resolve({
+            myahInboxEmailDraft: {
+              ...key,
+              threadId,
+              revision: 2,
+              body: {
+                markdown:
+                  cleanMainCardLoss && threadId === 'thread-2'
+                    ? ''
+                    : `Saved ${threadId} bytes`,
+                blocknote: null,
+              },
+            },
+          }),
+        );
+        await act(async () =>
+          take('MyahInboxReplySendReadiness').resolve({
+            myahInboxReplySendReadiness: { status: 'READY', reason: null },
+          }),
+        );
+      };
+      await drainHistory();
+      await answerSummary('thread-2');
+      await answerDraft('thread-2');
+      await selectThread('thread-1');
+      await answerSummary('thread-1');
+      await answerDraft('thread-1');
+      expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(2);
+      expect(mainEntry()).toMatchObject({ dirty: false, confirmedRevision: 2 });
+      expect(screen.getByText('Email actions thread-2')).toBeVisible();
+      mainRemoved =
+        loss === 'main-card loss' || loss === 'clean main-card loss';
+      if (loss === 'contact refresh failure')
+        mockContactRefreshStatus = 'failed';
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Simulate thread update' }),
+        ),
+      );
+      expect(screen.queryAllByLabelText('Real shared draft')).toHaveLength(0);
+      expect(screen.queryByText('Email actions thread-2')).toBeNull();
+      if (loss === 'history failure') {
+        await act(async () => take('MyahInboxContactEmailCard').reject());
+      } else {
+        await drainHistory();
+        // E's exact summary remains readable: membership must still guard its actions.
+        const summaries = requests.filter(
+          ({ name }) => name === 'MyahInboxThreads',
+        );
+        expect(
+          summaries.map(({ variables }) => variables.threadId).sort(),
+        ).toEqual(['thread-1', 'thread-2', 'thread-2']);
+        for (const request of summaries)
+          await answerSummary(String(request.variables.threadId));
+      }
+      expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+        'thread-2',
+      );
+      expect(mainEntry()?.localBody.markdown).toBe(
+        cleanMainCardLoss ? '' : 'Saved thread-2 bytes',
+      );
+      expect(entry()?.localBody.markdown).toBe('Saved thread-1 bytes');
+      expect(screen.queryByText('Email actions thread-2')).toBeNull();
+      expect(screen.queryByText('Email actions thread-1')).toBeNull();
+      expect(
+        within(
+          screen.getByRole('region', { name: 'Main reply' }),
+        ).queryByLabelText('Real shared draft'),
+      ).toBeNull();
+      if (loss === 'clean main-card loss') {
+        expect(
+          store.get(myahInboxContactSelectionState.atom).emailThreadId,
+        ).toBe('thread-2');
+        expect(
+          requests.filter(({ name }) => name === 'MyahInboxEmailDraft'),
+        ).toEqual([
+          expect.objectContaining({
+            variables: expect.objectContaining({ threadId: 'thread-1' }),
+          }),
+        ]);
+      } else if (loss === 'main-card loss') {
+        // The fresh exact C read is the original P1 regression: E must not suppress it.
+        await answerDraft('thread-1');
+        const inline = within(
+          screen.getByRole('region', { name: 'Inline reply' }),
+        );
+        expect(inline.getByLabelText('Real shared draft')).toBeEnabled();
+        expect(inline.getByLabelText('Real shared draft')).toHaveValue(
+          'Saved thread-1 bytes',
+        );
+        expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
+        expect(requests).toHaveLength(0);
+        fireEvent.change(inline.getByLabelText('Real shared draft'), {
+          target: { value: 'Edited C only' },
+        });
+        await advance();
+        expect(take('SaveMyahInboxDraft').variables).toEqual({
+          input: {
+            expectedWorkspaceId: key.workspaceId,
+            threadId: 'thread-1',
+            expectedRevision: 2,
+            body: { markdown: 'Edited C only', blocknote: null },
+          },
+        });
+        expect(mainEntry()?.localBody.markdown).toBe('Saved thread-2 bytes');
+        expect(mainEntry()?.dirty).toBe(false);
+        expect(requests).toHaveLength(0);
+      } else if (!cleanMainCardLoss) {
+        expect(screen.queryAllByLabelText('Real shared draft')).toHaveLength(0);
+        expect(
+          requests.some(({ name }) => name === 'MyahInboxEmailDraft'),
+        ).toBe(false);
+        expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+          false,
+        );
+      }
+    },
+  );
+
+  it('awaits latest-editor save before moving it inline and retains shared bytes through return to bottom', async () => {
+    mockContacts = [contact('contact-1', 'EMAIL')];
+    setup();
+    await completeRead('thread-2');
+    fireEvent.change(draftInput(), { target: { value: 'same shared bytes' } });
+    await selectThread('thread-2');
+    expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables).toMatchObject({
+      input: { threadId: 'thread-2', body: { markdown: 'same shared bytes' } },
+    });
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'same shared bytes', blocknote: null },
+        },
+      }),
+    );
+    const read = take('MyahInboxEmailDraft');
+    await act(async () =>
+      read.resolve({
+        myahInboxEmailDraft: {
+          ...key,
+          threadId: 'thread-2',
+          revision: 3,
+          body: { markdown: 'same shared bytes', blocknote: null },
+        },
+      }),
+    );
+    await act(async () =>
+      take('MyahInboxReplySendReadiness').resolve({
+        myahInboxReplySendReadiness: { status: 'READY', reason: null },
+      }),
+    );
+    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
+    expect(draftInput()).toHaveValue('same shared bytes');
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Return to bottom' })),
+    );
+    expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
+    expect(take('MyahInboxEmailDraft').variables.threadId).toBe('thread-2');
+  });
+
+  it('follows a verified later card when the current main draft is pristine', async () => {
+    mockContacts = [contact('contact-1', 'EMAIL')];
+    const { view, store } = setup();
+    await completeRead('thread-2', 'READY', { markdown: '', blocknote: null });
+    mockContacts = [
+      {
+        ...mockContacts[0],
+        email: {
+          ...mockContacts[0].email,
+          threadIds: ['thread-1', 'thread-2', 'thread-3'],
+          latestThreadId: 'thread-3',
+        },
+      },
+    ];
+    view.rerender(
+      <Provider store={store}>
+        <MyahInboxPage />
+      </Provider>,
+    );
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-3',
+    );
+    await completeRead('thread-3');
+    expect(screen.getByText('Email actions thread-3')).toBeVisible();
+  });
+
+  it('keeps a nonempty main draft pinned when a newer conversation appears and switches only explicitly', async () => {
+    mockContacts = [contact('contact-1', 'EMAIL')];
+    const { view, store } = setup();
+    await completeRead('thread-2');
+    mockContacts = [
+      {
+        ...mockContacts[0],
+        email: {
+          ...mockContacts[0].email,
+          threadIds: ['thread-1', 'thread-2', 'thread-3'],
+          latestThreadId: 'thread-3',
+        },
+      },
+    ];
+    view.rerender(
+      <Provider store={store}>
+        <MyahInboxPage />
+      </Provider>,
+    );
+    expect(screen.getByText('Email actions thread-2')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Switch to latest conversation' }),
+    ).toBeVisible();
+    expect(
+      requests.some((request) => request.name === 'MyahInboxEmailDraft'),
+    ).toBe(false);
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Switch to latest conversation' }),
+      ),
+    );
+    await completeRead('thread-3');
+    expect(screen.getByText('Email actions thread-3')).toBeVisible();
+    await selectThread('thread-2');
+    await completeRead('thread-2');
+    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(2);
+    expect(screen.getByText('Email actions thread-3')).toBeVisible();
+  });
+
+  it('reopens a non-latest same-contact recovery after remount and awaits the actual outgoing target save', async () => {
+    mockContacts = [contact('contact-1', 'EMAIL')];
+    const { store, view, mount, entry } = setup();
+    await completeRead('thread-2');
+    await selectThread('thread-1');
+    await completeRead();
+    fireEvent.change(draftInput(), {
+      target: { value: 'non-latest recovery' },
+    });
+    view.unmount();
+    await act(async () => jest.runAllTicks());
+    mount();
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-2',
+    );
+    await completeRead('thread-2');
+    fireEvent.change(draftInput(), {
+      target: { value: 'actual outgoing edit' },
+    });
+    await selectThread('thread-1');
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-2',
+    );
+    const outgoingSave = take('SaveMyahInboxDraft');
+    expect(outgoingSave.variables).toEqual({
+      input: {
+        expectedWorkspaceId: key.workspaceId,
+        threadId: 'thread-2',
+        expectedRevision: 2,
+        body: { markdown: 'actual outgoing edit', blocknote: null },
+      },
+    });
+    await act(async () =>
+      outgoingSave.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'actual outgoing edit', blocknote: null },
+        },
+      }),
+    );
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-2',
+    );
+    await advance();
+    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+      false,
+    );
+    expect(entry()?.localBody.markdown).toBe('non-latest recovery');
+    await completeRead();
+    expect(draftInput()).toHaveValue('non-latest recovery');
+    await advance();
+    const recoverySave = take('SaveMyahInboxDraft');
+    expect(recoverySave.variables).toEqual({
+      input: {
+        expectedWorkspaceId: key.workspaceId,
+        threadId: 'thread-1',
+        expectedRevision: 2,
+        body: { markdown: 'non-latest recovery', blocknote: null },
+      },
+    });
+    await act(async () =>
+      recoverySave.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'non-latest recovery', blocknote: null },
+        },
+      }),
+    );
+    expect(entry()).toMatchObject({ dirty: false, status: 'saved' });
+  });
+
+  it.each(['dirty', 'error'] as const)(
+    'leaves a dormant non-latest %s buffer reachable across contact/channel navigation after a forced switch',
+    async (status) => {
+      configureTwoThreadContact();
+      const { store, entry } = setup();
+      await completeRead('thread-2');
+      await selectThread('thread-1');
+      await completeRead();
+      fireEvent.change(draftInput(), {
+        target: { value: 'non-latest retained bytes' },
+      });
+      if (status === 'error') {
+        await advance();
+        await act(async () => take('SaveMyahInboxDraft').reject());
+        expect(entry()?.status).toBe('error');
+      }
+      act(() =>
+        store.set(currentWorkspaceState.atom, { id: 'workspace-2' } as never),
+      );
+      act(() =>
+        store.set(currentWorkspaceState.atom, { id: key.workspaceId } as never),
+      );
+      requests = []; // Only obsolete workspace-2 read handles exist here.
+      await select('contact-1');
+      expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+        'thread-2',
+      );
+      await completeRead('thread-2');
+      await selectChannel('Instagram');
+      expect(
+        screen.getByText('Instagram timeline contact-1'),
+      ).toBeInTheDocument();
+      await selectChannel('Email');
+      await completeRead('thread-2');
+      await select('contact-2');
+      expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+        'contact-2',
+      );
+      await completeRead('thread-3');
+      await select('contact-1');
+      await completeRead('thread-2');
+      await selectThread('thread-1');
+      expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+        'thread-2',
+      );
+      await advance();
+      expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+        false,
+      );
+      expect(entry()?.localBody.markdown).toBe('non-latest retained bytes');
+      await completeRead();
+      expect(draftInput()).toHaveValue('non-latest retained bytes');
+      await advance();
+      if (status === 'error') {
+        expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+          false,
+        );
+        expect(entry()?.status).toBe('error');
+        // Once mounted again, the same buffer is protected outgoing work.
+        await selectThread('thread-2');
+        await selectChannel('Instagram');
+        await select('contact-2');
+        expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+          contactId: 'contact-1',
+          channel: 'EMAIL',
+          emailThreadId: 'thread-2',
+        });
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole('button', { name: 'Retry draft save' }),
+          );
+        });
+      }
+      const save = take('SaveMyahInboxDraft');
+      expect(save.variables).toEqual({
+        input: {
+          expectedWorkspaceId: key.workspaceId,
+          threadId: 'thread-1',
+          expectedRevision: 2,
+          body: { markdown: 'non-latest retained bytes', blocknote: null },
+        },
+      });
+      await act(async () =>
+        save.resolve({
+          saveMyahInboxDraft: {
+            status: 'SAVED',
+            revision: 3,
+            body: { markdown: 'non-latest retained bytes', blocknote: null },
+          },
+        }),
+      );
+      expect(entry()).toMatchObject({ dirty: false, status: 'saved' });
+      await selectThread('thread-2');
+      expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+        'thread-2',
+      );
+    },
+  );
+
+  it.each([
+    ['OUTCOME_PENDING', 'pending'],
+    ['OUTCOME_UNKNOWN', 'unknown'],
+  ])(
+    'protects outgoing latest-thread %s work while non-latest recovery is dormant',
+    async (readiness, operationKind) => {
+      configureTwoThreadContact();
+      const { store, view, mount, entry } = setup();
+      await completeRead('thread-2');
+      await selectThread('thread-1');
+      await completeRead();
+      fireEvent.change(draftInput(), {
+        target: { value: 'paused non-latest edit' },
+      });
+      view.unmount();
+      await act(async () => jest.runAllTicks());
+      mount();
+      await completeRead('thread-2', readiness);
+      expect(
+        store.get(
+          myahInboxDraftAutosaveFamilyState.atomFamily({
+            workspaceId: key.workspaceId,
+            threadId: 'thread-2',
+          }),
+        )?.operation?.kind,
+      ).toBe(operationKind);
+      await selectThread('thread-1');
+      await selectChannel('Instagram');
+      await select('contact-2');
+      expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+        contactId: 'contact-1',
+        channel: 'EMAIL',
+        emailThreadId: 'thread-2',
+      });
+      await advance();
+      expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+        false,
+      );
+      expect(entry()?.localBody.markdown).toBe('paused non-latest edit');
+      expect(draftInput()).toBeDisabled();
+    },
+  );
+
+  it('reopens a forced-workspace recovery and resumes only after its exact read, without another edit', async () => {
+    const { store, entry } = setup();
+    await completeRead();
+    fireEvent.change(draftInput(), {
+      target: { value: 'retained edit' },
+    });
+    act(() =>
+      store.set(currentWorkspaceState.atom, { id: 'workspace-2' } as never),
+    );
+    await advance();
+    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+      false,
+    );
+    act(() =>
+      store.set(currentWorkspaceState.atom, { id: key.workspaceId } as never),
+    );
+    requests = []; // Discard only obsolete workspace-2 read transport handles.
+    await select('contact-1');
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    await advance();
+    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+      false,
+    );
+    expect(entry()?.localBody.markdown).toBe('retained edit');
+    await completeRead();
+    expect(draftInput()).toHaveValue('retained edit');
+    await advance();
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables).toEqual({
+      input: {
+        expectedWorkspaceId: key.workspaceId,
+        threadId: key.threadId,
+        expectedRevision: 2,
+        body: { markdown: 'retained edit', blocknote: null },
+      },
+    });
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'retained edit', blocknote: null },
+        },
+      }),
+    );
+    expect(entry()).toMatchObject({ dirty: false, status: 'saved' });
+  });
+  it('reopens an error buffer after a forced switch, keeps it paused and retries only on explicit action', async () => {
+    const { store, entry } = setup();
+    await completeRead();
+    fireEvent.change(draftInput(), {
+      target: { value: 'failed edit' },
+    });
+    await advance();
+    await act(async () => take('SaveMyahInboxDraft').reject());
+    expect(entry()?.status).toBe('error');
+    act(() =>
+      store.set(currentWorkspaceState.atom, { id: 'workspace-2' } as never),
+    );
+    act(() =>
+      store.set(currentWorkspaceState.atom, { id: key.workspaceId } as never),
+    );
+    requests = [];
+    await select('contact-1');
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    await completeRead();
+    await advance();
+    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+      false,
+    );
+    expect(draftInput()).toHaveValue('failed edit');
+    expect(entry()?.status).toBe('error');
+    // Once reopened, the error is outgoing active work and must block navigation.
+    await select('contact-2');
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry draft save' }));
+    });
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables).toEqual({
+      input: {
+        expectedWorkspaceId: key.workspaceId,
+        threadId: key.threadId,
+        expectedRevision: 2,
+        body: { markdown: 'failed edit', blocknote: null },
+      },
+    });
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'failed edit', blocknote: null },
+        },
+      }),
+    );
+    expect(entry()).toMatchObject({ dirty: false, status: 'saved' });
+    await select('contact-2');
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-2',
+    );
+  });
+
+  it('can restore another contact after Page remount, but first saves the newly active outgoing draft', async () => {
+    const { store, view, mount } = setup();
+    await completeRead();
+    await select('contact-2');
+    await completeRead('thread-2');
+    fireEvent.change(draftInput(), {
+      target: { value: 'second contact recovery' },
+    });
+    view.unmount();
+    await act(async () => jest.runAllTicks());
+    mount();
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    await completeRead();
+    fireEvent.change(draftInput(), {
+      target: { value: 'outgoing edit' },
+    });
+    await select('contact-2');
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables).toEqual({
+      input: {
+        expectedWorkspaceId: key.workspaceId,
+        threadId: key.threadId,
+        expectedRevision: 2,
+        body: { markdown: 'outgoing edit', blocknote: null },
+      },
+    });
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'outgoing edit', blocknote: null },
+        },
+      }),
+    );
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-2',
+    );
+    await advance();
+    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+      false,
+    );
+    await completeRead('thread-2');
+    expect(draftInput()).toHaveValue('second contact recovery');
+    await advance();
+    const recoverySave = take('SaveMyahInboxDraft');
+    expect(recoverySave.variables).toEqual({
+      input: {
+        expectedWorkspaceId: key.workspaceId,
+        threadId: 'thread-2',
+        expectedRevision: 2,
+        body: { markdown: 'second contact recovery', blocknote: null },
+      },
+    });
+    await act(async () =>
+      recoverySave.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'second contact recovery', blocknote: null },
+        },
+      }),
+    );
+  });
+});

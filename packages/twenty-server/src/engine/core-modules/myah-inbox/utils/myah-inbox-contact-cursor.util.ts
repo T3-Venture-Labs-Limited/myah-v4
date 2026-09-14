@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
+import { isISO8601 } from 'class-validator';
 import { isValidUuid } from 'twenty-shared/utils';
 
 export type MyahInboxContactCursor = {
@@ -12,6 +13,19 @@ type MyahInboxContactCursorPayload = {
   w: string;
   a: string;
   o: string;
+};
+
+export type MyahInboxInstagramMessageCursor = {
+  effectiveTimestamp: string;
+  messageId: string;
+};
+
+type MyahInboxInstagramMessageCursorPayload = {
+  v: 1;
+  w: string;
+  c: string;
+  t: string;
+  m: string;
 };
 
 export type MyahInboxContactEmailCursor = {
@@ -33,12 +47,20 @@ const invalidCursor = (): never => {
   throw new BadRequestException('Invalid Myah inbox contact cursor');
 };
 
-const parseActivityAt = (value: string): string => {
-  const activityAt = new Date(value);
+// Keep PostgreSQL microseconds separate from Date-based display values. Legacy
+// v1 millisecond tokens remain readable, but their lost precision is unrecoverable.
+const parseContactTimestamp = (value: string, invalid: () => never): string => {
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(
+      value,
+    ) ||
+    !isISO8601(value, { strict: true, strictSeparator: true })
+  ) {
+    return invalid();
+  }
 
-  if (Number.isNaN(activityAt.getTime())) return invalidCursor();
-
-  return activityAt.toISOString();
+  return value.includes('.') ? value : value.replace('Z', '.000Z');
 };
 
 const assertOrderingKey = (value: string): void => {
@@ -57,7 +79,7 @@ export const encodeMyahInboxContactCursor = (input: {
   const payload: MyahInboxContactCursorPayload = {
     v: 1,
     w: input.workspaceId,
-    a: parseActivityAt(input.activityAt),
+    a: parseContactTimestamp(input.activityAt, invalidCursor),
     o: input.orderingKey,
   };
 
@@ -86,7 +108,7 @@ export const decodeMyahInboxContactCursor = (
     assertOrderingKey(payload.o);
 
     return {
-      activityAt: parseActivityAt(payload.a),
+      activityAt: parseContactTimestamp(payload.a, invalidCursor),
       orderingKey: payload.o,
     };
   } catch {
@@ -94,16 +116,85 @@ export const decodeMyahInboxContactCursor = (
   }
 };
 
-const invalidEmailCursor = (): never => {
-  throw new BadRequestException('Invalid Myah inbox contact email cursor');
+const invalidInstagramMessageCursor = (): never => {
+  throw new BadRequestException('Invalid Myah inbox Instagram message cursor');
 };
 
-const parseEmailReceivedAt = (value: string): string => {
-  const receivedAt = new Date(value);
+// Instagram cursors carry PostgreSQL's exact ordering timestamp. Do not
+// canonicalize through Date: JavaScript Date drops microseconds.
+const parseInstagramEffectiveTimestamp = (value: string): string => {
+  const timestamp = new Date(value);
 
-  if (Number.isNaN(receivedAt.getTime())) return invalidEmailCursor();
+  if (
+    Number.isNaN(timestamp.getTime()) ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(value)
+  ) {
+    return invalidInstagramMessageCursor();
+  }
 
-  return receivedAt.toISOString();
+  return value;
+};
+
+export const encodeMyahInboxInstagramMessageCursor = (input: {
+  workspaceId: string;
+  conversationId: string;
+  effectiveTimestamp: string;
+  messageId: string;
+}): string => {
+  if (
+    !isValidUuid(input.workspaceId) ||
+    !isValidUuid(input.conversationId) ||
+    !isValidUuid(input.messageId)
+  ) {
+    return invalidInstagramMessageCursor();
+  }
+  const payload: MyahInboxInstagramMessageCursorPayload = {
+    v: 1,
+    w: input.workspaceId,
+    c: input.conversationId,
+    t: parseInstagramEffectiveTimestamp(input.effectiveTimestamp),
+    m: input.messageId,
+  };
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+};
+
+export const decodeMyahInboxInstagramMessageCursor = (
+  value: string,
+  expected: { workspaceId: string; conversationId: string },
+): MyahInboxInstagramMessageCursor => {
+  try {
+    if (
+      !value ||
+      !isValidUuid(expected.workspaceId) ||
+      !isValidUuid(expected.conversationId)
+    ) {
+      return invalidInstagramMessageCursor();
+    }
+    const payload = JSON.parse(
+      Buffer.from(value, 'base64url').toString('utf8'),
+    ) as Partial<MyahInboxInstagramMessageCursorPayload>;
+    if (
+      payload.v !== 1 ||
+      payload.w !== expected.workspaceId ||
+      payload.c !== expected.conversationId ||
+      typeof payload.t !== 'string' ||
+      typeof payload.m !== 'string' ||
+      !isValidUuid(payload.m) ||
+      Object.keys(payload).length !== 5
+    ) {
+      return invalidInstagramMessageCursor();
+    }
+    return {
+      effectiveTimestamp: parseInstagramEffectiveTimestamp(payload.t),
+      messageId: payload.m,
+    };
+  } catch {
+    return invalidInstagramMessageCursor();
+  }
+};
+
+const invalidEmailCursor = (): never => {
+  throw new BadRequestException('Invalid Myah inbox contact email cursor');
 };
 
 export const encodeMyahInboxContactEmailCursor = (input: {
@@ -117,7 +208,7 @@ export const encodeMyahInboxContactEmailCursor = (input: {
   const payload: MyahInboxContactEmailCursorPayload = {
     v: 1,
     w: input.workspaceId,
-    a: parseEmailReceivedAt(input.receivedAt),
+    a: parseContactTimestamp(input.receivedAt, invalidEmailCursor),
     m: input.messageId,
   };
 
@@ -148,7 +239,7 @@ export const decodeMyahInboxContactEmailCursor = (
     }
 
     return {
-      receivedAt: parseEmailReceivedAt(payload.a),
+      receivedAt: parseContactTimestamp(payload.a, invalidEmailCursor),
       messageId: payload.m,
     };
   } catch {

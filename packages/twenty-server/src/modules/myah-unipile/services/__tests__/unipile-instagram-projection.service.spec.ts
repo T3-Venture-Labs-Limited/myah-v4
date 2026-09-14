@@ -30,6 +30,7 @@ type Message = {
   accountId: string;
   chatId: string;
   senderId: string;
+  isSender?: 0 | 1;
   text: string | null;
   timestamp: string | null;
   hasAttachments: boolean;
@@ -549,7 +550,7 @@ describe('UnipileInstagramProjectionService', () => {
     expect(providerFetch).not.toHaveBeenCalled();
   });
 
-  it('classifies the account owner as outbound and any unrecognized sender as unknown', async () => {
+  it('uses verified Unipile self-sender evidence for outbound messages while retaining identity fallback', async () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     const query = jest.fn().mockImplementation((sql: string) => {
       if (sql.includes('_myahSocialConversation')) {
@@ -582,7 +583,24 @@ describe('UnipileInstagramProjectionService', () => {
         binding,
         chat,
         conversationRecordId,
-        message: { ...inboundMessage, senderId: binding.instagramUserId },
+        message: {
+          ...inboundMessage,
+          senderId: '17841400000000003',
+          isSender: 1,
+        },
+      }),
+    ).resolves.toMatchObject({ direction: 'OUTBOUND', deliveryState: 'SENT' });
+    await expect(
+      subject.service.upsertVerifiedMessage({
+        workspace,
+        binding,
+        chat,
+        conversationRecordId,
+        message: {
+          ...inboundMessage,
+          messageId: 'unipile-message-identity-fallback',
+          senderId: binding.instagramUserId,
+        },
       }),
     ).resolves.toMatchObject({ direction: 'OUTBOUND', deliveryState: 'SENT' });
     await expect(
@@ -595,6 +613,7 @@ describe('UnipileInstagramProjectionService', () => {
           ...inboundMessage,
           messageId: 'unipile-message-unknown',
           senderId: '17841400000000003',
+          isSender: 0,
         },
       }),
     ).resolves.toMatchObject({
@@ -604,6 +623,88 @@ describe('UnipileInstagramProjectionService', () => {
 
     expect(providerFetch).not.toHaveBeenCalled();
   });
+
+  it('idempotently promotes an existing unknown message to outbound from verified self-sender evidence', async () => {
+    const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+    const messageRecordId = 'b7037d71-3486-4767-80a1-d0f1e3209985';
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('_myahSocialConversation')) {
+        return Promise.resolve([{ id: conversationRecordId }]);
+      }
+      if (sql.includes('_myahSocialMessage') && sql.includes('SELECT')) {
+        return Promise.resolve([
+          {
+            id: messageRecordId,
+            deliveryState: 'UNKNOWN',
+            deliveryStateUpdatedAt: inboundMessage.timestamp,
+          },
+        ]);
+      }
+
+      return Promise.resolve([]);
+    });
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    await expect(
+      subject.service.upsertVerifiedMessage({
+        workspace,
+        binding,
+        chat,
+        conversationRecordId,
+        message: {
+          ...inboundMessage,
+          senderId: 'provider-specific-self-sender',
+          isSender: 1,
+        },
+      }),
+    ).resolves.toEqual({
+      messageRecordId,
+      direction: 'OUTBOUND',
+      deliveryState: 'SENT',
+    });
+
+    expect(
+      findQuery(
+        query,
+        `UPDATE "${getWorkspaceSchemaName(workspace.id)}"."_myahSocialMessage"`,
+      )[1],
+    ).toEqual(expect.arrayContaining(['OUTBOUND', 'SENT', messageRecordId]));
+    expect(
+      query.mock.calls.some(
+        ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO'),
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    ['self sender marked inbound', chat.attendeeProviderId, 1],
+    ['owner marked inbound', binding.instagramUserId, 0],
+  ])(
+    'rejects a contradictory %s flag before writing',
+    async (_name, senderId, isSender) => {
+      const query = jest.fn();
+      const subject = createProjectionService(query);
+
+      if (!subject) {
+        return;
+      }
+
+      await expect(
+        subject.service.upsertVerifiedMessage({
+          workspace,
+          binding,
+          chat,
+          conversationRecordId: 'conversation-record-id',
+          message: { ...inboundMessage, senderId, isSender: isSender as 0 | 1 },
+        }),
+      ).rejects.toThrow(ConflictException);
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not regress an existing delivery state when a replay is older and lower precedence', async () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';

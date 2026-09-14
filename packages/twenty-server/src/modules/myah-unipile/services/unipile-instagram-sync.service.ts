@@ -27,6 +27,7 @@ import {
 import {
   type UnipileInstagramChat,
   type UnipileInstagramMessage,
+  unipileInstagramMessageDirection,
 } from 'src/modules/myah-unipile/types/unipile-v1.type';
 
 const PAGE_SIZE = 250;
@@ -483,7 +484,13 @@ export class UnipileInstagramSyncService {
     binding: UnipileInstagramAccountBindingEntity,
     chat: UnipileInstagramChat,
   ): 'UNKNOWN' | 'RECEIVED' | 'SENT' | 'DELIVERED' | 'READ' {
-    if (message.senderId === binding.instagramUserId) {
+    if (
+      unipileInstagramMessageDirection(
+        message,
+        binding.instagramUserId,
+        chat.attendeeProviderId,
+      ) === 'OUTBOUND'
+    ) {
       if (message.seen) {
         return 'READ';
       }
@@ -491,7 +498,11 @@ export class UnipileInstagramSyncService {
       return message.delivered ? 'DELIVERED' : 'SENT';
     }
 
-    return message.senderId === chat.attendeeProviderId
+    return unipileInstagramMessageDirection(
+      message,
+      binding.instagramUserId,
+      chat.attendeeProviderId,
+    ) === 'INBOUND'
       ? 'RECEIVED'
       : 'UNKNOWN';
   }

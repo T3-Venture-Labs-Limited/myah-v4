@@ -18,7 +18,11 @@ import { InstagramMessageReceiptProjectionService } from 'src/engine/core-module
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { UnipileV1ClientService } from 'src/modules/myah-unipile/services/unipile-v1-client.service';
-import { type UnipileInstagramMessage } from 'src/modules/myah-unipile/types/unipile-v1.type';
+import {
+  hasContradictoryUnipileInstagramSenderEvidence,
+  type UnipileInstagramMessage,
+  unipileInstagramMessageDirection,
+} from 'src/modules/myah-unipile/types/unipile-v1.type';
 const CLEAR_NOT_SENT_MINIMUM_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type InstagramMessageReconciliationInspection =
@@ -60,6 +64,11 @@ export class InstagramMessageReconciliationService {
       receipt.actionApprovalBinding.actionVersion !== 2
     ) {
       throw new Error('Unknown Instagram message receipt is unavailable');
+    }
+    // Existing v2 START bindings lack a verified messaging-ID snapshot and
+    // attendee namespace contract. Future START support must review both.
+    if (receipt.actionApprovalBinding.actionKind === 'START_CHAT') {
+      return { kind: 'INDETERMINATE' };
     }
     const reservation = await this.reservationRepository.findOne(
       input.workspaceId,
@@ -220,7 +229,9 @@ export class InstagramMessageReconciliationService {
         });
         matches.push(
           ...page.messages
-            .filter((message) => this.matches(message, authority))
+            .filter((message) =>
+              this.matches(message, authority, dispatchBoundary),
+            )
             .map(({ messageId }) => ({ chatId, messageId })),
         );
         pageCount += 1;
@@ -241,15 +252,50 @@ export class InstagramMessageReconciliationService {
   private matches(
     message: UnipileInstagramMessage,
     authority: InstagramMessageActionAuthority,
+    dispatchBoundary: Date,
   ): boolean {
-    return (
-      !message.deleted &&
-      !message.hidden &&
-      !message.isEvent &&
-      message.senderId === authority.canonicalGraph.account.instagramUserId &&
-      message.text !== null &&
-      computeActionContentDigest(message.text) ===
+    const { account, draft } = authority.canonicalGraph;
+
+    if (
+      hasContradictoryUnipileInstagramSenderEvidence(
+        message,
+        account.instagramUserId,
+        draft.recipientProviderId,
+      )
+    ) {
+      throw new Error('Instagram message sender evidence is contradictory');
+    }
+
+    if (
+      message.deleted ||
+      message.hidden ||
+      message.isEvent ||
+      message.text === null ||
+      computeActionContentDigest(message.text) !==
         authority.expectedActionBinding.contentDigest
+    ) {
+      return false;
+    }
+
+    const direction = unipileInstagramMessageDirection(
+      message,
+      account.instagramUserId,
+      draft.recipientProviderId,
     );
+
+    if (direction === 'INBOUND') return false;
+    if (direction === 'UNKNOWN') {
+      throw new Error('Instagram message sender evidence is indeterminate');
+    }
+
+    const timestamp =
+      message.timestamp === null ? NaN : Date.parse(message.timestamp);
+
+    // Search overlap can reveal uncertainty, but cannot prove this dispatch.
+    if (!Number.isFinite(timestamp) || timestamp < dispatchBoundary.getTime()) {
+      throw new Error('Instagram message dispatch timing is indeterminate');
+    }
+
+    return true;
   }
 }

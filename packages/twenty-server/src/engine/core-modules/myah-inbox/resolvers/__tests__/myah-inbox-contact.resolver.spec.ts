@@ -52,6 +52,56 @@ const buildResolver = () => {
 };
 
 describe('MyahInboxContactResolver', () => {
+  it.each([
+    ['myahInboxContactEmailCards', 'listCards'],
+    ['myahInboxContactEmailCard', 'readCard'],
+    ['myahInboxContactEmailCardMessages', 'listCardMessages'],
+    ['myahInboxContactEmailMessageLocation', 'locateMessage'],
+  ] as const)(
+    'wires %s to its exact bounded reader and rejects workspace mismatch',
+    async (operation, reader) => {
+      const dispatch = jest
+        .fn()
+        .mockResolvedValue({ snapshot: 'bounded-result' });
+      const resolver = new MyahInboxContactResolver(
+        {} as never,
+        { [reader]: dispatch } as never,
+        {} as never,
+      );
+      const input = {
+        contactId: 'contact',
+        threadId: 'thread',
+        messageId: 'message',
+        snapshot: 'snapshot',
+        expectedWorkspaceId: workspace.id,
+      };
+      await expect(
+        (async () =>
+          resolver[operation](
+            input as never,
+            workspace as never,
+            workspaceMemberId,
+          ))(),
+      ).resolves.toEqual({ snapshot: 'bounded-result' });
+      expect(dispatch).toHaveBeenCalledWith({
+        ...input,
+        workspace,
+        workspaceMemberId,
+        authContext: userAuthContext,
+        user: userAuthContext.user,
+      });
+      dispatch.mockClear();
+      await expect(
+        (async () =>
+          resolver[operation](
+            { ...input, expectedWorkspaceId: 'other' } as never,
+            workspace as never,
+            workspaceMemberId,
+          ))(),
+      ).rejects.toThrow('Inbox workspace changed');
+      expect(dispatch).not.toHaveBeenCalled();
+    },
+  );
   beforeEach(() => {
     jest
       .mocked(getWorkspaceAuthContext)

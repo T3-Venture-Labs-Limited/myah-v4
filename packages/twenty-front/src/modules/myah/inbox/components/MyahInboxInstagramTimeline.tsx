@@ -1,3 +1,5 @@
+import { Fragment } from 'react';
+
 import { styled } from '@linaria/react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -12,6 +14,7 @@ const StyledTimeline = styled.section`
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[3]} 0;
 `;
 
 const StyledStatus = styled.div`
@@ -19,9 +22,17 @@ const StyledStatus = styled.div`
   font-size: ${themeCssVariables.font.size.xs};
 `;
 
+const StyledTimestamp = styled.time`
+  align-self: center;
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.xs};
+  margin: ${themeCssVariables.spacing[2]} 0;
+`;
+
 type MyahInboxInstagramTimelineProps = {
   channelState: MyahInboxInstagramChannelState;
   messages: MyahInstagramConversationMessage[];
+  inboundSenderName?: string | null;
   error?: string | null;
   provider?: 'COMPOSIO_HISTORY' | 'UNIPILE';
   lifecycle?: 'ACTIVE' | 'HISTORICAL';
@@ -30,9 +41,41 @@ type MyahInboxInstagramTimelineProps = {
   onLoadMore?: () => void;
 };
 
+const getTimestamp = (message: MyahInstagramConversationMessage) =>
+  message.providerCreatedAt ?? message.createdAt;
+
+const getTimestampLabel = (timestamp: string) => {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime())
+    ? 'Unknown time'
+    : date.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+};
+
+const needsTimestampSeparator = (
+  previous: MyahInstagramConversationMessage | undefined,
+  message: MyahInstagramConversationMessage,
+) => {
+  if (!previous) return true;
+  const previousTime = Date.parse(getTimestamp(previous));
+  const messageTime = Date.parse(getTimestamp(message));
+  return (
+    Number.isNaN(previousTime) ||
+    Number.isNaN(messageTime) ||
+    new Date(previousTime).toDateString() !==
+      new Date(messageTime).toDateString() ||
+    messageTime - previousTime > 5 * 60 * 1000
+  );
+};
+
 export const MyahInboxInstagramTimeline = ({
   channelState,
   messages,
+  inboundSenderName,
   error = null,
   provider,
   lifecycle,
@@ -44,10 +87,6 @@ export const MyahInboxInstagramTimeline = ({
     return <StyledStatus>Instagram is disconnected.</StyledStatus>;
   }
 
-  if (error) {
-    return <StyledStatus role="alert">{error}</StyledStatus>;
-  }
-
   const isComposioHistory =
     provider === 'COMPOSIO_HISTORY' ||
     lifecycle === 'HISTORICAL' ||
@@ -56,18 +95,14 @@ export const MyahInboxInstagramTimeline = ({
 
   return (
     <StyledTimeline aria-label="Instagram conversation">
+      {error ? <StyledStatus role="alert">{error}</StyledStatus> : null}
       {channelState === 'AMBIGUOUS' ? (
         <StyledStatus>
           Multiple Instagram conversations found (read-only).
         </StyledStatus>
       ) : isComposioHistory ? (
         <StyledStatus>Read-only Instagram history</StyledStatus>
-      ) : (
-        <StyledStatus>Unipile Instagram (active)</StyledStatus>
-      )}
-      {messages.map((message) => (
-        <MyahInboxInstagramMessage key={message.id} message={message} />
-      ))}
+      ) : null}
       {(hasNextPage || loadingMore) && onLoadMore ? (
         <Button
           title={
@@ -81,6 +116,31 @@ export const MyahInboxInstagramTimeline = ({
           onClick={onLoadMore}
         />
       ) : null}
+      {messages.map((message, index) => {
+        const previous = messages[index - 1];
+        const groupedWithPrevious =
+          !needsTimestampSeparator(previous, message) &&
+          previous?.direction === message.direction;
+        const timestamp = getTimestamp(message);
+        const validTimestamp = !Number.isNaN(Date.parse(timestamp));
+        return (
+          <Fragment key={message.id}>
+            {needsTimestampSeparator(previous, message) ? (
+              <StyledTimestamp
+                aria-label={getTimestampLabel(timestamp)}
+                dateTime={validTimestamp ? timestamp : undefined}
+              >
+                {getTimestampLabel(timestamp)}
+              </StyledTimestamp>
+            ) : null}
+            <MyahInboxInstagramMessage
+              message={message}
+              groupedWithPrevious={groupedWithPrevious}
+              inboundSenderName={inboundSenderName}
+            />
+          </Fragment>
+        );
+      })}
     </StyledTimeline>
   );
 };

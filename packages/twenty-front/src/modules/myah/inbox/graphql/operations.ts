@@ -10,6 +10,7 @@ export const GET_MYAH_INBOX_THREADS = gql`
     $snoozeStatus: MyahInboxSnoozeStatus
     $search: String
     $threadId: String
+    $expectedWorkspaceId: UUID
   ) {
     myahInboxThreads(
       first: $first
@@ -20,6 +21,7 @@ export const GET_MYAH_INBOX_THREADS = gql`
       snoozeStatus: $snoozeStatus
       search: $search
       threadId: $threadId
+      expectedWorkspaceId: $expectedWorkspaceId
     ) {
       edges {
         cursor
@@ -106,8 +108,14 @@ export const GENERATE_MYAH_INBOX_REPLY_PROPOSAL = gql`
 `;
 
 export const GET_MYAH_INBOX_REPLY_SEND_READINESS = gql`
-  query MyahInboxReplySendReadiness($threadId: UUID!) {
-    myahInboxReplySendReadiness(threadId: $threadId) {
+  query MyahInboxReplySendReadiness(
+    $threadId: UUID!
+    $expectedWorkspaceId: UUID
+  ) {
+    myahInboxReplySendReadiness(
+      threadId: $threadId
+      expectedWorkspaceId: $expectedWorkspaceId
+    ) {
       status
       reason
     }
@@ -227,6 +235,40 @@ export const GET_MYAH_INBOX_CONTACT = gql`
   }
 `;
 
+export const GET_MYAH_INBOX_INSTAGRAM_MESSAGES = gql`
+  query MyahInboxInstagramMessages(
+    $conversationId: String!
+    $first: Int
+    $after: String
+  ) {
+    myahInboxInstagramMessages(
+      conversationId: $conversationId
+      first: $first
+      after: $after
+    ) {
+      edges {
+        cursor
+        node {
+          id
+          text
+          direction
+          sentVia
+          provider
+          deliveryState
+          providerCreatedAt
+          createdAt
+          hasAttachments
+          attachmentCount
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
 export const GET_MYAH_INBOX_CONTACT_EMAIL_MESSAGES = gql`
   query MyahInboxContactEmailMessages(
     $contactId: String!
@@ -259,6 +301,154 @@ export const GET_MYAH_INBOX_CONTACT_EMAIL_MESSAGES = gql`
       pageInfo {
         hasNextPage
         endCursor
+      }
+    }
+  }
+`;
+
+const MYAH_INBOX_EMAIL_CARD_FIELDS = gql`
+  fragment MyahInboxEmailCardFields on MyahInboxEmailCard {
+    threadId
+    rootMessageId
+    startTimestamp
+    subject
+    campaignLabel
+    historyBasis
+  }
+`;
+
+const MYAH_INBOX_EMAIL_MESSAGE_PAGE_FIELDS = gql`
+  fragment MyahInboxEmailStoredMessageFields on MyahInboxContactEmailMessage {
+    id
+    messageThreadId
+    subject
+    text
+    receivedAt
+    direction
+    visibility
+    participants {
+      role
+      handle
+      displayName
+    }
+    attachmentFileIds
+  }
+  fragment MyahInboxEmailMessagePageFields on MyahInboxEmailMessagePage {
+    threadId
+    olderCursor
+    newerCursor
+    root {
+      ...MyahInboxEmailStoredMessageFields
+    }
+    messages {
+      ...MyahInboxEmailStoredMessageFields
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_CONTACT_EMAIL_CARDS = gql`
+  ${MYAH_INBOX_EMAIL_CARD_FIELDS}
+  query MyahInboxContactEmailCards(
+    $contactId: String!
+    $expectedWorkspaceId: UUID!
+    $snapshot: String
+    $olderCursor: String
+  ) {
+    myahInboxContactEmailCards(
+      contactId: $contactId
+      expectedWorkspaceId: $expectedWorkspaceId
+      snapshot: $snapshot
+      olderCursor: $olderCursor
+    ) {
+      snapshot
+      olderCursor
+      latestThreadId
+      cards {
+        ...MyahInboxEmailCardFields
+      }
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_CONTACT_EMAIL_CARD = gql`
+  ${MYAH_INBOX_EMAIL_CARD_FIELDS}
+  query MyahInboxContactEmailCard(
+    $contactId: String!
+    $expectedWorkspaceId: UUID!
+    $threadId: UUID!
+  ) {
+    myahInboxContactEmailCard(
+      contactId: $contactId
+      expectedWorkspaceId: $expectedWorkspaceId
+      threadId: $threadId
+    ) {
+      snapshot
+      card {
+        ...MyahInboxEmailCardFields
+      }
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_CONTACT_EMAIL_CARD_MESSAGES = gql`
+  ${MYAH_INBOX_EMAIL_MESSAGE_PAGE_FIELDS}
+  query MyahInboxContactEmailCardMessages(
+    $contactId: String!
+    $expectedWorkspaceId: UUID!
+    $threadId: UUID!
+    $snapshot: String!
+    $cursor: String
+  ) {
+    myahInboxContactEmailCardMessages(
+      contactId: $contactId
+      expectedWorkspaceId: $expectedWorkspaceId
+      threadId: $threadId
+      snapshot: $snapshot
+      cursor: $cursor
+    ) {
+      ...MyahInboxEmailMessagePageFields
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_CONTACT_EMAIL_MESSAGE_LOCATION = gql`
+  ${MYAH_INBOX_EMAIL_CARD_FIELDS}
+  ${MYAH_INBOX_EMAIL_MESSAGE_PAGE_FIELDS}
+  query MyahInboxContactEmailMessageLocation(
+    $contactId: String!
+    $expectedWorkspaceId: UUID!
+    $messageId: UUID!
+    $snapshot: String!
+  ) {
+    myahInboxContactEmailMessageLocation(
+      contactId: $contactId
+      expectedWorkspaceId: $expectedWorkspaceId
+      messageId: $messageId
+      snapshot: $snapshot
+    ) {
+      messageId
+      card {
+        ...MyahInboxEmailCardFields
+      }
+      page {
+        ...MyahInboxEmailMessagePageFields
+      }
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_EMAIL_DRAFT = gql`
+  query MyahInboxEmailDraft($threadId: UUID!, $expectedWorkspaceId: UUID!) {
+    myahInboxEmailDraft(
+      threadId: $threadId
+      expectedWorkspaceId: $expectedWorkspaceId
+    ) {
+      workspaceId
+      threadId
+      revision
+      body {
+        markdown
+        blocknote
       }
     }
   }

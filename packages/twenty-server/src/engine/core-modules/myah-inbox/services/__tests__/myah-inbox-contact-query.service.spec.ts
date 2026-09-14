@@ -1,6 +1,9 @@
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { encodeMyahInboxContactCursor } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-cursor.util';
+import {
+  encodeMyahInboxContactCursor,
+  decodeMyahInboxContactCursor,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-cursor.util';
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 
 const rolePermissionConfig = { unionOf: ['role-id'] };
@@ -47,6 +50,7 @@ const rawRows = [
     identityRecordId: creatorId,
     orderingKey: `creator:${creatorId}`,
     lastActivityAt: '2026-09-05T12:00:00.000Z',
+    activityCursorTimestamp: '2026-09-05T12:00:00.000000Z',
     latestChannel: 'INSTAGRAM',
     displayName: 'Creator One',
     creatorId,
@@ -86,6 +90,7 @@ const rawRows = [
     identityRecordId: emailThreadAId,
     orderingKey: `email-thread:${emailThreadAId}`,
     lastActivityAt: '2026-09-05T10:00:00.000Z',
+    activityCursorTimestamp: '2026-09-05T10:00:00.000000Z',
     latestChannel: 'EMAIL',
     displayName: 'unmatched@example.com',
     creatorId: null,
@@ -104,6 +109,7 @@ const rawRows = [
     identityRecordId: instagramAId,
     orderingKey: `instagram-conversation:${instagramAId}`,
     lastActivityAt: '2026-09-05T09:00:00.000Z',
+    activityCursorTimestamp: '2026-09-05T09:00:00.000000Z',
     latestChannel: 'INSTAGRAM',
     displayName: '@unmatched.creator',
     creatorId: null,
@@ -152,7 +158,7 @@ const loadService = (): ContactQueryServiceConstructor | undefined => {
   }
 };
 
-const buildHarness = (rows = rawRows) => {
+const buildHarness = (rows: unknown[] = rawRows) => {
   const query = jest.fn().mockResolvedValue(rows);
   const createQueryBuilder = (objectName: string) => {
     const builder = {
@@ -229,6 +235,113 @@ const request = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('MyahInboxContactQueryService', () => {
+  it('emits exact SQL cursor text separately from the Date display timestamp', async () => {
+    const exactTimestamp = '2026-09-05T12:30:00.000900Z';
+    const harness = buildHarness([
+      {
+        ...rawRows[0],
+        lastActivityAt: new Date(exactTimestamp),
+        activityCursorTimestamp: exactTimestamp,
+      },
+    ]);
+    const result = await harness.service.listContacts(request());
+    const edges = result.edges as Array<{
+      cursor: string;
+      node: { lastActivityAt: string };
+    }>;
+    expect(edges[0].node.lastActivityAt).toBe('2026-09-05T12:30:00.000Z');
+    expect(
+      decodeMyahInboxContactCursor(edges[0].cursor, workspaceId).activityAt,
+    ).toBe(exactTimestamp);
+    expect(harness.query.mock.calls[0][0]).toContain(`to_char(`);
+    expect(harness.query.mock.calls[0][0]).toContain(
+      `contact."lastActivityAt" AT TIME ZONE 'UTC'`,
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`,
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      `AS "activityCursorTimestamp"`,
+    );
+  });
+
+  it('traverses same-millisecond rows and exact timestamp ID ties once with a mocked keyset boundary', async () => {
+    const rows = ['000100', '000900', '000900']
+      .map((fraction, index) => ({
+        ...rawRows[0],
+        identityRecordId: `00000000-0000-4000-8000-${String(index + 20).padStart(12, '0')}`,
+        orderingKey: `creator:00000000-0000-4000-8000-${String(index + 20).padStart(12, '0')}`,
+        lastActivityAt: new Date('2026-09-05T12:30:00.000Z'),
+        activityCursorTimestamp: `2026-09-05T12:30:00.${fraction}Z`,
+      }))
+      .sort(
+        (left, right) =>
+          -(
+            left.activityCursorTimestamp.localeCompare(
+              right.activityCursorTimestamp,
+            ) || left.orderingKey.localeCompare(right.orderingKey)
+          ),
+      );
+    const harness = buildHarness([]);
+    // This models keyset comparison on exact SQL text; it does not execute PostgreSQL.
+    harness.query.mockImplementation(
+      async (_sql: string, parameters: unknown[]) => {
+        const boundary = parameters.find(
+          (value): value is string =>
+            typeof value === 'string' && value.startsWith('2026-09-05T'),
+        );
+        const boundaryKey = boundary
+          ? (parameters[parameters.indexOf(boundary) + 1] as string)
+          : undefined;
+        const exactBoundary = boundary?.replace(
+          /\.(\d+)Z$/,
+          (_, fraction: string) => `.${fraction.padEnd(6, '0')}Z`,
+        );
+        return rows
+          .filter(
+            (row) =>
+              !boundary ||
+              row.activityCursorTimestamp < exactBoundary! ||
+              (row.activityCursorTimestamp === exactBoundary &&
+                row.orderingKey < boundaryKey!),
+          )
+          .slice(0, Number(parameters[parameters.length - 1]));
+      },
+    );
+    const seen: string[] = [];
+    let after: string | undefined;
+    let hasNextPage = true;
+    for (let page = 0; page < rows.length + 1 && hasNextPage; page++) {
+      const result = await harness.service.listContacts(
+        request({ first: 1, after }),
+      );
+      const edges = result.edges as Array<{ cursor: string }>;
+      const pageInfo = result.pageInfo as {
+        hasNextPage: boolean;
+        endCursor: string | null;
+      };
+      expect(edges).toHaveLength(1);
+      seen.push(
+        decodeMyahInboxContactCursor(edges[0].cursor, workspaceId).orderingKey,
+      );
+      after = pageInfo.endCursor!;
+      hasNextPage = pageInfo.hasNextPage;
+    }
+    expect(hasNextPage).toBe(false);
+    expect(seen).toEqual(rows.map((row) => row.orderingKey));
+    expect(new Set(seen).size).toBe(rows.length);
+    expect(
+      harness.query.mock.calls.slice(1).map(([, parameters]) => parameters),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          rows[0].activityCursorTimestamp,
+          rows[0].orderingKey,
+        ]),
+      ]),
+    );
+  });
+
   it('groups all linked Email threads and Instagram conversations once under the readable Creator', async () => {
     const harness = buildHarness(rawRows.slice(0, 1));
 

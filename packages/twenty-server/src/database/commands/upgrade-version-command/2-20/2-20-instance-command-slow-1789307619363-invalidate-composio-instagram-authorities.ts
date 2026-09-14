@@ -4,7 +4,7 @@ import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decor
 import type { SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
 import { invalidateComposioInstagramAuthorities } from 'src/database/commands/upgrade-version-command/2-20/utils/invalidate-composio-instagram-authorities.util';
 
-@RegisteredInstanceCommand('2.20.0', 1799201004000, { type: 'slow' })
+@RegisteredInstanceCommand('2.20.0', 1789307619363, { type: 'slow' })
 export class InvalidateComposioInstagramAuthoritiesSlowInstanceCommand implements SlowInstanceCommand {
   public readonly runDataMigrationWithoutWorkspaces = true;
 

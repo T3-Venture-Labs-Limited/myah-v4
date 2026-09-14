@@ -58,7 +58,7 @@ export type ActionApprovalInteractionContextType =
       AND "interactionContextType" IS NULL
       AND "interactionContextId" IS NULL
     )
-  )`,
+  ) IS TRUE`,
 )
 export class ActionApprovalBindingEntity {
   @PrimaryGeneratedColumn('uuid')

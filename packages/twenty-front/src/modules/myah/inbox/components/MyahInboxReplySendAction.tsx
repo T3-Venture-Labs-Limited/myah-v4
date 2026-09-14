@@ -16,22 +16,23 @@ import {
   MyahInboxReplySendReadinessStatus,
 } from '~/generated/graphql';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from 'twenty-ui/input';
 
 export type MyahInboxReplySendActionProps = {
   draftKey: MyahInboxDraftAutosaveKey;
+  editorOwner?: symbol;
   disabled?: boolean;
+  label?: string;
   entry: MyahInboxDraftAutosaveEntry;
-  onDraftReconciled: (thread: MyahInboxDraftAutosaveThread) => void;
-  onSendingChange: (sending: boolean) => void;
+  onDraftReconciled?: (thread: MyahInboxDraftAutosaveThread) => void;
+  onSendingChange?: (sending: boolean) => void;
   onSent?: () => void | Promise<void>;
 };
 
-const SEND_READINESS_DESCRIPTION_ID = 'myah-inbox-send-readiness';
-
 const getReadinessMessage = (
   status: MyahInboxReplySendReadinessStatus | undefined,
+  reason: string | null | undefined,
   hasPendingFirstSave: boolean,
 ): string | null => {
   switch (status) {
@@ -53,13 +54,15 @@ const getReadinessMessage = (
     case MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE:
       return hasPendingFirstSave
         ? 'Saving the first shared draft…'
-        : 'This Email conversation is unavailable.';
+        : reason?.trim() || 'This Email conversation is unavailable.';
   }
 };
 
 export const MyahInboxReplySendAction = ({
   draftKey,
+  editorOwner,
   disabled = false,
+  label,
   entry,
   onDraftReconciled,
   onSendingChange,
@@ -74,12 +77,35 @@ export const MyahInboxReplySendAction = ({
     enqueueWarningSnackBar,
   } = useSnackBar();
   const { readiness, readinessLoading, send, sending } = useMyahInboxReplySend(
+    draftKey.workspaceId,
     draftKey.threadId,
     entry.confirmedRevision,
   );
+  const readinessDescriptionId = useId();
+  // oxlint-disable-next-line twenty/no-state-useref
+  const mountedRef = useRef(false);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const scopeRef = useRef(draftKey);
+  scopeRef.current = draftKey;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [draftKey.workspaceId, draftKey.threadId]);
   const [isSending, setIsSending] = useState(false);
-  const [isUnknown, setIsUnknown] = useState(false);
-  const [isPending, setIsPending] = useState(false);
+  const [localIsUnknown, setIsUnknown] = useState(false);
+  const [localIsPending, setIsPending] = useState(false);
+
+  const isUnknown = localIsUnknown || entry.operation?.kind === 'unknown';
+  const isPending = localIsPending || entry.operation?.kind === 'pending';
+  useEffect(() => {
+    if (readinessLoading) return;
+    if (readiness?.status === MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN)
+      autosaveController.setReadinessLock(draftKey, 'unknown');
+    if (readiness?.status === MyahInboxReplySendReadinessStatus.OUTCOME_PENDING)
+      autosaveController.setReadinessLock(draftKey, 'pending');
+  }, [autosaveController, draftKey, readiness, readinessLoading]);
 
   const hasPendingFirstSave =
     (entry.dirty || entry.status === 'saving') &&
@@ -93,9 +119,15 @@ export const MyahInboxReplySendAction = ({
     readiness?.status === MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN;
   const readinessMessage = readinessLoading
     ? 'Checking Email send readiness…'
-    : getReadinessMessage(readiness?.status, hasPendingFirstSave);
+    : getReadinessMessage(
+        readiness?.status,
+        readiness?.reason,
+        hasPendingFirstSave,
+      );
   const canAttemptSend =
     !disabled &&
+    !entry.operation &&
+    autosaveController.isTargetAuthorized(draftKey) &&
     !isSending &&
     !sending &&
     !isPending &&
@@ -152,15 +184,27 @@ export const MyahInboxReplySendAction = ({
       return;
     }
 
+    const capture = autosaveController.acquire(
+      draftKey,
+      'sending',
+      editorOwner,
+    );
+    if (!capture) return;
+    const isCurrent = () =>
+      mountedRef.current &&
+      scopeRef.current.workspaceId === capture.key.workspaceId &&
+      scopeRef.current.threadId === capture.key.threadId &&
+      autosaveController.isOperationCurrent(capture);
     setIsSending(true);
-    onSendingChange(true);
+    onSendingChange?.(true);
 
     let keepSharedDraftLocked = false;
 
     try {
-      const flushed = await autosaveController.flush(draftKey);
+      const flushed = await autosaveController.flush(capture.key);
 
       if (
+        !isCurrent() ||
         flushed.dirty ||
         flushed.status === 'saving' ||
         flushed.status === 'error' ||
@@ -171,51 +215,68 @@ export const MyahInboxReplySendAction = ({
       }
 
       const result = await send({
-        threadId: draftKey.threadId,
+        expectedWorkspaceId: capture.key.workspaceId,
+        threadId: capture.key.threadId,
         expectedDraftRevision: flushed.confirmedRevision,
       });
       if (
         result.body !== null ||
         result.outcome === MyahInboxReplySendOutcome.SENT
       ) {
-        onDraftReconciled({
-          key: draftKey,
+        autosaveController.reconcileOperation(capture, {
+          key: capture.key,
           revision: result.revision,
           body: result.body,
         });
       }
       const remainsPending =
         result.outcome === MyahInboxReplySendOutcome.SENDING;
+      if (remainsPending) autosaveController.setOutcomeLock(capture, 'pending');
+      if (result.outcome === MyahInboxReplySendOutcome.UNKNOWN)
+        autosaveController.setOutcomeLock(capture, 'unknown');
+      if (!isCurrent()) return;
       setIsPending(remainsPending);
+      if (
+        result.body !== null ||
+        result.outcome === MyahInboxReplySendOutcome.SENT
+      )
+        onDraftReconciled?.({
+          key: capture.key,
+          revision: result.revision,
+          body: result.body,
+        });
       keepSharedDraftLocked =
         remainsPending || result.outcome === MyahInboxReplySendOutcome.UNKNOWN;
       handleOutcome(result);
+    } catch {
+      autosaveController.setOutcomeLock(capture, 'unknown');
+      keepSharedDraftLocked = true;
+      if (isCurrent()) setIsUnknown(true);
     } finally {
-      setIsSending(false);
-      if (!keepSharedDraftLocked) {
-        onSendingChange(false);
+      if (isCurrent()) {
+        setIsSending(false);
+        if (!keepSharedDraftLocked) onSendingChange?.(false);
       }
+      autosaveController.release(capture);
     }
   };
 
   return (
     <>
       <Button
-        title={t`Send`}
+        title={label ?? t`Send`}
         variant="primary"
         accent="brand"
         size="small"
         aria-describedby={
-          readinessMessage || isUnknown
-            ? SEND_READINESS_DESCRIPTION_ID
-            : undefined
+          readinessMessage || isUnknown ? readinessDescriptionId : undefined
         }
         disabled={!canAttemptSend}
         onClick={handleSend}
       />
       {(readinessMessage || isUnknown) && (
         <span
-          id={SEND_READINESS_DESCRIPTION_ID}
+          id={readinessDescriptionId}
           role={isUnknown || hasPersistedUnknownOutcome ? 'alert' : 'status'}
         >
           {isUnknown

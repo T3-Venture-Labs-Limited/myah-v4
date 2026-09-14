@@ -15,8 +15,10 @@ import {
 } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 import { UnipileInstagramAccountFinalizationLockService } from 'src/modules/myah-unipile/services/unipile-instagram-account-finalization-lock.service';
 import {
+  hasContradictoryUnipileInstagramSenderEvidence,
   type UnipileInstagramChat,
   type UnipileInstagramMessage,
+  unipileInstagramMessageDirection,
 } from 'src/modules/myah-unipile/types/unipile-v1.type';
 
 type WorkspaceIdentity = {
@@ -787,6 +789,11 @@ export class UnipileInstagramProjectionService {
       input.message.chatId !== input.chat.chatId ||
       !input.message.messageId ||
       !input.message.senderId ||
+      hasContradictoryUnipileInstagramSenderEvidence(
+        input.message,
+        input.binding.instagramUserId,
+        input.chat.attendeeProviderId,
+      ) ||
       !Number.isInteger(input.message.attachmentCount) ||
       input.message.attachmentCount < 0
     ) {
@@ -797,15 +804,11 @@ export class UnipileInstagramProjectionService {
   private messageDirection(
     input: UnipileInstagramMessageProjectionInput,
   ): MessageDirection {
-    if (input.message.senderId === input.chat.attendeeProviderId) {
-      return 'INBOUND';
-    }
-
-    if (input.message.senderId === input.binding.instagramUserId) {
-      return 'OUTBOUND';
-    }
-
-    return 'UNKNOWN';
+    return unipileInstagramMessageDirection(
+      input.message,
+      input.binding.instagramUserId,
+      input.chat.attendeeProviderId,
+    );
   }
 
   private defaultDeliveryState(direction: MessageDirection): DeliveryState {

@@ -1,3 +1,5 @@
+import { Logger, UnauthorizedException } from '@nestjs/common';
+
 type WebhookEvent = {
   id: string;
   bindingId: string;
@@ -210,6 +212,114 @@ describe('UnipileInstagramWebhookIntakeService', () => {
     expect(harness.webhookQueue.enqueue).not.toHaveBeenCalled();
   });
 
+  it('logs bounded, structural validation diagnostics only after authentication', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+    const loggerWarnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation();
+    const diagnosticMessage = 'do-not-log-message-content';
+    const diagnosticUrl = 'https://do-not-log.example/private';
+    const diagnosticUnknownKey = 'do-not-log-unknown-key';
+
+    try {
+      await expect(
+        service.intake({
+          body: {
+            ...messageReceivedBody,
+            [diagnosticUnknownKey]: 'do-not-log-unknown-value',
+            message: diagnosticMessage,
+            sender: {
+              ...messageReceivedBody.sender,
+              profile_url: null,
+            },
+            attachments: [{ url: diagnosticUrl }],
+            event: undefined,
+          },
+          secret: 'shared-webhook-secret',
+        }),
+      ).rejects.toEqual(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            message: 'Invalid Unipile Instagram webhook payload',
+            statusCode: 400,
+          }),
+        }),
+      );
+
+      expect(loggerWarnSpy).toHaveBeenCalledTimes(1);
+      const diagnostic = loggerWarnSpy.mock.calls[0][0] as string;
+
+      const diagnosticPrefix = 'UNIPILE_INSTAGRAM_WEBHOOK_VALIDATION_FAILED ';
+
+      expect(diagnostic.startsWith(diagnosticPrefix)).toBe(true);
+      const parsedDiagnostic = JSON.parse(
+        diagnostic.slice(diagnosticPrefix.length),
+      ) as {
+        issues: Array<{
+          code: string;
+          path: string;
+          unrecognizedKeyCount?: number;
+        }>;
+      };
+
+      expect(parsedDiagnostic.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'invalid_value',
+            path: '$event',
+          }),
+          expect.objectContaining({
+            code: 'invalid_type',
+            path: '$sender.profile_url',
+          }),
+          expect.objectContaining({
+            code: 'unrecognized_keys',
+            path: '$',
+            unrecognizedKeyCount: 1,
+          }),
+        ]),
+      );
+      for (const forbiddenValue of [
+        diagnosticMessage,
+        diagnosticUnknownKey,
+        'do-not-log-unknown-value',
+        diagnosticUrl,
+        'shared-webhook-secret',
+      ]) {
+        expect(diagnostic).not.toContain(forbiddenValue);
+      }
+      expect(diagnostic.length).toBeLessThan(2_000);
+      expect(harness.dataSource.transaction).not.toHaveBeenCalled();
+      expect(harness.webhookQueue.enqueue).not.toHaveBeenCalled();
+    } finally {
+      loggerWarnSpy.mockRestore();
+    }
+  });
+
+  it('does not emit diagnostics for unauthorized payloads', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+    const loggerWarnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation();
+
+    try {
+      await expect(
+        service.intake({
+          body: { doNotLogThisUnknownKey: 'do-not-log-this-value' },
+          secret: 'invalid-secret',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      expect(loggerWarnSpy).not.toHaveBeenCalled();
+      expect(harness.dataSource.transaction).not.toHaveBeenCalled();
+      expect(harness.webhookQueue.enqueue).not.toHaveBeenCalled();
+    } finally {
+      loggerWarnSpy.mockRestore();
+    }
+  });
+
   it('rejects an unbounded workspace identifier before database or queue side effects', async () => {
     const harness = createHarness();
     const service = createService(harness);
@@ -299,6 +409,55 @@ describe('UnipileInstagramWebhookIntakeService', () => {
       expect(harness.webhookQueue.enqueue).not.toHaveBeenCalled();
     },
   );
+
+  it('accepts provider metadata only on identity envelopes and strips it before normalization', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+    const normalizeSpy = jest.spyOn(
+      service as unknown as { normalize: (payload: unknown) => unknown },
+      'normalize',
+    );
+
+    await expect(
+      service.intake({
+        body: {
+          ...messageReceivedBody,
+          account_info: {
+            ...messageReceivedBody.account_info,
+            provider_account_metadata: { account_state: 'active' },
+          },
+          attendees: [
+            {
+              ...messageReceivedBody.attendees[0],
+              event_type: 1,
+              provider_attendee_metadata: { role: 'owner' },
+            },
+            messageReceivedBody.attendees[1],
+          ],
+          event: 'message_received',
+          sender: {
+            ...messageReceivedBody.sender,
+            event_type: 1,
+            provider_sender_metadata: { role: 'remote' },
+          },
+        },
+        secret: 'shared-webhook-secret',
+      }),
+    ).resolves.toEqual({ ok: true, duplicate: false });
+
+    expect(normalizeSpy).toHaveBeenCalledWith({
+      ...messageReceivedBody,
+      account_info: messageReceivedBody.account_info,
+      attendees: messageReceivedBody.attendees,
+    });
+    expect(harness.eventRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attendeeProviderId: instagramRemoteId,
+        unipileChatId: messageReceivedBody.chat_id,
+        unipileMessageId: messageReceivedBody.message_id,
+      }),
+    );
+  });
 
   it('commits a received claim before publishing its id then marks it enqueued', async () => {
     const harness = createHarness();
@@ -550,15 +709,57 @@ describe('UnipileInstagramWebhookIntakeService', () => {
     },
   );
 
-  it.each(['message_deleted', 'message_reaction'])(
-    'rejects unsupported %s events before database or queue side effects',
-    async (event) => {
+  it.each([
+    ['a numeric event', 1],
+    ['a null event', null],
+    ['a missing event', undefined],
+    ['an unknown event', 'message_deleted'],
+  ])(
+    'rejects %s before database or queue side effects',
+    async (_name, event) => {
       const harness = createHarness();
       const service = createService(harness);
 
       await expect(
         service.intake({
           body: { ...messageReceivedBody, event },
+          secret: 'shared-webhook-secret',
+        }),
+      ).rejects.toThrow();
+
+      expect(harness.dataSource.transaction).not.toHaveBeenCalled();
+      expect(harness.eventRepository.create).not.toHaveBeenCalled();
+      expect(harness.webhookQueue.enqueue).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['a missing account owner id', { account_info: {} }],
+    [
+      'a missing attendee provider id',
+      { attendees: [{ attendee_provider_id: instagramOwnerId }, {}] },
+    ],
+    ['an unknown root field', { provider_root_metadata: {} }],
+    [
+      'an unknown attachment field',
+      {
+        attachments: [
+          {
+            provider_attachment_metadata: {},
+            url: 'https://cdn.unipile.example/attachment.jpg',
+          },
+        ],
+      },
+    ],
+  ])(
+    'continues rejecting %s before database or queue side effects',
+    async (_name, overrides) => {
+      const harness = createHarness();
+      const service = createService(harness);
+
+      await expect(
+        service.intake({
+          body: { ...messageReceivedBody, ...overrides },
           secret: 'shared-webhook-secret',
         }),
       ).rejects.toThrow();

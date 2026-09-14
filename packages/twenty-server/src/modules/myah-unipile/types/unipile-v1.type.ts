@@ -13,6 +13,19 @@ export type UnipileInstagramAccount = {
   sourceStatus: UnipileInstagramSourceStatus;
 };
 
+export type UnipileGetInstagramMessagingProfileInput = {
+  accountId: string;
+  // Must already be the canonical username from resolveInstagramRecipient.
+  username: string;
+};
+
+export type UnipileInstagramMessagingProfile = {
+  providerId: string;
+  // GET profile provider_messaging_id, distinct from profile and attendee IDs.
+  providerMessagingId: string;
+  username: string;
+};
+
 type UnipileHostedAuthLinkBaseInput = {
   expiresOn: Date;
   successRedirectUrl: string;
@@ -135,6 +148,8 @@ export type UnipileInstagramMessage = {
   accountId: string;
   chatId: string;
   senderId: string;
+  // Provider-validated 0/1 self-sender evidence. Absent only for legacy reads.
+  isSender?: 0 | 1;
   text: string | null;
   timestamp: string | null;
   seen: boolean;
@@ -144,6 +159,34 @@ export type UnipileInstagramMessage = {
   isEvent: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
+};
+
+export const hasContradictoryUnipileInstagramSenderEvidence = (
+  message: Pick<UnipileInstagramMessage, 'isSender' | 'senderId'>,
+  instagramUserId: string,
+  attendeeProviderId: string,
+): boolean =>
+  (message.isSender === 1 && message.senderId === attendeeProviderId) ||
+  (message.isSender === 0 && message.senderId === instagramUserId);
+
+export const unipileInstagramMessageDirection = (
+  message: Pick<UnipileInstagramMessage, 'isSender' | 'senderId'>,
+  instagramUserId: string,
+  attendeeProviderId: string,
+): 'INBOUND' | 'OUTBOUND' | 'UNKNOWN' => {
+  if (message.isSender === 1) {
+    return 'OUTBOUND';
+  }
+
+  if (message.isSender === 0) {
+    return message.senderId === attendeeProviderId ? 'INBOUND' : 'UNKNOWN';
+  }
+
+  if (message.senderId === attendeeProviderId) {
+    return 'INBOUND';
+  }
+
+  return message.senderId === instagramUserId ? 'OUTBOUND' : 'UNKNOWN';
 };
 
 export type UnipileListMessagesInput = {

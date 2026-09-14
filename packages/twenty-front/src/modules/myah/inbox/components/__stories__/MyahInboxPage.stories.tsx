@@ -2,6 +2,7 @@ import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { useEffect, useState } from 'react';
 
+import { type useMyahInboxEmailHistory } from '@/myah/inbox/hooks/useMyahInboxEmailHistory';
 import { MyahInboxContactConversation } from '@/myah/inbox/components/MyahInboxContactConversation';
 import { MyahInboxContactList } from '@/myah/inbox/components/MyahInboxContactList';
 import { MyahInboxInstagramComposer } from '@/myah/inbox/components/MyahInboxInstagramComposer';
@@ -277,15 +278,83 @@ const MyahInboxStorySurface = ({
         inboxOwner: null,
       }
     : null;
-  const emailState = {
-    messages: emailMessages,
+  const storyCards = [
+    ...new Set(emailMessages.map((message) => message.messageThreadId)),
+  ].map((threadId) => {
+    const root = emailMessages.find(
+      (message) => message.messageThreadId === threadId,
+    )!;
+    return {
+      threadId,
+      rootMessageId: root.id,
+      startTimestamp: root.receivedAt,
+      subject: root.subject,
+      campaignLabel: null,
+      historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+    };
+  });
+  const emailState: ReturnType<typeof useMyahInboxEmailHistory> = {
+    segments: [
+      {
+        id: 'story',
+        origin: 'retained',
+        snapshot: 'story',
+        olderCursor: null,
+        requests: [],
+        pages: [
+          {
+            cards: storyCards,
+            snapshot: 'story',
+            olderCursor: null,
+            latestThreadId: storyCards.at(-1)?.threadId ?? null,
+          },
+        ],
+      },
+    ],
+    windows: storyCards.map((card) => ({
+      id: card.threadId,
+      threadId: card.threadId,
+      card,
+      snapshot: 'story',
+      requests: [{}],
+      olderCursor: null,
+      newerCursor: null,
+      anchorMessageId: null,
+      pages: [
+        {
+          threadId: card.threadId,
+          root: emailMessages.find(
+            (message) => message.id === card.rootMessageId,
+          )!,
+          messages: emailMessages.filter(
+            (message) =>
+              message.messageThreadId === card.threadId &&
+              message.id !== card.rootMessageId,
+          ),
+          olderCursor: null,
+          newerCursor: null,
+        },
+      ],
+    })),
+    detachedCards: [],
+    missingMessageIds: [],
+    historyRebased: false,
+    cardPageBudget: 1,
+    locationMissing: false,
+    status: 'ready',
     loading: false,
-    loadingMore: false,
-    isLoadingMore: false,
     error: undefined,
-    hasNextPage: false,
-    loadMore: async () => undefined,
+    incrementalFailure: undefined,
+    loadOlderCards: async () => undefined,
+    openCard: async () => undefined,
+    openDetachedCard: async () => undefined,
+    loadMessages: async () => undefined,
+    retryIncremental: async () => undefined,
+    locateMessage: async () => undefined,
     refresh: async () => undefined,
+    rebase: async () => undefined,
+    setReadingAnchor: () => undefined,
+    purge: () => undefined,
   };
   const selectedThreadState = {
     thread: selectedThread,
@@ -365,9 +434,14 @@ const MyahInboxStorySurface = ({
           selectionChannel={storyChannel}
           selectedEmailThreadId={storyEmailThreadId}
           email={emailState}
+          inlineThreadId={null}
+          inlineThread={selectedThreadState}
+          latestThreadId={storyCards.at(-1)?.threadId ?? null}
+          onCloseInline={fn()}
+          onSwitchToLatest={fn()}
           selectedThread={selectedThreadState}
           onSelectChannel={setStoryChannel}
-          onSelectEmailThread={setStoryEmailThreadId}
+          onReplyToCard={fn()}
           onContactLinked={async () => undefined}
           onActivity={async () => undefined}
           onThreadUpdated={fn()}

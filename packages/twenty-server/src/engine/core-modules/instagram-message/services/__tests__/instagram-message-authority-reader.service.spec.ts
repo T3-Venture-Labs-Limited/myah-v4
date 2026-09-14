@@ -1,4 +1,7 @@
+import { InstagramMessageLocalAuthorityReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-local-authority-reader.service';
+import { PermissionsException } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { InstagramMessageAuthorityReaderService } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.service';
+import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const draftId = '00000000-0000-4000-8000-000000000002';
@@ -31,10 +34,17 @@ const firstDraft = {
   conversationProvider: null,
   conversationLifecycle: null,
   conversationInstagramAccountId: null,
+  conversationCreatorId: null,
 };
 
-const buildHarness = (draft: Record<string, unknown> = firstDraft) => {
-  const dataSource = {
+const buildHarness = (
+  draft: Record<string, unknown> = firstDraft,
+  dataSourceOverride?: {
+    transaction: jest.Mock;
+    query: jest.Mock;
+  },
+) => {
+  const dataSource = dataSourceOverride ?? {
     transaction: jest.fn(async (callback) => callback({ query: jest.fn() })),
     query: jest.fn(async (sql: string) =>
       sql.includes('"_myahInstagramReplyDraft"') ? [draft] : [],
@@ -94,6 +104,52 @@ describe('InstagramMessageAuthorityReaderService', () => {
     await harness.service.assertReadyAfterReservation(authority);
 
     expect(harness.client.listChats).toHaveBeenCalledTimes(1);
+    const sql = harness.dataSource.query.mock.calls
+      .map(([statement]) => statement)
+      .join('\n');
+    expect(sql).toMatch(/LEFT JOIN "workspace_[^"]+"\."creator" creator/);
+    expect(sql).not.toContain('"_creator"');
+  });
+
+  it('requires the GlobalWorkspaceDataSource raw-query permission option for draft and local conversation authority reads', async () => {
+    const queryRunner = {
+      isReleased: false,
+      query: jest.fn(async (sql: string) =>
+        sql.includes('"_myahInstagramReplyDraft"') ? [firstDraft] : [],
+      ),
+      release: jest.fn(),
+    };
+    const dataSource = Object.create(
+      GlobalWorkspaceDataSource.prototype,
+    ) as GlobalWorkspaceDataSource;
+    Object.defineProperty(dataSource, 'createQueryRunner', {
+      value: jest.fn(() => queryRunner),
+    });
+    Object.defineProperty(dataSource, 'transaction', {
+      value: jest.fn(async (callback) => callback({ query: jest.fn() })),
+    });
+    const harness = buildHarness(firstDraft, dataSource as never);
+
+    try {
+      await dataSource.query('SELECT 1');
+      throw new Error('GlobalWorkspaceDataSource query should require options');
+    } catch (error) {
+      expect(error).toBeInstanceOf(PermissionsException);
+    }
+
+    await harness.service.createDirectAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
+      draftId,
+      expectedRevision: 2,
+    });
+
+    expect(
+      queryRunner.query.mock.calls.map(([sql]) => sql).join('\n'),
+    ).toContain('"_myahInstagramReplyDraft"');
+    expect(
+      queryRunner.query.mock.calls.map(([sql]) => sql).join('\n'),
+    ).toContain('"_myahSocialConversation"');
   });
 
   it('blocks START_CHAT when a current provider chat already exists', async () => {
@@ -129,10 +185,11 @@ describe('InstagramMessageAuthorityReaderService', () => {
       conversationId: 'conversation-id',
       providerConversationId: 'provider-chat',
       conversationRecipientIgsid: 'creator.name',
-      conversationRecipientUsername: 'creator.name',
+      conversationRecipientUsername: null,
       conversationProvider: 'UNIPILE',
       conversationLifecycle: 'ACTIVE',
       conversationInstagramAccountId: accountRecordId,
+      conversationCreatorId: creatorId,
     });
 
     const authority = await harness.service.createThreadReplyAuthority({
@@ -158,4 +215,141 @@ describe('InstagramMessageAuthorityReaderService', () => {
       expectedAttendeeId: 'creator.name',
     });
   });
+});
+
+describe('InstagramMessageAuthorityReaderService shared local extraction', () => {
+  it.each(['rebuildExecutionAuthority', 'rebuildForReconciliation'] as const)(
+    'keeps %s authority equivalent and provider-free until reservation',
+    async (method) => {
+      const harness = buildHarness({
+        ...firstDraft,
+        kind: 'REPLY',
+        conversationId: 'conversation-id',
+        providerConversationId: 'provider-chat',
+        conversationRecipientIgsid: 'creator.name',
+        conversationProvider: 'UNIPILE',
+        conversationLifecycle: 'ACTIVE',
+        conversationInstagramAccountId: accountRecordId,
+        conversationCreatorId: creatorId,
+      });
+      const original = await harness.service.createThreadReplyAuthority({
+        workspaceId,
+        initiatorUserWorkspaceId: 'viewer-id',
+        threadId: 'thread-id',
+        draftId,
+      });
+      expect(harness.service).toBeInstanceOf(
+        InstagramMessageLocalAuthorityReaderService,
+      );
+      await expect(
+        harness.service[method]({
+          workspaceId,
+          binding: original.expectedActionBinding,
+        }),
+      ).resolves.toEqual(original);
+      expect(harness.client.listChats).not.toHaveBeenCalled();
+      expect(harness.client.getChat).not.toHaveBeenCalled();
+      expect(harness.dataSource.query).toHaveBeenLastCalledWith(
+        expect.stringContaining('"_myahInstagramReplyDraft"'),
+        [draftId, method === 'rebuildForReconciliation'],
+        undefined,
+        { shouldBypassPermissionChecks: true },
+      );
+      await harness.service.assertReadyAfterReservation(original);
+      expect(harness.client.getChat).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['rebuildExecutionAuthority', 'rebuildForReconciliation'] as const)(
+    'preserves %s fingerprint mismatch rejection',
+    async (method) => {
+      const harness = buildHarness();
+      const authority = await harness.service.createDirectAuthority({
+        workspaceId,
+        initiatorUserWorkspaceId: 'viewer-id',
+        draftId,
+        expectedRevision: 2,
+      });
+      await expect(
+        harness.service[method]({
+          workspaceId,
+          binding: {
+            ...authority.expectedActionBinding,
+            actionContextFingerprint: 'stale',
+          },
+        }),
+      ).rejects.toThrow('source graph is unavailable');
+      expect(harness.client.listChats).not.toHaveBeenCalled();
+      expect(harness.client.getChat).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('InstagramMessageAuthorityReaderService current conversation Creator linkage', () => {
+  it.each([null, 'replacement-creator'])(
+    'rejects saved REPLY after Creator link becomes %s without changing revision or provider target',
+    async (conversationCreatorId) => {
+      const draft = {
+        ...firstDraft,
+        kind: 'REPLY',
+        recipientProviderId: 'recipient-igsid',
+        conversationId: 'conversation-id',
+        providerConversationId: 'provider-chat',
+        conversationRecipientIgsid: 'recipient-igsid',
+        conversationProvider: 'UNIPILE',
+        conversationLifecycle: 'ACTIVE',
+        conversationInstagramAccountId: accountRecordId,
+        conversationCreatorId: creatorId as string | null,
+      };
+      const harness = buildHarness(draft);
+      const input = {
+        workspaceId,
+        initiatorUserWorkspaceId: 'viewer-id',
+        draftId,
+        expectedRevision: 2,
+      };
+      const original = await harness.service.createDirectAuthority(input);
+      draft.conversationCreatorId = conversationCreatorId;
+
+      await expect(
+        harness.service.createDirectAuthority(input),
+      ).rejects.toThrow('REPLY draft target is stale');
+      await expect(
+        harness.service.createThreadReplyAuthority({
+          ...input,
+          threadId: 'thread-id',
+        }),
+      ).rejects.toThrow('REPLY draft target is stale');
+      for (const method of [
+        'rebuildExecutionAuthority',
+        'rebuildForReconciliation',
+      ] as const) {
+        await expect(
+          harness.service[method]({
+            workspaceId,
+            binding: original.expectedActionBinding,
+          }),
+        ).rejects.toThrow('REPLY draft target is stale');
+      }
+      expect(draft.revision).toBe(2);
+      expect(harness.client.getChat).not.toHaveBeenCalled();
+      expect(harness.client.listChats).not.toHaveBeenCalled();
+      expect(harness.dataSource.query).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'conversation."creatorId" AS "conversationCreatorId"',
+        ),
+        [draftId, true],
+        undefined,
+        { shouldBypassPermissionChecks: true },
+      );
+
+      draft.conversationCreatorId = creatorId;
+      await expect(
+        harness.service.rebuildExecutionAuthority({
+          workspaceId,
+          binding: original.expectedActionBinding,
+        }),
+      ).resolves.toEqual(original);
+    },
+  );
 });

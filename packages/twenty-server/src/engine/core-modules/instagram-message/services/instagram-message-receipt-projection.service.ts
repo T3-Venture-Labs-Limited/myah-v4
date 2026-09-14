@@ -18,6 +18,10 @@ import {
 } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 import { UnipileInstagramProjectionService } from 'src/modules/myah-unipile/services/unipile-instagram-projection.service';
 import { UnipileV1ClientService } from 'src/modules/myah-unipile/services/unipile-v1-client.service';
+import {
+  hasContradictoryUnipileInstagramSenderEvidence,
+  unipileInstagramMessageDirection,
+} from 'src/modules/myah-unipile/types/unipile-v1.type';
 
 @Injectable()
 export class InstagramMessageReceiptProjectionService {
@@ -39,6 +43,11 @@ export class InstagramMessageReceiptProjectionService {
       throw new Error(
         'Accepted Instagram provider identifiers are unavailable',
       );
+    }
+
+    // Current authority/provider matches cannot verify historical START identity.
+    if (input.actionKind === 'START_CHAT') {
+      throw new Error('Instagram first-contact projection is unavailable');
     }
 
     const authority = await this.authorityReader.rebuildForReconciliation({
@@ -72,7 +81,16 @@ export class InstagramMessageReceiptProjectionService {
       messageId: input.providerExternalMessageId,
     });
     if (
-      message.senderId !== account.instagramUserId ||
+      hasContradictoryUnipileInstagramSenderEvidence(
+        message,
+        account.instagramUserId,
+        chat.attendeeProviderId,
+      ) ||
+      unipileInstagramMessageDirection(
+        message,
+        account.instagramUserId,
+        chat.attendeeProviderId,
+      ) !== 'OUTBOUND' ||
       message.deleted ||
       message.hidden ||
       message.isEvent ||

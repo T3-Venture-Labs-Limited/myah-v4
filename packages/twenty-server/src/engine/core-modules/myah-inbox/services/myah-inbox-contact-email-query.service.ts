@@ -1,10 +1,38 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
+
+import {
+  type MyahInboxEmailCard,
+  type MyahInboxEmailCardPage,
+  type MyahInboxEmailCardProjection,
+  type MyahInboxEmailMessagePage,
+  type MyahInboxEmailMessageLocation,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-email-card.dto';
+import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
+import {
+  decodeMyahInboxEmailCardCursor,
+  encodeMyahInboxEmailCardCursor,
+  isMyahInboxEmailTimestamp,
+  type MyahInboxEmailCardCursor,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-email-card-cursor.util';
+import {
+  buildMyahInboxEmailReadQuery,
+  type MyahInboxEmailSqlScope,
+  type MyahInboxEmailReadSelection,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-email-read-query.util';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 
 import { IsNull } from 'typeorm';
 
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import { MessageChannelType } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, isValidUuid } from 'twenty-shared/utils';
 
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
@@ -30,14 +58,39 @@ import {
   MessageVisibilityPolicyService,
 } from 'src/modules/messaging/common/query-hooks/message/message-visibility-policy.service';
 
-type MyahInboxListContactEmailMessagesInput = {
+export type MyahInboxListContactEmailMessagesInput = {
   contactId: string;
+  expectedWorkspaceId?: string | null;
   first?: number;
   after?: string;
   authContext: WorkspaceAuthContext;
   user: AuthContextUser;
   workspace: Pick<WorkspaceEntity, 'id'>;
   workspaceMemberId: string;
+};
+
+export type MyahInboxEmailReadContext = Omit<
+  MyahInboxListContactEmailMessagesInput,
+  'first' | 'after'
+>;
+
+type EmailReadEnvelope = {
+  authorized: boolean;
+  orderingUnavailable: boolean;
+  rootChanged: boolean;
+  cursorValid: boolean;
+  fingerprint: string;
+  snapshotAt: string;
+  cards: MyahInboxEmailCard[];
+  latestThreadId: string | null;
+  hasOlderCards: boolean;
+  card: MyahInboxEmailCard | null;
+  page:
+    | (Omit<MyahInboxEmailMessagePage, 'olderCursor' | 'newerCursor'> & {
+        hasOlder: boolean;
+        hasNewer: boolean;
+      })
+    | null;
 };
 
 type ContextRecord = {
@@ -64,6 +117,7 @@ type EmailMessageRaw = {
   id: string;
   messageThreadId: string;
   receivedAt: Date | string;
+  receivedAtCursorTimestamp: string;
   subject: string | null;
   text: string | null;
   visibility: MessageVisibilityAccess;
@@ -103,6 +157,441 @@ export class MyahInboxContactEmailQueryService {
     private readonly messageVisibilityPolicyService: MessageVisibilityPolicyService,
   ) {}
 
+  async listCards(
+    input: MyahInboxEmailReadContext & {
+      snapshot?: string;
+      olderCursor?: string;
+    },
+  ): Promise<MyahInboxEmailCardPage> {
+    this.assertUserRequest(input);
+    const scope = {
+      workspaceId: input.workspace.id,
+      userWorkspaceId: input.authContext.userWorkspaceId,
+      contactId: input.contactId,
+    };
+    const snapshot = input.snapshot
+      ? decodeMyahInboxEmailCardCursor(input.snapshot, scope, 'snapshot')
+      : undefined;
+    const cursor = input.olderCursor
+      ? decodeMyahInboxEmailCardCursor(input.olderCursor, scope, 'cards')
+      : undefined;
+    if (
+      cursor &&
+      (!snapshot ||
+        cursor.snapshotAt !== snapshot.snapshotAt ||
+        cursor.fingerprint !== snapshot.fingerprint)
+    ) {
+      throw new BadRequestException('Invalid Inbox history cursor');
+    }
+    const row = await this.readEmailEnvelope(input, {
+      mode: 'cards',
+      cutoff: snapshot?.snapshotAt,
+      fingerprint: snapshot?.fingerprint,
+      boundary: cursor
+        ? { timestamp: cursor.timestamp!, id: cursor.id! }
+        : undefined,
+    });
+    const token: MyahInboxEmailCardCursor = {
+      version: 1,
+      ...scope,
+      kind: 'snapshot',
+      snapshotAt: row.snapshotAt,
+      fingerprint: row.fingerprint,
+    };
+    const first = row.cards[0];
+    return {
+      cards: row.cards,
+      snapshot: encodeMyahInboxEmailCardCursor(token),
+      latestThreadId: row.latestThreadId,
+      olderCursor:
+        row.hasOlderCards && first
+          ? encodeMyahInboxEmailCardCursor({
+              ...token,
+              kind: 'cards',
+              timestamp: first.startTimestamp,
+              id: first.threadId,
+            })
+          : null,
+    };
+  }
+
+  async readCard(
+    input: MyahInboxEmailReadContext & { threadId: string },
+  ): Promise<MyahInboxEmailCardProjection> {
+    this.assertUserRequest(input);
+    if (!isValidUuid(input.threadId))
+      throw new BadRequestException('Invalid Inbox thread');
+    const row = await this.readEmailEnvelope(input, {
+      mode: 'card',
+      threadId: input.threadId,
+    });
+    return {
+      card: row.card,
+      snapshot: encodeMyahInboxEmailCardCursor({
+        version: 1,
+        kind: 'snapshot',
+        workspaceId: input.workspace.id,
+        userWorkspaceId: input.authContext.userWorkspaceId,
+        contactId: input.contactId,
+        snapshotAt: row.snapshotAt,
+        fingerprint: row.fingerprint,
+      }),
+    };
+  }
+
+  async listCardMessages(
+    input: MyahInboxEmailReadContext & {
+      threadId: string;
+      snapshot: string;
+      cursor?: string;
+    },
+  ): Promise<MyahInboxEmailMessagePage> {
+    if (!isValidUuid(input.threadId))
+      throw new BadRequestException('Invalid Inbox thread');
+    const snapshot = this.readSnapshot(input);
+    const cursor = input.cursor
+      ? decodeMyahInboxEmailCardCursor(input.cursor, snapshot)
+      : undefined;
+    if (
+      cursor &&
+      (!['older', 'newer'].includes(cursor.kind) ||
+        cursor.threadId !== input.threadId ||
+        cursor.snapshotAt !== snapshot.snapshotAt ||
+        cursor.fingerprint !== snapshot.fingerprint)
+    )
+      throw new BadRequestException('Invalid Inbox history cursor');
+    const row = await this.readEmailEnvelope(input, {
+      mode: 'messages',
+      threadId: input.threadId,
+      cutoff: snapshot.snapshotAt,
+      fingerprint: snapshot.fingerprint,
+      direction: cursor?.kind === 'newer' ? 'newer' : 'older',
+      boundary: cursor
+        ? { timestamp: cursor.timestamp!, id: cursor.id! }
+        : undefined,
+    });
+    if (!row.page) throw new ForbiddenException('Inbox card is not readable');
+    return this.mapMessagePage(row.page, snapshot, cursor);
+  }
+
+  async locateMessage(
+    input: MyahInboxEmailReadContext & { messageId: string; snapshot: string },
+  ): Promise<MyahInboxEmailMessageLocation | null> {
+    if (!isValidUuid(input.messageId))
+      throw new BadRequestException('Invalid Inbox message');
+    const snapshot = this.readSnapshot(input);
+    const row = await this.readEmailEnvelope(input, {
+      mode: 'location',
+      messageId: input.messageId,
+      cutoff: snapshot.snapshotAt,
+      fingerprint: snapshot.fingerprint,
+    });
+    return row.card && row.page
+      ? {
+          card: row.card,
+          page: this.mapMessagePage(row.page, snapshot),
+          messageId: input.messageId,
+        }
+      : null;
+  }
+
+  private readSnapshot(
+    input: MyahInboxEmailReadContext & { snapshot: string },
+  ): MyahInboxEmailCardCursor {
+    this.assertUserRequest(input);
+    return decodeMyahInboxEmailCardCursor(
+      input.snapshot,
+      {
+        workspaceId: input.workspace.id,
+        userWorkspaceId: input.authContext.userWorkspaceId,
+        contactId: input.contactId,
+      },
+      'snapshot',
+    );
+  }
+
+  private mapMessagePage(
+    page: NonNullable<EmailReadEnvelope['page']>,
+    snapshot: MyahInboxEmailCardCursor,
+    cursor?: MyahInboxEmailCardCursor,
+  ): MyahInboxEmailMessagePage {
+    const messages = [page.root, ...page.messages];
+    for (const message of messages) {
+      if (!isMyahInboxEmailTimestamp(message.receivedAt))
+        throw new BadRequestException(
+          'Inbox timestamp projection is unavailable',
+        );
+      if (
+        !['FULL', 'SUBJECT', 'METADATA'].includes(message.visibility) ||
+        !['INCOMING', 'OUTGOING'].includes(message.direction)
+      )
+        throw new ForbiddenException('Inbox message projection failed closed');
+    }
+    const boundary = (kind: 'older' | 'newer') => {
+      const message =
+        kind === 'older'
+          ? page.messages[0]
+          : page.messages[page.messages.length - 1];
+      return message
+        ? encodeMyahInboxEmailCardCursor({
+            ...snapshot,
+            kind,
+            threadId: page.threadId,
+            timestamp: message.receivedAt,
+            id: message.id,
+          })
+        : cursor
+          ? encodeMyahInboxEmailCardCursor({ ...cursor, kind })
+          : null;
+    };
+    return {
+      threadId: page.threadId,
+      root: page.root,
+      messages: page.messages,
+      olderCursor: page.hasOlder ? boundary('older') : null,
+      newerCursor: page.hasNewer ? boundary('newer') : null,
+    };
+  }
+
+  private async readEmailEnvelope(
+    input: MyahInboxEmailReadContext,
+    selection: MyahInboxEmailReadSelection,
+  ): Promise<EmailReadEnvelope> {
+    return this.withEmailReadScope(input, async (scope) => {
+      const query = buildMyahInboxEmailReadQuery(scope, selection);
+      const dataSource =
+        await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+      const [row] = await dataSource.query<EmailReadEnvelope[]>(
+        query.sql,
+        query.parameters,
+        undefined,
+        { shouldBypassPermissionChecks: true },
+      );
+      if (!row?.authorized)
+        throw new ForbiddenException('Inbox member or contact is not readable');
+      if (!row.cursorValid)
+        throw new BadRequestException('Invalid Inbox history cursor');
+      if (row.orderingUnavailable)
+        throw new BadRequestException('Inbox history ordering is unavailable');
+      if (
+        row.rootChanged ||
+        (selection.fingerprint && row.fingerprint !== selection.fingerprint)
+      )
+        throw new BadRequestException('Inbox history changed; reload history');
+      if (
+        !isMyahInboxEmailTimestamp(row.snapshotAt) ||
+        row.cards.some(
+          (card) => !isMyahInboxEmailTimestamp(card.startTimestamp),
+        )
+      )
+        throw new BadRequestException(
+          'Inbox timestamp projection is unavailable',
+        );
+      return row;
+    });
+  }
+
+  private async withEmailReadScope<Result>(
+    input: MyahInboxEmailReadContext,
+    consume: (scope: MyahInboxEmailSqlScope) => Promise<Result>,
+  ): Promise<Result> {
+    this.assertUserRequest(input);
+    assertMyahInboxExpectedWorkspace(
+      input.workspace.id,
+      input.expectedWorkspaceId,
+    );
+    const contact = decodeMyahInboxContactId(
+      input.contactId,
+      input.workspace.id,
+    );
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const workspaceContext = getWorkspaceContext();
+        const rolePermissionConfig = resolveRolePermissionConfig({
+          authContext: input.authContext,
+          userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+          apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+        });
+        if (!rolePermissionConfig)
+          throw new ForbiddenException('Inbox role permissions are required');
+        const parameters: unknown[] = [];
+        const ctes: string[] = [];
+        const parameter = (value: unknown) => {
+          parameters.push(value);
+          return `$${parameters.length}`;
+        };
+        const projection = async (
+          name: string,
+          object: string,
+          alias: string,
+          fields: string[],
+          where: string,
+          optional = false,
+          extra?: { expression: string; parameters: Record<string, string> },
+          whereParameters: Record<string, string> = {},
+        ) => {
+          let query: SerializedPermissionQuery;
+          try {
+            // SAFETY: this is the same native repository, narrowed to its serialization methods.
+            const repository =
+              (await this.globalWorkspaceOrmManager.getRepository<
+                Record<string, unknown>
+              >(
+                input.workspace.id,
+                object,
+                rolePermissionConfig,
+              )) as unknown as PermissionAwareRepository;
+            const builder = repository
+              .createQueryBuilder(alias)
+              .select(`${alias}.id`, 'id')
+              .where(where)
+              .setParameters(whereParameters);
+            for (const field of fields)
+              builder.addSelect(`${alias}."${field}"`, field);
+            if (extra)
+              builder
+                .addSelect(extra.expression, 'visibility')
+                .setParameters(extra.parameters);
+            query = serializePermissionQuery(builder);
+          } catch (error) {
+            if (
+              !optional ||
+              !(error instanceof PermissionsException) ||
+              error.code !== PermissionsExceptionCode.PERMISSION_DENIED
+            )
+              throw error;
+            query = {
+              sql: `SELECT NULL::uuid AS id${fields.map((field) => `, NULL::${field.endsWith('Id') ? 'uuid' : 'text'} AS "${field}"`).join('')} WHERE FALSE`,
+              parameters: [],
+            };
+          }
+          ctes.push(
+            `${name} AS (${rebasePostgresParameters(query.sql, parameters.length)})`,
+          );
+          parameters.push(...query.parameters);
+        };
+        // All mandatory row predicates are serialized into the same statement, not earlier findOne reads.
+        await projection(
+          'readable_member',
+          'workspaceMember',
+          'member',
+          [],
+          'member.id = :readId',
+          false,
+          undefined,
+          { readId: input.workspaceMemberId },
+        );
+        const contactObject =
+          contact.kind === 'creator'
+            ? 'creator'
+            : contact.kind === 'email-thread'
+              ? 'messageThread'
+              : 'myahSocialConversation';
+        await projection(
+          'readable_contact',
+          contactObject,
+          'contact',
+          [],
+          'contact.id = :readId AND contact."deletedAt" IS NULL',
+          false,
+          undefined,
+          { readId: contact.recordId },
+        );
+        await projection(
+          'readable_threads',
+          'messageThread',
+          'thread',
+          contact.kind === 'creator' ? ['creatorId'] : [],
+          'thread."deletedAt" IS NULL',
+        );
+        await projection(
+          'readable_messages',
+          'message',
+          'message',
+          ['messageThreadId', 'receivedAt', 'createdAt', 'isDraft'],
+          'message."deletedAt" IS NULL',
+          false,
+          this.messageVisibilityPolicyService.buildSqlVisibilityProjection({
+            workspaceId: input.workspace.id,
+            userWorkspaceId: input.authContext.userWorkspaceId,
+            messageIdExpression: 'message.id',
+          }),
+        );
+        await projection(
+          'readable_subject',
+          'message',
+          'subject',
+          ['subject'],
+          'subject."deletedAt" IS NULL',
+          true,
+        );
+        await projection(
+          'readable_text',
+          'message',
+          'body',
+          ['text'],
+          'body."deletedAt" IS NULL',
+          true,
+        );
+        await projection(
+          'readable_participants',
+          'messageParticipant',
+          'participant',
+          ['messageId', 'role', 'handle', 'displayName'],
+          'participant."deletedAt" IS NULL',
+          true,
+        );
+        await projection(
+          'readable_campaign_relation',
+          'messageThread',
+          'relation',
+          ['myahCampaignId'],
+          'relation."deletedAt" IS NULL',
+          true,
+        );
+        await projection(
+          'readable_campaign',
+          'campaign',
+          'campaign',
+          [],
+          'campaign."deletedAt" IS NULL',
+          true,
+        );
+        await projection(
+          'readable_campaign_name',
+          'campaign',
+          'campaign_name',
+          ['name'],
+          'campaign_name."deletedAt" IS NULL',
+          true,
+        );
+        const recordId = parameter(contact.recordId);
+        const eligibleThread =
+          contact.kind === 'creator'
+            ? `thread."creatorId" = ${recordId}::uuid`
+            : contact.kind === 'email-thread'
+              ? `thread.id = ${recordId}::uuid`
+              : `${recordId}::uuid IS NULL`;
+        const workspaceId = parameter(input.workspace.id);
+        const schema = getWorkspaceSchemaName(input.workspace.id);
+        ctes.push(`authorized_email AS (
+        SELECT message.id, message."messageThreadId", message."receivedAt", message."createdAt", message.visibility, association.direction
+        FROM readable_messages message JOIN readable_threads thread ON thread.id = message."messageThreadId"
+        JOIN LATERAL (
+          SELECT association.direction FROM "${schema}"."messageChannelMessageAssociation" association
+          JOIN core."messageChannel" channel ON channel.id = association."messageChannelId" AND channel."workspaceId" = ${workspaceId}::uuid
+          WHERE association."messageId" = message.id AND association."deletedAt" IS NULL AND channel.type::text IN ('EMAIL','EMAIL_GROUP')
+          ORDER BY association.id LIMIT 1
+        ) association ON TRUE
+        WHERE ${eligibleThread} AND message."isDraft" = FALSE AND message.visibility <> 'HIDDEN'
+          AND EXISTS (SELECT 1 FROM readable_member) AND EXISTS (SELECT 1 FROM readable_contact)
+      )`);
+        return consume({ sql: ctes.join(',\n'), parameters });
+      },
+      input.authContext,
+    );
+  }
+
   async listMessages(
     input: MyahInboxListContactEmailMessagesInput,
   ): Promise<MyahInboxContactEmailMessageConnection> {
@@ -132,6 +621,7 @@ export class MyahInboxContactEmailQueryService {
           throw new ForbiddenException('Inbox role permissions are required');
         }
 
+        // SAFETY: native repositories implement the narrow read/serialization surface below.
         const repository = async (name: string) =>
           (await this.globalWorkspaceOrmManager.getRepository<
             Record<string, unknown>
@@ -320,7 +810,11 @@ email_messages AS (
     AND message.visibility <> ${hidden}
     ${cursorCondition}
 )
-SELECT message.*
+SELECT message.*,
+  to_char(
+    message."receivedAt" AT TIME ZONE 'UTC',
+    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+  ) AS "receivedAtCursorTimestamp"
 FROM email_messages message
 ORDER BY message."receivedAt" ASC, message.id ASC
 LIMIT ${limit}`;
@@ -366,7 +860,7 @@ LIMIT ${limit}`;
           return {
             cursor: encodeMyahInboxContactEmailCursor({
               workspaceId: input.workspace.id,
-              receivedAt,
+              receivedAt: row.receivedAtCursorTimestamp,
               messageId: row.id,
             }),
             node: {
@@ -395,9 +889,11 @@ LIMIT ${limit}`;
     );
   }
 
-  private assertUserRequest(
-    input: MyahInboxListContactEmailMessagesInput,
-  ): asserts input is MyahInboxListContactEmailMessagesInput & {
+  private assertUserRequest<
+    Input extends MyahInboxListContactEmailMessagesInput,
+  >(
+    input: Input,
+  ): asserts input is Input & {
     authContext: Extract<WorkspaceAuthContext, { type: 'user' }>;
   } {
     if (

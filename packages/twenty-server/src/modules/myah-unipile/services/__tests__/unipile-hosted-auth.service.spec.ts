@@ -19,6 +19,7 @@ type UnipileHostedAuthService = {
     workspaceId: string;
     userWorkspaceId: string;
   }) => Promise<{ attemptId: string; url: string }>;
+  expirePendingAttempt: (attemptId: string) => Promise<void>;
   resumeProcessingAttempt: (
     attemptId: string,
   ) => Promise<{ attemptId: string; status: string }>;
@@ -200,6 +201,59 @@ describe('UnipileHostedAuthService', () => {
     expect(rawSecret).toMatch(/^[0-9a-f]{64}$/);
     expect(collectStrings(persistedAttempt)).not.toContain(rawSecret);
     expect(collectStrings(result)).not.toContain(rawSecret);
+  });
+
+  it('uses a dedicated callback base URL with a stable slash join without changing frontend redirects', async () => {
+    const hostedAuthServiceModule = loadHostedAuthServiceModule();
+
+    expect(hostedAuthServiceModule).toBeDefined();
+
+    if (!hostedAuthServiceModule) {
+      return;
+    }
+
+    const attemptRepository = {
+      create: jest.fn((attempt) => attempt),
+      save: jest.fn(async (attempt) => attempt),
+    };
+    const client = {
+      createHostedAuthLink: jest.fn(async () => ({
+        url: 'https://auth.unipile.test/hosted-link',
+      })),
+    };
+    const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      attemptRepository,
+      { findOne: jest.fn().mockResolvedValue(null) },
+      client,
+      {
+        get: jest.fn((key: string) => {
+          if (key === 'SERVER_URL') return 'https://api.myah.test/';
+          if (key === 'FRONTEND_URL') return 'https://app.myah.test';
+          if (key === 'UNIPILE_INSTAGRAM_CALLBACK_BASE_URL') {
+            return 'https://callback-tunnel.trycloudflare.com/';
+          }
+        }),
+      },
+      createAvailabilityService(),
+    );
+
+    const { attemptId } = await service.createConnectionAttempt({
+      workspaceId,
+      userWorkspaceId,
+    });
+    const providerInput = (
+      client.createHostedAuthLink.mock.calls as unknown as Array<
+        [HostedAuthLinkInput]
+      >
+    )[0][0];
+
+    expect(providerInput).toEqual(
+      expect.objectContaining({
+        notifyUrl: `https://callback-tunnel.trycloudflare.com/rest/myah/unipile/instagram/hosted-auth/${attemptId}/notify`,
+        successRedirectUrl: `https://app.myah.test/settings/accounts/instagram?connection=success&attemptId=${attemptId}`,
+        failureRedirectUrl: `https://app.myah.test/settings/accounts/instagram?connection=failed&attemptId=${attemptId}`,
+      }),
+    );
   });
 
   it('marks the persisted attempt failed when Hosted Auth link creation rejects', async () => {
@@ -2289,5 +2343,269 @@ describe('UnipileHostedAuthService', () => {
       'SELECT pg_advisory_xact_lock(hashtext($1))',
       [`unipile-hosted-auth-finalization:${attemptId}`],
     );
+  });
+
+  describe('expirePendingAttempt', () => {
+    const createExpiryHarness = () => {
+      const hostedAuthServiceModule = loadHostedAuthServiceModule();
+
+      if (!hostedAuthServiceModule) {
+        throw new Error('Hosted Auth service unavailable');
+      }
+
+      const notification = {
+        attemptId: 'expired-attempt',
+        name: 'expiry-callback-secret',
+        status: 'CREATION_SUCCESS' as const,
+        accountId: 'opaque-account-id',
+      };
+      const initialAttempt = {
+        id: notification.attemptId,
+        workspaceId,
+        userWorkspaceId,
+        operation: 'CREATE',
+        expectedBindingId: null,
+        callbackSecretHash: createHash('sha256')
+          .update(notification.name)
+          .digest('hex'),
+        callbackDigest: null as string | null,
+        callbackAccountId: null as string | null,
+        callbackStatus: null as string | null,
+        status: 'PENDING',
+        expiresAt: new Date(now.getTime() - 1),
+        processedAt: null as Date | null,
+        failureCode: null as string | null,
+        failureReason: null as string | null,
+      };
+      let storedAttempt: typeof initialAttempt | null = { ...initialAttempt };
+      const events: string[] = [];
+      const manager = {
+        query: jest.fn(),
+        findOne: jest.fn(async () =>
+          storedAttempt ? { ...storedAttempt } : null,
+        ),
+        save: jest.fn(async (attempt: typeof initialAttempt) => attempt),
+      };
+      const attemptRepository = {
+        create: jest.fn(),
+        save: jest.fn(),
+        manager: {
+          // Mock commit/rollback only: this is not database lock evidence.
+          transaction: jest.fn(async (callback) => {
+            const firstSave = manager.save.mock.calls.length;
+
+            events.push('start');
+            try {
+              const result = await callback(manager);
+              const saves = manager.save.mock.calls.slice(firstSave);
+
+              if (saves.length > 0) {
+                storedAttempt = { ...saves[saves.length - 1][0] };
+              }
+              events.push('commit');
+
+              return result;
+            } catch (error) {
+              events.push('rollback');
+              throw error;
+            }
+          }),
+        },
+      };
+      const bindingRepository = { findOne: jest.fn() };
+      const client = { createHostedAuthLink: jest.fn(), getAccount: jest.fn() };
+      const accountService = { finalizeHostedAuthConnection: jest.fn() };
+      const availability = createAvailabilityService();
+      const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        attemptRepository,
+        bindingRepository,
+        client,
+        { get: jest.fn() },
+        availability,
+        accountService,
+      );
+
+      return {
+        service,
+        manager,
+        events,
+        notification,
+        availability,
+        attemptRepository,
+        client,
+        accountService,
+        initialAttempt,
+        readStored: () => storedAttempt,
+        setStored: (attempt: typeof initialAttempt | null) => {
+          storedAttempt = attempt;
+        },
+        expectNoFinalization: () => {
+          expect(client.getAccount).not.toHaveBeenCalled();
+          expect(client.createHostedAuthLink).not.toHaveBeenCalled();
+          expect(
+            accountService.finalizeHostedAuthConnection,
+          ).not.toHaveBeenCalled();
+          expect(bindingRepository.findOne).not.toHaveBeenCalled();
+          expect(manager.query).not.toHaveBeenCalled();
+          expect(attemptRepository.save).not.toHaveBeenCalled();
+        },
+      };
+    };
+
+    it.each([-1, 0])(
+      'terminalizes PENDING at expiry offset %s exactly once without finalization',
+      async (offset) => {
+        const harness = createExpiryHarness();
+
+        harness.setStored({
+          ...harness.initialAttempt,
+          expiresAt: new Date(now.getTime() + offset),
+        });
+        await harness.service.expirePendingAttempt(
+          harness.notification.attemptId,
+        );
+        const terminal = harness.readStored();
+
+        expect(terminal).toEqual({
+          ...harness.initialAttempt,
+          expiresAt: new Date(now.getTime() + offset),
+          status: 'FAILED',
+          processedAt: now,
+          failureCode: 'HOSTED_AUTH_EXPIRED',
+          failureReason: 'Instagram authorization expired',
+        });
+        jest.setSystemTime(new Date(now.getTime() + 60_000));
+        await harness.service.expirePendingAttempt(
+          harness.notification.attemptId,
+        );
+        expect(harness.readStored()).toEqual(terminal);
+        expect(harness.manager.save).toHaveBeenCalledTimes(1);
+        expect(harness.manager.findOne).toHaveBeenCalledWith(
+          expect.anything(),
+          {
+            where: { id: harness.notification.attemptId },
+            lock: { mode: 'pessimistic_write' },
+          },
+        );
+        expect(harness.events).toEqual(['start', 'commit', 'start', 'commit']);
+        harness.expectNoFinalization();
+      },
+    );
+
+    it.each(['PROCESSING', 'COMPLETED', 'FAILED', 'future', 'missing'])(
+      'ignores a stale selected id whose locked row is %s',
+      async (state) => {
+        const harness = createExpiryHarness();
+        const current =
+          state === 'missing'
+            ? null
+            : {
+                ...harness.initialAttempt,
+                status: state === 'future' ? 'PENDING' : state,
+                expiresAt: new Date(
+                  now.getTime() + (state === 'future' ? 1 : -1),
+                ),
+              };
+
+        harness.setStored(current);
+        await harness.service.expirePendingAttempt(
+          harness.notification.attemptId,
+        );
+        expect(harness.readStored()).toEqual(current);
+        expect(harness.manager.save).not.toHaveBeenCalled();
+        expect(harness.manager.findOne).toHaveBeenCalledWith(
+          expect.anything(),
+          {
+            where: { id: harness.notification.attemptId },
+            lock: { mode: 'pessimistic_write' },
+          },
+        );
+        harness.expectNoFinalization();
+      },
+    );
+
+    it('propagates a failed expiry write and leaves the mock committed row PENDING for retry', async () => {
+      const harness = createExpiryHarness();
+      const failure = new Error('synthetic failed write');
+
+      harness.manager.save.mockRejectedValueOnce(failure);
+      await expect(
+        harness.service.expirePendingAttempt(harness.notification.attemptId),
+      ).rejects.toBe(failure);
+      expect(harness.readStored()).toEqual(harness.initialAttempt);
+      expect(harness.events).toEqual(['start', 'rollback']);
+      await harness.service.expirePendingAttempt(
+        harness.notification.attemptId,
+      );
+      expect(harness.readStored()?.status).toBe('FAILED');
+      harness.expectNoFinalization();
+    });
+
+    it('does zero expiry work when disabled', async () => {
+      const harness = createExpiryHarness();
+      const failure = new Error('disabled');
+
+      harness.availability.assertEnabled.mockImplementation(() => {
+        throw failure;
+      });
+      await expect(
+        harness.service.expirePendingAttempt(harness.notification.attemptId),
+      ).rejects.toBe(failure);
+      expect(
+        harness.attemptRepository.manager.transaction,
+      ).not.toHaveBeenCalled();
+      harness.expectNoFinalization();
+    });
+
+    it('keeps an expiry-winning mock row FAILED when a later valid callback arrives', async () => {
+      const harness = createExpiryHarness();
+
+      await harness.service.expirePendingAttempt(
+        harness.notification.attemptId,
+      );
+      await expect(
+        harness.service.processNotification(harness.notification),
+      ).rejects.toThrow(ConflictException);
+      expect(harness.readStored()?.status).toBe('FAILED');
+      expect(harness.manager.save).toHaveBeenCalledTimes(1);
+      harness.expectNoFinalization();
+    });
+
+    it('leaves a callback-winning mock row PROCESSING for ordinary recovery after expiry', async () => {
+      const harness = createExpiryHarness();
+      const outage = new Error('temporary lookup outage');
+
+      harness.setStored({
+        ...harness.initialAttempt,
+        expiresAt: new Date(now.getTime() + 1),
+      });
+      harness.client.getAccount.mockRejectedValueOnce(outage);
+      await expect(
+        harness.service.processNotification(harness.notification),
+      ).rejects.toBe(outage);
+      expect(harness.readStored()?.status).toBe('PROCESSING');
+      jest.setSystemTime(new Date(now.getTime() + 1));
+      harness.manager.save.mockClear();
+      harness.manager.query.mockClear();
+      harness.client.getAccount.mockClear();
+      await harness.service.expirePendingAttempt(
+        harness.notification.attemptId,
+      );
+      expect(harness.readStored()?.status).toBe('PROCESSING');
+      expect(harness.manager.save).not.toHaveBeenCalled();
+      harness.expectNoFinalization();
+      harness.client.getAccount.mockResolvedValue({
+        accountId: harness.notification.accountId,
+      });
+      await expect(
+        harness.service.resumeProcessingAttempt(harness.notification.attemptId),
+      ).resolves.toEqual({
+        attemptId: harness.notification.attemptId,
+        status: 'COMPLETED',
+      });
+      expect(
+        harness.accountService.finalizeHostedAuthConnection,
+      ).toHaveBeenCalledTimes(1);
+    });
   });
 });

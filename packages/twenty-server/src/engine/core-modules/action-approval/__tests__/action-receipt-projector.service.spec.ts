@@ -1,3 +1,5 @@
+import { InstagramMessageReceiptProjectionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-receipt-projection.service';
+import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 
 describe('ActionReceiptProjectorService', () => {
@@ -132,7 +134,7 @@ describe('ActionReceiptProjectorService', () => {
     expect(writer.project).not.toHaveBeenCalled();
     expect(repository.update).not.toHaveBeenCalled();
   });
-  it('projects a v2 direct Instagram receipt through an explicit module-owned writer', async () => {
+  it('projects a v2 direct REPLY Instagram receipt through an explicit module-owned writer', async () => {
     const directWriter = { project: jest.fn().mockResolvedValue(undefined) };
     const defaultWriter = { project: jest.fn() };
     const repository = {
@@ -144,7 +146,7 @@ describe('ActionReceiptProjectorService', () => {
           ...receipt.actionApprovalBinding,
           actionName: 'send_instagram_message',
           actionVersion: 2,
-          actionKind: 'START_CHAT',
+          actionKind: 'REPLY',
           threadId: null,
           interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
           interactionContextId: receipt.actionApprovalBinding.draftId,
@@ -165,7 +167,7 @@ describe('ActionReceiptProjectorService', () => {
       expect.objectContaining({
         actionName: 'send_instagram_message',
         actionVersion: 2,
-        actionKind: 'START_CHAT',
+        actionKind: 'REPLY',
         threadId: null,
         interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
         interactionContextId: receipt.actionApprovalBinding.draftId,
@@ -177,5 +179,104 @@ describe('ActionReceiptProjectorService', () => {
       { id: receipt.id, state: 'PROVIDER_ACCEPTED' },
       { state: 'SENT' },
     );
+  });
+  it('retains Accepted IDs through the real projector and real START writer despite matching historical evidence', async () => {
+    const stored = {
+      ...receipt,
+      providerMessageId: null,
+      actionApprovalBinding: {
+        ...receipt.actionApprovalBinding,
+        actionName: 'send_instagram_message',
+        actionVersion: 2,
+        actionKind: 'START_CHAT',
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+        interactionContextId: receipt.actionApprovalBinding.draftId,
+        contentDigest: computeActionContentDigest('Exact historical body'),
+      },
+    };
+    const before = structuredClone(stored);
+    const repository = {
+      findOne: jest.fn().mockResolvedValue(stored),
+      update: jest
+        .fn()
+        .mockImplementation(async (_where, patch) =>
+          Object.assign(stored, patch),
+        ),
+    };
+    const authorityReader = {
+      rebuildForReconciliation: jest.fn().mockResolvedValue({
+        canonicalGraph: {
+          account: {
+            bindingId: 'account-binding',
+            unipileAccountId: 'provider-account',
+            instagramUserId: 'owner',
+          },
+          draft: {
+            kind: 'START_CHAT',
+            recipientProviderId: '17841400000000000',
+          },
+        },
+      }),
+    };
+    const bindingRepository = {
+      findOne: jest
+        .fn()
+        .mockResolvedValue({ id: 'account-binding', status: 'ACTIVE' }),
+    };
+    const client = {
+      getChat: jest
+        .fn()
+        .mockResolvedValue({ attendeeProviderId: '17841400000000000' }),
+      getMessage: jest.fn().mockResolvedValue({
+        senderId: 'owner',
+        text: 'Exact historical body',
+        hidden: false,
+        deleted: false,
+        isEvent: false,
+      }),
+    };
+    const projection = {
+      upsertVerifiedChat: jest
+        .fn()
+        .mockResolvedValue({ conversationRecordId: 'conversation' }),
+      upsertVerifiedMessage: jest.fn(),
+    };
+    const draft = { sentAt: null as Date | null };
+    const draftService = {
+      markSent: jest.fn().mockImplementation(async () => {
+        draft.sentAt = new Date();
+      }),
+    };
+    const writer = new InstagramMessageReceiptProjectionService(
+      authorityReader as never,
+      bindingRepository as never,
+      client as never,
+      projection as never,
+      draftService as never,
+    );
+    const defaultWriter = { project: jest.fn() };
+    const service = new ActionReceiptProjectorService(
+      repository as never,
+      defaultWriter,
+    );
+    await expect(
+      service.projectReceiptWithWriter(stored.id, writer),
+    ).rejects.toThrow('Instagram first-contact projection is unavailable');
+    expect(repository.findOne).toHaveBeenCalledWith({
+      where: { id: stored.id },
+      relations: { actionApprovalBinding: { evidenceLinks: true } },
+    });
+    expect(repository.update).not.toHaveBeenCalled();
+    expect(stored).toEqual(before);
+    expect(defaultWriter.project).not.toHaveBeenCalled();
+    expect(authorityReader.rebuildForReconciliation).not.toHaveBeenCalled();
+    expect(bindingRepository.findOne).not.toHaveBeenCalled();
+    expect(client.getChat).not.toHaveBeenCalled();
+    expect(client.getMessage).not.toHaveBeenCalled();
+    expect(projection.upsertVerifiedChat).not.toHaveBeenCalled();
+    expect(projection.upsertVerifiedMessage).not.toHaveBeenCalled();
+    expect(draftService.markSent).not.toHaveBeenCalled();
+    expect(draft.sentAt).toBeNull();
   });
 });

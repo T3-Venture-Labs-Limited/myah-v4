@@ -6,7 +6,7 @@ import { WorkspaceIteratorService } from 'src/database/commands/command-runners/
 import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 
-@RegisteredWorkspaceCommand('2.20.0', 1799201011000)
+@RegisteredWorkspaceCommand('2.20.0', 1789307619366)
 @Command({
   name: 'upgrade:2-20:synchronize-instagram-message-permissions',
   description:

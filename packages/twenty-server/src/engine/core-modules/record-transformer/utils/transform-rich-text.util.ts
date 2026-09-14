@@ -16,18 +16,19 @@ let cachedServerBlockNoteEditor: ServerBlockNoteEditor | null = null;
 // the ESM bundle path where the full chain works.
 const nativeImport = new Function('specifier', 'return import(specifier)');
 
-const getServerBlockNoteEditor = async (): Promise<ServerBlockNoteEditor> => {
-  if (cachedServerBlockNoteEditor) {
-    return cachedServerBlockNoteEditor;
-  }
+export const getServerBlockNoteEditor =
+  async (): Promise<ServerBlockNoteEditor> => {
+    if (cachedServerBlockNoteEditor) {
+      return cachedServerBlockNoteEditor;
+    }
 
-  const module = await nativeImport('@blocknote/server-util');
-  const editor: ServerBlockNoteEditor = module.ServerBlockNoteEditor.create();
+    const module = await nativeImport('@blocknote/server-util');
+    const editor: ServerBlockNoteEditor = module.ServerBlockNoteEditor.create();
 
-  cachedServerBlockNoteEditor = editor;
+    cachedServerBlockNoteEditor = editor;
 
-  return editor;
-};
+    return editor;
+  };
 
 export const transformRichTextValue = async (
   // oxlint-disable-next-line typescript/no-explicit-any

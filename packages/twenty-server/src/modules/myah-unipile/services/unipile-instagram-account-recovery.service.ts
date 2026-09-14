@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, type Repository } from 'typeorm';
+import { LessThan, LessThanOrEqual, type Repository } from 'typeorm';
 
 import {
   UnipileHostedAuthAttemptEntity,
@@ -39,6 +39,7 @@ export class UnipileInstagramAccountRecoveryService {
       unknownDisconnectBindings,
       connectingBindings,
       staleHostedAuthAttempts,
+      expiredPendingAttempts,
     ] = await Promise.all([
       this.bindingRepository.find({
         where: {
@@ -60,6 +61,14 @@ export class UnipileInstagramAccountRecoveryService {
           updatedAt: LessThan(processingBefore),
         },
         order: { updatedAt: 'ASC', id: 'ASC' },
+        take: 50,
+      }),
+      this.hostedAuthAttemptRepository.find({
+        where: {
+          status: UnipileHostedAuthAttemptStatus.PENDING,
+          expiresAt: LessThanOrEqual(new Date()),
+        },
+        order: { expiresAt: 'ASC', id: 'ASC' },
         take: 50,
       }),
     ]);
@@ -89,6 +98,14 @@ export class UnipileInstagramAccountRecoveryService {
       try {
         await this.hostedAuthService.resumeProcessingAttempt(attempt.id);
         hostedRecovered += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    for (const attempt of expiredPendingAttempts) {
+      try {
+        await this.hostedAuthService.expirePendingAttempt(attempt.id);
       } catch {
         failed += 1;
       }

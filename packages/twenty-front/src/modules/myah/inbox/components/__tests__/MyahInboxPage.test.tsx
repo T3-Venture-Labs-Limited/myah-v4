@@ -1,9 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import {
   act,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
 
@@ -16,7 +20,8 @@ import {
 import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 
 const flush = jest.fn().mockResolvedValue(undefined);
-const flushWorkspace = jest.fn();
+const flushWorkspace = jest.fn().mockResolvedValue(true);
+const invalidateWorkspace = jest.fn();
 const refreshContacts = jest.fn();
 const loadMoreContacts = jest.fn();
 const loadMoreEmail = jest.fn();
@@ -24,8 +29,11 @@ const refreshEmail = jest.fn();
 const refreshSelectedThread = jest.fn();
 const mockUseMyahInboxContacts = jest.fn();
 const mockUseMyahInboxContactEmailMessages = jest.fn();
+const mockUseMyahInboxEmailHistory = jest.fn();
 const mockUseMyahInboxSelectedEmailThread = jest.fn();
 let isMobile = false;
+let mockThreadUpdated: (message: string) => void;
+let mockContactLinked: (id: string) => void | Promise<void>;
 
 jest.mock('twenty-ui/theme-constants', () => ({
   ThemeContext: require('react').createContext({
@@ -33,16 +41,18 @@ jest.mock('twenty-ui/theme-constants', () => ({
   }),
   themeCssVariables: {
     brand: { focusRing: 'blue' },
-    background: { primary: 'white' },
-    border: { color: { light: 'gray' } },
+    background: { primary: 'white', transparent: { lighter: 'whitesmoke' } },
+    border: { color: { light: 'gray' }, radius: { md: '4px' } },
     font: {
-      color: { secondary: 'gray', tertiary: 'gray' },
-      size: { sm: '12px', xs: '11px' },
+      color: { primary: 'black', secondary: 'gray', tertiary: 'gray' },
+      size: { md: '14px', sm: '12px', xs: '11px' },
+      weight: { semiBold: 600 },
     },
     spacing: {
       1: '4px',
       2: '8px',
       3: '12px',
+      4: '16px',
       6: '24px',
       8: '32px',
     },
@@ -59,8 +69,22 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxDraftAutosaveController', () => ({
   }: {
     children: React.ReactNode;
   }) => children,
-  useMyahInboxDraftAutosaveController: () => ({ flush, flushWorkspace }),
-  useMyahInboxDraftAutosaveControllerContext: () => ({ flush, flushWorkspace }),
+  useMyahInboxDraftAutosaveController: () => ({
+    flush,
+    flushWorkspace,
+    flushWorkspaceForNavigation: (workspaceId: string) =>
+      flushWorkspace(workspaceId),
+    invalidateWorkspace,
+    getEntry: () => null,
+  }),
+  useMyahInboxDraftAutosaveControllerContext: () => ({
+    flush,
+    flushWorkspace,
+    flushWorkspaceForNavigation: (workspaceId: string) =>
+      flushWorkspace(workspaceId),
+    invalidateWorkspace,
+    getEntry: () => null,
+  }),
 }));
 
 jest.mock('@/myah/inbox/hooks/useMyahInboxContacts', () => ({
@@ -73,6 +97,10 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxContactEmailMessages', () => ({
     mockUseMyahInboxContactEmailMessages(...args),
 }));
 
+jest.mock('@/myah/inbox/hooks/useMyahInboxEmailHistory', () => ({
+  useMyahInboxEmailHistory: (...args: unknown[]) =>
+    mockUseMyahInboxEmailHistory(...args),
+}));
 jest.mock('@/myah/inbox/hooks/useMyahInboxSelectedEmailThread', () => ({
   useMyahInboxSelectedEmailThread: (...args: unknown[]) =>
     mockUseMyahInboxSelectedEmailThread(...args),
@@ -84,6 +112,7 @@ jest.mock('@/myah/inbox/components/MyahInboxContactList', () => ({
     selectedContactId,
     onSelectContact,
     onRefresh,
+    onRetry,
   }: {
     contacts: MyahInboxContact[];
     selectedContactId: string | null;
@@ -92,6 +121,7 @@ jest.mock('@/myah/inbox/components/MyahInboxContactList', () => ({
       options?: { openConversation?: boolean },
     ) => void;
     onRefresh: () => void;
+    onRetry: () => void;
   }) => (
     <div aria-label="Contact list">
       {contacts.map((contact) => (
@@ -106,7 +136,8 @@ jest.mock('@/myah/inbox/components/MyahInboxContactList', () => ({
           Select {contact.displayName}
         </button>
       ))}
-      <button onClick={onRefresh}>Refresh contacts</button>
+      <button onClick={onRefresh}>Refresh Inbox</button>
+      <button onClick={onRetry}>Retry contacts</button>
     </div>
   ),
 }));
@@ -130,20 +161,29 @@ jest.mock('@/myah/inbox/components/MyahInboxChannelTabs', () => ({
   ),
 }));
 
-jest.mock('@/myah/inbox/components/MyahInboxContactHeader', () => ({
-  MyahInboxContactHeader: ({
-    contact,
-    onSelectEmailThread,
+jest.mock('@/ui/input/components/Select', () => ({
+  Select: ({
+    label,
+    value,
+    options,
+    onChange,
   }: {
-    contact: MyahInboxContact;
-    onSelectEmailThread: (threadId: string) => void;
+    label: string;
+    value: string;
+    options: Array<{ label: string; value: string }>;
+    onChange: (value: string) => void;
   }) => (
-    <div>
-      Header {contact.displayName}
-      <button onClick={() => onSelectEmailThread('thread-1')}>
-        Select exact thread
-      </button>
-    </div>
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   ),
 }));
 
@@ -167,20 +207,38 @@ jest.mock(
 );
 
 jest.mock('@/myah/inbox/components/MyahInboxThreadActions', () => ({
-  MyahInboxThreadActions: ({ thread }: { thread: { id: string } }) => (
-    <div>Email actions {thread.id}</div>
-  ),
+  MyahInboxThreadActions: ({
+    thread,
+    onThreadUpdated,
+  }: {
+    thread: { id: string };
+    onThreadUpdated: (message: string) => void;
+  }) => {
+    mockThreadUpdated = onThreadUpdated;
+    return <div>Email actions {thread.id}</div>;
+  },
 }));
 
 jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
   MyahInboxReplyWorkspace: ({
     thread,
     onSent,
+    scopeGeneration,
+    targetAvailable,
+    presentation,
   }: {
+    scopeGeneration: string;
+    targetAvailable: boolean;
+    presentation?: 'default' | 'main';
     thread: { id: string };
     onSent?: () => void | Promise<void>;
   }) => (
-    <div>
+    <div
+      data-testid="draft-authority"
+      data-scope={scopeGeneration}
+      data-available={String(targetAvailable)}
+      data-presentation={presentation}
+    >
       Email composer {thread.id}
       <button onClick={() => void onSent?.()}>Simulate Email sent</button>
     </div>
@@ -192,9 +250,12 @@ jest.mock('@/myah/inbox/components/MyahInboxContactLinkAction', () => ({
     onLinked,
   }: {
     onLinked: (id: string) => void;
-  }) => (
-    <button onClick={() => onLinked('contact-linked')}>Link Creator</button>
-  ),
+  }) => {
+    mockContactLinked = onLinked;
+    return (
+      <button onClick={() => onLinked('contact-linked')}>Link Creator</button>
+    );
+  },
 }));
 
 jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
@@ -214,6 +275,21 @@ jest.mock('@/side-panel/components/SidePanelToggleButton', () => ({
 jest.mock('twenty-ui/icon', () => ({ IconInbox: () => null }));
 
 jest.mock('twenty-ui/input', () => ({
+  Button: ({
+    title,
+    ariaLabel,
+    onClick,
+    disabled,
+  }: {
+    title: string;
+    ariaLabel?: string;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) => (
+    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
+      {title}
+    </button>
+  ),
   SegmentedControl: ({
     options,
     onChange,
@@ -296,6 +372,41 @@ const setDefaultHooks = () => {
     refreshStatus: 'idle',
     refreshError: null,
   });
+  mockUseMyahInboxEmailHistory.mockImplementation(
+    (_workspace: string, contactId: string | null) => ({
+      segments: contactId
+        ? [
+            {
+              id: 'segment',
+              snapshot: 'snapshot',
+              olderCursor: null,
+              requests: [],
+              pages: [
+                {
+                  latestThreadId: 'thread-2',
+                  cards: ['thread-1', 'thread-2'].map((id, index) => ({
+                    threadId: id,
+                    rootMessageId: `${id}-root`,
+                    subject: id,
+                    startTimestamp: `2026-09-0${index + 1}T00:00:00Z`,
+                    historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+                  })),
+                },
+              ],
+            },
+          ]
+        : [],
+      windows: [],
+      detachedCards: [],
+      status: 'ready',
+      loading: false,
+      missingMessageIds: [],
+      refresh: refreshEmail,
+      openCard: jest.fn(),
+      openDetachedCard: jest.fn(),
+      setReadingAnchor: jest.fn(),
+    }),
+  );
   mockUseMyahInboxContactEmailMessages.mockReturnValue({
     messages: [
       {
@@ -354,14 +465,384 @@ const renderPage = (store = createStore()) => {
 };
 
 describe('MyahInboxPage contact-first flow', () => {
+  it('matches history gutters and leaves bottom space without restoring wrapper padding', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../MyahInboxContactConversation.tsx'),
+      'utf8',
+    );
+    const wrapperStyles = source.match(
+      /const StyledReply = styled\.section`([\s\S]*?)`;/,
+    )?.[1];
+    expect(wrapperStyles).toBeDefined();
+    expect(wrapperStyles).not.toContain('border-top:');
+    expect(wrapperStyles).not.toContain('max-height:');
+    expect(wrapperStyles).not.toMatch(/padding(?:-[a-z]+)?:/);
+    expect(wrapperStyles).toContain(
+      'margin: 0 ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[2]};',
+    );
+    const historySource = readFileSync(
+      resolve(__dirname, '../MyahInboxEmailOutreachHistory.tsx'),
+      'utf8',
+    );
+    expect(historySource).toContain(
+      'padding: ${themeCssVariables.spacing[2]};',
+    );
+    const historyStyles = historySource.match(
+      /const StyledHistory = styled\.section`([\s\S]*?)`;/,
+    )?.[1];
+    expect(historyStyles).toContain('scrollbar-gutter: stable;');
+    expect(wrapperStyles).toContain('scrollbar-gutter: stable;');
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     isMobile = false;
     setDefaultHooks();
+    refreshEmail.mockReset().mockResolvedValue(undefined);
     refreshContacts.mockResolvedValue({
       status: 'success',
       selectedContact: contacts[0],
     });
+  });
+
+  it('ignores an old exact header mutation completion after contact/channel scope changes', async () => {
+    renderPage();
+    await screen.findByText('Email composer thread-2');
+    const oldCompletion = mockThreadUpdated;
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' })),
+    );
+    refreshEmail.mockClear();
+    refreshContacts.mockClear();
+    await act(async () => oldCompletion('Obsolete action completed'));
+    expect(screen.queryByText('Obsolete action completed')).toBeNull();
+    expect(refreshEmail).not.toHaveBeenCalled();
+    expect(refreshContacts).not.toHaveBeenCalled();
+  });
+
+  it('provides an Email-only keyboard-scrollable outer fallback without changing Instagram', async () => {
+    renderPage();
+    const email = await screen.findByRole('region', {
+      name: 'Selected contact conversation',
+    });
+    expect(email).toHaveAttribute('tabindex', '0');
+    email.focus();
+    expect(email).toHaveFocus();
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    expect(
+      screen.getByRole('region', { name: 'Selected contact conversation' }),
+    ).not.toHaveAttribute('tabindex');
+  });
+
+  it('waits for all draft keys before an intentional contact transition', async () => {
+    let resolve!: (saved: boolean) => void;
+    flushWorkspace.mockReturnValueOnce(
+      new Promise<boolean>((done) => {
+        resolve = done;
+      }),
+    );
+    const { store } = renderPage();
+    await screen.findByText('Email composer thread-2');
+    fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' }));
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    await act(async () => resolve(true));
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-2',
+    );
+  });
+
+  it('keeps the editor reachable when any affected key fails its intentional flush', async () => {
+    flushWorkspace.mockResolvedValueOnce(false);
+    const { store } = renderPage();
+    await screen.findByText('Email composer thread-2');
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' })),
+    );
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    expect(screen.getByText('Email composer thread-2')).toBeVisible();
+    expect(
+      screen.getByText(
+        'Resolve pending draft changes before leaving this conversation.',
+      ),
+    ).toBeVisible();
+  });
+
+  it('does not resume an old transition after a forced workspace switch', async () => {
+    let resolve!: (saved: boolean) => void;
+    flushWorkspace.mockReturnValueOnce(
+      new Promise<boolean>((done) => {
+        resolve = done;
+      }),
+    );
+    const { store } = renderPage();
+    await screen.findByText('Email composer thread-2');
+    fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' }));
+    act(() =>
+      store.set(currentWorkspaceState.atom, { id: 'workspace-2' } as never),
+    );
+    await act(async () => resolve(true));
+    expect(store.get(myahInboxContactSelectionState.atom).workspaceId).not.toBe(
+      'workspace-1',
+    );
+    expect(invalidateWorkspace).toHaveBeenCalledWith('workspace-1');
+  });
+
+  it('revalidates draft authority after contact refresh even when native membership is unchanged', async () => {
+    renderPage();
+    await screen.findByText('Email composer thread-2');
+    const scope = screen
+      .getByTestId('draft-authority')
+      .getAttribute('data-scope');
+    expect(scope).not.toBeNull();
+    expect(screen.getByTestId('draft-authority')).toHaveAttribute(
+      'data-available',
+      'true',
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' })),
+    );
+    expect(
+      screen.getByTestId('draft-authority').getAttribute('data-scope'),
+    ).not.toBe(scope);
+  });
+
+  it.each(['Refresh Inbox', 'Retry contacts'])(
+    '%s explicitly refreshes same-contact Email history without changing its authorization key',
+    async (button) => {
+      const { store } = renderPage();
+      await screen.findByText('Email composer thread-2');
+      const selection = store.get(myahInboxContactSelectionState.atom);
+      const historyScope = mockUseMyahInboxEmailHistory.mock.calls.at(-1);
+      await act(async () =>
+        fireEvent.click(screen.getByRole('button', { name: button })),
+      );
+      expect(refreshContacts).toHaveBeenCalledWith('contact-1');
+      expect(refreshEmail).toHaveBeenCalledTimes(1);
+      expect(mockUseMyahInboxEmailHistory.mock.calls.at(-1)).toEqual(
+        historyScope,
+      );
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(selection);
+      expect(flushWorkspace).not.toHaveBeenCalled();
+      expect(invalidateWorkspace).not.toHaveBeenCalled();
+      expect(screen.getByText('Email composer thread-2')).toBeVisible();
+    },
+  );
+
+  it.each(['failed', 'ignored'])(
+    'does not refresh history or revalidate draft authority when contacts refresh is %s',
+    async (status) => {
+      renderPage();
+      await screen.findByText('Email composer thread-2');
+      const scope = screen
+        .getByTestId('draft-authority')
+        .getAttribute('data-scope');
+      refreshContacts.mockResolvedValueOnce({ status, selectedContact: null });
+      await act(async () =>
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' })),
+      );
+      expect(refreshEmail).not.toHaveBeenCalled();
+      expect(screen.getByTestId('draft-authority')).toHaveAttribute(
+        'data-scope',
+        scope,
+      );
+    },
+  );
+
+  it.each(['contact', 'channel', 'workspace', 'unmount'])(
+    'does not refresh an old Email history after a pending contacts refresh and %s transition',
+    async (transition) => {
+      let complete!: (result: {
+        status: 'success';
+        selectedContact: MyahInboxContact;
+      }) => void;
+      refreshContacts.mockReturnValueOnce(
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+      );
+      const { store, unmount } = renderPage();
+      await screen.findByText('Email composer thread-2');
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+      await act(async () => {
+        if (transition === 'contact') {
+          fireEvent.click(
+            screen.getByRole('option', { name: 'Select contact-2' }),
+          );
+        } else if (transition === 'channel') {
+          fireEvent.click(
+            screen.getByRole('button', { name: 'Instagram channel' }),
+          );
+        } else if (transition === 'workspace') {
+          store.set(currentWorkspaceState.atom, { id: 'workspace-2' } as never);
+        } else {
+          unmount();
+        }
+      });
+      const selection = store.get(myahInboxContactSelectionState.atom);
+      await act(async () =>
+        complete({ status: 'success', selectedContact: contacts[0] }),
+      );
+      expect(refreshEmail).not.toHaveBeenCalled();
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(selection);
+    },
+  );
+
+  it('does not refresh Email history for an Instagram selection', async () => {
+    renderPage();
+    await screen.findByText('Email composer thread-2');
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' })),
+    );
+    expect(refreshEmail).not.toHaveBeenCalled();
+    expect(screen.getByText('Instagram timeline contact-1')).toBeVisible();
+  });
+
+  it('does not refresh Email history without a selected contact', async () => {
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [],
+    });
+    refreshContacts.mockResolvedValueOnce({
+      status: 'success',
+      selectedContact: null,
+    });
+    renderPage();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' })),
+    );
+    expect(refreshContacts).toHaveBeenCalledWith(null);
+    expect(refreshEmail).not.toHaveBeenCalled();
+  });
+
+  it.each(['removed', 'regrouped', 'Email unavailable'])(
+    'does not refresh the old Email history when the refreshed contact is %s',
+    async (change) => {
+      const nextContact =
+        change === 'removed'
+          ? null
+          : change === 'regrouped'
+            ? contact('contact-regrouped', 'EMAIL')
+            : {
+                ...contacts[0],
+                email: { ...contacts[0].email, isAvailable: false },
+              };
+      renderPage();
+      await screen.findByText('Email composer thread-2');
+      refreshContacts.mockResolvedValueOnce({
+        status: 'success',
+        selectedContact: nextContact,
+      });
+      await act(async () =>
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' })),
+      );
+      expect(refreshEmail).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refreshes Email history exactly once after a current thread update', async () => {
+    renderPage();
+    await screen.findByText('Email composer thread-2');
+    await act(async () => mockThreadUpdated('Thread updated'));
+    expect(screen.getByText('Thread updated')).toBeVisible();
+    expect(refreshEmail).toHaveBeenCalledTimes(1);
+    expect(refreshSelectedThread).toHaveBeenCalledTimes(1);
+    expect(refreshContacts).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes the complete selector and keeps header/main exact scope when an older card replies inline', async () => {
+    renderPage();
+    const header = await screen.findByLabelText('Contact conversation header');
+    expect(
+      within(header).getByRole('group', {
+        name: 'Email actions for First subject',
+      }),
+    ).toBeVisible();
+    expect(
+      within(header).queryByText('Email actions for First subject'),
+    ).toBeNull();
+    expect(within(header).getByText('Email actions thread-2')).toBeVisible();
+    expect(screen.queryByLabelText('Email thread')).toBeNull();
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reply to thread-1' }),
+      ),
+    );
+    expect(within(header).getByText('Email actions thread-2')).toBeVisible();
+    expect(screen.getByText('Email composer thread-1')).toBeVisible();
+    expect(screen.getByText('Email composer thread-2')).toBeVisible();
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    expect(screen.queryByLabelText('Email thread')).toBeNull();
+    expect(screen.queryByText(/Email actions/)).toBeNull();
+    expect(screen.queryByText(/Email composer/)).toBeNull();
+  });
+
+  it('moves the latest shared editor inline without a duplicate and returns it to bottom', async () => {
+    renderPage();
+    await screen.findByText('Email composer thread-2');
+    const mainReply = screen.getByRole('region', { name: 'Main reply' });
+    expect(within(mainReply).getByTestId('draft-authority')).toHaveAttribute(
+      'data-presentation',
+      'main',
+    );
+    expect(
+      within(mainReply).queryByText('Main reply · First subject'),
+    ).not.toBeInTheDocument();
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reply to thread-2' }),
+      ),
+    );
+    expect(screen.getAllByText('Email composer thread-2')).toHaveLength(1);
+    expect(
+      within(screen.getByRole('region', { name: 'Inline reply' })).getByText(
+        'Email composer thread-2',
+      ),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole('region', { name: 'Inline reply' })).getByTestId(
+        'draft-authority',
+      ),
+    ).toHaveAttribute('data-presentation', 'default');
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Return to bottom' })),
+    );
+    expect(screen.getAllByText('Email composer thread-2')).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Main reply' })).toHaveFocus(),
+    );
+  });
+
+  it('does not use the contact activity target before bounded outreach history resolves', () => {
+    mockUseMyahInboxEmailHistory.mockReturnValue({
+      segments: [],
+      windows: [],
+      detachedCards: [],
+      missingMessageIds: [],
+      status: 'idle',
+      loading: true,
+    });
+    renderPage();
+    expect(screen.queryByText(/Email composer/)).toBeNull();
+    expect(screen.queryByText(/Email actions/)).toBeNull();
   });
 
   it('selects the first Contact with its latest channel and exact Email target', async () => {
@@ -376,7 +857,7 @@ describe('MyahInboxPage contact-first flow', () => {
         instagramConversationId: null,
       }),
     );
-    expect(screen.getByText('Header contact-1')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'contact-1' })).toBeVisible();
     expect(screen.getByText('Email composer thread-2')).toBeVisible();
   });
 
@@ -395,16 +876,13 @@ describe('MyahInboxPage contact-first flow', () => {
     });
   });
 
-  it('flushes the exact Email draft before selecting another Contact', async () => {
+  it('flushes every affected Email draft before selecting another Contact', async () => {
     const { store } = renderPage();
 
     await screen.findByText('Email composer thread-2');
     fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' }));
 
-    expect(flush).toHaveBeenCalledWith({
-      workspaceId: 'workspace-1',
-      threadId: 'thread-2',
-    });
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
     await waitFor(() =>
       expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
         contactId: 'contact-2',
@@ -421,12 +899,13 @@ describe('MyahInboxPage contact-first flow', () => {
     const { store } = renderPage();
 
     await screen.findByText('Email composer thread-2');
-    fireEvent.click(screen.getByRole('button', { name: 'Instagram channel' }));
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
 
-    expect(flush).toHaveBeenCalledWith({
-      workspaceId: 'workspace-1',
-      threadId: 'thread-2',
-    });
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
     expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
       channel: 'INSTAGRAM',
       emailThreadId: null,
@@ -437,8 +916,8 @@ describe('MyahInboxPage contact-first flow', () => {
   it('retains a valid selected Contact on refresh and clears a removed one', async () => {
     const { store } = renderPage();
 
-    await screen.findByText('Header contact-1');
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh contacts' }));
+    await screen.findByRole('heading', { name: 'contact-1' });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
     await waitFor(() =>
       expect(refreshContacts).toHaveBeenCalledWith('contact-1'),
     );
@@ -450,7 +929,7 @@ describe('MyahInboxPage contact-first flow', () => {
       status: 'success',
       selectedContact: null,
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh contacts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
 
     await waitFor(() =>
       expect(store.get(myahInboxContactSelectionState.atom)).toEqual(
@@ -476,8 +955,8 @@ describe('MyahInboxPage contact-first flow', () => {
     refreshContacts.mockReturnValueOnce(deferred.promise);
     const { store } = renderPage();
 
-    await screen.findByText('Header contact-1');
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh contacts' }));
+    await screen.findByRole('heading', { name: 'contact-1' });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
     fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' }));
     await act(async () => {
       deferred.resolve({ status: 'success', selectedContact: contacts[0] });
@@ -486,6 +965,31 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
       'contact-2',
     );
+  });
+
+  it('does not let a completed old Creator link retarget the currently selected contact', async () => {
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [contact('contact-unmatched', 'EMAIL', false), contacts[1]],
+    });
+    const { store } = renderPage();
+    await screen.findByText('Email composer thread-2');
+    const oldCompletion = mockContactLinked;
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' })),
+    );
+    refreshContacts.mockClear();
+    refreshContacts.mockResolvedValue({
+      status: 'success',
+      selectedContact: contact('contact-linked', 'EMAIL'),
+    });
+    await act(async () => oldCompletion('contact-linked'));
+    expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+      contactId: 'contact-2',
+      channel: 'INSTAGRAM',
+    });
+    expect(screen.getByText('Instagram timeline contact-2')).toBeVisible();
+    expect(refreshContacts).not.toHaveBeenCalled();
   });
 
   it('refreshes and preserves the exact target after explicit Creator link', async () => {
@@ -499,7 +1003,7 @@ describe('MyahInboxPage contact-first flow', () => {
     });
     const { store } = renderPage();
 
-    await screen.findByText('Header contact-unmatched');
+    await screen.findByRole('heading', { name: 'contact-unmatched' });
     fireEvent.click(screen.getByRole('button', { name: 'Link Creator' }));
 
     await waitFor(() =>
@@ -524,24 +1028,28 @@ describe('MyahInboxPage contact-first flow', () => {
     });
 
     fireEvent.click(selectedContact);
-    expect(screen.getByText('Header contact-1')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'contact-1' })).toBeVisible();
     expect(screen.getByLabelText('Conversation pane')).toHaveFocus();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Contacts' }));
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Contacts' })),
+    );
     expect(screen.getByLabelText('Contact list')).toBeVisible();
     expect(
       screen.getByRole('option', { name: 'Select contact-1' }),
     ).toHaveFocus();
   });
 
-  it('flushes every workspace draft on page hide and unmount', async () => {
+  it('best-effort flushes on page hide but invalidates authority on forced unmount', async () => {
     const { unmount } = renderPage();
 
-    await screen.findByText('Header contact-1');
+    await screen.findByRole('heading', { name: 'contact-1' });
     act(() => window.dispatchEvent(new Event('pagehide')));
     expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
 
+    flushWorkspace.mockClear();
     unmount();
-    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+    expect(flushWorkspace).not.toHaveBeenCalled();
+    expect(invalidateWorkspace).toHaveBeenCalledWith('workspace-1');
   });
 });

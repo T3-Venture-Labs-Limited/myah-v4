@@ -2,7 +2,10 @@ import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/
 
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { encodeMyahInboxContactEmailCursor } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-cursor.util';
+import {
+  encodeMyahInboxContactEmailCursor,
+  decodeMyahInboxContactEmailCursor,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-cursor.util';
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 
 const rolePermissionConfig = { unionOf: ['role-id'] };
@@ -65,6 +68,7 @@ const rawRows = [
     id: messageAId,
     messageThreadId: emailThreadAId,
     receivedAt: '2026-09-05T10:00:00.000Z',
+    receivedAtCursorTimestamp: '2026-09-05T10:00:00.000000Z',
     subject: 'First subject',
     text: 'First body',
     visibility: 'FULL',
@@ -77,6 +81,7 @@ const rawRows = [
     id: messageBId,
     messageThreadId: emailThreadBId,
     receivedAt: '2026-09-05T11:00:00.000Z',
+    receivedAtCursorTimestamp: '2026-09-05T11:00:00.000000Z',
     subject: 'Visible subject',
     text: 'secret body',
     visibility: 'SUBJECT',
@@ -88,6 +93,18 @@ const rawRows = [
 ];
 
 type EmailQueryService = {
+  listCards: (
+    input: Record<string, unknown>,
+  ) => Promise<Record<string, unknown>>;
+  listCardMessages: (
+    input: Record<string, unknown>,
+  ) => Promise<Record<string, unknown>>;
+  locateMessage: (
+    input: Record<string, unknown>,
+  ) => Promise<Record<string, unknown> | null>;
+  readCard: (
+    input: Record<string, unknown>,
+  ) => Promise<Record<string, unknown>>;
   listMessages: (
     input: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>;
@@ -104,7 +121,7 @@ const loadService = (): EmailQueryServiceConstructor | undefined => {
   }
 };
 
-const buildHarness = (rows = rawRows) => {
+const buildHarness = (rows: unknown[] = rawRows) => {
   const query = jest.fn().mockResolvedValue(rows);
   const builderByObjectName = new Map<string, Record<string, jest.Mock>>();
   const createQueryBuilder = (objectName: string) => {
@@ -183,6 +200,206 @@ const request = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('MyahInboxContactEmailQueryService', () => {
+  it('emits exact SQL cursor text separately from the Date display timestamp', async () => {
+    const exactTimestamp = '2026-09-05T12:30:00.000900Z';
+    const harness = buildHarness([
+      {
+        ...rawRows[0],
+        receivedAt: new Date(exactTimestamp),
+        receivedAtCursorTimestamp: exactTimestamp,
+      },
+    ]);
+    const result = await harness.service.listMessages(request());
+    const edges = result.edges as Array<{
+      cursor: string;
+      node: { receivedAt: string };
+    }>;
+    expect(edges[0].node.receivedAt).toBe('2026-09-05T12:30:00.000Z');
+    expect(
+      decodeMyahInboxContactEmailCursor(edges[0].cursor, workspaceId)
+        .receivedAt,
+    ).toBe(exactTimestamp);
+    expect(harness.query.mock.calls[0][0]).toContain(`to_char(`);
+    expect(harness.query.mock.calls[0][0]).toContain(
+      `message."receivedAt" AT TIME ZONE 'UTC'`,
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`,
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      `AS "receivedAtCursorTimestamp"`,
+    );
+  });
+
+  it('traverses same-millisecond rows and exact timestamp ID ties once with a mocked keyset boundary', async () => {
+    const rows = ['000100', '000900', '000900']
+      .map((fraction, index) => ({
+        ...rawRows[0],
+        id: `00000000-0000-4000-8000-${String(index + 20).padStart(12, '0')}`,
+        receivedAt: new Date('2026-09-05T12:30:00.000Z'),
+        receivedAtCursorTimestamp: `2026-09-05T12:30:00.${fraction}Z`,
+      }))
+      .sort(
+        (left, right) =>
+          left.receivedAtCursorTimestamp.localeCompare(
+            right.receivedAtCursorTimestamp,
+          ) || left.id.localeCompare(right.id),
+      );
+    const harness = buildHarness([]);
+    // This models keyset comparison on exact SQL text; it does not execute PostgreSQL.
+    harness.query.mockImplementation(
+      async (_sql: string, parameters: unknown[]) => {
+        const boundary = parameters.find(
+          (value): value is string =>
+            typeof value === 'string' && value.startsWith('2026-09-05T'),
+        );
+        const boundaryKey = boundary
+          ? (parameters[parameters.indexOf(boundary) + 1] as string)
+          : undefined;
+        const exactBoundary = boundary?.replace(
+          /\.(\d+)Z$/,
+          (_, fraction: string) => `.${fraction.padEnd(6, '0')}Z`,
+        );
+        return rows
+          .filter(
+            (row) =>
+              !boundary ||
+              row.receivedAtCursorTimestamp > exactBoundary! ||
+              (row.receivedAtCursorTimestamp === exactBoundary &&
+                row.id > boundaryKey!),
+          )
+          .slice(0, Number(parameters[parameters.length - 1]));
+      },
+    );
+    const seen: string[] = [];
+    let after: string | undefined;
+    let hasNextPage = true;
+    for (let page = 0; page < rows.length + 1 && hasNextPage; page++) {
+      const result = await harness.service.listMessages(
+        request({ first: 1, after }),
+      );
+      const edges = result.edges as Array<{ cursor: string }>;
+      const pageInfo = result.pageInfo as {
+        hasNextPage: boolean;
+        endCursor: string | null;
+      };
+      expect(edges).toHaveLength(1);
+      seen.push(
+        decodeMyahInboxContactEmailCursor(edges[0].cursor, workspaceId)
+          .messageId,
+      );
+      after = pageInfo.endCursor!;
+      hasNextPage = pageInfo.hasNextPage;
+    }
+    expect(hasNextPage).toBe(false);
+    expect(seen).toEqual(rows.map((row) => row.id));
+    expect(new Set(seen).size).toBe(rows.length);
+    expect(
+      harness.query.mock.calls.slice(1).map(([, parameters]) => parameters),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([rows[0].receivedAtCursorTimestamp, rows[0].id]),
+      ]),
+    );
+  });
+
+  it('maps a single authorized card envelope without changing legacy message paging', async () => {
+    const card = {
+      threadId: emailThreadAId,
+      rootMessageId: messageAId,
+      startTimestamp: '2026-09-01T00:00:00.123456Z',
+      subject: 'subject',
+      campaignLabel: null,
+      historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+    };
+    const harness = buildHarness([
+      {
+        authorized: true,
+        orderingUnavailable: false,
+        rootChanged: false,
+        cursorValid: true,
+        fingerprint: 'a'.repeat(32),
+        snapshotAt: '2026-09-08T00:00:00.123456Z',
+        latestThreadId: emailThreadAId,
+        cards: [card],
+        hasOlderCards: false,
+      },
+    ]);
+    await expect(
+      (async () => harness.service.listCards(request()))(),
+    ).resolves.toMatchObject({
+      cards: [card],
+      latestThreadId: emailThreadAId,
+      olderCursor: null,
+      snapshot: expect.any(String),
+    });
+    expect(harness.query).toHaveBeenCalledTimes(1);
+  });
+  it('reads exact authorized cards and returns null for a missing message location', async () => {
+    const harness = buildHarness([
+      {
+        authorized: true,
+        orderingUnavailable: false,
+        rootChanged: false,
+        cursorValid: true,
+        fingerprint: 'a'.repeat(32),
+        snapshotAt: '2026-09-08T00:00:00.123456Z',
+        latestThreadId: null,
+        cards: [],
+        card: null,
+        page: null,
+        hasOlderCards: false,
+      },
+    ]);
+    const head = await harness.service.listCards(request());
+    await expect(
+      (async () =>
+        harness.service.readCard(request({ threadId: emailThreadAId })))(),
+    ).resolves.toMatchObject({ card: null, snapshot: expect.any(String) });
+    await expect(
+      (async () =>
+        harness.service.locateMessage(
+          request({ messageId: messageAId, snapshot: head.snapshot }),
+        ))(),
+    ).resolves.toBeNull();
+    await expect(
+      (async () =>
+        harness.service.listCardMessages(
+          request({ threadId: emailThreadAId, snapshot: head.snapshot }),
+        ))(),
+    ).rejects.toThrow('Inbox card is not readable');
+  });
+
+  it.each([
+    [{ authorized: false }, 'Inbox member or contact is not readable'],
+    [{ orderingUnavailable: true }, 'Inbox history ordering is unavailable'],
+    [{ rootChanged: true }, 'Inbox history changed; reload history'],
+    [{ cursorValid: false }, 'Invalid Inbox history cursor'],
+    [
+      { snapshotAt: '2026-09-08T00:00:00.123Z' },
+      'Inbox timestamp projection is unavailable',
+    ],
+  ])(
+    'rejects an invalid envelope before returning IDs',
+    async (failure, message) => {
+      const harness = buildHarness([
+        {
+          authorized: true,
+          orderingUnavailable: false,
+          rootChanged: false,
+          cursorValid: true,
+          cards: [],
+          snapshotAt: '2026-09-08T00:00:00.123456Z',
+          fingerprint: 'a'.repeat(32),
+          ...failure,
+        },
+      ]);
+      await expect(harness.service.listCards(request())).rejects.toThrow(
+        message,
+      );
+    },
+  );
+
   it('returns one chronological connection across every readable native thread linked to a Creator', async () => {
     const harness = buildHarness();
 

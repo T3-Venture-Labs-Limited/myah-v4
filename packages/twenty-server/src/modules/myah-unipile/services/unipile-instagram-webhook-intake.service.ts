@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from 'crypto';
 import {
   BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -22,6 +23,45 @@ import {
 import { UnipileInstagramAvailabilityService } from 'src/modules/myah-unipile/services/unipile-instagram-availability.service';
 import { UnipileInstagramWebhookQueue } from 'src/modules/myah-unipile/services/unipile-instagram-webhook.queue';
 
+const MAX_VALIDATION_DIAGNOSTIC_ISSUES = 8;
+const MAX_VALIDATION_DIAGNOSTIC_PATH_DEPTH = 6;
+const MAX_VALIDATION_DIAGNOSTIC_ARRAY_INDEX = 9_999;
+const MAX_VALIDATION_DIAGNOSTIC_UNKNOWN_KEY_COUNT = 50;
+const UNIPILE_INSTAGRAM_WEBHOOK_VALIDATION_FAILED =
+  'UNIPILE_INSTAGRAM_WEBHOOK_VALIDATION_FAILED';
+const webhookSchemaFieldNames = new Set([
+  'AccountStatus',
+  'account_id',
+  'account_info',
+  'account_type',
+  'attachments',
+  'attendee_id',
+  'attendee_name',
+  'attendee_profile_url',
+  'attendee_provider_id',
+  'attendees',
+  'chat_id',
+  'event',
+  'feature',
+  'height',
+  'id',
+  'message',
+  'message_id',
+  'mimetype',
+  'name',
+  'profile_url',
+  'sender',
+  'size',
+  'sticker',
+  'timestamp',
+  'type',
+  'unavailable',
+  'url',
+  'user_id',
+  'webhook_name',
+  'width',
+]);
+
 const identifierSchema = z.string().trim().min(1).max(512);
 const timestampSchema = z.iso.datetime({ offset: true }).max(64);
 const supportedMessageEventSchema = z.enum([
@@ -36,7 +76,7 @@ const accountInfoSchema = z
     type: z.literal('INSTAGRAM').optional(),
     user_id: identifierSchema,
   })
-  .strict();
+  .strip();
 const attendeeSchema = z
   .object({
     attendee_id: identifierSchema.optional(),
@@ -46,7 +86,7 @@ const attendeeSchema = z
     name: z.string().trim().min(1).max(512).optional(),
     profile_url: z.string().url().max(2048).optional(),
   })
-  .strict();
+  .strip();
 const attachmentSchema = z
   .object({
     id: identifierSchema.optional(),
@@ -109,6 +149,17 @@ const webhookPayloadSchema = z.union([
 ]);
 
 type WebhookPayload = z.infer<typeof webhookPayloadSchema>;
+type ValidationIssue = {
+  code: string;
+  errors?: readonly unknown[];
+  keys?: readonly unknown[];
+  path: readonly PropertyKey[];
+};
+type ValidationDiagnosticIssue = {
+  code: string;
+  path: string;
+  unrecognizedKeyCount?: number;
+};
 type NormalizedWebhookPayload = {
   accountId: string;
   accountStatus: string | null;
@@ -129,6 +180,10 @@ type ClaimedEvent = {
 
 @Injectable()
 export class UnipileInstagramWebhookIntakeService {
+  private readonly logger = new Logger(
+    UnipileInstagramWebhookIntakeService.name,
+  );
+
   constructor(
     private readonly configService: TwentyConfigService,
     @InjectDataSource()
@@ -146,6 +201,8 @@ export class UnipileInstagramWebhookIntakeService {
 
     const parsedPayload = webhookPayloadSchema.safeParse(input.body);
     if (!parsedPayload.success) {
+      this.logValidationFailure(parsedPayload.error.issues);
+
       throw new BadRequestException(
         'Invalid Unipile Instagram webhook payload',
       );
@@ -160,6 +217,76 @@ export class UnipileInstagramWebhookIntakeService {
     await this.webhookQueue.enqueue(claimed.event.id);
 
     return { ok: true, duplicate: claimed.duplicate };
+  }
+
+  private logValidationFailure(issues: readonly ValidationIssue[]): void {
+    const diagnosticIssues: ValidationDiagnosticIssue[] = [];
+
+    this.collectValidationDiagnosticIssues(issues, diagnosticIssues);
+    this.logger.warn(
+      `${UNIPILE_INSTAGRAM_WEBHOOK_VALIDATION_FAILED} ${JSON.stringify({ issues: diagnosticIssues })}`,
+    );
+  }
+
+  private collectValidationDiagnosticIssues(
+    issues: readonly ValidationIssue[],
+    diagnosticIssues: ValidationDiagnosticIssue[],
+  ): void {
+    for (const issue of issues) {
+      if (diagnosticIssues.length >= MAX_VALIDATION_DIAGNOSTIC_ISSUES) {
+        return;
+      }
+      if (issue.code === 'invalid_union' && Array.isArray(issue.errors)) {
+        for (const branchIssues of issue.errors) {
+          if (!Array.isArray(branchIssues)) {
+            continue;
+          }
+          this.collectValidationDiagnosticIssues(
+            branchIssues as ValidationIssue[],
+            diagnosticIssues,
+          );
+          if (diagnosticIssues.length >= MAX_VALIDATION_DIAGNOSTIC_ISSUES) {
+            return;
+          }
+        }
+
+        continue;
+      }
+
+      const diagnosticIssue: ValidationDiagnosticIssue = {
+        code: issue.code,
+        path: this.sanitizeValidationPath(issue.path),
+      };
+      if (issue.code === 'unrecognized_keys' && Array.isArray(issue.keys)) {
+        diagnosticIssue.unrecognizedKeyCount = Math.min(
+          issue.keys.length,
+          MAX_VALIDATION_DIAGNOSTIC_UNKNOWN_KEY_COUNT,
+        );
+      }
+      diagnosticIssues.push(diagnosticIssue);
+    }
+  }
+
+  private sanitizeValidationPath(path: readonly PropertyKey[]): string {
+    let sanitizedPath = '$';
+
+    for (const segment of path.slice(0, MAX_VALIDATION_DIAGNOSTIC_PATH_DEPTH)) {
+      if (typeof segment === 'number' && Number.isSafeInteger(segment)) {
+        sanitizedPath += `[${Math.min(
+          Math.max(segment, 0),
+          MAX_VALIDATION_DIAGNOSTIC_ARRAY_INDEX,
+        )}]`;
+        continue;
+      }
+      if (typeof segment === 'string' && webhookSchemaFieldNames.has(segment)) {
+        sanitizedPath += sanitizedPath === '$' ? segment : `.${segment}`;
+        continue;
+      }
+
+      return sanitizedPath;
+    }
+
+    return sanitizedPath;
   }
 
   private assertSecret(secret: string | undefined): void {

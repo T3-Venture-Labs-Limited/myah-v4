@@ -1,3 +1,8 @@
+import { DiscoveryService } from '@nestjs/core';
+import { UpgradeCommandRegistryService } from 'src/engine/core-modules/upgrade/services/upgrade-command-registry.service';
+import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619348-create-unipile-instagram-foundation';
+import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
+import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619373-backfill-composio-instagram-history.command';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
@@ -49,6 +54,7 @@ const buildWorkspaceCacheGetMock = (
 
 describe('UpgradeStatusService', () => {
   let service: UpgradeStatusService;
+  let getUpgradeSequence: jest.Mock;
   let getLastAttemptedInstanceCommand: jest.Mock;
   let getInferredVersion: jest.Mock;
   let getWorkspaceLastAttemptedCommandName: jest.Mock;
@@ -69,6 +75,7 @@ describe('UpgradeStatusService', () => {
   };
 
   beforeEach(async () => {
+    getUpgradeSequence = jest.fn(() => MOCK_SEQUENCE);
     getLastAttemptedInstanceCommand = jest.fn();
     getInferredVersion = jest.fn(async (name?: string) => {
       if (!name) return null;
@@ -100,7 +107,7 @@ describe('UpgradeStatusService', () => {
         {
           provide: UpgradeSequenceReaderService,
           useValue: {
-            getUpgradeSequence: () => MOCK_SEQUENCE,
+            getUpgradeSequence,
           },
         },
         {
@@ -127,6 +134,47 @@ describe('UpgradeStatusService', () => {
 
     service = module.get(UpgradeStatusService);
   });
+
+  it.each(['completed', 'failed'] as const)(
+    'retains %s old instance and workspace tail health with corrected registry output',
+    async (status) => {
+      getUpgradeSequence.mockReturnValue(
+        buildInstagramSequenceReader().getUpgradeSequence(),
+      );
+      const common = {
+        status,
+        executedByVersion: '2.20.0',
+        errorMessage: status === 'failed' ? 'saved failure' : null,
+        createdAt: new Date('2026-09-12T00:00:00Z'),
+      };
+      getLastAttemptedInstanceCommand.mockResolvedValue({
+        ...common,
+        name: INSTAGRAM_SLOW_D,
+      });
+      mockActiveWorkspaces([{ id: 'ws-1', displayName: 'Saved workspace' }]);
+      getWorkspaceLastAttemptedCommandName.mockResolvedValue(
+        new Map([
+          [
+            'ws-1',
+            {
+              ...common,
+              name: INSTAGRAM_WORKSPACE_D,
+              workspaceId: 'ws-1',
+              isInitial: true,
+            },
+          ],
+        ]),
+      );
+      const expectedHealth =
+        status === 'completed'
+          ? UpgradeHealthEnum.UP_TO_DATE
+          : UpgradeHealthEnum.FAILED;
+      expect((await service.getInstanceStatus()).health).toBe(expectedHealth);
+      expect((await service.getWorkspaceStatuses())[0].health).toBe(
+        expectedHealth,
+      );
+    },
+  );
 
   describe('getInstanceStatus', () => {
     it('should return up-to-date when cursor is at last instance command', async () => {
@@ -409,3 +457,29 @@ describe('UpgradeStatusService', () => {
     });
   });
 });
+
+const INSTAGRAM_SLOW_D =
+  '2.20.0_InvalidateComposioInstagramAuthoritiesSlowInstanceCommand_1799201004000';
+const INSTAGRAM_WORKSPACE_D =
+  '2.20.0_BackfillComposioInstagramHistoryWorkspaceCommand_1799201012000';
+
+// Reflect real command prototypes only; these fixtures never invoke production command bodies.
+const buildInstagramSequenceReader = () => {
+  const providers = [
+    CreateUnipileInstagramFoundationFastInstanceCommand,
+    InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
+    BackfillComposioInstagramHistoryWorkspaceCommand,
+  ].map((metatype) => ({
+    metatype,
+    instance: Object.create(metatype.prototype),
+  }));
+  const registry = new UpgradeCommandRegistryService({
+    getProviders: () => providers,
+  } as unknown as DiscoveryService);
+  registry.onModuleInit();
+  const reader = new UpgradeSequenceReaderService(registry);
+  expect(reader.getUpgradeSequence().map(({ timestamp }) => timestamp)).toEqual(
+    [1789307619348, 1789307619363, 1789307619373],
+  );
+  return reader;
+};

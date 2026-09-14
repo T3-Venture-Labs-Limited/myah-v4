@@ -1,6 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 import { UnipileInstagramChatCheckpointEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-chat-checkpoint.entity';
@@ -9,6 +10,7 @@ import { UnipileInstagramAvailabilityService } from 'src/modules/myah-unipile/se
 import { UnipileInstagramAccountService } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
 import { UnipileInstagramProjectionService } from 'src/modules/myah-unipile/services/unipile-instagram-projection.service';
 import {
+  UNIPILE_FETCH,
   UnipileReadError,
   UnipileV1ClientService,
 } from 'src/modules/myah-unipile/services/unipile-v1-client.service';
@@ -36,6 +38,7 @@ type Message = {
   accountId: string;
   chatId: string;
   senderId: string;
+  isSender?: 0 | 1;
   text: string | null;
   timestamp: string | null;
   seen: boolean;
@@ -111,7 +114,13 @@ const message = (
   properties: Partial<
     Pick<
       Message,
-      'senderId' | 'seen' | 'delivered' | 'hidden' | 'deleted' | 'isEvent'
+      | 'senderId'
+      | 'isSender'
+      | 'seen'
+      | 'delivered'
+      | 'hidden'
+      | 'deleted'
+      | 'isEvent'
     >
   > = {},
 ): Message => ({
@@ -152,6 +161,7 @@ const requireSyncServiceModule = (): SyncServiceModule => {
 };
 
 const createHarness = (input: {
+  realClient?: UnipileV1ClientService;
   runningRun?: Run | null;
   completedRuns?: Run[];
   checkpoints?: Checkpoint[];
@@ -365,7 +375,10 @@ const createHarness = (input: {
             provide: getRepositoryToken(UnipileInstagramChatCheckpointEntity),
             useValue: checkpointRepository,
           },
-          { provide: UnipileV1ClientService, useValue: client },
+          {
+            provide: UnipileV1ClientService,
+            useValue: input.realClient ?? client,
+          },
           {
             provide: UnipileInstagramAccountService,
             useValue: accountService,
@@ -988,6 +1001,12 @@ describe('UnipileInstagramSyncService', () => {
       '2026-09-04T12:00:00.000Z',
     ],
     ['outbound sent', { senderId: binding.instagramUserId }, 'SENT', undefined],
+    [
+      'outbound provider self-sender',
+      { senderId: 'provider-specific-self-sender', isSender: 1 as const },
+      'SENT',
+      undefined,
+    ],
     ['inbound', { senderId: 'attendee-chat-1' }, 'RECEIVED', undefined],
   ])(
     'projects %s messages with the authoritative delivery state',
@@ -1090,4 +1109,213 @@ describe('UnipileInstagramSyncService', () => {
       completedAt: null,
     });
   });
+});
+
+describe('UnipileInstagramSyncService connected timestamp ingestion', () => {
+  const apiBaseUrl = 'https://timestamp.invalid/api/v1/';
+  const rawChat = {
+    object: 'Chat',
+    id: 'chat-1',
+    account_id: binding.unipileAccountId,
+    account_type: 'INSTAGRAM',
+    type: 0,
+    attendee_provider_id: 'attendee-chat-1',
+    name: 'body-sentinel',
+    timestamp: '2024-02-29T12:00:00.123456Z',
+  };
+  const rawMessage = {
+    object: 'Message',
+    id: 'message-1',
+    account_id: binding.unipileAccountId,
+    chat_id: 'chat-1',
+    sender_id: 'attendee-chat-1',
+    is_sender: 0,
+    text: 'body-sentinel',
+    attachments: [],
+    timestamp: '2024-02-29T12:00:00.123456Z',
+  };
+  const reads = [
+    {
+      method: 'listChats',
+      code: 'UNIPILE_CHAT_LIST_UNAVAILABLE',
+      reason: 'Unable to retrieve the requested Instagram chats',
+    },
+    {
+      method: 'getChat',
+      code: 'UNIPILE_CHAT_UNAVAILABLE',
+      reason: 'Unable to retrieve the requested Instagram chat',
+    },
+    {
+      method: 'listMessages',
+      code: 'UNIPILE_MESSAGE_LIST_UNAVAILABLE',
+      reason: 'Unable to retrieve the requested Instagram messages',
+    },
+    {
+      method: 'getMessage',
+      code: 'UNIPILE_MESSAGE_UNAVAILABLE',
+      reason: 'Unable to retrieve the requested Instagram message',
+    },
+  ] as const;
+
+  it.each(reads)(
+    'marks each ACTIVE sweep FAILED at actual $method HTTP200 rejection, not a lifetime retry bound',
+    async (read) => {
+      const malformed = 'not-a-date-timestamp-sentinel';
+      const bodies = [
+        {
+          object: 'ChatList',
+          items: [
+            {
+              ...rawChat,
+              timestamp:
+                read.method === 'listChats' ? malformed : rawChat.timestamp,
+            },
+          ],
+          cursor: null,
+        },
+        {
+          ...rawChat,
+          timestamp: read.method === 'getChat' ? malformed : rawChat.timestamp,
+        },
+        {
+          object: 'MessageList',
+          items: [
+            {
+              ...rawMessage,
+              timestamp:
+                read.method === 'listMessages'
+                  ? malformed
+                  : rawMessage.timestamp,
+            },
+          ],
+          cursor: null,
+        },
+        {
+          ...rawMessage,
+          timestamp:
+            read.method === 'getMessage' ? malformed : rawMessage.timestamp,
+        },
+      ];
+      const routes = [
+        `chats?account_id=${binding.unipileAccountId}&account_type=INSTAGRAM&limit=250`,
+        'chats/chat-1',
+        'chats/chat-1/messages?after=2024-02-28T11%3A00%3A00.000Z&limit=250',
+        'messages/message-1',
+      ];
+      const fetch = jest.fn(async (url: string, init: RequestInit) => {
+        expect(init.method).toBe('GET');
+        const index = routes.findIndex(
+          (route) => url === `${apiBaseUrl}${route}`,
+        );
+        expect(index).toBeGreaterThanOrEqual(0);
+        if (index < 0) throw new Error('Unexpected synthetic route');
+        return new Response(JSON.stringify(bodies[index]), { status: 200 });
+      });
+      const module = await Test.createTestingModule({
+        providers: [
+          UnipileV1ClientService,
+          { provide: UNIPILE_FETCH, useValue: fetch },
+          {
+            provide: UnipileInstagramAvailabilityService,
+            useValue: { assertEnabled: jest.fn(), config: { apiBaseUrl } },
+          },
+          {
+            provide: TwentyConfigService,
+            useValue: {
+              get: jest.fn((key: string) => {
+                expect(key).toBe('UNIPILE_API_KEY');
+                return 'synthetic-timestamp-api-key-secret';
+              }),
+            },
+          },
+        ],
+      }).compile();
+      try {
+        const checkpoint: Checkpoint = {
+          id: 'existing-checkpoint',
+          bindingId,
+          unipileChatId: 'chat-1',
+          completedMessageHighWaterAt: new Date('2024-02-28T12:00:00.000Z'),
+        };
+        const checkpointBefore = { ...checkpoint };
+        const harness = createHarness({
+          realClient: module.get(UnipileV1ClientService),
+          checkpoints: [checkpoint],
+          // Account-status reconciliation is deliberately outside this transport slice.
+          reconciledStatus: 'ACTIVE',
+        });
+        const service = await harness.createService();
+        const rejectedIndex = reads.indexOf(read);
+        const expectedRoutes = routes
+          .slice(0, rejectedIndex + 1)
+          .map((route) => `${apiBaseUrl}${route}`);
+        for (let sweep = 1; sweep <= 2; sweep++) {
+          const result = service.synchronizeBinding(bindingId);
+          await expect(result).rejects.toBeInstanceOf(UnipileReadError);
+          await expect(result).rejects.toMatchObject({
+            status: 200,
+            retryable: false,
+            code: read.code,
+            message: read.reason,
+          });
+          expect(harness.state.runs).toHaveLength(sweep);
+          expect(harness.state.runs[sweep - 1]).toMatchObject({
+            status: 'FAILED',
+            failureCode: read.code,
+            failureReason: read.reason,
+            completedAt: expect.any(Date),
+            completedChatHighWaterAt: null,
+            chatCursor: null,
+            messageCursor: null,
+            currentChatId: rejectedIndex >= 2 ? 'chat-1' : null,
+            currentChatAttendeeId:
+              rejectedIndex >= 2 ? 'attendee-chat-1' : null,
+          });
+          expect(
+            harness.state.savedRuns[harness.state.savedRuns.length - 1],
+          ).toEqual(harness.state.runs[sweep - 1]);
+          expect(JSON.stringify(harness.state.runs)).not.toMatch(
+            /timestamp-sentinel|body-sentinel|synthetic-timestamp-api-key-secret|Zod|issues/,
+          );
+          expect(harness.state.checkpoints.get('chat-1')).toEqual(
+            checkpointBefore,
+          );
+          expect(harness.checkpointRepository.save).not.toHaveBeenCalled();
+          expect(harness.projection.upsertVerifiedChat).toHaveBeenCalledTimes(
+            rejectedIndex >= 2 ? sweep : 0,
+          );
+          if (rejectedIndex >= 2)
+            expect(
+              harness.projection.upsertVerifiedChat,
+            ).toHaveBeenLastCalledWith(
+              expect.objectContaining({
+                chat: expect.objectContaining({ timestamp: rawChat.timestamp }),
+              }),
+            );
+          expect(
+            harness.projection.upsertVerifiedMessage,
+          ).not.toHaveBeenCalled();
+          expect(
+            harness.projection.markCompletedMessageSync,
+          ).not.toHaveBeenCalled();
+          expect(
+            harness.projection.markCompletedChatSync,
+          ).not.toHaveBeenCalled();
+          expect(
+            harness.accountService.reconcileBoundAccountStatus,
+          ).toHaveBeenCalledTimes(sweep);
+          expect(fetch.mock.calls.map(([url]) => url)).toEqual(
+            Array.from({ length: sweep }, () => expectedRoutes).flat(),
+          );
+          expect(harness.queryRunner.query).toHaveBeenLastCalledWith(
+            'SELECT pg_advisory_unlock(hashtext($1))',
+            [`unipile-instagram-sync:${bindingId}`],
+          );
+          expect(harness.queryRunner.release).toHaveBeenCalledTimes(sweep);
+        }
+      } finally {
+        await module.close();
+      }
+    },
+  );
 });

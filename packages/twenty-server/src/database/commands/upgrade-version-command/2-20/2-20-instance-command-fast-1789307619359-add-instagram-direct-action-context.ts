@@ -4,14 +4,11 @@ import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decor
 import { type FastInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/fast-instance-command.interface';
 
 const BINDING = '"core"."actionApprovalBinding"';
-const CONTEXT_CONSTRAINT =
-  '"CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT"';
+const CONTEXT_CONSTRAINT = '"CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT"';
 const RESOLUTION = '"core"."instagramSendOutcomeResolution"';
 
-@RegisteredInstanceCommand('2.20.0', 1799201003000)
-export class AddInstagramDirectActionContextFastInstanceCommand
-  implements FastInstanceCommand
-{
+@RegisteredInstanceCommand('2.20.0', 1789307619359)
+export class AddInstagramDirectActionContextFastInstanceCommand implements FastInstanceCommand {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`ALTER TABLE ${BINDING}
       ADD COLUMN IF NOT EXISTS "interactionContextType" varchar,

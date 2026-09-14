@@ -27,6 +27,7 @@ import { CustomPermissionGuard } from 'src/engine/guards/custom-permission.guard
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 
@@ -40,6 +41,7 @@ export class InstagramMessageResolver {
     private readonly recordAccessService: InstagramMessageRecordAccessService,
     private readonly myahTeamAuthorizationService: MyahTeamAuthorizationService,
     private readonly permissionService: InstagramMessagePermissionService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
   @Mutation(() => InstagramMessageDraftResultDto)
@@ -49,36 +51,38 @@ export class InstagramMessageResolver {
     @AuthUserWorkspaceId() userWorkspaceId: string,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<InstagramMessageDraftResultDto> {
-    const rolePermissionConfig = this.getRolePermissionConfig(
+    return this.executeInAuthenticatedWorkspaceContext(
       workspace,
       userWorkspaceId,
       workspaceMemberId,
+      async (rolePermissionConfig) => {
+        await this.permissionService.assertCanSend({
+          actionKind: input.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
+          rolePermissionConfig,
+          workspaceId: workspace.id,
+        });
+        await this.recordAccessService.assertCanSaveDraft({
+          ...input,
+          workspaceId: workspace.id,
+          rolePermissionConfig,
+        });
+
+        const result = await this.draftService.saveDraft({
+          ...input,
+          workspaceId: workspace.id,
+          workspaceMemberId,
+        });
+        if (result.status === 'CONFLICT') {
+          await this.recordAccessService.assertCanReadDraft({
+            workspaceId: workspace.id,
+            draftId: result.draftId,
+            rolePermissionConfig,
+          });
+        }
+
+        return result;
+      },
     );
-    await this.permissionService.assertCanSend({
-      actionKind: input.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
-      rolePermissionConfig,
-      workspaceId: workspace.id,
-    });
-    await this.recordAccessService.assertCanSaveDraft({
-      ...input,
-      workspaceId: workspace.id,
-      rolePermissionConfig,
-    });
-
-    const result = await this.draftService.saveDraft({
-      ...input,
-      workspaceId: workspace.id,
-      workspaceMemberId,
-    });
-    if (result.status === 'CONFLICT') {
-      await this.recordAccessService.assertCanReadDraft({
-        workspaceId: workspace.id,
-        draftId: result.draftId,
-        rolePermissionConfig,
-      });
-    }
-
-    return result;
   }
 
   @Query(() => InstagramMessageDraftResultDto, { nullable: true })
@@ -88,37 +92,39 @@ export class InstagramMessageResolver {
     @AuthUserWorkspaceId() userWorkspaceId: string,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<InstagramMessageDraftResultDto | null> {
-    const rolePermissionConfig = this.getRolePermissionConfig(
+    return this.executeInAuthenticatedWorkspaceContext(
       workspace,
       userWorkspaceId,
       workspaceMemberId,
+      async (rolePermissionConfig) => {
+        await this.permissionService.assertCanSend({
+          actionKind: input.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
+          rolePermissionConfig,
+          workspaceId: workspace.id,
+        });
+        await this.recordAccessService.assertCanSaveDraft({
+          ...input,
+          workspaceId: workspace.id,
+          draftId: '00000000-0000-4000-8000-000000000000',
+          expectedRevision: 0,
+          rolePermissionConfig,
+        });
+        const result = await this.draftService.getDraftForTarget({
+          ...input,
+          workspaceId: workspace.id,
+        });
+
+        if (result) {
+          await this.recordAccessService.assertCanReadDraft({
+            workspaceId: workspace.id,
+            draftId: result.draftId,
+            rolePermissionConfig,
+          });
+        }
+
+        return result;
+      },
     );
-    await this.permissionService.assertCanSend({
-      actionKind: input.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
-      rolePermissionConfig,
-      workspaceId: workspace.id,
-    });
-    await this.recordAccessService.assertCanSaveDraft({
-      ...input,
-      workspaceId: workspace.id,
-      draftId: '00000000-0000-4000-8000-000000000000',
-      expectedRevision: 0,
-      rolePermissionConfig,
-    });
-    const result = await this.draftService.getDraftForTarget({
-      ...input,
-      workspaceId: workspace.id,
-    });
-
-    if (result) {
-      await this.recordAccessService.assertCanReadDraft({
-        workspaceId: workspace.id,
-        draftId: result.draftId,
-        rolePermissionConfig,
-      });
-    }
-
-    return result;
   }
 
   @Mutation(() => InstagramMessageSendResultDto)
@@ -128,24 +134,26 @@ export class InstagramMessageResolver {
     @AuthUserWorkspaceId() userWorkspaceId: string,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<InstagramMessageSendResultDto> {
-    const rolePermissionConfig = this.getRolePermissionConfig(
+    return this.executeInAuthenticatedWorkspaceContext(
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-    );
-    await this.recordAccessService.assertCanReadDraft({
-      workspaceId: workspace.id,
-      draftId: input.draftId,
-      rolePermissionConfig,
-    });
+      async (rolePermissionConfig) => {
+        await this.recordAccessService.assertCanReadDraft({
+          workspaceId: workspace.id,
+          draftId: input.draftId,
+          rolePermissionConfig,
+        });
 
-    return this.sendService.sendDirect({
-      workspaceId: workspace.id,
-      initiatorUserWorkspaceId: userWorkspaceId,
-      draftId: input.draftId,
-      expectedRevision: input.expectedRevision,
-      rolePermissionConfig,
-    });
+        return this.sendService.sendDirect({
+          workspaceId: workspace.id,
+          initiatorUserWorkspaceId: userWorkspaceId,
+          draftId: input.draftId,
+          expectedRevision: input.expectedRevision,
+          rolePermissionConfig,
+        });
+      },
+    );
   }
 
   @Query(() => InstagramMessageSendStatusDto)
@@ -155,42 +163,46 @@ export class InstagramMessageResolver {
     @AuthUserWorkspaceId() userWorkspaceId: string,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<InstagramMessageSendStatusDto> {
-    const rolePermissionConfig = this.getRolePermissionConfig(
+    return this.executeInAuthenticatedWorkspaceContext(
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-    );
-    const authContext = getWorkspaceAuthContext();
-    const isWorkspaceOperator =
-      isUserAuthContext(authContext) &&
-      this.myahTeamAuthorizationService.isMyahTeamMember(authContext.user);
-    const result =
-      await this.actionApprovalService.getDirectInstagramReceiptForViewer({
-        receiptId: input.receiptId,
-        workspaceId: workspace.id,
-        userWorkspaceId,
-        allowWorkspaceOperator: isWorkspaceOperator,
-      });
-    await this.permissionService.assertCanSend({
-      actionKind: result.actionKind,
-      rolePermissionConfig,
-      workspaceId: workspace.id,
-    });
+      async (rolePermissionConfig) => {
+        const authContext = getWorkspaceAuthContext();
+        const isWorkspaceOperator =
+          isUserAuthContext(authContext) &&
+          this.myahTeamAuthorizationService.isMyahTeamMember(authContext.user);
+        const result =
+          await this.actionApprovalService.getDirectInstagramReceiptForViewer({
+            receiptId: input.receiptId,
+            workspaceId: workspace.id,
+            userWorkspaceId,
+            allowWorkspaceOperator: isWorkspaceOperator,
+          });
+        await this.permissionService.assertCanSend({
+          actionKind: result.actionKind,
+          rolePermissionConfig,
+          workspaceId: workspace.id,
+        });
 
-    return {
-      receiptId: result.receipt.id,
-      state: result.receipt.state,
-      providerCode: result.receipt.providerCode,
-      outcome: result.receipt.outcome,
-    };
+        return {
+          receiptId: result.receipt.id,
+          state: result.receipt.state,
+          providerCode: result.receipt.providerCode,
+          outcome: result.receipt.outcome,
+        };
+      },
+    );
   }
 
-  private getRolePermissionConfig(
+  private async executeInAuthenticatedWorkspaceContext<T>(
     workspace: WorkspaceEntity,
     userWorkspaceId: string,
     workspaceMemberId: string,
-  ): RolePermissionConfig {
+    callback: (rolePermissionConfig: RolePermissionConfig) => Promise<T>,
+  ): Promise<T> {
     const authContext = getWorkspaceAuthContext();
+
     if (
       !isUserAuthContext(authContext) ||
       !authContext.user ||
@@ -202,18 +214,25 @@ export class InstagramMessageResolver {
         'Instagram messaging requires matching authenticated user context',
       );
     }
-    const workspaceContext = getWorkspaceContext();
-    const rolePermissionConfig = resolveRolePermissionConfig({
-      authContext,
-      userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
-      apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
-    });
-    if (!rolePermissionConfig) {
-      throw new ForbiddenException(
-        'Instagram message permissions are required',
-      );
-    }
 
-    return rolePermissionConfig;
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const workspaceContext = getWorkspaceContext();
+        const rolePermissionConfig = resolveRolePermissionConfig({
+          authContext,
+          userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+          apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+        });
+
+        if (!rolePermissionConfig) {
+          throw new ForbiddenException(
+            'Instagram message permissions are required',
+          );
+        }
+
+        return callback(rolePermissionConfig);
+      },
+      authContext,
+    );
   }
 }

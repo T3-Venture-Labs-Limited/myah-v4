@@ -133,6 +133,71 @@ describe('MyahInboxResolver', () => {
     expect(listThreads).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'myahInboxThreads',
+    'updateMyahInboxThread',
+    'saveMyahInboxDraft',
+    'generateMyahInboxReplyProposal',
+  ] as const)(
+    'rejects captured workspace mismatch before %s dispatch',
+    async (operation) => {
+      const dispatch = jest.fn().mockResolvedValue({});
+      const resolver = new MyahInboxResolver(
+        { listThreads: dispatch } as never,
+        {
+          updateMyahInboxThread: dispatch,
+          saveMyahInboxDraft: dispatch,
+        } as never,
+        { generateReplyProposal: dispatch } as never,
+      );
+      await expect(
+        resolver[operation](
+          {
+            threadId: '20202020-0b5c-4178-bed7-d371f6411eaa',
+            expectedWorkspaceId: '20202020-0b5c-4178-bed7-d371f6411eab',
+          } as never,
+          workspace as never,
+          workspaceMemberId,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(dispatch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('guards the exact authoritative shared draft read with a required captured workspace', async () => {
+    const readEmailDraft = jest.fn().mockResolvedValue({
+      workspaceId: workspace.id,
+      threadId: 'thread',
+      revision: 4,
+      body: null,
+    });
+    const resolver = new MyahInboxResolver(
+      { readEmailDraft } as never,
+      {} as never,
+      {} as never,
+    );
+    await expect(
+      (async () =>
+        resolver.myahInboxEmailDraft(
+          'thread',
+          workspace.id,
+          workspace as never,
+          workspaceMemberId,
+        ))(),
+    ).resolves.toMatchObject({ revision: 4, body: null });
+    readEmailDraft.mockClear();
+    await expect(
+      (async () =>
+        resolver.myahInboxEmailDraft(
+          'thread',
+          'other',
+          workspace as never,
+          workspaceMemberId,
+        ))(),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(readEmailDraft).not.toHaveBeenCalled();
+  });
+
   it('accepts oversized public page requests for the service clamp', async () => {
     const input = Object.assign(new MyahInboxThreadsInput(), {
       first: MYAH_INBOX_MAX_PAGE_SIZE + 1,

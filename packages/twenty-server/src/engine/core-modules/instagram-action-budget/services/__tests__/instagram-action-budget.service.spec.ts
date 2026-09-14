@@ -367,7 +367,7 @@ describe('InstagramActionBudgetService', () => {
     expectUsage(usage, {
       dailyUsed: 3,
       hourlyUsed: 1,
-      nextEligibleAt: new Date(dbNow.getTime() + 1),
+      nextEligibleAt: null,
     });
     expect(harness.calls.map(({ sql }) => sql)).toEqual(
       expect.arrayContaining(['SELECT clock_timestamp() AS "dbNow"']),
@@ -389,6 +389,126 @@ describe('InstagramActionBudgetService', () => {
       '"reservedAt" > $3::timestamptz - INTERVAL \'24 hours\'',
     );
     expect(count?.sql).not.toContain('CURRENT_TIMESTAMP');
+  });
+
+  describe.each([
+    {
+      label: 'available with one recent reservation',
+      hourly: 1,
+      older: 0,
+      olderAge: 7_200_000,
+      delay: null,
+      windows: [],
+    },
+    {
+      label: 'hourly-only exhausted',
+      hourly: 10,
+      older: 0,
+      olderAge: 7_200_000,
+      delay: 3_540_000,
+      windows: ['HOURLY'],
+    },
+    {
+      label: 'daily-only exhausted with an earlier daily expiry',
+      hourly: 1,
+      older: 99,
+      olderAge: 84_600_000,
+      delay: 1_800_000,
+      windows: ['DAILY'],
+    },
+    {
+      label: 'both exhausted with daily expiring last',
+      hourly: 10,
+      older: 90,
+      olderAge: 7_200_000,
+      delay: 79_200_000,
+      windows: ['HOURLY', 'DAILY'],
+    },
+    {
+      label: 'both exhausted with hourly expiring last',
+      hourly: 10,
+      older: 90,
+      olderAge: 84_600_000,
+      delay: 3_540_000,
+      windows: ['HOURLY', 'DAILY'],
+    },
+  ])('$label eligibility', ({ hourly, older, olderAge, delay, windows }) => {
+    const setup = () => {
+      const context = createService();
+      for (let index = 0; index < hourly; index++)
+        context.harness.addReservation();
+      for (let index = 0; index < older; index++) {
+        context.harness.addReservation({
+          reservedAt: new Date(dbNow.getTime() - olderAge),
+        });
+      }
+      return context;
+    };
+    const expectedUsage = {
+      dailyLimit: 100,
+      dailyRemaining: 100 - hourly - older,
+      dailyUsed: hourly + older,
+      hourlyLimit: 10,
+      hourlyRemaining: 10 - hourly,
+      hourlyUsed: hourly,
+      nextEligibleAt: delay === null ? null : new Date(dbNow.getTime() + delay),
+    };
+
+    it('inspects only exhausted windows without mutating capacity', async () => {
+      const { harness, service } = setup();
+      await expect(
+        service.inspectUsage({ instagramAccountRecordId, workspaceId }),
+      ).resolves.toEqual(expectedUsage);
+      expect(harness.manager.save).not.toHaveBeenCalled();
+      expect(harness.reservations).toHaveLength(hourly + older);
+    });
+
+    it('preserves fresh reservation or persisted block results', async () => {
+      const { harness, service } = setup();
+      const result = await service.reserve(reserveInput());
+      if (windows.length === 0) {
+        expect(result).toEqual({
+          status: 'RESERVED',
+          reservationId: expect.any(String),
+        });
+        expect(harness.reservations).toHaveLength(hourly + older + 1);
+        expect(harness.reservations[hourly + older]).toMatchObject({
+          reservedAt: dbNow,
+        });
+        expect(harness.blocks).toEqual([]);
+        await expect(
+          service.inspectUsage({ instagramAccountRecordId, workspaceId }),
+        ).resolves.toEqual({
+          ...expectedUsage,
+          hourlyUsed: hourly + 1,
+          hourlyRemaining: 9 - hourly,
+          dailyUsed: hourly + older + 1,
+          dailyRemaining: 99 - hourly - older,
+        });
+      } else {
+        expect(result).toEqual({
+          ...expectedUsage,
+          blockedWindows: windows,
+          code: 'INSTAGRAM_ACTION_LIMIT_REACHED',
+          status: 'BLOCKED',
+        });
+        expect(harness.reservations).toHaveLength(hourly + older);
+        expect(harness.blocks).toHaveLength(1);
+        expect(harness.blocks[0]).toMatchObject({
+          ...expectedUsage,
+          blockedWindows: windows,
+        });
+        expect(harness.receipts[0].state).toBe(
+          ActionExecutionReceiptState.BLOCKED,
+        );
+        await expect(
+          service.getBlockedResult({
+            actionExecutionReceiptId: receiptId,
+            workspaceId,
+          }),
+        ).resolves.toEqual(result);
+      }
+    });
   });
 
   it.each([

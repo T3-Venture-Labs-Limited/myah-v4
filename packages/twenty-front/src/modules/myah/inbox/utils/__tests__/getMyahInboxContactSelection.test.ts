@@ -43,6 +43,16 @@ const contact: MyahInboxContact = {
 };
 
 describe('getMyahInboxContactSelection', () => {
+  it('does not substitute activity order for unresolved outreach order', () => {
+    expect(
+      getMyahInboxSelectionForChannel({
+        workspaceId: 'workspace-1',
+        contact,
+        channel: 'EMAIL',
+        previousSelection: null,
+      }).emailThreadId,
+    ).toBeNull();
+  });
   it('defaults a new Contact to its latest available channel and exact target', () => {
     expect(
       getMyahInboxContactSelection({
@@ -59,7 +69,7 @@ describe('getMyahInboxContactSelection', () => {
     });
   });
 
-  it('preserves a valid exact Email target across refresh and falls back deterministically', () => {
+  it('preserves a pinned exact Email target despite partial contact membership', () => {
     const previousSelection = {
       workspaceId: 'workspace-1',
       contactId: 'contact-1',
@@ -88,7 +98,7 @@ describe('getMyahInboxContactSelection', () => {
         },
         previousSelection,
       }).emailThreadId,
-    ).toBe('thread-2');
+    ).toBe('thread-1');
   });
 
   it('clears Email authority immediately on Instagram and blocks an ambiguous target', () => {

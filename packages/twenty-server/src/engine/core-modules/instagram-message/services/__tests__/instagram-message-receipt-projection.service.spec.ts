@@ -24,14 +24,14 @@ const authority = buildInstagramMessageActionAuthority({
     id: draftId,
     revision: 2,
     body: 'Hello creator',
-    kind: 'START_CHAT',
+    kind: 'REPLY',
     creatorRecordId: '00000000-0000-4000-8000-000000000004',
     recipientUsername: 'creator.name',
     recipientSourceValues: [
       { field: 'instagramUsername', value: '@Creator.Name' },
     ],
-    conversationRecordId: null,
-    providerConversationId: null,
+    conversationRecordId: '00000000-0000-4000-8000-000000000008',
+    providerConversationId: 'provider-chat',
     recipientProviderId: 'creator-provider-id',
   },
   account: {
@@ -172,6 +172,25 @@ describe('InstagramMessageReceiptProjectionService', () => {
     );
   });
 
+  it('accepts validated provider self-sender evidence when the provider sender ID differs from the account ID', async () => {
+    const harness = buildHarness();
+    harness.client.getMessage.mockResolvedValue({
+      ...harness.message,
+      senderId: 'provider-specific-self-sender',
+      isSender: 1,
+    });
+
+    await expect(
+      harness.writer.project(projectionInput),
+    ).resolves.toBeUndefined();
+    expect(harness.projection.upsertVerifiedMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({ isSender: 1 }),
+      }),
+    );
+    expect(harness.draftService.markSent).toHaveBeenCalledTimes(1);
+  });
+
   it('fails closed before projection when the bound provider message content does not match approval', async () => {
     const harness = buildHarness();
     harness.client.getMessage.mockResolvedValue({
@@ -185,4 +204,86 @@ describe('InstagramMessageReceiptProjectionService', () => {
     expect(harness.projection.upsertVerifiedChat).not.toHaveBeenCalled();
     expect(harness.projection.upsertVerifiedMessage).not.toHaveBeenCalled();
   });
+});
+
+describe('InstagramMessageReceiptProjectionService first-contact safety', () => {
+  it.each(['creator.name', '17841400000000000', 'creator-provider-id'])(
+    'rejects apparently matching historical START identity %s before reconstruction or provider reads',
+    async (identity) => {
+      const harness = buildHarness();
+      const legacyAuthority = buildInstagramMessageActionAuthority({
+        ...authority.expectedActionBinding,
+        ...authority.canonicalGraph,
+        evidenceLinks: [...authority.expectedActionBinding.evidenceLinks],
+        draft: {
+          ...authority.canonicalGraph.draft,
+          kind: 'START_CHAT',
+          conversationRecordId: null,
+          providerConversationId: null,
+          recipientUsername: identity,
+          recipientProviderId: identity,
+          recipientSourceValues: [
+            { field: 'instagramUsername', value: identity },
+          ],
+        },
+      });
+      harness.authorityReader.rebuildForReconciliation.mockResolvedValue(
+        legacyAuthority,
+      );
+      harness.client.getChat.mockResolvedValue({
+        ...harness.chat,
+        attendeeProviderId: identity,
+      });
+      const input = {
+        ...projectionInput,
+        ...legacyAuthority.expectedActionBinding,
+      };
+      const before = structuredClone(input);
+      await expect(harness.writer.project(input)).rejects.toThrow(
+        'Instagram first-contact projection is unavailable',
+      );
+      expect(input).toEqual(before);
+      expect(
+        harness.authorityReader.rebuildForReconciliation,
+      ).not.toHaveBeenCalled();
+      expect(harness.bindingRepository.findOne).not.toHaveBeenCalled();
+      expect(harness.client.getChat).not.toHaveBeenCalled();
+      expect(harness.client.getMessage).not.toHaveBeenCalled();
+      expect(harness.projection.upsertVerifiedChat).not.toHaveBeenCalled();
+      expect(harness.projection.upsertVerifiedMessage).not.toHaveBeenCalled();
+      expect(harness.draftService.markSent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    {
+      override: { actionName: 'send_inbox_reply' },
+      error: 'An Instagram message v2 projection is required',
+    },
+    {
+      override: { providerExternalMessageId: null },
+      error: 'Accepted Instagram provider identifiers are unavailable',
+    },
+    {
+      override: { providerThreadExternalId: null },
+      error: 'Accepted Instagram provider identifiers are unavailable',
+    },
+  ])(
+    'retains existing validation before the START guard: $error',
+    async ({ override, error }) => {
+      const harness = buildHarness();
+      await expect(
+        harness.writer.project({
+          ...projectionInput,
+          actionKind: 'START_CHAT',
+          ...override,
+        }),
+      ).rejects.toThrow(error);
+      expect(
+        harness.authorityReader.rebuildForReconciliation,
+      ).not.toHaveBeenCalled();
+      expect(harness.client.getChat).not.toHaveBeenCalled();
+      expect(harness.draftService.markSent).not.toHaveBeenCalled();
+    },
+  );
 });

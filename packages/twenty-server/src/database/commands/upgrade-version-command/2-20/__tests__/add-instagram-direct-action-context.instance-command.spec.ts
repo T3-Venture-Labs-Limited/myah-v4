@@ -16,9 +16,7 @@ type CommandModule = {
 
 const loadCommandModule = (): CommandModule | undefined => {
   try {
-    return require(
-      'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201003000-add-instagram-direct-action-context'
-    ) as CommandModule;
+    return require('src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619359-add-instagram-direct-action-context') as CommandModule;
   } catch {
     return undefined;
   }
@@ -50,7 +48,7 @@ describe('AddInstagramDirectActionContextFastInstanceCommand', () => {
       ),
     ).toEqual({
       runAfterWorkspace: false,
-      timestamp: 1799201003000,
+      timestamp: 1789307619359,
       type: 'fast',
       version: '2.20.0',
     });
@@ -65,33 +63,29 @@ describe('AddInstagramDirectActionContextFastInstanceCommand', () => {
       .map(([statement]) => statement as string)
       .join('\n');
 
-    expect(sql).toContain(
-      'ALTER COLUMN "threadId" DROP NOT NULL',
-    );
+    expect(sql).toContain('ALTER COLUMN "threadId" DROP NOT NULL');
     expect(sql).toContain(
       'ADD COLUMN IF NOT EXISTS "interactionContextType" varchar',
     );
     expect(sql).toContain(
       'ADD COLUMN IF NOT EXISTS "interactionContextId" uuid',
     );
-    expect(sql).toContain(
-      'ADD COLUMN IF NOT EXISTS "actionKind" varchar',
-    );
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "actionKind" varchar');
     expect(sql).toContain(
       '"interactionContextType" = \'MYAH_INBOX_INSTAGRAM_DRAFT\'',
     );
     expect(sql).toContain('"actionName" = \'send_instagram_message\'');
     expect(sql).toContain('"actionVersion" = 2');
-    expect(sql).toContain(
-      '"actionKind" IN (\'START_CHAT\', \'REPLY\')',
-    );
+    expect(sql).toContain("\"actionKind\" IN ('START_CHAT', 'REPLY')");
     expect(sql).toMatch(
       /"actionName" <> 'send_instagram_message'[\s\S]*"actionKind" IS NULL/,
     );
     expect(sql).toMatch(
       /"threadId" IS NULL[\s\S]*"interactionContextId" = "draftId"/,
     );
-    expect(sql).toMatch(/"threadId" IS NOT NULL[\s\S]*"interactionContextType" IS NULL[\s\S]*"interactionContextId" IS NULL/);
+    expect(sql).toMatch(
+      /"threadId" IS NOT NULL[\s\S]*"interactionContextType" IS NULL[\s\S]*"interactionContextId" IS NULL/,
+    );
   });
 
   it('creates immutable receipt-linked Instagram send outcome resolutions', async () => {
@@ -106,9 +100,7 @@ describe('AddInstagramDirectActionContextFastInstanceCommand', () => {
     expect(sql).toContain(
       'CREATE TABLE IF NOT EXISTS "core"."instagramSendOutcomeResolution"',
     );
-    expect(sql).toContain(
-      'UNIQUE ("actionExecutionReceiptId")',
-    );
+    expect(sql).toContain('UNIQUE ("actionExecutionReceiptId")');
     expect(sql).toContain(
       'FOREIGN KEY ("actionExecutionReceiptId") REFERENCES "core"."actionExecutionReceipt"("id") ON DELETE RESTRICT',
     );
@@ -116,20 +108,20 @@ describe('AddInstagramDirectActionContextFastInstanceCommand', () => {
       'FOREIGN KEY ("resolvedByUserWorkspaceId") REFERENCES "core"."userWorkspace"("id") ON DELETE RESTRICT',
     );
     expect(sql).toContain(
-      'CHECK ("outcome" IN (\'CONFIRMED_SENT\', \'CLEARED_NOT_SENT\'))',
+      "CHECK (\"outcome\" IN ('CONFIRMED_SENT', 'CLEARED_NOT_SENT'))",
     );
     expect(sql).toContain('"evidenceTypes" text[] NOT NULL');
     expect(sql).toContain('"evidenceDigests" varchar(64)[] NOT NULL');
   });
 
   it('refuses rollback when direct contexts exist before restoring legacy nullability', async () => {
-    const query = jest
-      .fn()
-      .mockResolvedValueOnce([{ count: 1 }]);
+    const query = jest.fn().mockResolvedValueOnce([{ count: 1 }]);
 
     await expect(
       getCommand().down({ query } as unknown as QueryRunner),
-    ).rejects.toThrow('Cannot roll back populated Instagram direct action contexts');
+    ).rejects.toThrow(
+      'Cannot roll back populated Instagram direct action contexts',
+    );
     expect(query).toHaveBeenCalledTimes(1);
   });
 
@@ -142,7 +134,9 @@ describe('AddInstagramDirectActionContextFastInstanceCommand', () => {
 
     await getCommand().down({ query } as unknown as QueryRunner);
 
-    const statements = query.mock.calls.map(([statement]) => statement as string);
+    const statements = query.mock.calls.map(
+      ([statement]) => statement as string,
+    );
     const sql = statements.join('\n');
     const setNotNullIndex = statements.findIndex((statement) =>
       statement.includes('ALTER COLUMN "threadId" SET NOT NULL'),

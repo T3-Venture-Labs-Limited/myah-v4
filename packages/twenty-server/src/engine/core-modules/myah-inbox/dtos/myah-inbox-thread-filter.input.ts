@@ -6,8 +6,10 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Min,
 } from 'class-validator';
+import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 
 export enum MyahInboxState {
   NEEDS_REPLY = 'NEEDS_REPLY',
@@ -26,6 +28,11 @@ registerEnumType(MyahInboxSnoozeStatus, { name: 'MyahInboxSnoozeStatus' });
 
 @ArgsType()
 export class MyahInboxThreadsInput {
+  @Field(() => UUIDScalarType, { nullable: true })
+  @IsOptional()
+  @IsUUID()
+  expectedWorkspaceId?: string | null;
+
   @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { type Repository } from 'typeorm';
+import { type QueryRunner, type Repository } from 'typeorm';
 
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
@@ -11,6 +11,7 @@ import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { InstagramMessageDraftLockService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft-lock.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 export type SaveInstagramMessageDraftInput = {
@@ -132,7 +133,7 @@ export class InstagramMessageDraftService {
   ): Promise<SaveInstagramMessageDraftResult> {
     const body = input.body.trim();
     if (
-      !body ||
+      (!body && input.expectedRevision === 0) ||
       !Number.isSafeInteger(input.expectedRevision) ||
       input.expectedRevision < 0
     ) {
@@ -156,10 +157,15 @@ export class InstagramMessageDraftService {
         const schemaName = getWorkspaceSchemaName(workspace.id);
 
         return dataSource.transaction(async (manager) => {
-          const target = await this.resolveTarget(manager, schemaName, input);
+          const target = await this.resolveTarget(
+            dataSource,
+            manager.queryRunner,
+            schemaName,
+            input,
+          );
 
           if (input.expectedRevision === 0) {
-            const [created] = await manager.query<SavedDraftRow[]>(
+            const [created] = await dataSource.query<SavedDraftRow[]>(
               `INSERT INTO "${schemaName}"."_myahInstagramReplyDraft" (
                  "id", "name", "title", "body", "kind", "status", "source",
                  "creatorId", "conversationId", "recipientUsername",
@@ -186,17 +192,21 @@ export class InstagramMessageDraftService {
                 target.recipientProviderId,
                 input.workspaceMemberId,
               ],
+              manager.queryRunner,
+              { shouldBypassPermissionChecks: true },
             );
 
             if (created) return this.toResult('SAVED', created);
 
-            const [current] = await manager.query<SavedDraftRow[]>(
+            const [current] = await dataSource.query<SavedDraftRow[]>(
               `SELECT "id", "revision", "body"
                FROM "${schemaName}"."_myahInstagramReplyDraft"
                WHERE "id" = $1
                  AND "deletedAt" IS NULL
                LIMIT 1`,
               [input.draftId],
+              manager.queryRunner,
+              { shouldBypassPermissionChecks: true },
             );
             if (!current) {
               throw new Error('Instagram message draft is unavailable');
@@ -205,7 +215,7 @@ export class InstagramMessageDraftService {
             return this.toResult('CONFLICT', current);
           }
 
-          const [saved] = await manager.query<SavedDraftRow[]>(
+          const [savedRows] = await dataSource.query<[SavedDraftRow[], number]>(
             `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
              SET "body" = $3,
                  "kind" = '${input.kind}',
@@ -234,16 +244,21 @@ export class InstagramMessageDraftService {
               target.recipientProviderId,
               input.workspaceMemberId,
             ],
+            manager.queryRunner,
+            { shouldBypassPermissionChecks: true },
           );
+          const [saved] = savedRows;
           if (saved) return this.toResult('SAVED', saved);
 
-          const [current] = await manager.query<SavedDraftRow[]>(
+          const [current] = await dataSource.query<SavedDraftRow[]>(
             `SELECT "id", "revision", "body"
              FROM "${schemaName}"."_myahInstagramReplyDraft"
              WHERE "id" = $1
                AND "deletedAt" IS NULL
              LIMIT 1`,
             [input.draftId],
+            manager.queryRunner,
+            { shouldBypassPermissionChecks: true },
           );
           if (!current)
             throw new Error('Instagram message draft is unavailable');
@@ -266,12 +281,14 @@ export class InstagramMessageDraftService {
         await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
       const schemaName = getWorkspaceSchemaName(workspace.id);
       await dataSource.transaction(async (manager) => {
-        const [draft] = await manager.query<Array<{ body: string | null }>>(
+        const [draft] = await dataSource.query<Array<{ body: string | null }>>(
           `SELECT "body"
              FROM "${schemaName}"."_myahInstagramReplyDraft"
              WHERE "id" = $1 AND "deletedAt" IS NULL
              LIMIT 1`,
           [input.draftId],
+          manager.queryRunner,
+          { shouldBypassPermissionChecks: true },
         );
         if (
           !draft?.body ||
@@ -279,7 +296,7 @@ export class InstagramMessageDraftService {
         ) {
           throw new Error('Instagram message draft content changed');
         }
-        await manager.query(
+        await dataSource.query(
           `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
              SET "status" = 'SENT',
                  "sentAt" = COALESCE("sentAt", NOW()),
@@ -287,13 +304,16 @@ export class InstagramMessageDraftService {
              WHERE "id" = $1
                AND "deletedAt" IS NULL`,
           [input.draftId],
+          manager.queryRunner,
+          { shouldBypassPermissionChecks: true },
         );
       });
     }, buildSystemAuthContext({ workspace }));
   }
 
   private async resolveTarget(
-    manager: { query: <T>(sql: string, parameters?: unknown[]) => Promise<T> },
+    dataSource: GlobalWorkspaceDataSource,
+    queryRunner: QueryRunner | undefined,
     schemaName: string,
     input: SaveInstagramMessageDraftInput,
   ): Promise<DraftTarget> {
@@ -303,7 +323,7 @@ export class InstagramMessageDraftService {
           'FIRST_MESSAGE draft requires a Creator and no conversation',
         );
       }
-      const [creator] = await manager.query<
+      const [creator] = await dataSource.query<
         Array<{
           instagramUsername: string | null;
           instagramUrl: string | null;
@@ -311,10 +331,12 @@ export class InstagramMessageDraftService {
         }>
       >(
         `SELECT "instagramUsername", "instagramUrl", "instagramLinkPrimaryLinkUrl"
-         FROM "${schemaName}"."_creator"
+         FROM "${schemaName}"."creator"
          WHERE "id" = $1 AND "deletedAt" IS NULL
          LIMIT 1`,
         [input.creatorRecordId],
+        queryRunner,
+        { shouldBypassPermissionChecks: true },
       );
       if (!creator) throw new Error('Creator is unavailable');
       const recipient = resolveInstagramRecipient({
@@ -336,7 +358,7 @@ export class InstagramMessageDraftService {
     if (!input.conversationRecordId) {
       throw new Error('Active Unipile conversation is unavailable');
     }
-    const [conversation] = await manager.query<
+    const [conversation] = await dataSource.query<
       Array<{
         id: string;
         creatorId: string | null;
@@ -355,20 +377,45 @@ export class InstagramMessageDraftService {
          AND "deletedAt" IS NULL
        LIMIT 1`,
       [input.conversationRecordId],
+      queryRunner,
+      { shouldBypassPermissionChecks: true },
     );
     if (
       !conversation ||
       !conversation.creatorId ||
-      !conversation.recipientUsername?.trim() ||
       !conversation.recipientIgsid?.trim()
     ) {
       throw new Error('Active Unipile conversation is unavailable');
     }
 
+    const [creator] = await dataSource.query<
+      Array<{
+        instagramUsername: string | null;
+        instagramUrl: string | null;
+        instagramLinkPrimaryLinkUrl: string | null;
+      }>
+    >(
+      `SELECT "instagramUsername", "instagramUrl", "instagramLinkPrimaryLinkUrl"
+       FROM "${schemaName}"."creator"
+       WHERE "id" = $1 AND "deletedAt" IS NULL
+       LIMIT 1`,
+      [conversation.creatorId],
+      queryRunner,
+      { shouldBypassPermissionChecks: true },
+    );
+    if (!creator) throw new Error('Creator is unavailable');
+    const recipient = resolveInstagramRecipient({
+      instagramUsername: creator.instagramUsername,
+      instagramUrl: creator.instagramUrl,
+      instagramLink: {
+        primaryLinkUrl: creator.instagramLinkPrimaryLinkUrl,
+      },
+    });
+
     return {
       creatorRecordId: conversation.creatorId,
       conversationRecordId: conversation.id,
-      recipientUsername: conversation.recipientUsername.trim().toLowerCase(),
+      recipientUsername: recipient.normalizedUsername,
       recipientProviderId: conversation.recipientIgsid.trim(),
     };
   }
@@ -393,6 +440,7 @@ export class InstagramMessageDraftService {
     });
     if (!workspace) throw new Error('Workspace is unavailable');
 
+    // SAFETY: this query only needs the workspace identifier required by the system auth context.
     return workspace as unknown as FlatWorkspace;
   }
 }

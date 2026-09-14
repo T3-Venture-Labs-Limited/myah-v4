@@ -1,3 +1,6 @@
+import { useStore } from 'jotai';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useOpenMyahInboxContextInSidePanel } from '@/myah/inbox/hooks/useOpenMyahInboxContextInSidePanel';
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
@@ -61,6 +64,11 @@ export const MyahInboxThreadActions = ({
   onThreadUpdated,
   onUpdateFailed,
 }: MyahInboxThreadActionsProps) => {
+  const store = useStore();
+  const workspaceId = useAtomStateValue(currentWorkspaceState)?.id;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const targetRef = useRef({ workspaceId, threadId: thread.id });
+  targetRef.current = { workspaceId, threadId: thread.id };
   const { objectMetadataItems } = useObjectMetadataItems();
   const { updateThread } = useMyahInboxThreadMutations();
   const { openMyahInboxContextInSidePanel } =
@@ -82,11 +90,18 @@ export const MyahInboxThreadActions = ({
     input: UpdateMyahInboxThreadInput,
     successMessage: string,
   ) => {
+    const isCurrent = () =>
+      Boolean(workspaceId) &&
+      store.get(currentWorkspaceState.atom)?.id === workspaceId &&
+      targetRef.current.workspaceId === workspaceId &&
+      targetRef.current.threadId === input.threadId;
+    if (!workspaceId || !isCurrent()) return;
     try {
-      await updateThread(input);
-      onThreadUpdated(successMessage);
+      await updateThread({ ...input, expectedWorkspaceId: workspaceId });
+      if (isCurrent()) onThreadUpdated(successMessage);
     } catch {
-      onUpdateFailed?.('Could not update the conversation. Try again.');
+      if (isCurrent())
+        onUpdateFailed?.('Could not update the conversation. Try again.');
     }
   };
 

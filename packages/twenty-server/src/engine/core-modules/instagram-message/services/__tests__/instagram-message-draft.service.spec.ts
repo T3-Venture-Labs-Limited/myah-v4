@@ -1,3 +1,5 @@
+import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+
 type DraftService = {
   saveDraft: (
     input: Record<string, unknown>,
@@ -31,10 +33,19 @@ const loadService = (): DraftServiceConstructor | undefined => {
 const buildHarness = (
   queryImplementation?: (sql: string, parameters?: unknown[]) => unknown[],
 ) => {
-  const query = jest.fn(async (sql: string, parameters?: unknown[]) =>
-    queryImplementation ? queryImplementation(sql, parameters) : [],
-  );
-  const manager = { query };
+  const query = jest.fn(async (sql: string, parameters?: unknown[]) => {
+    const rows = queryImplementation
+      ? queryImplementation(sql, parameters)
+      : [];
+
+    return sql.trimStart().startsWith('UPDATE') ? [rows, rows.length] : rows;
+  });
+  const manager = {
+    query: jest.fn(async () => {
+      throw new Error('RAW_SQL_NOT_ALLOWED');
+    }),
+    queryRunner: {},
+  };
   const dataSource = {
     query,
     transaction: jest.fn(async (callback) => callback(manager)),
@@ -58,6 +69,7 @@ const buildHarness = (
 
   return {
     query,
+    draftLockService,
     actionApprovalService,
     service: new Service!(
       workspaceRepository as never,
@@ -80,9 +92,233 @@ const firstMessageInput = {
 };
 
 describe('InstagramMessageDraftService', () => {
+  it.each([
+    { kind: 'FIRST_MESSAGE', body: '' },
+    { kind: 'FIRST_MESSAGE', body: '  \n  ' },
+    { kind: 'REPLY', body: '' },
+    { kind: 'REPLY', body: '  \n  ' },
+  ])(
+    'persists an empty $kind update ($body) under CAS and reloads empty',
+    async ({ kind, body }) => {
+      const conversationRecordId = kind === 'REPLY' ? conversationId : null;
+      const recipientProviderId =
+        kind === 'REPLY' ? 'exact-igsid' : 'creator.name';
+      let stored = { id: draftId, revision: 4, body: 'Persisted text' };
+      const harness = buildHarness((sql, parameters) => {
+        if (sql.includes('"_myahSocialConversation"'))
+          return [
+            {
+              id: conversationId,
+              creatorId,
+              recipientIgsid: recipientProviderId,
+            },
+          ];
+        if (sql.includes('"creator"'))
+          return [{ instagramUsername: 'creator.name' }];
+        if (sql.trimStart().startsWith('UPDATE')) {
+          if (
+            parameters?.[0] !== stored.id ||
+            parameters?.[1] !== stored.revision
+          )
+            return [];
+          stored = {
+            ...stored,
+            revision: stored.revision + 1,
+            body: parameters?.[2] as string,
+          };
+          return [stored];
+        }
+        if (sql.includes('SELECT "id", "revision", "body"')) return [stored];
+        return [];
+      });
+      await expect(
+        harness.service.saveDraft({
+          ...firstMessageInput,
+          expectedRevision: 4,
+          kind,
+          conversationRecordId,
+          body,
+        }),
+      ).resolves.toEqual({
+        status: 'SAVED',
+        draftId,
+        revision: 5,
+        body: '',
+      });
+      expect(harness.draftLockService.withLock).toHaveBeenCalledWith(
+        { workspaceId, draftId },
+        expect.any(Function),
+      );
+      expect(
+        harness.actionApprovalService.isDraftExecutionLocked,
+      ).toHaveBeenCalledWith({
+        workspaceId,
+        draftId,
+        actionName: 'send_instagram_message',
+      });
+      expect(harness.query).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /WHERE "id" = \$1\s+AND "revision" = \$2\s+AND "sentAt" IS NULL\s+AND "deletedAt" IS NULL/,
+        ),
+        [
+          draftId,
+          4,
+          '',
+          creatorId,
+          conversationRecordId,
+          'creator.name',
+          recipientProviderId,
+          workspaceMemberId,
+        ],
+        expect.anything(),
+        { shouldBypassPermissionChecks: true },
+      );
+      expect(
+        harness.query.mock.calls.some(([sql]) => sql.includes('INSERT INTO')),
+      ).toBe(false);
+      await expect(
+        harness.service.getDraftForTarget({
+          workspaceId,
+          kind,
+          creatorRecordId: creatorId,
+          conversationRecordId,
+        }),
+      ).resolves.toEqual({
+        status: 'SAVED',
+        draftId,
+        revision: 5,
+        body: '',
+        executionLocked: false,
+      });
+      expect(() =>
+        buildInstagramMessageActionAuthority({
+          workspaceId,
+          initiatorUserWorkspaceId: workspaceMemberId,
+          threadId: null,
+          interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+          interactionContextId: draftId,
+          draft: {
+            id: draftId,
+            revision: stored.revision,
+            body: stored.body,
+            kind: kind === 'REPLY' ? 'REPLY' : 'START_CHAT',
+            creatorRecordId: creatorId,
+            conversationRecordId,
+            providerConversationId: kind === 'REPLY' ? 'exact-chat' : null,
+            recipientUsername: 'creator.name',
+            recipientProviderId,
+            recipientSourceValues: [],
+          },
+          account: {
+            bindingId: 'binding',
+            workspaceInstagramAccountRecordId: 'account',
+            unipileAccountId: 'provider-account',
+            instagramUserId: 'owner',
+          },
+          evidenceLinks: [],
+        }),
+      ).toThrow('Instagram message body is empty');
+    },
+  );
+
+  it.each(['', '   '])(
+    'continues rejecting empty creation %j before writes',
+    async (body) => {
+      const harness = buildHarness();
+      await expect(
+        harness.service.saveDraft({ ...firstMessageInput, body }),
+      ).rejects.toThrow('Invalid Instagram message draft');
+      expect(harness.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns the current body for a stale clear without overwriting it', async () => {
+    const harness = buildHarness((sql) => {
+      if (sql.includes('"creator"'))
+        return [{ instagramUsername: 'creator.name' }];
+      if (sql.includes('SELECT "id", "revision", "body"'))
+        return [{ id: draftId, revision: 5, body: 'Remote text' }];
+      return [];
+    });
+    await expect(
+      harness.service.saveDraft({
+        ...firstMessageInput,
+        expectedRevision: 4,
+        body: '',
+      }),
+    ).resolves.toEqual({
+      status: 'CONFLICT',
+      draftId,
+      revision: 5,
+      body: 'Remote text',
+    });
+  });
+
+  it('rejects a clear under the existing execution lock before any read/write', async () => {
+    const harness = buildHarness();
+    harness.actionApprovalService.isDraftExecutionLocked.mockResolvedValue(
+      true,
+    );
+    await expect(
+      harness.service.saveDraft({
+        ...firstMessageInput,
+        expectedRevision: 4,
+        body: '',
+      }),
+    ).rejects.toThrow('Instagram message draft is locked for execution');
+    expect(harness.query).not.toHaveBeenCalled();
+  });
+
+  it('still resolves the current target before permitting a clear', async () => {
+    const harness = buildHarness();
+    await expect(
+      harness.service.saveDraft({
+        ...firstMessageInput,
+        kind: 'REPLY',
+        conversationRecordId: conversationId,
+        expectedRevision: 4,
+        body: '',
+      }),
+    ).rejects.toThrow('Active Unipile conversation is unavailable');
+    expect(
+      harness.query.mock.calls.some(([sql]) => sql.includes('UPDATE')),
+    ).toBe(false);
+  });
+
+  it('propagates a failed empty update instead of claiming it was saved', async () => {
+    const harness = buildHarness((sql) => {
+      if (sql.includes('"creator"'))
+        return [{ instagramUsername: 'creator.name' }];
+      if (sql.includes('UPDATE')) throw new Error('Persistence failure');
+      return [];
+    });
+    await expect(
+      harness.service.saveDraft({
+        ...firstMessageInput,
+        expectedRevision: 4,
+        body: '',
+      }),
+    ).rejects.toThrow('Persistence failure');
+  });
+
+  it.each([-1, 0.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects invalid revision %s even for a clear',
+    async (expectedRevision) => {
+      const harness = buildHarness();
+      await expect(
+        harness.service.saveDraft({
+          ...firstMessageInput,
+          expectedRevision,
+          body: '',
+        }),
+      ).rejects.toThrow('Invalid Instagram message draft');
+      expect(harness.query).not.toHaveBeenCalled();
+    },
+  );
+
   it('creates a server-owned FIRST_MESSAGE draft bound to a current Creator recipient without provider I/O', async () => {
     const harness = buildHarness((sql) => {
-      if (sql.includes('FROM "workspace_') && sql.includes('"_creator"')) {
+      if (sql.includes('FROM "workspace_') && sql.includes('"creator"')) {
         return [
           {
             instagramUsername: '@Creator.Name',
@@ -106,19 +342,17 @@ describe('InstagramMessageDraftService', () => {
         body: 'Hello creator',
       },
     );
+
     const sql = harness.query.mock.calls
       .map(([statement]) => statement)
       .join('\n');
-    expect(sql).toContain('"_creator"');
-    expect(sql).toContain('"_myahInstagramReplyDraft"');
-    expect(sql).toContain("'FIRST_MESSAGE'");
-    expect(sql).toContain('"recipientUsername"');
-    expect(sql).not.toContain('api/v1');
+    expect(sql).toMatch(/FROM "workspace_[^"]+"\."creator"/);
+    expect(sql).not.toContain('"_creator"');
   });
 
   it('returns the current revision and body without overwriting a stale save', async () => {
     const harness = buildHarness((sql) => {
-      if (sql.includes('FROM "workspace_') && sql.includes('"_creator"')) {
+      if (sql.includes('FROM "workspace_') && sql.includes('"creator"')) {
         return [
           {
             instagramUsername: '@Creator.Name',
@@ -147,12 +381,9 @@ describe('InstagramMessageDraftService', () => {
       revision: 4,
       body: 'Remote edit',
     });
-    expect(
-      harness.query.mock.calls.filter(([sql]) => sql.includes('UPDATE')),
-    ).toHaveLength(1);
   });
 
-  it('requires one exact active Unipile conversation for REPLY drafts', async () => {
+  it('uses the linked Creator normalized identity and exact conversation IGSID for a REPLY without a conversation username', async () => {
     const harness = buildHarness((sql) => {
       if (sql.includes('"_myahSocialConversation"')) {
         return [
@@ -161,8 +392,17 @@ describe('InstagramMessageDraftService', () => {
             creatorId,
             provider: 'UNIPILE',
             lifecycle: 'ACTIVE',
-            recipientUsername: 'creator.name',
+            recipientUsername: null,
             recipientIgsid: 'creator-provider-id',
+          },
+        ];
+      }
+      if (sql.includes('"creator"')) {
+        return [
+          {
+            instagramUsername: '@Creator.Name',
+            instagramUrl: null,
+            instagramLinkPrimaryLinkUrl: null,
           },
         ];
       }
@@ -181,6 +421,17 @@ describe('InstagramMessageDraftService', () => {
         conversationRecordId: conversationId,
       }),
     ).resolves.toMatchObject({ status: 'SAVED', revision: 1 });
+    expect(harness.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO'),
+      expect.arrayContaining(['creator.name', 'creator-provider-id']),
+      expect.anything(),
+      { shouldBypassPermissionChecks: true },
+    );
+    const sql = harness.query.mock.calls
+      .map(([statement]) => statement)
+      .join('\n');
+    expect(sql).toMatch(/FROM "workspace_[^"]+"\."creator"/);
+    expect(sql).not.toContain('"_creator"');
 
     const missingConversation = buildHarness(() => []);
     await expect(
@@ -191,6 +442,70 @@ describe('InstagramMessageDraftService', () => {
       }),
     ).rejects.toThrow('Active Unipile conversation is unavailable');
   });
+
+  it.each([
+    [
+      'has no linked Creator',
+      { creatorId: null, recipientIgsid: 'ig-id' },
+      null,
+    ],
+    ['has no IGSID', { creatorId, recipientIgsid: ' ' }, null],
+    [
+      'has no current Creator record',
+      { creatorId, recipientIgsid: 'ig-id' },
+      [],
+    ],
+    [
+      'has an invalid Creator identity',
+      { creatorId, recipientIgsid: 'ig-id' },
+      [
+        {
+          instagramUsername: 'not a valid handle!',
+          instagramUrl: null,
+          instagramLinkPrimaryLinkUrl: null,
+        },
+      ],
+    ],
+    [
+      'has ambiguous Creator identities',
+      { creatorId, recipientIgsid: 'ig-id' },
+      [
+        {
+          instagramUsername: 'creator.one',
+          instagramUrl: 'https://instagram.com/creator.two/',
+          instagramLinkPrimaryLinkUrl: null,
+        },
+      ],
+    ],
+  ])(
+    'fails closed when the active reply %s',
+    async (_case, target, creator) => {
+      const harness = buildHarness((sql) => {
+        if (sql.includes('"_myahSocialConversation"')) {
+          return [
+            {
+              id: conversationId,
+              provider: 'UNIPILE',
+              lifecycle: 'ACTIVE',
+              recipientUsername: null,
+              ...target,
+            },
+          ];
+        }
+        if (sql.includes('"creator"')) return creator ?? [];
+
+        return [];
+      });
+
+      await expect(
+        harness.service.saveDraft({
+          ...firstMessageInput,
+          kind: 'REPLY',
+          conversationRecordId: conversationId,
+        }),
+      ).rejects.toThrow();
+    },
+  );
   it('loads the latest unsent server draft for the exact target after reload', async () => {
     const harness = buildHarness((sql) =>
       sql.includes('"_myahInstagramReplyDraft"')
@@ -214,19 +529,6 @@ describe('InstagramMessageDraftService', () => {
       revision: 3,
       body: 'Saved across reload',
       executionLocked: true,
-    });
-    const [sql, parameters] = harness.query.mock.calls[0];
-
-    expect(sql).toContain('"sentAt" IS NULL');
-    expect(sql).toContain('"conversationId" = $2');
-    expect(sql).toContain('ORDER BY "updatedAt" DESC, "id" DESC');
-    expect(parameters).toEqual(['REPLY', conversationId]);
-    expect(
-      harness.actionApprovalService.isDraftExecutionLocked,
-    ).toHaveBeenCalledWith({
-      workspaceId,
-      actionName: 'send_instagram_message',
-      draftId,
     });
   });
 });

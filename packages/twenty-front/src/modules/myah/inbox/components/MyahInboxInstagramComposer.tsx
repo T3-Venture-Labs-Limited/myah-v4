@@ -7,9 +7,21 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { type MyahInboxInstagramChannelState } from '@/myah/inbox/types/MyahInboxContact';
 
 const StyledComposer = styled.section`
+  background: ${themeCssVariables.background.transparent.lighter};
+  border: 1px solid ${themeCssVariables.border.color.light};
+  border-radius: ${themeCssVariables.border.radius.md};
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[3]};
+`;
+
+const StyledActions = styled.div`
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[2]};
+  justify-content: flex-end;
 `;
 
 const StyledError = styled.div`
@@ -51,19 +63,22 @@ export const MyahInboxInstagramComposer = ({
       <TextArea
         ariaLabel={label}
         disabled={isReadOnly}
-        minRows={4}
+        minRows={6}
+        maxRows={6}
         onChange={onBodyChange}
         textAreaId={textAreaId}
         value={body}
       />
       {error && <StyledError role="alert">{error}</StyledError>}
-      <Button
-        disabled={cannotSend}
-        onClick={onReviewAndSend}
-        size="small"
-        title="Review and send"
-        variant="primary"
-      />
+      <StyledActions aria-label="Instagram draft actions">
+        <Button
+          disabled={cannotSend}
+          onClick={onReviewAndSend}
+          size="small"
+          title="Review and send"
+          variant="primary"
+        />
+      </StyledActions>
     </StyledComposer>
   );
 };

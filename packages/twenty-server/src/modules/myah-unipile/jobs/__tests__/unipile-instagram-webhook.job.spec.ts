@@ -1,11 +1,19 @@
 import { Scope } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { UnipileInstagramAvailabilityService } from 'src/modules/myah-unipile/services/unipile-instagram-availability.service';
 
 import {
   MessageQueue,
   PROCESSOR_METADATA,
   PROCESS_METADATA,
 } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import { UnipileReadError } from 'src/modules/myah-unipile/services/unipile-v1-client.service';
+import {
+  UNIPILE_FETCH,
+  UnipileReadError,
+  UnipileV1ClientService,
+} from 'src/modules/myah-unipile/services/unipile-v1-client.service';
 
 type WebhookEvent = {
   id: string;
@@ -49,11 +57,10 @@ type WebhookJob = {
 type WebhookJobModule = {
   UnipileInstagramWebhookJob: new (
     dataSource: { transaction: jest.Mock },
-    client: {
-      getAccount: jest.Mock;
-      getChat: jest.Mock;
-      getMessage: jest.Mock;
-    },
+    client: Pick<
+      UnipileV1ClientService,
+      'getAccount' | 'getChat' | 'getMessage'
+    >,
     projectionService: {
       upsertVerifiedChat: jest.Mock;
       upsertVerifiedMessage: jest.Mock;
@@ -188,7 +195,10 @@ const createHarness = (
 };
 
 describe('UnipileInstagramWebhookJob', () => {
-  const createJob = (harness: WebhookJobHarness) => {
+  const createJob = (
+    harness: WebhookJobHarness,
+    realClient?: UnipileV1ClientService,
+  ) => {
     const jobModule = loadWebhookJobModule();
 
     expect(jobModule).toBeDefined();
@@ -199,13 +209,255 @@ describe('UnipileInstagramWebhookJob', () => {
 
     return new jobModule.UnipileInstagramWebhookJob(
       harness.dataSource,
-      harness.client,
+      realClient ?? harness.client,
       harness.projectionService,
       harness.accountService,
       harness.syncQueue,
       harness.availabilityService,
     );
   };
+
+  describe('connected timestamp ingestion', () => {
+    const cases = [
+      {
+        read: 'getChat',
+        code: 'UNIPILE_CHAT_UNAVAILABLE',
+        reason: 'Unable to retrieve the requested Instagram chat',
+        calls: 2,
+      },
+      {
+        read: 'getMessage',
+        code: 'UNIPILE_MESSAGE_UNAVAILABLE',
+        reason: 'Unable to retrieve the requested Instagram message',
+        calls: 3,
+      },
+    ] as const;
+    const createConnectedHarness = async (
+      badRead: string | null,
+      timestamp: string | null = null,
+      chatStatus = 200,
+    ) => {
+      const harness = createHarness();
+      const apiBaseUrl = 'https://timestamp.invalid/api/v1/';
+      const routes = [
+        `accounts/${binding.unipileAccountId}`,
+        `chats/${messageEvent.unipileChatId}`,
+        `messages/${messageEvent.unipileMessageId}`,
+      ];
+      const bodies = [
+        {
+          id: binding.unipileAccountId,
+          type: 'INSTAGRAM',
+          connection_params: {
+            im: { id: binding.instagramUserId, username: 'synthetic-user' },
+          },
+          sources: [{ status: 'OK' }],
+        },
+        {
+          object: 'Chat',
+          id: messageEvent.unipileChatId,
+          account_id: binding.unipileAccountId,
+          account_type: 'INSTAGRAM',
+          type: 0,
+          attendee_provider_id: messageEvent.attendeeProviderId,
+          name: 'body-sentinel',
+          timestamp:
+            badRead === 'getChat' ? 'not-a-date-timestamp-sentinel' : timestamp,
+        },
+        {
+          object: 'Message',
+          id: messageEvent.unipileMessageId,
+          account_id: binding.unipileAccountId,
+          chat_id: messageEvent.unipileChatId,
+          sender_id: messageEvent.attendeeProviderId,
+          text: 'body-sentinel',
+          attachments: [],
+          timestamp:
+            badRead === 'getMessage'
+              ? 'not-a-date-timestamp-sentinel'
+              : timestamp,
+        },
+      ];
+      const fetch = jest.fn(async (url: string, init: RequestInit) => {
+        expect(harness.eventRepository.save).toHaveBeenCalledTimes(1);
+        expect(harness.eventRepository.save.mock.calls[0][0]).toMatchObject({
+          status: 'PROCESSING',
+          attemptCount: 1,
+          nextAttemptAt: null,
+        });
+        expect(init.method).toBe('GET');
+        const index = routes.findIndex(
+          (route) => url === `${apiBaseUrl}${route}`,
+        );
+        expect(index).toBeGreaterThanOrEqual(0);
+        if (index < 0) throw new Error('Unexpected synthetic route');
+        return new Response(JSON.stringify(bodies[index]), {
+          status: index === 1 ? chatStatus : 200,
+        });
+      });
+      const module = await Test.createTestingModule({
+        providers: [
+          UnipileV1ClientService,
+          { provide: UNIPILE_FETCH, useValue: fetch },
+          {
+            provide: UnipileInstagramAvailabilityService,
+            useValue: { assertEnabled: jest.fn(), config: { apiBaseUrl } },
+          },
+          {
+            provide: TwentyConfigService,
+            useValue: {
+              get: jest.fn((key: string) => {
+                expect(key).toBe('UNIPILE_API_KEY');
+                return 'synthetic-timestamp-api-key-secret';
+              }),
+            },
+          },
+        ],
+      }).compile();
+      return {
+        harness,
+        fetch,
+        module,
+        job: createJob(harness, module.get(UnipileV1ClientService)),
+        urls: routes.map((route) => `${apiBaseUrl}${route}`),
+      };
+    };
+
+    it.each(cases)(
+      'claims PROCESSING then fails the event on actual $read HTTP200 rejection; FAILED replay does no reads or saves',
+      async ({ read, code, reason, calls }) => {
+        const { harness, fetch, module, job, urls } =
+          await createConnectedHarness(read);
+        try {
+          const result = job.handle({ eventId: messageEvent.id });
+          await expect(result).rejects.toBeInstanceOf(UnipileReadError);
+          await expect(result).rejects.toMatchObject({
+            status: 200,
+            retryable: false,
+            code,
+            message: reason,
+          });
+          expect(fetch.mock.calls.map(([url]) => url)).toEqual(
+            urls.slice(0, calls),
+          );
+          expect(harness.eventRepository.save).toHaveBeenCalledTimes(2);
+          expect(harness.eventRepository.save).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              status: 'FAILED',
+              attemptCount: 1,
+              nextAttemptAt: null,
+              failureCode: code,
+              failureReason: reason,
+            }),
+          );
+          expect(
+            JSON.stringify(harness.eventRepository.save.mock.calls),
+          ).not.toMatch(
+            /timestamp-sentinel|body-sentinel|synthetic-timestamp-api-key-secret|Zod|issues/,
+          );
+          expect(
+            harness.eventRepository.save.mock.invocationCallOrder[0],
+          ).toBeLessThan(fetch.mock.invocationCallOrder[0]);
+          expect(
+            harness.projectionService.upsertVerifiedChat,
+          ).not.toHaveBeenCalled();
+          expect(
+            harness.projectionService.upsertVerifiedMessage,
+          ).not.toHaveBeenCalled();
+          expect(harness.syncQueue.enqueue).not.toHaveBeenCalled();
+          await expect(
+            job.handle({ eventId: messageEvent.id }),
+          ).resolves.toBeUndefined();
+          expect(fetch).toHaveBeenCalledTimes(calls);
+          expect(harness.eventRepository.save).toHaveBeenCalledTimes(2);
+          expect(
+            harness.projectionService.upsertVerifiedChat,
+          ).not.toHaveBeenCalled();
+          expect(
+            harness.projectionService.upsertVerifiedMessage,
+          ).not.toHaveBeenCalled();
+          expect(harness.syncQueue.enqueue).not.toHaveBeenCalled();
+        } finally {
+          await module.close();
+        }
+      },
+    );
+
+    it('retains retryable real-adapter failures as RECEIVED with backoff, not FAILED', async () => {
+      const { harness, fetch, module, job, urls } =
+        await createConnectedHarness(null, null, 503);
+      const startedAt = Date.now();
+      try {
+        await expect(
+          job.handle({ eventId: messageEvent.id }),
+        ).rejects.toMatchObject({
+          status: 503,
+          retryable: true,
+          code: 'UNIPILE_CHAT_UNAVAILABLE',
+        });
+        expect(fetch.mock.calls.map(([url]) => url)).toEqual(urls.slice(0, 2));
+        expect(harness.eventRepository.save).toHaveBeenCalledTimes(2);
+        const retry = harness.eventRepository.save.mock
+          .calls[1][0] as WebhookEvent;
+        expect(retry).toMatchObject({
+          status: 'RECEIVED',
+          attemptCount: 1,
+          nextAttemptAt: expect.any(Date),
+          failureCode: 'UNIPILE_WEBHOOK_REREAD_FAILED',
+          failureReason: 'Unable to reread Unipile Instagram webhook event',
+        });
+        expect(retry.nextAttemptAt?.getTime()).toBeGreaterThan(startedAt);
+        expect(
+          harness.projectionService.upsertVerifiedChat,
+        ).not.toHaveBeenCalled();
+        expect(
+          harness.projectionService.upsertVerifiedMessage,
+        ).not.toHaveBeenCalled();
+        expect(harness.syncQueue.enqueue).not.toHaveBeenCalled();
+      } finally {
+        await module.close();
+      }
+    });
+
+    it.each([null, '2024-02-29T12:00:00.123456-00:00'])(
+      'projects accepted real-adapter timestamps %p unchanged after the valid account read',
+      async (timestamp) => {
+        const { harness, fetch, module, job, urls } =
+          await createConnectedHarness(null, timestamp);
+        try {
+          await expect(
+            job.handle({ eventId: messageEvent.id }),
+          ).resolves.toBeUndefined();
+          expect(fetch.mock.calls.map(([url]) => url)).toEqual(urls);
+          expect(
+            harness.projectionService.upsertVerifiedChat,
+          ).toHaveBeenCalledWith(
+            expect.objectContaining({
+              chat: expect.objectContaining({ timestamp }),
+            }),
+          );
+          expect(
+            harness.projectionService.upsertVerifiedMessage,
+          ).toHaveBeenCalledWith(
+            expect.objectContaining({
+              message: expect.objectContaining({ timestamp }),
+            }),
+          );
+          expect(harness.eventRepository.save).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              status: 'COMPLETED',
+              failureCode: null,
+              failureReason: null,
+              nextAttemptAt: null,
+            }),
+          );
+          expect(harness.syncQueue.enqueue).not.toHaveBeenCalled();
+        } finally {
+          await module.close();
+        }
+      },
+    );
+  });
 
   it('checks availability before claiming or reading webhook state', async () => {
     const harness = createHarness();

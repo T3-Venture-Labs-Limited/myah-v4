@@ -1,3 +1,5 @@
+import { useStore } from 'jotai';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useMutation } from '@apollo/client/react';
 
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
@@ -12,6 +14,14 @@ import {
 } from '~/generated/graphql';
 
 export const useMyahInboxThreadMutations = () => {
+  const store = useStore();
+  const assertWorkspace = (expectedWorkspaceId: string) => {
+    if (
+      !expectedWorkspaceId ||
+      store.get(currentWorkspaceState.atom)?.id !== expectedWorkspaceId
+    )
+      throw new Error('Inbox workspace changed');
+  };
   const apolloCoreClient = useApolloCoreClient();
   const [updateThreadMutation] = useMutation(UpdateMyahInboxThreadDocument, {
     client: apolloCoreClient,
@@ -24,7 +34,10 @@ export const useMyahInboxThreadMutations = () => {
     { client: apolloCoreClient },
   );
 
-  const updateThread = async (input: UpdateMyahInboxThreadInput) => {
+  const updateThread = async (
+    input: UpdateMyahInboxThreadInput & { expectedWorkspaceId: string },
+  ) => {
+    assertWorkspace(input.expectedWorkspaceId);
     const result = await updateThreadMutation({ variables: { input } });
 
     if (!result.data) {
@@ -34,7 +47,10 @@ export const useMyahInboxThreadMutations = () => {
     return result.data.updateMyahInboxThread;
   };
 
-  const saveDraft = async (input: SaveMyahInboxDraftInput) => {
+  const saveDraft = async (
+    input: SaveMyahInboxDraftInput & { expectedWorkspaceId: string },
+  ) => {
+    assertWorkspace(input.expectedWorkspaceId);
     const result = await saveDraftMutation({ variables: { input } });
 
     if (!result.data) {
@@ -45,8 +61,11 @@ export const useMyahInboxThreadMutations = () => {
   };
 
   const generateProposal = async (
-    input: GenerateMyahInboxReplyProposalInput,
+    input: GenerateMyahInboxReplyProposalInput & {
+      expectedWorkspaceId: string;
+    },
   ) => {
+    assertWorkspace(input.expectedWorkspaceId);
     const result = await generateProposalMutation({ variables: { input } });
 
     if (!result.data) {

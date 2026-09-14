@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, parseMyahReplyRichText } from 'twenty-shared/utils';
 
 import {
   MyahInboxReplyActionDefinition,
@@ -24,8 +24,8 @@ import {
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-send.dto';
 import { MyahInboxDraftSaveStatus } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-draft-save-result.dto';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
+import { renderMyahInboxReplyBody } from 'src/engine/core-modules/myah-inbox/utils/render-myah-inbox-reply-body.util';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { escapeHtml } from 'src/engine/core-modules/emailing-domain/utils/escape-html.util';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 import { classifyMessageOutboundError } from 'src/modules/messaging/message-outbound-manager/utils/classify-message-outbound-error.util';
@@ -117,11 +117,17 @@ export class MyahInboxReplySendService {
         };
       }
 
-      await this.actionDefinition.buildAuthority({
+      const authority = await this.actionDefinition.buildAuthority({
         workspaceId: input.workspace.id,
         initiatorUserWorkspaceId: input.userWorkspaceId,
         messageThreadId: input.threadId,
       });
+
+      try {
+        parseMyahReplyRichText(authority.canonicalGraph.draftBody);
+      } catch {
+        return this.toInvalidDraftReadiness();
+      }
 
       return { status: MyahInboxReplySendReadinessStatus.READY, reason: null };
     } catch (error) {
@@ -140,7 +146,7 @@ export class MyahInboxReplySendService {
       return preparation.result;
     }
 
-    const { authority, receipt } = preparation;
+    const { authority, receipt, renderedBody } = preparation;
     const graph = authority.canonicalGraph;
     let sent: SendMessageResult;
     try {
@@ -148,8 +154,8 @@ export class MyahInboxReplySendService {
         {
           to: [graph.recipientEmail],
           subject: graph.subject,
-          body: graph.draftBody.markdown,
-          html: escapeHtml(graph.draftBody.markdown),
+          body: renderedBody.body,
+          html: renderedBody.html,
           attachments: [],
           inReplyTo: graph.inReplyTo,
           threadExternalId: graph.providerThreadExternalId ?? undefined,
@@ -186,6 +192,7 @@ export class MyahInboxReplySendService {
     | {
         authority: MyahInboxReplyActionAuthority;
         receipt: SafeActionExecutionReceipt;
+        renderedBody: { body: string; html: string };
       }
   > {
     try {
@@ -202,6 +209,21 @@ export class MyahInboxReplySendService {
             });
           } catch {
             return { result: this.toStaleOutcome(input) };
+          }
+
+          const graph = authority.canonicalGraph;
+          let renderedBody: { body: string; html: string };
+          try {
+            renderedBody = await renderMyahInboxReplyBody(graph.draftBody);
+          } catch {
+            return {
+              result: {
+                outcome: MyahInboxReplySendOutcome.FAILED,
+                receiptId: null,
+                revision: graph.draftRevision,
+                body: graph.draftBody,
+              },
+            };
           }
 
           let binding: { id: string };
@@ -247,7 +269,11 @@ export class MyahInboxReplySendService {
               };
             }
 
-            return { authority: rebuilt, receipt: reservation.receipt };
+            return {
+              authority: rebuilt,
+              receipt: reservation.receipt,
+              renderedBody,
+            };
           } catch {
             await this.invalidateBinding(input, binding.id);
 
@@ -387,6 +413,14 @@ export class MyahInboxReplySendService {
     } catch {
       // A stale outcome is safer than exposing cleanup storage failures.
     }
+  }
+
+  private toInvalidDraftReadiness(): MyahInboxReplySendReadiness {
+    return {
+      status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
+      reason:
+        'This draft contains unsupported formatted content. Edit the draft and try again.',
+    };
   }
 
   private toReadiness(error: unknown): MyahInboxReplySendReadiness {

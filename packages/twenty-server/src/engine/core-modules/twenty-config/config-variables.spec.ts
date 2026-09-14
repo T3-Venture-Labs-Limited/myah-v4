@@ -30,6 +30,7 @@ type UnipileConfigVariables = ConfigVariables & {
   UNIPILE_DSN_BASE_URL: string;
   UNIPILE_API_KEY: string;
   UNIPILE_WEBHOOK_SECRET: string;
+  UNIPILE_INSTAGRAM_CALLBACK_BASE_URL: string | undefined;
 };
 
 const validUnipileWebhookSecret =
@@ -59,6 +60,7 @@ describe('Unipile Instagram configuration', () => {
     );
     expect(config.UNIPILE_API_KEY).toBe('');
     expect(config.UNIPILE_WEBHOOK_SECRET).toBe('');
+    expect(config.UNIPILE_INSTAGRAM_CALLBACK_BASE_URL).toBeUndefined();
     expect(getValidationProperties(config)).not.toEqual(
       expect.arrayContaining([
         'UNIPILE_DSN_BASE_URL',
@@ -107,6 +109,58 @@ describe('Unipile Instagram configuration', () => {
       isHiddenInAdminPanel: true,
       type: ConfigVariableType.STRING,
     });
+    expect(metadata?.UNIPILE_INSTAGRAM_CALLBACK_BASE_URL).toMatchObject({
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.STRING,
+    });
+  });
+
+  it.each([
+    'http://callbacks.example',
+    'https://user:password@callbacks.example',
+    'https://callbacks.example/path',
+    'https://callbacks.example/?query=value',
+    'https://callbacks.example/#fragment',
+    'https://localhost',
+    'https://127.0.0.1',
+    'https://[::1]',
+    'https://callbacks.local',
+  ])('rejects an unsafe explicit callback base URL: %s', (url) => {
+    const config = createEnabledUnipileConfig({
+      UNIPILE_INSTAGRAM_CALLBACK_BASE_URL: url,
+    });
+
+    expect(getValidationProperties(config)).toContain(
+      'UNIPILE_INSTAGRAM_CALLBACK_BASE_URL',
+    );
+  });
+
+  it.each([
+    'https://callback-tunnel.trycloudflare.com',
+    'https://callback-tunnel.trycloudflare.com/',
+    '',
+  ])(
+    'accepts a public HTTPS callback origin or an empty backward-compatible override: %s',
+    (UNIPILE_INSTAGRAM_CALLBACK_BASE_URL) => {
+      expect(
+        getValidationProperties(
+          createEnabledUnipileConfig({
+            UNIPILE_INSTAGRAM_CALLBACK_BASE_URL,
+          }),
+        ),
+      ).not.toContain('UNIPILE_INSTAGRAM_CALLBACK_BASE_URL');
+    },
+  );
+
+  it('rejects an unsafe explicit callback override while disabled instead of falling back', () => {
+    const config = Object.assign(new ConfigVariables(), {
+      UNIPILE_INSTAGRAM_CALLBACK_BASE_URL: 'http://localhost',
+    });
+
+    expect(getValidationProperties(config)).toContain(
+      'UNIPILE_INSTAGRAM_CALLBACK_BASE_URL',
+    );
   });
 
   it('requires API and webhook secrets when enabled', () => {

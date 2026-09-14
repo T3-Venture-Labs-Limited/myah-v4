@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -19,6 +20,10 @@ export enum UnipileInstagramSyncRunStatus {
 }
 
 @Entity({ name: 'unipileInstagramSyncRun', schema: 'core' })
+@Check(
+  'CHK_UNIPILE_IG_SYNC_RUN_CHAT_IDENTITY',
+  `(("currentChatId" IS NULL AND "currentChatAttendeeId" IS NULL) OR ("currentChatId" IS NOT NULL AND btrim("currentChatAttendeeId") <> '')) IS TRUE`,
+)
 @Index('IDX_UNIPILE_IG_SYNC_RUN_RUNNING_BINDING', ['bindingId'], {
   unique: true,
   where: `"status" = 'RUNNING'`,

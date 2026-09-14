@@ -223,7 +223,7 @@ describe('SettingsAccountsInstagram', () => {
 
   it('navigates the current tab to hosted authorization when no account is connected', async () => {
     const redirectUrl = 'https://hosted-auth.example/connect';
-    fetchMock.mockResponseOnce(JSON.stringify(null));
+    fetchMock.mockResponseOnce('');
     fetchMock.mockResponseOnce(
       JSON.stringify({ attemptId: 'connect-attempt-id', redirectUrl }),
     );
@@ -277,7 +277,7 @@ describe('SettingsAccountsInstagram', () => {
       }),
     );
     fetchMock.mockResponseOnce(JSON.stringify({ status: 'DISCONNECTED' }));
-    fetchMock.mockResponseOnce(JSON.stringify(null));
+    fetchMock.mockResponseOnce('');
 
     const user = userEvent.setup();
     renderInstagramSettings();
@@ -322,17 +322,82 @@ describe('SettingsAccountsInstagram', () => {
     ).toBeVisible();
   });
 
-  it('warns and reloads without disconnected success while recovery is pending', async () => {
-    fetchMock.mockResponseOnce(
-      JSON.stringify({
-        id: 'workspace-binding-id',
-        username: 'myah_test_account',
-        status: 'ACTIVE',
-        lastCheckedAt: null,
-        lastError: null,
-      }),
-    );
-    fetchMock.mockResponseOnce(JSON.stringify({ status: 'PENDING_RECOVERY' }));
+  it.each([true, false])(
+    'keeps pending nonactionable after disconnect when status refresh succeeds: %s',
+    async (refreshSucceeds) => {
+      fetchMock.mockResponseOnce(
+        JSON.stringify({
+          id: 'workspace-binding-id',
+          username: 'myah_test_account',
+          status: 'ACTIVE',
+          lastCheckedAt: null,
+          lastError: null,
+        }),
+      );
+      fetchMock.mockResponseOnce(
+        JSON.stringify({ status: 'PENDING_RECOVERY' }),
+      );
+      if (refreshSucceeds) {
+        fetchMock.mockResponseOnce(
+          JSON.stringify({
+            id: 'workspace-binding-id',
+            username: 'myah_test_account',
+            status: 'DELETE_UNKNOWN',
+            lastCheckedAt: null,
+            lastError: null,
+          }),
+        );
+      } else {
+        fetchMock.mockResponseOnce('', { status: 500 });
+      }
+
+      const user = userEvent.setup();
+      renderInstagramSettings();
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Disconnect Instagram' }),
+      );
+
+      await waitFor(() => {
+        expect(mockEnqueueWarningSnackBar).toHaveBeenCalledWith({
+          message: 'Instagram disconnect is still being confirmed.',
+        });
+        expect(mockEnqueueSuccessSnackBar).not.toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenNthCalledWith(
+          3,
+          'http://localhost/rest/myah/unipile/instagram/account',
+          {
+            method: 'GET',
+            headers: {
+              Authorization: 'Bearer test-token',
+              'content-type': 'application/json',
+            },
+          },
+        );
+      });
+      expect(
+        await screen.findByText('Disconnect pending', { exact: true }),
+      ).toBeVisible();
+      const disconnect = screen.getByRole('button', {
+        name: 'Disconnect Instagram',
+      });
+      expect(disconnect).toBeDisabled();
+      expect(
+        screen.queryByRole('button', { name: 'Connect Instagram' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Reconnect Instagram' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Refresh status' }),
+      ).toBeEnabled();
+      await user.click(disconnect);
+      expect(mockWindowConfirm).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it('keeps a delete-unknown account nonactionable while Refresh status remains available', async () => {
     fetchMock.mockResponseOnce(
       JSON.stringify({
         id: 'workspace-binding-id',
@@ -346,30 +411,25 @@ describe('SettingsAccountsInstagram', () => {
     const user = userEvent.setup();
     renderInstagramSettings();
 
+    expect(
+      await screen.findByText('Disconnect pending', { exact: true }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Disconnect Instagram' }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Connect Instagram' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Reconnect Instagram' }),
+    ).not.toBeInTheDocument();
     await user.click(
-      await screen.findByRole('button', { name: 'Disconnect Instagram' }),
+      screen.getByRole('button', { name: 'Disconnect Instagram' }),
     );
-
-    await waitFor(() => {
-      expect(mockEnqueueWarningSnackBar).toHaveBeenCalledWith({
-        message: 'Instagram disconnect is still being confirmed.',
-      });
-      expect(mockEnqueueSuccessSnackBar).not.toHaveBeenCalled();
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        3,
-        'http://localhost/rest/myah/unipile/instagram/account',
-        {
-          method: 'GET',
-          headers: {
-            Authorization: 'Bearer test-token',
-            'content-type': 'application/json',
-          },
-        },
-      );
-    });
-  });
-
-  it('labels a delete-unknown account Disconnect pending and offers only Disconnect', async () => {
+    expect(mockWindowConfirm).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const refresh = screen.getByRole('button', { name: 'Refresh status' });
+    expect(refresh).toBeEnabled();
     fetchMock.mockResponseOnce(
       JSON.stringify({
         id: 'workspace-binding-id',
@@ -379,21 +439,14 @@ describe('SettingsAccountsInstagram', () => {
         lastError: null,
       }),
     );
-
-    renderInstagramSettings();
-
+    await user.click(refresh);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(
-      await screen.findByText('Disconnect pending', { exact: true }),
-    ).toBeVisible();
+      fetchMock.mock.calls.every(([, options]) => options?.method === 'GET'),
+    ).toBe(true);
     expect(
       screen.getByRole('button', { name: 'Disconnect Instagram' }),
-    ).toBeVisible();
-    expect(
-      screen.queryByRole('button', { name: 'Connect Instagram' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Reconnect Instagram' }),
-    ).not.toBeInTheDocument();
+    ).toBeDisabled();
   });
 
   it('labels an inactive account Inactive and offers only Connect', async () => {
@@ -514,8 +567,21 @@ describe('SettingsAccountsInstagram', () => {
     ).toBeVisible();
   });
 
+  it('treats an empty successful account response as no connected account', async () => {
+    fetchMock.mockResponseOnce('');
+
+    renderInstagramSettings();
+
+    const connectButton = await screen.findByRole('button', {
+      name: 'Connect Instagram',
+    });
+
+    await waitFor(() => expect(connectButton).toBeEnabled());
+    expect(mockEnqueueErrorSnackBar).not.toHaveBeenCalled();
+  });
+
   it('does not poll hosted authorization status without an attempt id', async () => {
-    fetchMock.mockResponseOnce(JSON.stringify(null));
+    fetchMock.mockResponseOnce('');
 
     renderInstagramSettings();
 
@@ -529,6 +595,44 @@ describe('SettingsAccountsInstagram', () => {
       expect.stringContaining('/hosted-auth/'),
       expect.anything(),
     );
+  });
+
+  it('loads the actual account immediately without polling after a failed Hosted Auth return', async () => {
+    jest.useFakeTimers();
+    window.history.replaceState(
+      {},
+      '',
+      '/settings/accounts/instagram?connection=failed&attemptId=failed-attempt-id',
+    );
+    fetchMock.mockResponseOnce('');
+
+    renderInstagramSettings();
+
+    const connectButton = await screen.findByRole('button', {
+      name: 'Connect Instagram',
+    });
+
+    await waitFor(() => expect(connectButton).toBeEnabled());
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost/rest/myah/unipile/instagram/account',
+      {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer test-token',
+          'content-type': 'application/json',
+        },
+      },
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/hosted-auth/failed-attempt-id/status'),
+      expect.anything(),
+    );
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('polls an attempt before loading the account and reloads it once on completion', async () => {
@@ -719,6 +823,18 @@ describe('SettingsAccountsInstagram', () => {
 
   it('shows a safe error when loading the account status fails', async () => {
     fetchMock.mockResponseOnce('', { status: 500 });
+
+    renderInstagramSettings();
+
+    await waitFor(() => {
+      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
+        message: 'Could not load Instagram connection status.',
+      });
+    });
+  });
+
+  it('shows a safe error for a malformed nonempty account response', async () => {
+    fetchMock.mockResponseOnce('not-json');
 
     renderInstagramSettings();
 

@@ -32,6 +32,45 @@ describe('useMyahInboxSelectedEmailThread', () => {
     query.mockReset();
   });
 
+  it('rejects a mismatched exact-thread response rather than exposing another action target', async () => {
+    query.mockResolvedValue({
+      data: {
+        myahInboxThreads: { edges: [{ node: { ...thread, id: 'other' } }] },
+      },
+    });
+    const { result } = renderHook(() =>
+      useMyahInboxSelectedEmailThread('workspace-1', 'thread-1'),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.thread).toBeNull();
+    expect(result.current.error).toBeInstanceOf(Error);
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({ errorPolicy: 'none' }),
+    );
+  });
+
+  it('masks and re-reads a same-ID summary on authorization generation change', async () => {
+    query
+      .mockResolvedValueOnce({
+        data: { myahInboxThreads: { edges: [{ node: thread }] } },
+      })
+      .mockImplementationOnce(() => new Promise(() => undefined));
+    const { result, rerender } = renderHook(
+      ({ authorization }) =>
+        useMyahInboxSelectedEmailThread(
+          'workspace-1',
+          'thread-1',
+          authorization,
+        ),
+      { initialProps: { authorization: 'member-full' } },
+    );
+    await waitFor(() => expect(result.current.thread).toEqual(thread));
+    rerender({ authorization: 'member-restricted' });
+    expect(result.current.thread).toBeNull();
+    expect(result.current.loading).toBe(true);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
   it('loads the exact native thread summary and refreshes it', async () => {
     query.mockResolvedValue({
       data: {
@@ -47,7 +86,11 @@ describe('useMyahInboxSelectedEmailThread', () => {
     await waitFor(() => expect(result.current.thread).toEqual(thread));
     expect(query).toHaveBeenCalledWith(
       expect.objectContaining({
-        variables: { first: 1, threadId: 'thread-1' },
+        variables: {
+          first: 1,
+          threadId: 'thread-1',
+          expectedWorkspaceId: 'workspace-1',
+        },
         fetchPolicy: 'no-cache',
       }),
     );

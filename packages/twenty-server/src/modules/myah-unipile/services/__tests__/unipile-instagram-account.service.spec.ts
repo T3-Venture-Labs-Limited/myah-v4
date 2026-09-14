@@ -1,5 +1,8 @@
 import { ConflictException } from '@nestjs/common';
-import { IsNull, Not } from 'typeorm';
+import { In, IsNull, Not } from 'typeorm';
+
+import { UnipileInstagramAccountProjectionService as WorkspaceAccountProjectionService } from 'src/modules/myah-unipile/services/unipile-instagram-account-projection.service';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import type { UnipileInstagramWebhookAccountStatus } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
 
 type SafeMappedInstagramAccount = {
@@ -324,6 +327,113 @@ describe('UnipileInstagramAccountService', () => {
       expect(callOrder).toEqual(['availability']);
       expect(unexpectedDependencyCall).not.toHaveBeenCalled();
       await expect(operation).rejects.toBe(unavailableError);
+    },
+  );
+
+  it.each(['CREATE', 'RECONNECT', 'bound', 'connecting', 'webhook'] as const)(
+    'does not complete %s when the actual projection requires explicit restore (mock SQL)',
+    async (caller) => {
+      const binding = {
+        id: reconnectBindingId,
+        workspaceId,
+        workspaceInstagramAccountRecordId,
+        unipileAccountId: account.accountId,
+        instagramUserId: account.instagramUserId,
+        connectedByUserWorkspaceId: 'original-connecting-actor',
+        status: caller === 'connecting' ? 'CONNECTING' : 'NEEDS_RECONNECT',
+        deactivatedAt: null,
+      };
+      const originalBinding = { ...binding };
+      const workspaceRepository = {
+        findOne: jest.fn().mockResolvedValue(workspace),
+      };
+      const bindingRepository = {
+        findOne: jest
+          .fn()
+          .mockResolvedValue(caller === 'CREATE' ? null : binding),
+        create: jest.fn((value) => value),
+        save: jest.fn().mockResolvedValue(binding),
+      };
+      // Exercise production projection, but neither a database nor the Hosted Auth HTTP handler.
+      const query = jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT') && !sql.includes('"deletedAt" IS NULL')) {
+          return [
+            {
+              id: workspaceInstagramAccountRecordId,
+              deletedAt: '2026-09-01T00:00:00.000Z',
+            },
+          ];
+        }
+
+        return [];
+      });
+      const executeInWorkspaceContext = jest.fn(
+        async (operation: () => Promise<unknown>) => operation(),
+      );
+      const projection = new WorkspaceAccountProjectionService({
+        executeInWorkspaceContext,
+        getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
+      } as unknown as ConstructorParameters<
+        typeof WorkspaceAccountProjectionService
+      >[0]);
+      const upsertVerifiedAccount = jest.fn(
+        projection.upsertVerifiedAccount.bind(projection),
+      );
+      const accountClient = {
+        getAccount: jest.fn().mockResolvedValue(account),
+        deleteAccount: jest.fn(),
+      };
+      const service = createAccountService({
+        workspaceRepository,
+        bindingRepository,
+        projectionService: { upsertVerifiedAccount },
+        accountClient,
+      });
+
+      if (!service) {
+        return;
+      }
+
+      const operation =
+        caller === 'CREATE'
+          ? service.finalizeHostedAuthConnection(finalizeInput)
+          : caller === 'RECONNECT'
+            ? service.finalizeHostedAuthConnection(reconnectFinalizeInput)
+            : caller === 'bound'
+              ? service.reconcileBoundAccountStatus(reconnectBindingId)
+              : caller === 'connecting'
+                ? service.reconcileConnectingAccount(reconnectBindingId)
+                : service.reconcileWebhookAccountStatus({
+                    bindingId: reconnectBindingId,
+                    status: 'OK',
+                  });
+
+      await expect(operation).rejects.toThrow(
+        new ConflictException('Instagram account requires explicit restore'),
+      );
+      expect(upsertVerifiedAccount).toHaveBeenCalledWith({
+        workspace,
+        account,
+        status: 'ACTIVE',
+      });
+      expect(bindingRepository.create).not.toHaveBeenCalled();
+      expect(bindingRepository.save).not.toHaveBeenCalled();
+      expect(binding).toEqual(originalBinding);
+      expect(query.mock.calls.every(([sql]) => sql.includes('SELECT'))).toBe(
+        true,
+      );
+      expect(
+        query.mock.calls.every(([sql]) =>
+          sql.includes(
+            `FROM "${getWorkspaceSchemaName(workspaceId)}"."_myahInstagramAccount"`,
+          ),
+        ),
+      ).toBe(true);
+      expect(executeInWorkspaceContext).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ type: 'system', workspace }),
+      );
+      expect(accountClient.deleteAccount).not.toHaveBeenCalled();
     },
   );
 
@@ -1387,79 +1497,186 @@ describe('UnipileInstagramAccountService', () => {
     expect(transactionNumber).toBe(2);
   });
 
-  it('serializes an existing DELETE_UNKNOWN retry without writing a duplicate marker', async () => {
-    const savedStatuses: string[] = [];
-    const binding = {
-      id: reconnectBindingId,
-      workspaceId,
-      workspaceInstagramAccountRecordId,
-      unipileAccountId: account.accountId,
-      instagramUserId: account.instagramUserId,
-      status: 'DELETE_UNKNOWN',
-      deactivatedAt: null,
-    };
-    const workspaceRepository = {
-      findOne: jest.fn().mockResolvedValue(workspace),
-    };
-    const bindingRepository = {
-      findOne: jest.fn().mockResolvedValue(binding),
-      create: jest.fn(),
-      save: jest.fn(async (savedBinding) => {
-        savedStatuses.push(savedBinding.status);
+  it.each(['DELETE_UNKNOWN', 'ACTIVE'])(
+    'returns pending without side effects when %s is pending under the session lock',
+    async (initialStatus) => {
+      const savedStatuses: string[] = [];
+      const binding = {
+        id: reconnectBindingId,
+        workspaceId,
+        workspaceInstagramAccountRecordId,
+        unipileAccountId: account.accountId,
+        instagramUserId: account.instagramUserId,
+        status: initialStatus,
+        deactivatedAt: null,
+      };
+      const workspaceRepository = {
+        findOne: jest.fn().mockResolvedValue(workspace),
+      };
+      const bindingRepository = {
+        findOne: jest
+          .fn()
+          .mockResolvedValueOnce({ ...binding, status: initialStatus })
+          .mockImplementation(async ({ where }) => {
+            expect(where).toEqual({
+              id: reconnectBindingId,
+              workspaceId,
+              status: In([initialStatus, 'DELETE_UNKNOWN']),
+              deactivatedAt: IsNull(),
+            });
+            return { ...binding };
+          }),
+        create: jest.fn(),
+        save: jest.fn(async (savedBinding) => {
+          savedStatuses.push(savedBinding.status);
 
-        return savedBinding;
-      }),
-    };
-    const coreManager = createCoreManager(
-      workspaceRepository,
-      bindingRepository,
-    );
-    const transaction = jest.fn(
-      async (callback: (manager: CoreManager) => Promise<unknown>) =>
-        callback(coreManager),
-    );
-    const finalizationLockService: FinalizationLockService = {
-      withLock: jest.fn(() => {
-        throw new Error('disconnect must use the session lock');
-      }),
-      withSessionLock: jest.fn(
-        async (
-          _scope: unknown,
-          operation: (runner: CoreQueryRunner) => Promise<unknown>,
-        ) => operation({ manager: { transaction } }),
-      ),
-    };
-    const service = createAccountService({
-      workspaceRepository,
-      bindingRepository,
-      projectionService: {
+          return savedBinding;
+        }),
+      };
+      const coreManager = createCoreManager(
+        workspaceRepository,
+        bindingRepository,
+      );
+      const transaction = jest.fn(
+        async (callback: (manager: CoreManager) => Promise<unknown>) =>
+          callback(coreManager),
+      );
+      let signalWaitingForLock: () => void = () => undefined;
+      const waitingForLock = new Promise<void>((resolve) => {
+        signalWaitingForLock = resolve;
+      });
+      let acquireLock: () => void = () => undefined;
+      const lockAcquired = new Promise<void>((resolve) => {
+        acquireLock = resolve;
+      });
+      const finalizationLockService: FinalizationLockService = {
+        withLock: jest.fn(() => {
+          throw new Error('disconnect must use the session lock');
+        }),
+        withSessionLock: jest.fn(
+          async (
+            _scope: unknown,
+            operation: (runner: CoreQueryRunner) => Promise<unknown>,
+          ) => {
+            signalWaitingForLock();
+            await lockAcquired;
+            return operation({ manager: { transaction } });
+          },
+        ),
+      };
+      const projectionService = {
         upsertVerifiedAccount: jest.fn(),
         markAccountStatus: jest.fn(),
-      },
-      accountClient: {
-        deleteAccount: jest.fn(async (_accountId, { beforeDispatch }) => {
-          await beforeDispatch();
-
-          return { kind: 'ACCEPTED', value: { deleted: true } };
-        }),
+      };
+      const accountClient = {
+        deleteAccount: jest
+          .fn()
+          .mockResolvedValue({ kind: 'ACCEPTED', value: { deleted: true } }),
         getAccount: jest.fn(),
-      },
-      finalizationLockService,
-    });
+      };
+      const service = createAccountService({
+        workspaceRepository,
+        bindingRepository,
+        projectionService,
+        accountClient,
+        finalizationLockService,
+      });
 
-    if (!service) {
-      return;
-    }
+      if (!service) {
+        return;
+      }
 
-    await expect(
-      service.disconnectAccount({ workspaceId, userWorkspaceId }),
-    ).resolves.toEqual({ status: 'DISCONNECTED' });
+      const disconnect = service.disconnectAccount({
+        workspaceId,
+        userWorkspaceId,
+      });
+      await waitingForLock;
+      expect(transaction).not.toHaveBeenCalled();
+      binding.status = 'DELETE_UNKNOWN';
+      acquireLock();
+      await expect(disconnect).resolves.toEqual({ status: 'PENDING_RECOVERY' });
 
-    expect(finalizationLockService.withSessionLock).toHaveBeenCalledTimes(1);
-    expect(finalizationLockService.withLock).not.toHaveBeenCalled();
-    expect(transaction).toHaveBeenCalledTimes(2);
-    expect(savedStatuses).toEqual(['INACTIVE']);
-  });
+      expect(finalizationLockService.withSessionLock).toHaveBeenCalledTimes(1);
+      expect(finalizationLockService.withLock).not.toHaveBeenCalled();
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(savedStatuses).toEqual([]);
+      expect(bindingRepository.save).not.toHaveBeenCalled();
+      expect(accountClient.deleteAccount).not.toHaveBeenCalled();
+      expect(accountClient.getAccount).not.toHaveBeenCalled();
+      expect(projectionService.markAccountStatus).not.toHaveBeenCalled();
+      expect(projectionService.upsertVerifiedAccount).not.toHaveBeenCalled();
+      expect(binding.status).toBe('DELETE_UNKNOWN');
+    },
+  );
+
+  it.each(['provider account', 'Instagram owner', 'missing workspace'])(
+    'does not accept a pending marker with a changed %s',
+    async (mismatch) => {
+      const binding = {
+        id: reconnectBindingId,
+        workspaceId,
+        workspaceInstagramAccountRecordId,
+        unipileAccountId: account.accountId,
+        instagramUserId: account.instagramUserId,
+        status: 'DELETE_UNKNOWN',
+        deactivatedAt: null,
+      };
+      const currentBinding = {
+        ...binding,
+        unipileAccountId:
+          mismatch === 'provider account'
+            ? 'different-account'
+            : binding.unipileAccountId,
+        instagramUserId:
+          mismatch === 'Instagram owner'
+            ? 'different-owner'
+            : binding.instagramUserId,
+      };
+      const bindingRepository = {
+        findOne: jest
+          .fn()
+          .mockResolvedValueOnce(binding)
+          .mockResolvedValueOnce(currentBinding),
+        create: jest.fn(),
+        save: jest.fn(),
+      };
+      const projectionService = {
+        upsertVerifiedAccount: jest.fn(),
+        markAccountStatus: jest.fn(),
+      };
+      const accountClient = { deleteAccount: jest.fn(), getAccount: jest.fn() };
+      const service = createAccountService({
+        workspaceRepository: {
+          findOne: jest
+            .fn()
+            .mockResolvedValue(
+              mismatch === 'missing workspace' ? null : workspace,
+            ),
+        },
+        bindingRepository,
+        projectionService,
+        accountClient,
+      });
+      if (!service) {
+        return;
+      }
+      await expect(
+        service.disconnectAccount({ workspaceId, userWorkspaceId }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(bindingRepository.findOne).toHaveBeenNthCalledWith(2, {
+        where: {
+          id: reconnectBindingId,
+          workspaceId,
+          status: In(['DELETE_UNKNOWN', 'DELETE_UNKNOWN']),
+          deactivatedAt: IsNull(),
+        },
+      });
+      expect(accountClient.deleteAccount).not.toHaveBeenCalled();
+      expect(accountClient.getAccount).not.toHaveBeenCalled();
+      expect(bindingRepository.save).not.toHaveBeenCalled();
+      expect(projectionService.markAccountStatus).not.toHaveBeenCalled();
+    },
+  );
 
   it('persists a safe ERROR after a non-404 known rejection and rejects the disconnect', async () => {
     const callOrder: string[] = [];
@@ -1600,6 +1817,12 @@ describe('UnipileInstagramAccountService', () => {
         userWorkspaceId,
       }),
     ).resolves.toEqual({ status: 'PENDING_RECOVERY' });
+
+    await expect(
+      service.disconnectAccount({ workspaceId, userWorkspaceId }),
+    ).resolves.toEqual({ status: 'PENDING_RECOVERY' });
+    expect(accountClient.deleteAccount).toHaveBeenCalledTimes(1);
+    expect(accountClient.getAccount).not.toHaveBeenCalled();
 
     expect(accountClient.deleteAccount).toHaveBeenCalledWith(
       account.accountId,

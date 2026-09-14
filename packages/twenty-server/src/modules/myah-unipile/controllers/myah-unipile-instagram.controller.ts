@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PermissionFlagType } from 'twenty-shared/constants';
+import { z } from 'zod';
 
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
@@ -24,11 +26,25 @@ import {
   type WorkspaceInstagramAccountStatus,
 } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
 
-type HostedAuthNotificationBody = {
-  account_id: string;
-  name: string;
-  status: 'CREATION_SUCCESS' | 'RECONNECTED';
-};
+const hostedAuthNotificationSchema = z.object({
+  attemptId: z.uuid(),
+  body: z
+    .object({
+      // Use the existing webhook identifier ceiling; preserve opaque identity exactly.
+      account_id: z
+        .string()
+        .min(1)
+        .max(512)
+        .refine((value) => value.trim().length > 0),
+      // createHostedAuthAttempt emits randomBytes(32).toString('hex').
+      name: z
+        .string()
+        .length(64)
+        .regex(/^[0-9a-f]+$/),
+      status: z.enum(['CREATION_SUCCESS', 'RECONNECTED']),
+    })
+    .strict(),
+});
 
 @Controller('rest/myah/unipile/instagram')
 @UseGuards(
@@ -114,13 +130,22 @@ export class MyahUnipileInstagramPublicController {
   @HttpCode(HttpStatus.OK)
   async notifyHostedAuth(
     @Param('attemptId') attemptId: string,
-    @Body() body: HostedAuthNotificationBody,
+    @Body() body: unknown,
   ): Promise<{ ok: true }> {
-    await this.hostedAuthService.processNotification({
-      accountId: body.account_id,
+    const notification = hostedAuthNotificationSchema.safeParse({
       attemptId,
-      name: body.name,
-      status: body.status,
+      body,
+    });
+
+    if (!notification.success) {
+      throw new BadRequestException('Invalid Hosted Auth notification');
+    }
+
+    await this.hostedAuthService.processNotification({
+      accountId: notification.data.body.account_id,
+      attemptId: notification.data.attemptId,
+      name: notification.data.body.name,
+      status: notification.data.body.status,
     });
 
     return { ok: true };

@@ -35,7 +35,7 @@ type AppSyncedTableColumn = {
   columnName: string;
 };
 
-@RegisteredWorkspaceCommand('2.20.0', 1799201012000)
+@RegisteredWorkspaceCommand('2.20.0', 1789307619373)
 @Command({
   name: 'upgrade:2-20:backfill-composio-instagram-history',
   description:
@@ -47,7 +47,11 @@ export class BackfillComposioInstagramHistoryWorkspaceCommand extends ActiveOrSu
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
-    if (!args.dataSource) return;
+    if (!args.dataSource) {
+      throw new Error(
+        'Cannot backfill Composio Instagram history: workspace data source is required',
+      );
+    }
 
     const schemaName = getWorkspaceSchemaName(args.workspaceId);
     const appSyncedColumns = (await args.dataSource.query(

@@ -4,7 +4,13 @@ import { IsNull, Not } from 'typeorm';
 import { type ObjectRecord } from 'twenty-shared/types';
 
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import {
+  UnipileInstagramAccountBindingEntity,
+  UnipileInstagramAccountBindingStatus,
+} from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 
 type AccessibleInstagramDraft = ObjectRecord & {
   id: string;
@@ -13,10 +19,18 @@ type AccessibleInstagramDraft = ObjectRecord & {
   creatorId: string | null;
   conversationId: string | null;
 };
+
+type AccessibleInstagramConversation = ObjectRecord & {
+  id: string;
+  instagramAccountId: string | null;
+};
+
 @Injectable()
 export class InstagramMessageRecordAccessService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    @InjectWorkspaceScopedRepository(UnipileInstagramAccountBindingEntity)
+    private readonly accountBindingRepository: WorkspaceScopedRepository<UnipileInstagramAccountBindingEntity>,
   ) {}
 
   async assertCanReadDraft(input: {
@@ -32,7 +46,7 @@ export class InstagramMessageRecordAccessService {
       );
     const draft = await repository.findOne({
       where: { id: input.draftId, deletedAt: IsNull() },
-      select: { id: true },
+      select: { id: true, revision: true, body: true },
     });
     if (!draft) throw new Error('Instagram message draft is unavailable');
   }
@@ -64,7 +78,7 @@ export class InstagramMessageRecordAccessService {
       throw new Error('Instagram message draft is unavailable');
     }
 
-    await this.assertCanSaveDraft({
+    const accessibleConversation = await this.assertCanSaveDraft({
       workspaceId: input.workspaceId,
       draftId: draft.id,
       expectedRevision: Number(draft.revision),
@@ -74,6 +88,14 @@ export class InstagramMessageRecordAccessService {
       rolePermissionConfig: input.rolePermissionConfig,
     });
 
+    const accountRecordId =
+      draft.kind === 'REPLY'
+        ? accessibleConversation?.instagramAccountId
+        : await this.getActiveAccountRecordId(input.workspaceId);
+    if (!accountRecordId) {
+      throw new Error('Instagram account is unavailable');
+    }
+
     const accountRepository =
       await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
         input.workspaceId,
@@ -82,6 +104,7 @@ export class InstagramMessageRecordAccessService {
       );
     const account = await accountRepository.findOne({
       where: {
+        id: accountRecordId,
         deletedAt: IsNull(),
         status: 'ACTIVE',
         unipileAccountId: Not(IsNull()),
@@ -107,7 +130,7 @@ export class InstagramMessageRecordAccessService {
     creatorRecordId: string | null;
     conversationRecordId: string | null;
     rolePermissionConfig: RolePermissionConfig;
-  }): Promise<void> {
+  }): Promise<AccessibleInstagramConversation | undefined> {
     if (input.expectedRevision > 0) {
       await this.assertCanReadDraft(input);
     }
@@ -142,17 +165,36 @@ export class InstagramMessageRecordAccessService {
         'myahSocialConversation',
         input.rolePermissionConfig,
       );
-    const conversation = await repository.findOne({
+    const conversation = (await repository.findOne({
       where: {
         id: input.conversationRecordId,
         deletedAt: IsNull(),
         provider: 'UNIPILE',
         lifecycle: 'ACTIVE',
       },
-      select: { id: true },
-    });
+      select: { id: true, instagramAccountId: true },
+    })) as AccessibleInstagramConversation | null;
     if (!conversation) {
       throw new Error('Active Unipile conversation is unavailable');
     }
+
+    return conversation;
+  }
+
+  private async getActiveAccountRecordId(
+    workspaceId: string,
+  ): Promise<string | null> {
+    const bindings = await this.accountBindingRepository.find(workspaceId, {
+      take: 2,
+      where: {
+        status: UnipileInstagramAccountBindingStatus.ACTIVE,
+        deactivatedAt: IsNull(),
+      },
+    });
+    if (bindings.length !== 1) {
+      return null;
+    }
+
+    return bindings[0].workspaceInstagramAccountRecordId;
   }
 }

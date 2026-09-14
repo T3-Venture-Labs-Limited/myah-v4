@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { resolveInstagramRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-instagram-recipient.util';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import {
   unipileAccountDeletedSchema,
@@ -9,6 +10,7 @@ import {
   unipileInstagramAccountSchema,
   unipileInstagramChatSchema,
   unipileInstagramMessageSchema,
+  unipileInstagramMessagingProfileSchema,
   unipileMessageListSchema,
   unipileMessageSentSchema,
 } from 'src/modules/myah-unipile/schemas/unipile-v1.schema';
@@ -18,6 +20,8 @@ import {
   type UnipileDeleteAccountOptions,
   type UnipileDeleteAccountOutcome,
   type UnipileGetChatInput,
+  type UnipileGetInstagramMessagingProfileInput,
+  type UnipileInstagramMessagingProfile,
   type UnipileInstagramAccount,
   type UnipileGetMessageInput,
   type UnipileInstagramChat,
@@ -327,15 +331,17 @@ export class UnipileV1ClientService {
     }
 
     return {
-      chats: chatList.items.map((chat) => ({
-        chatId: chat.id,
-        accountId: chat.account_id,
-        accountType: chat.account_type,
-        type: 'ONE_TO_ONE',
-        attendeeProviderId: chat.attendee_provider_id,
-        name: chat.name,
-        timestamp: chat.timestamp,
-      })),
+      chats: chatList.items
+        .filter((chat) => chat.type === 0)
+        .map((chat) => ({
+          chatId: chat.id,
+          accountId: chat.account_id,
+          accountType: chat.account_type,
+          type: 'ONE_TO_ONE',
+          attendeeProviderId: chat.attendee_provider_id,
+          name: chat.name,
+          timestamp: chat.timestamp,
+        })),
       nextCursor: chatList.cursor,
     };
   }
@@ -406,6 +412,9 @@ export class UnipileV1ClientService {
         accountId: message.account_id,
         chatId: message.chat_id,
         senderId: message.sender_id,
+        ...(message.is_sender === undefined
+          ? {}
+          : { isSender: message.is_sender }),
         text: message.text,
         timestamp: message.timestamp,
         seen: message.seen,
@@ -463,6 +472,9 @@ export class UnipileV1ClientService {
       accountId: message.data.account_id,
       chatId: message.data.chat_id,
       senderId: message.data.sender_id,
+      ...(message.data.is_sender === undefined
+        ? {}
+        : { isSender: message.data.is_sender }),
       text: message.data.text,
       timestamp: message.data.timestamp,
       seen: message.data.seen,
@@ -502,6 +514,7 @@ export class UnipileV1ClientService {
       !chat.success ||
       chat.data.id !== input.chatId ||
       chat.data.account_id !== input.accountId ||
+      chat.data.type !== 0 ||
       chat.data.attendee_provider_id !== input.expectedAttendeeId
     ) {
       throw this.readError(
@@ -519,6 +532,73 @@ export class UnipileV1ClientService {
       attendeeProviderId: chat.data.attendee_provider_id,
       name: chat.data.name,
       timestamp: chat.data.timestamp,
+    };
+  }
+
+  async getInstagramMessagingProfile(
+    input: UnipileGetInstagramMessagingProfileInput,
+  ): Promise<UnipileInstagramMessagingProfile> {
+    this.availabilityService.assertEnabled();
+
+    const code = 'UNIPILE_INSTAGRAM_MESSAGING_PROFILE_UNAVAILABLE';
+    const message =
+      'Unable to retrieve the requested Instagram messaging profile';
+    let normalizedUsername: string;
+
+    try {
+      normalizedUsername = resolveInstagramRecipient({
+        instagramUsername: input.username,
+        instagramUrl: null,
+        instagramLink: null,
+      }).normalizedUsername;
+    } catch {
+      throw this.readError(400, code, message);
+    }
+
+    // Validate using the existing Creator rules without rewriting the requested
+    // identity. Returned public_identifier must match these canonical bytes too.
+    if (
+      normalizedUsername !== input.username ||
+      typeof input.accountId !== 'string' ||
+      input.accountId.trim().length === 0
+    ) {
+      throw this.readError(400, code, message);
+    }
+
+    const query = new URLSearchParams({ account_id: input.accountId });
+
+    if (query.get('account_id') !== input.accountId) {
+      throw this.readError(400, code, message);
+    }
+
+    const response = await this.read(
+      `${this.availabilityService.config.apiBaseUrl}users/${encodeURIComponent(input.username)}?${query.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'X-API-KEY': this.twentyConfigService.get('UNIPILE_API_KEY'),
+        },
+        redirect: 'error',
+      },
+      code,
+      message,
+    );
+    const profile = await this.parseReadResponse(
+      response,
+      (body) => unipileInstagramMessagingProfileSchema.parse(body),
+      code,
+      message,
+    );
+
+    if (profile.public_identifier !== input.username) {
+      throw this.readError(response.status, code, message);
+    }
+
+    return {
+      providerId: profile.provider_id,
+      providerMessagingId: profile.provider_messaging_id,
+      username: profile.public_identifier,
     };
   }
 

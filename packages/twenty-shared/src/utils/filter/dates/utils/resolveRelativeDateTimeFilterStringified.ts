@@ -1,7 +1,6 @@
 import { relativeDateFilterStringifiedSchema } from '@/utils/filter/dates/utils/relativeDateFilterStringifiedSchema';
 import { resolveRelativeDateTimeFilter } from '@/utils/filter/dates/utils/resolveRelativeDateTimeFilter';
 import { isNonEmptyString } from '@sniptt/guards';
-import { isDefined } from 'class-validator';
 import { Temporal } from 'temporal-polyfill';
 
 export const resolveRelativeDateTimeFilterStringified = (
@@ -19,9 +18,9 @@ export const resolveRelativeDateTimeFilterStringified = (
   if (relativeDateFilterParseResult.success) {
     const relativeDateFilter = relativeDateFilterParseResult.data;
 
-    const referenceTodayZonedDateTime = isDefined(relativeDateFilter.timezone)
-      ? Temporal.Now.zonedDateTimeISO(relativeDateFilter.timezone)
-      : Temporal.Now.zonedDateTimeISO();
+    const referenceTodayZonedDateTime = Temporal.Now.zonedDateTimeISO(
+      relativeDateFilter.timezone ?? undefined,
+    );
 
     const relativeDateFilterWithDateRange = resolveRelativeDateTimeFilter(
       relativeDateFilter,

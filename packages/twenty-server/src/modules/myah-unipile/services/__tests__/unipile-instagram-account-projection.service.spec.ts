@@ -92,6 +92,62 @@ const createProjectionService = (query: jest.Mock) => {
   };
 };
 
+type IdentityRecord = {
+  id: string;
+  igUserId: string;
+  unipileAccountId: string | null;
+  deletedAt: string | null;
+};
+
+// In-memory SQL seam only: not a PostgreSQL uniqueness or native restore test.
+const createIdentityQuery = (records: IdentityRecord[]) =>
+  jest.fn(async (sql: string, values: unknown[]) => {
+    if (sql.includes('SELECT')) {
+      const identity = sql.includes('WHERE "igUserId"')
+        ? 'igUserId'
+        : 'unipileAccountId';
+
+      return records
+        .filter(
+          (record) =>
+            record[identity] === values[0] &&
+            (!sql.includes('"deletedAt" IS NULL') || record.deletedAt === null),
+        )
+        .map((record) => ({ ...record }));
+    }
+
+    if (sql.includes('UPDATE')) {
+      const rows = records
+        .filter(
+          (record) =>
+            record.id === values[11] &&
+            (!sql.includes('"deletedAt" IS NULL') || record.deletedAt === null),
+        )
+        .map(({ id }) => ({ id }));
+
+      // TypeORM's PostgreSQL raw UPDATE result, including RETURNING.
+      return [rows, rows.length];
+    }
+
+    return [];
+  });
+
+const originalRecord: IdentityRecord = {
+  id: '5c833949-57b8-4aa2-8d8c-24d10cecf6ec',
+  igUserId: account.instagramUserId,
+  unipileAccountId: account.accountId,
+  deletedAt: null,
+};
+const deletedAt = '2026-09-01T00:00:00.000Z';
+const restoreRequired = 'Instagram account requires explicit restore';
+const identityConflict = 'Instagram account identity conflict';
+
+const otherProviderHolder: IdentityRecord = {
+  ...originalRecord,
+  id: 'd9e165ba-a630-41f6-9c1e-7299362f74cc',
+  igUserId: 'different-instagram-identity',
+};
+
 describe('UnipileInstagramAccountProjectionService', () => {
   let providerFetch: jest.SpyInstance;
 
@@ -109,13 +165,289 @@ describe('UnipileInstagramAccountProjectionService', () => {
     jest.restoreAllMocks();
   });
 
+  it.each([
+    {
+      name: 'deleted matching Instagram identity with the same provider ID',
+      records: [{ ...originalRecord, deletedAt }],
+      message: restoreRequired,
+    },
+    {
+      name: 'deleted matching Instagram identity with a previous provider ID',
+      records: [
+        { ...originalRecord, deletedAt, unipileAccountId: 'previous-provider' },
+      ],
+      message: restoreRequired,
+    },
+    {
+      name: 'deleted legacy Instagram identity with no provider ID',
+      records: [{ ...originalRecord, deletedAt, unipileAccountId: null }],
+      message: restoreRequired,
+    },
+    ...[null, deletedAt].flatMap((holderDeletedAt) => [
+      {
+        name: `${holderDeletedAt ? 'deleted' : 'live'} other provider holder without an Instagram match`,
+        records: [{ ...otherProviderHolder, deletedAt: holderDeletedAt }],
+        message: identityConflict,
+      },
+      {
+        name: `live Instagram match colliding with a ${holderDeletedAt ? 'deleted' : 'live'} provider holder`,
+        records: [
+          { ...originalRecord, unipileAccountId: 'previous-provider' },
+          { ...otherProviderHolder, deletedAt: holderDeletedAt },
+        ],
+        message: identityConflict,
+      },
+    ]),
+    {
+      name: 'deleted Instagram match colliding with another deleted provider holder',
+      records: [
+        { ...originalRecord, deletedAt, unipileAccountId: 'previous-provider' },
+        { ...otherProviderHolder, deletedAt },
+      ],
+      message: identityConflict,
+    },
+  ])(
+    'rejects $name without any write or identity disclosure',
+    async ({ records, message }) => {
+      const before = structuredClone(records);
+      const query = createIdentityQuery(records);
+      const subject = createProjectionService(query);
+
+      if (!subject) {
+        return;
+      }
+
+      const operation = subject.service.upsertVerifiedAccount({
+        workspace,
+        account,
+        status,
+      });
+
+      await expect(operation).rejects.toBeInstanceOf(ConflictException);
+      await expect(operation).rejects.toThrow(new ConflictException(message));
+      expect(query.mock.calls.every(([sql]) => sql.includes('SELECT'))).toBe(
+        true,
+      );
+      expect(records).toEqual(before);
+      for (const [sql, values, runner, options] of (query as jest.Mock).mock
+        .calls) {
+        expect(sql).toContain(
+          `FROM "${getWorkspaceSchemaName(workspace.id)}"."_myahInstagramAccount"`,
+        );
+        expect(sql).not.toContain('"deletedAt" IS NULL');
+        expect(sql).not.toContain(account.instagramUserId);
+        expect(sql).not.toContain(account.accountId);
+        expect(values).toEqual([
+          sql.includes('WHERE "igUserId"')
+            ? account.instagramUserId
+            : account.accountId,
+        ]);
+        expect(runner).toBeUndefined();
+        expect(options).toEqual(queryOptions);
+      }
+      expect(providerFetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects duplicate Instagram identities including a deleted match', async () => {
+    const query = createIdentityQuery([
+      { ...originalRecord },
+      { ...originalRecord, id: otherProviderHolder.id, deletedAt },
+    ]);
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    await expect(
+      subject.service.upsertVerifiedAccount({ workspace, account, status }),
+    ).rejects.toThrow(
+      'Multiple Instagram accounts match the verified Instagram identity',
+    );
+    expect(query.mock.calls.every(([sql]) => sql.includes('SELECT'))).toBe(
+      true,
+    );
+  });
+
+  it('reuses the original UUID only after explicit restore in mock state', async () => {
+    const record = { ...originalRecord, deletedAt: deletedAt as string | null };
+    const query = createIdentityQuery([record]);
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    await expect(
+      subject.service.upsertVerifiedAccount({ workspace, account, status }),
+    ).rejects.toThrow(restoreRequired);
+    expect(record.deletedAt).toBe(deletedAt);
+    expect(query.mock.calls.every(([sql]) => sql.includes('SELECT'))).toBe(
+      true,
+    );
+
+    // Simulate an independently authorized restore of this UUID, not projection recovery.
+    record.deletedAt = null;
+    query.mockClear();
+
+    await expect(
+      subject.service.upsertVerifiedAccount({ workspace, account, status }),
+    ).resolves.toBe(originalRecord.id);
+    expect(
+      query.mock.calls.filter(([sql]) => sql.includes('UPDATE')),
+    ).toHaveLength(1);
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT'))).toBe(
+      false,
+    );
+    expect(query.mock.calls.some(([sql]) => /"deletedAt"\s*=/.test(sql))).toBe(
+      false,
+    );
+    expect(record.id).toBe(originalRecord.id);
+  });
+
+  it('does not mutate or verify an account deleted between lookup and update', async () => {
+    const record = { ...originalRecord };
+    const identityQuery = createIdentityQuery([record]);
+    const query = jest.fn(async (sql: string, values: unknown[]) => {
+      if (sql.includes('UPDATE')) {
+        record.deletedAt = deletedAt;
+      }
+
+      return identityQuery(sql, values);
+    });
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    await expect(
+      subject.service.upsertVerifiedAccount({ workspace, account, status }),
+    ).rejects.toThrow('Instagram account verification update failed');
+    const update = query.mock.calls.find(([sql]) => sql.includes('UPDATE'));
+
+    expect(update?.[0]).toContain('"deletedAt" IS NULL');
+    expect(update?.[0]).toContain('RETURNING "id"');
+    expect(record.deletedAt).toBe(deletedAt);
+    expect(query.mock.calls.some(([sql]) => /"deletedAt"\s*=/.test(sql))).toBe(
+      false,
+    );
+  });
+
+  it.each([null, 'previous-provider', account.accountId])(
+    'allows a verified live Instagram identity with provider holder %s',
+    async (unipileAccountId) => {
+      const query = createIdentityQuery([
+        { ...originalRecord, unipileAccountId },
+      ]);
+      const subject = createProjectionService(query);
+
+      if (!subject) {
+        return;
+      }
+
+      await expect(
+        subject.service.upsertVerifiedAccount({ workspace, account, status }),
+      ).resolves.toBe(originalRecord.id);
+      expect(
+        query.mock.calls.filter(([sql]) => sql.includes('UPDATE')),
+      ).toEqual([
+        [
+          expect.any(String),
+          expect.arrayContaining([account.accountId, originalRecord.id]),
+          undefined,
+          queryOptions,
+        ],
+      ]);
+      expect(query.mock.calls.some(([sql]) => sql.includes('INSERT'))).toBe(
+        false,
+      );
+    },
+  );
+
+  it('requires the conditional update to return the original UUID', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([{ ...originalRecord }])
+      .mockResolvedValueOnce([{ id: originalRecord.id }])
+      .mockResolvedValueOnce([[{ id: otherProviderHolder.id }], 1]);
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    await expect(
+      subject.service.upsertVerifiedAccount({ workspace, account, status }),
+    ).rejects.toThrow('Instagram account verification update failed');
+    expect(query).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    { name: 'zero affected and returned rows', result: [[], 0] },
+    {
+      name: 'zero affected rows with one returned row',
+      result: [[{ id: originalRecord.id }], 0],
+    },
+    {
+      name: 'two affected rows with one returned row',
+      result: [[{ id: originalRecord.id }], 2],
+    },
+    { name: 'one affected row without returned rows', result: [[], 1] },
+    {
+      name: 'one affected row with two returned rows',
+      result: [[{ id: originalRecord.id }, { id: otherProviderHolder.id }], 1],
+    },
+    {
+      name: 'two affected and returned rows',
+      result: [[{ id: originalRecord.id }, { id: otherProviderHolder.id }], 2],
+    },
+    {
+      name: 'rows-only result instead of the TypeORM UPDATE tuple',
+      result: [{ id: originalRecord.id }],
+    },
+  ])('rejects $name without a fallback write', async ({ result }) => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([{ ...originalRecord }])
+      .mockResolvedValueOnce([{ id: originalRecord.id }])
+      .mockResolvedValueOnce(result);
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    await expect(
+      subject.service.upsertVerifiedAccount({ workspace, account, status }),
+    ).rejects.toThrow('Instagram account verification update failed');
+    expect(query).toHaveBeenCalledTimes(3);
+    const [updateSql, updateValues, runner, options] = query.mock.calls[2];
+
+    expect(updateSql).toContain(
+      `UPDATE "${getWorkspaceSchemaName(workspace.id)}"."_myahInstagramAccount"`,
+    );
+    expect(updateSql).toContain('WHERE "id" = $12');
+    expect(updateSql).toContain('"deletedAt" IS NULL');
+    expect(updateSql).toContain('RETURNING "id"');
+    expect(updateSql).not.toMatch(/"deletedAt"\s*=/);
+    expect(updateValues[11]).toBe(originalRecord.id);
+    expect(runner).toBeUndefined();
+    expect(options).toEqual(queryOptions);
+    expect(providerFetch).not.toHaveBeenCalled();
+  });
+
   it('reuses the exact nondeleted Instagram record without replacing its Composio ownership', async () => {
     const workspaceInstagramAccountRecordId =
       '5c833949-57b8-4aa2-8d8c-24d10cecf6ec';
     const query = jest
       .fn()
-      .mockResolvedValueOnce([{ id: workspaceInstagramAccountRecordId }])
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce([
+        { id: workspaceInstagramAccountRecordId, deletedAt: null },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([[{ id: workspaceInstagramAccountRecordId }], 1]);
     const subject = createProjectionService(query);
 
     if (!subject) {
@@ -128,7 +460,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
 
     const schemaName = getWorkspaceSchemaName(workspace.id);
     const [selectSql, selectValues] = query.mock.calls[0];
-    const [updateSql] = query.mock.calls[1];
+    const [updateSql] = query.mock.calls[2];
 
     expect(subject.executeInWorkspaceContext).toHaveBeenCalledWith(
       expect.any(Function),
@@ -143,13 +475,21 @@ describe('UnipileInstagramAccountProjectionService', () => {
       queryOptions,
     );
     expect(selectSql).toContain('"igUserId" = $1');
-    expect(selectSql).toContain('"deletedAt" IS NULL');
+    expect(selectSql).not.toContain('"deletedAt" IS NULL');
     expect(selectSql).not.toContain(workspace.id);
     expect(selectSql).not.toContain(account.instagramUserId);
     expect(selectValues).toEqual([account.instagramUserId]);
-
     expect(query).toHaveBeenNthCalledWith(
       2,
+      expect.stringContaining('WHERE "unipileAccountId" = $1'),
+      [account.accountId],
+      undefined,
+      queryOptions,
+    );
+    expect(query.mock.calls[1][0]).not.toContain('"deletedAt" IS NULL');
+
+    expect(query).toHaveBeenNthCalledWith(
+      3,
       expect.stringContaining(`UPDATE "${schemaName}"."_myahInstagramAccount"`),
       [
         '@verified.creator',
@@ -172,6 +512,8 @@ describe('UnipileInstagramAccountProjectionService', () => {
     expect(updateSql).toContain('"status" = $5');
     expect(updateSql).toContain('"lastError" = $7');
     expect(updateSql).toContain('WHERE "id" = $12');
+    expect(updateSql).toContain('"deletedAt" IS NULL');
+    expect(updateSql).toContain('RETURNING "id"');
     expect(updateSql).not.toContain('"connectedAccountId"');
     expect(updateSql).not.toContain('"composioUserId"');
     expect(updateSql).not.toContain('"authConfigId"');
@@ -179,11 +521,15 @@ describe('UnipileInstagramAccountProjectionService', () => {
     expect(updateSql).not.toContain(account.accountId);
     expect(updateSql).not.toContain(account.username);
     expect(providerFetch).not.toHaveBeenCalled();
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(3);
   });
 
-  it('inserts a workspace record when the stable Instagram identity has no nondeleted match', async () => {
-    const query = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+  it('inserts a workspace record only when neither identity has a holder', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
     const subject = createProjectionService(query);
 
     if (!subject) {
@@ -198,7 +544,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
       });
     const schemaName = getWorkspaceSchemaName(workspace.id);
     const [selectSql] = query.mock.calls[0];
-    const [insertSql, insertValues] = query.mock.calls[1];
+    const [insertSql, insertValues] = query.mock.calls[2];
 
     expect(workspaceInstagramAccountRecordId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
@@ -212,6 +558,14 @@ describe('UnipileInstagramAccountProjectionService', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       2,
+      expect.stringContaining('WHERE "unipileAccountId" = $1'),
+      [account.accountId],
+      undefined,
+      queryOptions,
+    );
+    expect(query.mock.calls[1][0]).not.toContain('"deletedAt" IS NULL');
+    expect(query).toHaveBeenNthCalledWith(
+      3,
       expect.stringContaining(
         `INSERT INTO "${schemaName}"."_myahInstagramAccount"`,
       ),
@@ -238,7 +592,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
       queryOptions,
     );
     expect(selectSql).toContain('"igUserId" = $1');
-    expect(selectSql).toContain('"deletedAt" IS NULL');
+    expect(selectSql).not.toContain('"deletedAt" IS NULL');
     expect(insertSql).toContain('"id"');
     expect(insertSql).toContain('"lastError"');
     expect(insertSql).not.toContain(workspace.id);
@@ -247,7 +601,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     expect(insertSql).not.toContain(account.username);
     expect(providerFetch).not.toHaveBeenCalled();
     expect(insertValues).toContain(workspaceInstagramAccountRecordId);
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(3);
   });
 
   it('rejects an ambiguous stable Instagram identity without writing a record', async () => {
@@ -273,7 +627,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     expect(query).toHaveBeenCalledTimes(1);
     expect(selectSql).toContain(`FROM "${schemaName}"."_myahInstagramAccount"`);
     expect(selectSql).toContain('"igUserId" = $1');
-    expect(selectSql).toContain('"deletedAt" IS NULL');
+    expect(selectSql).not.toContain('"deletedAt" IS NULL');
     expect(selectSql).not.toContain(workspace.id);
     expect(selectSql).not.toContain(account.instagramUserId);
     expect(selectValues).toEqual([account.instagramUserId]);

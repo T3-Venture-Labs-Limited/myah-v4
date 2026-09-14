@@ -8,8 +8,8 @@ type AddUnipileInstagramSyncStateFastInstanceCommand = {
   down: (queryRunner: QueryRunner) => Promise<void>;
 };
 
-type AddUnipileInstagramSyncStateFastInstanceCommandConstructor = new () =>
-  AddUnipileInstagramSyncStateFastInstanceCommand;
+type AddUnipileInstagramSyncStateFastInstanceCommandConstructor =
+  new () => AddUnipileInstagramSyncStateFastInstanceCommand;
 
 type AddUnipileInstagramSyncStateFastInstanceCommandModule = {
   AddUnipileInstagramSyncStateFastInstanceCommand: AddUnipileInstagramSyncStateFastInstanceCommandConstructor;
@@ -31,9 +31,7 @@ const loadCommandModule = ():
   | AddUnipileInstagramSyncStateFastInstanceCommandModule
   | undefined => {
   try {
-    return require(
-      'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201001000-add-unipile-instagram-sync-state',
-    ) as AddUnipileInstagramSyncStateFastInstanceCommandModule;
+    return require('src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619352-add-unipile-instagram-sync-state') as AddUnipileInstagramSyncStateFastInstanceCommandModule;
   } catch {
     return undefined;
   }
@@ -52,9 +50,7 @@ const getTableNames = (statements: string[]): string[] =>
 const getDroppedTableNames = (statements: string[]): string[] =>
   statements.flatMap((statement) =>
     Array.from(
-      statement.matchAll(
-        /DROP TABLE(?: IF EXISTS)? "core"\."([^"]+)"/g,
-      ),
+      statement.matchAll(/DROP TABLE(?: IF EXISTS)? "core"\."([^"]+)"/g),
       ([, tableName]) => tableName,
     ),
   );
@@ -95,7 +91,7 @@ describe('AddUnipileInstagramSyncStateFastInstanceCommand', () => {
       ),
     ).toEqual({
       runAfterWorkspace: false,
-      timestamp: 1799201001000,
+      timestamp: 1789307619352,
       type: 'fast',
       version: '2.20.0',
     });
@@ -107,7 +103,9 @@ describe('AddUnipileInstagramSyncStateFastInstanceCommand', () => {
 
       await getCommand().up({ query } as unknown as QueryRunner);
 
-      const statements = query.mock.calls.map(([statement]) => statement as string);
+      const statements = query.mock.calls.map(
+        ([statement]) => statement as string,
+      );
       const sql = statements.join('\n');
       const syncRunCreate = statements.find((statement) =>
         statement.includes(
@@ -167,7 +165,9 @@ describe('AddUnipileInstagramSyncStateFastInstanceCommand', () => {
       expect(syncRunCreate).toContain(
         '"status" "core"."unipileInstagramSyncRun_status_enum" NOT NULL DEFAULT \'RUNNING\'',
       );
-      expect(syncRunCreate).toContain('"overlapAfter" TIMESTAMP WITH TIME ZONE');
+      expect(syncRunCreate).toContain(
+        '"overlapAfter" TIMESTAMP WITH TIME ZONE',
+      );
       expect(syncRunCreate).toContain('"chatCursor" text');
       expect(syncRunCreate).toContain('"currentChatId" text');
       expect(syncRunCreate).toContain('"currentChatAttendeeId" text');
@@ -210,9 +210,7 @@ describe('AddUnipileInstagramSyncStateFastInstanceCommand', () => {
       expect(checkpointCreate).toContain(
         'UNIQUE ("bindingId", "unipileChatId")',
       );
-      expect(checkpointCreate).toContain(
-        'btrim("unipileChatId") <> \'\'',
-      );
+      expect(checkpointCreate).toContain('btrim("unipileChatId") <> \'\'');
       expect(checkpointCreate).toContain(
         '"createdAt" TIMESTAMP WITH TIME ZONE',
       );
@@ -297,7 +295,9 @@ describe('AddUnipileInstagramSyncStateFastInstanceCommand', () => {
 
       await getCommand().down({ query } as unknown as QueryRunner);
 
-      const statements = query.mock.calls.map(([statement]) => statement as string);
+      const statements = query.mock.calls.map(
+        ([statement]) => statement as string,
+      );
       const droppedTables = getDroppedTableNames(statements);
       const webhookEventDrop = statements.indexOf(
         'DROP TABLE IF EXISTS "core"."unipileInstagramWebhookEvent"',

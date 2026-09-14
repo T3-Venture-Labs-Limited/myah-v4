@@ -70,7 +70,6 @@ const message = (
 const defaultProps = {
   messages: [message({})],
   selectedEmailThreadId: 'thread-a',
-  selectedEmailThreadSubject: 'Launch details',
   loading: false,
   loadingMore: false,
   error: undefined,
@@ -144,29 +143,21 @@ describe('MyahInboxContactEmailTimeline', () => {
     expect(onSelectEmailThread).toHaveBeenCalledWith('thread-b');
   });
 
-  it('keeps the exact selected Email target visible without exposing its internal ID', () => {
-    render(
-      <MyahInboxContactEmailTimeline
-        {...defaultProps}
-        messages={[]}
-        selectedEmailThreadId="78e40e64-66d8-4df5-a632-a6ebfdd7c121"
-        selectedEmailThreadSubject="Campaign terms"
-      />,
-    );
+  it('omits the duplicate reply target strip while preserving the selected thread separator', () => {
+    render(<MyahInboxContactEmailTimeline {...defaultProps} />);
 
-    const target = screen.getByLabelText('Selected email thread');
-
-    expect(target).toHaveTextContent('Reply target');
-    expect(target).toHaveTextContent('Email conversation');
-    expect(target).toHaveTextContent('Campaign terms');
-    expect(target).not.toHaveTextContent(
-      '78e40e64-66d8-4df5-a632-a6ebfdd7c121',
+    expect(
+      screen.queryByLabelText('Selected email thread'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Reply target')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: /Selected email thread Launch details,/,
+      }),
+    ).toBeVisible();
+    expect(screen.getByTestId('native-email-message-body')).toHaveTextContent(
+      'First body',
     );
-    expect(target).toHaveAttribute(
-      'data-thread-id',
-      '78e40e64-66d8-4df5-a632-a6ebfdd7c121',
-    );
-    expect(screen.getByText('No email messages yet.')).toBeInTheDocument();
   });
 
   it('uses the native body primitive for readable text and safely replaces restricted content', () => {
@@ -205,7 +196,7 @@ describe('MyahInboxContactEmailTimeline', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows loading and retryable error states without hiding the selected target', () => {
+  it('shows loading and retryable error states without a duplicate target strip', () => {
     const onRetry = jest.fn();
     const { rerender } = render(
       <MyahInboxContactEmailTimeline {...defaultProps} loading messages={[]} />,
@@ -214,13 +205,9 @@ describe('MyahInboxContactEmailTimeline', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Loading email messages',
     );
-    expect(screen.getByLabelText('Selected email thread')).toHaveTextContent(
-      'Launch details',
-    );
-    expect(screen.getByLabelText('Selected email thread')).toHaveAttribute(
-      'data-thread-id',
-      'thread-a',
-    );
+    expect(
+      screen.queryByLabelText('Selected email thread'),
+    ).not.toBeInTheDocument();
 
     rerender(
       <MyahInboxContactEmailTimeline

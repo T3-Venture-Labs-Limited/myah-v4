@@ -25,6 +25,20 @@ jest.mock('twenty-ui/theme-constants', () => ({
 }));
 
 const mockGenerateProposal = jest.fn();
+const mockApplyProposal = jest.fn().mockResolvedValue(true);
+const mockCapture = {
+  key: { workspaceId: 'workspace-1', threadId: 'thread-1' },
+  token: Symbol('generate'),
+};
+const mockController = {
+  flush: jest.fn().mockResolvedValue({}),
+  acquire: () => mockCapture,
+  applyProposalIfCurrent: mockApplyProposal,
+  release: jest.fn(),
+};
+jest.mock('@/myah/inbox/hooks/useMyahInboxDraftAutosaveController', () => ({
+  useMyahInboxDraftAutosaveControllerContext: () => mockController,
+}));
 
 jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
   useMyahInboxThreadMutations: () => ({
@@ -63,7 +77,6 @@ describe('MyahInboxProposalPreview', () => {
   });
 
   it('writes a generated reply directly into the shared draft', async () => {
-    const onApply = jest.fn();
     const proposal = {
       body: { markdown: 'Thanks for the update.', blocknote: null },
     };
@@ -71,9 +84,8 @@ describe('MyahInboxProposalPreview', () => {
 
     render(
       <MyahInboxProposalPreview
-        threadId="thread-1"
+        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
         disabled={false}
-        onApply={onApply}
       />,
     );
 
@@ -86,9 +98,10 @@ describe('MyahInboxProposalPreview', () => {
 
     expect(mockGenerateProposal).toHaveBeenCalledWith({
       threadId: 'thread-1',
+      expectedWorkspaceId: 'workspace-1',
       operatorInstructions: 'Draft a concise reply to this conversation.',
     });
-    expect(onApply).toHaveBeenCalledWith(proposal.body);
+    expect(mockApplyProposal).toHaveBeenCalledWith(mockCapture, proposal.body);
     expect(screen.queryByText('Generated reply')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Reply preview')).not.toBeInTheDocument();
     expect(
@@ -102,9 +115,8 @@ describe('MyahInboxProposalPreview', () => {
   it('renders Generate Reply as the only normal draft action', () => {
     render(
       <MyahInboxProposalPreview
-        threadId="thread-1"
+        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
         disabled={false}
-        onApply={jest.fn()}
         renderGenerateAction={(generateAction) => (
           <div aria-label="Draft actions">{generateAction}</div>
         )}
@@ -124,9 +136,8 @@ describe('MyahInboxProposalPreview', () => {
 
     render(
       <MyahInboxProposalPreview
-        threadId="thread-1"
+        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
         disabled={false}
-        onApply={jest.fn()}
       />,
     );
 
@@ -145,9 +156,8 @@ describe('MyahInboxProposalPreview', () => {
 
     render(
       <MyahInboxProposalPreview
-        threadId="thread-1"
+        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
         disabled={false}
-        onApply={jest.fn()}
       />,
     );
 
@@ -163,9 +173,8 @@ describe('MyahInboxProposalPreview', () => {
   it('does not call Task 5 while the draft is read-only', () => {
     render(
       <MyahInboxProposalPreview
-        threadId="thread-1"
+        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
         disabled
-        onApply={jest.fn()}
       />,
     );
 

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { ILike, IsNull } from 'typeorm';
+import { type MyahInboxEmailDraft } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-email-draft.dto';
 
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import {
@@ -409,6 +410,66 @@ export class MyahInboxQueryService {
             hasNextPage,
             endCursor: edges[edges.length - 1]?.cursor ?? null,
           },
+        };
+      },
+      input.authContext,
+    );
+  }
+
+  async readEmailDraft(
+    input: Pick<
+      MyahInboxListThreadsInput,
+      'authContext' | 'user' | 'workspace' | 'workspaceMemberId'
+    > & { threadId: string },
+  ): Promise<MyahInboxEmailDraft> {
+    const threadId = input.threadId;
+    this.assertUserRequest(input);
+    this.assertValidFilterIds(input);
+    await this.getThreadSummary({ ...input, threadId });
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const context = getWorkspaceContext();
+        const role = resolveRolePermissionConfig({
+          authContext: input.authContext,
+          userWorkspaceRoleMap: context.userWorkspaceRoleMap,
+          apiKeyRoleMap: context.apiKeyRoleMap,
+        });
+        if (!role) throw new ForbiddenException('Inbox draft is not readable');
+        const repository = await this.globalWorkspaceOrmManager.getRepository<
+          Record<string, unknown>
+        >(input.workspace.id, 'messageThread', role);
+        const [row] = await repository
+          .createQueryBuilder('thread')
+          .select('thread.id', 'threadId')
+          .addSelect('thread."myahReplyDraftRevision"', 'revision')
+          .addSelect('thread."myahReplyDraftBodyMarkdown"', 'markdown')
+          .addSelect('thread."myahReplyDraftBodyBlocknote"', 'blocknote')
+          .where('thread.id = :threadId AND thread."deletedAt" IS NULL', {
+            threadId,
+          })
+          .getRawMany<{
+            threadId: string;
+            revision: number;
+            markdown: string | null;
+            blocknote: string | null;
+          }>();
+        if (
+          !row ||
+          row.threadId !== threadId ||
+          !Number.isSafeInteger(row.revision) ||
+          row.revision < 0
+        )
+          throw new ForbiddenException('Inbox draft is not readable');
+        // Reuse existing Inbox policy authority, including a target-loss check after the draft read.
+        await this.getThreadSummary({ ...input, threadId });
+        return {
+          workspaceId: input.workspace.id,
+          threadId,
+          revision: row.revision,
+          body:
+            row.markdown === null && row.blocknote === null
+              ? null
+              : { markdown: row.markdown ?? '', blocknote: row.blocknote },
         };
       },
       input.authContext,

@@ -8,8 +8,8 @@ type CreateUnipileInstagramFoundationFastInstanceCommand = {
   down: (queryRunner: QueryRunner) => Promise<void>;
 };
 
-type CreateUnipileInstagramFoundationFastInstanceCommandConstructor = new () =>
-  CreateUnipileInstagramFoundationFastInstanceCommand;
+type CreateUnipileInstagramFoundationFastInstanceCommandConstructor =
+  new () => CreateUnipileInstagramFoundationFastInstanceCommand;
 
 type CreateUnipileInstagramFoundationFastInstanceCommandModule = {
   CreateUnipileInstagramFoundationFastInstanceCommand: CreateUnipileInstagramFoundationFastInstanceCommandConstructor;
@@ -24,9 +24,7 @@ const loadCommandModule = ():
   | CreateUnipileInstagramFoundationFastInstanceCommandModule
   | undefined => {
   try {
-    return require(
-      'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1799201000000-create-unipile-instagram-foundation',
-    ) as CreateUnipileInstagramFoundationFastInstanceCommandModule;
+    return require('src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619348-create-unipile-instagram-foundation') as CreateUnipileInstagramFoundationFastInstanceCommandModule;
   } catch {
     return undefined;
   }
@@ -45,9 +43,7 @@ const getTableNames = (statements: string[]): string[] =>
 const getDroppedTableNames = (statements: string[]): string[] =>
   statements.flatMap((statement) =>
     Array.from(
-      statement.matchAll(
-        /DROP TABLE(?: IF EXISTS)? "core"\."([^"]+)"/g,
-      ),
+      statement.matchAll(/DROP TABLE(?: IF EXISTS)? "core"\."([^"]+)"/g),
       ([, tableName]) => tableName,
     ),
   );
@@ -78,7 +74,7 @@ describe('CreateUnipileInstagramFoundationFastInstanceCommand', () => {
       ),
     ).toEqual({
       runAfterWorkspace: false,
-      timestamp: 1799201000000,
+      timestamp: 1789307619348,
       type: 'fast',
       version: '2.20.0',
     });
@@ -90,7 +86,9 @@ describe('CreateUnipileInstagramFoundationFastInstanceCommand', () => {
 
       await getCommand().up({ query } as unknown as QueryRunner);
 
-      const statements = query.mock.calls.map(([statement]) => statement as string);
+      const statements = query.mock.calls.map(
+        ([statement]) => statement as string,
+      );
       const sql = statements.join('\n');
       const bindingCreate = statements.find((statement) =>
         statement.includes(
@@ -144,9 +142,7 @@ describe('CreateUnipileInstagramFoundationFastInstanceCommand', () => {
       expect(attemptCreate).not.toContain('"userWorkspaceId" uuid NOT NULL');
       expect(attemptCreate).toContain('"operation"');
       expect(attemptCreate).toContain('"expectedBindingId" uuid');
-      expect(attemptCreate).not.toContain(
-        '"expectedBindingId" uuid NOT NULL',
-      );
+      expect(attemptCreate).not.toContain('"expectedBindingId" uuid NOT NULL');
       expect(attemptCreate).toContain('"callbackSecretHash"');
       expect(attemptCreate).toContain('"callbackDigest"');
       expect(attemptCreate).toContain('"callbackAccountId"');
@@ -199,7 +195,9 @@ describe('CreateUnipileInstagramFoundationFastInstanceCommand', () => {
 
       await getCommand().down({ query } as unknown as QueryRunner);
 
-      const statements = query.mock.calls.map(([statement]) => statement as string);
+      const statements = query.mock.calls.map(
+        ([statement]) => statement as string,
+      );
       const droppedTables = getDroppedTableNames(statements);
       const firstTableDrop = statements.findIndex((statement) =>
         statement.includes('DROP TABLE'),

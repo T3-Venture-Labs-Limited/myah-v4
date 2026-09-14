@@ -1,5 +1,18 @@
 import { ForbiddenException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
+import {
+  MyahInboxEmailCardPage,
+  MyahInboxEmailCardProjection,
+  MyahInboxEmailMessagePage,
+  MyahInboxEmailMessageLocation,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-email-card.dto';
+import {
+  MyahInboxEmailCardsInput,
+  MyahInboxEmailCardInput,
+  MyahInboxEmailCardMessagesInput,
+  MyahInboxEmailMessageLocationInput,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-email-read.input';
+import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
@@ -74,6 +87,86 @@ export class MyahInboxContactResolver {
     const { authContext, user } = this.getAuthenticatedUserContext();
 
     return this.contactEmailQueryService.listMessages({
+      ...input,
+      authContext,
+      user,
+      workspace,
+      workspaceMemberId,
+    });
+  }
+
+  @Query(() => MyahInboxEmailCardPage)
+  async myahInboxContactEmailCards(
+    @Args() input: MyahInboxEmailCardsInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<MyahInboxEmailCardPage> {
+    const { authContext, user } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
+    return this.contactEmailQueryService.listCards({
+      ...input,
+      authContext,
+      user,
+      workspace,
+      workspaceMemberId,
+    });
+  }
+
+  @Query(() => MyahInboxEmailCardProjection)
+  async myahInboxContactEmailCard(
+    @Args() input: MyahInboxEmailCardInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<MyahInboxEmailCardProjection> {
+    const { authContext, user } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
+    return this.contactEmailQueryService.readCard({
+      ...input,
+      authContext,
+      user,
+      workspace,
+      workspaceMemberId,
+    });
+  }
+
+  @Query(() => MyahInboxEmailMessagePage)
+  async myahInboxContactEmailCardMessages(
+    @Args() input: MyahInboxEmailCardMessagesInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<MyahInboxEmailMessagePage> {
+    const { authContext, user } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
+    return this.contactEmailQueryService.listCardMessages({
+      ...input,
+      authContext,
+      user,
+      workspace,
+      workspaceMemberId,
+    });
+  }
+
+  @Query(() => MyahInboxEmailMessageLocation, { nullable: true })
+  async myahInboxContactEmailMessageLocation(
+    @Args() input: MyahInboxEmailMessageLocationInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<MyahInboxEmailMessageLocation | null> {
+    const { authContext, user } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
+    return this.contactEmailQueryService.locateMessage({
       ...input,
       authContext,
       user,

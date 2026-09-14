@@ -1,3 +1,7 @@
+import { InstagramMessageLocalAuthorityReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-local-authority-reader.service';
+import { InstagramMessageProposalReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-proposal-reader.service';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
+import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -37,6 +41,7 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     PermissionsModule,
     MessagingSendManagerModule,
     TypeOrmModule.forFeature([
+      UnipileInstagramAccountBindingEntity,
       ActionApprovalBindingEntity,
       ActionApprovalBindingEvidenceLinkEntity,
       ActionExecutionReceiptEntity,
@@ -48,6 +53,9 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ]),
   ],
   providers: [
+    InstagramMessageLocalAuthorityReaderService,
+    InstagramMessageProposalReaderService,
+    provideWorkspaceScopedRepository(UnipileInstagramAccountBindingEntity),
     ActionApprovalService,
     ActionReceiptProjectorService,
     ActionApprovalResolver,

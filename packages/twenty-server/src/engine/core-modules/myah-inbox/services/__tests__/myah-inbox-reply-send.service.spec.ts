@@ -15,6 +15,15 @@ import {
   type MyahInboxReplySendRequest,
 } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-send.service';
 
+jest.mock(
+  'src/engine/core-modules/myah-inbox/utils/render-myah-inbox-reply-body.util',
+  () => ({ renderMyahInboxReplyBody: jest.fn() }),
+);
+
+const { renderMyahInboxReplyBody } = jest.requireMock(
+  'src/engine/core-modules/myah-inbox/utils/render-myah-inbox-reply-body.util',
+) as { renderMyahInboxReplyBody: jest.Mock };
+
 const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
 const userId = '20202020-1234-4678-9012-345678901235';
@@ -244,6 +253,13 @@ const createService = (overrides?: {
 };
 
 describe('MyahInboxReplySendService', () => {
+  beforeEach(() => {
+    renderMyahInboxReplyBody.mockResolvedValue({
+      body: authority.canonicalGraph.draftBody.markdown,
+      html: authority.canonicalGraph.draftBody.markdown,
+    });
+  });
+
   it('proves authority, reserves before one provider send, records acceptance, and projects', async () => {
     const setup = createService();
 
@@ -286,6 +302,31 @@ describe('MyahInboxReplySendService', () => {
       receiptId,
       revision: 4,
       body: authority.canonicalGraph.draftBody,
+    });
+  });
+
+  it('dispatches the prepared plain text and HTML without changing the canonical graph', async () => {
+    renderMyahInboxReplyBody.mockResolvedValue({
+      body: 'Projected plain text',
+      html: '<p><strong>Projected HTML</strong></p>',
+    });
+    const setup = createService();
+
+    await setup.service.send(request());
+
+    expect(renderMyahInboxReplyBody).toHaveBeenCalledWith(
+      authority.canonicalGraph.draftBody,
+    );
+    expect(setup.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: 'Projected plain text',
+        html: '<p><strong>Projected HTML</strong></p>',
+      }),
+      authority.canonicalGraph.connectedAccount,
+    );
+    expect(authority.canonicalGraph.draftBody).toEqual({
+      markdown: 'Thanks for the update',
+      blocknote: null,
     });
   });
 
@@ -389,7 +430,24 @@ describe('MyahInboxReplySendService', () => {
     expect(setup.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('invalidates only its receipt-free binding when authority changes after binding creation', async () => {
+  it('keeps the draft recoverable without a receipt when rendering fails before reservation', async () => {
+    renderMyahInboxReplyBody.mockRejectedValue(new Error('invalid rich body'));
+    const setup = createService();
+
+    await expect(setup.service.send(request())).resolves.toEqual({
+      outcome: MyahInboxReplySendOutcome.FAILED,
+      receiptId: null,
+      revision: 4,
+      body: authority.canonicalGraph.draftBody,
+    });
+    expect(setup.createApprovedInboxReplyBinding).not.toHaveBeenCalled();
+    expect(setup.reserveExecutionForBinding).not.toHaveBeenCalled();
+    expect(setup.sendMessage).not.toHaveBeenCalled();
+    expect(setup.recordProviderAccepted).not.toHaveBeenCalled();
+    expect(setup.recordProviderTerminalState).not.toHaveBeenCalled();
+  });
+
+  it('invalidates only its receipt-free binding when authority changes after formatting and binding creation', async () => {
     const setup = createService({
       rebuildExecutionAuthority: jest
         .fn()
@@ -412,6 +470,10 @@ describe('MyahInboxReplySendService', () => {
       draftId: threadId,
     });
     expect(setup.reserveExecutionForBinding).not.toHaveBeenCalled();
+    expect(renderMyahInboxReplyBody).toHaveBeenCalledWith(
+      authority.canonicalGraph.draftBody,
+    );
+    expect(setup.sendMessage).not.toHaveBeenCalled();
   });
 
   it('records a definitive rejection, preserves the body, and advances its revision once', async () => {
@@ -617,6 +679,24 @@ describe('MyahInboxReplySendService', () => {
       expect(setup.buildAuthority).not.toHaveBeenCalled();
     },
   );
+
+  it('reports invalid rich content with an actionable recoverable readiness reason', async () => {
+    const setup = createService({
+      buildAuthority: jest.fn().mockResolvedValue({
+        ...authority,
+        canonicalGraph: {
+          ...authority.canonicalGraph,
+          draftBody: { markdown: 'Recover this draft', blocknote: '{' },
+        },
+      }),
+    });
+
+    await expect(setup.service.getReadiness(request())).resolves.toEqual({
+      status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
+      reason:
+        'This draft contains unsupported formatted content. Edit the draft and try again.',
+    });
+  });
 
   it('maps only known authority failures to safe readiness without exposing raw errors', async () => {
     const setup = createService({

@@ -46,6 +46,45 @@ describe('PermissionsService', () => {
 
     service = module.get<PermissionsService>(PermissionsService);
   });
+  describe('Instagram forward cutover explicit-grant boundary', () => {
+    it.each([
+      PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
+      PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
+      PermissionFlagType.RESOLVE_INSTAGRAM_SEND_OUTCOME,
+    ])(
+      '%s defaults and blanket tools deny, valid explicit grants allow',
+      (flag) => {
+        expect(
+          service.getDefaultUserWorkspacePermissions().permissionFlags[flag],
+        ).toBe(false);
+        for (const blanket of [false, true]) {
+          const role = {
+            canAccessAllTools: blanket,
+            canUpdateAllSettings: blanket,
+            rolePermissionFlags: [],
+          } as unknown as RoleEntity;
+          expect(service.checkRolePermissions(role, flag)).toBe(false);
+          role.rolePermissionFlags = [
+            {
+              permissionFlag: {
+                universalIdentifier: SystemPermissionFlag.SEND_EMAIL_TOOL,
+              },
+            },
+          ] as never;
+          expect(service.checkRolePermissions(role, flag)).toBe(false);
+          role.rolePermissionFlags = [
+            {
+              permissionFlag: {
+                universalIdentifier: SystemPermissionFlag[flag],
+              },
+            },
+          ] as never;
+          expect(service.checkRolePermissions(role, flag)).toBe(true);
+        }
+      },
+    );
+  });
+
   describe('getDefaultUserWorkspacePermissions', () => {
     it('returns an exhaustive disabled permission map including Instagram send controls', () => {
       expect(service.getDefaultUserWorkspacePermissions()).toEqual({

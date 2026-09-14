@@ -12,17 +12,13 @@ import {
 } from 'src/engine/core-modules/action-approval/dtos/action-approval-evidence.dto';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
+import { InstagramMessageProposalReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-proposal-reader.service';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
-import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
-import { buildSystemAuthContext } from 'src/engine/core-modules/auth/utils/build-system-auth-context.util';
-import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 @UseGuards(WorkspaceAuthGuard, SettingsPermissionGuard(PermissionFlagType.AI))
 @MetadataResolver()
@@ -30,7 +26,7 @@ export class ActionApprovalResolver {
   constructor(
     private readonly dataSource: DataSource,
     private readonly actionApprovalService: ActionApprovalService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly instagramMessageProposalReader: InstagramMessageProposalReaderService,
   ) {}
 
   @Query(() => ActionApprovalProposalDTO)
@@ -51,7 +47,7 @@ export class ActionApprovalResolver {
       binding.actionVersion === 2 &&
       binding.actionKind === 'REPLY'
     ) {
-      return this.getInstagramMessageProposal(workspace, binding);
+      return this.getInstagramMessageProposal(binding, userWorkspaceId);
     }
     return {
       action: binding.actionName,
@@ -73,47 +69,13 @@ export class ActionApprovalResolver {
   }
 
   private async getInstagramMessageProposal(
-    workspace: WorkspaceEntity,
     binding: ActionApprovalBindingEntity,
+    userWorkspaceId: string,
   ): Promise<ActionApprovalProposalDTO> {
-    const proposal =
-      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          const dataSource =
-            await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-          const schemaName = getWorkspaceSchemaName(workspace.id);
-          const [draft] = await dataSource.query<
-            Array<{
-              body: string | null;
-              recipientUsername: string | null;
-              accountLabel: string | null;
-            }>
-          >(
-            `SELECT draft."body", draft."recipientUsername",
-                    COALESCE(account."label", account."name") AS "accountLabel"
-             FROM "${schemaName}"."_myahInstagramReplyDraft" draft
-             LEFT JOIN "${schemaName}"."_myahSocialConversation" conversation
-               ON conversation."id" = draft."conversationId"
-             LEFT JOIN "${schemaName}"."_myahInstagramAccount" account
-               ON account."id" = conversation."instagramAccountId"
-             WHERE draft."id" = $1
-               AND draft."deletedAt" IS NULL
-             LIMIT 1`,
-            [binding.draftId],
-          );
-          if (
-            !draft?.body ||
-            computeActionContentDigest(draft.body) !== binding.contentDigest
-          ) {
-            throw new Error('Instagram message proposal is unavailable');
-          }
-
-          return draft;
-        },
-        buildSystemAuthContext({
-          workspace: workspace as unknown as FlatWorkspace,
-        }),
-      );
+    const proposal = await this.instagramMessageProposalReader.read(
+      binding,
+      userWorkspaceId,
+    );
 
     return {
       action: binding.actionName,

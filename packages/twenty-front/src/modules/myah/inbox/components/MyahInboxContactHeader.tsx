@@ -1,9 +1,8 @@
-import { getMyahInboxSafeEmailSubject } from '@/myah/inbox/components/MyahInboxEmailSubjectSeparator';
+import { type ReactNode } from 'react';
 import {
   type MyahInboxChannel,
   type MyahInboxContact,
 } from '@/myah/inbox/types/MyahInboxContact';
-import { Select } from '@/ui/input/components/Select';
 import { styled } from '@linaria/react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -40,37 +39,24 @@ const StyledChannel = styled.span`
   font-size: ${themeCssVariables.font.size.xs};
 `;
 
-const StyledEmailTarget = styled.div`
-  flex: 1;
-  min-width: 0;
+const StyledActions = styled.div`
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[2]};
 `;
-
-export type MyahInboxEmailThreadOption = {
-  id: string;
-  subject: string | null;
-  detail: string;
-};
 
 export type MyahInboxContactHeaderProps = {
   contact: MyahInboxContact;
   channel: MyahInboxChannel;
-  selectedEmailThreadId: string | null;
-  emailThreadOptions: MyahInboxEmailThreadOption[];
-  onSelectEmailThread: (threadId: string) => void;
+  actions?: ReactNode;
 };
 
 export const MyahInboxContactHeader = ({
   contact,
   channel,
-  selectedEmailThreadId,
-  emailThreadOptions,
-  onSelectEmailThread,
+  actions,
 }: MyahInboxContactHeaderProps) => {
-  const selectOptions = emailThreadOptions.map((thread) => ({
-    label: `${getMyahInboxSafeEmailSubject(thread.subject)} · ${thread.detail}`,
-    value: thread.id,
-  }));
-
   return (
     <StyledHeader aria-label="Contact conversation header">
       <StyledIdentity>
@@ -79,24 +65,7 @@ export const MyahInboxContactHeader = ({
           {channel === 'EMAIL' ? 'Email' : 'Instagram'}
         </StyledChannel>
       </StyledIdentity>
-      {channel === 'EMAIL' ? (
-        <StyledEmailTarget>
-          <Select
-            dropdownWidthAuto
-            fullWidth
-            dropdownId={`myah-inbox-email-thread-${contact.id}`}
-            label="Email thread"
-            value={selectedEmailThreadId ?? ''}
-            emptyOption={{ label: 'Select a thread', value: '' }}
-            options={selectOptions}
-            onChange={(threadId) => {
-              if (threadId !== '') {
-                onSelectEmailThread(threadId);
-              }
-            }}
-          />
-        </StyledEmailTarget>
-      ) : null}
+      <StyledActions>{actions}</StyledActions>
     </StyledHeader>
   );
 };

@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, type EntityManager, type Repository } from 'typeorm';
+import { In, IsNull, Not, type EntityManager, type Repository } from 'typeorm';
 
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { UnipileHostedAuthAttemptOperation } from 'src/modules/myah-unipile/entities/unipile-hosted-auth-attempt.entity';
@@ -304,7 +304,10 @@ export class UnipileInstagramAccountService {
               where: {
                 id: binding.id,
                 workspaceId: input.workspaceId,
-                status: binding.status,
+                status: In([
+                  binding.status,
+                  UnipileInstagramAccountBindingStatus.DELETE_UNKNOWN,
+                ]),
                 deactivatedAt: IsNull(),
               },
             });
@@ -341,9 +344,17 @@ export class UnipileInstagramAccountService {
               await bindingRepository.save(currentBinding);
             }
 
-            return { binding: currentBinding, workspace };
+            return {
+              binding: currentBinding,
+              workspace,
+              disconnectMarkerPersisted,
+            };
           },
         );
+
+        if (marker.disconnectMarkerPersisted) {
+          return { status: 'PENDING_RECOVERY' as const };
+        }
 
         await this.projectionService.markAccountStatus({
           workspace: marker.workspace,

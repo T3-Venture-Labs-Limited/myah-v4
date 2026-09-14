@@ -121,6 +121,14 @@ type UnipileGetMessageInput = {
 };
 
 type UnipileV1ClientService = {
+  getInstagramMessagingProfile: (input: {
+    accountId: string;
+    username: string;
+  }) => Promise<{
+    providerId: string;
+    providerMessagingId: string;
+    username: string;
+  }>;
   createHostedAuthLink: (
     input: UnipileCreateHostedAuthLinkInput,
   ) => Promise<{ url: string }>;
@@ -631,175 +639,321 @@ describe('UnipileV1ClientService', () => {
     });
   });
 
-  it('creates a single-use Instagram Hosted Auth link with only public callback state', async () => {
-    const clientServiceModule = loadClientServiceModule();
+  it.each([
+    'https://account.unipile.com/synthetic-hosted-auth-link',
+    'https://account.unipile.com:443/synthetic-hosted-auth-link',
+    'https://account.unipile.com/opaque%2fTOKEN%2B%3D/%252F?signature=a%2Fb%2Bc%3D&state=x+y&state=%2520#opaque%23',
+  ])(
+    'creates a single-use Instagram Hosted Auth link preserving %s with only public callback state',
+    async (url) => {
+      const clientServiceModule = loadClientServiceModule();
 
-    expect(clientServiceModule).toBeDefined();
+      expect(clientServiceModule).toBeDefined();
 
-    if (!clientServiceModule) {
-      return;
-    }
+      if (!clientServiceModule) {
+        return;
+      }
 
-    const apiKey = 'synthetic-unipile-api-key';
-    const callOrder: string[] = [];
-    const availabilityService = {
-      assertEnabled: jest.fn(() => callOrder.push('availability')),
-      config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
-    };
-    const twentyConfigService = {
-      get: jest.fn((key: string) => {
-        callOrder.push(`config:${key}`);
+      const apiKey = 'synthetic-unipile-api-key';
+      const callOrder: string[] = [];
+      const availabilityService = {
+        assertEnabled: jest.fn(() => callOrder.push('availability')),
+        config: { apiBaseUrl: 'https://api46.unipile.com:17699/api/v1/' },
+      };
+      const twentyConfigService = {
+        get: jest.fn((key: string) => {
+          callOrder.push(`config:${key}`);
 
-        if (key === 'UNIPILE_API_KEY') {
-          return apiKey;
-        }
+          if (key === 'UNIPILE_API_KEY') {
+            return apiKey;
+          }
 
-        throw new Error(`Unexpected configuration key: ${key}`);
-      }),
-    };
-    const fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          url: 'https://auth.unipile.com/synthetic-hosted-auth-link',
-          id: 'provider-only-link-id',
+          throw new Error(`Unexpected configuration key: ${key}`);
         }),
-    });
-    const service = new clientServiceModule.UnipileV1ClientService(
-      availabilityService,
-      twentyConfigService,
-      fetch,
-    );
-    const expiresOn = new Date('2026-09-03T12:15:00.000Z');
-    const input = {
-      expiresOn,
-      successRedirectUrl:
-        'https://app.myah.test/integrations/instagram/success',
-      failureRedirectUrl:
-        'https://app.myah.test/integrations/instagram/failure',
-      notifyUrl:
-        'https://api.myah.test/unipile/hosted-auth/attempts/attempt-public-123',
-      name: 'b893a6da2ea0a6444fa14afaf9f18f45101111bdc5b84aaef54d9c9c9d70e701',
-    };
+      };
+      const fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            url,
+            id: 'provider-only-link-id',
+          }),
+      });
+      const service = new clientServiceModule.UnipileV1ClientService(
+        availabilityService,
+        twentyConfigService,
+        fetch,
+      );
+      const expiresOn = new Date('2026-09-03T12:15:00.000Z');
+      const input = {
+        expiresOn,
+        successRedirectUrl:
+          'https://app.myah.test/integrations/instagram/success',
+        failureRedirectUrl:
+          'https://app.myah.test/integrations/instagram/failure',
+        notifyUrl:
+          'https://api.myah.test/unipile/hosted-auth/attempts/attempt-public-123',
+        name: 'b893a6da2ea0a6444fa14afaf9f18f45101111bdc5b84aaef54d9c9c9d70e701',
+      };
 
-    const hostedAuthLink = await service.createHostedAuthLink(input);
+      const hostedAuthLink = await service.createHostedAuthLink(input);
 
-    expect(hostedAuthLink).toEqual({
-      url: 'https://auth.unipile.com/synthetic-hosted-auth-link',
-    });
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(
-      'https://api49.unipile.com:17981/api/v1/hosted/accounts/link',
-      {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'X-API-KEY': apiKey,
+      expect(hostedAuthLink).toEqual({ url });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledWith(
+        'https://api46.unipile.com:17699/api/v1/hosted/accounts/link',
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-API-KEY': apiKey,
+          },
+          body: JSON.stringify({
+            type: 'create',
+            providers: ['INSTAGRAM'],
+            single_use: true,
+            api_url: 'https://api46.unipile.com:17699',
+            expiresOn: expiresOn.toISOString(),
+            success_redirect_url: input.successRedirectUrl,
+            failure_redirect_url: input.failureRedirectUrl,
+            notify_url: input.notifyUrl,
+            name: input.name,
+          }),
+          redirect: 'error',
+          signal: expect.any(AbortSignal),
         },
-        body: JSON.stringify({
-          type: 'create',
-          providers: ['INSTAGRAM'],
-          single_use: true,
-          api_url: 'https://api49.unipile.com:17981',
-          expiresOn: expiresOn.toISOString(),
-          success_redirect_url: input.successRedirectUrl,
-          failure_redirect_url: input.failureRedirectUrl,
-          notify_url: input.notifyUrl,
-          name: input.name,
+      );
+      expect(callOrder).toEqual(['availability', 'config:UNIPILE_API_KEY']);
+    },
+  );
+  it.each([
+    'https://account.unipile.com/synthetic-hosted-auth-reconnect-link',
+    'https://account.unipile.com:443/synthetic-hosted-auth-reconnect-link',
+    'https://account.unipile.com/opaque%2fTOKEN%2B%3D/%252F?signature=a%2Fb%2Bc%3D&state=x+y&state=%2520#opaque%23',
+  ])(
+    'creates a single-use Hosted Auth reconnect link preserving %s without provider selection or account leakage',
+    async (url) => {
+      const clientServiceModule = loadClientServiceModule();
+
+      expect(clientServiceModule).toBeDefined();
+
+      if (!clientServiceModule) {
+        return;
+      }
+
+      const apiKey = 'synthetic-unipile-api-key';
+      const callOrder: string[] = [];
+      const availabilityService = {
+        assertEnabled: jest.fn(() => callOrder.push('availability')),
+        config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
+      };
+      const twentyConfigService = {
+        get: jest.fn((key: string) => {
+          callOrder.push(`config:${key}`);
+
+          if (key === 'UNIPILE_API_KEY') {
+            return apiKey;
+          }
+
+          throw new Error(`Unexpected configuration key: ${key}`);
         }),
-        redirect: 'error',
-        signal: expect.any(AbortSignal),
-      },
-    );
-    expect(callOrder).toEqual(['availability', 'config:UNIPILE_API_KEY']);
-  });
-  it('creates a single-use Hosted Auth reconnect link without provider selection or account leakage', async () => {
-    const clientServiceModule = loadClientServiceModule();
+      };
+      const fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            url,
+            id: 'provider-only-link-id',
+            account_id: 'unipile-instagram-account-123',
+          }),
+      });
+      const service = new clientServiceModule.UnipileV1ClientService(
+        availabilityService,
+        twentyConfigService,
+        fetch,
+      );
+      const expiresOn = new Date('2026-09-03T12:15:00.000Z');
+      const input = {
+        operation: 'RECONNECT' as const,
+        reconnectAccountId: 'unipile-instagram-account-123',
+        expiresOn,
+        successRedirectUrl:
+          'https://app.myah.test/integrations/instagram/success',
+        failureRedirectUrl:
+          'https://app.myah.test/integrations/instagram/failure',
+        notifyUrl:
+          'https://api.myah.test/unipile/hosted-auth/attempts/attempt-public-123',
+        name: 'b893a6da2ea0a6444fa14afaf9f18f45101111bdc5b84aaef54d9c9c9d70e701',
+      };
 
-    expect(clientServiceModule).toBeDefined();
+      const hostedAuthLink = await service.createHostedAuthLink(input);
 
-    if (!clientServiceModule) {
-      return;
-    }
-
-    const apiKey = 'synthetic-unipile-api-key';
-    const callOrder: string[] = [];
-    const availabilityService = {
-      assertEnabled: jest.fn(() => callOrder.push('availability')),
-      config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
-    };
-    const twentyConfigService = {
-      get: jest.fn((key: string) => {
-        callOrder.push(`config:${key}`);
-
-        if (key === 'UNIPILE_API_KEY') {
-          return apiKey;
-        }
-
-        throw new Error(`Unexpected configuration key: ${key}`);
-      }),
-    };
-    const fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          url: 'https://auth.unipile.com/synthetic-hosted-auth-reconnect-link',
-          id: 'provider-only-link-id',
-          account_id: 'unipile-instagram-account-123',
-        }),
-    });
-    const service = new clientServiceModule.UnipileV1ClientService(
-      availabilityService,
-      twentyConfigService,
-      fetch,
-    );
-    const expiresOn = new Date('2026-09-03T12:15:00.000Z');
-    const input = {
-      operation: 'RECONNECT' as const,
-      reconnectAccountId: 'unipile-instagram-account-123',
-      expiresOn,
-      successRedirectUrl:
-        'https://app.myah.test/integrations/instagram/success',
-      failureRedirectUrl:
-        'https://app.myah.test/integrations/instagram/failure',
-      notifyUrl:
-        'https://api.myah.test/unipile/hosted-auth/attempts/attempt-public-123',
-      name: 'b893a6da2ea0a6444fa14afaf9f18f45101111bdc5b84aaef54d9c9c9d70e701',
-    };
-
-    const hostedAuthLink = await service.createHostedAuthLink(input);
-
-    expect(hostedAuthLink).toEqual({
-      url: 'https://auth.unipile.com/synthetic-hosted-auth-reconnect-link',
-    });
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(
-      'https://api49.unipile.com:17981/api/v1/hosted/accounts/link',
-      {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'X-API-KEY': apiKey,
+      expect(hostedAuthLink).toEqual({ url });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledWith(
+        'https://api49.unipile.com:17981/api/v1/hosted/accounts/link',
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-API-KEY': apiKey,
+          },
+          body: JSON.stringify({
+            type: 'reconnect',
+            reconnect_account: input.reconnectAccountId,
+            single_use: true,
+            api_url: 'https://api49.unipile.com:17981',
+            expiresOn: expiresOn.toISOString(),
+            success_redirect_url: input.successRedirectUrl,
+            failure_redirect_url: input.failureRedirectUrl,
+            notify_url: input.notifyUrl,
+            name: input.name,
+          }),
+          redirect: 'error',
+          signal: expect.any(AbortSignal),
         },
-        body: JSON.stringify({
-          type: 'reconnect',
-          reconnect_account: input.reconnectAccountId,
-          single_use: true,
-          api_url: 'https://api49.unipile.com:17981',
-          expiresOn: expiresOn.toISOString(),
-          success_redirect_url: input.successRedirectUrl,
-          failure_redirect_url: input.failureRedirectUrl,
-          notify_url: input.notifyUrl,
-          name: input.name,
-        }),
-        redirect: 'error',
-        signal: expect.any(AbortSignal),
-      },
-    );
-    expect(callOrder).toEqual(['availability', 'config:UNIPILE_API_KEY']);
-  });
+      );
+      expect(callOrder).toEqual(['availability', 'config:UNIPILE_API_KEY']);
+    },
+  );
+
+  describe.each(['CREATE', 'RECONNECT'] as const)(
+    'Hosted Auth %s returned URL trust',
+    (operation) => {
+      it.each<[string, unknown]>([
+        ['attacker HTTPS host', 'https://attacker.example/url-token-sentinel'],
+        ['HTTP official host', 'http://account.unipile.com/url-token-sentinel'],
+        ['javascript scheme', 'javascript:alert("url-token-sentinel")'],
+        ['data scheme', 'data:text/plain,url-token-sentinel'],
+        ['FTP scheme', 'ftp://account.unipile.com/url-token-sentinel'],
+        [
+          'blob scheme with official origin',
+          'blob:https://account.unipile.com/00000000-0000-4000-8000-000000000000',
+        ],
+        [
+          'host suffix',
+          'https://account.unipile.com.attacker.example/url-token-sentinel',
+        ],
+        ['subdomain', 'https://login.account.unipile.com/url-token-sentinel'],
+        ['lookalike', 'https://account-unipile.com/url-token-sentinel'],
+        [
+          'trailing-dot host',
+          'https://account.unipile.com./url-token-sentinel',
+        ],
+        // The official guide generates account.unipile.com, not this old fixture host.
+        [
+          'undocumented sibling host',
+          'https://auth.unipile.com/url-token-sentinel',
+        ],
+        [
+          'API DSN origin',
+          'https://api49.unipile.com:17981/url-token-sentinel',
+        ],
+        ['custom domain', 'https://auth.myah.test/url-token-sentinel'],
+        [
+          'attacker userinfo on official host',
+          'https://credential-sentinel@account.unipile.com/url-token-sentinel',
+        ],
+        [
+          'password on official host',
+          'https://:credential-sentinel@account.unipile.com/url-token-sentinel',
+        ],
+        [
+          'username and password',
+          'https://attacker:credential-sentinel@account.unipile.com/url-token-sentinel',
+        ],
+        [
+          'official host as userinfo',
+          'https://account.unipile.com@attacker.example/url-token-sentinel',
+        ],
+        [
+          'nondefault port',
+          'https://account.unipile.com:444/url-token-sentinel',
+        ],
+        ['malformed URL', 'https://[url-token-sentinel'],
+        ['relative URL', '/url-token-sentinel'],
+        ['empty URL', ''],
+        ['missing URL', undefined],
+        ['null URL', null],
+        ['numeric URL', 123],
+        [
+          'object URL',
+          { url: 'https://account.unipile.com/url-token-sentinel' },
+        ],
+        ['array URL', ['https://account.unipile.com/url-token-sentinel']],
+      ])(
+        'rejects %s through the existing redacted read error',
+        async (_name, url) => {
+          const clientServiceModule = loadClientServiceModule();
+
+          expect(clientServiceModule).toBeDefined();
+
+          if (!clientServiceModule) {
+            return;
+          }
+
+          const apiKey = 'synthetic-hosted-auth-api-key';
+          const diagnostic = 'provider-diagnostic-sentinel';
+          const fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ url, detail: diagnostic }),
+          });
+          const service = new clientServiceModule.UnipileV1ClientService(
+            {
+              assertEnabled: jest.fn(),
+              config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
+            },
+            { get: jest.fn(() => apiKey) },
+            fetch,
+          );
+          const input = {
+            expiresOn: new Date('2026-09-03T12:15:00.000Z'),
+            successRedirectUrl:
+              'https://app.myah.test/integrations/instagram/success',
+            failureRedirectUrl:
+              'https://app.myah.test/integrations/instagram/failure',
+            notifyUrl:
+              'https://api.myah.test/unipile/hosted-auth/attempts/attempt-public-123',
+            name: 'synthetic-callback-state',
+          };
+          const error = await service
+            .createHostedAuthLink(
+              operation === 'RECONNECT'
+                ? {
+                    ...input,
+                    operation,
+                    reconnectAccountId: 'synthetic-account',
+                  }
+                : input,
+            )
+            .catch((caught: unknown) => caught);
+
+          expect(error).toBeInstanceOf(clientServiceModule.UnipileReadError);
+          expect(error).toMatchObject({
+            name: 'UnipileReadError',
+            code: 'UNIPILE_HOSTED_AUTH_LINK_UNAVAILABLE',
+            message: 'Unable to create an Instagram Hosted Auth link',
+            status: 200,
+            retryable: false,
+          });
+          for (const sensitive of [
+            apiKey,
+            diagnostic,
+            'url-token-sentinel',
+            'credential-sentinel',
+            ...(typeof url === 'string' && url.length > 0 ? [url] : []),
+          ]) {
+            expect(JSON.stringify(error)).not.toContain(sensitive);
+            expect(String(error)).not.toContain(sensitive);
+          }
+          expect(fetch).toHaveBeenCalledTimes(1);
+        },
+      );
+    },
+  );
 
   it('lists Instagram chats with the exact cursor query and safe public values', async () => {
     const clientServiceModule = loadClientServiceModule();
@@ -838,7 +992,7 @@ describe('UnipileV1ClientService', () => {
               provider_id: 'provider-chat-456',
               attendee_provider_id: 'instagram-user-456',
               name: null,
-              type: 1,
+              type: 0,
               timestamp: '2026-09-03T12:15:00.000Z',
               unread_count: 0,
               archived: 0,
@@ -893,6 +1047,137 @@ describe('UnipileV1ClientService', () => {
     );
   });
 
+  it('imports only single chats from a mixed page and preserves its cursor', async () => {
+    const clientServiceModule = loadClientServiceModule();
+
+    expect(clientServiceModule).toBeDefined();
+
+    if (!clientServiceModule) {
+      return;
+    }
+
+    const fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          object: 'ChatList',
+          items: [
+            {
+              object: 'Chat',
+              id: 'unipile-direct-chat-123',
+              account_id: 'unipile-account-123',
+              account_type: 'INSTAGRAM',
+              attendee_provider_id: 'instagram-user-456',
+              name: null,
+              type: 0,
+              timestamp: '2026-09-03T12:15:00.000Z',
+            },
+            {
+              object: 'Chat',
+              id: 'unipile-group-chat-456',
+              account_id: 'unipile-account-123',
+              account_type: 'INSTAGRAM',
+              name: 'Synthetic group',
+              type: 1,
+              timestamp: '2026-09-03T12:14:00.000Z',
+            },
+            {
+              object: 'Chat',
+              id: 'unipile-channel-chat-789',
+              account_id: 'unipile-account-123',
+              account_type: 'INSTAGRAM',
+              name: 'Synthetic channel',
+              type: 2,
+              timestamp: '2026-09-03T12:13:00.000Z',
+            },
+          ],
+          cursor: 'next-cursor-789',
+        }),
+    });
+    const service = new clientServiceModule.UnipileV1ClientService(
+      {
+        assertEnabled: jest.fn(),
+        config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
+      },
+      { get: jest.fn(() => 'synthetic-unipile-api-key') },
+      fetch,
+    );
+
+    await expect(
+      service.listChats({
+        accountId: 'unipile-account-123',
+        cursor: 'current-cursor-456',
+        after: '2026-09-03T12:15:00.000Z',
+        limit: 25,
+      }),
+    ).resolves.toEqual({
+      chats: [
+        {
+          chatId: 'unipile-direct-chat-123',
+          accountId: 'unipile-account-123',
+          accountType: 'INSTAGRAM',
+          type: 'ONE_TO_ONE',
+          attendeeProviderId: 'instagram-user-456',
+          name: null,
+          timestamp: '2026-09-03T12:15:00.000Z',
+        },
+      ],
+      nextCursor: 'next-cursor-789',
+    });
+  });
+
+  it('fails closed when a chat page contains an unsupported chat type', async () => {
+    const clientServiceModule = loadClientServiceModule();
+
+    expect(clientServiceModule).toBeDefined();
+
+    if (!clientServiceModule) {
+      return;
+    }
+
+    const fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          object: 'ChatList',
+          items: [
+            {
+              object: 'Chat',
+              id: 'unipile-unsupported-chat-123',
+              account_id: 'unipile-account-123',
+              account_type: 'INSTAGRAM',
+              name: null,
+              type: 3,
+              timestamp: '2026-09-03T12:15:00.000Z',
+            },
+          ],
+          cursor: null,
+        }),
+    });
+    const service = new clientServiceModule.UnipileV1ClientService(
+      {
+        assertEnabled: jest.fn(),
+        config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
+      },
+      { get: jest.fn(() => 'synthetic-unipile-api-key') },
+      fetch,
+    );
+
+    await expect(
+      service.listChats({
+        accountId: 'unipile-account-123',
+        cursor: null,
+        after: '2026-09-03T12:15:00.000Z',
+        limit: 25,
+      }),
+    ).rejects.toMatchObject({
+      code: 'UNIPILE_CHAT_LIST_UNAVAILABLE',
+      message: 'Unable to retrieve the requested Instagram chats',
+    });
+  });
+
   it('rejects a chat list item bound to another Instagram account', async () => {
     const clientServiceModule = loadClientServiceModule();
 
@@ -921,7 +1206,7 @@ describe('UnipileV1ClientService', () => {
               account_type: 'INSTAGRAM',
               attendee_provider_id: 'instagram-user-456',
               name: null,
-              type: 1,
+              type: 0,
               timestamp: '2026-09-03T12:15:00.000Z',
             },
           ],
@@ -990,6 +1275,7 @@ describe('UnipileV1ClientService', () => {
                 account_id: 'unipile-account-123',
                 chat_id: 'unipile-chat-123',
                 sender_id: 'instagram-user-456',
+                is_sender: 1,
                 text: null,
                 attachments: [
                   {
@@ -1040,6 +1326,7 @@ describe('UnipileV1ClientService', () => {
           accountId: 'unipile-account-123',
           chatId: 'unipile-chat-123',
           senderId: 'instagram-user-456',
+          isSender: 1,
           text: null,
           timestamp: '2026-09-03T12:15:00.000Z',
           seen: true,
@@ -1191,6 +1478,7 @@ describe('UnipileV1ClientService', () => {
             account_id: 'unipile-account-123',
             chat_id: 'unipile-chat-123',
             sender_id: 'instagram-user-456',
+            is_sender: 1,
             text: null,
             attachments: [
               {
@@ -1231,6 +1519,7 @@ describe('UnipileV1ClientService', () => {
       accountId: 'unipile-account-123',
       chatId: 'unipile-chat-123',
       senderId: 'instagram-user-456',
+      isSender: 1,
       text: null,
       timestamp: '2026-09-03T12:15:00.000Z',
       seen: false,
@@ -1341,6 +1630,56 @@ describe('UnipileV1ClientService', () => {
     },
   );
 
+  it.each([false, 2])(
+    'rejects invalid provider self-sender evidence %p',
+    async (isSender) => {
+      const clientServiceModule = loadClientServiceModule();
+
+      expect(clientServiceModule).toBeDefined();
+      if (!clientServiceModule) {
+        return;
+      }
+
+      const service = new clientServiceModule.UnipileV1ClientService(
+        {
+          assertEnabled: jest.fn(),
+          config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
+        },
+        { get: jest.fn(() => 'synthetic-unipile-api-key') },
+        jest.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              object: 'Message',
+              id: 'unipile-message-123',
+              account_id: 'unipile-account-123',
+              chat_id: 'unipile-chat-123',
+              sender_id: 'instagram-user-456',
+              is_sender: isSender,
+              text: 'Synthetic Instagram message',
+              attachments: [],
+              timestamp: '2026-09-03T12:15:00.000Z',
+            }),
+        }),
+      );
+      const getMessage = service.getMessage;
+
+      expect(getMessage).toBeDefined();
+      if (!getMessage) {
+        return;
+      }
+
+      await expect(
+        getMessage.call(service, {
+          accountId: 'unipile-account-123',
+          chatId: 'unipile-chat-123',
+          messageId: 'unipile-message-123',
+        }),
+      ).rejects.toThrow('Unable to retrieve the requested Instagram message');
+    },
+  );
+
   it('rejects a zero message list limit before availability, secret lookup, or fetch', async () => {
     const clientServiceModule = loadClientServiceModule();
 
@@ -1416,7 +1755,7 @@ describe('UnipileV1ClientService', () => {
             account_type: 'INSTAGRAM',
             attendee_provider_id: 'instagram-user-456',
             name: null,
-            type: 1,
+            type: 0,
             timestamp: '2026-09-03T12:15:00.000Z',
             provider_detail: 'must not appear in the public result',
           }),
@@ -1470,6 +1809,58 @@ describe('UnipileV1ClientService', () => {
     ]);
   });
 
+  it('rejects a group chat when resolving a direct-chat identity', async () => {
+    const clientServiceModule = loadClientServiceModule();
+
+    expect(clientServiceModule).toBeDefined();
+
+    if (!clientServiceModule) {
+      return;
+    }
+
+    const fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          object: 'Chat',
+          id: 'unipile-group-chat-123',
+          account_id: 'unipile-account-123',
+          account_type: 'INSTAGRAM',
+          name: 'Synthetic group',
+          type: 1,
+          timestamp: '2026-09-03T12:15:00.000Z',
+        }),
+    });
+    const service = new clientServiceModule.UnipileV1ClientService(
+      {
+        assertEnabled: jest.fn(),
+        config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
+      },
+      { get: jest.fn(() => 'synthetic-unipile-api-key') },
+      fetch,
+    );
+
+    const getChat = service.getChat;
+
+    expect(getChat).toBeDefined();
+
+    if (!getChat) {
+      return;
+    }
+
+    await expect(
+      getChat.call(service, {
+        accountId: 'unipile-account-123',
+        chatId: 'unipile-group-chat-123',
+        expectedAttendeeId: 'instagram-user-456',
+      }),
+    ).rejects.toMatchObject({
+      code: 'UNIPILE_CHAT_UNAVAILABLE',
+      message: 'Unable to retrieve the requested Instagram chat',
+    });
+  });
+
   it('rejects an account-mismatched chat without exposing provider data', async () => {
     const clientServiceModule = loadClientServiceModule();
 
@@ -1504,7 +1895,7 @@ describe('UnipileV1ClientService', () => {
           account_type: 'INSTAGRAM',
           attendee_provider_id: 'instagram-user-456',
           name: null,
-          type: 1,
+          type: 0,
           timestamp: '2026-09-03T12:15:00.000Z',
           provider_detail: providerBody,
         }),
@@ -1563,7 +1954,7 @@ describe('UnipileV1ClientService', () => {
           account_type: 'INSTAGRAM',
           attendee_provider_id: 'instagram-user-456',
           name: null,
-          type: 1,
+          type: 0,
           timestamp: '2026-09-03T12:15:00.000Z',
         }),
     });
@@ -2383,4 +2774,663 @@ describe('UnipileV1ClientService', () => {
       },
     );
   });
+});
+
+describe('UnipileV1ClientService.getInstagramMessagingProfile', () => {
+  const input = {
+    accountId: ' account+scope/&account_id=other?#%雪 ',
+    username: 'synthetic.creator_13',
+  };
+  const profile = {
+    object: 'UserProfile',
+    provider: 'INSTAGRAM',
+    provider_id: 'profile-900719925474099312345',
+    provider_messaging_id: 'messaging-opaque:000456',
+    public_identifier: input.username,
+  };
+  const apiKey = 'synthetic-profile-api-key';
+  const apiBaseUrl = 'https://api49.unipile.com:17981/api/v1/';
+  const diagnostic = 'synthetic-provider-diagnostic';
+  const createHarness = () => {
+    const clientServiceModule = loadClientServiceModule();
+
+    expect(clientServiceModule).toBeDefined();
+
+    const callOrder: string[] = [];
+    const availability = {
+      assertEnabled: jest.fn(() => callOrder.push('availability')),
+      config: { apiBaseUrl },
+    };
+    const config = {
+      get: jest.fn(() => {
+        callOrder.push('config');
+
+        return apiKey;
+      }),
+    };
+    const fetch = jest.fn().mockImplementation(() => {
+      callOrder.push('fetch');
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(profile),
+      });
+    });
+    const service = new clientServiceModule!.UnipileV1ClientService(
+      availability,
+      config,
+      fetch,
+    );
+
+    expect(service.getInstagramMessagingProfile).toEqual(expect.any(Function));
+
+    return {
+      service,
+      fetch,
+      config,
+      availability,
+      callOrder,
+      clientServiceModule: clientServiceModule!,
+    };
+  };
+  const expectSafeError = (
+    error: unknown,
+    status: number,
+    retryable: boolean,
+  ) => {
+    expect(error).toMatchObject({
+      name: 'UnipileReadError',
+      status,
+      code: 'UNIPILE_INSTAGRAM_MESSAGING_PROFILE_UNAVAILABLE',
+      message: 'Unable to retrieve the requested Instagram messaging profile',
+      retryable,
+    });
+    for (const sensitive of [
+      apiKey,
+      apiBaseUrl,
+      input.accountId,
+      input.username,
+      profile.provider_id,
+      profile.provider_messaging_id,
+      diagnostic,
+    ]) {
+      expect(JSON.stringify(error)).not.toContain(sensitive);
+      expect(String(error)).not.toContain(sensitive);
+    }
+  };
+
+  it('reads the exact account-scoped path with a 15s timeout and no write dispatch', async () => {
+    const { service, fetch, config, callOrder } = createHarness();
+    const signal = new AbortController().signal;
+    const timeout = jest.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
+    const beforeDispatch = jest.fn();
+
+    try {
+      await expect(
+        service.getInstagramMessagingProfile({
+          ...input,
+          ...{ beforeDispatch },
+        }),
+      ).resolves.toEqual({
+        providerId: profile.provider_id,
+        providerMessagingId: profile.provider_messaging_id,
+        username: input.username,
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledWith(
+        `${apiBaseUrl}users/synthetic.creator_13?account_id=+account%2Bscope%2F%26account_id%3Dother%3F%23%25%E9%9B%AA+`,
+        {
+          method: 'GET',
+          headers: { Accept: 'application/json', 'X-API-KEY': apiKey },
+          redirect: 'error',
+          signal,
+        },
+      );
+      const [url] = fetch.mock.calls[0] as [string];
+
+      expect([...new URL(url).searchParams.entries()]).toEqual([
+        ['account_id', input.accountId],
+      ]);
+      expect(timeout).toHaveBeenCalledWith(15_000);
+      expect(config.get).toHaveBeenCalledWith('UNIPILE_API_KEY');
+      expect(callOrder).toEqual(['availability', 'config', 'fetch']);
+      expect(beforeDispatch).not.toHaveBeenCalled();
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  it.each(['account-\uD800', 'account-\uDC00'])(
+    'rejects unpaired surrogate account ID %p before API configuration, secret lookup or transport',
+    async (accountId) => {
+      const { service, fetch, config, availability, callOrder } =
+        createHarness();
+      const getApiConfig = jest.fn(() => ({ apiBaseUrl }));
+
+      Object.defineProperty(availability, 'config', { get: getApiConfig });
+      const error = await service
+        .getInstagramMessagingProfile({ ...input, accountId })
+        .catch((caught: unknown) => caught);
+
+      expectSafeError(error, 400, false);
+      expect(getApiConfig).not.toHaveBeenCalled();
+      expect(config.get).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(callOrder).toEqual(['availability']);
+    },
+  );
+
+  it('preserves a supplementary Unicode account ID through the adapter request', async () => {
+    const { service, fetch } = createHarness();
+    const accountId = 'account-\uD83D\uDE80';
+
+    await expect(
+      service.getInstagramMessagingProfile({ ...input, accountId }),
+    ).resolves.toEqual({
+      providerId: profile.provider_id,
+      providerMessagingId: profile.provider_messaging_id,
+      username: input.username,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url] = fetch.mock.calls[0] as [string];
+
+    expect([...new URL(url).searchParams.entries()]).toEqual([
+      ['account_id', accountId],
+    ]);
+  });
+
+  it('discards profile metadata and preserves opaque ID bytes without coercion or trimming', async () => {
+    const { service, fetch } = createHarness();
+
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          ...profile,
+          provider_id: ' 000900719925474099312345 ',
+          provider_messaging_id: ' opaque/messaging:+000123 ',
+          full_name: 'Synthetic Creator',
+          biography: diagnostic,
+          followers_count: 123,
+          relationship_status: { following: false },
+          pk: 123,
+          id: 'unipile-attendee-record-id',
+        }),
+    });
+    await expect(service.getInstagramMessagingProfile(input)).resolves.toEqual({
+      providerId: ' 000900719925474099312345 ',
+      providerMessagingId: ' opaque/messaging:+000123 ',
+      username: input.username,
+    });
+  });
+
+  it.each<[string, unknown]>([
+    ['wrong provider', { ...profile, provider: 'LINKEDIN' }],
+    ['wrong object', { ...profile, object: 'ChatAttendee' }],
+    ['missing provider', { ...profile, provider: undefined }],
+    ['missing object', { ...profile, object: undefined }],
+    ['mismatched username', { ...profile, public_identifier: 'other.creator' }],
+    [
+      'noncanonical returned username',
+      { ...profile, public_identifier: 'Synthetic.Creator_13' },
+    ],
+    [
+      'at-sign returned username',
+      { ...profile, public_identifier: '@synthetic.creator_13' },
+    ],
+    [
+      'whitespace returned username',
+      { ...profile, public_identifier: ' synthetic.creator_13 ' },
+    ],
+    [
+      'SDK-only pk',
+      {
+        object: 'UserProfile',
+        provider: 'INSTAGRAM',
+        pk: 123,
+        username: input.username,
+      },
+    ],
+    [
+      'attendee ID only',
+      {
+        ...profile,
+        provider_messaging_id: undefined,
+        id: 'unipile-attendee-record-id',
+      },
+    ],
+    ['null body', null],
+    ['array body', [profile]],
+    ...['provider_id', 'provider_messaging_id', 'public_identifier'].flatMap(
+      (field) =>
+        [undefined, null, '', ' \t\n', 123].map((value): [string, unknown] => [
+          `${field}=${String(value)}`,
+          { ...profile, [field]: value },
+        ]),
+    ),
+  ])(
+    'fails closed on %s without identity fallbacks or response leaks',
+    async (_name, body) => {
+      const { service, fetch, clientServiceModule } = createHarness();
+
+      fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(body),
+      });
+      const error = await service
+        .getInstagramMessagingProfile(input)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(clientServiceModule.UnipileReadError);
+      expectSafeError(error, 200, false);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    '',
+    ' ',
+    '@synthetic.creator_13',
+    'Synthetic.Creator_13',
+    ' synthetic.creator_13 ',
+    '../chats',
+    '.',
+    '..',
+    'creator..name',
+    '.creator',
+    'creator.',
+    'creator/other',
+    'creator?account_id=other',
+    'creator#fragment',
+    'creator%2fother',
+    'creator\\other',
+    'a'.repeat(31),
+    'creator-name',
+    '雪',
+  ])(
+    'rejects noncanonical or injectable requested username %p before secret lookup or transport',
+    async (username) => {
+      const { service, fetch, config } = createHarness();
+      const error = await service
+        .getInstagramMessagingProfile({ ...input, username })
+        .catch((caught: unknown) => caught);
+
+      expectSafeError(error, 400, false);
+      expect(config.get).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['', ' \t\n'])(
+    'rejects blank account ID %p before secret lookup or transport',
+    async (accountId) => {
+      const { service, fetch, config } = createHarness();
+      const error = await service
+        .getInstagramMessagingProfile({ ...input, accountId })
+        .catch((caught: unknown) => caught);
+
+      expectSafeError(error, 400, false);
+      expect(config.get).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([400, 401, 403, 404, 422, 429, 500, 502, 503])(
+    'redacts HTTP %s failures with existing read retryability and no retries',
+    async (status) => {
+      const { service, fetch } = createHarness();
+      const json = jest.fn(() =>
+        Promise.resolve({ detail: diagnostic, ...profile }),
+      );
+
+      fetch.mockResolvedValue({ ok: false, status, json });
+      const error = await service
+        .getInstagramMessagingProfile(input)
+        .catch((caught: unknown) => caught);
+
+      expectSafeError(error, status, status === 429 || status >= 500);
+      expect(json).not.toHaveBeenCalled();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('redacts malformed JSON', async () => {
+    const { service, fetch } = createHarness();
+
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError(diagnostic)),
+    });
+    const error = await service
+      .getInstagramMessagingProfile(input)
+      .catch((caught: unknown) => caught);
+
+    expectSafeError(error, 200, false);
+  });
+
+  it.each(['TimeoutError', 'TypeError'])(
+    'redacts transport %s without retrying',
+    async (name) => {
+      const { service, fetch } = createHarness();
+
+      fetch.mockRejectedValue(
+        Object.assign(new Error(`${apiBaseUrl}${diagnostic}${apiKey}`), {
+          name,
+        }),
+      );
+      const error = await service
+        .getInstagramMessagingProfile(input)
+        .catch((caught: unknown) => caught);
+
+      expectSafeError(error, 0, true);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('honors feature availability before configuration lookup or transport', async () => {
+    const { service, fetch, config, availability } = createHarness();
+    const disabled = new Error('Instagram integration is disabled');
+
+    availability.assertEnabled.mockImplementation(() => {
+      throw disabled;
+    });
+    await expect(service.getInstagramMessagingProfile(input)).rejects.toBe(
+      disabled,
+    );
+    expect(config.get).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('UnipileV1ClientService timestamp ingestion', () => {
+  const accountId = 'opaque-account';
+  const chatId = 'opaque-chat';
+  const messageId = 'opaque-message';
+  const attendeeId = ' attendee:opaque ';
+  const cursor = ' cursor:+/% opaque ';
+  const apiBaseUrl = 'https://timestamp.invalid/api/v1/';
+  const apiKey = 'synthetic-timestamp-api-key-secret';
+  const after = '2024-01-01T00:00:00.000Z';
+  const rawChat = (timestamp: unknown) => ({
+    object: 'Chat',
+    id: chatId,
+    account_id: accountId,
+    account_type: 'INSTAGRAM',
+    type: 0,
+    attendee_provider_id: attendeeId,
+    name: 'body-sentinel',
+    timestamp,
+  });
+  const rawMessage = (timestamp: unknown) => ({
+    object: 'Message',
+    id: messageId,
+    account_id: accountId,
+    chat_id: chatId,
+    sender_id: attendeeId,
+    is_sender: 0,
+    text: 'body-sentinel',
+    attachments: [{}],
+    timestamp,
+  });
+  const reads = [
+    {
+      method: 'listChats',
+      code: 'UNIPILE_CHAT_LIST_UNAVAILABLE',
+      message: 'Unable to retrieve the requested Instagram chats',
+      route: `chats?account_id=${accountId}&account_type=INSTAGRAM&after=${encodeURIComponent(after)}&limit=25`,
+    },
+    {
+      method: 'getChat',
+      code: 'UNIPILE_CHAT_UNAVAILABLE',
+      message: 'Unable to retrieve the requested Instagram chat',
+      route: `chats/${chatId}`,
+    },
+    {
+      method: 'listMessages',
+      code: 'UNIPILE_MESSAGE_LIST_UNAVAILABLE',
+      message: 'Unable to retrieve the requested Instagram messages',
+      route: `chats/${chatId}/messages?after=${encodeURIComponent(after)}&limit=25`,
+    },
+    {
+      method: 'getMessage',
+      code: 'UNIPILE_MESSAGE_UNAVAILABLE',
+      message: 'Unable to retrieve the requested Instagram message',
+      route: `messages/${messageId}`,
+    },
+  ] as const;
+  type Read = (typeof reads)[number];
+  const harnessFor = (
+    read: Read,
+    timestamp: unknown,
+    bodyOverride?: unknown,
+  ) => {
+    const module = loadClientServiceModule();
+
+    if (!module) throw new Error('Unipile client is unavailable');
+
+    const chat = rawChat(timestamp);
+    const message = rawMessage(timestamp);
+    const body =
+      bodyOverride ??
+      (read.method === 'listChats'
+        ? { object: 'ChatList', items: [chat], cursor }
+        : read.method === 'listMessages'
+          ? { object: 'MessageList', items: [message], cursor }
+          : read.method === 'getChat'
+            ? chat
+            : message);
+    const fetch = jest.fn(async (url: string, init: RequestInit) => {
+      expect(url).toBe(`${apiBaseUrl}${read.route}`);
+      expect(init.method).toBe('GET');
+      expect(init.headers).toEqual({
+        Accept: 'application/json',
+        'X-API-KEY': apiKey,
+      });
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    const service = new module.UnipileV1ClientService(
+      { assertEnabled: jest.fn(), config: { apiBaseUrl } },
+      {
+        get: jest.fn((key: string) => {
+          expect(key).toBe('UNIPILE_API_KEY');
+          return apiKey;
+        }),
+      },
+      fetch,
+    );
+    const invoke = () => {
+      switch (read.method) {
+        case 'listChats':
+          return service.listChats({
+            accountId,
+            cursor: null,
+            after,
+            limit: 25,
+          });
+        case 'listMessages':
+          return service.listMessages({
+            accountId,
+            chatId,
+            cursor: null,
+            after,
+            limit: 25,
+          });
+        case 'getChat': {
+          if (!service.getChat) throw new Error('getChat is unavailable');
+          return service.getChat({
+            accountId,
+            chatId,
+            expectedAttendeeId: attendeeId,
+          });
+        }
+        case 'getMessage': {
+          if (!service.getMessage) throw new Error('getMessage is unavailable');
+          return service.getMessage({ accountId, chatId, messageId });
+        }
+      }
+    };
+    return { invoke, fetch, ErrorClass: module.UnipileReadError };
+  };
+  const expectRejected = async (
+    read: Read,
+    timestamp: unknown,
+    body?: unknown,
+  ) => {
+    const harness = harnessFor(read, timestamp, body);
+    const result = harness.invoke();
+    await expect(result).rejects.toBeInstanceOf(harness.ErrorClass);
+    await expect(result).rejects.toMatchObject({
+      name: 'UnipileReadError',
+      status: 200,
+      code: read.code,
+      message: read.message,
+      retryable: false,
+    });
+    const error = (await result.catch(
+      (value: unknown) => value,
+    )) as UnipileReadError;
+    expect(`${error.message} ${JSON.stringify(error)}`).not.toMatch(
+      /body-sentinel|timestamp-sentinel|synthetic-timestamp-api-key-secret|Zod|issues|invalid_format/,
+    );
+    expect(error).not.toHaveProperty('cause');
+    expect(error).not.toHaveProperty('issues');
+    expect(harness.fetch).toHaveBeenCalledTimes(1);
+  };
+
+  describe.each(reads)('$method', (read) => {
+    it.each([
+      'not-a-date-timestamp-sentinel',
+      '',
+      '2026-02-29T12:00:00Z',
+      '2024-02-30T12:00:00Z',
+      '1900-02-29T12:00:00Z',
+      '2024-04-31T12:00:00Z',
+      '2024-00-01T12:00:00Z',
+      '2024-13-01T12:00:00Z',
+      '2024-01-00T12:00:00Z',
+      '0000-01-01T00:00:00Z',
+      '+010000-01-01T00:00:00Z',
+      '2024-01-01T12:00:00+16:00',
+      '2024-01-01T12:00:00-16:00',
+      '2024-01-01T12:00:00+23:59',
+      '0001-01-01T00:00:00+15:59',
+      '9999-12-31T23:59:59-15:59',
+      '2024-01-01T23:59:59.9999999Z',
+      '2024-01-01T12:00:00.123456789Z',
+      `2024-01-01T12:00:00.${'1'.repeat(100)}Z`,
+      '2024-01-01T12:00:00.1234567+05:30',
+      '2024-01-01T12:00:00+15:60',
+      '2024-01-01T12:00:00+0530',
+      '2024-01-01t12:00:00Z',
+      '2024-01-01T12:00:00z',
+      '2024-01-01T24:00:00Z',
+      '2024-01-01T12:60:00Z',
+      '2024-01-01T12:00:60Z',
+      '2024-01-01T12:00:00',
+      '2024-01-01',
+      'infinity',
+      '-infinity',
+      ' 2024-01-01T12:00:00Z',
+      '2024-01-01T12:00:00Z\n',
+      '2024-01-01T12:00.1Z',
+      '2024-01-01T12:00:00.Z',
+    ])(
+      'rejects malformed successful timestamp %p with a redacted terminal read error',
+      async (timestamp) => {
+        await expectRejected(read, timestamp);
+      },
+    );
+
+    it.each([undefined, 123, false, {}, []])(
+      'retains required string-or-null controls for %p',
+      async (timestamp) => {
+        await expectRejected(read, timestamp);
+      },
+    );
+
+    it.each([
+      null,
+      '2024-01-01T12:00Z',
+      '2024-01-01T12:00+15:59',
+      '2024-02-29T12:00:00Z',
+      '2000-02-29T12:00:00Z',
+      '2024-01-01T12:00:00.1Z',
+      '2024-01-01T12:00:00.123Z',
+      '2024-01-01T12:00:00.123456Z',
+      '2024-01-01T12:00:00.123456+05:30',
+      '2024-01-01T12:00:00+15:59',
+      '2024-01-01T12:00:00-15:59',
+      '2024-01-01T12:00:00-00:00',
+      '2024-01-01T12:00:00+00:00',
+      '0001-01-01T00:00:00Z',
+      '9999-12-31T23:59:59.999999Z',
+      '0001-01-01T15:59:00+15:59',
+      '9999-12-31T08:00:59.999999-15:59',
+    ])(
+      'preserves accepted timestamp %p and opaque identity/cursor bytes',
+      async (timestamp) => {
+        const harness = harnessFor(read, timestamp);
+        const result = await harness.invoke();
+        const record =
+          'chats' in result
+            ? result.chats[0]
+            : 'messages' in result
+              ? result.messages[0]
+              : result;
+        expect(record).toMatchObject({ accountId, chatId, timestamp });
+        if ('messageId' in record) {
+          expect(record).toMatchObject({
+            messageId,
+            senderId: attendeeId,
+            text: 'body-sentinel',
+            attachmentCount: 1,
+            hasAttachments: true,
+          });
+        } else {
+          expect(record).toMatchObject({ attendeeProviderId: attendeeId });
+        }
+        if ('nextCursor' in result) expect(result.nextCursor).toBe(cursor);
+        expect(harness.fetch).toHaveBeenCalledTimes(1);
+      },
+    );
+  });
+
+  it.each([1, 2])(
+    'rejects a mixed ChatList before filtering ignored chat type %s',
+    async (type) => {
+      await expectRejected(reads[0], null, {
+        object: 'ChatList',
+        cursor,
+        items: [
+          rawChat(null),
+          {
+            ...rawChat('not-a-date-timestamp-sentinel'),
+            id: 'ignored-chat',
+            type,
+          },
+        ],
+      });
+    },
+  );
+  it.each(['hidden', 'deleted', 'is_event'])(
+    'rejects a mixed MessageList with malformed %s item before consumer skipping',
+    async (flag) => {
+      await expectRejected(reads[2], null, {
+        object: 'MessageList',
+        cursor,
+        items: [
+          rawMessage(null),
+          {
+            ...rawMessage('not-a-date-timestamp-sentinel'),
+            id: 'ignored-message',
+            [flag]: 1,
+          },
+        ],
+      });
+    },
+  );
 });

@@ -26,8 +26,11 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean };
   Int: { input: number; output: number };
   Float: { input: number; output: number };
+  /** A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format. */
   DateTime: { input: string; output: string };
+  /** The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf). */
   JSON: { input: any; output: any };
+  /** A UUID scalar type */
   UUID: { input: any; output: any };
 };
 
@@ -131,6 +134,7 @@ export enum FilterIs {
 }
 
 export type GenerateMyahInboxReplyProposalInput = {
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
   operatorInstructions: Scalars['String']['input'];
   threadId: Scalars['UUID']['input'];
 };
@@ -488,11 +492,91 @@ export enum MyahInboxDraftSaveStatus {
   SAVED = 'SAVED',
 }
 
+export type MyahInboxEmailCard = {
+  __typename?: 'MyahInboxEmailCard';
+  campaignLabel?: Maybe<Scalars['String']['output']>;
+  historyBasis: Scalars['String']['output'];
+  rootMessageId: Scalars['UUID']['output'];
+  startTimestamp: Scalars['String']['output'];
+  subject?: Maybe<Scalars['String']['output']>;
+  threadId: Scalars['UUID']['output'];
+};
+
+export type MyahInboxEmailCardPage = {
+  __typename?: 'MyahInboxEmailCardPage';
+  cards: Array<MyahInboxEmailCard>;
+  latestThreadId?: Maybe<Scalars['UUID']['output']>;
+  olderCursor?: Maybe<Scalars['String']['output']>;
+  snapshot: Scalars['String']['output'];
+};
+
+export type MyahInboxEmailCardProjection = {
+  __typename?: 'MyahInboxEmailCardProjection';
+  card?: Maybe<MyahInboxEmailCard>;
+  snapshot: Scalars['String']['output'];
+};
+
+export type MyahInboxEmailDraft = {
+  __typename?: 'MyahInboxEmailDraft';
+  body?: Maybe<MyahInboxRichText>;
+  revision: Scalars['Int']['output'];
+  threadId: Scalars['UUID']['output'];
+  workspaceId: Scalars['UUID']['output'];
+};
+
+export type MyahInboxEmailMessageLocation = {
+  __typename?: 'MyahInboxEmailMessageLocation';
+  card: MyahInboxEmailCard;
+  messageId: Scalars['UUID']['output'];
+  page: MyahInboxEmailMessagePage;
+};
+
+export type MyahInboxEmailMessagePage = {
+  __typename?: 'MyahInboxEmailMessagePage';
+  messages: Array<MyahInboxContactEmailMessage>;
+  newerCursor?: Maybe<Scalars['String']['output']>;
+  olderCursor?: Maybe<Scalars['String']['output']>;
+  root: MyahInboxContactEmailMessage;
+  threadId: Scalars['UUID']['output'];
+};
+
 export enum MyahInboxInstagramChannelState {
   AMBIGUOUS = 'AMBIGUOUS',
   READY = 'READY',
   UNAVAILABLE = 'UNAVAILABLE',
 }
+
+export type MyahInboxInstagramMessage = {
+  __typename?: 'MyahInboxInstagramMessage';
+  attachmentCount: Scalars['Int']['output'];
+  createdAt: Scalars['String']['output'];
+  deliveryState: Scalars['String']['output'];
+  direction: Scalars['String']['output'];
+  hasAttachments: Scalars['Boolean']['output'];
+  id: Scalars['String']['output'];
+  provider: Scalars['String']['output'];
+  providerCreatedAt?: Maybe<Scalars['String']['output']>;
+  sentVia: Scalars['String']['output'];
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+export type MyahInboxInstagramMessageConnection = {
+  __typename?: 'MyahInboxInstagramMessageConnection';
+  edges: Array<MyahInboxInstagramMessageEdge>;
+  pageInfo: MyahInboxInstagramMessagePageInfo;
+};
+
+export type MyahInboxInstagramMessageEdge = {
+  __typename?: 'MyahInboxInstagramMessageEdge';
+  cursor: Scalars['String']['output'];
+  node: MyahInboxInstagramMessage;
+};
+
+export type MyahInboxInstagramMessagePageInfo = {
+  __typename?: 'MyahInboxInstagramMessagePageInfo';
+  endCursor?: Maybe<Scalars['String']['output']>;
+  hasNextPage: Scalars['Boolean']['output'];
+};
 
 export type MyahInboxReplyProposal = {
   __typename?: 'MyahInboxReplyProposal';
@@ -547,6 +631,7 @@ export type MyahInboxReplySendStatus = {
 };
 
 export type MyahInboxReplySendStatusInput = {
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
   receiptId: Scalars['UUID']['input'];
   threadId: Scalars['UUID']['input'];
 };
@@ -644,8 +729,14 @@ export type Query = {
   instagramMessageSendStatus: InstagramMessageSendStatusDto;
   isMaintenanceModeBannerDismissed: Scalars['Boolean']['output'];
   myahInboxContact: MyahInboxContactSummary;
+  myahInboxContactEmailCard: MyahInboxEmailCardProjection;
+  myahInboxContactEmailCardMessages: MyahInboxEmailMessagePage;
+  myahInboxContactEmailCards: MyahInboxEmailCardPage;
+  myahInboxContactEmailMessageLocation?: Maybe<MyahInboxEmailMessageLocation>;
   myahInboxContactEmailMessages: MyahInboxContactEmailMessageConnection;
   myahInboxContacts: MyahInboxContactConnection;
+  myahInboxEmailDraft: MyahInboxEmailDraft;
+  myahInboxInstagramMessages: MyahInboxInstagramMessageConnection;
   myahInboxReplySendReadiness: MyahInboxReplySendReadiness;
   myahInboxReplySendStatus: MyahInboxReplySendStatus;
   myahInboxThreads: MyahInboxThreadConnection;
@@ -719,6 +810,34 @@ export type QueryMyahInboxContactArgs = {
   contactId: Scalars['String']['input'];
 };
 
+export type QueryMyahInboxContactEmailCardArgs = {
+  contactId: Scalars['String']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  threadId: Scalars['UUID']['input'];
+};
+
+export type QueryMyahInboxContactEmailCardMessagesArgs = {
+  contactId: Scalars['String']['input'];
+  cursor?: InputMaybe<Scalars['String']['input']>;
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  snapshot: Scalars['String']['input'];
+  threadId: Scalars['UUID']['input'];
+};
+
+export type QueryMyahInboxContactEmailCardsArgs = {
+  contactId: Scalars['String']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  olderCursor?: InputMaybe<Scalars['String']['input']>;
+  snapshot?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type QueryMyahInboxContactEmailMessageLocationArgs = {
+  contactId: Scalars['String']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  messageId: Scalars['UUID']['input'];
+  snapshot: Scalars['String']['input'];
+};
+
 export type QueryMyahInboxContactEmailMessagesArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   contactId: Scalars['String']['input'];
@@ -736,7 +855,19 @@ export type QueryMyahInboxContactsArgs = {
   states?: InputMaybe<Array<MyahInboxState>>;
 };
 
+export type QueryMyahInboxEmailDraftArgs = {
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  threadId: Scalars['UUID']['input'];
+};
+
+export type QueryMyahInboxInstagramMessagesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  conversationId: Scalars['String']['input'];
+  first?: InputMaybe<Scalars['Int']['input']>;
+};
+
 export type QueryMyahInboxReplySendReadinessArgs = {
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
   threadId: Scalars['UUID']['input'];
 };
 
@@ -747,6 +878,7 @@ export type QueryMyahInboxReplySendStatusArgs = {
 export type QueryMyahInboxThreadsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   campaignId?: InputMaybe<Scalars['String']['input']>;
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   owner?: InputMaybe<Scalars['String']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
@@ -802,6 +934,7 @@ export type SaveInstagramMessageDraftInput = {
 export type SaveMyahInboxDraftInput = {
   body?: InputMaybe<MyahInboxRichTextInput>;
   expectedRevision: Scalars['Int']['input'];
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
   threadId: Scalars['UUID']['input'];
 };
 
@@ -841,6 +974,7 @@ export type SendInstagramMessageInput = {
 
 export type SendMyahInboxReplyInput = {
   expectedDraftRevision: Scalars['Int']['input'];
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
   threadId: Scalars['UUID']['input'];
 };
 
@@ -963,6 +1097,7 @@ export type UuidFilter = {
 export type UpdateMyahInboxThreadInput = {
   campaignId?: InputMaybe<Scalars['UUID']['input']>;
   creatorId?: InputMaybe<Scalars['UUID']['input']>;
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
   inboxOwnerId?: InputMaybe<Scalars['UUID']['input']>;
   inboxState?: InputMaybe<MyahInboxState>;
   snoozedUntil?: InputMaybe<Scalars['String']['input']>;
@@ -1381,6 +1516,7 @@ export type MyahInboxThreadsQueryVariables = Exact<{
   snoozeStatus?: InputMaybe<MyahInboxSnoozeStatus>;
   search?: InputMaybe<Scalars['String']['input']>;
   threadId?: InputMaybe<Scalars['String']['input']>;
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
 export type MyahInboxThreadsQuery = {
@@ -1493,6 +1629,7 @@ export type GenerateMyahInboxReplyProposalMutation = {
 
 export type MyahInboxReplySendReadinessQueryVariables = Exact<{
   threadId: Scalars['UUID']['input'];
+  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
 }>;
 
 export type MyahInboxReplySendReadinessQuery = {
@@ -1704,6 +1841,41 @@ export type MyahInboxContactQuery = {
   };
 };
 
+export type MyahInboxInstagramMessagesQueryVariables = Exact<{
+  conversationId: Scalars['String']['input'];
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+export type MyahInboxInstagramMessagesQuery = {
+  __typename?: 'Query';
+  myahInboxInstagramMessages: {
+    __typename?: 'MyahInboxInstagramMessageConnection';
+    edges: Array<{
+      __typename?: 'MyahInboxInstagramMessageEdge';
+      cursor: string;
+      node: {
+        __typename?: 'MyahInboxInstagramMessage';
+        id: string;
+        text?: string | null;
+        direction: string;
+        sentVia: string;
+        provider: string;
+        deliveryState: string;
+        providerCreatedAt?: string | null;
+        createdAt: string;
+        hasAttachments: boolean;
+        attachmentCount: number;
+      };
+    }>;
+    pageInfo: {
+      __typename?: 'MyahInboxInstagramMessagePageInfo';
+      hasNextPage: boolean;
+      endCursor?: string | null;
+    };
+  };
+};
+
 export type MyahInboxContactEmailMessagesQueryVariables = Exact<{
   contactId: Scalars['String']['input'];
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1740,6 +1912,260 @@ export type MyahInboxContactEmailMessagesQuery = {
       hasNextPage: boolean;
       endCursor?: string | null;
     };
+  };
+};
+
+export type MyahInboxEmailCardFieldsFragment = {
+  __typename?: 'MyahInboxEmailCard';
+  threadId: any;
+  rootMessageId: any;
+  startTimestamp: string;
+  subject?: string | null;
+  campaignLabel?: string | null;
+  historyBasis: string;
+};
+
+export type MyahInboxEmailStoredMessageFieldsFragment = {
+  __typename?: 'MyahInboxContactEmailMessage';
+  id: any;
+  messageThreadId: any;
+  subject?: string | null;
+  text?: string | null;
+  receivedAt: string;
+  direction: string;
+  visibility: string;
+  attachmentFileIds: Array<any>;
+  participants: Array<{
+    __typename?: 'MyahInboxContactEmailParticipant';
+    role: string;
+    handle?: string | null;
+    displayName?: string | null;
+  }>;
+};
+
+export type MyahInboxEmailMessagePageFieldsFragment = {
+  __typename?: 'MyahInboxEmailMessagePage';
+  threadId: any;
+  olderCursor?: string | null;
+  newerCursor?: string | null;
+  root: {
+    __typename?: 'MyahInboxContactEmailMessage';
+    id: any;
+    messageThreadId: any;
+    subject?: string | null;
+    text?: string | null;
+    receivedAt: string;
+    direction: string;
+    visibility: string;
+    attachmentFileIds: Array<any>;
+    participants: Array<{
+      __typename?: 'MyahInboxContactEmailParticipant';
+      role: string;
+      handle?: string | null;
+      displayName?: string | null;
+    }>;
+  };
+  messages: Array<{
+    __typename?: 'MyahInboxContactEmailMessage';
+    id: any;
+    messageThreadId: any;
+    subject?: string | null;
+    text?: string | null;
+    receivedAt: string;
+    direction: string;
+    visibility: string;
+    attachmentFileIds: Array<any>;
+    participants: Array<{
+      __typename?: 'MyahInboxContactEmailParticipant';
+      role: string;
+      handle?: string | null;
+      displayName?: string | null;
+    }>;
+  }>;
+};
+
+export type MyahInboxContactEmailCardsQueryVariables = Exact<{
+  contactId: Scalars['String']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  snapshot?: InputMaybe<Scalars['String']['input']>;
+  olderCursor?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+export type MyahInboxContactEmailCardsQuery = {
+  __typename?: 'Query';
+  myahInboxContactEmailCards: {
+    __typename?: 'MyahInboxEmailCardPage';
+    snapshot: string;
+    olderCursor?: string | null;
+    latestThreadId?: any | null;
+    cards: Array<{
+      __typename?: 'MyahInboxEmailCard';
+      threadId: any;
+      rootMessageId: any;
+      startTimestamp: string;
+      subject?: string | null;
+      campaignLabel?: string | null;
+      historyBasis: string;
+    }>;
+  };
+};
+
+export type MyahInboxContactEmailCardQueryVariables = Exact<{
+  contactId: Scalars['String']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  threadId: Scalars['UUID']['input'];
+}>;
+
+export type MyahInboxContactEmailCardQuery = {
+  __typename?: 'Query';
+  myahInboxContactEmailCard: {
+    __typename?: 'MyahInboxEmailCardProjection';
+    snapshot: string;
+    card?: {
+      __typename?: 'MyahInboxEmailCard';
+      threadId: any;
+      rootMessageId: any;
+      startTimestamp: string;
+      subject?: string | null;
+      campaignLabel?: string | null;
+      historyBasis: string;
+    } | null;
+  };
+};
+
+export type MyahInboxContactEmailCardMessagesQueryVariables = Exact<{
+  contactId: Scalars['String']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  threadId: Scalars['UUID']['input'];
+  snapshot: Scalars['String']['input'];
+  cursor?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+export type MyahInboxContactEmailCardMessagesQuery = {
+  __typename?: 'Query';
+  myahInboxContactEmailCardMessages: {
+    __typename?: 'MyahInboxEmailMessagePage';
+    threadId: any;
+    olderCursor?: string | null;
+    newerCursor?: string | null;
+    root: {
+      __typename?: 'MyahInboxContactEmailMessage';
+      id: any;
+      messageThreadId: any;
+      subject?: string | null;
+      text?: string | null;
+      receivedAt: string;
+      direction: string;
+      visibility: string;
+      attachmentFileIds: Array<any>;
+      participants: Array<{
+        __typename?: 'MyahInboxContactEmailParticipant';
+        role: string;
+        handle?: string | null;
+        displayName?: string | null;
+      }>;
+    };
+    messages: Array<{
+      __typename?: 'MyahInboxContactEmailMessage';
+      id: any;
+      messageThreadId: any;
+      subject?: string | null;
+      text?: string | null;
+      receivedAt: string;
+      direction: string;
+      visibility: string;
+      attachmentFileIds: Array<any>;
+      participants: Array<{
+        __typename?: 'MyahInboxContactEmailParticipant';
+        role: string;
+        handle?: string | null;
+        displayName?: string | null;
+      }>;
+    }>;
+  };
+};
+
+export type MyahInboxContactEmailMessageLocationQueryVariables = Exact<{
+  contactId: Scalars['String']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  messageId: Scalars['UUID']['input'];
+  snapshot: Scalars['String']['input'];
+}>;
+
+export type MyahInboxContactEmailMessageLocationQuery = {
+  __typename?: 'Query';
+  myahInboxContactEmailMessageLocation?: {
+    __typename?: 'MyahInboxEmailMessageLocation';
+    messageId: any;
+    card: {
+      __typename?: 'MyahInboxEmailCard';
+      threadId: any;
+      rootMessageId: any;
+      startTimestamp: string;
+      subject?: string | null;
+      campaignLabel?: string | null;
+      historyBasis: string;
+    };
+    page: {
+      __typename?: 'MyahInboxEmailMessagePage';
+      threadId: any;
+      olderCursor?: string | null;
+      newerCursor?: string | null;
+      root: {
+        __typename?: 'MyahInboxContactEmailMessage';
+        id: any;
+        messageThreadId: any;
+        subject?: string | null;
+        text?: string | null;
+        receivedAt: string;
+        direction: string;
+        visibility: string;
+        attachmentFileIds: Array<any>;
+        participants: Array<{
+          __typename?: 'MyahInboxContactEmailParticipant';
+          role: string;
+          handle?: string | null;
+          displayName?: string | null;
+        }>;
+      };
+      messages: Array<{
+        __typename?: 'MyahInboxContactEmailMessage';
+        id: any;
+        messageThreadId: any;
+        subject?: string | null;
+        text?: string | null;
+        receivedAt: string;
+        direction: string;
+        visibility: string;
+        attachmentFileIds: Array<any>;
+        participants: Array<{
+          __typename?: 'MyahInboxContactEmailParticipant';
+          role: string;
+          handle?: string | null;
+          displayName?: string | null;
+        }>;
+      }>;
+    };
+  } | null;
+};
+
+export type MyahInboxEmailDraftQueryVariables = Exact<{
+  threadId: Scalars['UUID']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+}>;
+
+export type MyahInboxEmailDraftQuery = {
+  __typename?: 'Query';
+  myahInboxEmailDraft: {
+    __typename?: 'MyahInboxEmailDraft';
+    workspaceId: any;
+    threadId: any;
+    revision: number;
+    body?: {
+      __typename?: 'MyahInboxRichText';
+      markdown: string;
+      blocknote?: string | null;
+    } | null;
   };
 };
 
@@ -2597,6 +3023,157 @@ export const MyahInboxContactFieldsFragmentDoc = {
     },
   ],
 } as unknown as DocumentNode<MyahInboxContactFieldsFragment, unknown>;
+export const MyahInboxEmailCardFieldsFragmentDoc = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailCardFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxEmailCard' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'threadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'rootMessageId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'startTimestamp' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'subject' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'campaignLabel' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'historyBasis' } },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<MyahInboxEmailCardFieldsFragment, unknown>;
+export const MyahInboxEmailStoredMessageFieldsFragmentDoc = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailStoredMessageFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxContactEmailMessage' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'messageThreadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'subject' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'receivedAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'direction' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'visibility' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'participants' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'role' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'handle' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'displayName' } },
+              ],
+            },
+          },
+          { kind: 'Field', name: { kind: 'Name', value: 'attachmentFileIds' } },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  MyahInboxEmailStoredMessageFieldsFragment,
+  unknown
+>;
+export const MyahInboxEmailMessagePageFieldsFragmentDoc = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailMessagePageFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxEmailMessagePage' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'threadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'olderCursor' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'newerCursor' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'root' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'FragmentSpread',
+                  name: {
+                    kind: 'Name',
+                    value: 'MyahInboxEmailStoredMessageFields',
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'messages' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'FragmentSpread',
+                  name: {
+                    kind: 'Name',
+                    value: 'MyahInboxEmailStoredMessageFields',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailStoredMessageFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxContactEmailMessage' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'messageThreadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'subject' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'receivedAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'direction' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'visibility' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'participants' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'role' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'handle' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'displayName' } },
+              ],
+            },
+          },
+          { kind: 'Field', name: { kind: 'Name', value: 'attachmentFileIds' } },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<MyahInboxEmailMessagePageFieldsFragment, unknown>;
 export const WorkflowDiffFragmentFragmentDoc = {
   kind: 'Document',
   definitions: [
@@ -3475,6 +4052,14 @@ export const MyahInboxThreadsDocument = {
           },
           type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
         },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'expectedWorkspaceId' },
+          },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+        },
       ],
       selectionSet: {
         kind: 'SelectionSet',
@@ -3545,6 +4130,14 @@ export const MyahInboxThreadsDocument = {
                 value: {
                   kind: 'Variable',
                   name: { kind: 'Name', value: 'threadId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'expectedWorkspaceId' },
                 },
               },
             ],
@@ -3955,6 +4548,14 @@ export const MyahInboxReplySendReadinessDocument = {
             type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
           },
         },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'expectedWorkspaceId' },
+          },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+        },
       ],
       selectionSet: {
         kind: 'SelectionSet',
@@ -3969,6 +4570,14 @@ export const MyahInboxReplySendReadinessDocument = {
                 value: {
                   kind: 'Variable',
                   name: { kind: 'Name', value: 'threadId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'expectedWorkspaceId' },
                 },
               },
             ],
@@ -4620,6 +5229,173 @@ export const MyahInboxContactDocument = {
   MyahInboxContactQuery,
   MyahInboxContactQueryVariables
 >;
+export const MyahInboxInstagramMessagesDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'MyahInboxInstagramMessages' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'conversationId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'String' },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'first' },
+          },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'after' },
+          },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'myahInboxInstagramMessages' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'conversationId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'conversationId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'first' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'first' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'after' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'after' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'edges' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'cursor' },
+                      },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'node' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'id' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'text' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'direction' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'sentVia' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'provider' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'deliveryState' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: {
+                                kind: 'Name',
+                                value: 'providerCreatedAt',
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'createdAt' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'hasAttachments' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'attachmentCount' },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'pageInfo' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'hasNextPage' },
+                      },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'endCursor' },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  MyahInboxInstagramMessagesQuery,
+  MyahInboxInstagramMessagesQueryVariables
+>;
 export const MyahInboxContactEmailMessagesDocument = {
   kind: 'Document',
   definitions: [
@@ -4802,6 +5578,833 @@ export const MyahInboxContactEmailMessagesDocument = {
 } as unknown as DocumentNode<
   MyahInboxContactEmailMessagesQuery,
   MyahInboxContactEmailMessagesQueryVariables
+>;
+export const MyahInboxContactEmailCardsDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'MyahInboxContactEmailCards' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'contactId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'String' },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'expectedWorkspaceId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'snapshot' },
+          },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'olderCursor' },
+          },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'myahInboxContactEmailCards' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'contactId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'contactId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'snapshot' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'snapshot' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'olderCursor' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'olderCursor' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'snapshot' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'olderCursor' } },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'latestThreadId' },
+                },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'cards' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'FragmentSpread',
+                        name: {
+                          kind: 'Name',
+                          value: 'MyahInboxEmailCardFields',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailCardFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxEmailCard' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'threadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'rootMessageId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'startTimestamp' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'subject' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'campaignLabel' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'historyBasis' } },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  MyahInboxContactEmailCardsQuery,
+  MyahInboxContactEmailCardsQueryVariables
+>;
+export const MyahInboxContactEmailCardDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'MyahInboxContactEmailCard' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'contactId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'String' },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'expectedWorkspaceId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'threadId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'myahInboxContactEmailCard' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'contactId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'contactId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'threadId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'threadId' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'snapshot' } },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'card' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'FragmentSpread',
+                        name: {
+                          kind: 'Name',
+                          value: 'MyahInboxEmailCardFields',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailCardFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxEmailCard' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'threadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'rootMessageId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'startTimestamp' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'subject' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'campaignLabel' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'historyBasis' } },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  MyahInboxContactEmailCardQuery,
+  MyahInboxContactEmailCardQueryVariables
+>;
+export const MyahInboxContactEmailCardMessagesDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'MyahInboxContactEmailCardMessages' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'contactId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'String' },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'expectedWorkspaceId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'threadId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'snapshot' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'String' },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'cursor' },
+          },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'myahInboxContactEmailCardMessages' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'contactId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'contactId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'threadId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'threadId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'snapshot' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'snapshot' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'cursor' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'cursor' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'FragmentSpread',
+                  name: {
+                    kind: 'Name',
+                    value: 'MyahInboxEmailMessagePageFields',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailStoredMessageFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxContactEmailMessage' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'messageThreadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'subject' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'receivedAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'direction' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'visibility' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'participants' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'role' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'handle' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'displayName' } },
+              ],
+            },
+          },
+          { kind: 'Field', name: { kind: 'Name', value: 'attachmentFileIds' } },
+        ],
+      },
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailMessagePageFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxEmailMessagePage' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'threadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'olderCursor' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'newerCursor' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'root' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'FragmentSpread',
+                  name: {
+                    kind: 'Name',
+                    value: 'MyahInboxEmailStoredMessageFields',
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'messages' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'FragmentSpread',
+                  name: {
+                    kind: 'Name',
+                    value: 'MyahInboxEmailStoredMessageFields',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  MyahInboxContactEmailCardMessagesQuery,
+  MyahInboxContactEmailCardMessagesQueryVariables
+>;
+export const MyahInboxContactEmailMessageLocationDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'MyahInboxContactEmailMessageLocation' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'contactId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'String' },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'expectedWorkspaceId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'messageId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'snapshot' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'String' },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: {
+              kind: 'Name',
+              value: 'myahInboxContactEmailMessageLocation',
+            },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'contactId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'contactId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'messageId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'messageId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'snapshot' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'snapshot' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'messageId' } },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'card' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'FragmentSpread',
+                        name: {
+                          kind: 'Name',
+                          value: 'MyahInboxEmailCardFields',
+                        },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'page' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'FragmentSpread',
+                        name: {
+                          kind: 'Name',
+                          value: 'MyahInboxEmailMessagePageFields',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailStoredMessageFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxContactEmailMessage' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'messageThreadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'subject' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'receivedAt' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'direction' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'visibility' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'participants' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'role' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'handle' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'displayName' } },
+              ],
+            },
+          },
+          { kind: 'Field', name: { kind: 'Name', value: 'attachmentFileIds' } },
+        ],
+      },
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailCardFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxEmailCard' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'threadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'rootMessageId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'startTimestamp' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'subject' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'campaignLabel' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'historyBasis' } },
+        ],
+      },
+    },
+    {
+      kind: 'FragmentDefinition',
+      name: { kind: 'Name', value: 'MyahInboxEmailMessagePageFields' },
+      typeCondition: {
+        kind: 'NamedType',
+        name: { kind: 'Name', value: 'MyahInboxEmailMessagePage' },
+      },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          { kind: 'Field', name: { kind: 'Name', value: 'threadId' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'olderCursor' } },
+          { kind: 'Field', name: { kind: 'Name', value: 'newerCursor' } },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'root' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'FragmentSpread',
+                  name: {
+                    kind: 'Name',
+                    value: 'MyahInboxEmailStoredMessageFields',
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'messages' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'FragmentSpread',
+                  name: {
+                    kind: 'Name',
+                    value: 'MyahInboxEmailStoredMessageFields',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  MyahInboxContactEmailMessageLocationQuery,
+  MyahInboxContactEmailMessageLocationQueryVariables
+>;
+export const MyahInboxEmailDraftDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'MyahInboxEmailDraft' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'threadId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'expectedWorkspaceId' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'myahInboxEmailDraft' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'threadId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'threadId' },
+                },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'expectedWorkspaceId' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'workspaceId' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'threadId' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'revision' } },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'body' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'markdown' },
+                      },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'blocknote' },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  MyahInboxEmailDraftQuery,
+  MyahInboxEmailDraftQueryVariables
 >;
 export const LinkMyahInboxContactCreatorDocument = {
   kind: 'Document',
