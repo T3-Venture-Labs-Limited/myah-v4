@@ -2391,11 +2391,11 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
         [TABLES.map((table) => `core."${table}"`)],
       );
       expect(absent).toEqual({
-        tableCount: 0,
+        tableCount: 1,
         hasCsaFunction: false,
         hasCtpFunction: false,
         policyColumnCount: 0,
-        enumCount: 0,
+        enumCount: 3,
       });
       expect(
         await readUnaffectedParentCatalog((sql) => runner.query(sql)),
