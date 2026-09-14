@@ -1,4 +1,4 @@
-import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794325-create-campaign-execution-authority-foundation';
+import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794327-create-campaign-execution-authority-foundation';
 
 const run = async (direction: 'up' | 'down') => {
   const query = jest.fn().mockResolvedValue(undefined);
