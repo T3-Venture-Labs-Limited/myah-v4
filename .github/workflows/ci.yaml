@@ -84,7 +84,7 @@ jobs:
         run: >-
           npx nx affected -t test --configuration=ci
           --base=origin/${{ github.base_ref }} --head=${{ github.sha }}
-          --exclude=twenty-e2e-testing,twenty-zapier --parallel=1
+          --exclude=twenty-e2e-testing,twenty-zapier,twenty-server --parallel=1
       - name: Save unit test cache
         uses: ./.github/actions/save-cache
         with:

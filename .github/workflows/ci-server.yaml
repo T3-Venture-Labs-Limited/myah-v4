@@ -24,6 +24,7 @@ jobs:
       files: |
         package.json
         yarn.lock
+        .github/workflows/ci-server.yaml
         packages/twenty-server/**
         packages/twenty-front/src/generated/**
         packages/twenty-front/src/generated-metadata/**
@@ -387,6 +388,10 @@ jobs:
     needs: [server-build, select-runner]
     timeout-minutes: 30
     runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Fetch custom Github Actions and base branch history
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -401,10 +406,9 @@ jobs:
       - name: Build twenty-shared
         run: npx nx build twenty-shared
       - name: Server / Run Tests
-        uses: ./.github/actions/nx-affected
-        with:
-          tag: scope:backend
-          tasks: test
+        run: >-
+          npx nx test twenty-server --configuration=ci
+          --shard=${{ matrix.shard }}/2
 
   server-integration-test:
     timeout-minutes: 30
