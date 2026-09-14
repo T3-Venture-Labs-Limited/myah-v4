@@ -15,6 +15,8 @@ const FIELDS =
   'id name objective lifecycleStatus sequenceAuthorization deletedAt';
 const ERROR =
   'Campaign lifecycle and execution authority require a dedicated operation.';
+const SEQUENCE_AUTHORIZATION_ERROR =
+  'Campaign sequence authorization requires a dedicated operation.';
 
 const operationArgs = {
   objectMetadataSingularName: 'campaign',
@@ -24,10 +26,11 @@ const operationArgs = {
 
 const expectRejected = async (
   operation: Parameters<typeof makeGraphqlAPIRequest>[0],
+  error = ERROR,
 ) => {
   const response = await makeGraphqlAPIRequest(operation);
 
-  expect(response.body.errors?.[0]?.message).toContain(ERROR);
+  expect(response.body.errors?.[0]?.message).toContain(error);
   expect(response.body.errors?.[0]?.extensions?.code).toBe('BAD_USER_INPUT');
   expect(Object.values(response.body.data ?? {})).toEqual([null]);
 };
@@ -131,6 +134,7 @@ describe('Campaign GraphQL lifecycle write guards', () => {
           },
         ],
       }),
+      SEQUENCE_AUTHORIZATION_ERROR,
     );
     expect(await readCampaign(authorityId)).toBeNull();
 
@@ -192,6 +196,7 @@ describe('Campaign GraphQL lifecycle write guards', () => {
         recordId: id,
         data: { sequenceAuthorization: { authorizationId: 'forged' } },
       }),
+      SEQUENCE_AUTHORIZATION_ERROR,
     );
     await expectRejected(
       updateManyOperationFactory({
@@ -199,6 +204,7 @@ describe('Campaign GraphQL lifecycle write guards', () => {
         filter: { id: { eq: id } },
         data: { sequenceAuthorization: { authorizationId: 'forged-bulk' } },
       }),
+      SEQUENCE_AUTHORIZATION_ERROR,
     );
     await expectRejected(
       updateOneOperationFactory({
