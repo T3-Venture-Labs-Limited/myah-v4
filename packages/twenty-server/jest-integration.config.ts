@@ -44,7 +44,7 @@ const jestConfig: JestConfigWithTsJest = {
   // @exodus/bytes via html-encoding-sniffer, @csstools/@asamuzakjp css engine);
   // let swc transform them (and .mjs below) so jest can require jsdom.
   transformIgnorePatterns: [
-    '/node_modules/(?!(jsdom|html-encoding-sniffer|whatwg-encoding|@exodus|parse5|entities|tough-cookie|@csstools|@asamuzakjp)/)',
+    '/node_modules/(?!(file-type|@file-type|strtok3|token-types|@borewit|@tokenizer|uint8array-extras|read-next-line|jsdom|html-encoding-sniffer|whatwg-encoding|@exodus|parse5|entities|tough-cookie|@csstools|@asamuzakjp)/)',
   ],
   transform: {
     '^.+\\.(t|j|mj)s$': [
@@ -82,6 +82,7 @@ const jestConfig: JestConfigWithTsJest = {
     ...pathsToModuleNameMapper(tsConfig.compilerOptions.paths, {
       prefix: '<rootDir>/',
     }),
+    '^file-type$': require.resolve('file-type'),
     '^test/(.*)$': '<rootDir>/test/$1',
   },
   globals: {

@@ -6,6 +6,7 @@ import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/c
 import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
 import { repairInstagramSecurityChecks } from 'src/database/commands/upgrade-version-command/2-20/utils/repair-instagram-security-checks.util';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 jest.mock(
   'src/database/commands/upgrade-version-command/2-20/utils/repair-instagram-security-checks.util',
@@ -84,10 +85,15 @@ const fixture = () => {
     remaining: '0',
     uncopied: '0',
     missingColumn: false,
+    historyTables: true,
+    schemaExists: true,
   };
   const core = {
     query: jest.fn(async (sql: string) => {
-      if (sql.includes('JOIN pg_catalog.pg_namespace n ON n.nspname'))
+      if (
+        sql.includes('SELECT w.id') &&
+        sql.includes('JOIN pg_catalog.pg_namespace n ON n.nspname')
+      )
         return state.workspace ? [{ id: 'workspace' }] : [];
       if (sql.includes('FROM core.application')) return applications;
       if (sql.includes('FROM core."permissionFlag"')) return definitions;
@@ -98,6 +104,73 @@ const fixture = () => {
         return targets;
       if (sql.includes('jsonb_to_recordset'))
         return [{ count: state.uncopied }];
+      if (sql.includes('expiredBindings')) {
+        events.push('invalidate');
+        return [];
+      }
+      if (
+        sql.includes('core.workspace') &&
+        sql.includes('"databaseSchema"')
+      )
+        return state.schemaExists
+          ? [
+              {
+                databaseSchema: sql.includes(
+                  'WHERE id = $1 AND "databaseSchema" IS NULL',
+                )
+                  ? null
+                  : getWorkspaceSchemaName(
+                      '00000000-0000-4000-8000-000000000001',
+                    ),
+              },
+            ]
+          : [];
+      if (sql.includes('information_schema.columns')) {
+        events.push('column-preflight');
+        return state.missingColumn
+          ? [{ tableName: '_myahSocialConversation', columnName: 'id' }]
+          : Object.entries({
+              _myahSocialConversation: [
+                'id',
+                'provider',
+                'lifecycle',
+                'providerConversationId',
+                'recipientIgsid',
+              ],
+              _myahSocialMessage: [
+                'id',
+                'provider',
+                'conversationId',
+                'text',
+                'providerCreatedAt',
+              ],
+              _myahInstagramReplyDraft: [
+                'id',
+                'conversationId',
+                'status',
+                'sentAt',
+                'sendBlockedReason',
+              ],
+            }).flatMap(([tableName, names]) =>
+              names.map((columnName) => ({ tableName, columnName })),
+            );
+      }
+      if (sql.includes('information_schema.tables'))
+        return state.historyTables
+          ? [
+              { tableName: '_myahSocialConversation' },
+              { tableName: '_myahSocialMessage' },
+              { tableName: '_myahInstagramReplyDraft' },
+            ]
+          : [];
+      if (sql.includes('legacyMessages')) {
+        events.push('backfill');
+        return [];
+      }
+      if (sql.includes('SELECT (')) {
+        events.push('postconditions');
+        return [{ count: state.remaining }];
+      }
       throw new Error('Unexpected core SQL');
     }),
   };
@@ -107,7 +180,7 @@ const fixture = () => {
       if (sql.includes('information_schema.columns')) {
         events.push('column-preflight');
         return state.missingColumn
-          ? []
+          ? [{ tableName: '_myahSocialConversation', columnName: 'id' }]
           : Object.entries({
               _myahSocialConversation: [
                 'id',
@@ -152,9 +225,13 @@ const fixture = () => {
   const iterator = {} as WorkspaceIteratorService;
   const backfill = new BackfillComposioInstagramHistoryWorkspaceCommand(
     iterator,
+    core as unknown as DataSource,
   );
   const invalidator =
-    new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(iterator);
+    new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
+      iterator,
+      core as unknown as DataSource,
+    );
   const backfillSpy = jest.spyOn(backfill, 'runOnWorkspace');
   const invalidateSpy = jest.spyOn(invalidator, 'runOnWorkspace');
   jest
@@ -224,9 +301,17 @@ describe('VerifyInstagramSecurityCutoverWorkspaceCommand', () => {
       expect.stringContaining('jsonb_to_recordset'),
       [JSON.stringify(f.targets), f.args.workspaceId],
     );
-    expect(
-      f.core.query.mock.calls.every(([sql]) => /^\s*SELECT/.test(sql)),
-    ).toBe(true);
+    expect(f.core.query).toHaveBeenCalledWith(
+      expect.stringContaining('expiredBindings'),
+      [f.args.workspaceId],
+    );
+    const coreMutations = f.core.query.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql) => !/^\s*SELECT/.test(sql));
+
+    expect(coreMutations).toHaveLength(2);
+    expect(coreMutations[0]).toContain('expiredBindings');
+    expect(coreMutations[1]).toContain('legacyMessages');
   });
 
   it('dry-run reports remaining work with no invalidation/backfill DML or argument mutation', async () => {
@@ -268,6 +353,46 @@ describe('VerifyInstagramSecurityCutoverWorkspaceCommand', () => {
       expect(f.core.query).not.toHaveBeenCalled();
     },
   );
+
+  it('skips a workspace where the historical Instagram app tables never existed', async () => {
+    const f = fixture();
+
+    f.state.historyTables = false;
+
+    await expect(f.verifier.runOnWorkspace(f.args)).resolves.toBeUndefined();
+    expect(repairInstagramSecurityChecks).not.toHaveBeenCalled();
+    expect(f.invalidateSpy).not.toHaveBeenCalled();
+    expect(f.backfillSpy).not.toHaveBeenCalled();
+  });
+
+  it('fails before the no-history skip when the recorded workspace schema does not physically exist', async () => {
+    const f = fixture();
+
+    f.state.historyTables = false;
+    f.state.schemaExists = false;
+
+    await expect(f.verifier.runOnWorkspace(f.args)).rejects.toThrow(
+      'dedicated data source',
+    );
+    expect(repairInstagramSecurityChecks).not.toHaveBeenCalled();
+    expect(f.invalidateSpy).not.toHaveBeenCalled();
+    expect(f.backfillSpy).not.toHaveBeenCalled();
+  });
+
+  it('skips a workspace only after confirming that it has no database schema', async () => {
+    const f = fixture();
+
+    f.args.dataSource = undefined;
+
+    await expect(f.verifier.runOnWorkspace(f.args)).resolves.toBeUndefined();
+    expect(f.core.query).toHaveBeenCalledWith(
+      expect.stringContaining('"databaseSchema" IS NULL'),
+      [f.args.workspaceId],
+    );
+    expect(repairInstagramSecurityChecks).not.toHaveBeenCalled();
+    expect(f.invalidateSpy).not.toHaveBeenCalled();
+    expect(f.backfillSpy).not.toHaveBeenCalled();
+  });
 
   it.each([
     'missing-instagram',

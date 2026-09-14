@@ -1,4 +1,6 @@
+import { InjectDataSource } from '@nestjs/typeorm';
 import { Command } from 'nest-commander';
+import { DataSource } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
@@ -13,23 +15,20 @@ import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/deco
     'Expire legacy Composio Instagram authorities for each existing workspace',
 })
 export class InvalidateComposioInstagramAuthoritiesWorkspaceCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
-  constructor(workspaceIteratorService: WorkspaceIteratorService) {
+  constructor(
+    workspaceIteratorService: WorkspaceIteratorService,
+    @InjectDataSource() private readonly coreDataSource: DataSource,
+  ) {
     super(workspaceIteratorService);
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
-    if (!args.dataSource) {
-      throw new Error(
-        'Cannot invalidate Composio Instagram authorities: workspace data source is required',
-      );
-    }
-
     if (args.options.dryRun) {
       return;
     }
 
     await invalidateComposioInstagramAuthorities(
-      args.dataSource,
+      this.coreDataSource,
       args.workspaceId,
     );
   }

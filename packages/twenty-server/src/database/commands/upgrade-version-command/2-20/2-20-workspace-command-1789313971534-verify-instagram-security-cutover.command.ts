@@ -228,6 +228,54 @@ export class VerifyInstagramSecurityCutoverWorkspaceCommand extends ActiveOrSusp
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    if (!args.dataSource) {
+      const schemaLessWorkspaces = await this.coreDataSource.query(
+        `SELECT "databaseSchema" FROM core.workspace
+         WHERE id = $1 AND "databaseSchema" IS NULL AND "deletedAt" IS NULL`,
+        [args.workspaceId],
+      );
+
+      if (schemaLessWorkspaces.length !== 1) {
+        throw new Error(
+          'Instagram cutover requires a workspace and its dedicated data source',
+        );
+      }
+      return;
+    }
+
+    const schemaName = getWorkspaceSchemaName(args.workspaceId);
+    const [workspace] = (await this.coreDataSource.query(
+      `SELECT w."databaseSchema" FROM core.workspace w
+       JOIN pg_catalog.pg_namespace n ON n.nspname = w."databaseSchema"
+       WHERE w.id = $1 AND w."databaseSchema" = $2 AND w."deletedAt" IS NULL`,
+      [args.workspaceId, schemaName],
+    )) as { databaseSchema: string }[];
+
+    if (workspace?.databaseSchema !== schemaName) {
+      throw new Error(
+        'Instagram cutover requires a workspace and its dedicated data source',
+      );
+    }
+
+    const historyTables = await this.coreDataSource.query(
+      `SELECT table_name AS "tableName"
+       FROM information_schema.tables
+       WHERE table_schema = $1
+         AND table_name = ANY($2::text[])`,
+      [
+        schemaName,
+        [
+          '_myahSocialConversation',
+          '_myahSocialMessage',
+          '_myahInstagramReplyDraft',
+        ],
+      ],
+    );
+
+    if (historyTables.length === 0) {
+      return;
+    }
+
     await this.preflight(args);
     const core = await repairInstagramSecurityChecks(this.coreDataSource, {
       dryRun: args.options.dryRun,
@@ -273,7 +321,7 @@ export class VerifyInstagramSecurityCutoverWorkspaceCommand extends ActiveOrSusp
 
   private async remainingWork(args: RunOnWorkspaceArgs): Promise<string> {
     const schema = getWorkspaceSchemaName(args.workspaceId);
-    const rows = await args.dataSource!.query(
+    const rows = await this.coreDataSource.query(
       `SELECT (
         (SELECT count(*) FROM core."actionApprovalBinding" WHERE "workspaceId" = $1
           AND "actionName" = 'send_instagram_reply' AND state IN ('PENDING', 'APPROVED')) +

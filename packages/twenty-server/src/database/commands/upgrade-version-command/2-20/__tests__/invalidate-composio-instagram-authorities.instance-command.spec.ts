@@ -76,38 +76,34 @@ describe('InvalidateComposioInstagramAuthoritiesWorkspaceCommand', () => {
     const query = jest.fn().mockResolvedValue(undefined);
     const command = new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
       {} as WorkspaceIteratorService,
+      { query } as unknown as DataSource,
     );
 
-    await command.runOnWorkspace({
-      ...args,
-      dataSource: { query } as never,
-    });
+    await command.runOnWorkspace(args);
 
     expect(query).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[0][0]).toContain('AND \"workspaceId\" = $1');
     expect(query.mock.calls[0][1]).toEqual([args.workspaceId]);
   });
 
-  it.each([false, true])(
-    'rejects a missing workspace data source (dryRun=%s)',
-    async (dryRun) => {
-      const command =
-        new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
-          {} as WorkspaceIteratorService,
-        );
+  it('uses the core data source when the workspace has no schema', async () => {
+    const query = jest.fn().mockResolvedValue(undefined);
+    const command = new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
+      {} as WorkspaceIteratorService,
+      { query } as unknown as DataSource,
+    );
 
-      await expect(
-        command.runOnWorkspace({ ...args, options: { dryRun } }),
-      ).rejects.toThrow(
-        'Cannot invalidate Composio Instagram authorities: workspace data source is required',
-      );
-    },
-  );
+    await command.runOnWorkspace(args);
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][1]).toEqual([args.workspaceId]);
+  });
 
   it('never mutates authorities in dry-run mode', async () => {
     const query = jest.fn();
     const command = new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
       {} as WorkspaceIteratorService,
+      { query } as unknown as DataSource,
     );
 
     await command.runOnWorkspace({

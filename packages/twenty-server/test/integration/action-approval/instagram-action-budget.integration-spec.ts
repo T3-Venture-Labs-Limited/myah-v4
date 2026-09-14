@@ -649,7 +649,7 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
     expect(Number(targetCount)).toBe(1);
   });
 
-  it('permits exactly one fake Unipile call for concurrent distinct approved START_CHAT drafts', async () => {
+  it('rejects concurrent approved START_CHAT drafts without a provider call', async () => {
     const firstReceiptId = await insertProcessingReceipt(500);
     const secondReceiptId = await insertProcessingReceipt(501);
     const approvalIds = [fixtureId(10_500), fixtureId(10_501)];
@@ -764,16 +764,17 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
       rolePermissionConfig: { shouldBypassPermissionChecks: true as const },
     });
 
-    const results = await Promise.all(
+    await Promise.all(
       approvalIds.map((approvalId) =>
-        sendService.executeApproved(sendInput(approvalId)),
+        expect(
+          sendService.executeApproved(sendInput(approvalId)),
+        ).rejects.toThrow('Instagram first-contact sending is unavailable'),
       ),
     );
 
-    expect(results.map(({ status }) => status).sort()).toEqual([
-      'FAILED',
-      'SENT',
-    ]);
-    expect(providerCalls).toHaveBeenCalledTimes(1);
+    expect(
+      actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expect(providerCalls).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,7 @@ import {
 } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { type ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
@@ -435,9 +436,11 @@ const setup = () => {
   store.set(currentWorkspaceMemberState.atom, { id: 'member-1' } as never);
   const mount = () =>
     render(
-      <Provider store={store}>
-        <MyahInboxPage />
-      </Provider>,
+      <MemoryRouter initialEntries={['/myah/inbox']}>
+        <Provider store={store}>
+          <MyahInboxPage />
+        </Provider>
+      </MemoryRouter>,
     );
   return {
     store,
@@ -1026,9 +1029,11 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       },
     ];
     view.rerender(
-      <Provider store={store}>
-        <MyahInboxPage />
-      </Provider>,
+      <MemoryRouter initialEntries={['/myah/inbox']}>
+        <Provider store={store}>
+          <MyahInboxPage />
+        </Provider>
+      </MemoryRouter>,
     );
     expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
       'thread-3',
@@ -1052,9 +1057,11 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       },
     ];
     view.rerender(
-      <Provider store={store}>
-        <MyahInboxPage />
-      </Provider>,
+      <MemoryRouter initialEntries={['/myah/inbox']}>
+        <Provider store={store}>
+          <MyahInboxPage />
+        </Provider>
+      </MemoryRouter>,
     );
     expect(screen.getByText('Email actions thread-2')).toBeVisible();
     expect(

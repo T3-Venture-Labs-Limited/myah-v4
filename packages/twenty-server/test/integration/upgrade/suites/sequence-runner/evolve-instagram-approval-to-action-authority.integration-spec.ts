@@ -1179,12 +1179,13 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
        '00000000-0000-0000-0000-000000000723',
        '00000000-0000-0000-0000-000000000724', 'draft')`);
 
-    const command = new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
-      {} as never,
-    );
     const commandDataSource = {
       query: queryRunner.query.bind(queryRunner),
     } as unknown as DataSource;
+    const command = new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
+      {} as never,
+      commandDataSource,
+    );
     const commandArgs = {
       workspaceId,
       options: { dryRun: false },

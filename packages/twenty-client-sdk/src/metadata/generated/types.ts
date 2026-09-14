@@ -70,9 +70,9 @@ export default {
         240,
         255,
         259,
-        311,
         314,
         317,
+        320,
         370,
         371,
         372,
@@ -5609,6 +5609,69 @@ export default {
                 1
             ]
         },
+        "WorkspaceMailboxConnectionStatus": {
+            "connectedAccountId": [
+                3
+            ],
+            "errorCode": [
+                1
+            ],
+            "errorMessage": [
+                1
+            ],
+            "lastSafeOperation": [
+                1
+            ],
+            "maskedHandle": [
+                1
+            ],
+            "messageChannelId": [
+                3
+            ],
+            "state": [
+                1
+            ],
+            "syncStage": [
+                1
+            ],
+            "syncStatus": [
+                1
+            ],
+            "updatedAt": [
+                4
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "WorkspaceMailboxConnectionResult": {
+            "connectedAccountId": [
+                3
+            ],
+            "messageChannelId": [
+                3
+            ],
+            "status": [
+                308
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "RevokeWorkspaceMailboxResult": {
+            "connectedAccountId": [
+                3
+            ],
+            "revoked": [
+                6
+            ],
+            "state": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
         "BillingTrialPeriod": {
             "duration": [
                 12
@@ -5639,7 +5702,7 @@ export default {
                 1
             ],
             "modelFamily": [
-                311
+                314
             ],
             "modelFamilyLabel": [
                 1
@@ -5654,7 +5717,7 @@ export default {
                 12
             ],
             "nativeCapabilities": [
-                309
+                312
             ],
             "isDeprecated": [
                 6
@@ -5693,7 +5756,7 @@ export default {
                 1
             ],
             "trialPeriods": [
-                308
+                311
             ],
             "__typename": [
                 1
@@ -5701,7 +5764,7 @@ export default {
         },
         "Support": {
             "supportDriver": [
-                314
+                317
             ],
             "supportFrontChatId": [
                 1
@@ -5727,7 +5790,7 @@ export default {
         },
         "Captcha": {
             "provider": [
-                317
+                320
             ],
             "siteKey": [
                 1
@@ -5764,7 +5827,7 @@ export default {
                 259
             ],
             "metadata": [
-                319
+                322
             ],
             "__typename": [
                 1
@@ -5792,10 +5855,10 @@ export default {
                 261
             ],
             "billing": [
-                312
+                315
             ],
             "aiModels": [
-                310
+                313
             ],
             "signInPrefilled": [
                 6
@@ -5819,25 +5882,25 @@ export default {
                 6
             ],
             "support": [
-                313
+                316
             ],
             "isAttachmentPreviewEnabled": [
                 6
             ],
             "sentry": [
-                315
+                318
             ],
             "captcha": [
-                316
+                319
             ],
             "api": [
-                318
+                321
             ],
             "canManageFeatureFlags": [
                 6
             ],
             "publicFeatureFlags": [
-                320
+                323
             ],
             "isMicrosoftMessagingEnabled": [
                 6
@@ -5879,7 +5942,7 @@ export default {
                 6
             ],
             "maintenance": [
-                321
+                324
             ],
             "__typename": [
                 1
@@ -5926,7 +5989,7 @@ export default {
                 1
             ],
             "dailyUsage": [
-                325
+                328
             ],
             "__typename": [
                 1
@@ -5934,16 +5997,16 @@ export default {
         },
         "UsageAnalytics": {
             "usageByUser": [
-                323
+                326
             ],
             "usageByOperationType": [
-                323
+                326
             ],
             "usageByModel": [
-                323
+                326
             ],
             "timeSeries": [
-                325
+                328
             ],
             "periodStart": [
                 4
@@ -5952,7 +6015,7 @@ export default {
                 4
             ],
             "userDailyUsage": [
-                326
+                329
             ],
             "__typename": [
                 1
@@ -6056,7 +6119,7 @@ export default {
                 1
             ],
             "location": [
-                333
+                336
             ],
             "__typename": [
                 1
@@ -6215,69 +6278,6 @@ export default {
             ],
             "inputSchema": [
                 7
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "WorkspaceMailboxConnectionStatus": {
-            "connectedAccountId": [
-                3
-            ],
-            "errorCode": [
-                1
-            ],
-            "errorMessage": [
-                1
-            ],
-            "lastSafeOperation": [
-                1
-            ],
-            "maskedHandle": [
-                1
-            ],
-            "messageChannelId": [
-                3
-            ],
-            "state": [
-                1
-            ],
-            "syncStage": [
-                1
-            ],
-            "syncStatus": [
-                1
-            ],
-            "updatedAt": [
-                4
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "WorkspaceMailboxConnectionResult": {
-            "connectedAccountId": [
-                3
-            ],
-            "messageChannelId": [
-                3
-            ],
-            "status": [
-                339
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "RevokeWorkspaceMailboxResult": {
-            "connectedAccountId": [
-                3
-            ],
-            "revoked": [
-                6
-            ],
-            "state": [
-                1
             ],
             "__typename": [
                 1
@@ -6599,7 +6599,7 @@ export default {
                 1
             ],
             "parts": [
-                335
+                338
             ],
             "processedAt": [
                 4
@@ -6954,7 +6954,7 @@ export default {
         },
         "Query": {
             "getWorkspaceMailboxStatus": [
-                339,
+                308,
                 {
                     "connectedAccountId": [
                         3,
@@ -7701,7 +7701,7 @@ export default {
                 }
             ],
             "getToolIndex": [
-                338
+                341
             ],
             "getToolInputSchema": [
                 7,
@@ -7713,10 +7713,10 @@ export default {
                 }
             ],
             "webhooks": [
-                337
+                340
             ],
             "webhook": [
-                337,
+                340,
                 {
                     "id": [
                         3,
@@ -7855,7 +7855,7 @@ export default {
                 }
             ],
             "getAutoCompleteAddress": [
-                332,
+                335,
                 {
                     "address": [
                         1,
@@ -7874,7 +7874,7 @@ export default {
                 }
             ],
             "getAddressDetails": [
-                334,
+                337,
                 {
                     "placeId": [
                         1,
@@ -7887,7 +7887,7 @@ export default {
                 }
             ],
             "getUsageAnalytics": [
-                327,
+                330,
                 {
                     "input": [
                         405
@@ -7895,7 +7895,7 @@ export default {
                 }
             ],
             "findManyPublicDomains": [
-                331
+                334
             ],
             "__typename": [
                 1
@@ -8164,7 +8164,7 @@ export default {
         "UsageOperationType": {},
         "Mutation": {
             "connectWorkspaceMailbox": [
-                340,
+                309,
                 {
                     "input": [
                         408,
@@ -8173,7 +8173,7 @@ export default {
                 }
             ],
             "rotateWorkspaceMailbox": [
-                340,
+                309,
                 {
                     "input": [
                         411,
@@ -8182,7 +8182,7 @@ export default {
                 }
             ],
             "reconnectWorkspaceMailbox": [
-                340,
+                309,
                 {
                     "input": [
                         411,
@@ -8191,7 +8191,7 @@ export default {
                 }
             ],
             "revokeWorkspaceMailbox": [
-                341,
+                310,
                 {
                     "connectedAccountId": [
                         3,
@@ -10249,7 +10249,7 @@ export default {
                 }
             ],
             "createWebhook": [
-                337,
+                340,
                 {
                     "input": [
                         546,
@@ -10258,7 +10258,7 @@ export default {
                 }
             ],
             "updateWebhook": [
-                337,
+                340,
                 {
                     "input": [
                         547,
@@ -10267,7 +10267,7 @@ export default {
                 }
             ],
             "deleteWebhook": [
-                337,
+                340,
                 {
                     "id": [
                         3,
@@ -10276,7 +10276,7 @@ export default {
                 }
             ],
             "runAgent": [
-                336,
+                339,
                 {
                     "input": [
                         549,
@@ -10569,7 +10569,7 @@ export default {
                 }
             ],
             "impersonate": [
-                324,
+                327,
                 {
                     "userId": [
                         3,
@@ -10618,7 +10618,7 @@ export default {
                 }
             ],
             "createPublicDomain": [
-                331,
+                334,
                 {
                     "domain": [
                         1,
@@ -10658,7 +10658,7 @@ export default {
                 }
             ],
             "createDevelopmentApplication": [
-                328,
+                331,
                 {
                     "universalIdentifier": [
                         1,
@@ -10671,7 +10671,7 @@ export default {
                 }
             ],
             "syncApplication": [
-                329,
+                332,
                 {
                     "manifest": [
                         7,
@@ -10683,7 +10683,7 @@ export default {
                 }
             ],
             "uploadApplicationFile": [
-                330,
+                333,
                 {
                     "file": [
                         418,

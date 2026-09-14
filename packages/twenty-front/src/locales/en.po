@@ -1559,6 +1559,7 @@ msgstr "Activating..."
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/domains/components/SettingsWorkspaceDomainCard.tsx
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -5698,7 +5699,6 @@ msgid "Connect your Instagram Business or Creator account to read conversations 
 msgstr "Connect your Instagram Business or Creator account to read conversations and reply with your approval."
 
 #. js-lingui-id: QHcLEN
-#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationConnectionsSection.tsx
@@ -5712,6 +5712,11 @@ msgstr "Connected"
 #: src/pages/settings/accounts/SettingsAccounts.tsx
 msgid "Connected accounts"
 msgstr "Connected accounts"
+
+#. js-lingui-id: 9zb2WA
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Connecting"
+msgstr "Connecting"
 
 #. js-lingui-id: exyUec
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
@@ -5779,6 +5784,11 @@ msgstr "Connection successfully created"
 #: src/modules/settings/accounts/hooks/useImapSmtpCaldavConnectionForm.ts
 msgid "Connection successfully updated"
 msgstr "Connection successfully updated"
+
+#. js-lingui-id: Eoe89X
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Connection unavailable"
+msgstr "Connection unavailable"
 
 #. js-lingui-id: wiygne
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
@@ -6085,6 +6095,11 @@ msgstr "Cost per million tokens (USD)"
 msgid "Cost per million tokens for cached input (USD)"
 msgstr "Cost per million tokens for cached input (USD)"
 
+#. js-lingui-id: OmK9hW
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Could not confirm Instagram authorization."
+msgstr "Could not confirm Instagram authorization."
+
 #. js-lingui-id: 4h4AUx
 #: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
 msgid "Could not confirm whether the Campaign was saved. Choose New to check again and retry the same creation. If this keeps happening, check your Campaign access."
@@ -6104,6 +6119,12 @@ msgstr "Could not delete approved access domain"
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "Could not disconnect Shopify."
 msgstr "Could not disconnect Shopify."
+
+#. js-lingui-id: F5pkuT
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Could not disconnect the Instagram account."
+msgstr "Could not disconnect the Instagram account."
 
 #. js-lingui-id: O5XFg7
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -6135,10 +6156,11 @@ msgstr "Could not open the API playground"
 msgid "Could not refresh validity token. Please contact support."
 msgstr "Could not refresh validity token. Please contact support."
 
-#. js-lingui-id: 6baIaY
+#. js-lingui-id: lSckXc
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-msgid "Could not start Instagram authorization. Check the server Instagram configuration."
-msgstr "Could not start Instagram authorization. Check the server Instagram configuration."
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Could not start Instagram authorization."
+msgstr "Could not start Instagram authorization."
 
 #. js-lingui-id: oJAw2x
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
@@ -7530,8 +7552,12 @@ msgstr "Deleting {objectLabel}"
 msgid "Deleting this method will remove it permanently from your account."
 msgstr "Deleting this method will remove it permanently from your account."
 
-#. js-lingui-id: kJHy3o
+#. js-lingui-id: pSPj8a
 #: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here."
+msgstr "Delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here."
+
+#. js-lingui-id: kJHy3o
 #: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 msgid "Delivery outcome is unknown. This draft is locked to prevent a duplicate send."
 msgstr "Delivery outcome is unknown. This draft is locked to prevent a duplicate send."
@@ -7746,6 +7772,12 @@ msgstr "Disconnect connection?"
 msgid "Disconnect domain"
 msgstr "Disconnect domain"
 
+#. js-lingui-id: BC18Z8
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Disconnect Instagram"
+msgstr "Disconnect Instagram"
+
 #. js-lingui-id: W7C8bv
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Disconnect mailbox"
@@ -7757,10 +7789,20 @@ msgstr "Disconnect mailbox"
 msgid "Disconnect mailbox {0}"
 msgstr "Disconnect mailbox {0}"
 
+#. js-lingui-id: Z6aLO+
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Disconnect pending"
+msgstr "Disconnect pending"
+
 #. js-lingui-id: 0xMKx0
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "Disconnect Shopify"
 msgstr "Disconnect Shopify"
+
+#. js-lingui-id: eU7YlA
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Disconnect this Instagram account?"
+msgstr "Disconnect this Instagram account?"
 
 #. js-lingui-id: YtZpxj
 #. placeholder {0}: domainToRemove.name
@@ -9170,6 +9212,7 @@ msgstr "Erasure of soft-deleted records"
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsCodeDetail.tsx
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsHttpRequestDetail.tsx
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Error"
 msgstr "Error"
 
@@ -11434,6 +11477,7 @@ msgstr "In-Reply-To"
 #: src/modules/settings/domains/components/SettingsWorkspaceDomainCard.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/data-model/SettingsObjectFieldTable.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -11646,10 +11690,15 @@ msgstr "Inspect these deterministic local fixture records, then explicitly resol
 msgid "Instagram"
 msgstr "Instagram"
 
-#. js-lingui-id: mSOWyQ
+#. js-lingui-id: 3UgZpw
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-msgid "Instagram authorization opened in a new tab."
-msgstr "Instagram authorization opened in a new tab."
+msgid "Instagram account disconnected."
+msgstr "Instagram account disconnected."
+
+#. js-lingui-id: UgwGHV
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Instagram disconnect is still being confirmed."
+msgstr "Instagram disconnect is still being confirmed."
 
 #. js-lingui-id: ZEZf5o
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -14147,6 +14196,11 @@ msgstr "Navigation tabs"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "Needs attention"
 msgstr "Needs attention"
+
+#. js-lingui-id: NMW5sD
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Needs reconnect"
+msgstr "Needs reconnect"
 
 #. js-lingui-id: 8mDP6r
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
@@ -18613,6 +18667,7 @@ msgstr "Review Inbox reply"
 
 #. js-lingui-id: BXm/6/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review Instagram reply"
 msgstr "Review Instagram reply"
 
@@ -18667,6 +18722,7 @@ msgid "Review the exact server-derived Inbox reply before it is sent."
 msgstr "Review the exact server-derived Inbox reply before it is sent."
 
 #. js-lingui-id: EIzxzn
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review the exact server-derived Instagram reply before it is sent."
 msgstr "Review the exact server-derived Instagram reply before it is sent."
@@ -19838,6 +19894,11 @@ msgstr "Send"
 msgid "Send an invite email to your team"
 msgstr "Send an invite email to your team"
 
+#. js-lingui-id: lQEGUw
+#: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
+msgid "Send approved first messages to start Instagram conversations"
+msgstr "Send approved first messages to start Instagram conversations"
+
 #. js-lingui-id: QjPgX3
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
 msgid "Send approved replies in existing Instagram conversations"
@@ -19869,6 +19930,11 @@ msgstr "Send email."
 msgid "Send emails via connected accounts"
 msgstr "Send emails via connected accounts"
 
+#. js-lingui-id: dG8iZb
+#: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
+msgid "Send Instagram First Message"
+msgstr "Send Instagram First Message"
+
 #. js-lingui-id: 11W7Ux
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
 msgid "Send Instagram Reply"
@@ -19878,6 +19944,11 @@ msgstr "Send Instagram Reply"
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionCreateCalendarEvent.tsx
 msgid "Send invitations"
 msgstr "Send invitations"
+
+#. js-lingui-id: F7JqaK
+#: src/modules/myah/inbox/components/MyahInboxReplyWorkspace.tsx
+msgid "Send reply"
+msgstr "Send reply"
 
 #. js-lingui-id: ULtHaJ
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
@@ -21863,6 +21934,7 @@ msgid "The provider did not respond."
 msgstr "The provider did not respond."
 
 #. js-lingui-id: c82Ji/
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "The reply will be sent to the existing conversation."
@@ -25229,6 +25301,7 @@ msgid "You have scheduled a credit pack change. Do you want to cancel it?"
 msgstr "You have scheduled a credit pack change. Do you want to cancel it?"
 
 #. js-lingui-id: 28Hr4M
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx

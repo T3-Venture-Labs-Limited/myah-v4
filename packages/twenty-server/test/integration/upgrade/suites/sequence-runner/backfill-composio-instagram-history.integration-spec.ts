@@ -101,17 +101,22 @@ describe('Composio Instagram stale-workspace cutover (integration)', () => {
   });
 
   it('preserves overlapping history and IDs while discarding only obsolete unsent legacy drafts on an idempotent rerun', async () => {
+    const commandDataSource = {
+      query: (sql: string, parameters?: unknown[]) =>
+        sql.includes('FROM core.workspace')
+          ? Promise.resolve([{ databaseSchema: schemaName }])
+          : queryRunner.query(sql, parameters),
+    } as never;
     const command = new BackfillComposioInstagramHistoryWorkspaceCommand(
       {} as never,
+      commandDataSource,
     );
     const args = {
       workspaceId,
       options: { dryRun: false },
       index: 0,
       total: 1,
-      dataSource: {
-        query: queryRunner.query.bind(queryRunner),
-      } as never,
+      dataSource: commandDataSource,
     };
 
     await command.runOnWorkspace(args);

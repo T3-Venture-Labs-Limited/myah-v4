@@ -1106,6 +1106,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
       const backfill =
         new dependencies.BackfillComposioInstagramHistoryWorkspaceCommand(
           iterator,
+          dataSource,
         );
       verifier =
         new dependencies.VerifyInstagramSecurityCutoverWorkspaceCommand(
@@ -1113,6 +1114,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
           dataSource,
           new dependencies.InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
             iterator,
+            dataSource,
           ),
           backfill,
         );

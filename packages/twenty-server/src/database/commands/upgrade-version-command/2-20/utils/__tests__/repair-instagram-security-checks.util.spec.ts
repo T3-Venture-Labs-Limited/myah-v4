@@ -525,7 +525,7 @@ jest.mock('typeorm', () => ({
     }
   },
   getMetadataArgsStorage: () => ({ checks: [] }),
-}));
+}), { virtual: true });
 jest.mock('src/engine/core-modules/action-approval/entities/action-approval-binding.entity', () => ({ ActionApprovalBindingEntity: class {} }));
 jest.mock('src/modules/myah-unipile/entities/unipile-instagram-sync-run.entity', () => ({ UnipileInstagramSyncRunEntity: class {} }));
 require(${JSON.stringify(join(server, 'test/integration/upgrade/suites/sequence-runner/repair-instagram-security-cutover.integration-spec.ts'))});

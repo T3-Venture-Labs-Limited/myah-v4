@@ -1,4 +1,6 @@
+import { InjectDataSource } from '@nestjs/typeorm';
 import { Command } from 'nest-commander';
+import { DataSource } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -32,7 +34,7 @@ const REQUIRED_COLUMNS_BY_TABLE = {
 
 type AppSyncedTableColumn = {
   tableName: keyof typeof REQUIRED_COLUMNS_BY_TABLE;
-  columnName: string;
+  columnName: string | null;
 };
 
 @RegisteredWorkspaceCommand('2.20.0', 1789307619373)
@@ -42,34 +44,60 @@ type AppSyncedTableColumn = {
     'Preserve legacy Composio Instagram history and invalidate obsolete reply drafts',
 })
 export class BackfillComposioInstagramHistoryWorkspaceCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
-  constructor(workspaceIteratorService: WorkspaceIteratorService) {
+  constructor(
+    workspaceIteratorService: WorkspaceIteratorService,
+    @InjectDataSource() private readonly coreDataSource: DataSource,
+  ) {
     super(workspaceIteratorService);
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
-    if (!args.dataSource) {
+    const schemaName = getWorkspaceSchemaName(args.workspaceId);
+    const [workspace] = (await this.coreDataSource.query(
+      `SELECT w."databaseSchema" FROM core.workspace w
+       WHERE w.id = $1 AND w."deletedAt" IS NULL
+         AND (w."databaseSchema" IS NULL OR EXISTS (
+           SELECT 1 FROM pg_catalog.pg_namespace n
+           WHERE n.nspname = w."databaseSchema"
+         ))`,
+      [args.workspaceId],
+    )) as { databaseSchema: string | null }[];
+
+    if (workspace?.databaseSchema === null) {
+      return;
+    }
+    if (workspace?.databaseSchema !== schemaName) {
       throw new Error(
-        'Cannot backfill Composio Instagram history: workspace data source is required',
+        'Cannot backfill Composio Instagram history: workspace schema prerequisite mismatch',
       );
     }
 
-    const schemaName = getWorkspaceSchemaName(args.workspaceId);
-    const appSyncedColumns = (await args.dataSource.query(
+    const appSyncedColumns = (await this.coreDataSource.query(
       `SELECT
-        table_name AS "tableName",
-        column_name AS "columnName"
-      FROM information_schema.columns
-      WHERE table_schema = $1
-        AND table_name = ANY($2::text[])`,
+        tables.table_name AS "tableName",
+        columns.column_name AS "columnName"
+      FROM information_schema.tables tables
+      LEFT JOIN information_schema.columns columns
+        ON columns.table_schema = tables.table_schema
+        AND columns.table_name = tables.table_name
+      WHERE tables.table_schema = $1
+        AND tables.table_name = ANY($2::text[])`,
       [schemaName, Object.keys(REQUIRED_COLUMNS_BY_TABLE)],
     )) as AppSyncedTableColumn[];
+
+    if (appSyncedColumns.length === 0) {
+      return;
+    }
+
     const availableColumnsByTable = new Map<string, Set<string>>();
 
     for (const { tableName, columnName } of appSyncedColumns) {
       const availableColumns =
         availableColumnsByTable.get(tableName) ?? new Set<string>();
 
-      availableColumns.add(columnName);
+      if (columnName !== null) {
+        availableColumns.add(columnName);
+      }
       availableColumnsByTable.set(tableName, availableColumns);
     }
     const missingAppSyncedColumns = Object.entries(
@@ -92,7 +120,7 @@ export class BackfillComposioInstagramHistoryWorkspaceCommand extends ActiveOrSu
       return;
     }
 
-    await args.dataSource.query(`
+    await this.coreDataSource.query(`
       WITH "legacyMessages" AS (
         UPDATE "${schemaName}"."_myahSocialMessage" AS "message"
         SET "provider" = 'COMPOSIO_HISTORY'
