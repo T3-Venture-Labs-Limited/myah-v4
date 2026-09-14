@@ -14,7 +14,7 @@ describe('CreateCampaignExecutionAuthorityFoundationFastInstanceCommand', () => 
     const queries = await run('up');
     const sql = queries.join('\n');
 
-    expect(queries).toHaveLength(29);
+    expect(queries).toHaveLength(31);
     expect(
       queries.filter((query) => query.startsWith('CREATE TABLE')),
     ).toHaveLength(8);
@@ -30,9 +30,12 @@ describe('CreateCampaignExecutionAuthorityFoundationFastInstanceCommand', () => 
     ]) {
       expect(sql).toContain(`"core"."${table}"`);
     }
-    expect(sql).not.toContain('campaignSequenceAuthorization');
-    expect(sql).not.toContain('campaign_sequence_authorization_immutable_guard');
-    expect(sql).not.toContain('TRG_CSA_IMMUTABLE');
+    expect(sql).not.toMatch(
+      /(?:CREATE|DROP) TABLE "core"\."campaignSequenceAuthorization"/,
+    );
+    expect(sql).not.toMatch(
+      /(?:CREATE|DROP) TYPE "core"\."campaignSequenceAuthorization_(?:state|revocationReason)_enum"/,
+    );
     expect(sql).toContain(
       'ALTER TABLE "core"."workspace" ADD "campaignCapacityTimeZone" text',
     );
@@ -47,10 +50,15 @@ describe('CreateCampaignExecutionAuthorityFoundationFastInstanceCommand', () => 
     );
   });
 
-  it('installs the test-preparation-proof immutable guard after its table exists', async () => {
+  it('installs both immutable guards without recreating sequence authorization schema', async () => {
     const queries = await run('up');
     const sql = queries.join('\n');
 
+    expect(sql).toContain('TRIGGER "TRG_CSA_IMMUTABLE"');
+    expect(sql).toContain('campaign_sequence_authorization_immutable_guard');
+    expect(sql).toContain(
+      "to_jsonb(NEW) - ARRAY['state', 'revokedAt', 'revocationReason', 'updatedAt']",
+    );
     expect(sql).toContain('TRIGGER "TRG_CTP_IMMUTABLE"');
     expect(sql).toContain('campaign_test_preparation_proof_immutable_guard');
     expect(sql).toContain(
@@ -58,11 +66,18 @@ describe('CreateCampaignExecutionAuthorityFoundationFastInstanceCommand', () => 
     );
   });
 
-  it('does not drop the main-owned sequence authorization schema', async () => {
+  it('drops the sequence guard but not the main-owned sequence authorization schema', async () => {
     const queries = await run('down');
+    const sql = queries.join('\n');
 
-    expect(queries).toHaveLength(29);
-    expect(queries.join('\n')).not.toContain('campaignSequenceAuthorization');
-    expect(queries.join('\n')).not.toContain('campaign_sequence_authorization');
+    expect(queries).toHaveLength(31);
+    expect(sql).toContain('DROP TRIGGER "TRG_CSA_IMMUTABLE"');
+    expect(sql).toContain('DROP FUNCTION "core".campaign_sequence_authorization_immutable_guard()');
+    expect(sql).not.toMatch(
+      /DROP TABLE "core"\."campaignSequenceAuthorization"/,
+    );
+    expect(sql).not.toMatch(
+      /DROP TYPE "core"\."campaignSequenceAuthorization_(?:state|revocationReason)_enum"/,
+    );
   });
 });
