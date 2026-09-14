@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { IANA_TIME_ZONES } from 'twenty-shared/constants';
 import { parse as parseUuid, stringify as stringifyUuid } from 'uuid';
 
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
@@ -23,7 +22,6 @@ import {
 
 const SHA_256_DIGEST = /^[0-9a-f]{64}$/;
 const LOCAL_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/;
-const SUPPORTED_IANA_TIME_ZONES = new Set<string>(IANA_TIME_ZONES);
 
 type JsonRecord = Record<string, unknown>;
 
@@ -57,14 +55,11 @@ const exactKeys = (value: JsonRecord, expected: readonly string[]): boolean => {
   );
 };
 
-const isRecord = (value: unknown): value is JsonRecord => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value))
-    return false;
-
-  const prototype = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
-};
+const isRecord = (value: unknown): value is JsonRecord =>
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.getPrototypeOf(value) === Object.prototype;
 
 const isPlainFiniteData = (
   value: unknown,
@@ -84,9 +79,7 @@ const isPlainFiniteData = (
 
   if (
     (Array.isArray(value) && prototype !== Array.prototype) ||
-    (!Array.isArray(value) &&
-      prototype !== Object.prototype &&
-      prototype !== null)
+    (!Array.isArray(value) && prototype !== Object.prototype)
   ) {
     return false;
   }
@@ -141,8 +134,18 @@ const isDigest = (value: unknown): value is string =>
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
-const isSupportedIanaTimeZone = (value: unknown): value is string =>
-  typeof value === 'string' && SUPPORTED_IANA_TIME_ZONES.has(value);
+const isCanonicalTimeZone = (value: unknown): value is string => {
+  if (typeof value !== 'string' || value.length === 0) return false;
+
+  try {
+    return (
+      new Intl.DateTimeFormat('en-US', { timeZone: value }).resolvedOptions()
+        .timeZone === value
+    );
+  } catch {
+    return false;
+  }
+};
 
 const toCanonicalInstant = (value: unknown): string | null => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -198,7 +201,7 @@ const parseRequest = (value: unknown): CampaignSequenceAuthorizationRequest => {
     ]) ||
     !isRecord(value.preparedProof) ||
     !isRecord(value.reviewedWindow) ||
-    !isSupportedIanaTimeZone(value.campaignCapacityTimeZone)
+    !isCanonicalTimeZone(value.campaignCapacityTimeZone)
   ) {
     throw new Error('Invalid Campaign sequence authorization request');
   }
@@ -282,7 +285,7 @@ const parseRequest = (value: unknown): CampaignSequenceAuthorizationRequest => {
 
   if (
     !exactKeys(window, ['timeZone', 'startLocalTime', 'endLocalTime']) ||
-    !isSupportedIanaTimeZone(window.timeZone) ||
+    !isCanonicalTimeZone(window.timeZone) ||
     typeof window.startLocalTime !== 'string' ||
     !LOCAL_TIME.test(window.startLocalTime) ||
     typeof window.endLocalTime !== 'string' ||
@@ -641,32 +644,6 @@ export class CampaignSequenceAuthorizationService {
     return { kind: 'CURRENT_REVOKED', authorization: latest };
   }
 
-  async lookupStartKeyInTransaction(
-    context: CampaignSequenceAuthorizationTransactionContext,
-    input: Readonly<{ startIdempotencyKey: string }>,
-  ) {
-    this.assertContext(context);
-    const startIdempotencyKey = this.requireUuid(
-      input.startIdempotencyKey,
-      'start idempotency key',
-    );
-    const rawRows = await context.manager.queryRunner!.query(
-      `SELECT * FROM core."campaignSequenceAuthorization"
-       WHERE "workspaceId" = $1 AND "campaignId" = $2
-         AND "startIdempotencyKey" = $3`,
-      [context.workspaceId, context.campaignId, startIdempotencyKey],
-    );
-
-    if (!Array.isArray(rawRows) || rawRows.length > 1) {
-      throw new Error(
-        'Campaign sequence authorization history integrity failure',
-      );
-    }
-    if (rawRows.length === 0) return { kind: 'NOT_FOUND' } as const;
-
-    return { kind: 'FOUND', authorization: parseRecord(rawRows[0]) } as const;
-  }
-
   async lookupStartRequestInTransaction(
     context: CampaignSequenceAuthorizationTransactionContext,
     input: Readonly<{
@@ -804,8 +781,6 @@ export class CampaignSequenceAuthorizationService {
     const authorization = parseRecord(inserted.records[0]);
     const nextProjection = projectionFor(authorization);
     const workspaceSchema = getWorkspaceSchemaName(context.workspaceId);
-    // pi-lens-ignore: ast-grep:no-sql-in-code
-    // pi-lens-ignore: sql-injection
     const projected = await context.manager.queryRunner!.query(
       `UPDATE "${workspaceSchema}"."campaign"
        SET "sequenceAuthorization" = $1::jsonb
@@ -904,8 +879,6 @@ export class CampaignSequenceAuthorizationService {
 
     const authorization = parseRecord(updated.records[0]);
     const workspaceSchema = getWorkspaceSchemaName(context.workspaceId);
-    // pi-lens-ignore: ast-grep:no-sql-in-code
-    // pi-lens-ignore: sql-injection
     const projected = await context.manager.queryRunner!.query(
       `UPDATE "${workspaceSchema}"."campaign"
        SET "sequenceAuthorization" = $1::jsonb

@@ -18,7 +18,7 @@ const authContext = {
   workspace: { id: 'workspace-a' },
 } as WorkspaceAuthContext;
 const dedicatedError =
-  'Campaign lifecycle and execution authority require a dedicated operation.';
+  'Campaign sequence authorization requires a dedicated operation.';
 
 const lifecycleService = new CampaignLifecycleService(
   {} as GlobalWorkspaceOrmManager,
@@ -140,11 +140,11 @@ describe('Common runner Campaign raw-input pre-query ordering', () => {
     ],
     [
       CommonQueryNames.CREATE_MANY,
-      { data: [{ name: 'allowed' }, { deletedAt: undefined }] },
+      { data: [{ name: 'allowed' }, { sequenceAuthorization: undefined }] },
     ],
     [
       CommonQueryNames.UPDATE_ONE,
-      { id: 'campaign-a', data: { lifecycleStatus: undefined } },
+      { id: 'campaign-a', data: { sequenceAuthorization: undefined } },
     ],
     [
       CommonQueryNames.UPDATE_MANY,
@@ -163,8 +163,8 @@ describe('Common runner Campaign raw-input pre-query ordering', () => {
     },
   );
 
-  it('does not partially process a mixed createMany payload', async () => {
-    const data = [{ name: 'first' }, { deletedAt: null }];
+  it('rejects a later createMany row with own undefined sequenceAuthorization before processing any row', async () => {
+    const data = [{ name: 'first' }, { sequenceAuthorization: undefined }];
 
     await expect(
       processArgs(
@@ -173,7 +173,10 @@ describe('Common runner Campaign raw-input pre-query ordering', () => {
         CommonQueryNames.CREATE_MANY,
       ),
     ).rejects.toThrow(dedicatedError);
-    expect(data).toEqual([{ name: 'first' }, { deletedAt: null }]);
+    expect(data).toEqual([
+      { name: 'first' },
+      { sequenceAuthorization: undefined },
+    ]);
     expect(dataArgProcessor.process).not.toHaveBeenCalled();
   });
 

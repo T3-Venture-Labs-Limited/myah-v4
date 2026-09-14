@@ -109,21 +109,6 @@ const mutationResult = (records: unknown[], affected = records.length) => ({
   affected,
 });
 
-const nullPrototypeClone = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(nullPrototypeClone);
-  if (value === null || typeof value !== 'object') return value;
-
-  return Object.assign(
-    Object.create(null) as Record<string, unknown>,
-    Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        nullPrototypeClone(item),
-      ]),
-    ),
-  );
-};
-
 const managerWith = (...results: unknown[]) => {
   const query = jest.fn();
 
@@ -328,20 +313,6 @@ describe('CampaignSequenceAuthorizationService', () => {
     expect(manager.transaction).not.toHaveBeenCalled();
   });
 
-  it('accepts the null-prototype request snapshot produced by CampaignExecutionService', async () => {
-    const manager = managerWith([]);
-
-    await expect(
-      service().lookupStartRequestInTransaction(
-        contextWith(manager, 'DRAFT', null),
-        {
-          startIdempotencyKey: IDS.startKey,
-          request: nullPrototypeClone(request) as typeof request,
-        },
-      ),
-    ).resolves.toEqual({ kind: 'NOT_FOUND' });
-  });
-
   it('distinguishes not found from same-key structural request conflict', async () => {
     const absentManager = managerWith([]);
     const conflictManager = managerWith([row()]);
@@ -367,38 +338,6 @@ describe('CampaignSequenceAuthorizationService', () => {
         },
       ),
     ).resolves.toEqual({ kind: 'IDEMPOTENCY_KEY_CONFLICT' });
-  });
-
-  it('uses exact shared IANA membership, including listed aliases', async () => {
-    const aliasRequest = {
-      ...request,
-      reviewedWindow: { ...request.reviewedWindow, timeZone: 'US/Eastern' },
-      campaignCapacityTimeZone: 'US/Eastern',
-    };
-    const aliasManager = managerWith([
-      row({ binding: binding({ request: aliasRequest }) }),
-    ]);
-    const invalidManager = managerWith();
-
-    await expect(
-      service().lookupStartRequestInTransaction(
-        contextWith(aliasManager, 'PAUSED', projection()),
-        { startIdempotencyKey: IDS.startKey, request: aliasRequest },
-      ),
-    ).resolves.toMatchObject({ kind: 'EXACT_MATCH' });
-    await expect(
-      service().lookupStartRequestInTransaction(
-        contextWith(invalidManager, 'PAUSED', projection()),
-        {
-          startIdempotencyKey: IDS.startKey,
-          request: {
-            ...request,
-            campaignCapacityTimeZone: 'Mars/Olympus',
-          },
-        },
-      ),
-    ).rejects.toThrow('request');
-    expect(invalidManager.queryRunner.query).not.toHaveBeenCalled();
   });
 
   it('preserves whitespace-bearing request identity through lookup and replay', async () => {

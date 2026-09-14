@@ -2,6 +2,7 @@ import { type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Injectable } from '@nestjs/common';
 
+import { IsNull, Not } from 'typeorm';
 import { isDefined } from 'twenty-shared/utils';
 
 import {
@@ -14,21 +15,30 @@ import {
   type UpdateManyResolverArgs,
   type UpdateOneResolverArgs,
 } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
-import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type WorkspaceRawInputPreQueryHookContext } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import {
   getWorkspaceContext,
   type ORMWorkspaceContext,
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
-import { MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER } from 'src/modules/myah-campaign/constants/campaign-lifecycle.constants';
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
+import {
+  CAMPAIGN_ALLOWED_TRANSITIONS,
+  CAMPAIGN_STATUSES,
+  MYAH_CAMPAIGN_CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+  MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
+} from 'src/modules/myah-campaign/constants/campaign-lifecycle.constants';
+import { type CampaignCreatorWorkspaceRecord } from 'src/modules/myah-campaign/types/campaign-creator-workspace-record.type';
+import { type CampaignStatus } from 'src/modules/myah-campaign/types/campaign-status.type';
 import {
   type CampaignMutationData,
   type CampaignUpdateFilter,
+  type CampaignWorkspaceRecord,
 } from 'src/modules/myah-campaign/types/campaign-workspace-record.type';
 import {
-  hasOwnCampaignInputKey,
   isForbiddenGenericCampaignCreateData,
   isForbiddenGenericCampaignUpdateData,
   rejectGenericCampaignLifecycleOperation,
@@ -42,11 +52,40 @@ export type CampaignUpdateManyArgs = UpdateManyResolverArgs<
   CampaignUpdateFilter
 >;
 
-const UPSERT_ERROR = {
-  message: 'Campaign upsert is not supported; use create or update.',
-  userFriendlyMessage: msg`Campaign upsert is not supported; use create or update.`,
+const LIFECYCLE_ERRORS = {
+  upsert: {
+    message: 'Campaign upsert is not supported; use create or update.',
+    userFriendlyMessage: msg`Campaign upsert is not supported; use create or update.`,
+  },
+  updateOne: {
+    message: 'Change Campaign status from Campaign Overview.',
+    userFriendlyMessage: msg`Change Campaign status from Campaign Overview.`,
+  },
+  oneCampaign: {
+    message: 'Change one Campaign status at a time.',
+    userFriendlyMessage: msg`Change one Campaign status at a time.`,
+  },
+  name: {
+    message: 'Campaign name is required before activation.',
+    userFriendlyMessage: msg`Campaign name is required before activation.`,
+  },
+  objective: {
+    message: 'Campaign objective is required before activation.',
+    userFriendlyMessage: msg`Campaign objective is required before activation.`,
+  },
+  audience: {
+    message: 'Add at least one creator before activating this campaign.',
+    userFriendlyMessage: msg`Add at least one creator before activating this campaign.`,
+  },
+  invalidStatus: {
+    message: 'Campaign status is invalid.',
+    userFriendlyMessage: msg`Campaign status is invalid.`,
+  },
+  transition: {
+    message: 'This Campaign status change is not allowed.',
+    userFriendlyMessage: msg`This Campaign status change is not allowed.`,
+  },
 } as const;
-
 function throwBadRequest({
   message,
   userFriendlyMessage,
@@ -61,6 +100,26 @@ function throwBadRequest({
   );
 }
 
+const isCampaignStatus = (value: unknown): value is CampaignStatus =>
+  typeof value === 'string' &&
+  CAMPAIGN_STATUSES.some((campaignStatus) => campaignStatus === value);
+
+const isNonEmptyTrimmedString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const hasRequiredText = (value: string | null | undefined): boolean =>
+  isNonEmptyTrimmedString(value);
+
+const hasOwn = (value: unknown, key: PropertyKey): boolean =>
+  value !== null &&
+  (typeof value === 'object' || typeof value === 'function') &&
+  Object.prototype.hasOwnProperty.call(value, key);
+
+const hasOwnSequenceAuthorization = (data: unknown): boolean =>
+  data !== null &&
+  (typeof data === 'object' || typeof data === 'function') &&
+  Object.prototype.hasOwnProperty.call(data, 'sequenceAuthorization');
+
 @Injectable()
 export class CampaignLifecycleService {
   constructor(
@@ -71,10 +130,9 @@ export class CampaignLifecycleService {
     context: WorkspaceRawInputPreQueryHookContext,
     payload: CampaignCreateOneArgs,
   ): void {
-    if (
-      this.isCanonicalCampaign(context) &&
-      isForbiddenGenericCampaignCreateData(payload.data)
-    ) {
+    this.validateRawCampaignMutation(context, payload.data);
+
+    if (isForbiddenGenericCampaignCreateData(payload.data)) {
       rejectGenericCampaignLifecycleOperation();
     }
   }
@@ -83,10 +141,9 @@ export class CampaignLifecycleService {
     context: WorkspaceRawInputPreQueryHookContext,
     payload: CampaignCreateManyArgs,
   ): void {
-    if (
-      this.isCanonicalCampaign(context) &&
-      payload.data.some(isForbiddenGenericCampaignCreateData)
-    ) {
+    this.validateRawCampaignMutation(context, payload.data);
+
+    if (payload.data.some(isForbiddenGenericCampaignCreateData)) {
       rejectGenericCampaignLifecycleOperation();
     }
   }
@@ -95,11 +152,29 @@ export class CampaignLifecycleService {
     context: WorkspaceRawInputPreQueryHookContext,
     payload: CampaignUpdateOneArgs | CampaignUpdateManyArgs,
   ): void {
-    if (
-      this.isCanonicalCampaign(context) &&
-      isForbiddenGenericCampaignUpdateData(payload.data)
-    ) {
+    this.validateRawCampaignMutation(context, payload.data);
+
+    if (isForbiddenGenericCampaignUpdateData(payload.data)) {
       rejectGenericCampaignLifecycleOperation();
+    }
+  }
+
+  private validateRawCampaignMutation(
+    context: WorkspaceRawInputPreQueryHookContext,
+    data: unknown | unknown[],
+  ): void {
+    if (
+      context.objectMetadataUniversalIdentifier ===
+        MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER &&
+      (Array.isArray(data)
+        ? data.some(hasOwnSequenceAuthorization)
+        : hasOwnSequenceAuthorization(data))
+    ) {
+      throwBadRequest({
+        message:
+          'Campaign sequence authorization requires a dedicated operation.',
+        userFriendlyMessage: msg`Campaign sequence authorization requires a dedicated operation.`,
+      });
     }
   }
 
@@ -111,12 +186,12 @@ export class CampaignLifecycleService {
     return this.executeForMyahCampaign({
       authContext,
       payload,
-      callback: (workspaceContext) => {
+      callback: async (workspaceContext) => {
         if (payload.upsert === true) {
-          throwBadRequest(UPSERT_ERROR);
+          throwBadRequest(LIFECYCLE_ERRORS.upsert);
         }
 
-        this.prepareCreateData({
+        await this.prepareCreateData({
           authContext,
           workspaceContext,
           data: payload.data,
@@ -135,17 +210,17 @@ export class CampaignLifecycleService {
     return this.executeForMyahCampaign({
       authContext,
       payload,
-      callback: (workspaceContext) => {
+      callback: async (workspaceContext) => {
         if (payload.upsert === true) {
-          throwBadRequest(UPSERT_ERROR);
-        }
-
-        if (payload.data.some(isForbiddenGenericCampaignCreateData)) {
-          rejectGenericCampaignLifecycleOperation();
+          throwBadRequest(LIFECYCLE_ERRORS.upsert);
         }
 
         for (const data of payload.data) {
-          this.prepareCreateData({ authContext, workspaceContext, data });
+          await this.prepareCreateData({
+            authContext,
+            workspaceContext,
+            data,
+          });
         }
 
         return payload;
@@ -162,11 +237,11 @@ export class CampaignLifecycleService {
       authContext,
       payload,
       callback: () => {
-        if (isForbiddenGenericCampaignUpdateData(payload.data)) {
-          rejectGenericCampaignLifecycleOperation();
+        if (!hasOwn(payload.data, 'lifecycleStatus')) {
+          return payload;
         }
 
-        return payload;
+        return throwBadRequest(LIFECYCLE_ERRORS.updateOne);
       },
     });
   }
@@ -179,12 +254,93 @@ export class CampaignLifecycleService {
     return this.executeForMyahCampaign({
       authContext,
       payload,
-      callback: () => {
-        if (isForbiddenGenericCampaignUpdateData(payload.data)) {
-          rejectGenericCampaignLifecycleOperation();
+      callback: async (workspaceContext) => {
+        if (!hasOwn(payload.data, 'lifecycleStatus')) {
+          return payload;
         }
 
-        return payload;
+        const targetStatus = payload.data.lifecycleStatus;
+
+        if (!isCampaignStatus(targetStatus)) {
+          return throwBadRequest(LIFECYCLE_ERRORS.invalidStatus);
+        }
+
+        const campaignId = this.getSingleCampaignId(payload.filter);
+        const rolePermissionConfig = this.resolveRolePermissionConfig({
+          authContext,
+          workspaceContext,
+        });
+        const campaignRepository =
+          await this.globalWorkspaceOrmManager.getRepository<CampaignWorkspaceRecord>(
+            authContext.workspace.id,
+            'campaign',
+            rolePermissionConfig,
+          );
+        const campaign = await campaignRepository.findOne({
+          where: { id: campaignId },
+          select: { id: true, lifecycleStatus: true },
+        });
+
+        if (!isDefined(campaign)) {
+          return throwBadRequest(LIFECYCLE_ERRORS.transition);
+        }
+
+        const observedStatus = campaign.lifecycleStatus;
+
+        if (!isCampaignStatus(observedStatus)) {
+          return throwBadRequest(LIFECYCLE_ERRORS.invalidStatus);
+        }
+
+        if (observedStatus !== targetStatus) {
+          if (
+            !CAMPAIGN_ALLOWED_TRANSITIONS[observedStatus].includes(targetStatus)
+          ) {
+            return throwBadRequest(LIFECYCLE_ERRORS.transition);
+          }
+
+          if (targetStatus === 'ACTIVE') {
+            const needsPersistedName = !hasOwn(payload.data, 'name');
+            const needsPersistedObjective = !hasOwn(payload.data, 'objective');
+            const campaignSetup =
+              needsPersistedName || needsPersistedObjective
+                ? await campaignRepository.findOne({
+                    where: { id: campaignId },
+                    select: {
+                      id: true,
+                      ...(needsPersistedName ? { name: true } : {}),
+                      ...(needsPersistedObjective ? { objective: true } : {}),
+                    },
+                  })
+                : undefined;
+
+            if (
+              (needsPersistedName || needsPersistedObjective) &&
+              !isDefined(campaignSetup)
+            ) {
+              return throwBadRequest(LIFECYCLE_ERRORS.transition);
+            }
+
+            await this.validateActivationReadiness({
+              authContext,
+              workspaceContext,
+              rolePermissionConfig,
+              campaignId,
+              name: needsPersistedName
+                ? campaignSetup?.name
+                : payload.data.name,
+              objective: needsPersistedObjective
+                ? campaignSetup?.objective
+                : payload.data.objective,
+            });
+          }
+        }
+
+        return {
+          ...payload,
+          filter: {
+            and: [payload.filter, { lifecycleStatus: { eq: observedStatus } }],
+          },
+        };
       },
     });
   }
@@ -221,7 +377,7 @@ export class CampaignLifecycleService {
     );
   }
 
-  private prepareCreateData({
+  private async prepareCreateData({
     authContext,
     workspaceContext,
     data,
@@ -229,31 +385,37 @@ export class CampaignLifecycleService {
     authContext: WorkspaceAuthContext;
     workspaceContext: ORMWorkspaceContext;
     data: CampaignMutationData;
-  }): void {
-    if (isForbiddenGenericCampaignCreateData(data)) {
-      rejectGenericCampaignLifecycleOperation();
+  }): Promise<void> {
+    if (
+      !hasOwn(data, 'lifecycleStatus') ||
+      data.lifecycleStatus === undefined ||
+      data.lifecycleStatus === null ||
+      data.lifecycleStatus === ''
+    ) {
+      data.lifecycleStatus = 'DRAFT';
     }
 
-    if (!hasOwnCampaignInputKey(data, 'lifecycleStatus')) {
-      data.lifecycleStatus = 'DRAFT';
+    if (!isCampaignStatus(data.lifecycleStatus)) {
+      return throwBadRequest(LIFECYCLE_ERRORS.invalidStatus);
     }
 
     if (
       isUserAuthContext(authContext) &&
-      !hasOwnCampaignInputKey(data, 'ownerId') &&
+      !hasOwn(data, 'ownerId') &&
       this.hasInstalledOwnerField(workspaceContext)
     ) {
       data.ownerId = authContext.workspaceMemberId;
     }
-  }
 
-  private isCanonicalCampaign(
-    context: WorkspaceRawInputPreQueryHookContext,
-  ): boolean {
-    return (
-      context.objectMetadataUniversalIdentifier ===
-      MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER
-    );
+    if (data.lifecycleStatus === 'ACTIVE') {
+      await this.validateActivationReadiness({
+        authContext,
+        workspaceContext,
+        campaignId: data.id,
+        name: data.name,
+        objective: data.objective,
+      });
+    }
   }
 
   private hasInstalledOwnerField(
@@ -277,5 +439,119 @@ export class CampaignLifecycleService {
         fieldMetadata.name === 'owner' &&
         fieldMetadata.isActive,
     );
+  }
+
+  private getSingleCampaignId(filter: CampaignUpdateFilter): string {
+    const idFilter = filter.id;
+
+    if (!isDefined(idFilter) || typeof idFilter !== 'object') {
+      return throwBadRequest(LIFECYCLE_ERRORS.oneCampaign);
+    }
+
+    const hasEq = hasOwn(idFilter, 'eq');
+    const hasIn = hasOwn(idFilter, 'in');
+
+    if (hasEq === hasIn) {
+      return throwBadRequest(LIFECYCLE_ERRORS.oneCampaign);
+    }
+
+    if (hasEq && isNonEmptyTrimmedString(idFilter.eq)) {
+      return idFilter.eq;
+    }
+
+    if (
+      hasIn &&
+      Array.isArray(idFilter.in) &&
+      idFilter.in.length === 1 &&
+      isNonEmptyTrimmedString(idFilter.in[0])
+    ) {
+      return idFilter.in[0];
+    }
+
+    return throwBadRequest(LIFECYCLE_ERRORS.oneCampaign);
+  }
+
+  private resolveRolePermissionConfig({
+    authContext,
+    workspaceContext,
+  }: {
+    authContext: WorkspaceAuthContext;
+    workspaceContext: ORMWorkspaceContext;
+  }): RolePermissionConfig {
+    const rolePermissionConfig = resolveRolePermissionConfig({
+      authContext,
+      userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+      apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+    });
+
+    if (!isDefined(rolePermissionConfig)) {
+      throw new CommonQueryRunnerException(
+        'Role could not be resolved.',
+        CommonQueryRunnerExceptionCode.INVALID_AUTH_CONTEXT,
+        {
+          userFriendlyMessage: msg`Your permissions could not be resolved.`,
+        },
+      );
+    }
+
+    return rolePermissionConfig;
+  }
+
+  private async validateActivationReadiness({
+    authContext,
+    workspaceContext,
+    rolePermissionConfig,
+    campaignId,
+    name,
+    objective,
+  }: {
+    authContext: WorkspaceAuthContext;
+    workspaceContext: ORMWorkspaceContext;
+    rolePermissionConfig?: RolePermissionConfig;
+    campaignId: string | undefined;
+    name: string | null | undefined;
+    objective: string | null | undefined;
+  }): Promise<void> {
+    if (!hasRequiredText(name)) {
+      throwBadRequest(LIFECYCLE_ERRORS.name);
+    }
+
+    if (!hasRequiredText(objective)) {
+      throwBadRequest(LIFECYCLE_ERRORS.objective);
+    }
+
+    const campaignCreatorObjectMetadata =
+      workspaceContext.flatObjectMetadataMaps.byUniversalIdentifier[
+        MYAH_CAMPAIGN_CREATOR_OBJECT_UNIVERSAL_IDENTIFIER
+      ];
+
+    if (
+      !isDefined(campaignId) ||
+      !isDefined(campaignCreatorObjectMetadata) ||
+      campaignCreatorObjectMetadata.nameSingular !== 'campaignCreator'
+    ) {
+      throwBadRequest(LIFECYCLE_ERRORS.audience);
+    }
+
+    const resolvedRolePermissionConfig =
+      rolePermissionConfig ??
+      this.resolveRolePermissionConfig({ authContext, workspaceContext });
+    const campaignCreatorRepository =
+      await this.globalWorkspaceOrmManager.getRepository<CampaignCreatorWorkspaceRecord>(
+        authContext.workspace.id,
+        'campaignCreator',
+        resolvedRolePermissionConfig,
+      );
+    const hasEffectiveCreator = await campaignCreatorRepository.exists({
+      where: {
+        campaignId,
+        creatorId: Not(IsNull()),
+        deletedAt: IsNull(),
+      },
+    });
+
+    if (!hasEffectiveCreator) {
+      throwBadRequest(LIFECYCLE_ERRORS.audience);
+    }
   }
 }

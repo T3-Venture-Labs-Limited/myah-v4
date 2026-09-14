@@ -122,7 +122,8 @@ import { CreateManagedEmailOfferFastInstanceCommand } from 'src/database/command
 import { AddManagedEmailPaymentReceiptsColumnFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000004000-add-managed-email-payment-receipts-column';
 import { MigrateManagedEmailPaymentReceiptsSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1786000004001-migrate-managed-email-payment-receipts';
 import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1788163457871-extend-managed-provider-funding-action';
-import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065457681-create-campaign-execution-authority-foundation';
+import { CreateCampaignSequenceAuthorizationSchemaFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065457681-create-campaign-sequence-authorization-schema';
+import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794325-create-campaign-execution-authority-foundation';
 import { AddCampaignDispatchEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789066100000-add-campaign-dispatch-evidence';
 
 export const INSTANCE_COMMANDS = [
@@ -247,6 +248,7 @@ export const INSTANCE_COMMANDS = [
   AddManagedEmailPaymentReceiptsColumnFastInstanceCommand,
   MigrateManagedEmailPaymentReceiptsSlowInstanceCommand,
   ExtendManagedProviderFundingActionFastInstanceCommand,
+  CreateCampaignSequenceAuthorizationSchemaFastInstanceCommand,
   CreateCampaignExecutionAuthorityFoundationFastInstanceCommand,
   AddCampaignDispatchEvidenceFastInstanceCommand,
 ];

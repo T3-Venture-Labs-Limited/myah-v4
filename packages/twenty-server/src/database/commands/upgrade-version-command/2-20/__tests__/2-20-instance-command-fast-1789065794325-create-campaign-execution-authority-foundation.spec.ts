@@ -1,4 +1,4 @@
-import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065457681-create-campaign-execution-authority-foundation';
+import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794325-create-campaign-execution-authority-foundation';
 
 const run = async (direction: 'up' | 'down') => {
   const query = jest.fn().mockResolvedValue(undefined);
@@ -14,10 +14,10 @@ describe('CreateCampaignExecutionAuthorityFoundationFastInstanceCommand', () => 
     const queries = await run('up');
     const sql = queries.join('\n');
 
-    expect(queries).toHaveLength(35);
+    expect(queries).toHaveLength(29);
     expect(
       queries.filter((query) => query.startsWith('CREATE TABLE')),
-    ).toHaveLength(9);
+    ).toHaveLength(8);
     for (const table of [
       'campaignExecution',
       'campaignActivation',
@@ -26,11 +26,13 @@ describe('CreateCampaignExecutionAuthorityFoundationFastInstanceCommand', () => 
       'mailboxCapacityDay',
       'mailboxDispatchClock',
       'outboundEmailAttempt',
-      'campaignSequenceAuthorization',
       'campaignTestPreparationProof',
     ]) {
       expect(sql).toContain(`"core"."${table}"`);
     }
+    expect(sql).not.toContain('campaignSequenceAuthorization');
+    expect(sql).not.toContain('campaign_sequence_authorization_immutable_guard');
+    expect(sql).not.toContain('TRG_CSA_IMMUTABLE');
     expect(sql).toContain(
       'ALTER TABLE "core"."workspace" ADD "campaignCapacityTimeZone" text',
     );
@@ -45,41 +47,22 @@ describe('CreateCampaignExecutionAuthorityFoundationFastInstanceCommand', () => 
     );
   });
 
-  it('installs both reviewed immutable guards after their tables exist', async () => {
+  it('installs the test-preparation-proof immutable guard after its table exists', async () => {
     const queries = await run('up');
     const sql = queries.join('\n');
 
-    expect(sql).toContain('TRIGGER "TRG_CSA_IMMUTABLE"');
-    expect(sql).toContain('campaign_sequence_authorization_immutable_guard');
     expect(sql).toContain('TRIGGER "TRG_CTP_IMMUTABLE"');
     expect(sql).toContain('campaign_test_preparation_proof_immutable_guard');
-    expect(sql).toContain(
-      "to_jsonb(NEW) - ARRAY['state', 'revokedAt', 'revocationReason', 'updatedAt']",
-    );
     expect(sql).toContain(
       "to_jsonb(NEW) - ARRAY['testSubmissionCapabilityId', 'finalEvidenceDigest']",
     );
   });
 
-  it('drops immutable guards before dropping their protected tables', async () => {
+  it('does not drop the main-owned sequence authorization schema', async () => {
     const queries = await run('down');
-    const csaTrigger = queries.findIndex((query) =>
-      query.includes('DROP TRIGGER "TRG_CSA_IMMUTABLE"'),
-    );
-    const ctpTrigger = queries.findIndex((query) =>
-      query.includes('DROP TRIGGER "TRG_CTP_IMMUTABLE"'),
-    );
-    const csaTable = queries.findIndex((query) =>
-      query.includes('DROP TABLE "core"."campaignSequenceAuthorization"'),
-    );
-    const ctpTable = queries.findIndex((query) =>
-      query.includes('DROP TABLE "core"."campaignTestPreparationProof"'),
-    );
 
-    expect(queries).toHaveLength(35);
-    expect(csaTrigger).toBeGreaterThanOrEqual(0);
-    expect(ctpTrigger).toBeGreaterThanOrEqual(0);
-    expect(csaTrigger).toBeLessThan(csaTable);
-    expect(ctpTrigger).toBeLessThan(ctpTable);
+    expect(queries).toHaveLength(29);
+    expect(queries.join('\n')).not.toContain('campaignSequenceAuthorization');
+    expect(queries.join('\n')).not.toContain('campaign_sequence_authorization');
   });
 });
