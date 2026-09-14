@@ -167,26 +167,89 @@ describe('CampaignLifecycleService', () => {
     );
   });
 
-  it.each([
-    { data: { sequenceAuthorization: undefined } },
-    { data: { sequenceAuthorization: { authorizationId: 'forged' } } },
-  ])(
-    'rejects caller-owned sequenceAuthorization at the raw mutation boundary',
-    (payload) => {
-      expect(() =>
-        service.validateRawCampaignMutation(
-          {
-            objectMetadataId: campaignObjectMetadata.id,
-            objectMetadataUniversalIdentifier:
-              MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
-          },
-          payload.data,
-        ),
-      ).toThrow(
+  const campaignRawInputContext = {
+    objectMetadataId: campaignObjectMetadata.id,
+    objectMetadataUniversalIdentifier:
+      MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
+  };
+
+  it('rejects caller-owned sequenceAuthorization through public raw validation before normalization', () => {
+    const validate = (callback: () => void) =>
+      expect(callback).toThrow(
         'Campaign sequence authorization requires a dedicated operation.',
       );
-    },
-  );
+
+    validate(() =>
+      service.validateRawCreateOne(campaignRawInputContext, {
+        data: { sequenceAuthorization: undefined },
+      } as never),
+    );
+    validate(() =>
+      service.validateRawCreateMany(campaignRawInputContext, {
+        data: [{ sequenceAuthorization: { authorizationId: 'forged' } }],
+      } as never),
+    );
+    validate(() =>
+      service.validateRawUpdate(campaignRawInputContext, {
+        data: { sequenceAuthorization: undefined },
+      } as never),
+    );
+  });
+
+  it('preserves canonical generic raw protection', () => {
+    const validate = (callback: () => void) =>
+      expect(callback).toThrow(
+        'Campaign lifecycle and execution authority require a dedicated operation.',
+      );
+
+    validate(() =>
+      service.validateRawCreateOne(campaignRawInputContext, {
+        data: { deletedAt: null },
+      } as never),
+    );
+    validate(() =>
+      service.validateRawCreateMany(campaignRawInputContext, {
+        data: [{ lifecycleStatus: 'ACTIVE' }],
+      } as never),
+    );
+    validate(() =>
+      service.validateRawUpdate(campaignRawInputContext, {
+        data: { deletedAt: null },
+      } as never),
+    );
+  });
+
+  it('leaves foreign same-named raw input unchanged', () => {
+    const foreignContext = {
+      ...campaignRawInputContext,
+      objectMetadataUniversalIdentifier: 'foreign-campaign-universal-id',
+    };
+    const createOnePayload = {
+      data: { sequenceAuthorization: undefined, deletedAt: null },
+    };
+    const createManyPayload = {
+      data: [
+        { sequenceAuthorization: undefined },
+        { lifecycleStatus: 'ACTIVE' },
+      ],
+    };
+    const updatePayload = {
+      data: { sequenceAuthorization: undefined, deletedAt: null },
+    };
+    const payloads = [createOnePayload, createManyPayload, updatePayload];
+    const originalPayloads = structuredClone(payloads);
+
+    expect(() =>
+      service.validateRawCreateOne(foreignContext, createOnePayload as never),
+    ).not.toThrow();
+    expect(() =>
+      service.validateRawCreateMany(foreignContext, createManyPayload as never),
+    ).not.toThrow();
+    expect(() =>
+      service.validateRawUpdate(foreignContext, updatePayload as never),
+    ).not.toThrow();
+    expect(payloads).toEqual(originalPayloads);
+  });
 
   describe('app-object isolation', () => {
     it('returns every payload unchanged before defaults, rejections, or repositories for a foreign same-named object', async () => {

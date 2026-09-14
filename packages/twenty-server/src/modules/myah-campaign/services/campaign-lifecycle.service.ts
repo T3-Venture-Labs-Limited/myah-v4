@@ -120,6 +120,12 @@ const hasOwnSequenceAuthorization = (data: unknown): boolean =>
   (typeof data === 'object' || typeof data === 'function') &&
   Object.prototype.hasOwnProperty.call(data, 'sequenceAuthorization');
 
+const isMyahCampaignRawInput = (
+  context: WorkspaceRawInputPreQueryHookContext,
+): boolean =>
+  context.objectMetadataUniversalIdentifier ===
+  MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER;
+
 @Injectable()
 export class CampaignLifecycleService {
   constructor(
@@ -132,7 +138,10 @@ export class CampaignLifecycleService {
   ): void {
     this.validateRawCampaignMutation(context, payload.data);
 
-    if (isForbiddenGenericCampaignCreateData(payload.data)) {
+    if (
+      isMyahCampaignRawInput(context) &&
+      isForbiddenGenericCampaignCreateData(payload.data)
+    ) {
       rejectGenericCampaignLifecycleOperation();
     }
   }
@@ -143,7 +152,10 @@ export class CampaignLifecycleService {
   ): void {
     this.validateRawCampaignMutation(context, payload.data);
 
-    if (payload.data.some(isForbiddenGenericCampaignCreateData)) {
+    if (
+      isMyahCampaignRawInput(context) &&
+      payload.data.some(isForbiddenGenericCampaignCreateData)
+    ) {
       rejectGenericCampaignLifecycleOperation();
     }
   }
@@ -154,7 +166,10 @@ export class CampaignLifecycleService {
   ): void {
     this.validateRawCampaignMutation(context, payload.data);
 
-    if (isForbiddenGenericCampaignUpdateData(payload.data)) {
+    if (
+      isMyahCampaignRawInput(context) &&
+      isForbiddenGenericCampaignUpdateData(payload.data)
+    ) {
       rejectGenericCampaignLifecycleOperation();
     }
   }
@@ -164,8 +179,7 @@ export class CampaignLifecycleService {
     data: unknown | unknown[],
   ): void {
     if (
-      context.objectMetadataUniversalIdentifier ===
-        MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER &&
+      isMyahCampaignRawInput(context) &&
       (Array.isArray(data)
         ? data.some(hasOwnSequenceAuthorization)
         : hasOwnSequenceAuthorization(data))
