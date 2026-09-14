@@ -313,6 +313,57 @@ describe('CampaignSequenceAuthorizationService', () => {
     expect(manager.transaction).not.toHaveBeenCalled();
   });
 
+  it('returns not found or the canonical authorization for a start key and rejects malformed history', async () => {
+    const absentManager = managerWith([]);
+    const foundManager = managerWith([row()]);
+    const malformedHistoryManager = managerWith([
+      row({ generation: Number.MAX_SAFE_INTEGER + 1 }),
+    ]);
+
+    await expect(
+      service().lookupStartKeyInTransaction(
+        contextWith(absentManager, 'DRAFT', null),
+        { startIdempotencyKey: IDS.startKey },
+      ),
+    ).resolves.toEqual({ kind: 'NOT_FOUND' });
+    await expect(
+      service().lookupStartKeyInTransaction(
+        contextWith(foundManager, 'DRAFT', null),
+        { startIdempotencyKey: IDS.startKey },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'FOUND',
+      authorization: { authorizationId: IDS.authorization, generation: 1 },
+    });
+    await expect(
+      service().lookupStartKeyInTransaction(
+        contextWith(malformedHistoryManager, 'DRAFT', null),
+        { startIdempotencyKey: IDS.startKey },
+      ),
+    ).rejects.toThrow('history integrity failure');
+  });
+
+  it('validates start key input and transaction context before lookup', async () => {
+    const invalidInputManager = managerWith();
+    const inactiveManager = managerWith();
+    inactiveManager.queryRunner.isTransactionActive = false;
+
+    await expect(
+      service().lookupStartKeyInTransaction(
+        contextWith(invalidInputManager, 'DRAFT', null),
+        { startIdempotencyKey: 'not-a-uuid' },
+      ),
+    ).rejects.toThrow('Invalid start idempotency key');
+    await expect(
+      service().lookupStartKeyInTransaction(
+        contextWith(inactiveManager, 'DRAFT', null),
+        { startIdempotencyKey: IDS.startKey },
+      ),
+    ).rejects.toThrow('active caller-supplied transaction');
+    expect(invalidInputManager.queryRunner.query).not.toHaveBeenCalled();
+    expect(inactiveManager.queryRunner.query).not.toHaveBeenCalled();
+  });
+
   it('distinguishes not found from same-key structural request conflict', async () => {
     const absentManager = managerWith([]);
     const conflictManager = managerWith([row()]);

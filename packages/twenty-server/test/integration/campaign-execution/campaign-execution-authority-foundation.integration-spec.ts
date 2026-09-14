@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { DataSource, type QueryRunner } from 'typeorm';
 
-import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065457681-create-campaign-execution-authority-foundation';
+import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794327-create-campaign-execution-authority-foundation';
 import { AddCampaignDispatchEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789066100000-add-campaign-dispatch-evidence';
 import { setPgDateTypeParser } from 'src/database/pg/set-pg-date-type-parser';
 import { CampaignTestPreparationProofService } from 'src/engine/core-modules/campaign-test-authority/services/campaign-test-preparation-proof.service';
