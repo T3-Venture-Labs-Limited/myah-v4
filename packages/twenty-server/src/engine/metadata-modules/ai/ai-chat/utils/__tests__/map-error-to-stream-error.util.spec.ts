@@ -1,4 +1,9 @@
 import {
+  ManagedProviderBillingException,
+  ManagedProviderBillingExceptionCode,
+} from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.exception';
+
+import {
   AiException,
   AiExceptionCode,
 } from 'src/engine/metadata-modules/ai/ai.exception';
@@ -18,6 +23,19 @@ describe('mapErrorToStreamError', () => {
       code: AiExceptionCode.API_KEY_NOT_CONFIGURED,
       message:
         'No AI models are available. Configure at least one AI provider.',
+    });
+  });
+
+  it('preserves managed-provider insufficient balance as a user-safe typed error', () => {
+    expect(
+      mapErrorToStreamError(
+        new ManagedProviderBillingException(
+          ManagedProviderBillingExceptionCode.INSUFFICIENT_PREPAID_BALANCE,
+        ),
+      ),
+    ).toEqual({
+      code: ManagedProviderBillingExceptionCode.INSUFFICIENT_PREPAID_BALANCE,
+      message: 'Insufficient prepaid balance for this operation.',
     });
   });
 

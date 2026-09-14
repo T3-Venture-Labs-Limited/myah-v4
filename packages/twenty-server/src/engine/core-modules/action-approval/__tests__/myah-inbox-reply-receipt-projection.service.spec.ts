@@ -5,6 +5,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
   it('projects an empty-subject Inbox reply from an approved alias and clears only its approved revision', async () => {
     const workspaceId = '00000000-0000-4000-8000-000000000101';
     const messageThreadId = '00000000-0000-4000-8000-000000000102';
+    const agentChatThreadId = '00000000-0000-4000-8000-000000000108';
     const messageChannelId = '00000000-0000-4000-8000-000000000103';
     const parentMessageId = '00000000-0000-4000-8000-000000000104';
     const providerMessageId = '<sent@example.com>';
@@ -15,7 +16,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
       workspaceId,
       draftId: messageThreadId,
       actionVersion: 1,
-      threadId: messageThreadId,
+      threadId: agentChatThreadId,
       initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000106',
       actionName: 'send_inbox_reply' as const,
       contentDigest: computeActionContentDigest(

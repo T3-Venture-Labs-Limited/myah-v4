@@ -499,7 +499,7 @@ describe('RecordIndexSurface', () => {
     await waitFor(() => {
       expect(mockRecordIndexPageHeader).toHaveBeenLastCalledWith({
         contextStoreInstanceId: MAIN_CONTEXT_STORE_INSTANCE_ID,
-        headerActionButton: undefined,
+        headerLeadingAction: undefined,
         headerTitle: undefined,
       });
     });
@@ -654,7 +654,7 @@ describe('RecordIndexSurface', () => {
   });
 
   it('forwards scoped header overrides to the native header', async () => {
-    const headerActionButton = (
+    const headerLeadingAction = (
       <IconButton Icon={IconArrowLeft} ariaLabel="Back to Creator Lists" />
     );
 
@@ -664,7 +664,7 @@ describe('RecordIndexSurface', () => {
         objectNameSingular="creator"
         viewId="creator-default-view"
         indexIdentifierUrl={creatorShowUrl}
-        headerActionButton={headerActionButton}
+        headerLeadingAction={headerLeadingAction}
         headerTitle="List A"
       />,
     );
@@ -672,7 +672,7 @@ describe('RecordIndexSurface', () => {
     await waitFor(() => {
       expect(mockRecordIndexPageHeader).toHaveBeenLastCalledWith({
         contextStoreInstanceId: 'creator-list-pane-list-a',
-        headerActionButton,
+        headerLeadingAction,
         headerTitle: 'List A',
       });
     });

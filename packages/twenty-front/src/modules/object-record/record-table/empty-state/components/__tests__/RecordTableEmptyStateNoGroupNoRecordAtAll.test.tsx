@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { RecordTableEmptyStateNoGroupNoRecordAtAll } from '@/object-record/record-table/empty-state/components/RecordTableEmptyStateNoGroupNoRecordAtAll';
 
 const mockRecordTableEmptyStateDisplay = jest.fn();
+const mockCreateNewIndexRecord = jest.fn();
 
 let recordIndexContext:
   | {
@@ -26,7 +27,9 @@ jest.mock('@/object-metadata/hooks/useObjectLabel', () => ({
 }));
 
 jest.mock('@/object-record/record-table/hooks/useCreateNewIndexRecord', () => ({
-  useCreateNewIndexRecord: () => ({ createNewIndexRecord: jest.fn() }),
+  useCreateNewIndexRecord: () => ({
+    createNewIndexRecord: mockCreateNewIndexRecord,
+  }),
 }));
 
 jest.mock(
@@ -49,6 +52,7 @@ jest.mock(
   () => ({
     RecordTableEmptyStateDisplay: (props: {
       animatedPlaceholderType: string;
+      onClick?: () => void;
       buttonTitle?: string;
       subTitle?: string;
       title: string;
@@ -58,7 +62,9 @@ jest.mock(
         <>
           <div>{props.title}</div>
           {props.subTitle && <div>{props.subTitle}</div>}
-          {props.buttonTitle && <button>{props.buttonTitle}</button>}
+          {props.buttonTitle && (
+            <button onClick={props.onClick}>{props.buttonTitle}</button>
+          )}
         </>
       );
     },
@@ -67,7 +73,16 @@ jest.mock(
 
 describe('RecordTableEmptyStateNoGroupNoRecordAtAll', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     recordIndexContext = { hideEmptyStateSubtitle: true };
+  });
+
+  it('forwards a native create gesture', () => {
+    render(<RecordTableEmptyStateNoGroupNoRecordAtAll />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add a Campaign Creator' }),
+    );
+    expect(mockCreateNewIndexRecord).toHaveBeenCalledTimes(1);
   });
 
   it('suppresses the inherited subtitle without changing the native empty state title', () => {

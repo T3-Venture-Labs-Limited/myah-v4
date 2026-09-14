@@ -3,6 +3,7 @@ import { getSidePanelCommandMenuDropdownIdFromCommandMenuId } from '@/command-me
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
+import { shouldCloseAfterCreationComponentState } from '@/side-panel/pages/record-page/states/shouldCloseAfterCreationComponentState';
 import { SidePanelPageComponentInstanceContext } from '@/side-panel/states/contexts/SidePanelPageComponentInstanceContext';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { contextStoreRecordShowParentViewComponentState } from '@/context-store/states/contextStoreRecordShowParentViewComponentState';
@@ -23,7 +24,7 @@ import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { IconBrowserMaximize } from 'twenty-ui/icon';
+import { IconBrowserMaximize, IconCheck } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
 import { getOsControlSymbol } from 'twenty-ui/utilities';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
@@ -56,6 +57,9 @@ export const RecordShowSidePanelOpenRecordButton = ({
     activeTabIdComponentState,
     tabListComponentId,
   );
+  const shouldCloseAfterCreation = useAtomComponentStateValue(
+    shouldCloseAfterCreationComponentState,
+  );
 
   const tabListComponentIdInRecordPage = getShowPageTabListComponentId({
     targetObjectId: recordId,
@@ -82,6 +86,15 @@ export const RecordShowSidePanelOpenRecordButton = ({
   const { closeDropdown } = useCloseDropdown();
 
   const handleOpenRecord = useCallback(() => {
+    closeDropdown(
+      getSidePanelCommandMenuDropdownIdFromCommandMenuId(commandMenuId),
+    );
+
+    if (shouldCloseAfterCreation) {
+      closeSidePanelMenu();
+      return;
+    }
+
     const tabIdToOpen =
       activeTabId === 'home'
         ? objectNameSingular === CoreObjectNameSingular.Note ||
@@ -108,10 +121,6 @@ export const RecordShowSidePanelOpenRecordButton = ({
       objectRecordId: recordId,
     });
 
-    closeDropdown(
-      getSidePanelCommandMenuDropdownIdFromCommandMenuId(commandMenuId),
-    );
-
     closeSidePanelMenu();
   }, [
     commandMenuId,
@@ -123,6 +132,7 @@ export const RecordShowSidePanelOpenRecordButton = ({
     parentViewState,
     recordId,
     setActiveTabId,
+    shouldCloseAfterCreation,
     store,
   ]);
 
@@ -139,11 +149,11 @@ export const RecordShowSidePanelOpenRecordButton = ({
 
   return (
     <Button
-      title={t`Open`}
+      title={shouldCloseAfterCreation ? t`Done` : t`Open`}
       variant="primary"
       accent="brand"
       size="small"
-      Icon={IconBrowserMaximize}
+      Icon={shouldCloseAfterCreation ? IconCheck : IconBrowserMaximize}
       hotkeys={[getOsControlSymbol(), '⏎']}
       onClick={handleOpenRecord}
     />

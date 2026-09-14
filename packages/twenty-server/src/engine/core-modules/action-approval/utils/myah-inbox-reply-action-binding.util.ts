@@ -11,11 +11,13 @@ export const buildMyahInboxReplyExpectedActionBinding = ({
   initiatorUserWorkspaceId,
   graph,
   evidenceObjectMetadataIds,
+  agentChatThreadId,
 }: {
   workspaceId: string;
   initiatorUserWorkspaceId: string;
   graph: CanonicalMyahInboxReplyGraph;
   evidenceObjectMetadataIds: MyahInboxReplyEvidenceObjectMetadataIds;
+  agentChatThreadId?: string;
 }): MyahInboxReplyExpectedActionBindingWithWorkspace => ({
   workspaceId,
   actionName: 'send_inbox_reply',
@@ -51,7 +53,7 @@ export const buildMyahInboxReplyExpectedActionBinding = ({
       graph.senderDisplayName,
     ]),
   ),
-  threadId: graph.messageThreadId,
+  threadId: agentChatThreadId ?? graph.messageThreadId,
   initiatorUserWorkspaceId,
   evidenceLinks: [
     {

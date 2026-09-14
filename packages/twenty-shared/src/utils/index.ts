@@ -18,20 +18,6 @@ export { getContiguousIncrementalValues } from './array/getContiguousIncremental
 export { isNonEmptyArray } from './array/isNonEmptyArray';
 export { mapById } from './array/mapById';
 export { mapByProperty } from './array/mapByProperty';
-export {
-  createMyahReplyBlocksFromPlainText,
-  parseMyahReplyRichText,
-  serializeMyahReplyBlocks,
-} from './myahReplyRichText';
-export type {
-  MyahReplyBlock,
-  MyahReplyBody,
-  MyahReplyInlineContent,
-  MyahReplyLink,
-  MyahReplyText,
-  MyahReplyTextStyles,
-  ParsedMyahReplyBody,
-} from './myahReplyRichText';
 export { sumByProperty } from './array/sumByProperty';
 export { upsertIntoArrayOfObjectsComparingId } from './array/upsertIntoArrayOfObjectsComparingId';
 export { upsertPropertiesOfItemIntoArrayOfObjectsComparingId } from './array/upsertPropertiesOfItemIntoArrayOfObjectsComparingId';
@@ -187,6 +173,20 @@ export {
 export { getUniqueConstraintsFields } from './indexMetadata/getUniqueConstraintsFields';
 export { isAutoSelectModelId } from './isAutoSelectModelId';
 export { fastDeepEqual } from './json/fast-deep-equal';
+export type {
+  MyahReplyTextStyles,
+  MyahReplyText,
+  MyahReplyLink,
+  MyahReplyInlineContent,
+  MyahReplyBlock,
+  MyahReplyBody,
+  ParsedMyahReplyBody,
+} from './myahReplyRichText';
+export {
+  createMyahReplyBlocksFromPlainText,
+  serializeMyahReplyBlocks,
+  parseMyahReplyRichText,
+} from './myahReplyRichText';
 export { getAppPath } from './navigation/getAppPath';
 export { getSettingsPath } from './navigation/getSettingsPath';
 export { parseJson } from './parseJson';

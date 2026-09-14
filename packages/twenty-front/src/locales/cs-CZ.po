@@ -1256,6 +1256,11 @@ msgstr "Chyba 500 - {duration}ms"
 msgid "7d"
 msgstr ""
 
+#. js-lingui-id: zQz49J
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "A Campaign creation is pending in another view. Return there to continue."
+msgstr ""
+
 #. js-lingui-id: XyYY2A
 #. placeholder {0}: conflictingCurrentPool.intent.product
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -1493,6 +1498,11 @@ msgstr "Akce při kliknutí"
 msgid "Action required"
 msgstr ""
 
+#. js-lingui-id: a+rqJV
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Action unavailable"
+msgstr ""
+
 #. js-lingui-id: 7L01XJ
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableHeader.tsx
 #: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsTableHeader.tsx
@@ -1590,7 +1600,7 @@ msgid "Add \"{trimmedName}\" to options"
 msgstr "Přidat \"{trimmedName}\" do možností"
 
 #. js-lingui-id: lvbgDR
-#. placeholder {0}: formatUsdCents(selectedPreset.principalCents).replace('.00', '')
+#. placeholder {0}: formatUsdWholeDollars(principalCents)
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "Add {0} credit"
 msgstr ""
@@ -4201,6 +4211,11 @@ msgstr ""
 msgid "Campaign Agent settings saved."
 msgstr ""
 
+#. js-lingui-id: M3txsw
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Campaign creation is already in progress."
+msgstr ""
+
 #. js-lingui-id: su0ybc
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
@@ -4215,6 +4230,21 @@ msgstr ""
 #. js-lingui-id: 6nG/xd
 #: src/modules/activities/emails/hooks/useSendMessageCampaign.ts
 msgid "Campaign queued to {queuedCount} recipient(s), {skippedCount} skipped"
+msgstr ""
+
+#. js-lingui-id: r3wwzn
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Campaign saved, but could not open. Choose New in the original view to open it."
+msgstr ""
+
+#. js-lingui-id: y+oXZ8
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Campaign saved, but counts could not refresh."
+msgstr ""
+
+#. js-lingui-id: C3/N+m
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Campaign saved, but some data could not refresh. Reopen the Campaign or refresh this view."
 msgstr ""
 
 #. js-lingui-id: oRJtCM
@@ -5647,17 +5677,18 @@ msgid "Connect the Instagram account you use for your business. You can review c
 msgstr ""
 
 #. js-lingui-id: YLx3sC
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect via IMAP/SMTP"
 msgstr ""
 
 #. js-lingui-id: Zgi9Fd
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect with Google"
 msgstr "Připojit s Google"
 
 #. js-lingui-id: IOfqM8
-#: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
+#: src/modules/settings/accounts/components/EmailAccountConnectionCards.tsx
 msgid "Connect with Microsoft"
 msgstr "Připojit s Microsoft"
 
@@ -6059,6 +6090,16 @@ msgstr "Cena za milion tokenů (USD)"
 msgid "Cost per million tokens for cached input (USD)"
 msgstr "Cena za milion tokenů pro vstup z mezipaměti (USD)"
 
+#. js-lingui-id: 4h4AUx
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Could not confirm whether the Campaign was saved. Choose New to check again and retry the same creation. If this keeps happening, check your Campaign access."
+msgstr ""
+
+#. js-lingui-id: DkaE7S
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Could not create Campaign."
+msgstr ""
+
 #. js-lingui-id: VVRHmR
 #: src/modules/settings/security/components/approvedAccessDomains/SettingsSecurityApprovedAccessDomainRowDropdownMenu.tsx
 msgid "Could not delete approved access domain"
@@ -6186,15 +6227,12 @@ msgstr "Počet unikátních hodnot"
 #. js-lingui-id: JNCzPW
 #: src/modules/object-metadata/hooks/useSortSubFieldChoicesForField.ts
 #: src/modules/object-record/record-field/ui/form-types/components/FormAddressFieldInput.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
 #: src/modules/settings/data-model/fields/forms/address/constants/DefaultSelectionAddressWithMessages.ts
 #: src/modules/ui/field/input/components/AddressInput.tsx
 msgid "Country"
 msgstr "Země"
-
-#. js-lingui-id: 87bpog
-#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
-msgid "Country code"
-msgstr ""
 
 #. js-lingui-id: 1NDkH/
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -6430,6 +6468,11 @@ msgstr ""
 msgid "Creating {objectLabel}"
 msgstr ""
 
+#. js-lingui-id: XhDAhd
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Creating Campaign…"
+msgstr ""
+
 #. js-lingui-id: fR16ki
 #: src/modules/auth/sign-in-up/constants/WorkspaceActivationMessages.ts
 msgid "Creating your data model..."
@@ -6658,6 +6701,11 @@ msgstr "Vlastní"
 #. js-lingui-id: +V9e6z
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
 msgid "Custom AI Models"
+msgstr ""
+
+#. js-lingui-id: cV+1xZ
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Custom amount"
 msgstr ""
 
 #. js-lingui-id: OaTurC
@@ -7961,6 +8009,7 @@ msgid "Don't sync emails from team@ support@ noreply@..."
 msgstr "Nesynchronizovat e-maily od team@ support@ noreply@..."
 
 #. js-lingui-id: DPfwMq
+#: src/modules/command-menu-item/components/RecordShowSidePanelOpenRecordButton.tsx
 #: src/modules/page-layout/widgets/fields/components/FieldsConfigurationGroupRenameInput.tsx
 msgid "Done"
 msgstr ""
@@ -8816,6 +8865,13 @@ msgstr ""
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx
 msgid "Enter a value to store in database"
 msgstr "Zadejte hodnotu pro uložení do databáze"
+
+#. js-lingui-id: f8THyZ
+#. placeholder {0}: formatUsdWholeDollars(customerFundingPolicy.minimumPrincipalCents)
+#. placeholder {1}: formatUsdWholeDollars(customerFundingPolicy.maximumPrincipalCents)
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Enter a whole-dollar amount from {0} to {1}."
+msgstr ""
 
 #. js-lingui-id: P/e64M
 #: src/pages/settings/ai/components/SettingsAgentSettingsTab.tsx
@@ -11580,11 +11636,6 @@ msgstr ""
 #. js-lingui-id: ZEZf5o
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Instagram messaging"
-msgstr ""
-
-#. js-lingui-id: mopxc6
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "Instagram reply unavailable"
 msgstr ""
 
 #. js-lingui-id: TKQ7K+
@@ -18048,6 +18099,11 @@ msgstr ""
 msgid "Renews monthly: {0} on {monthlyRenewalDate}"
 msgstr ""
 
+#. js-lingui-id: d5Xagu
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Reopen the original Campaign view to continue this creation."
+msgstr ""
+
 #. js-lingui-id: Ee8JBW
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
 msgid "Reorder field"
@@ -18424,7 +18480,7 @@ msgid "Retry"
 msgstr "Opakovat"
 
 #. js-lingui-id: 2oJwet
-#. placeholder {0}: formatUsdCents(selectedPreset.principalCents).replace('.00', '')
+#. placeholder {0}: formatUsdWholeDollars(principalCents)
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "Retry {0} credit"
 msgstr ""
@@ -18486,6 +18542,11 @@ msgstr ""
 msgid "Return to mailbox overview"
 msgstr ""
 
+#. js-lingui-id: fLfCca
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "Return to original view"
+msgstr ""
+
 #. js-lingui-id: ZbpKL+
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminJobDetailsExpandable.tsx
 msgid "Return Value"
@@ -18527,6 +18588,11 @@ msgstr ""
 msgid "Review charges"
 msgstr ""
 
+#. js-lingui-id: IbDUDL
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review Inbox reply"
+msgstr ""
+
 #. js-lingui-id: BXm/6/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review Instagram reply"
@@ -18552,6 +18618,11 @@ msgstr ""
 msgid "Review managed mailboxes"
 msgstr ""
 
+#. js-lingui-id: +5UXOF
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review outreach email"
+msgstr ""
+
 #. js-lingui-id: RXKPQv
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "Review prewarmed bundle"
@@ -18572,9 +18643,19 @@ msgstr ""
 msgid "Review selected bundle"
 msgstr ""
 
+#. js-lingui-id: PBtpKR
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived Inbox reply before it is sent."
+msgstr ""
+
 #. js-lingui-id: EIzxzn
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review the exact server-derived Instagram reply before it is sent."
+msgstr ""
+
+#. js-lingui-id: MoNVPS
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived outreach email before it is sent."
 msgstr ""
 
 #. js-lingui-id: bkU8ZB
@@ -18595,6 +18676,11 @@ msgstr ""
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Review warmup capacity purchase"
+msgstr ""
+
+#. js-lingui-id: 6LTyxl
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Revision"
 msgstr ""
 
 #. js-lingui-id: GXsAby
@@ -19459,6 +19545,11 @@ msgstr "Vyberte 1 pole"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Select a canceled mailbox pool before recovering capacity."
+msgstr ""
+
+#. js-lingui-id: L+nQeT
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Select a country"
 msgstr ""
 
 #. js-lingui-id: OMoA3j
@@ -20898,6 +20989,7 @@ msgstr ""
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "Subject"
 msgstr "Předmět"
@@ -21416,6 +21508,11 @@ msgstr "Textový editor"
 msgid "That mailbox already exists in this local inventory."
 msgstr ""
 
+#. js-lingui-id: ss995V
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The action cannot be approved until its source is available."
+msgstr ""
+
 #. js-lingui-id: KJjmr/
 #: src/pages/settings/email/SettingsWorkspaceEmailGroupChannelDetail.tsx
 msgid "The address your workspace sends and receives email from."
@@ -21522,9 +21619,14 @@ msgstr ""
 msgid "The email associated to your account"
 msgstr "Email spojený s vaším účtem"
 
-#. js-lingui-id: 2iMFiI
+#. js-lingui-id: QzI/32
 #: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The exact server-derived Instagram reply is unavailable."
+msgid "The email will be sent to the selected recipient."
+msgstr ""
+
+#. js-lingui-id: f1P1mM
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The exact server-derived action is unavailable."
 msgstr ""
 
 #. js-lingui-id: diO3fm
@@ -21712,19 +21814,10 @@ msgstr ""
 msgid "The provider did not respond."
 msgstr ""
 
-#. js-lingui-id: JAbrJR
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The reply cannot be approved until its source is available."
-msgstr ""
-
 #. js-lingui-id: c82Ji/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "The reply will be sent to the existing conversation."
-msgstr ""
-
-#. js-lingui-id: 7KjM3t
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "The selected amount is prepaid principal, plus applicable tax. Purchased AI credit expires 12 months after successful payment."
 msgstr ""
 
 #. js-lingui-id: wxyrqd
@@ -25092,6 +25185,16 @@ msgstr ""
 msgid "You need to sign in again first."
 msgstr ""
 
+#. js-lingui-id: 7h4Xj4
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "You no longer have permission to confirm this Campaign creation."
+msgstr ""
+
+#. js-lingui-id: hKB6AR
+#: src/modules/object-record/hooks/useCreateOneRecord.ts
+msgid "You no longer have permission to create Campaigns."
+msgstr ""
+
 #. js-lingui-id: z8eKS7
 #: src/modules/settings/billing/hooks/useBillingWording.ts
 msgid "you will be charged ${enterprisePrice} per user per month"
@@ -25254,6 +25357,11 @@ msgstr "Váš klíč API poskytovatele pro autentizaci"
 #. js-lingui-id: xfhFiy
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
 msgid "Your quote and order identity are stored."
+msgstr ""
+
+#. js-lingui-id: GRra6D
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Your saved payment method will be charged immediately. Applicable tax may be added. Purchased credit expires 12 months after payment. Purchases are non-refundable except where law requires."
 msgstr ""
 
 #. js-lingui-id: 319YPG

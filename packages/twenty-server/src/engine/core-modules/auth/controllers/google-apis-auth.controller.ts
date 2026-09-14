@@ -22,6 +22,9 @@ import { GoogleAPIsOauthExchangeCodeForTokenGuard } from 'src/engine/core-module
 import { GoogleAPIsOauthRequestCodeGuard } from 'src/engine/core-modules/auth/guards/google-apis-oauth-request-code.guard';
 import { GoogleAPIsService } from 'src/engine/core-modules/auth/services/google-apis.service';
 import { TransientTokenService } from 'src/engine/core-modules/auth/token/services/transient-token.service';
+import { appendConnectedAccountIdToRedirectLocation } from 'src/engine/core-modules/auth/utils/append-connected-account-id-to-redirect-location.util';
+import { buildOAuthCampaignFailureRedirectLocation } from 'src/engine/core-modules/auth/utils/build-oauth-campaign-failure-redirect-location.util';
+import { buildWorkspaceUrlFromRelativeRedirectLocation } from 'src/engine/core-modules/auth/utils/build-workspace-url-from-relative-redirect-location.util';
 import { APIsOAuthRequest } from 'src/engine/core-modules/auth/types/apis-oauth-request.type';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { GuardRedirectService } from 'src/engine/core-modules/guard-redirect/services/guard-redirect.service';
@@ -67,6 +70,7 @@ export class GoogleAPIsAuthController {
     @Res() res: Response,
   ) {
     let workspace: WorkspaceEntity | null = null;
+    let redirectLocation: string | undefined;
 
     try {
       const { user } = req;
@@ -76,11 +80,12 @@ export class GoogleAPIsAuthController {
         accessToken,
         refreshToken,
         transientToken,
-        redirectLocation,
+        redirectLocation: requestedRedirectLocation,
         calendarVisibility,
         messageVisibility,
         skipMessageChannelConfiguration,
       } = user;
+      redirectLocation = requestedRedirectLocation;
 
       const { workspaceMemberId, userId, workspaceId } =
         await this.transientTokenService.verifyTransientToken(transientToken);
@@ -125,19 +130,39 @@ export class GoogleAPIsAuthController {
         );
       }
 
-      const pathname =
-        redirectLocation ||
+      const returnLocation =
+        appendConnectedAccountIdToRedirectLocation(
+          redirectLocation,
+          connectedAccountId,
+        ) ||
         getSettingsPath(SettingsPath.AccountsConfiguration, {
           connectedAccountId,
         });
 
-      const url = this.workspaceDomainsService.buildWorkspaceURL({
+      const url = buildWorkspaceUrlFromRelativeRedirectLocation({
+        buildWorkspaceURL: this.workspaceDomainsService.buildWorkspaceURL.bind(
+          this.workspaceDomainsService,
+        ),
+        redirectLocation: returnLocation,
         workspace,
-        pathname,
       });
 
       return res.redirect(url.toString());
     } catch (error) {
+      const failureReturnLocation =
+        buildOAuthCampaignFailureRedirectLocation(redirectLocation);
+      if (workspace && failureReturnLocation) {
+        const url = buildWorkspaceUrlFromRelativeRedirectLocation({
+          buildWorkspaceURL:
+            this.workspaceDomainsService.buildWorkspaceURL.bind(
+              this.workspaceDomainsService,
+            ),
+          redirectLocation: failureReturnLocation,
+          workspace,
+        });
+        return res.redirect(url.toString());
+      }
+
       return res.redirect(
         this.guardRedirectService.getRedirectErrorUrlAndCaptureExceptions({
           error,

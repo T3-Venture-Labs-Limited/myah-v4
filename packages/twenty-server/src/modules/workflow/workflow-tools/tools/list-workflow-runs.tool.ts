@@ -39,11 +39,17 @@ const listWorkflowRunsSchema = z.object({
     .describe(`Maximum number of runs to return (default ${DEFAULT_LIMIT})`),
 });
 
-type ListWorkflowRunsInput = z.infer<typeof listWorkflowRunsSchema>;
+export type ListWorkflowRunsInput = z.infer<typeof listWorkflowRunsSchema>;
+
+type ListWorkflowRunsScope = {
+  outreachCampaignId: string;
+  workflowId: string;
+};
 
 export const createListWorkflowRunsTool = (
   deps: Pick<WorkflowToolDependencies, 'globalWorkspaceOrmManager'>,
   context: ListWorkflowRunsToolContext,
+  scope?: ListWorkflowRunsScope,
 ) => ({
   name: 'list_workflow_runs' as const,
   description:
@@ -65,14 +71,23 @@ export const createListWorkflowRunsTool = (
           const queryBuilder =
             workflowRunRepository.createQueryBuilder('workflowRun');
 
-          queryBuilder
-            .innerJoin('workflowRun.workflow', 'workflow')
-            .andWhere('workflow.outreachCampaignId IS NULL');
+          queryBuilder.innerJoin('workflowRun.workflow', 'workflow');
 
-          if (isDefined(parameters.workflowId)) {
-            queryBuilder.andWhere('workflowRun.workflowId = :workflowId', {
-              workflowId: parameters.workflowId,
-            });
+          if (scope) {
+            queryBuilder
+              .andWhere('workflow.outreachCampaignId = :outreachCampaignId', {
+                outreachCampaignId: scope.outreachCampaignId,
+              })
+              .andWhere('workflowRun.workflowId = :workflowId', {
+                workflowId: scope.workflowId,
+              });
+          } else {
+            queryBuilder.andWhere('workflow.outreachCampaignId IS NULL');
+            if (isDefined(parameters.workflowId)) {
+              queryBuilder.andWhere('workflowRun.workflowId = :workflowId', {
+                workflowId: parameters.workflowId,
+              });
+            }
           }
 
           if (isDefined(parameters.status)) {

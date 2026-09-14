@@ -9,7 +9,10 @@ import { PermissionsService } from 'src/engine/metadata-modules/permissions/perm
 export type ExternalWritePolicy = {
   permissionFlag?: PermissionFlagType;
   kind: 'read' | 'preparation' | 'external-write';
-  actionName?: 'send_instagram_reply' | 'send_outreach_email';
+  actionName?:
+    | 'send_instagram_reply'
+    | 'send_outreach_email'
+    | 'send_myah_inbox_reply';
 };
 
 const EXTERNAL_WRITE_POLICIES: Readonly<Record<string, ExternalWritePolicy>> =
@@ -44,6 +47,11 @@ const EXTERNAL_WRITE_POLICIES: Readonly<Record<string, ExternalWritePolicy>> =
       kind: 'external-write',
       actionName: 'send_outreach_email',
     },
+    send_myah_inbox_reply: {
+      permissionFlag: PermissionFlagType.SEND_EMAIL_TOOL,
+      kind: 'external-write',
+      actionName: 'send_myah_inbox_reply',
+    },
     create_calendar_event: {
       permissionFlag: PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL,
       kind: 'external-write',
@@ -77,9 +85,7 @@ export class ExternalWritePolicyService {
       throw new Error(`No policy registered for action tool "${toolName}".`);
     }
 
-    const isRegisteredApprovalAction =
-      policy.actionName === 'send_instagram_reply' ||
-      policy.actionName === 'send_outreach_email';
+    const isRegisteredApprovalAction = policy.actionName !== undefined;
 
     if (
       policy.kind === 'external-write' &&

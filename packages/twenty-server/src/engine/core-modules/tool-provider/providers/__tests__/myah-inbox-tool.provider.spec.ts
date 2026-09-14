@@ -23,7 +23,6 @@ const userAuthContext = {
   workspaceMemberId,
   workspaceMember: { id: workspaceMemberId },
 };
-
 const context = {
   workspaceId,
   roleId,
@@ -43,23 +42,37 @@ const context = {
   },
 };
 
-const createProvider = ({ canRead = true }: { canRead?: boolean } = {}) => {
+const tool = (name: string) => ({
+  name,
+  description: name,
+  inputSchema: z.object({}).strict(),
+  execute: jest.fn(),
+});
+
+const createProvider = ({
+  canRead = true,
+  canUpdate = false,
+  canSend = false,
+}: {
+  canRead?: boolean;
+  canUpdate?: boolean;
+  canSend?: boolean;
+} = {}) => {
   const workspaceService = {
     generateMyahInboxTools: jest.fn().mockReturnValue({
-      get_myah_inbox_thread_context: {
-        name: 'get_myah_inbox_thread_context',
-        description: 'get_myah_inbox_thread_context',
-        inputSchema: z.object({}).strict(),
-        execute: jest.fn(),
-      },
-      generate_myah_inbox_reply_proposal: {
-        name: 'generate_myah_inbox_reply_proposal',
-        description: 'generate_myah_inbox_reply_proposal',
-        inputSchema: z
-          .object({ operatorInstructions: z.string().min(1) })
-          .strict(),
-        execute: jest.fn(),
-      },
+      search_myah_inbox_threads: tool('search_myah_inbox_threads'),
+      get_myah_inbox_thread_context: tool('get_myah_inbox_thread_context'),
+      generate_myah_inbox_reply_proposal: tool(
+        'generate_myah_inbox_reply_proposal',
+      ),
+      update_myah_inbox_thread: tool('update_myah_inbox_thread'),
+      save_myah_inbox_reply_draft: tool('save_myah_inbox_reply_draft'),
+      get_myah_inbox_reply_send_readiness: tool(
+        'get_myah_inbox_reply_send_readiness',
+      ),
+      get_myah_inbox_reply_send_status: tool(
+        'get_myah_inbox_reply_send_status',
+      ),
     }),
   };
   const workspaceCacheService = {
@@ -68,6 +81,7 @@ const createProvider = ({ canRead = true }: { canRead?: boolean } = {}) => {
         [roleId]: {
           [messageThreadObjectId]: {
             canReadObjectRecords: canRead,
+            canUpdateObjectRecords: canUpdate,
           },
         },
       },
@@ -85,38 +99,29 @@ const createProvider = ({ canRead = true }: { canRead?: boolean } = {}) => {
       },
     }),
   };
+  const permissionsService = {
+    hasToolPermission: jest.fn().mockResolvedValue(canSend),
+  };
   const provider = new MyahInboxToolProvider(
     workspaceService as never,
     workspaceCacheService as never,
     flatEntityMapsCacheService as never,
+    permissionsService as never,
   );
 
-  return { provider, workspaceService };
+  return { provider, workspaceService, permissionsService };
 };
 
 describe('MyahInboxToolProvider', () => {
-  it('uses the current user, role, and MessageThread read permission for availability', async () => {
+  it('is available to the matching readable user without a thread selection', async () => {
     const readable = createProvider();
-    const unreadable = createProvider({ canRead: false });
 
-    await expect(readable.provider.isAvailable(context as never)).resolves.toBe(
-      true,
-    );
-    await expect(
-      unreadable.provider.isAvailable(context as never),
-    ).resolves.toBe(false);
-    await expect(
-      readable.provider.isAvailable({
-        ...context,
-        actorContext: undefined,
-      } as never),
-    ).resolves.toBe(false);
     await expect(
       readable.provider.isAvailable({
         ...context,
         myahInboxSelection: undefined,
       } as never),
-    ).resolves.toBe(false);
+    ).resolves.toBe(true);
     await expect(
       readable.provider.isAvailable({
         ...context,
@@ -125,20 +130,21 @@ describe('MyahInboxToolProvider', () => {
           threadId,
         },
       } as never),
+    ).resolves.toBe(true);
+    await expect(
+      readable.provider.isAvailable({
+        ...context,
+        actorContext: undefined,
+      } as never),
+    ).resolves.toBe(false);
+    await expect(
+      createProvider({ canRead: false }).provider.isAvailable(context as never),
     ).resolves.toBe(false);
   });
 
-  it('catalogues only the two read/propose tools and executes through the workspace service', async () => {
-    const { provider, workspaceService } = createProvider();
+  it('emits only readable tools without mutation or send permissions', async () => {
+    const { provider, workspaceService, permissionsService } = createProvider();
 
-    await expect(
-      provider.generateDescriptors(context as never),
-    ).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'get_myah_inbox_thread_context' }),
-        expect.objectContaining({ name: 'generate_myah_inbox_reply_proposal' }),
-      ]),
-    );
     const names = (await provider.generateDescriptors(context as never)).map(
       ({ name }) => name,
     );
@@ -146,17 +152,47 @@ describe('MyahInboxToolProvider', () => {
     expect(names.sort()).toEqual([
       'generate_myah_inbox_reply_proposal',
       'get_myah_inbox_thread_context',
+      'search_myah_inbox_threads',
     ]);
-    expect(names).not.toEqual(
-      expect.arrayContaining([
-        'update_myah_inbox_thread',
-        'save_myah_inbox_draft',
-        'send_myah_inbox_reply',
-      ]),
-    );
     expect(workspaceService.generateMyahInboxTools).toHaveBeenCalledWith(
       context,
     );
+    expect(permissionsService.hasToolPermission).toHaveBeenCalledWith(
+      context.rolePermissionConfig,
+      workspaceId,
+      expect.anything(),
+    );
+  });
+
+  it('emits thread mutations only with MessageThread update permission', async () => {
+    const { provider } = createProvider({ canUpdate: true });
+
+    const names = (await provider.generateDescriptors(context as never)).map(
+      ({ name }) => name,
+    );
+
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'update_myah_inbox_thread',
+        'save_myah_inbox_reply_draft',
+      ]),
+    );
+  });
+
+  it('emits readiness and status only with SEND_EMAIL_TOOL permission and never emits send execution', async () => {
+    const { provider } = createProvider({ canSend: true });
+
+    const names = (await provider.generateDescriptors(context as never)).map(
+      ({ name }) => name,
+    );
+
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'get_myah_inbox_reply_send_readiness',
+        'get_myah_inbox_reply_send_status',
+      ]),
+    );
+    expect(names).not.toContain('send_myah_inbox_reply');
   });
 
   it('registers the exported workspace token and provider in the existing module catalogue', () => {
@@ -220,28 +256,17 @@ describe('MyahInboxToolProvider', () => {
     ).toBe(true);
     expect(
       toolProviderImports.some((moduleImport) => {
-        if (moduleImport === MyahInboxModule) {
-          return true;
-        }
+        if (moduleImport === MyahInboxModule) return true;
 
-        if (
-          typeof moduleImport !== 'object' ||
-          moduleImport === null ||
-          !('forwardRef' in moduleImport)
-        ) {
-          return false;
-        }
-
-        return (moduleImport.forwardRef as () => unknown)() === MyahInboxModule;
+        return (
+          typeof moduleImport === 'object' &&
+          moduleImport !== null &&
+          'forwardRef' in moduleImport &&
+          (moduleImport.forwardRef as () => unknown)() === MyahInboxModule
+        );
       }),
     ).toBe(true);
     expect(toolProviderProviders).toContain(MyahInboxToolProvider);
     expect(providerCollection?.inject).toContain(MyahInboxToolProvider);
-
-    const instances = providerCollection!.inject.map((token) => ({ token }));
-    const registered = providerCollection!.useFactory(...instances);
-    const myahIndex = providerCollection!.inject.indexOf(MyahInboxToolProvider);
-
-    expect(registered).toContain(instances[myahIndex]);
   });
 });

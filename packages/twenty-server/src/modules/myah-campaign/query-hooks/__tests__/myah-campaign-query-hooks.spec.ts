@@ -14,11 +14,25 @@ import {
   MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
 } from 'src/modules/myah-campaign/constants/campaign-lifecycle.constants';
 import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-campaign-lifecycle.module';
+import { CampaignAccountResolver } from 'src/modules/myah-campaign/resolvers/campaign-account.resolver';
+import {
+  MyahCampaignAccountCreateManyPreQueryHook,
+  MyahCampaignAccountCreateOnePreQueryHook,
+  MyahCampaignAccountDeleteManyPreQueryHook,
+  MyahCampaignAccountDeleteOnePreQueryHook,
+  MyahCampaignAccountDestroyManyPreQueryHook,
+  MyahCampaignAccountDestroyOnePreQueryHook,
+  MyahCampaignAccountRestoreManyPreQueryHook,
+  MyahCampaignAccountRestoreOnePreQueryHook,
+  MyahCampaignAccountUpdateManyPreQueryHook,
+  MyahCampaignAccountUpdateOnePreQueryHook,
+} from 'src/modules/myah-campaign/query-hooks/myah-campaign-account-write.pre-query.hooks';
 import { MyahCampaignCreateManyPreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-create-many.pre-query.hook';
 import { MyahCampaignCreateOnePreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-create-one.pre-query.hook';
 import { MyahCampaignQueryHookModule } from 'src/modules/myah-campaign/query-hooks/myah-campaign-query-hook.module';
 import { MyahCampaignUpdateManyPreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-update-many.pre-query.hook';
 import { MyahCampaignUpdateOnePreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-update-one.pre-query.hook';
+import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 import {
   CampaignLifecycleService,
   type CampaignUpdateManyArgs,
@@ -224,6 +238,67 @@ describe('Myah Campaign query hooks', () => {
       campaignIds: ['campaign-a', 'campaign-b'],
       workspaceId: 'workspace-a',
     });
+  });
+});
+
+describe('Campaign Account generic-write query hooks', () => {
+  const accountHookCases = [
+    [MyahCampaignAccountCreateOnePreQueryHook, 'campaignAccount.createOne'],
+    [MyahCampaignAccountCreateManyPreQueryHook, 'campaignAccount.createMany'],
+    [MyahCampaignAccountUpdateOnePreQueryHook, 'campaignAccount.updateOne'],
+    [MyahCampaignAccountUpdateManyPreQueryHook, 'campaignAccount.updateMany'],
+    [MyahCampaignAccountDeleteOnePreQueryHook, 'campaignAccount.deleteOne'],
+    [MyahCampaignAccountDeleteManyPreQueryHook, 'campaignAccount.deleteMany'],
+    [MyahCampaignAccountDestroyOnePreQueryHook, 'campaignAccount.destroyOne'],
+    [MyahCampaignAccountDestroyManyPreQueryHook, 'campaignAccount.destroyMany'],
+    [MyahCampaignAccountRestoreOnePreQueryHook, 'campaignAccount.restoreOne'],
+    [MyahCampaignAccountRestoreManyPreQueryHook, 'campaignAccount.restoreMany'],
+  ] as const;
+
+  it.each(accountHookCases)(
+    '%s rejects generic writes with the system-managed message',
+    async (HookClass) => {
+      const hook = new HookClass();
+
+      await expect(
+        hook.execute(authContext, 'campaignAccount', {} as never),
+      ).rejects.toThrow('Campaign Accounts are system-managed');
+    },
+  );
+
+  it.each(accountHookCases)(
+    '%s carries its exact pre-hook decorator key',
+    (HookClass, decoratorKey) => {
+      expect(
+        Reflect.getMetadata(WORKSPACE_QUERY_HOOK_METADATA, HookClass),
+      ).toEqual({
+        key: decoratorKey,
+        type: WorkspaceQueryHookType.PRE_HOOK,
+      });
+    },
+  );
+
+  it('registers Campaign Account controls and generic-write hooks', () => {
+    const lifecycleProviders = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      MyahCampaignLifecycleModule,
+    ) as unknown[];
+    const lifecycleExports = Reflect.getMetadata(
+      MODULE_METADATA.EXPORTS,
+      MyahCampaignLifecycleModule,
+    ) as unknown[];
+    const queryHookProviders = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      MyahCampaignQueryHookModule,
+    ) as unknown[];
+
+    expect(lifecycleProviders).toEqual(
+      expect.arrayContaining([CampaignAccountService, CampaignAccountResolver]),
+    );
+    expect(lifecycleExports).toContain(CampaignAccountService);
+    expect(queryHookProviders).toEqual(
+      expect.arrayContaining(accountHookCases.map(([HookClass]) => HookClass)),
+    );
   });
 });
 

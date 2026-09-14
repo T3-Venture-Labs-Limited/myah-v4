@@ -599,7 +599,9 @@ export enum MyahInboxReplySendOutcome {
 
 export type MyahInboxReplySendReadiness = {
   __typename?: 'MyahInboxReplySendReadiness';
+  body?: Maybe<MyahInboxRichText>;
   reason?: Maybe<Scalars['String']['output']>;
+  revision: Scalars['Int']['output'];
   status: MyahInboxReplySendReadinessStatus;
 };
 

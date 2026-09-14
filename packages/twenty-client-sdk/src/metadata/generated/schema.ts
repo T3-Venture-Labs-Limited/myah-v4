@@ -1084,6 +1084,395 @@ export interface EnterpriseSubscriptionStatusDTO {
     __typename: 'EnterpriseSubscriptionStatusDTO'
 }
 
+export interface BillingSubscriptionSchedulePhaseItem {
+    price: Scalars['String']
+    quantity?: Scalars['Float']
+    __typename: 'BillingSubscriptionSchedulePhaseItem'
+}
+
+export interface BillingSubscriptionSchedulePhase {
+    start_date: Scalars['Float']
+    end_date: Scalars['Float']
+    items: BillingSubscriptionSchedulePhaseItem[]
+    __typename: 'BillingSubscriptionSchedulePhase'
+}
+
+export interface BillingProductMetadata {
+    planKey: BillingPlanKey
+    priceUsageBased: BillingUsageType
+    productKey: BillingProductKey
+    __typename: 'BillingProductMetadata'
+}
+
+
+/** The different billing plans available */
+export type BillingPlanKey = 'PRO' | 'ENTERPRISE'
+
+export type BillingUsageType = 'METERED' | 'LICENSED'
+
+
+/** The different billing products available */
+export type BillingProductKey = 'BASE_PRODUCT' | 'RESOURCE_CREDIT'
+
+export interface BillingPriceLicensed {
+    recurringInterval: SubscriptionInterval
+    unitAmount: Scalars['Float']
+    stripePriceId: Scalars['String']
+    priceUsageType: BillingUsageType
+    creditAmount?: Scalars['Float']
+    __typename: 'BillingPriceLicensed'
+}
+
+export type SubscriptionInterval = 'Month' | 'Year'
+
+export interface BillingPriceTier {
+    upTo?: Scalars['Float']
+    flatAmount?: Scalars['Float']
+    unitAmount?: Scalars['Float']
+    __typename: 'BillingPriceTier'
+}
+
+export interface BillingPriceMetered {
+    tiers: BillingPriceTier[]
+    recurringInterval: SubscriptionInterval
+    stripePriceId: Scalars['String']
+    priceUsageType: BillingUsageType
+    __typename: 'BillingPriceMetered'
+}
+
+export interface BillingProduct {
+    name: Scalars['String']
+    description: Scalars['String']
+    images?: Scalars['String'][]
+    metadata: BillingProductMetadata
+    __typename: 'BillingProduct'
+}
+
+export interface BillingLicensedProduct {
+    name: Scalars['String']
+    description: Scalars['String']
+    images?: Scalars['String'][]
+    metadata: BillingProductMetadata
+    prices?: BillingPriceLicensed[]
+    __typename: 'BillingLicensedProduct'
+}
+
+export interface BillingMeteredProduct {
+    name: Scalars['String']
+    description: Scalars['String']
+    images?: Scalars['String'][]
+    metadata: BillingProductMetadata
+    prices?: BillingPriceMetered[]
+    __typename: 'BillingMeteredProduct'
+}
+
+export interface BillingSubscriptionItem {
+    id: Scalars['UUID']
+    hasReachedCurrentPeriodCap: Scalars['Boolean']
+    quantity?: Scalars['Float']
+    stripePriceId: Scalars['String']
+    billingProduct: BillingProductDTO
+    __typename: 'BillingSubscriptionItem'
+}
+
+export interface BillingCustomer {
+    id: Scalars['UUID']
+    hasPaymentMethod?: Scalars['Boolean']
+    __typename: 'BillingCustomer'
+}
+
+export interface BillingSubscription {
+    id: Scalars['UUID']
+    status: SubscriptionStatus
+    interval?: SubscriptionInterval
+    billingSubscriptionItems?: BillingSubscriptionItem[]
+    currentPeriodEnd?: Scalars['DateTime']
+    metadata: Scalars['JSON']
+    phases: BillingSubscriptionSchedulePhase[]
+    cancelAt?: Scalars['DateTime']
+    __typename: 'BillingSubscription'
+}
+
+export type SubscriptionStatus = 'Active' | 'Canceled' | 'Incomplete' | 'IncompleteExpired' | 'PastDue' | 'Paused' | 'Trialing' | 'Unpaid'
+
+export interface BillingEndTrialPeriod {
+    /** Updated subscription status */
+    status?: SubscriptionStatus
+    /** Boolean that confirms if a payment method was found */
+    hasPaymentMethod: Scalars['Boolean']
+    /** Billing portal URL for payment method update (returned when no payment method exists) */
+    billingPortalUrl?: Scalars['String']
+    __typename: 'BillingEndTrialPeriod'
+}
+
+export interface BillingResourceCreditUsage {
+    productKey: BillingProductKey
+    periodStart: Scalars['DateTime']
+    periodEnd: Scalars['DateTime']
+    usedCredits: Scalars['Float']
+    grantedCredits: Scalars['Float']
+    rolloverCredits: Scalars['Float']
+    totalGrantedCredits: Scalars['Float']
+    unitPriceCents: Scalars['Float']
+    __typename: 'BillingResourceCreditUsage'
+}
+
+export interface BillingPlan {
+    planKey: BillingPlanKey
+    baseProducts: BillingLicensedProduct[]
+    resourceCreditProducts: BillingLicensedProduct[]
+    meteredProducts: BillingMeteredProduct[]
+    __typename: 'BillingPlan'
+}
+
+export interface BillingPaymentIntent {
+    clientSecret: Scalars['String']
+    paymentIntentType: Scalars['String']
+    __typename: 'BillingPaymentIntent'
+}
+
+export interface BillingSession {
+    url?: Scalars['String']
+    __typename: 'BillingSession'
+}
+
+export interface BillingUpdate {
+    /** Current billing subscription */
+    currentBillingSubscription: BillingSubscription
+    /** All billing subscriptions */
+    billingSubscriptions: BillingSubscription[]
+    __typename: 'BillingUpdate'
+}
+
+export interface ManagedProviderCustomerFundingBillingAddress {
+    city?: Scalars['String']
+    country?: Scalars['String']
+    line1?: Scalars['String']
+    line2?: Scalars['String']
+    postalCode?: Scalars['String']
+    state?: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingBillingAddress'
+}
+
+export interface ManagedProviderCustomerFundingCardSummary {
+    brand: Scalars['String']
+    expiryMonth: Scalars['Float']
+    expiryYear: Scalars['Float']
+    last4: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingCardSummary'
+}
+
+export interface ManagedProviderCustomerFundingTaxIdSummary {
+    country?: Scalars['String']
+    type: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingTaxIdSummary'
+}
+
+export interface ManagedProviderCustomerFundingBillingSummary {
+    address: ManagedProviderCustomerFundingBillingAddress
+    card?: ManagedProviderCustomerFundingCardSummary
+    name?: Scalars['String']
+    paymentMethodReady: Scalars['Boolean']
+    taxId?: ManagedProviderCustomerFundingTaxIdSummary
+    __typename: 'ManagedProviderCustomerFundingBillingSummary'
+}
+
+export interface ManagedProviderAiTopUpPolicy {
+    incrementCents: Scalars['Int']
+    minimumPrincipalCents: Scalars['Int']
+    maximumPrincipalCents: Scalars['Int']
+    suggestedPrincipalCents: Scalars['Int'][]
+    __typename: 'ManagedProviderAiTopUpPolicy'
+}
+
+export interface ManagedProviderCustomerFundingHistoryItem {
+    id: Scalars['String']
+    fundingType: Scalars['String']
+    state: Scalars['String']
+    principalCents: Scalars['String']
+    taxCents?: Scalars['String']
+    collectedTotalCents?: Scalars['String']
+    expiresAt?: Scalars['DateTime']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    invoiceUrl?: Scalars['String']
+    actionRequired: Scalars['Boolean']
+    __typename: 'ManagedProviderCustomerFundingHistoryItem'
+}
+
+export interface ManagedProviderCustomerFundingPaymentMethod {
+    ready: Scalars['Boolean']
+    clientSecret?: Scalars['String']
+    billingSummary?: ManagedProviderCustomerFundingBillingSummary
+    publishableKey?: Scalars['String']
+    setupIntentId?: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingPaymentMethod'
+}
+
+export interface ManagedProviderCustomerFundingPaymentAction {
+    clientSecret: Scalars['String']
+    publishableKey: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingPaymentAction'
+}
+
+export interface ManagedProviderBillingStatus {
+    available: Scalars['Boolean']
+    prepaidBalanceCents?: Scalars['String']
+    pendingOperationCount: Scalars['Int']
+    reconciliationRequiredOperationCount: Scalars['Int']
+    customerFundingAvailable: Scalars['Boolean']
+    customerFundingPaymentMethodReady: Scalars['Boolean']
+    customerFundingPolicy: ManagedProviderAiTopUpPolicy
+    customerFundingHistory: ManagedProviderCustomerFundingHistoryItem[]
+    customerFundingBillingSummary?: ManagedProviderCustomerFundingBillingSummary
+    __typename: 'ManagedProviderBillingStatus'
+}
+
+export interface VerificationRecord {
+    type: Scalars['String']
+    key: Scalars['String']
+    value: Scalars['String']
+    priority?: Scalars['Float']
+    __typename: 'VerificationRecord'
+}
+
+export interface EmailingDomain {
+    id: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    domain: Scalars['String']
+    status: EmailingDomainStatus
+    verificationRecords?: VerificationRecord[]
+    verifiedAt?: Scalars['DateTime']
+    __typename: 'EmailingDomain'
+}
+
+export type EmailingDomainStatus = 'PENDING' | 'VERIFIED' | 'FAILED' | 'TEMPORARY_FAILURE'
+
+export interface PublicConnectionParametersOutput {
+    host: Scalars['String']
+    port: Scalars['Float']
+    username?: Scalars['String']
+    connectionSecurity?: EmailConnectionSecurity
+    __typename: 'PublicConnectionParametersOutput'
+}
+
+export type EmailConnectionSecurity = 'NONE' | 'STARTTLS' | 'SSL_TLS'
+
+export interface PublicImapSmtpCaldavConnectionParameters {
+    IMAP?: PublicConnectionParametersOutput
+    SMTP?: PublicConnectionParametersOutput
+    CALDAV?: PublicConnectionParametersOutput
+    __typename: 'PublicImapSmtpCaldavConnectionParameters'
+}
+
+export interface ConnectedAccountPublicDTO {
+    id: Scalars['UUID']
+    handle: Scalars['String']
+    provider: Scalars['String']
+    lastCredentialsRefreshedAt?: Scalars['DateTime']
+    authFailedAt?: Scalars['DateTime']
+    archivedAt?: Scalars['DateTime']
+    handleAliases?: Scalars['String'][]
+    scopes?: Scalars['String'][]
+    lastSignedInAt?: Scalars['DateTime']
+    userWorkspaceId: Scalars['UUID']
+    connectionProviderId?: Scalars['UUID']
+    applicationId?: Scalars['UUID']
+    name?: Scalars['String']
+    visibility: Scalars['String']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    connectionParameters?: PublicImapSmtpCaldavConnectionParameters
+    __typename: 'ConnectedAccountPublicDTO'
+}
+
+export interface MessageChannel {
+    id: Scalars['UUID']
+    visibility: MessageChannelVisibility
+    handle: Scalars['String']
+    type: MessageChannelType
+    isContactAutoCreationEnabled: Scalars['Boolean']
+    contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy
+    messageFolderImportPolicy: MessageFolderImportPolicy
+    excludeNonProfessionalEmails: Scalars['Boolean']
+    excludeGroupEmails: Scalars['Boolean']
+    pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction
+    isSyncEnabled: Scalars['Boolean']
+    syncedAt?: Scalars['DateTime']
+    syncStatus: MessageChannelSyncStatus
+    syncStage: MessageChannelSyncStage
+    syncStageStartedAt?: Scalars['DateTime']
+    throttleFailureCount: Scalars['Float']
+    throttleRetryAfter?: Scalars['DateTime']
+    connectedAccountId: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    connectedAccount?: ConnectedAccountPublicDTO
+    __typename: 'MessageChannel'
+}
+
+export type MessageChannelVisibility = 'METADATA' | 'SUBJECT' | 'SHARE_EVERYTHING'
+
+export type MessageChannelType = 'EMAIL' | 'SMS' | 'EMAIL_GROUP'
+
+export type MessageChannelContactAutoCreationPolicy = 'SENT_AND_RECEIVED' | 'SENT' | 'NONE'
+
+export type MessageFolderImportPolicy = 'ALL_FOLDERS' | 'SELECTED_FOLDERS'
+
+export type MessageChannelPendingGroupEmailsAction = 'GROUP_EMAILS_DELETION' | 'GROUP_EMAILS_IMPORT' | 'NONE'
+
+export type MessageChannelSyncStatus = 'NOT_SYNCED' | 'ONGOING' | 'ACTIVE' | 'FAILED_INSUFFICIENT_PERMISSIONS' | 'FAILED_UNKNOWN'
+
+export type MessageChannelSyncStage = 'PENDING_CONFIGURATION' | 'MESSAGE_LIST_FETCH_PENDING' | 'MESSAGE_LIST_FETCH_SCHEDULED' | 'MESSAGE_LIST_FETCH_ONGOING' | 'MESSAGES_IMPORT_PENDING' | 'MESSAGES_IMPORT_SCHEDULED' | 'MESSAGES_IMPORT_ONGOING' | 'FAILED'
+
+export interface CreateEmailGroupChannelOutput {
+    messageChannel: MessageChannel
+    forwardingAddress: Scalars['String']
+    __typename: 'CreateEmailGroupChannelOutput'
+}
+
+export interface CampaignAudiencePreviewDTO {
+    totalMembers: Scalars['Int']
+    withoutEmail: Scalars['Int']
+    duplicateEmails: Scalars['Int']
+    globallyUnsubscribed: Scalars['Int']
+    topicUnsubscribed: Scalars['Int']
+    sendable: Scalars['Int']
+    __typename: 'CampaignAudiencePreviewDTO'
+}
+
+export interface SendEmailViaDomainOutput {
+    messageId: Scalars['String']
+    __typename: 'SendEmailViaDomainOutput'
+}
+
+export interface CampaignSkippedRecipientsDTO {
+    noEmail: Scalars['Int']
+    deduped: Scalars['Int']
+    overCap: Scalars['Int']
+    __typename: 'CampaignSkippedRecipientsDTO'
+}
+
+export interface SendMessageCampaignOutputDTO {
+    campaignId: Scalars['String']
+    queuedCount: Scalars['Int']
+    skipped: CampaignSkippedRecipientsDTO
+    __typename: 'SendMessageCampaignOutputDTO'
+}
+
+export interface UnsubscribeTopic {
+    id: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    name?: Scalars['String']
+    description?: Scalars['String']
+    visibility: UnsubscribeTopicVisibility
+    __typename: 'UnsubscribeTopic'
+}
+
+export type UnsubscribeTopicVisibility = 'PUBLIC' | 'PRIVATE'
+
 export interface FileWithSignedUrl {
     id: Scalars['UUID']
     path: Scalars['String']
@@ -1203,117 +1592,6 @@ export interface LogicFunctionLogs {
     __typename: 'LogicFunctionLogs'
 }
 
-export interface BillingSubscriptionSchedulePhaseItem {
-    price: Scalars['String']
-    quantity?: Scalars['Float']
-    __typename: 'BillingSubscriptionSchedulePhaseItem'
-}
-
-export interface BillingSubscriptionSchedulePhase {
-    start_date: Scalars['Float']
-    end_date: Scalars['Float']
-    items: BillingSubscriptionSchedulePhaseItem[]
-    __typename: 'BillingSubscriptionSchedulePhase'
-}
-
-export interface BillingProductMetadata {
-    planKey: BillingPlanKey
-    priceUsageBased: BillingUsageType
-    productKey: BillingProductKey
-    __typename: 'BillingProductMetadata'
-}
-
-
-/** The different billing plans available */
-export type BillingPlanKey = 'PRO' | 'ENTERPRISE'
-
-export type BillingUsageType = 'METERED' | 'LICENSED'
-
-
-/** The different billing products available */
-export type BillingProductKey = 'BASE_PRODUCT' | 'RESOURCE_CREDIT'
-
-export interface BillingPriceLicensed {
-    recurringInterval: SubscriptionInterval
-    unitAmount: Scalars['Float']
-    stripePriceId: Scalars['String']
-    priceUsageType: BillingUsageType
-    creditAmount?: Scalars['Float']
-    __typename: 'BillingPriceLicensed'
-}
-
-export type SubscriptionInterval = 'Month' | 'Year'
-
-export interface BillingPriceTier {
-    upTo?: Scalars['Float']
-    flatAmount?: Scalars['Float']
-    unitAmount?: Scalars['Float']
-    __typename: 'BillingPriceTier'
-}
-
-export interface BillingPriceMetered {
-    tiers: BillingPriceTier[]
-    recurringInterval: SubscriptionInterval
-    stripePriceId: Scalars['String']
-    priceUsageType: BillingUsageType
-    __typename: 'BillingPriceMetered'
-}
-
-export interface BillingProduct {
-    name: Scalars['String']
-    description: Scalars['String']
-    images?: Scalars['String'][]
-    metadata: BillingProductMetadata
-    __typename: 'BillingProduct'
-}
-
-export interface BillingLicensedProduct {
-    name: Scalars['String']
-    description: Scalars['String']
-    images?: Scalars['String'][]
-    metadata: BillingProductMetadata
-    prices?: BillingPriceLicensed[]
-    __typename: 'BillingLicensedProduct'
-}
-
-export interface BillingMeteredProduct {
-    name: Scalars['String']
-    description: Scalars['String']
-    images?: Scalars['String'][]
-    metadata: BillingProductMetadata
-    prices?: BillingPriceMetered[]
-    __typename: 'BillingMeteredProduct'
-}
-
-export interface BillingSubscriptionItem {
-    id: Scalars['UUID']
-    hasReachedCurrentPeriodCap: Scalars['Boolean']
-    quantity?: Scalars['Float']
-    stripePriceId: Scalars['String']
-    billingProduct: BillingProductDTO
-    __typename: 'BillingSubscriptionItem'
-}
-
-export interface BillingSubscription {
-    id: Scalars['UUID']
-    status: SubscriptionStatus
-    interval?: SubscriptionInterval
-    billingSubscriptionItems?: BillingSubscriptionItem[]
-    currentPeriodEnd?: Scalars['DateTime']
-    metadata: Scalars['JSON']
-    phases: BillingSubscriptionSchedulePhase[]
-    cancelAt?: Scalars['DateTime']
-    __typename: 'BillingSubscription'
-}
-
-export type SubscriptionStatus = 'Active' | 'Canceled' | 'Incomplete' | 'IncompleteExpired' | 'PastDue' | 'Paused' | 'Trialing' | 'Unpaid'
-
-export interface BillingCustomer {
-    id: Scalars['UUID']
-    hasPaymentMethod?: Scalars['Boolean']
-    __typename: 'BillingCustomer'
-}
-
 export interface IndexField {
     id: Scalars['UUID']
     fieldMetadataId: Scalars['UUID']
@@ -1416,6 +1694,20 @@ export interface ObjectFieldsConnection {
     __typename: 'ObjectFieldsConnection'
 }
 
+export interface CampaignEmailAccountDTO {
+    id: Scalars['UUID']
+    connectedAccountId: Scalars['UUID']
+    messageChannelId: Scalars['UUID']
+    provider?: Scalars['String']
+    senderEmail?: Scalars['String']
+    label: Scalars['String']
+    isDefault: Scalars['Boolean']
+    health: CampaignEmailAccountHealth
+    __typename: 'CampaignEmailAccountDTO'
+}
+
+export type CampaignEmailAccountHealth = 'AVAILABLE' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE'
+
 export interface CampaignCreatorDTO {
     id: Scalars['UUID']
     campaignId: Scalars['UUID']
@@ -1471,137 +1763,6 @@ export interface ApprovedAccessDomain {
     __typename: 'ApprovedAccessDomain'
 }
 
-export interface BillingEndTrialPeriod {
-    /** Updated subscription status */
-    status?: SubscriptionStatus
-    /** Boolean that confirms if a payment method was found */
-    hasPaymentMethod: Scalars['Boolean']
-    /** Billing portal URL for payment method update (returned when no payment method exists) */
-    billingPortalUrl?: Scalars['String']
-    __typename: 'BillingEndTrialPeriod'
-}
-
-export interface BillingResourceCreditUsage {
-    productKey: BillingProductKey
-    periodStart: Scalars['DateTime']
-    periodEnd: Scalars['DateTime']
-    usedCredits: Scalars['Float']
-    grantedCredits: Scalars['Float']
-    rolloverCredits: Scalars['Float']
-    totalGrantedCredits: Scalars['Float']
-    unitPriceCents: Scalars['Float']
-    __typename: 'BillingResourceCreditUsage'
-}
-
-export interface BillingPlan {
-    planKey: BillingPlanKey
-    baseProducts: BillingLicensedProduct[]
-    resourceCreditProducts: BillingLicensedProduct[]
-    meteredProducts: BillingMeteredProduct[]
-    __typename: 'BillingPlan'
-}
-
-export interface BillingPaymentIntent {
-    clientSecret: Scalars['String']
-    paymentIntentType: Scalars['String']
-    __typename: 'BillingPaymentIntent'
-}
-
-export interface BillingSession {
-    url?: Scalars['String']
-    __typename: 'BillingSession'
-}
-
-export interface BillingUpdate {
-    /** Current billing subscription */
-    currentBillingSubscription: BillingSubscription
-    /** All billing subscriptions */
-    billingSubscriptions: BillingSubscription[]
-    __typename: 'BillingUpdate'
-}
-
-export interface ManagedProviderCustomerFundingBillingAddress {
-    city?: Scalars['String']
-    country?: Scalars['String']
-    line1?: Scalars['String']
-    line2?: Scalars['String']
-    postalCode?: Scalars['String']
-    state?: Scalars['String']
-    __typename: 'ManagedProviderCustomerFundingBillingAddress'
-}
-
-export interface ManagedProviderCustomerFundingCardSummary {
-    brand: Scalars['String']
-    expiryMonth: Scalars['Float']
-    expiryYear: Scalars['Float']
-    last4: Scalars['String']
-    __typename: 'ManagedProviderCustomerFundingCardSummary'
-}
-
-export interface ManagedProviderCustomerFundingTaxIdSummary {
-    country?: Scalars['String']
-    type: Scalars['String']
-    __typename: 'ManagedProviderCustomerFundingTaxIdSummary'
-}
-
-export interface ManagedProviderCustomerFundingBillingSummary {
-    address: ManagedProviderCustomerFundingBillingAddress
-    card?: ManagedProviderCustomerFundingCardSummary
-    name?: Scalars['String']
-    paymentMethodReady: Scalars['Boolean']
-    taxId?: ManagedProviderCustomerFundingTaxIdSummary
-    __typename: 'ManagedProviderCustomerFundingBillingSummary'
-}
-
-export interface ManagedProviderAiTopUpPreset {
-    id: Scalars['String']
-    principalCents: Scalars['String']
-    __typename: 'ManagedProviderAiTopUpPreset'
-}
-
-export interface ManagedProviderCustomerFundingHistoryItem {
-    id: Scalars['String']
-    fundingType: Scalars['String']
-    state: Scalars['String']
-    presetId?: Scalars['String']
-    principalCents: Scalars['String']
-    taxCents?: Scalars['String']
-    collectedTotalCents?: Scalars['String']
-    expiresAt?: Scalars['DateTime']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    invoiceUrl?: Scalars['String']
-    actionRequired: Scalars['Boolean']
-    __typename: 'ManagedProviderCustomerFundingHistoryItem'
-}
-
-export interface ManagedProviderCustomerFundingPaymentMethod {
-    ready: Scalars['Boolean']
-    clientSecret?: Scalars['String']
-    billingSummary?: ManagedProviderCustomerFundingBillingSummary
-    publishableKey?: Scalars['String']
-    setupIntentId?: Scalars['String']
-    __typename: 'ManagedProviderCustomerFundingPaymentMethod'
-}
-
-export interface ManagedProviderCustomerFundingPaymentAction {
-    clientSecret: Scalars['String']
-    __typename: 'ManagedProviderCustomerFundingPaymentAction'
-}
-
-export interface ManagedProviderBillingStatus {
-    available: Scalars['Boolean']
-    prepaidBalanceCents?: Scalars['String']
-    pendingOperationCount: Scalars['Int']
-    reconciliationRequiredOperationCount: Scalars['Int']
-    customerFundingAvailable: Scalars['Boolean']
-    customerFundingPaymentMethodReady: Scalars['Boolean']
-    customerFundingPresets: ManagedProviderAiTopUpPreset[]
-    customerFundingHistory: ManagedProviderCustomerFundingHistoryItem[]
-    customerFundingBillingSummary?: ManagedProviderCustomerFundingBillingSummary
-    __typename: 'ManagedProviderBillingStatus'
-}
-
 export interface InviteSuggestion {
     email: Scalars['String']
     displayName?: Scalars['String']
@@ -1643,6 +1804,8 @@ export interface ActionApprovalProposal {
     body?: Scalars['String']
     recipientLabel?: Scalars['String']
     sendingAccountLabel?: Scalars['String']
+    subject?: Scalars['String']
+    draftRevision?: Scalars['Int']
     state: Scalars['String']
     expiresAt: Scalars['DateTime']
     occurredAt: Scalars['DateTime']
@@ -1656,44 +1819,6 @@ export interface ActionExecutionReceipt {
     outcome?: Scalars['String']
     evidenceLinks: ActionApprovalEvidenceLink[]
     __typename: 'ActionExecutionReceipt'
-}
-
-export interface PublicConnectionParametersOutput {
-    host: Scalars['String']
-    port: Scalars['Float']
-    username?: Scalars['String']
-    connectionSecurity?: EmailConnectionSecurity
-    __typename: 'PublicConnectionParametersOutput'
-}
-
-export type EmailConnectionSecurity = 'NONE' | 'STARTTLS' | 'SSL_TLS'
-
-export interface PublicImapSmtpCaldavConnectionParameters {
-    IMAP?: PublicConnectionParametersOutput
-    SMTP?: PublicConnectionParametersOutput
-    CALDAV?: PublicConnectionParametersOutput
-    __typename: 'PublicImapSmtpCaldavConnectionParameters'
-}
-
-export interface ConnectedAccountPublicDTO {
-    id: Scalars['UUID']
-    handle: Scalars['String']
-    provider: Scalars['String']
-    lastCredentialsRefreshedAt?: Scalars['DateTime']
-    authFailedAt?: Scalars['DateTime']
-    archivedAt?: Scalars['DateTime']
-    handleAliases?: Scalars['String'][]
-    scopes?: Scalars['String'][]
-    lastSignedInAt?: Scalars['DateTime']
-    userWorkspaceId: Scalars['UUID']
-    connectionProviderId?: Scalars['UUID']
-    applicationId?: Scalars['UUID']
-    name?: Scalars['String']
-    visibility: Scalars['String']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    connectionParameters?: PublicImapSmtpCaldavConnectionParameters
-    __typename: 'ConnectedAccountPublicDTO'
 }
 
 export interface VersionDistributionEntry {
@@ -2348,113 +2473,6 @@ export interface ManagedEmailActionResult {
     operationId: Scalars['String']
     __typename: 'ManagedEmailActionResult'
 }
-
-export interface VerificationRecord {
-    type: Scalars['String']
-    key: Scalars['String']
-    value: Scalars['String']
-    priority?: Scalars['Float']
-    __typename: 'VerificationRecord'
-}
-
-export interface EmailingDomain {
-    id: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    domain: Scalars['String']
-    status: EmailingDomainStatus
-    verificationRecords?: VerificationRecord[]
-    verifiedAt?: Scalars['DateTime']
-    __typename: 'EmailingDomain'
-}
-
-export type EmailingDomainStatus = 'PENDING' | 'VERIFIED' | 'FAILED' | 'TEMPORARY_FAILURE'
-
-export interface MessageChannel {
-    id: Scalars['UUID']
-    visibility: MessageChannelVisibility
-    handle: Scalars['String']
-    type: MessageChannelType
-    isContactAutoCreationEnabled: Scalars['Boolean']
-    contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy
-    messageFolderImportPolicy: MessageFolderImportPolicy
-    excludeNonProfessionalEmails: Scalars['Boolean']
-    excludeGroupEmails: Scalars['Boolean']
-    pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction
-    isSyncEnabled: Scalars['Boolean']
-    syncedAt?: Scalars['DateTime']
-    syncStatus: MessageChannelSyncStatus
-    syncStage: MessageChannelSyncStage
-    syncStageStartedAt?: Scalars['DateTime']
-    throttleFailureCount: Scalars['Float']
-    throttleRetryAfter?: Scalars['DateTime']
-    connectedAccountId: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    connectedAccount?: ConnectedAccountPublicDTO
-    __typename: 'MessageChannel'
-}
-
-export type MessageChannelVisibility = 'METADATA' | 'SUBJECT' | 'SHARE_EVERYTHING'
-
-export type MessageChannelType = 'EMAIL' | 'SMS' | 'EMAIL_GROUP'
-
-export type MessageChannelContactAutoCreationPolicy = 'SENT_AND_RECEIVED' | 'SENT' | 'NONE'
-
-export type MessageFolderImportPolicy = 'ALL_FOLDERS' | 'SELECTED_FOLDERS'
-
-export type MessageChannelPendingGroupEmailsAction = 'GROUP_EMAILS_DELETION' | 'GROUP_EMAILS_IMPORT' | 'NONE'
-
-export type MessageChannelSyncStatus = 'NOT_SYNCED' | 'ONGOING' | 'ACTIVE' | 'FAILED_INSUFFICIENT_PERMISSIONS' | 'FAILED_UNKNOWN'
-
-export type MessageChannelSyncStage = 'PENDING_CONFIGURATION' | 'MESSAGE_LIST_FETCH_PENDING' | 'MESSAGE_LIST_FETCH_SCHEDULED' | 'MESSAGE_LIST_FETCH_ONGOING' | 'MESSAGES_IMPORT_PENDING' | 'MESSAGES_IMPORT_SCHEDULED' | 'MESSAGES_IMPORT_ONGOING' | 'FAILED'
-
-export interface CreateEmailGroupChannelOutput {
-    messageChannel: MessageChannel
-    forwardingAddress: Scalars['String']
-    __typename: 'CreateEmailGroupChannelOutput'
-}
-
-export interface CampaignAudiencePreviewDTO {
-    totalMembers: Scalars['Int']
-    withoutEmail: Scalars['Int']
-    duplicateEmails: Scalars['Int']
-    globallyUnsubscribed: Scalars['Int']
-    topicUnsubscribed: Scalars['Int']
-    sendable: Scalars['Int']
-    __typename: 'CampaignAudiencePreviewDTO'
-}
-
-export interface SendEmailViaDomainOutput {
-    messageId: Scalars['String']
-    __typename: 'SendEmailViaDomainOutput'
-}
-
-export interface CampaignSkippedRecipientsDTO {
-    noEmail: Scalars['Int']
-    deduped: Scalars['Int']
-    overCap: Scalars['Int']
-    __typename: 'CampaignSkippedRecipientsDTO'
-}
-
-export interface SendMessageCampaignOutputDTO {
-    campaignId: Scalars['String']
-    queuedCount: Scalars['Int']
-    skipped: CampaignSkippedRecipientsDTO
-    __typename: 'SendMessageCampaignOutputDTO'
-}
-
-export interface UnsubscribeTopic {
-    id: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    name?: Scalars['String']
-    description?: Scalars['String']
-    visibility: UnsubscribeTopicVisibility
-    __typename: 'UnsubscribeTopic'
-}
-
-export type UnsubscribeTopicVisibility = 'PUBLIC' | 'PRIVATE'
 
 export interface BillingTrialPeriod {
     duration: Scalars['Float']
@@ -3143,6 +3161,13 @@ export interface Query {
     campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDTO
     campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDTO
     creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
+    campaignEmailAccounts: CampaignEmailAccountDTO[]
+    campaignEmailAccountCandidates: CampaignEmailAccountDTO[]
+    previewMessageCampaignAudience: CampaignAudiencePreviewDTO
+    unsubscribeTopics: UnsubscribeTopic[]
+    unsubscribePagePreviewUrl: Scalars['String']
+    myMessageChannels: MessageChannel[]
+    getEmailingDomains: EmailingDomain[]
     commandMenuItems: CommandMenuItem[]
     commandMenuItem?: CommandMenuItem
     frontComponents: FrontComponent[]
@@ -3169,11 +3194,6 @@ export interface Query {
     getToolInputSchema?: Scalars['JSON']
     webhooks: Webhook[]
     webhook?: Webhook
-    previewMessageCampaignAudience: CampaignAudiencePreviewDTO
-    unsubscribeTopics: UnsubscribeTopic[]
-    unsubscribePagePreviewUrl: Scalars['String']
-    myMessageChannels: MessageChannel[]
-    getEmailingDomains: EmailingDomain[]
     getActionApprovalProposal: ActionApprovalProposal
     getActionExecutionReceipt?: ActionExecutionReceipt
     myMessageFolders: MessageFolder[]
@@ -3357,6 +3377,20 @@ export interface Mutation {
     addCreatorListMemberIntent: CreatorListMemberDTO
     addCreatorListMembersIntent: CreatorListMemberDTO[]
     removeCreatorListMemberIntent: Scalars['Boolean']
+    linkCampaignEmailAccount: CampaignEmailAccountDTO[]
+    setDefaultCampaignEmailAccount: CampaignEmailAccountDTO[]
+    removeCampaignEmailAccount: CampaignEmailAccountDTO[]
+    sendEmailViaEmailingDomain: SendEmailViaDomainOutput
+    sendMessageCampaign: SendMessageCampaignOutputDTO
+    createUnsubscribeTopic: UnsubscribeTopic
+    updateUnsubscribeTopic: UnsubscribeTopic
+    deleteUnsubscribeTopic: Scalars['Boolean']
+    updateMessageChannel: MessageChannel
+    createEmailGroupChannel: CreateEmailGroupChannelOutput
+    deleteEmailGroupChannel: MessageChannel
+    createEmailingDomain: EmailingDomain
+    deleteEmailingDomain: Scalars['Boolean']
+    verifyEmailingDomain: EmailingDomain
     createCommandMenuItem: CommandMenuItem
     updateCommandMenuItem: CommandMenuItem
     resetCommandMenuItem: CommandMenuItem
@@ -3406,17 +3440,6 @@ export interface Mutation {
     createWebhook: Webhook
     updateWebhook: Webhook
     deleteWebhook: Webhook
-    sendEmailViaEmailingDomain: SendEmailViaDomainOutput
-    sendMessageCampaign: SendMessageCampaignOutputDTO
-    createUnsubscribeTopic: UnsubscribeTopic
-    updateUnsubscribeTopic: UnsubscribeTopic
-    deleteUnsubscribeTopic: Scalars['Boolean']
-    updateMessageChannel: MessageChannel
-    createEmailGroupChannel: CreateEmailGroupChannelOutput
-    deleteEmailGroupChannel: MessageChannel
-    createEmailingDomain: EmailingDomain
-    deleteEmailingDomain: Scalars['Boolean']
-    verifyEmailingDomain: EmailingDomain
     runAgent: RunAgentResult
     updateMessageFolder: MessageFolder
     updateMessageFolders: MessageFolder[]
@@ -3861,7 +3884,7 @@ export interface IndexGenqlSelection{
     indexFieldMetadataList?: IndexFieldGenqlSelection
     objectMetadata?: (IndexObjectMetadataConnectionGenqlSelection & { __args: {
     /** Limit or page results. */
-    paging: CursorPaging, 
+    paging: CursorPaging,
     /** Specify to filter the records returned. */
     filter: ObjectFilter} })
     __typename?: boolean | number
@@ -3915,12 +3938,12 @@ export interface ObjectGenqlSelection{
     searchFieldMetadataList?: SearchFieldGenqlSelection
     fields?: (ObjectFieldsConnectionGenqlSelection & { __args: {
     /** Limit or page results. */
-    paging: CursorPaging, 
+    paging: CursorPaging,
     /** Specify to filter the records returned. */
     filter: FieldFilter} })
     indexMetadatas?: (ObjectIndexMetadatasConnectionGenqlSelection & { __args: {
     /** Limit or page results. */
-    paging: CursorPaging, 
+    paging: CursorPaging,
     /** Specify to filter the records returned. */
     filter: IndexFilter} })
     __typename?: boolean | number
@@ -4594,6 +4617,400 @@ export interface EnterpriseSubscriptionStatusDTOGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface BillingSubscriptionSchedulePhaseItemGenqlSelection{
+    price?: boolean | number
+    quantity?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingSubscriptionSchedulePhaseGenqlSelection{
+    start_date?: boolean | number
+    end_date?: boolean | number
+    items?: BillingSubscriptionSchedulePhaseItemGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingProductMetadataGenqlSelection{
+    planKey?: boolean | number
+    priceUsageBased?: boolean | number
+    productKey?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingPriceLicensedGenqlSelection{
+    recurringInterval?: boolean | number
+    unitAmount?: boolean | number
+    stripePriceId?: boolean | number
+    priceUsageType?: boolean | number
+    creditAmount?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingPriceTierGenqlSelection{
+    upTo?: boolean | number
+    flatAmount?: boolean | number
+    unitAmount?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingPriceMeteredGenqlSelection{
+    tiers?: BillingPriceTierGenqlSelection
+    recurringInterval?: boolean | number
+    stripePriceId?: boolean | number
+    priceUsageType?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingProductGenqlSelection{
+    name?: boolean | number
+    description?: boolean | number
+    images?: boolean | number
+    metadata?: BillingProductMetadataGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingLicensedProductGenqlSelection{
+    name?: boolean | number
+    description?: boolean | number
+    images?: boolean | number
+    metadata?: BillingProductMetadataGenqlSelection
+    prices?: BillingPriceLicensedGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingMeteredProductGenqlSelection{
+    name?: boolean | number
+    description?: boolean | number
+    images?: boolean | number
+    metadata?: BillingProductMetadataGenqlSelection
+    prices?: BillingPriceMeteredGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingSubscriptionItemGenqlSelection{
+    id?: boolean | number
+    hasReachedCurrentPeriodCap?: boolean | number
+    quantity?: boolean | number
+    stripePriceId?: boolean | number
+    billingProduct?: BillingProductDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingCustomerGenqlSelection{
+    id?: boolean | number
+    hasPaymentMethod?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingSubscriptionGenqlSelection{
+    id?: boolean | number
+    status?: boolean | number
+    interval?: boolean | number
+    billingSubscriptionItems?: BillingSubscriptionItemGenqlSelection
+    currentPeriodEnd?: boolean | number
+    metadata?: boolean | number
+    phases?: BillingSubscriptionSchedulePhaseGenqlSelection
+    cancelAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingEndTrialPeriodGenqlSelection{
+    /** Updated subscription status */
+    status?: boolean | number
+    /** Boolean that confirms if a payment method was found */
+    hasPaymentMethod?: boolean | number
+    /** Billing portal URL for payment method update (returned when no payment method exists) */
+    billingPortalUrl?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingResourceCreditUsageGenqlSelection{
+    productKey?: boolean | number
+    periodStart?: boolean | number
+    periodEnd?: boolean | number
+    usedCredits?: boolean | number
+    grantedCredits?: boolean | number
+    rolloverCredits?: boolean | number
+    totalGrantedCredits?: boolean | number
+    unitPriceCents?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingPlanGenqlSelection{
+    planKey?: boolean | number
+    baseProducts?: BillingLicensedProductGenqlSelection
+    resourceCreditProducts?: BillingLicensedProductGenqlSelection
+    meteredProducts?: BillingMeteredProductGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingPaymentIntentGenqlSelection{
+    clientSecret?: boolean | number
+    paymentIntentType?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingSessionGenqlSelection{
+    url?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingUpdateGenqlSelection{
+    /** Current billing subscription */
+    currentBillingSubscription?: BillingSubscriptionGenqlSelection
+    /** All billing subscriptions */
+    billingSubscriptions?: BillingSubscriptionGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingBillingAddressGenqlSelection{
+    city?: boolean | number
+    country?: boolean | number
+    line1?: boolean | number
+    line2?: boolean | number
+    postalCode?: boolean | number
+    state?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingCardSummaryGenqlSelection{
+    brand?: boolean | number
+    expiryMonth?: boolean | number
+    expiryYear?: boolean | number
+    last4?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingTaxIdSummaryGenqlSelection{
+    country?: boolean | number
+    type?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingBillingSummaryGenqlSelection{
+    address?: ManagedProviderCustomerFundingBillingAddressGenqlSelection
+    card?: ManagedProviderCustomerFundingCardSummaryGenqlSelection
+    name?: boolean | number
+    paymentMethodReady?: boolean | number
+    taxId?: ManagedProviderCustomerFundingTaxIdSummaryGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderAiTopUpPolicyGenqlSelection{
+    incrementCents?: boolean | number
+    minimumPrincipalCents?: boolean | number
+    maximumPrincipalCents?: boolean | number
+    suggestedPrincipalCents?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingHistoryItemGenqlSelection{
+    id?: boolean | number
+    fundingType?: boolean | number
+    state?: boolean | number
+    principalCents?: boolean | number
+    taxCents?: boolean | number
+    collectedTotalCents?: boolean | number
+    expiresAt?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    invoiceUrl?: boolean | number
+    actionRequired?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingPaymentMethodGenqlSelection{
+    ready?: boolean | number
+    clientSecret?: boolean | number
+    billingSummary?: ManagedProviderCustomerFundingBillingSummaryGenqlSelection
+    publishableKey?: boolean | number
+    setupIntentId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingPaymentActionGenqlSelection{
+    clientSecret?: boolean | number
+    publishableKey?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderBillingStatusGenqlSelection{
+    available?: boolean | number
+    prepaidBalanceCents?: boolean | number
+    pendingOperationCount?: boolean | number
+    reconciliationRequiredOperationCount?: boolean | number
+    customerFundingAvailable?: boolean | number
+    customerFundingPaymentMethodReady?: boolean | number
+    customerFundingPolicy?: ManagedProviderAiTopUpPolicyGenqlSelection
+    customerFundingHistory?: ManagedProviderCustomerFundingHistoryItemGenqlSelection
+    customerFundingBillingSummary?: ManagedProviderCustomerFundingBillingSummaryGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface VerificationRecordGenqlSelection{
+    type?: boolean | number
+    key?: boolean | number
+    value?: boolean | number
+    priority?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface EmailingDomainGenqlSelection{
+    id?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    domain?: boolean | number
+    status?: boolean | number
+    verificationRecords?: VerificationRecordGenqlSelection
+    verifiedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface PublicConnectionParametersOutputGenqlSelection{
+    host?: boolean | number
+    port?: boolean | number
+    username?: boolean | number
+    connectionSecurity?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface PublicImapSmtpCaldavConnectionParametersGenqlSelection{
+    IMAP?: PublicConnectionParametersOutputGenqlSelection
+    SMTP?: PublicConnectionParametersOutputGenqlSelection
+    CALDAV?: PublicConnectionParametersOutputGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ConnectedAccountPublicDTOGenqlSelection{
+    id?: boolean | number
+    handle?: boolean | number
+    provider?: boolean | number
+    lastCredentialsRefreshedAt?: boolean | number
+    authFailedAt?: boolean | number
+    archivedAt?: boolean | number
+    handleAliases?: boolean | number
+    scopes?: boolean | number
+    lastSignedInAt?: boolean | number
+    userWorkspaceId?: boolean | number
+    connectionProviderId?: boolean | number
+    applicationId?: boolean | number
+    name?: boolean | number
+    visibility?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    connectionParameters?: PublicImapSmtpCaldavConnectionParametersGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MessageChannelGenqlSelection{
+    id?: boolean | number
+    visibility?: boolean | number
+    handle?: boolean | number
+    type?: boolean | number
+    isContactAutoCreationEnabled?: boolean | number
+    contactAutoCreationPolicy?: boolean | number
+    messageFolderImportPolicy?: boolean | number
+    excludeNonProfessionalEmails?: boolean | number
+    excludeGroupEmails?: boolean | number
+    pendingGroupEmailsAction?: boolean | number
+    isSyncEnabled?: boolean | number
+    syncedAt?: boolean | number
+    syncStatus?: boolean | number
+    syncStage?: boolean | number
+    syncStageStartedAt?: boolean | number
+    throttleFailureCount?: boolean | number
+    throttleRetryAfter?: boolean | number
+    connectedAccountId?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    connectedAccount?: ConnectedAccountPublicDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CreateEmailGroupChannelOutputGenqlSelection{
+    messageChannel?: MessageChannelGenqlSelection
+    forwardingAddress?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignAudiencePreviewDTOGenqlSelection{
+    totalMembers?: boolean | number
+    withoutEmail?: boolean | number
+    duplicateEmails?: boolean | number
+    globallyUnsubscribed?: boolean | number
+    topicUnsubscribed?: boolean | number
+    sendable?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SendEmailViaDomainOutputGenqlSelection{
+    messageId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignSkippedRecipientsDTOGenqlSelection{
+    noEmail?: boolean | number
+    deduped?: boolean | number
+    overCap?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SendMessageCampaignOutputDTOGenqlSelection{
+    campaignId?: boolean | number
+    queuedCount?: boolean | number
+    skipped?: CampaignSkippedRecipientsDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface UnsubscribeTopicGenqlSelection{
+    id?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    name?: boolean | number
+    description?: boolean | number
+    visibility?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface FileWithSignedUrlGenqlSelection{
     id?: boolean | number
     path?: boolean | number
@@ -4706,115 +5123,6 @@ export interface LogicFunctionExecutionResultGenqlSelection{
 export interface LogicFunctionLogsGenqlSelection{
     /** Execution Logs */
     logs?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingSubscriptionSchedulePhaseItemGenqlSelection{
-    price?: boolean | number
-    quantity?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingSubscriptionSchedulePhaseGenqlSelection{
-    start_date?: boolean | number
-    end_date?: boolean | number
-    items?: BillingSubscriptionSchedulePhaseItemGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingProductMetadataGenqlSelection{
-    planKey?: boolean | number
-    priceUsageBased?: boolean | number
-    productKey?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingPriceLicensedGenqlSelection{
-    recurringInterval?: boolean | number
-    unitAmount?: boolean | number
-    stripePriceId?: boolean | number
-    priceUsageType?: boolean | number
-    creditAmount?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingPriceTierGenqlSelection{
-    upTo?: boolean | number
-    flatAmount?: boolean | number
-    unitAmount?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingPriceMeteredGenqlSelection{
-    tiers?: BillingPriceTierGenqlSelection
-    recurringInterval?: boolean | number
-    stripePriceId?: boolean | number
-    priceUsageType?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingProductGenqlSelection{
-    name?: boolean | number
-    description?: boolean | number
-    images?: boolean | number
-    metadata?: BillingProductMetadataGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingLicensedProductGenqlSelection{
-    name?: boolean | number
-    description?: boolean | number
-    images?: boolean | number
-    metadata?: BillingProductMetadataGenqlSelection
-    prices?: BillingPriceLicensedGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingMeteredProductGenqlSelection{
-    name?: boolean | number
-    description?: boolean | number
-    images?: boolean | number
-    metadata?: BillingProductMetadataGenqlSelection
-    prices?: BillingPriceMeteredGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingSubscriptionItemGenqlSelection{
-    id?: boolean | number
-    hasReachedCurrentPeriodCap?: boolean | number
-    quantity?: boolean | number
-    stripePriceId?: boolean | number
-    billingProduct?: BillingProductDTOGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingSubscriptionGenqlSelection{
-    id?: boolean | number
-    status?: boolean | number
-    interval?: boolean | number
-    billingSubscriptionItems?: BillingSubscriptionItemGenqlSelection
-    currentPeriodEnd?: boolean | number
-    metadata?: boolean | number
-    phases?: BillingSubscriptionSchedulePhaseGenqlSelection
-    cancelAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingCustomerGenqlSelection{
-    id?: boolean | number
-    hasPaymentMethod?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -4933,6 +5241,19 @@ export interface ObjectFieldsConnectionGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface CampaignEmailAccountDTOGenqlSelection{
+    id?: boolean | number
+    connectedAccountId?: boolean | number
+    messageChannelId?: boolean | number
+    provider?: boolean | number
+    senderEmail?: boolean | number
+    label?: boolean | number
+    isDefault?: boolean | number
+    health?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface CampaignCreatorDTOGenqlSelection{
     id?: boolean | number
     campaignId?: boolean | number
@@ -4996,152 +5317,6 @@ export interface ApprovedAccessDomainGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface BillingEndTrialPeriodGenqlSelection{
-    /** Updated subscription status */
-    status?: boolean | number
-    /** Boolean that confirms if a payment method was found */
-    hasPaymentMethod?: boolean | number
-    /** Billing portal URL for payment method update (returned when no payment method exists) */
-    billingPortalUrl?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingResourceCreditUsageGenqlSelection{
-    productKey?: boolean | number
-    periodStart?: boolean | number
-    periodEnd?: boolean | number
-    usedCredits?: boolean | number
-    grantedCredits?: boolean | number
-    rolloverCredits?: boolean | number
-    totalGrantedCredits?: boolean | number
-    unitPriceCents?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingPlanGenqlSelection{
-    planKey?: boolean | number
-    baseProducts?: BillingLicensedProductGenqlSelection
-    resourceCreditProducts?: BillingLicensedProductGenqlSelection
-    meteredProducts?: BillingMeteredProductGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingPaymentIntentGenqlSelection{
-    clientSecret?: boolean | number
-    paymentIntentType?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingSessionGenqlSelection{
-    url?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingUpdateGenqlSelection{
-    /** Current billing subscription */
-    currentBillingSubscription?: BillingSubscriptionGenqlSelection
-    /** All billing subscriptions */
-    billingSubscriptions?: BillingSubscriptionGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderCustomerFundingBillingAddressGenqlSelection{
-    city?: boolean | number
-    country?: boolean | number
-    line1?: boolean | number
-    line2?: boolean | number
-    postalCode?: boolean | number
-    state?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderCustomerFundingCardSummaryGenqlSelection{
-    brand?: boolean | number
-    expiryMonth?: boolean | number
-    expiryYear?: boolean | number
-    last4?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderCustomerFundingTaxIdSummaryGenqlSelection{
-    country?: boolean | number
-    type?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderCustomerFundingBillingSummaryGenqlSelection{
-    address?: ManagedProviderCustomerFundingBillingAddressGenqlSelection
-    card?: ManagedProviderCustomerFundingCardSummaryGenqlSelection
-    name?: boolean | number
-    paymentMethodReady?: boolean | number
-    taxId?: ManagedProviderCustomerFundingTaxIdSummaryGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderAiTopUpPresetGenqlSelection{
-    id?: boolean | number
-    principalCents?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderCustomerFundingHistoryItemGenqlSelection{
-    id?: boolean | number
-    fundingType?: boolean | number
-    state?: boolean | number
-    presetId?: boolean | number
-    principalCents?: boolean | number
-    taxCents?: boolean | number
-    collectedTotalCents?: boolean | number
-    expiresAt?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    invoiceUrl?: boolean | number
-    actionRequired?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderCustomerFundingPaymentMethodGenqlSelection{
-    ready?: boolean | number
-    clientSecret?: boolean | number
-    billingSummary?: ManagedProviderCustomerFundingBillingSummaryGenqlSelection
-    publishableKey?: boolean | number
-    setupIntentId?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderCustomerFundingPaymentActionGenqlSelection{
-    clientSecret?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ManagedProviderBillingStatusGenqlSelection{
-    available?: boolean | number
-    prepaidBalanceCents?: boolean | number
-    pendingOperationCount?: boolean | number
-    reconciliationRequiredOperationCount?: boolean | number
-    customerFundingAvailable?: boolean | number
-    customerFundingPaymentMethodReady?: boolean | number
-    customerFundingPresets?: ManagedProviderAiTopUpPresetGenqlSelection
-    customerFundingHistory?: ManagedProviderCustomerFundingHistoryItemGenqlSelection
-    customerFundingBillingSummary?: ManagedProviderCustomerFundingBillingSummaryGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface InviteSuggestionGenqlSelection{
     email?: boolean | number
     displayName?: boolean | number
@@ -5188,6 +5363,8 @@ export interface ActionApprovalProposalGenqlSelection{
     body?: boolean | number
     recipientLabel?: boolean | number
     sendingAccountLabel?: boolean | number
+    subject?: boolean | number
+    draftRevision?: boolean | number
     state?: boolean | number
     expiresAt?: boolean | number
     occurredAt?: boolean | number
@@ -5201,45 +5378,6 @@ export interface ActionExecutionReceiptGenqlSelection{
     occurredAt?: boolean | number
     outcome?: boolean | number
     evidenceLinks?: ActionApprovalEvidenceLinkGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface PublicConnectionParametersOutputGenqlSelection{
-    host?: boolean | number
-    port?: boolean | number
-    username?: boolean | number
-    connectionSecurity?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface PublicImapSmtpCaldavConnectionParametersGenqlSelection{
-    IMAP?: PublicConnectionParametersOutputGenqlSelection
-    SMTP?: PublicConnectionParametersOutputGenqlSelection
-    CALDAV?: PublicConnectionParametersOutputGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ConnectedAccountPublicDTOGenqlSelection{
-    id?: boolean | number
-    handle?: boolean | number
-    provider?: boolean | number
-    lastCredentialsRefreshedAt?: boolean | number
-    authFailedAt?: boolean | number
-    archivedAt?: boolean | number
-    handleAliases?: boolean | number
-    scopes?: boolean | number
-    lastSignedInAt?: boolean | number
-    userWorkspaceId?: boolean | number
-    connectionProviderId?: boolean | number
-    applicationId?: boolean | number
-    name?: boolean | number
-    visibility?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    connectionParameters?: PublicImapSmtpCaldavConnectionParametersGenqlSelection
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -5958,104 +6096,6 @@ export interface ManagedEmailHealthDetailsGenqlSelection{
 export interface ManagedEmailActionResultGenqlSelection{
     accepted?: boolean | number
     operationId?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface VerificationRecordGenqlSelection{
-    type?: boolean | number
-    key?: boolean | number
-    value?: boolean | number
-    priority?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface EmailingDomainGenqlSelection{
-    id?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    domain?: boolean | number
-    status?: boolean | number
-    verificationRecords?: VerificationRecordGenqlSelection
-    verifiedAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface MessageChannelGenqlSelection{
-    id?: boolean | number
-    visibility?: boolean | number
-    handle?: boolean | number
-    type?: boolean | number
-    isContactAutoCreationEnabled?: boolean | number
-    contactAutoCreationPolicy?: boolean | number
-    messageFolderImportPolicy?: boolean | number
-    excludeNonProfessionalEmails?: boolean | number
-    excludeGroupEmails?: boolean | number
-    pendingGroupEmailsAction?: boolean | number
-    isSyncEnabled?: boolean | number
-    syncedAt?: boolean | number
-    syncStatus?: boolean | number
-    syncStage?: boolean | number
-    syncStageStartedAt?: boolean | number
-    throttleFailureCount?: boolean | number
-    throttleRetryAfter?: boolean | number
-    connectedAccountId?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    connectedAccount?: ConnectedAccountPublicDTOGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CreateEmailGroupChannelOutputGenqlSelection{
-    messageChannel?: MessageChannelGenqlSelection
-    forwardingAddress?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignAudiencePreviewDTOGenqlSelection{
-    totalMembers?: boolean | number
-    withoutEmail?: boolean | number
-    duplicateEmails?: boolean | number
-    globallyUnsubscribed?: boolean | number
-    topicUnsubscribed?: boolean | number
-    sendable?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SendEmailViaDomainOutputGenqlSelection{
-    messageId?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignSkippedRecipientsDTOGenqlSelection{
-    noEmail?: boolean | number
-    deduped?: boolean | number
-    overCap?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SendMessageCampaignOutputDTOGenqlSelection{
-    campaignId?: boolean | number
-    queuedCount?: boolean | number
-    skipped?: CampaignSkippedRecipientsDTOGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface UnsubscribeTopicGenqlSelection{
-    id?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    name?: boolean | number
-    description?: boolean | number
-    visibility?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6811,6 +6851,13 @@ export interface QueryGenqlSelection{
     campaignCreatorListRemovalImpact?: (CampaignCreatorListRemovalImpactDTOGenqlSelection & { __args: {input: CampaignCreatorListRemovalImpactInput} })
     campaignCreatorListAdditionCandidates?: (CampaignCreatorListAdditionCandidatesDTOGenqlSelection & { __args: {input: CampaignCreatorListAdditionCandidatesInput} })
     creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
+    campaignEmailAccounts?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: CampaignEmailAccountCampaignInput} })
+    campaignEmailAccountCandidates?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: CampaignEmailAccountCampaignInput} })
+    previewMessageCampaignAudience?: (CampaignAudiencePreviewDTOGenqlSelection & { __args: {input: PreviewMessageCampaignAudienceInput} })
+    unsubscribeTopics?: UnsubscribeTopicGenqlSelection
+    unsubscribePagePreviewUrl?: boolean | number
+    myMessageChannels?: (MessageChannelGenqlSelection & { __args?: {connectedAccountId?: (Scalars['UUID'] | null)} })
+    getEmailingDomains?: EmailingDomainGenqlSelection
     commandMenuItems?: CommandMenuItemGenqlSelection
     commandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
     frontComponents?: FrontComponentGenqlSelection
@@ -6837,11 +6884,6 @@ export interface QueryGenqlSelection{
     getToolInputSchema?: { __args: {toolName: Scalars['String']} }
     webhooks?: WebhookGenqlSelection
     webhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
-    previewMessageCampaignAudience?: (CampaignAudiencePreviewDTOGenqlSelection & { __args: {input: PreviewMessageCampaignAudienceInput} })
-    unsubscribeTopics?: UnsubscribeTopicGenqlSelection
-    unsubscribePagePreviewUrl?: boolean | number
-    myMessageChannels?: (MessageChannelGenqlSelection & { __args?: {connectedAccountId?: (Scalars['UUID'] | null)} })
-    getEmailingDomains?: EmailingDomainGenqlSelection
     getActionApprovalProposal?: (ActionApprovalProposalGenqlSelection & { __args: {bindingId: Scalars['UUID']} })
     getActionExecutionReceipt?: (ActionExecutionReceiptGenqlSelection & { __args: {bindingId: Scalars['UUID']} })
     myMessageFolders?: (MessageFolderGenqlSelection & { __args?: {messageChannelId?: (Scalars['UUID'] | null)} })
@@ -6892,6 +6934,10 @@ export interface CampaignCreatorListAdditionCandidatesInput {campaignId: Scalars
 
 export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID']}
 
+export interface CampaignEmailAccountCampaignInput {campaignId: Scalars['UUID']}
+
+export interface PreviewMessageCampaignAudienceInput {listId: Scalars['String'],unsubscribeTopicId?: (Scalars['String'] | null)}
+
 export interface LogicFunctionIdInput {
 /** The id of the function. */
 id: Scalars['ID']}
@@ -6899,8 +6945,6 @@ id: Scalars['ID']}
 export interface AgentIdInput {
 /** The id of the agent. */
 id: Scalars['UUID']}
-
-export interface PreviewMessageCampaignAudienceInput {listId: Scalars['String'],unsubscribeTopicId?: (Scalars['String'] | null)}
 
 export interface EventLogQueryInput {table: EventLogTable,filters?: (EventLogFiltersInput | null),first?: (Scalars['Int'] | null),after?: (Scalars['String'] | null)}
 
@@ -6970,8 +7014,8 @@ export interface MutationGenqlSelection{
     generatePlaygroundToken?: AuthTokenGenqlSelection
     emailPasswordResetLink?: (EmailPasswordResetLinkGenqlSelection & { __args: {email: Scalars['String'], workspaceId?: (Scalars['UUID'] | null)} })
     updatePasswordViaResetToken?: (InvalidatePasswordGenqlSelection & { __args: {passwordResetToken: Scalars['String'], newPassword: Scalars['String']} })
-    requestManagedProviderCustomerFunding?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {preset: Scalars['String'], idempotencyKey: Scalars['String']} })
-    prepareManagedProviderCustomerFundingPaymentMethod?: ManagedProviderCustomerFundingPaymentMethodGenqlSelection
+    requestManagedProviderCustomerFunding?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {principalCents: Scalars['Int'], idempotencyKey: Scalars['String']} })
+    prepareManagedProviderCustomerFundingPaymentMethod?: (ManagedProviderCustomerFundingPaymentMethodGenqlSelection & { __args?: {replaceExistingPaymentMethod?: (Scalars['Boolean'] | null)} })
     completeManagedProviderCustomerFundingPaymentMethod?: (ManagedProviderCustomerFundingPaymentMethodGenqlSelection & { __args: {setupIntentId?: (Scalars['String'] | null), name: Scalars['String'], line1: Scalars['String'], line2?: (Scalars['String'] | null), city: Scalars['String'], state?: (Scalars['String'] | null), postalCode: Scalars['String'], country: Scalars['String'], taxIdType?: (Scalars['String'] | null), taxIdValue?: (Scalars['String'] | null)} })
     prepareManagedProviderCustomerFundingPaymentAction?: (ManagedProviderCustomerFundingPaymentActionGenqlSelection & { __args: {actionId: Scalars['String']} })
     acknowledgeManagedProviderCustomerFundingPaymentAction?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {actionId: Scalars['String']} })
@@ -7070,6 +7114,20 @@ export interface MutationGenqlSelection{
     addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
     removeCreatorListMemberIntent?: { __args: {input: RemoveCreatorListMemberIntentInput} }
+    linkCampaignEmailAccount?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: LinkCampaignEmailAccountInput} })
+    setDefaultCampaignEmailAccount?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: CampaignEmailAccountLinkInput} })
+    removeCampaignEmailAccount?: (CampaignEmailAccountDTOGenqlSelection & { __args: {input: CampaignEmailAccountLinkInput} })
+    sendEmailViaEmailingDomain?: (SendEmailViaDomainOutputGenqlSelection & { __args: {input: SendEmailViaDomainInput} })
+    sendMessageCampaign?: (SendMessageCampaignOutputDTOGenqlSelection & { __args: {input: SendMessageCampaignInput} })
+    createUnsubscribeTopic?: (UnsubscribeTopicGenqlSelection & { __args: {input: CreateUnsubscribeTopicInput} })
+    updateUnsubscribeTopic?: (UnsubscribeTopicGenqlSelection & { __args: {input: UpdateUnsubscribeTopicInput} })
+    deleteUnsubscribeTopic?: { __args: {id: Scalars['String']} }
+    updateMessageChannel?: (MessageChannelGenqlSelection & { __args: {input: UpdateMessageChannelInput} })
+    createEmailGroupChannel?: (CreateEmailGroupChannelOutputGenqlSelection & { __args: {input: CreateEmailGroupChannelInput} })
+    deleteEmailGroupChannel?: (MessageChannelGenqlSelection & { __args: {id: Scalars['UUID']} })
+    createEmailingDomain?: (EmailingDomainGenqlSelection & { __args: {input: CreateEmailingDomainInput} })
+    deleteEmailingDomain?: { __args: {id: Scalars['String']} }
+    verifyEmailingDomain?: (EmailingDomainGenqlSelection & { __args: {id: Scalars['String']} })
     createCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {input: CreateCommandMenuItemInput} })
     updateCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {input: UpdateCommandMenuItemInput} })
     resetCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
@@ -7119,17 +7177,6 @@ export interface MutationGenqlSelection{
     createWebhook?: (WebhookGenqlSelection & { __args: {input: CreateWebhookInput} })
     updateWebhook?: (WebhookGenqlSelection & { __args: {input: UpdateWebhookInput} })
     deleteWebhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
-    sendEmailViaEmailingDomain?: (SendEmailViaDomainOutputGenqlSelection & { __args: {input: SendEmailViaDomainInput} })
-    sendMessageCampaign?: (SendMessageCampaignOutputDTOGenqlSelection & { __args: {input: SendMessageCampaignInput} })
-    createUnsubscribeTopic?: (UnsubscribeTopicGenqlSelection & { __args: {input: CreateUnsubscribeTopicInput} })
-    updateUnsubscribeTopic?: (UnsubscribeTopicGenqlSelection & { __args: {input: UpdateUnsubscribeTopicInput} })
-    deleteUnsubscribeTopic?: { __args: {id: Scalars['String']} }
-    updateMessageChannel?: (MessageChannelGenqlSelection & { __args: {input: UpdateMessageChannelInput} })
-    createEmailGroupChannel?: (CreateEmailGroupChannelOutputGenqlSelection & { __args: {input: CreateEmailGroupChannelInput} })
-    deleteEmailGroupChannel?: (MessageChannelGenqlSelection & { __args: {id: Scalars['UUID']} })
-    createEmailingDomain?: (EmailingDomainGenqlSelection & { __args: {input: CreateEmailingDomainInput} })
-    deleteEmailingDomain?: { __args: {id: Scalars['String']} }
-    verifyEmailingDomain?: (EmailingDomainGenqlSelection & { __args: {id: Scalars['String']} })
     runAgent?: (RunAgentResultGenqlSelection & { __args: {input: RunAgentInput} })
     updateMessageFolder?: (MessageFolderGenqlSelection & { __args: {input: UpdateMessageFolderInput} })
     updateMessageFolders?: (MessageFolderGenqlSelection & { __args: {input: UpdateMessageFoldersInput} })
@@ -7442,6 +7489,26 @@ export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],c
 
 export interface RemoveCreatorListMemberIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID'],confirmedCampaignIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
 
+export interface LinkCampaignEmailAccountInput {campaignId: Scalars['UUID'],connectedAccountId: Scalars['UUID']}
+
+export interface CampaignEmailAccountLinkInput {campaignId: Scalars['UUID'],campaignAccountId: Scalars['UUID']}
+
+export interface SendEmailViaDomainInput {emailingDomainId: Scalars['String'],to: Scalars['String'][],cc?: (Scalars['String'][] | null),bcc?: (Scalars['String'][] | null),subject: Scalars['String'],text: Scalars['String'],html?: (Scalars['String'] | null),from: Scalars['String'],replyTo?: (Scalars['String'][] | null)}
+
+export interface SendMessageCampaignInput {listId: Scalars['String'],unsubscribeTopicId?: (Scalars['String'] | null),subject: Scalars['String'],body: Scalars['String'],fromAddress: Scalars['String']}
+
+export interface CreateUnsubscribeTopicInput {name: Scalars['String'],description?: (Scalars['String'] | null),visibility?: (UnsubscribeTopicVisibility | null)}
+
+export interface UpdateUnsubscribeTopicInput {id: Scalars['String'],name?: (Scalars['String'] | null),description?: (Scalars['String'] | null),visibility?: (UnsubscribeTopicVisibility | null)}
+
+export interface UpdateMessageChannelInput {id: Scalars['UUID'],update: UpdateMessageChannelInputUpdates}
+
+export interface UpdateMessageChannelInputUpdates {visibility?: (MessageChannelVisibility | null),isContactAutoCreationEnabled?: (Scalars['Boolean'] | null),contactAutoCreationPolicy?: (MessageChannelContactAutoCreationPolicy | null),messageFolderImportPolicy?: (MessageFolderImportPolicy | null),isSyncEnabled?: (Scalars['Boolean'] | null),excludeNonProfessionalEmails?: (Scalars['Boolean'] | null),excludeGroupEmails?: (Scalars['Boolean'] | null)}
+
+export interface CreateEmailGroupChannelInput {handle: Scalars['String']}
+
+export interface CreateEmailingDomainInput {domain: Scalars['String']}
+
 export interface CreateCommandMenuItemInput {workflowVersionId?: (Scalars['UUID'] | null),frontComponentId?: (Scalars['UUID'] | null),engineComponentKey: EngineComponentKey,label: Scalars['String'],icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),hotKeys?: (Scalars['String'][] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),payload?: (Scalars['JSON'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
 
 export interface UpdateCommandMenuItemInput {id: Scalars['UUID'],label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),engineComponentKey?: (EngineComponentKey | null),hotKeys?: (Scalars['String'][] | null),pageLayoutId?: (Scalars['UUID'] | null)}
@@ -7538,22 +7605,6 @@ update: UpdateWebhookInputUpdates}
 
 export interface UpdateWebhookInputUpdates {targetUrl?: (Scalars['String'] | null),operations?: (Scalars['String'][] | null),description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
 
-export interface SendEmailViaDomainInput {emailingDomainId: Scalars['String'],to: Scalars['String'][],cc?: (Scalars['String'][] | null),bcc?: (Scalars['String'][] | null),subject: Scalars['String'],text: Scalars['String'],html?: (Scalars['String'] | null),from: Scalars['String'],replyTo?: (Scalars['String'][] | null)}
-
-export interface SendMessageCampaignInput {listId: Scalars['String'],unsubscribeTopicId?: (Scalars['String'] | null),subject: Scalars['String'],body: Scalars['String'],fromAddress: Scalars['String']}
-
-export interface CreateUnsubscribeTopicInput {name: Scalars['String'],description?: (Scalars['String'] | null),visibility?: (UnsubscribeTopicVisibility | null)}
-
-export interface UpdateUnsubscribeTopicInput {id: Scalars['String'],name?: (Scalars['String'] | null),description?: (Scalars['String'] | null),visibility?: (UnsubscribeTopicVisibility | null)}
-
-export interface UpdateMessageChannelInput {id: Scalars['UUID'],update: UpdateMessageChannelInputUpdates}
-
-export interface UpdateMessageChannelInputUpdates {visibility?: (MessageChannelVisibility | null),isContactAutoCreationEnabled?: (Scalars['Boolean'] | null),contactAutoCreationPolicy?: (MessageChannelContactAutoCreationPolicy | null),messageFolderImportPolicy?: (MessageFolderImportPolicy | null),isSyncEnabled?: (Scalars['Boolean'] | null),excludeNonProfessionalEmails?: (Scalars['Boolean'] | null),excludeGroupEmails?: (Scalars['Boolean'] | null)}
-
-export interface CreateEmailGroupChannelInput {handle: Scalars['String']}
-
-export interface CreateEmailingDomainInput {domain: Scalars['String']}
-
 export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId?: (Scalars['String'] | null)}
 
 export interface UpdateMessageFolderInput {id: Scalars['UUID'],update: UpdateMessageFolderInputUpdates}
@@ -7607,7 +7658,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingProductDTO"')
       return BillingProductDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApiKey_possibleTypes: string[] = ['ApiKey']
@@ -7615,7 +7666,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApiKey"')
       return ApiKey_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationRegistrationVariable_possibleTypes: string[] = ['ApplicationRegistrationVariable']
@@ -7623,7 +7674,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationVariable"')
       return ApplicationRegistrationVariable_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationRegistration_possibleTypes: string[] = ['ApplicationRegistration']
@@ -7631,7 +7682,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistration"')
       return ApplicationRegistration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const TwoFactorAuthenticationMethodSummary_possibleTypes: string[] = ['TwoFactorAuthenticationMethodSummary']
@@ -7639,7 +7690,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isTwoFactorAuthenticationMethodSummary"')
       return TwoFactorAuthenticationMethodSummary_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RowLevelPermissionPredicateGroup_possibleTypes: string[] = ['RowLevelPermissionPredicateGroup']
@@ -7647,7 +7698,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRowLevelPermissionPredicateGroup"')
       return RowLevelPermissionPredicateGroup_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RowLevelPermissionPredicate_possibleTypes: string[] = ['RowLevelPermissionPredicate']
@@ -7655,7 +7706,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRowLevelPermissionPredicate"')
       return RowLevelPermissionPredicate_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectPermission_possibleTypes: string[] = ['ObjectPermission']
@@ -7663,7 +7714,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectPermission"')
       return ObjectPermission_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const UserWorkspace_possibleTypes: string[] = ['UserWorkspace']
@@ -7671,7 +7722,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isUserWorkspace"')
       return UserWorkspace_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FullName_possibleTypes: string[] = ['FullName']
@@ -7679,7 +7730,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFullName"')
       return FullName_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WorkspaceMember_possibleTypes: string[] = ['WorkspaceMember']
@@ -7687,7 +7738,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMember"')
       return WorkspaceMember_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Agent_possibleTypes: string[] = ['Agent']
@@ -7695,7 +7746,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgent"')
       return Agent_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FieldPermission_possibleTypes: string[] = ['FieldPermission']
@@ -7703,7 +7754,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFieldPermission"')
       return FieldPermission_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RolePermissionFlag_possibleTypes: string[] = ['RolePermissionFlag']
@@ -7711,7 +7762,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRolePermissionFlag"')
       return RolePermissionFlag_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApiKeyForRole_possibleTypes: string[] = ['ApiKeyForRole']
@@ -7719,7 +7770,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApiKeyForRole"')
       return ApiKeyForRole_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Role_possibleTypes: string[] = ['Role']
@@ -7727,7 +7778,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRole"')
       return Role_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationRegistrationSummary_possibleTypes: string[] = ['ApplicationRegistrationSummary']
@@ -7735,7 +7786,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationSummary"')
       return ApplicationRegistrationSummary_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationVariable_possibleTypes: string[] = ['ApplicationVariable']
@@ -7743,7 +7794,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationVariable"')
       return ApplicationVariable_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AuthToken_possibleTypes: string[] = ['AuthToken']
@@ -7751,7 +7802,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAuthToken"')
       return AuthToken_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationTokenPair_possibleTypes: string[] = ['ApplicationTokenPair']
@@ -7759,7 +7810,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationTokenPair"')
       return ApplicationTokenPair_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FrontComponent_possibleTypes: string[] = ['FrontComponent']
@@ -7767,7 +7818,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFrontComponent"')
       return FrontComponent_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CommandMenuItem_possibleTypes: string[] = ['CommandMenuItem']
@@ -7775,7 +7826,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCommandMenuItem"')
       return CommandMenuItem_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CommandMenuItemPayload_possibleTypes: string[] = ['PathCommandMenuItemPayload','ObjectMetadataCommandMenuItemPayload']
@@ -7783,7 +7834,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCommandMenuItemPayload"')
       return CommandMenuItemPayload_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PathCommandMenuItemPayload_possibleTypes: string[] = ['PathCommandMenuItemPayload']
@@ -7791,7 +7842,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPathCommandMenuItemPayload"')
       return PathCommandMenuItemPayload_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectMetadataCommandMenuItemPayload_possibleTypes: string[] = ['ObjectMetadataCommandMenuItemPayload']
@@ -7799,7 +7850,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectMetadataCommandMenuItemPayload"')
       return ObjectMetadataCommandMenuItemPayload_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const LogicFunction_possibleTypes: string[] = ['LogicFunction']
@@ -7807,7 +7858,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLogicFunction"')
       return LogicFunction_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Field_possibleTypes: string[] = ['Field']
@@ -7815,7 +7866,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isField"')
       return Field_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Index_possibleTypes: string[] = ['Index']
@@ -7823,7 +7874,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isIndex"')
       return Index_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Object_possibleTypes: string[] = ['Object']
@@ -7831,7 +7882,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObject"')
       return Object_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Application_possibleTypes: string[] = ['Application']
@@ -7839,7 +7890,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplication"')
       return Application_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewField_possibleTypes: string[] = ['ViewField']
@@ -7847,7 +7898,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewField"')
       return ViewField_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewFilterGroup_possibleTypes: string[] = ['ViewFilterGroup']
@@ -7855,7 +7906,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewFilterGroup"')
       return ViewFilterGroup_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewFilter_possibleTypes: string[] = ['ViewFilter']
@@ -7863,7 +7914,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewFilter"')
       return ViewFilter_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewGroup_possibleTypes: string[] = ['ViewGroup']
@@ -7871,7 +7922,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewGroup"')
       return ViewGroup_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewSort_possibleTypes: string[] = ['ViewSort']
@@ -7879,7 +7930,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewSort"')
       return ViewSort_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewFieldGroup_possibleTypes: string[] = ['ViewFieldGroup']
@@ -7887,7 +7938,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewFieldGroup"')
       return ViewFieldGroup_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const View_possibleTypes: string[] = ['View']
@@ -7895,7 +7946,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isView"')
       return View_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Workspace_possibleTypes: string[] = ['Workspace']
@@ -7903,7 +7954,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspace"')
       return Workspace_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AppToken_possibleTypes: string[] = ['AppToken']
@@ -7911,7 +7962,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAppToken"')
       return AppToken_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const User_possibleTypes: string[] = ['User']
@@ -8218,6 +8269,318 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
+    const BillingSubscriptionSchedulePhaseItem_possibleTypes: string[] = ['BillingSubscriptionSchedulePhaseItem']
+    export const isBillingSubscriptionSchedulePhaseItem = (obj?: { __typename?: any } | null): obj is BillingSubscriptionSchedulePhaseItem => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionSchedulePhaseItem"')
+      return BillingSubscriptionSchedulePhaseItem_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingSubscriptionSchedulePhase_possibleTypes: string[] = ['BillingSubscriptionSchedulePhase']
+    export const isBillingSubscriptionSchedulePhase = (obj?: { __typename?: any } | null): obj is BillingSubscriptionSchedulePhase => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionSchedulePhase"')
+      return BillingSubscriptionSchedulePhase_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingProductMetadata_possibleTypes: string[] = ['BillingProductMetadata']
+    export const isBillingProductMetadata = (obj?: { __typename?: any } | null): obj is BillingProductMetadata => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingProductMetadata"')
+      return BillingProductMetadata_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingPriceLicensed_possibleTypes: string[] = ['BillingPriceLicensed']
+    export const isBillingPriceLicensed = (obj?: { __typename?: any } | null): obj is BillingPriceLicensed => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceLicensed"')
+      return BillingPriceLicensed_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingPriceTier_possibleTypes: string[] = ['BillingPriceTier']
+    export const isBillingPriceTier = (obj?: { __typename?: any } | null): obj is BillingPriceTier => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceTier"')
+      return BillingPriceTier_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingPriceMetered_possibleTypes: string[] = ['BillingPriceMetered']
+    export const isBillingPriceMetered = (obj?: { __typename?: any } | null): obj is BillingPriceMetered => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceMetered"')
+      return BillingPriceMetered_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingProduct_possibleTypes: string[] = ['BillingProduct']
+    export const isBillingProduct = (obj?: { __typename?: any } | null): obj is BillingProduct => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingProduct"')
+      return BillingProduct_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingLicensedProduct_possibleTypes: string[] = ['BillingLicensedProduct']
+    export const isBillingLicensedProduct = (obj?: { __typename?: any } | null): obj is BillingLicensedProduct => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingLicensedProduct"')
+      return BillingLicensedProduct_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingMeteredProduct_possibleTypes: string[] = ['BillingMeteredProduct']
+    export const isBillingMeteredProduct = (obj?: { __typename?: any } | null): obj is BillingMeteredProduct => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingMeteredProduct"')
+      return BillingMeteredProduct_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingSubscriptionItem_possibleTypes: string[] = ['BillingSubscriptionItem']
+    export const isBillingSubscriptionItem = (obj?: { __typename?: any } | null): obj is BillingSubscriptionItem => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionItem"')
+      return BillingSubscriptionItem_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingCustomer_possibleTypes: string[] = ['BillingCustomer']
+    export const isBillingCustomer = (obj?: { __typename?: any } | null): obj is BillingCustomer => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingCustomer"')
+      return BillingCustomer_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingSubscription_possibleTypes: string[] = ['BillingSubscription']
+    export const isBillingSubscription = (obj?: { __typename?: any } | null): obj is BillingSubscription => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscription"')
+      return BillingSubscription_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingEndTrialPeriod_possibleTypes: string[] = ['BillingEndTrialPeriod']
+    export const isBillingEndTrialPeriod = (obj?: { __typename?: any } | null): obj is BillingEndTrialPeriod => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingEndTrialPeriod"')
+      return BillingEndTrialPeriod_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingResourceCreditUsage_possibleTypes: string[] = ['BillingResourceCreditUsage']
+    export const isBillingResourceCreditUsage = (obj?: { __typename?: any } | null): obj is BillingResourceCreditUsage => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingResourceCreditUsage"')
+      return BillingResourceCreditUsage_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingPlan_possibleTypes: string[] = ['BillingPlan']
+    export const isBillingPlan = (obj?: { __typename?: any } | null): obj is BillingPlan => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPlan"')
+      return BillingPlan_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingPaymentIntent_possibleTypes: string[] = ['BillingPaymentIntent']
+    export const isBillingPaymentIntent = (obj?: { __typename?: any } | null): obj is BillingPaymentIntent => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPaymentIntent"')
+      return BillingPaymentIntent_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingSession_possibleTypes: string[] = ['BillingSession']
+    export const isBillingSession = (obj?: { __typename?: any } | null): obj is BillingSession => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSession"')
+      return BillingSession_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingUpdate_possibleTypes: string[] = ['BillingUpdate']
+    export const isBillingUpdate = (obj?: { __typename?: any } | null): obj is BillingUpdate => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingUpdate"')
+      return BillingUpdate_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingBillingAddress_possibleTypes: string[] = ['ManagedProviderCustomerFundingBillingAddress']
+    export const isManagedProviderCustomerFundingBillingAddress = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingBillingAddress => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingBillingAddress"')
+      return ManagedProviderCustomerFundingBillingAddress_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingCardSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingCardSummary']
+    export const isManagedProviderCustomerFundingCardSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingCardSummary => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingCardSummary"')
+      return ManagedProviderCustomerFundingCardSummary_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingTaxIdSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingTaxIdSummary']
+    export const isManagedProviderCustomerFundingTaxIdSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingTaxIdSummary => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingTaxIdSummary"')
+      return ManagedProviderCustomerFundingTaxIdSummary_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingBillingSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingBillingSummary']
+    export const isManagedProviderCustomerFundingBillingSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingBillingSummary => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingBillingSummary"')
+      return ManagedProviderCustomerFundingBillingSummary_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderAiTopUpPolicy_possibleTypes: string[] = ['ManagedProviderAiTopUpPolicy']
+    export const isManagedProviderAiTopUpPolicy = (obj?: { __typename?: any } | null): obj is ManagedProviderAiTopUpPolicy => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderAiTopUpPolicy"')
+      return ManagedProviderAiTopUpPolicy_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingHistoryItem_possibleTypes: string[] = ['ManagedProviderCustomerFundingHistoryItem']
+    export const isManagedProviderCustomerFundingHistoryItem = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingHistoryItem => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingHistoryItem"')
+      return ManagedProviderCustomerFundingHistoryItem_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingPaymentMethod_possibleTypes: string[] = ['ManagedProviderCustomerFundingPaymentMethod']
+    export const isManagedProviderCustomerFundingPaymentMethod = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingPaymentMethod => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingPaymentMethod"')
+      return ManagedProviderCustomerFundingPaymentMethod_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingPaymentAction_possibleTypes: string[] = ['ManagedProviderCustomerFundingPaymentAction']
+    export const isManagedProviderCustomerFundingPaymentAction = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingPaymentAction => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingPaymentAction"')
+      return ManagedProviderCustomerFundingPaymentAction_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderBillingStatus_possibleTypes: string[] = ['ManagedProviderBillingStatus']
+    export const isManagedProviderBillingStatus = (obj?: { __typename?: any } | null): obj is ManagedProviderBillingStatus => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderBillingStatus"')
+      return ManagedProviderBillingStatus_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const VerificationRecord_possibleTypes: string[] = ['VerificationRecord']
+    export const isVerificationRecord = (obj?: { __typename?: any } | null): obj is VerificationRecord => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isVerificationRecord"')
+      return VerificationRecord_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const EmailingDomain_possibleTypes: string[] = ['EmailingDomain']
+    export const isEmailingDomain = (obj?: { __typename?: any } | null): obj is EmailingDomain => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isEmailingDomain"')
+      return EmailingDomain_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const PublicConnectionParametersOutput_possibleTypes: string[] = ['PublicConnectionParametersOutput']
+    export const isPublicConnectionParametersOutput = (obj?: { __typename?: any } | null): obj is PublicConnectionParametersOutput => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicConnectionParametersOutput"')
+      return PublicConnectionParametersOutput_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const PublicImapSmtpCaldavConnectionParameters_possibleTypes: string[] = ['PublicImapSmtpCaldavConnectionParameters']
+    export const isPublicImapSmtpCaldavConnectionParameters = (obj?: { __typename?: any } | null): obj is PublicImapSmtpCaldavConnectionParameters => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicImapSmtpCaldavConnectionParameters"')
+      return PublicImapSmtpCaldavConnectionParameters_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ConnectedAccountPublicDTO_possibleTypes: string[] = ['ConnectedAccountPublicDTO']
+    export const isConnectedAccountPublicDTO = (obj?: { __typename?: any } | null): obj is ConnectedAccountPublicDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isConnectedAccountPublicDTO"')
+      return ConnectedAccountPublicDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const MessageChannel_possibleTypes: string[] = ['MessageChannel']
+    export const isMessageChannel = (obj?: { __typename?: any } | null): obj is MessageChannel => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMessageChannel"')
+      return MessageChannel_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CreateEmailGroupChannelOutput_possibleTypes: string[] = ['CreateEmailGroupChannelOutput']
+    export const isCreateEmailGroupChannelOutput = (obj?: { __typename?: any } | null): obj is CreateEmailGroupChannelOutput => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCreateEmailGroupChannelOutput"')
+      return CreateEmailGroupChannelOutput_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignAudiencePreviewDTO_possibleTypes: string[] = ['CampaignAudiencePreviewDTO']
+    export const isCampaignAudiencePreviewDTO = (obj?: { __typename?: any } | null): obj is CampaignAudiencePreviewDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignAudiencePreviewDTO"')
+      return CampaignAudiencePreviewDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const SendEmailViaDomainOutput_possibleTypes: string[] = ['SendEmailViaDomainOutput']
+    export const isSendEmailViaDomainOutput = (obj?: { __typename?: any } | null): obj is SendEmailViaDomainOutput => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSendEmailViaDomainOutput"')
+      return SendEmailViaDomainOutput_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignSkippedRecipientsDTO_possibleTypes: string[] = ['CampaignSkippedRecipientsDTO']
+    export const isCampaignSkippedRecipientsDTO = (obj?: { __typename?: any } | null): obj is CampaignSkippedRecipientsDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSkippedRecipientsDTO"')
+      return CampaignSkippedRecipientsDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const SendMessageCampaignOutputDTO_possibleTypes: string[] = ['SendMessageCampaignOutputDTO']
+    export const isSendMessageCampaignOutputDTO = (obj?: { __typename?: any } | null): obj is SendMessageCampaignOutputDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSendMessageCampaignOutputDTO"')
+      return SendMessageCampaignOutputDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const UnsubscribeTopic_possibleTypes: string[] = ['UnsubscribeTopic']
+    export const isUnsubscribeTopic = (obj?: { __typename?: any } | null): obj is UnsubscribeTopic => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isUnsubscribeTopic"')
+      return UnsubscribeTopic_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
     const FileWithSignedUrl_possibleTypes: string[] = ['FileWithSignedUrl']
     export const isFileWithSignedUrl = (obj?: { __typename?: any } | null): obj is FileWithSignedUrl => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isFileWithSignedUrl"')
@@ -8302,102 +8665,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isLogicFunctionLogs = (obj?: { __typename?: any } | null): obj is LogicFunctionLogs => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isLogicFunctionLogs"')
       return LogicFunctionLogs_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingSubscriptionSchedulePhaseItem_possibleTypes: string[] = ['BillingSubscriptionSchedulePhaseItem']
-    export const isBillingSubscriptionSchedulePhaseItem = (obj?: { __typename?: any } | null): obj is BillingSubscriptionSchedulePhaseItem => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionSchedulePhaseItem"')
-      return BillingSubscriptionSchedulePhaseItem_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingSubscriptionSchedulePhase_possibleTypes: string[] = ['BillingSubscriptionSchedulePhase']
-    export const isBillingSubscriptionSchedulePhase = (obj?: { __typename?: any } | null): obj is BillingSubscriptionSchedulePhase => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionSchedulePhase"')
-      return BillingSubscriptionSchedulePhase_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingProductMetadata_possibleTypes: string[] = ['BillingProductMetadata']
-    export const isBillingProductMetadata = (obj?: { __typename?: any } | null): obj is BillingProductMetadata => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingProductMetadata"')
-      return BillingProductMetadata_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingPriceLicensed_possibleTypes: string[] = ['BillingPriceLicensed']
-    export const isBillingPriceLicensed = (obj?: { __typename?: any } | null): obj is BillingPriceLicensed => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceLicensed"')
-      return BillingPriceLicensed_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingPriceTier_possibleTypes: string[] = ['BillingPriceTier']
-    export const isBillingPriceTier = (obj?: { __typename?: any } | null): obj is BillingPriceTier => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceTier"')
-      return BillingPriceTier_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingPriceMetered_possibleTypes: string[] = ['BillingPriceMetered']
-    export const isBillingPriceMetered = (obj?: { __typename?: any } | null): obj is BillingPriceMetered => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceMetered"')
-      return BillingPriceMetered_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingProduct_possibleTypes: string[] = ['BillingProduct']
-    export const isBillingProduct = (obj?: { __typename?: any } | null): obj is BillingProduct => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingProduct"')
-      return BillingProduct_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingLicensedProduct_possibleTypes: string[] = ['BillingLicensedProduct']
-    export const isBillingLicensedProduct = (obj?: { __typename?: any } | null): obj is BillingLicensedProduct => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingLicensedProduct"')
-      return BillingLicensedProduct_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingMeteredProduct_possibleTypes: string[] = ['BillingMeteredProduct']
-    export const isBillingMeteredProduct = (obj?: { __typename?: any } | null): obj is BillingMeteredProduct => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingMeteredProduct"')
-      return BillingMeteredProduct_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingSubscriptionItem_possibleTypes: string[] = ['BillingSubscriptionItem']
-    export const isBillingSubscriptionItem = (obj?: { __typename?: any } | null): obj is BillingSubscriptionItem => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionItem"')
-      return BillingSubscriptionItem_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingSubscription_possibleTypes: string[] = ['BillingSubscription']
-    export const isBillingSubscription = (obj?: { __typename?: any } | null): obj is BillingSubscription => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscription"')
-      return BillingSubscription_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingCustomer_possibleTypes: string[] = ['BillingCustomer']
-    export const isBillingCustomer = (obj?: { __typename?: any } | null): obj is BillingCustomer => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingCustomer"')
-      return BillingCustomer_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -8498,6 +8765,14 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
+    const CampaignEmailAccountDTO_possibleTypes: string[] = ['CampaignEmailAccountDTO']
+    export const isCampaignEmailAccountDTO = (obj?: { __typename?: any } | null): obj is CampaignEmailAccountDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignEmailAccountDTO"')
+      return CampaignEmailAccountDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
     const CampaignCreatorDTO_possibleTypes: string[] = ['CampaignCreatorDTO']
     export const isCampaignCreatorDTO = (obj?: { __typename?: any } | null): obj is CampaignCreatorDTO => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorDTO"')
@@ -8562,126 +8837,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
-    const BillingEndTrialPeriod_possibleTypes: string[] = ['BillingEndTrialPeriod']
-    export const isBillingEndTrialPeriod = (obj?: { __typename?: any } | null): obj is BillingEndTrialPeriod => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingEndTrialPeriod"')
-      return BillingEndTrialPeriod_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingResourceCreditUsage_possibleTypes: string[] = ['BillingResourceCreditUsage']
-    export const isBillingResourceCreditUsage = (obj?: { __typename?: any } | null): obj is BillingResourceCreditUsage => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingResourceCreditUsage"')
-      return BillingResourceCreditUsage_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingPlan_possibleTypes: string[] = ['BillingPlan']
-    export const isBillingPlan = (obj?: { __typename?: any } | null): obj is BillingPlan => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPlan"')
-      return BillingPlan_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingPaymentIntent_possibleTypes: string[] = ['BillingPaymentIntent']
-    export const isBillingPaymentIntent = (obj?: { __typename?: any } | null): obj is BillingPaymentIntent => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPaymentIntent"')
-      return BillingPaymentIntent_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingSession_possibleTypes: string[] = ['BillingSession']
-    export const isBillingSession = (obj?: { __typename?: any } | null): obj is BillingSession => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSession"')
-      return BillingSession_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingUpdate_possibleTypes: string[] = ['BillingUpdate']
-    export const isBillingUpdate = (obj?: { __typename?: any } | null): obj is BillingUpdate => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingUpdate"')
-      return BillingUpdate_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderCustomerFundingBillingAddress_possibleTypes: string[] = ['ManagedProviderCustomerFundingBillingAddress']
-    export const isManagedProviderCustomerFundingBillingAddress = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingBillingAddress => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingBillingAddress"')
-      return ManagedProviderCustomerFundingBillingAddress_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderCustomerFundingCardSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingCardSummary']
-    export const isManagedProviderCustomerFundingCardSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingCardSummary => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingCardSummary"')
-      return ManagedProviderCustomerFundingCardSummary_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderCustomerFundingTaxIdSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingTaxIdSummary']
-    export const isManagedProviderCustomerFundingTaxIdSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingTaxIdSummary => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingTaxIdSummary"')
-      return ManagedProviderCustomerFundingTaxIdSummary_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderCustomerFundingBillingSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingBillingSummary']
-    export const isManagedProviderCustomerFundingBillingSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingBillingSummary => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingBillingSummary"')
-      return ManagedProviderCustomerFundingBillingSummary_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderAiTopUpPreset_possibleTypes: string[] = ['ManagedProviderAiTopUpPreset']
-    export const isManagedProviderAiTopUpPreset = (obj?: { __typename?: any } | null): obj is ManagedProviderAiTopUpPreset => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderAiTopUpPreset"')
-      return ManagedProviderAiTopUpPreset_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderCustomerFundingHistoryItem_possibleTypes: string[] = ['ManagedProviderCustomerFundingHistoryItem']
-    export const isManagedProviderCustomerFundingHistoryItem = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingHistoryItem => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingHistoryItem"')
-      return ManagedProviderCustomerFundingHistoryItem_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderCustomerFundingPaymentMethod_possibleTypes: string[] = ['ManagedProviderCustomerFundingPaymentMethod']
-    export const isManagedProviderCustomerFundingPaymentMethod = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingPaymentMethod => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingPaymentMethod"')
-      return ManagedProviderCustomerFundingPaymentMethod_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderCustomerFundingPaymentAction_possibleTypes: string[] = ['ManagedProviderCustomerFundingPaymentAction']
-    export const isManagedProviderCustomerFundingPaymentAction = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingPaymentAction => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingPaymentAction"')
-      return ManagedProviderCustomerFundingPaymentAction_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ManagedProviderBillingStatus_possibleTypes: string[] = ['ManagedProviderBillingStatus']
-    export const isManagedProviderBillingStatus = (obj?: { __typename?: any } | null): obj is ManagedProviderBillingStatus => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderBillingStatus"')
-      return ManagedProviderBillingStatus_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
     const InviteSuggestion_possibleTypes: string[] = ['InviteSuggestion']
     export const isInviteSuggestion = (obj?: { __typename?: any } | null): obj is InviteSuggestion => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isInviteSuggestion"')
@@ -8734,30 +8889,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isActionExecutionReceipt = (obj?: { __typename?: any } | null): obj is ActionExecutionReceipt => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isActionExecutionReceipt"')
       return ActionExecutionReceipt_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicConnectionParametersOutput_possibleTypes: string[] = ['PublicConnectionParametersOutput']
-    export const isPublicConnectionParametersOutput = (obj?: { __typename?: any } | null): obj is PublicConnectionParametersOutput => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicConnectionParametersOutput"')
-      return PublicConnectionParametersOutput_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicImapSmtpCaldavConnectionParameters_possibleTypes: string[] = ['PublicImapSmtpCaldavConnectionParameters']
-    export const isPublicImapSmtpCaldavConnectionParameters = (obj?: { __typename?: any } | null): obj is PublicImapSmtpCaldavConnectionParameters => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicImapSmtpCaldavConnectionParameters"')
-      return PublicImapSmtpCaldavConnectionParameters_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ConnectedAccountPublicDTO_possibleTypes: string[] = ['ConnectedAccountPublicDTO']
-    export const isConnectedAccountPublicDTO = (obj?: { __typename?: any } | null): obj is ConnectedAccountPublicDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isConnectedAccountPublicDTO"')
-      return ConnectedAccountPublicDTO_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -9374,78 +9505,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isManagedEmailActionResult = (obj?: { __typename?: any } | null): obj is ManagedEmailActionResult => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailActionResult"')
       return ManagedEmailActionResult_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const VerificationRecord_possibleTypes: string[] = ['VerificationRecord']
-    export const isVerificationRecord = (obj?: { __typename?: any } | null): obj is VerificationRecord => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isVerificationRecord"')
-      return VerificationRecord_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const EmailingDomain_possibleTypes: string[] = ['EmailingDomain']
-    export const isEmailingDomain = (obj?: { __typename?: any } | null): obj is EmailingDomain => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isEmailingDomain"')
-      return EmailingDomain_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MessageChannel_possibleTypes: string[] = ['MessageChannel']
-    export const isMessageChannel = (obj?: { __typename?: any } | null): obj is MessageChannel => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMessageChannel"')
-      return MessageChannel_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CreateEmailGroupChannelOutput_possibleTypes: string[] = ['CreateEmailGroupChannelOutput']
-    export const isCreateEmailGroupChannelOutput = (obj?: { __typename?: any } | null): obj is CreateEmailGroupChannelOutput => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCreateEmailGroupChannelOutput"')
-      return CreateEmailGroupChannelOutput_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CampaignAudiencePreviewDTO_possibleTypes: string[] = ['CampaignAudiencePreviewDTO']
-    export const isCampaignAudiencePreviewDTO = (obj?: { __typename?: any } | null): obj is CampaignAudiencePreviewDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignAudiencePreviewDTO"')
-      return CampaignAudiencePreviewDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SendEmailViaDomainOutput_possibleTypes: string[] = ['SendEmailViaDomainOutput']
-    export const isSendEmailViaDomainOutput = (obj?: { __typename?: any } | null): obj is SendEmailViaDomainOutput => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSendEmailViaDomainOutput"')
-      return SendEmailViaDomainOutput_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CampaignSkippedRecipientsDTO_possibleTypes: string[] = ['CampaignSkippedRecipientsDTO']
-    export const isCampaignSkippedRecipientsDTO = (obj?: { __typename?: any } | null): obj is CampaignSkippedRecipientsDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSkippedRecipientsDTO"')
-      return CampaignSkippedRecipientsDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SendMessageCampaignOutputDTO_possibleTypes: string[] = ['SendMessageCampaignOutputDTO']
-    export const isSendMessageCampaignOutputDTO = (obj?: { __typename?: any } | null): obj is SendMessageCampaignOutputDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSendMessageCampaignOutputDTO"')
-      return SendMessageCampaignOutputDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const UnsubscribeTopic_possibleTypes: string[] = ['UnsubscribeTopic']
-    export const isUnsubscribeTopic = (obj?: { __typename?: any } | null): obj is UnsubscribeTopic => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isUnsubscribeTopic"')
-      return UnsubscribeTopic_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -10395,36 +10454,6 @@ export const enumPageLayoutType = {
    STANDALONE_PAGE: 'STANDALONE_PAGE' as const
 }
 
-export const enumNavigationMenuItemType = {
-   VIEW: 'VIEW' as const,
-   FOLDER: 'FOLDER' as const,
-   LINK: 'LINK' as const,
-   OBJECT: 'OBJECT' as const,
-   RECORD: 'RECORD' as const,
-   PAGE_LAYOUT: 'PAGE_LAYOUT' as const
-}
-
-export const enumMetadataEventAction = {
-   CREATED: 'CREATED' as const,
-   UPDATED: 'UPDATED' as const,
-   DELETED: 'DELETED' as const
-}
-
-export const enumDatabaseEventAction = {
-   CREATED: 'CREATED' as const,
-   UPDATED: 'UPDATED' as const,
-   DELETED: 'DELETED' as const,
-   DESTROYED: 'DESTROYED' as const,
-   RESTORED: 'RESTORED' as const,
-   UPSERTED: 'UPSERTED' as const
-}
-
-export const enumLogicFunctionExecutionStatus = {
-   IDLE: 'IDLE' as const,
-   SUCCESS: 'SUCCESS' as const,
-   ERROR: 'ERROR' as const
-}
-
 export const enumBillingPlanKey = {
    PRO: 'PRO' as const,
    ENTERPRISE: 'ENTERPRISE' as const
@@ -10456,52 +10485,17 @@ export const enumSubscriptionStatus = {
    Unpaid: 'Unpaid' as const
 }
 
-export const enumEmailConnectionSecurity = {
-   NONE: 'NONE' as const,
-   STARTTLS: 'STARTTLS' as const,
-   SSL_TLS: 'SSL_TLS' as const
-}
-
-export const enumRelationType = {
-   ONE_TO_MANY: 'ONE_TO_MANY' as const,
-   MANY_TO_ONE: 'MANY_TO_ONE' as const
-}
-
-export const enumIdentityProviderType = {
-   OIDC: 'OIDC' as const,
-   SAML: 'SAML' as const
-}
-
-export const enumSsoIdentityProviderStatus = {
-   Active: 'Active' as const,
-   Inactive: 'Inactive' as const,
-   Error: 'Error' as const
-}
-
-export const enumBillingEntitlementKey = {
-   SSO: 'SSO' as const,
-   CUSTOM_DOMAIN: 'CUSTOM_DOMAIN' as const,
-   RLS: 'RLS' as const,
-   AUDIT_LOGS: 'AUDIT_LOGS' as const
-}
-
-export const enumFeatureFlagKey = {
-   IS_UNIQUE_INDEXES_ENABLED: 'IS_UNIQUE_INDEXES_ENABLED' as const,
-   IS_JSON_FILTER_ENABLED: 'IS_JSON_FILTER_ENABLED' as const,
-   IS_MARKETPLACE_SETTING_TAB_VISIBLE: 'IS_MARKETPLACE_SETTING_TAB_VISIBLE' as const,
-   IS_EMAIL_GROUP_ENABLED: 'IS_EMAIL_GROUP_ENABLED' as const,
-   IS_JUNCTION_RELATIONS_ENABLED: 'IS_JUNCTION_RELATIONS_ENABLED' as const,
-   IS_REST_METADATA_API_NEW_FORMAT_DIRECT: 'IS_REST_METADATA_API_NEW_FORMAT_DIRECT' as const,
-   IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED: 'IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED' as const,
-   IS_SETTINGS_DISCOVERY_HERO_ENABLED: 'IS_SETTINGS_DISCOVERY_HERO_ENABLED' as const,
-   IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED: 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED' as const
-}
-
 export const enumEmailingDomainStatus = {
    PENDING: 'PENDING' as const,
    VERIFIED: 'VERIFIED' as const,
    FAILED: 'FAILED' as const,
    TEMPORARY_FAILURE: 'TEMPORARY_FAILURE' as const
+}
+
+export const enumEmailConnectionSecurity = {
+   NONE: 'NONE' as const,
+   STARTTLS: 'STARTTLS' as const,
+   SSL_TLS: 'SSL_TLS' as const
 }
 
 export const enumMessageChannelVisibility = {
@@ -10555,6 +10549,77 @@ export const enumMessageChannelSyncStage = {
 export const enumUnsubscribeTopicVisibility = {
    PUBLIC: 'PUBLIC' as const,
    PRIVATE: 'PRIVATE' as const
+}
+
+export const enumNavigationMenuItemType = {
+   VIEW: 'VIEW' as const,
+   FOLDER: 'FOLDER' as const,
+   LINK: 'LINK' as const,
+   OBJECT: 'OBJECT' as const,
+   RECORD: 'RECORD' as const,
+   PAGE_LAYOUT: 'PAGE_LAYOUT' as const
+}
+
+export const enumMetadataEventAction = {
+   CREATED: 'CREATED' as const,
+   UPDATED: 'UPDATED' as const,
+   DELETED: 'DELETED' as const
+}
+
+export const enumDatabaseEventAction = {
+   CREATED: 'CREATED' as const,
+   UPDATED: 'UPDATED' as const,
+   DELETED: 'DELETED' as const,
+   DESTROYED: 'DESTROYED' as const,
+   RESTORED: 'RESTORED' as const,
+   UPSERTED: 'UPSERTED' as const
+}
+
+export const enumLogicFunctionExecutionStatus = {
+   IDLE: 'IDLE' as const,
+   SUCCESS: 'SUCCESS' as const,
+   ERROR: 'ERROR' as const
+}
+
+export const enumCampaignEmailAccountHealth = {
+   AVAILABLE: 'AVAILABLE' as const,
+   RECONNECT_REQUIRED: 'RECONNECT_REQUIRED' as const,
+   UNAVAILABLE: 'UNAVAILABLE' as const
+}
+
+export const enumRelationType = {
+   ONE_TO_MANY: 'ONE_TO_MANY' as const,
+   MANY_TO_ONE: 'MANY_TO_ONE' as const
+}
+
+export const enumIdentityProviderType = {
+   OIDC: 'OIDC' as const,
+   SAML: 'SAML' as const
+}
+
+export const enumSsoIdentityProviderStatus = {
+   Active: 'Active' as const,
+   Inactive: 'Inactive' as const,
+   Error: 'Error' as const
+}
+
+export const enumBillingEntitlementKey = {
+   SSO: 'SSO' as const,
+   CUSTOM_DOMAIN: 'CUSTOM_DOMAIN' as const,
+   RLS: 'RLS' as const,
+   AUDIT_LOGS: 'AUDIT_LOGS' as const
+}
+
+export const enumFeatureFlagKey = {
+   IS_UNIQUE_INDEXES_ENABLED: 'IS_UNIQUE_INDEXES_ENABLED' as const,
+   IS_JSON_FILTER_ENABLED: 'IS_JSON_FILTER_ENABLED' as const,
+   IS_MARKETPLACE_SETTING_TAB_VISIBLE: 'IS_MARKETPLACE_SETTING_TAB_VISIBLE' as const,
+   IS_EMAIL_GROUP_ENABLED: 'IS_EMAIL_GROUP_ENABLED' as const,
+   IS_JUNCTION_RELATIONS_ENABLED: 'IS_JUNCTION_RELATIONS_ENABLED' as const,
+   IS_REST_METADATA_API_NEW_FORMAT_DIRECT: 'IS_REST_METADATA_API_NEW_FORMAT_DIRECT' as const,
+   IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED: 'IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED' as const,
+   IS_SETTINGS_DISCOVERY_HERO_ENABLED: 'IS_SETTINGS_DISCOVERY_HERO_ENABLED' as const,
+   IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED: 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED' as const
 }
 
 export const enumModelFamily = {

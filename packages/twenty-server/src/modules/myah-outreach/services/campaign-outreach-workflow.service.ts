@@ -1,5 +1,8 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { isDefined } from 'twenty-shared/utils';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { type WorkspaceQueryRunner } from 'src/engine/twenty-orm/query-runner/workspace-query-runner';
 
 import { RecordPositionService } from 'src/engine/core-modules/record-position/services/record-position.service';
@@ -12,6 +15,10 @@ import {
   type WorkflowVersionWorkspaceEntity,
 } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
 import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
+import {
+  createListWorkflowRunsTool,
+  type ListWorkflowRunsInput,
+} from 'src/modules/workflow/workflow-tools/tools/list-workflow-runs.tool';
 
 export type CampaignOutreachWorkflow = {
   campaignId: string;
@@ -21,9 +28,15 @@ export type CampaignOutreachWorkflow = {
 };
 
 type CampaignOutreachWorkflowArgs = {
+  authContext?: WorkspaceAuthContext;
   campaignId: string;
   workspaceId: string;
 };
+
+type CampaignOutreachWorkflowRunsArgs = CampaignOutreachWorkflowArgs &
+  Pick<ListWorkflowRunsInput, 'limit' | 'status'> & {
+    rolePermissionConfig: RolePermissionConfig;
+  };
 
 type PostgresError = {
   code?: string;
@@ -46,6 +59,7 @@ export class CampaignOutreachWorkflowService {
   ) {}
 
   async find({
+    authContext,
     workspaceId,
     campaignId,
   }: CampaignOutreachWorkflowArgs): Promise<CampaignOutreachWorkflow | null> {
@@ -55,10 +69,33 @@ export class CampaignOutreachWorkflowService {
 
         return this.findExistingOutreachWorkflow({ workspaceId, campaignId });
       },
+      authContext,
     );
   }
 
+  async listRuns({
+    authContext,
+    campaignId,
+    limit,
+    rolePermissionConfig,
+    status,
+    workspaceId,
+  }: CampaignOutreachWorkflowRunsArgs) {
+    const workflow = await this.find({ authContext, campaignId, workspaceId });
+
+    if (!workflow) {
+      return { success: true, workflowRuns: [] };
+    }
+
+    return createListWorkflowRunsTool(
+      { globalWorkspaceOrmManager: this.globalWorkspaceOrmManager },
+      { rolePermissionConfig, workspaceId },
+      { outreachCampaignId: campaignId, workflowId: workflow.workflowId },
+    ).execute({ limit, status });
+  }
+
   async createOrGet({
+    authContext,
     workspaceId,
     campaignId,
   }: CampaignOutreachWorkflowArgs): Promise<CampaignOutreachWorkflow> {
@@ -186,6 +223,7 @@ export class CampaignOutreachWorkflowService {
           await queryRunner.release();
         }
       },
+      authContext,
     );
   }
 

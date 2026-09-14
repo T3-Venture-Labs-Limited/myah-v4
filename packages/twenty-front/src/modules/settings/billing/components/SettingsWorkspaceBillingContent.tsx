@@ -1,4 +1,5 @@
 import { SettingsSectionSkeletonLoader } from '@/settings/components/SettingsSectionSkeletonLoader';
+import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import {
   StyledSettingsBillingCard,
   StyledSettingsBillingCardHeader,
@@ -18,10 +19,33 @@ const usdFormatter = new Intl.NumberFormat('en-US', {
 });
 const formatUsdCents = (amountCents: number): string =>
   usdFormatter.format(amountCents / 100);
+const formatUsdWholeDollars = (amountCents: number): string =>
+  formatUsdCents(amountCents).replace('.00', '');
 
-export type WorkspaceBillingPreset = {
-  id: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD';
-  principalCents: number;
+export type WorkspaceBillingFundingPolicy = {
+  incrementCents: number;
+  maximumPrincipalCents: number;
+  minimumPrincipalCents: number;
+  suggestedPrincipalCents: number[];
+};
+
+const parseCustomPrincipalCents = (
+  dollars: string,
+  policy: WorkspaceBillingFundingPolicy,
+): number | null => {
+  if (!/^\d+$/.test(dollars)) return null;
+
+  const principalCents = Number(dollars) * 100;
+  if (
+    !Number.isSafeInteger(principalCents) ||
+    principalCents < policy.minimumPrincipalCents ||
+    principalCents > policy.maximumPrincipalCents ||
+    principalCents % policy.incrementCents !== 0
+  ) {
+    return null;
+  }
+
+  return principalCents;
 };
 export type WorkspaceBillingSafeSummary = {
   address: {
@@ -50,7 +74,6 @@ export type WorkspaceBillingFundingHistoryEntry = {
   fundingType: 'PURCHASED' | 'SPONSORED' | 'CORRECTION';
   id: string;
   invoiceUrl: string | null;
-  presetId: string | null;
   principalCents: number;
   state:
     | 'PREPARING_PAYMENT'
@@ -68,10 +91,10 @@ type WorkspaceBillingReadyViewModel = {
   customerFundingAvailable: boolean;
   customerFundingBillingSummary: WorkspaceBillingSafeSummary | null;
   customerFundingPaymentMethodReady: boolean;
-  customerFundingPresets: WorkspaceBillingPreset[];
+  customerFundingPolicy: WorkspaceBillingFundingPolicy;
   fundingHistory: WorkspaceBillingFundingHistoryEntry[];
   isSubmitting: boolean;
-  retryPresetId?: WorkspaceBillingPreset['id'] | null;
+  retryPrincipalCents?: number | null;
   pendingOperationCount: number;
   reconciliationRequiredOperationCount: number;
 };
@@ -108,7 +131,7 @@ export type SettingsWorkspaceBillingContentProps = {
   managedEmailSubscriptions?: WorkspaceManagedEmailSubscriptionsViewModel;
   onManageManagedEmail?: () => void;
   onManagePaymentDetails?: () => void;
-  onRequestTopUp?: (presetId: WorkspaceBillingPreset['id']) => void;
+  onRequestFunding?: (principalCents: number) => void;
   onCompletePayment?: (actionId: string) => void;
 };
 
@@ -132,7 +155,7 @@ const StyledActions = styled.div`
   flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[2]};
 `;
-const StyledPresetButton = styled.button`
+const StyledAmountButton = styled.button`
   background: ${themeCssVariables.background.primary};
   border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.md};
@@ -463,11 +486,13 @@ export const SettingsWorkspaceBillingContent = ({
   onCompletePayment,
   onManageManagedEmail,
   onManagePaymentDetails,
-  onRequestTopUp,
+  onRequestFunding,
   viewModel,
 }: SettingsWorkspaceBillingContentProps) => {
-  const [selectedPresetId, setSelectedPresetId] =
-    useState<WorkspaceBillingPreset['id']>('AI_25_USD');
+  const [customAmountDollars, setCustomAmountDollars] = useState('');
+  const [isCustomAmountActive, setIsCustomAmountActive] = useState(false);
+  const [selectedSuggestedPrincipalCents, setSelectedSuggestedPrincipalCents] =
+    useState<number | null>(null);
   const managedEmail = (
     <ManagedEmailSubscriptions
       viewModel={managedEmailSubscriptions}
@@ -506,14 +531,31 @@ export const SettingsWorkspaceBillingContent = ({
     );
   }
 
-  const selectedPreset =
-    viewModel.retryPresetId === undefined || viewModel.retryPresetId === null
-      ? (viewModel.customerFundingPresets.find(
-          (preset) => preset.id === selectedPresetId,
-        ) ?? viewModel.customerFundingPresets[0])
-      : viewModel.customerFundingPresets.find(
-          (preset) => preset.id === viewModel.retryPresetId,
-        );
+  const { customerFundingPolicy } = viewModel;
+  const retryPrincipalCents = viewModel.retryPrincipalCents ?? null;
+  const isRetryingAmount = retryPrincipalCents !== null;
+  const selectedSuggestionPrincipalCents =
+    selectedSuggestedPrincipalCents !== null &&
+    customerFundingPolicy.suggestedPrincipalCents.includes(
+      selectedSuggestedPrincipalCents,
+    )
+      ? selectedSuggestedPrincipalCents
+      : (customerFundingPolicy.suggestedPrincipalCents[0] ?? null);
+  const customPrincipalCents = isCustomAmountActive
+    ? parseCustomPrincipalCents(customAmountDollars, customerFundingPolicy)
+    : null;
+  const principalCents = isRetryingAmount
+    ? retryPrincipalCents
+    : isCustomAmountActive
+      ? customPrincipalCents
+      : selectedSuggestionPrincipalCents;
+  const customAmountValue = isRetryingAmount
+    ? String(retryPrincipalCents / 100)
+    : customAmountDollars;
+  const customAmountError =
+    isCustomAmountActive && customPrincipalCents === null
+      ? t`Enter a whole-dollar amount from ${formatUsdWholeDollars(customerFundingPolicy.minimumPrincipalCents)} to ${formatUsdWholeDollars(customerFundingPolicy.maximumPrincipalCents)}.`
+      : undefined;
   const availableBalance = viewModel.availableBalanceCents;
 
   return (
@@ -552,44 +594,70 @@ export const SettingsWorkspaceBillingContent = ({
             </StyledSettingsBillingCardHeader>
             <StyledCardBody>
               <StyledActions role="group" aria-label={t`AI credit amount`}>
-                {viewModel.customerFundingPresets.map((preset) => (
-                  <StyledPresetButton
-                    key={preset.id}
-                    type="button"
-                    aria-pressed={preset.id === selectedPreset?.id}
-                    disabled={
-                      viewModel.retryPresetId !== undefined &&
-                      viewModel.retryPresetId !== null
-                    }
-                    onClick={() => setSelectedPresetId(preset.id)}
-                  >
-                    {formatUsdCents(preset.principalCents).replace('.00', '')}
-                  </StyledPresetButton>
-                ))}
+                {customerFundingPolicy.suggestedPrincipalCents.map(
+                  (suggestedPrincipalCents) => (
+                    <StyledAmountButton
+                      key={suggestedPrincipalCents}
+                      type="button"
+                      aria-pressed={
+                        !isRetryingAmount &&
+                        !isCustomAmountActive &&
+                        suggestedPrincipalCents ===
+                          selectedSuggestionPrincipalCents
+                      }
+                      disabled={isRetryingAmount}
+                      onClick={() => {
+                        setCustomAmountDollars('');
+                        setIsCustomAmountActive(false);
+                        setSelectedSuggestedPrincipalCents(
+                          suggestedPrincipalCents,
+                        );
+                      }}
+                    >
+                      {formatUsdWholeDollars(suggestedPrincipalCents)}
+                    </StyledAmountButton>
+                  ),
+                )}
               </StyledActions>
+              <SettingsTextInput
+                error={customAmountError}
+                inputMode="numeric"
+                instanceId="settings-workspace-billing-custom-amount"
+                label={t`Custom amount`}
+                leftAdornment="$"
+                onChange={(value) => {
+                  if (isRetryingAmount) return;
+
+                  setIsCustomAmountActive(true);
+                  setCustomAmountDollars(value);
+                }}
+                readOnly={isRetryingAmount}
+                value={customAmountValue}
+              />
               <StyledMuted>
-                {t`The selected amount is prepaid principal, plus applicable tax. Purchased AI credit expires 12 months after successful payment.`}
+                {t`Your saved payment method will be charged immediately. Applicable tax may be added. Purchased credit expires 12 months after payment. Purchases are non-refundable except where law requires.`}
               </StyledMuted>
               <StyledActions>
                 <Button
                   title={
-                    selectedPreset === undefined
+                    principalCents === null
                       ? t`Add AI credit`
-                      : viewModel.retryPresetId === selectedPreset.id
-                        ? t`Retry ${formatUsdCents(selectedPreset.principalCents).replace('.00', '')} credit`
-                        : t`Add ${formatUsdCents(selectedPreset.principalCents).replace('.00', '')} credit`
+                      : isRetryingAmount
+                        ? t`Retry ${formatUsdWholeDollars(principalCents)} credit`
+                        : t`Add ${formatUsdWholeDollars(principalCents)} credit`
                   }
                   accent="brand"
                   disabled={
-                    selectedPreset === undefined ||
+                    principalCents === null ||
                     !viewModel.customerFundingAvailable ||
                     viewModel.isSubmitting
                   }
                   isLoading={viewModel.isSubmitting}
-                  onClick={() =>
-                    selectedPreset !== undefined &&
-                    onRequestTopUp?.(selectedPreset.id)
-                  }
+                  onClick={() => {
+                    if (principalCents !== null) {
+                      onRequestFunding?.(principalCents);
+                    }
+                  }}
                 />
               </StyledActions>
             </StyledCardBody>

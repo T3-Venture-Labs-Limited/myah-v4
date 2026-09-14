@@ -1,7 +1,7 @@
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 
 import {
-  ManagedProviderAiTopUpPresetDTO,
+  ManagedProviderAiTopUpPolicyDTO,
   ManagedProviderCustomerFundingBillingSummaryDTO,
   ManagedProviderCustomerFundingHistoryItemDTO,
 } from './managed-provider-customer-funding.dto';
@@ -26,8 +26,8 @@ export class ManagedProviderBillingStatusDTO {
   @Field(() => Boolean)
   customerFundingPaymentMethodReady?: boolean;
 
-  @Field(() => [ManagedProviderAiTopUpPresetDTO])
-  customerFundingPresets?: ManagedProviderAiTopUpPresetDTO[];
+  @Field(() => ManagedProviderAiTopUpPolicyDTO)
+  customerFundingPolicy?: ManagedProviderAiTopUpPolicyDTO;
 
   @Field(() => [ManagedProviderCustomerFundingHistoryItemDTO])
   customerFundingHistory?: ManagedProviderCustomerFundingHistoryItemDTO[];

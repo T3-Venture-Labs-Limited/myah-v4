@@ -68,6 +68,11 @@ describe('MetronomeWorkspaceCustomerService', () => {
         installation as MyahWorkspaceInstallationEntity | null,
       );
     });
+    const customerAccountService = {
+      ensureWorkspaceInstallation: jest
+        .fn()
+        .mockResolvedValue(installations[0]),
+    };
     const workspaceRepository = {
       findOneBy: jest.fn().mockResolvedValue(workspace),
     } as Pick<Repository<WorkspaceEntity>, 'findOneBy'>;
@@ -130,9 +135,11 @@ describe('MetronomeWorkspaceCustomerService', () => {
 
     return {
       installationRepository,
+      customerAccountService,
       metronomeClientService,
       service: new MetronomeWorkspaceCustomerService(
         installationRepository,
+        customerAccountService as never,
         metronomeClientService as unknown as MetronomeClientService,
         workspaceRepository as Repository<WorkspaceEntity>,
         twentyConfigService as TwentyConfigService,
@@ -142,19 +149,26 @@ describe('MetronomeWorkspaceCustomerService', () => {
   };
 
   it('returns an existing workspace customer ID without a remote call', async () => {
-    const { installationRepository, metronomeClientService, service } =
-      createService({
-        installations: [
-          {
-            metronomeCustomerId: 'metronome-customer-id',
-            workspaceId,
-          },
-        ],
-      });
+    const {
+      customerAccountService,
+      installationRepository,
+      metronomeClientService,
+      service,
+    } = createService({
+      installations: [
+        {
+          metronomeCustomerId: 'metronome-customer-id',
+          workspaceId,
+        },
+      ],
+    });
 
     await expect(service.ensureWorkspaceCustomer(workspaceId)).resolves.toBe(
       'metronome-customer-id',
     );
+    expect(
+      customerAccountService.ensureWorkspaceInstallation,
+    ).toHaveBeenCalledWith(workspaceId);
     expect(installationRepository.findOneBy).toHaveBeenCalledWith({
       workspaceId,
     });
@@ -847,6 +861,9 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
       manager: { transaction },
       update: jest.fn(),
     };
+    const customerAccountService = {
+      ensureWorkspaceInstallation: jest.fn(),
+    };
     const metronomeClientService = {
       getBillingConfiguration: jest
         .fn()
@@ -869,6 +886,7 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
     return {
       service: new MetronomeWorkspaceCustomerService(
         installationRepository as never,
+        customerAccountService as never,
         metronomeClientService as never,
         workspaceRepository as never,
         config as never,
@@ -1012,6 +1030,9 @@ describe('MetronomeWorkspaceCustomerService shared Stripe billing context', () =
       manager: {},
       update: jest.fn(),
     };
+    const customerAccountService = {
+      ensureWorkspaceInstallation: jest.fn(),
+    };
     const metronomeClientService = {
       findCurrentContracts: jest.fn().mockResolvedValue(contracts),
       getBillingConfiguration: jest
@@ -1042,6 +1063,7 @@ describe('MetronomeWorkspaceCustomerService shared Stripe billing context', () =
       metronomeClientService,
       service: new MetronomeWorkspaceCustomerService(
         installationRepository as never,
+        customerAccountService as never,
         metronomeClientService as never,
         {} as never,
         config as never,

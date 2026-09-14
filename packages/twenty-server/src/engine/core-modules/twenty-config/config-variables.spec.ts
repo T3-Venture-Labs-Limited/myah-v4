@@ -8,6 +8,23 @@ import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enum
 import { TypedReflect } from 'src/utils/typed-reflect';
 
 describe('ConfigVariables', () => {
+  it('registers E2E fixture exposure as an env-only hidden flag disabled by default', () => {
+    const config = new ConfigVariables();
+    const metadata = TypedReflect.getMetadata(
+      'config-variables',
+      ConfigVariables,
+    );
+
+    expect(config.E2E_TEST_FIXTURES).toBe(false);
+    expect(metadata?.E2E_TEST_FIXTURES).toEqual({
+      group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+      description: 'Expose isolated authenticated E2E fixtures in test runtime',
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.BOOLEAN,
+    });
+  });
+
   it('registers exact Myah Team email allowlisting as an env-only hidden string', () => {
     const metadata = TypedReflect.getMetadata(
       'config-variables',

@@ -1,4 +1,6 @@
 import { type FlatSkill } from 'src/engine/metadata-modules/flat-skill/types/flat-skill.type';
+import { MYAH_STANDARD_FLAT_SKILL_METADATA_BUILDERS_BY_SKILL_NAME } from 'src/engine/workspace-manager/twenty-standard-application/utils/skill-metadata/myah-standard-skill-builders.util';
+
 import { type AllStandardSkillName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-skill-name.type';
 import {
   type CreateStandardSkillArgs,
@@ -754,9 +756,9 @@ plt.savefig('/home/user/output/analysis.png')
 print('Analysis complete!')
 \`\`\`
 
-## Calling Twenty Tools from Python (MCP Bridge)
+## Calling Myah Tools from Python (MCP Bridge)
 
-**A \`twenty\` variable is already bound in your code's scope.** Do NOT write
+**The \`twenty\` variable is an internal compatibility identifier already bound in your code's scope. Never expose that internal name as the product brand; user-facing responses call the product Myah.** Do NOT write
 \`import twenty\` — there is no Python package by that name. The helper is an
 instance of a class that has been pre-instantiated for you; just call methods
 on it directly.
@@ -1713,6 +1715,7 @@ python /home/user/scripts/pptx/replace.py input.pptx '{"{{company}}": "Acme Corp
         isCustom: false,
       },
     }),
+  ...MYAH_STANDARD_FLAT_SKILL_METADATA_BUILDERS_BY_SKILL_NAME,
 } satisfies {
   [P in AllStandardSkillName]: (
     args: Omit<CreateStandardSkillArgs, 'context'>,

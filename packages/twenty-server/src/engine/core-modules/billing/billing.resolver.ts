@@ -29,7 +29,7 @@ import { BillingService } from 'src/engine/core-modules/billing/services/billing
 import { formatBillingDatabaseProductToGraphqlDTO } from 'src/engine/core-modules/billing/utils/format-database-product-to-graphql-dto.util';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
 import {
-  AI_TOP_UP_PRESETS,
+  AI_TOP_UP_POLICY,
   ManagedProviderCustomerFundingService,
 } from 'src/engine/core-modules/managed-provider-billing/services/managed-provider-customer-funding.service';
 import { type ManagedProviderFundingActionEntity } from 'src/engine/core-modules/managed-provider-billing/entities/managed-provider-funding-action.entity';
@@ -68,9 +68,6 @@ import {
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
 
-const customerFundingBrowserEvidenceSchema = z.looseObject({
-  preset: z.enum(['AI_25_USD', 'AI_50_USD', 'AI_100_USD']),
-});
 const customerFundingBrowserReceiptSchema = z.object({
   invoiceUrl: z.string().nullable().optional(),
 });
@@ -141,12 +138,7 @@ export class BillingResolver {
         this.toCustomerFundingHistoryItem(action),
       ),
       customerFundingPaymentMethodReady: paymentMethodReady,
-      customerFundingPresets: Object.entries(AI_TOP_UP_PRESETS).map(
-        ([id, principalCents]) => ({
-          id,
-          principalCents: principalCents.toString(),
-        }),
-      ),
+      customerFundingPolicy: AI_TOP_UP_POLICY,
     };
   }
 
@@ -183,7 +175,7 @@ export class BillingResolver {
       await this.managedProviderCustomerFundingService.createCustomerFunding({
         actorId: user.id,
         idempotencyKey: input.idempotencyKey,
-        preset: input.preset,
+        principalCents: input.principalCents,
         workspaceId: workspace.id,
       }),
     );
@@ -198,9 +190,16 @@ export class BillingResolver {
   )
   async prepareManagedProviderCustomerFundingPaymentMethod(
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @Args('replaceExistingPaymentMethod', {
+      defaultValue: false,
+      nullable: true,
+      type: () => Boolean,
+    })
+    replaceExistingPaymentMethod: boolean | null,
   ): Promise<ManagedProviderCustomerFundingPaymentMethodDTO> {
     return await this.managedProviderCustomerFundingService.prepareCustomerFundingPaymentMethod(
       workspace.id,
+      replaceExistingPaymentMethod === true,
     );
   }
 
@@ -247,7 +246,10 @@ export class BillingResolver {
         { action, workspaceId: workspace.id },
       );
 
-    return { clientSecret: paymentAction.clientSecret };
+    return {
+      clientSecret: paymentAction.clientSecret,
+      publishableKey: paymentAction.publishableKey,
+    };
   }
 
   @Mutation(() => ManagedProviderCustomerFundingHistoryItemDTO)
@@ -600,9 +602,6 @@ export class BillingResolver {
   private toCustomerFundingHistoryItem(
     action: ManagedProviderFundingActionEntity,
   ): ManagedProviderCustomerFundingHistoryItemDTO {
-    const evidence = customerFundingBrowserEvidenceSchema.safeParse(
-      action.paymentEvidence,
-    );
     const receipt = customerFundingBrowserReceiptSchema.safeParse(
       action.paymentReceipt,
     );
@@ -624,7 +623,6 @@ export class BillingResolver {
             : 'PURCHASED',
       id: action.id,
       invoiceUrl,
-      presetId: evidence.success ? evidence.data.preset : null,
       principalCents: action.prepaidPrincipalCents ?? action.amountCents,
       state: CUSTOMER_FUNDING_STATE_LABELS[action.state],
       taxCents: action.taxCents,

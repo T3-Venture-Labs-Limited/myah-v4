@@ -11,6 +11,10 @@ import {
   OutreachEmailActionDefinition,
   OutreachEmailActionProposalInputZodSchema,
 } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
+import {
+  MyahInboxReplyActionDefinition,
+  MyahInboxReplyActionProposalInputZodSchema,
+} from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { type InstagramMessageAuthorityReader } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.type';
 import { InstagramMessagePermissionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
@@ -56,6 +60,7 @@ const requestApprovalAffectedRecordSchema = z.object({
 
 const INSTAGRAM_REPLY_TOOL_NAME = 'send_instagram_reply';
 const OUTREACH_EMAIL_TOOL_NAME = 'send_outreach_email';
+const MYAH_INBOX_REPLY_TOOL_NAME = 'send_myah_inbox_reply';
 
 const requestApprovalInputObjectSchema = z
   .object({
@@ -68,8 +73,8 @@ const requestApprovalInputObjectSchema = z
     riskLevel: approvalRiskLevelSchema.describe('Risk level for the user.'),
     toolName: z
       .string()
-      .optional()
-      .describe('The tool expected to perform the action after approval.'),
+      .min(1)
+      .describe('The exact tool that may run once after approval.'),
     targetLabel: z
       .string()
       .optional()
@@ -100,7 +105,8 @@ const requestApprovalInputObjectSchema = z
   .superRefine((input, context) => {
     if (
       input.toolName === INSTAGRAM_REPLY_TOOL_NAME ||
-      input.toolName === OUTREACH_EMAIL_TOOL_NAME
+      input.toolName === OUTREACH_EMAIL_TOOL_NAME ||
+      input.toolName === MYAH_INBOX_REPLY_TOOL_NAME
     ) {
       context.addIssue({
         code: 'custom',
@@ -124,9 +130,17 @@ const registeredOutreachEmailApprovalInputSchema = z
   })
   .strict();
 
+const registeredMyahInboxReplyApprovalInputSchema = z
+  .object({
+    toolName: z.literal(MYAH_INBOX_REPLY_TOOL_NAME),
+    actionInput: MyahInboxReplyActionProposalInputZodSchema,
+  })
+  .strict();
+
 const registeredApprovalInputSchema = z.discriminatedUnion('toolName', [
   registeredInstagramReplyApprovalInputSchema,
   registeredOutreachEmailApprovalInputSchema,
+  registeredMyahInboxReplyApprovalInputSchema,
 ]);
 
 const unwrapDirectApprovalArguments = (input: unknown): unknown => {
@@ -167,6 +181,7 @@ type RegisteredApprovalOptions = {
   actionDefinitions: {
     send_instagram_reply: InstagramMessageAuthorityReader;
     send_outreach_email: OutreachEmailActionDefinition;
+    send_myah_inbox_reply: MyahInboxReplyActionDefinition;
   };
   actionApprovalService: ActionApprovalService;
   instagramMessagePermissionService?: InstagramMessagePermissionService;
@@ -217,6 +232,19 @@ export const createRequestApprovalTool = (
                   registeredApprovalOptions.userWorkspaceId ?? '',
                 threadId: registeredApprovalOptions.threadId ?? '',
                 input: OutreachEmailActionProposalInputZodSchema.parse(input),
+              },
+            ),
+        },
+        send_myah_inbox_reply: {
+          proposalInputSchema: MyahInboxReplyActionProposalInputZodSchema,
+          propose: (input: unknown) =>
+            registeredApprovalOptions.actionDefinitions.send_myah_inbox_reply.propose(
+              {
+                workspaceId: registeredApprovalOptions.workspaceId,
+                initiatorUserWorkspaceId:
+                  registeredApprovalOptions.userWorkspaceId ?? '',
+                agentChatThreadId: registeredApprovalOptions.threadId ?? '',
+                input: MyahInboxReplyActionProposalInputZodSchema.parse(input),
               },
             ),
         },

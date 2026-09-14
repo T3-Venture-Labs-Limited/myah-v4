@@ -17,6 +17,8 @@ import { ManagedProviderOperationEntity } from '../entities/managed-provider-ope
 import { ManagedProviderPoolState } from '../enums/managed-provider-pool-state.enum';
 import { ManagedProviderOperationState } from '../enums/managed-provider-operation-state.enum';
 
+import { isManagedProviderWorkspaceAllowed } from '../utils/is-managed-provider-workspace-allowed.util';
+
 export type ManagedProviderPoolDesiredState = {
   providerKey: string;
   state: ManagedProviderPoolState;
@@ -49,9 +51,12 @@ export class ManagedProviderPoolService {
       providerKey === 'openrouter' &&
       MANAGED_OPENROUTER_TARIFF_MANIFEST_IS_FUNDED &&
       this.twentyConfigService.get('MANAGED_OPENROUTER_ENABLED') &&
-      this.twentyConfigService
-        .get('MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS')
-        .includes(workspaceId)
+      isManagedProviderWorkspaceAllowed({
+        allowedWorkspaceIds: this.twentyConfigService.get(
+          'MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS',
+        ),
+        workspaceId,
+      })
     );
   }
 

@@ -44,6 +44,7 @@ const idempotencyKey = 'managed-email-action-1';
 
 const createResolver = () => {
   const customerService = {
+    assertAcquisitionAvailable: jest.fn(),
     cancelDomainRenewal: jest.fn().mockResolvedValue({ accepted: true }),
     cancelWarmup: jest.fn().mockResolvedValue({ accepted: true }),
     domainHealth: jest.fn().mockResolvedValue(null),
@@ -67,16 +68,29 @@ const createResolver = () => {
       },
     ]),
   };
-  const managedProviderStripeService = {} as ManagedProviderStripeService;
+  const managedProviderStripeService = {
+    completeWorkspacePaymentMethodSetup: jest.fn().mockResolvedValue({
+      paymentMethodId: 'pm_test',
+      stripeCustomerId: 'cus_test',
+    }),
+    prepareWorkspacePaymentMethod: jest.fn().mockResolvedValue({
+      clientSecret: 'seti_secret',
+      publishableKey: 'pk_test',
+      ready: false,
+      setupIntentId: 'seti_test',
+      stripeCustomerId: 'cus_test',
+    }),
+  };
   const twentyConfigService = {
     get: jest.fn().mockReturnValue('SANDBOX'),
   };
 
   return {
     customerService,
+    managedProviderStripeService,
     resolver: new ManagedEmailResolver(
       customerService as unknown as ManagedEmailCustomerService,
-      managedProviderStripeService,
+      managedProviderStripeService as unknown as ManagedProviderStripeService,
       twentyConfigService as unknown as TwentyConfigService,
     ),
   };
@@ -444,6 +458,40 @@ describe('ManagedEmailResolver', () => {
       workspaceId: workspace.id,
     });
     expect('retryManagedEmailPayment' in resolver).toBe(false);
+  });
+  it('requires acquisition eligibility before preparing a Stripe payment method', async () => {
+    const { customerService, managedProviderStripeService, resolver } =
+      createResolver();
+
+    customerService.assertAcquisitionAvailable.mockImplementation(() => {
+      throw new Error('Managed email acquisition is unavailable');
+    });
+
+    await expect(
+      resolver.prepareManagedEmailPaymentMethod(workspace as never),
+    ).rejects.toThrow('Managed email acquisition is unavailable');
+    expect(
+      managedProviderStripeService.prepareWorkspacePaymentMethod,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('requires acquisition eligibility before completing a Stripe payment method', async () => {
+    const { customerService, managedProviderStripeService, resolver } =
+      createResolver();
+
+    customerService.assertAcquisitionAvailable.mockImplementation(() => {
+      throw new Error('Managed email acquisition is unavailable');
+    });
+
+    await expect(
+      resolver.completeManagedEmailPaymentMethod(
+        { setupIntentId: 'seti_test' },
+        workspace as never,
+      ),
+    ).rejects.toThrow('Managed email acquisition is unavailable');
+    expect(
+      managedProviderStripeService.completeWorkspacePaymentMethodSetup,
+    ).not.toHaveBeenCalled();
   });
 });
 

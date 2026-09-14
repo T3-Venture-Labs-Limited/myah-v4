@@ -17,6 +17,8 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { validateOperationIsPermittedOrThrow } from 'src/engine/twenty-orm/repository/permissions.utils';
 import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
+import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 
 import { MetadataGraphQLApiModule } from 'src/engine/api/graphql/metadata-graphql-api.module';
 import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
@@ -93,13 +95,25 @@ const createResolver = ({
       return resolvedBinding;
     }),
   };
+  const instagramMessageProposalReader = { read: jest.fn() };
+  const outreachActionDefinition = { getProposal: jest.fn() };
+  const inboxActionDefinition = { getProposal: jest.fn() };
   const Resolver = ActionApprovalResolver as unknown as new (
     ...args: unknown[]
   ) => ActionApprovalResolver;
 
   return {
-    resolver: new Resolver(dataSource, actionApprovalService, {}),
+    resolver: new Resolver(
+      dataSource,
+      actionApprovalService,
+      instagramMessageProposalReader,
+      outreachActionDefinition,
+      inboxActionDefinition,
+    ),
     actionApprovalService,
+    instagramMessageProposalReader,
+    outreachActionDefinition,
+    inboxActionDefinition,
     receiptRepository,
   };
 };
@@ -133,6 +147,77 @@ describe('ActionApprovalResolver', () => {
     });
   });
 
+  it('dispatches an Inbox reply proposal only to its definition', async () => {
+    const { resolver, inboxActionDefinition, outreachActionDefinition } =
+      createResolver({
+        resolvedBinding: {
+          ...binding,
+          actionName: 'send_inbox_reply',
+          state: 'PENDING',
+        },
+      });
+    inboxActionDefinition.getProposal.mockResolvedValue({
+      action: 'send_inbox_reply',
+      actionVersion: 1,
+      body: 'Reply body',
+      recipientLabel: 'creator@example.com',
+      sendingAccountLabel: 'hello@myah.test',
+      subject: 'Re: Partnership',
+      draftRevision: 3,
+      state: 'PENDING',
+      expiresAt: binding.expiresAt,
+      occurredAt: binding.createdAt,
+      evidenceLinks: [],
+    });
+
+    await expect(
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
+    ).resolves.toMatchObject({ action: 'send_inbox_reply' });
+    expect(inboxActionDefinition.getProposal).toHaveBeenCalledWith({
+      workspaceId,
+      binding: expect.objectContaining({ actionName: 'send_inbox_reply' }),
+    });
+    expect(outreachActionDefinition.getProposal).not.toHaveBeenCalled();
+  });
+
+  it('shows the immutable outreach recipient address in the approval projection', async () => {
+    const { resolver, outreachActionDefinition } = createResolver({
+      resolvedBinding: {
+        ...binding,
+        actionName: 'send_outreach_email',
+        state: 'PENDING',
+      },
+    });
+    outreachActionDefinition.getProposal.mockResolvedValue({
+      action: 'send_outreach_email',
+      actionVersion: 1,
+      body: 'Email body',
+      recipientLabel: 'Creator',
+      recipientEmail: 'creator@example.com',
+      senderEmail: 'brand@example.com',
+      subject: 'Partnership',
+      state: 'PENDING',
+      expiresAt: binding.expiresAt,
+      occurredAt: binding.createdAt,
+      evidenceLinks: [],
+    });
+
+    await expect(
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
+    ).resolves.toMatchObject({
+      recipientLabel: 'Creator <creator@example.com>',
+      sendingAccountLabel: 'brand@example.com',
+    });
+  });
+
   it('renders a legacy Instagram receipt as redacted historical evidence', async () => {
     const { resolver } = createResolver();
 
@@ -148,6 +233,8 @@ describe('ActionApprovalResolver', () => {
       body: null,
       recipientLabel: null,
       sendingAccountLabel: null,
+      subject: null,
+      draftRevision: null,
       state: 'CONSUMED',
       expiresAt: binding.expiresAt,
       occurredAt: binding.decidedAt,
@@ -556,6 +643,8 @@ describe('ActionApprovalResolver local reader wiring and compatibility', () => {
           getRepositoryToken(WorkspaceEntity),
           getRepositoryToken(ObjectMetadataEntity),
           getRepositoryToken(UnipileInstagramAccountBindingEntity),
+          OutreachEmailActionDefinition,
+          MyahInboxReplyActionDefinition,
         ].map((provide) => ({ provide, useValue: {} })),
       ],
     }).compile();

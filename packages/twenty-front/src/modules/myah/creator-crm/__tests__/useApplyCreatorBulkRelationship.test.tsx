@@ -1,10 +1,12 @@
+import { ApolloClient, ApolloLink, gql, InMemoryCache } from '@apollo/client';
 import { act, renderHook } from '@testing-library/react';
+import { Observable } from 'rxjs';
 
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
 
 const mockModify = jest.fn();
-const mockEvict = jest.fn();
+const mockUseApolloCoreClient = jest.fn();
 const mockRefetchQueries = jest.fn();
 const mockAddCreatorListMembersIntent = jest.fn();
 const mockRemoveCreatorListMemberIntent = jest.fn();
@@ -29,12 +31,7 @@ jest.mock('@apollo/client/react', () => ({
 }));
 
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
-  useApolloCoreClient: () => ({
-    cache: {
-      modify: mockModify,
-    },
-    refetchQueries: mockRefetchQueries,
-  }),
+  useApolloCoreClient: () => mockUseApolloCoreClient(),
 }));
 
 jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
@@ -57,6 +54,10 @@ describe('useApplyCreatorBulkRelationship', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseApolloCoreClient.mockReturnValue({
+      cache: { modify: mockModify },
+      refetchQueries: mockRefetchQueries,
+    });
     mockAddCreatorListMembersIntent.mockResolvedValue({ data: {} });
     mockRemoveCreatorListMemberIntent.mockResolvedValue({ data: {} });
     mockAddDirectCampaignCreators.mockResolvedValue({ data: {} });
@@ -66,12 +67,43 @@ describe('useApplyCreatorBulkRelationship', () => {
       .mockReturnValueOnce([mockAddDirectCampaignCreators]);
   });
 
-  it('uses the current shared membership input type for bulk removal', () => {
-    renderHook(() => useApplyCreatorBulkRelationship());
-
-    expect(mockUseMutation.mock.calls[1][0].loc.source.body).toContain(
-      '$input: CreatorListMembershipIntentInput!',
+  it('notifies filtered Creator indexes only after new List membership is committed', async () => {
+    let completeMembership: (() => void) | undefined;
+    mockAddCreatorListMembersIntent.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          completeMembership = resolve;
+        }),
     );
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+    let addition: Promise<void>;
+    act(() => {
+      addition = result.current.applyCreatorBulkRelationship({
+        target: { kind: 'creator-list', id: 'list-1', label: 'List' },
+        creatorIdsToAdd: ['creator-1'],
+      });
+    });
+    expect(
+      mockDispatchObjectRecordOperationBrowserEvent,
+    ).not.toHaveBeenCalled();
+    await act(async () => {
+      completeMembership?.();
+      await addition;
+    });
+    expect(mockDispatchObjectRecordOperationBrowserEvent).toHaveBeenCalledWith({
+      objectMetadataItem: mockCreatorObjectMetadataItem,
+      operation: {
+        type: 'update-many',
+        result: {
+          updateInputs: [
+            {
+              recordId: 'creator-1',
+              updatedFields: [{ listMemberships: null }],
+            },
+          ],
+        },
+      },
+    });
   });
 
   it('refreshes live List results and resets the contextual Creator table after removal', async () => {
@@ -96,22 +128,7 @@ describe('useApplyCreatorBulkRelationship', () => {
       });
     });
 
-    expect(mockRefetchQueries).toHaveBeenCalledWith({
-      include: [
-        'active',
-        'inactive',
-        'FindManyCreators',
-        'FindManyCreatorListMembers',
-        'FindManyCampaignCreators',
-      ],
-      updateCache: expect.any(Function),
-    });
     expect(executionOrder).toEqual(['modify', 'refetch', 'dispatch']);
-    const updateCache = mockRefetchQueries.mock.calls[0][0].updateCache;
-    updateCache({ evict: mockEvict });
-    expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creators' });
-    expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creatorListMembers' });
-    expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'campaignCreators' });
     expect(mockDispatchObjectRecordOperationBrowserEvent).toHaveBeenCalledWith({
       objectMetadataItem: mockCreatorObjectMetadataItem,
       operation: {
@@ -209,58 +226,74 @@ describe('useApplyCreatorBulkRelationship', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it.each([
-    {
-      target: { kind: 'creator-list' as const, id: 'list-1', label: 'List' },
-      relationshipObjectNamesPlural: ['creatorListMembers', 'campaignCreators'],
-      relationshipFindManyQueryNames: [
-        'FindManyCreatorListMembers',
-        'FindManyCampaignCreators',
-      ],
-    },
-    {
-      target: {
-        kind: 'campaign' as const,
-        id: 'campaign-1',
-        label: 'Campaign',
-      },
-      relationshipObjectNamesPlural: ['campaignCreators'],
-      relationshipFindManyQueryNames: ['FindManyCampaignCreators'],
-    },
-  ])(
-    'invalidates $relationshipObjectNamesPlural after adding creators',
-    async ({
-      target,
-      relationshipObjectNamesPlural,
-      relationshipFindManyQueryNames,
-    }) => {
-      const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+  it('refreshes live Creator data without executing skipped empty-ID queries', async () => {
+    const query = gql`
+      query FindManyCreators($filter: CreatorFilterInput!) {
+        creators(filter: $filter) {
+          id
+          name
+        }
+      }
+    `;
+    const variables = { filter: { id: { in: ['creator-1'] } } };
+    const refreshedData = {
+      creators: [{ id: 'creator-1', name: 'Updated Creator' }],
+    };
+    const requestedCreatorIds: string[][] = [];
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: new ApolloLink(
+        (operation) =>
+          new Observable((observer) => {
+            const creatorIds = operation.variables.filter.id.in as string[];
+            requestedCreatorIds.push(creatorIds);
+            observer.next(
+              creatorIds.length === 0
+                ? {
+                    errors: [
+                      {
+                        message:
+                          'Invalid filter value for field id. Expected non-empty array',
+                      },
+                    ],
+                  }
+                : { data: refreshedData },
+            );
+            observer.complete();
+          }),
+      ),
+    });
+    client.writeQuery({
+      query,
+      variables,
+      data: { creators: [{ id: 'creator-1', name: 'Before refresh' }] },
+    });
+    const liveQuery = client.watchQuery({ query, variables });
+    const skippedQuery = client.watchQuery({
+      query,
+      variables: { filter: { id: { in: [] } } },
+      fetchPolicy: 'standby',
+    });
+    const subscriptions = [liveQuery.subscribe({}), skippedQuery.subscribe({})];
+    mockUseApolloCoreClient.mockReturnValue(client);
 
+    try {
+      const { result } = renderHook(() => useApplyCreatorBulkRelationship());
       await act(async () => {
         await result.current.applyCreatorBulkRelationship({
-          target,
+          target: { kind: 'creator-list', id: 'list-1', label: 'List' },
           creatorIdsToAdd: ['creator-1'],
         });
       });
 
-      expect(mockRefetchQueries).toHaveBeenCalledWith({
-        include: [
-          'active',
-          'inactive',
-          'FindManyCreators',
-          ...relationshipFindManyQueryNames,
-        ],
-        updateCache: expect.any(Function),
-      });
-      const updateCache = mockRefetchQueries.mock.calls[0][0].updateCache;
-      updateCache({ evict: mockEvict });
-
-      expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creators' });
-      for (const fieldName of relationshipObjectNamesPlural) {
-        expect(mockEvict).toHaveBeenCalledWith({ fieldName });
-      }
-    },
-  );
+      expect(liveQuery.getCurrentResult().data).toEqual(refreshedData);
+      expect(requestedCreatorIds).toEqual([['creator-1']]);
+      expect(mockEnqueueErrorSnackBar).not.toHaveBeenCalled();
+    } finally {
+      subscriptions.forEach((subscription) => subscription.unsubscribe());
+      client.stop();
+    }
+  });
   it('adds direct campaign creators without a mailbox assignment', async () => {
     const { result } = renderHook(() => useApplyCreatorBulkRelationship());
 

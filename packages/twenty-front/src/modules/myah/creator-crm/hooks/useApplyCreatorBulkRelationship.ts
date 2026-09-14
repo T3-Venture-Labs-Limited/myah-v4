@@ -101,19 +101,9 @@ export const useApplyCreatorBulkRelationship = () => {
         targetKind === 'creator-list'
           ? ['creatorListMembers', 'campaignCreators']
           : ['campaignCreators'];
-      const relationshipFindManyQueryNames =
-        targetKind === 'creator-list'
-          ? ['FindManyCreatorListMembers', 'FindManyCampaignCreators']
-          : ['FindManyCampaignCreators'];
 
       try {
         await apolloCoreClient.refetchQueries({
-          include: [
-            'active',
-            'inactive',
-            'FindManyCreators',
-            ...relationshipFindManyQueryNames,
-          ],
           updateCache: (cache) => {
             cache.evict({ fieldName: 'creators' });
             relationshipObjectNames.forEach((fieldName) => {
@@ -245,11 +235,15 @@ export const useApplyCreatorBulkRelationship = () => {
         throw new Error('Creator bulk relationship creation failed');
       }
       await refetchCreatorRelationships(target.kind);
+      if (target.kind === 'creator-list') {
+        notifyCreatorListMembershipsChanged(creatorIdsToAdd);
+      }
     },
     [
       addCreatorListMembersIntent,
       addDirectCampaignCreators,
       enqueueErrorSnackBar,
+      notifyCreatorListMembershipsChanged,
       refetchCreatorRelationships,
     ],
   );

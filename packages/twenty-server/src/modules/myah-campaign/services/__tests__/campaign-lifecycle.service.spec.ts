@@ -223,6 +223,41 @@ describe('CampaignLifecycleService', () => {
   });
 
   describe('create', () => {
+    describe('native retry preparation', () => {
+      it.each(['DRAFT', undefined])(
+        'preserves explicit UUID and owner on repeated %p preparation without writes',
+        async (lifecycleStatus) => {
+          const original = {
+            data: {
+              id: '34700000-0000-4000-8000-000000000401',
+              ownerId: '34700000-0000-4000-8000-000000000402',
+              name: 'Retry preparation',
+              ...(lifecycleStatus ? { lifecycleStatus } : {}),
+            },
+          };
+          for (let run = 0; run < 2; run += 1) {
+            const payload = structuredClone(original);
+            await expect(
+              service.prepareCreateOne(userAuthContext, 'campaign', payload),
+            ).resolves.toBe(payload);
+            expect(payload).toEqual({
+              data: { ...original.data, lifecycleStatus: 'DRAFT' },
+            });
+          }
+          const upsert = { ...structuredClone(original), upsert: true };
+          await expectLifecycleError(
+            service.prepareCreateOne(userAuthContext, 'campaign', upsert),
+            'Campaign upsert is not supported; use create or update.',
+          );
+          expect(upsert).toEqual({ ...original, upsert: true });
+          expect(getRepository).not.toHaveBeenCalled();
+          expect(campaignCreatorRepository.update).not.toHaveBeenCalled();
+          expect(campaignCreatorRepository.delete).not.toHaveBeenCalled();
+          expect(campaignCreatorRepository.softDelete).not.toHaveBeenCalled();
+        },
+      );
+    });
+
     it('defaults a user create to Draft and the current workspace member owner', async () => {
       const payload = { data: { name: 'Launch' } };
 

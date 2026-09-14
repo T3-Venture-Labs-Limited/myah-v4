@@ -13,6 +13,10 @@ import { SynchronizeMyahCampaignAutomationMetadataCommand } from 'src/database/c
 import { SynchronizeMyahCreatorCrmMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302003-synchronize-myah-creator-crm-metadata.command';
 import { SynchronizeMyahCreatorCrmSearchMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302004-synchronize-myah-creator-crm-search-metadata.command';
 import { MigrateMyahCreatorImportMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302006-migrate-myah-creator-import-metadata.command';
+import { SynchronizeMyahAssistantSkillsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788250000000-synchronize-myah-assistant-skills.command';
+import { SynchronizeMyahCampaignAccountMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788537600000-synchronize-myah-campaign-account-metadata.command';
+import { RepairOrphanedObjectNavigationCommandsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788766265947-repair-orphaned-object-navigation-commands.command';
+
 import { MigrateMyahCreatorSocialLinksService } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
 import { RemoveReplacedTwentyCrmMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302002-remove-replaced-twenty-crm-metadata.command';
 import { SynchronizeInstagramMessagePermissionsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619366-synchronize-instagram-message-permissions.command';
@@ -46,12 +50,15 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     SynchronizeMyahCampaignEmailSignatureMetadataCommand,
     SynchronizeMyahCreatorCrmSearchMetadataCommand,
     MigrateMyahCreatorImportMetadataCommand,
+    SynchronizeMyahAssistantSkillsCommand,
+    SynchronizeMyahCampaignAccountMetadataCommand,
     MigrateMyahCreatorSocialLinksService,
     RemoveReplacedTwentyCrmMetadataCommand,
     SynchronizeInstagramMessagePermissionsCommand,
     InvalidateComposioInstagramAuthoritiesWorkspaceCommand,
     BackfillComposioInstagramHistoryWorkspaceCommand,
     VerifyInstagramSecurityCutoverWorkspaceCommand,
+    RepairOrphanedObjectNavigationCommandsCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,

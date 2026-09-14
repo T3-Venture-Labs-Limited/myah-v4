@@ -8,6 +8,7 @@ import {
   ACTION_TOOL_LABELS,
   type ActionToolId,
 } from 'src/engine/core-modules/tool-provider/constants/action-tool-label.constant';
+import { REGISTERED_ACTION_TOOL_NAMES } from 'src/engine/core-modules/tool-provider/constants/myah-assistant-tool-names.constant';
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { type GenerateDescriptorOptions } from 'src/engine/core-modules/tool-provider/interfaces/generate-descriptor-options.type';
 import { type ToolProvider } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider.interface';
@@ -32,6 +33,7 @@ import { PrepareInstagramReplyDraftTool } from 'src/engine/core-modules/tool/too
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 import { PrepareOutreachEmailDraftTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/prepare-outreach-email-draft-tool';
 import { SendOutreachEmailTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/send-outreach-email-tool';
+import { SendMyahInboxReplyTool } from 'src/engine/core-modules/tool/tools/myah-inbox-reply-tool/send-myah-inbox-reply-tool';
 import { ExtractJsonPathsTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/extract-json-paths-tool';
 import { SearchOutputTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/search-output-tool';
 import { SearchHelpCenterTool } from 'src/engine/core-modules/tool/tools/search-help-center-tool/search-help-center-tool';
@@ -53,6 +55,7 @@ export class ActionToolProvider implements ToolProvider {
     'send_instagram_reply',
     'prepare_outreach_email_draft',
     'send_outreach_email',
+    'send_myah_inbox_reply',
     'create_calendar_event',
     'search_help_center',
     'code_interpreter',
@@ -76,6 +79,7 @@ export class ActionToolProvider implements ToolProvider {
     private readonly sendInstagramReplyTool: SendInstagramReplyTool,
     private readonly prepareOutreachEmailDraftTool: PrepareOutreachEmailDraftTool,
     private readonly sendOutreachEmailTool: SendOutreachEmailTool,
+    private readonly sendMyahInboxReplyTool: SendMyahInboxReplyTool,
     private readonly permissionsService: PermissionsService,
     private readonly i18nService: I18nService,
     private readonly externalWritePolicyService: ExternalWritePolicyService,
@@ -91,6 +95,7 @@ export class ActionToolProvider implements ToolProvider {
       send_instagram_reply: this.sendInstagramReplyTool,
       prepare_outreach_email_draft: this.prepareOutreachEmailDraftTool,
       send_outreach_email: this.sendOutreachEmailTool,
+      send_myah_inbox_reply: this.sendMyahInboxReplyTool,
       create_calendar_event: this.createCalendarEventTool,
       search_help_center: this.searchHelpCenterTool,
       code_interpreter: this.codeInterpreterTool,
@@ -170,6 +175,14 @@ export class ActionToolProvider implements ToolProvider {
         this.buildDescriptor(
           'send_outreach_email',
           this.sendOutreachEmailTool,
+          includeSchemas,
+          context.locale,
+        ),
+      );
+      descriptors.push(
+        this.buildDescriptor(
+          'send_myah_inbox_reply',
+          this.sendMyahInboxReplyTool,
           includeSchemas,
           context.locale,
         ),
@@ -282,8 +295,7 @@ export class ActionToolProvider implements ToolProvider {
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
     const approvalBindingId =
-      (toolName === 'send_instagram_reply' ||
-        toolName === 'send_outreach_email') &&
+      REGISTERED_ACTION_TOOL_NAMES.some((name) => name === toolName) &&
       typeof args.actionApprovalBindingId === 'string'
         ? args.actionApprovalBindingId
         : undefined;

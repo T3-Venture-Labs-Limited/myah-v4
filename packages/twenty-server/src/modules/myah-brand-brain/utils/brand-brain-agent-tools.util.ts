@@ -488,20 +488,6 @@ const pageMarkdown = (
   return { markdown: null, truncated: false };
 };
 
-const capContextMetadata = (
-  value: string,
-): {
-  value: string;
-  truncated: boolean;
-} => {
-  const capped = capMarkdown({
-    markdown: value,
-    limit: CONTEXT_METADATA_CHARACTER_LIMIT,
-  });
-
-  return { value: capped.markdown, truncated: capped.truncated };
-};
-
 const buildContextMarkdown = ({
   brandSlug,
   task,

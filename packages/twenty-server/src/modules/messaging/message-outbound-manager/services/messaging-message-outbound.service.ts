@@ -24,10 +24,34 @@ export class MessagingMessageOutboundService {
   public async assertConnectedAccountSendable(
     connectedAccount: ConnectedAccountEntity,
   ): Promise<void> {
-    if (connectedAccount.provider === ConnectedAccountProvider.EMAIL_GROUP) {
-      await this.emailGroupMessageOutboundService.assertSendable(
-        connectedAccount,
-      );
+    switch (connectedAccount.provider) {
+      case ConnectedAccountProvider.GOOGLE:
+        return this.gmailMessageOutboundService.assertSendable(
+          connectedAccount,
+        );
+      case ConnectedAccountProvider.MICROSOFT:
+        return this.microsoftMessageOutboundService.assertSendable(
+          connectedAccount,
+        );
+      case ConnectedAccountProvider.IMAP_SMTP_CALDAV:
+        return this.imapSmtpMessageOutboundService.assertSendable(
+          connectedAccount,
+        );
+      case ConnectedAccountProvider.EMAIL_GROUP:
+        return this.emailGroupMessageOutboundService.assertSendable(
+          connectedAccount,
+        );
+      case ConnectedAccountProvider.OIDC:
+      case ConnectedAccountProvider.SAML:
+      case ConnectedAccountProvider.APP:
+        throw new Error(
+          `Provider ${connectedAccount.provider} does not support sending messages`,
+        );
+      default:
+        return assertUnreachable(
+          connectedAccount.provider,
+          `Provider ${connectedAccount.provider} not supported for sending messages`,
+        );
     }
   }
 

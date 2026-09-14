@@ -8,9 +8,9 @@ import {
   MyahInboxReplyUnavailableError,
   type MyahInboxReplyActionAuthority,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
+import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptState } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
-import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 import { type SafeActionExecutionReceipt } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
@@ -22,18 +22,16 @@ import {
   type MyahInboxReplySendResult,
   type MyahInboxReplySendStatus,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-send.dto';
-import { MyahInboxDraftSaveStatus } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-draft-save-result.dto';
-import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
+import {
+  MyahInboxReplyApprovedExecutionService,
+  type MyahInboxReplyExecutionResult,
+} from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-approved-execution.service';
 import { renderMyahInboxReplyBody } from 'src/engine/core-modules/myah-inbox/utils/render-myah-inbox-reply-body.util';
-import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
-import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
-import { classifyMessageOutboundError } from 'src/modules/messaging/message-outbound-manager/utils/classify-message-outbound-error.util';
 
 type MyahInboxReplySendRequestContext = {
   authContext: WorkspaceAuthContext;
   user: AuthContextUser | undefined;
-  workspace: WorkspaceEntity;
+  workspace: { id: string };
   userWorkspaceId: string;
   workspaceMemberId: string;
   threadId: string;
@@ -82,21 +80,27 @@ export class MyahInboxReplySendService {
   constructor(
     private readonly actionApprovalService: ActionApprovalService,
     private readonly actionDefinition: MyahInboxReplyActionDefinition,
-    private readonly messageOutboundService: MessagingMessageOutboundService,
-    private readonly projector: ActionReceiptProjectorService,
-    private readonly myahInboxMutationService: MyahInboxMutationService,
+    private readonly approvedExecutionService: MyahInboxReplyApprovedExecutionService,
   ) {}
+
   async getReadiness(
     input: MyahInboxReplySendRequestContext,
   ): Promise<MyahInboxReplySendReadiness> {
     this.assertUserRequest(input);
 
+    let draftState: Pick<MyahInboxReplySendReadiness, 'revision' | 'body'> = {
+      revision: 0,
+      body: null,
+    };
+
     try {
-      await this.actionDefinition.getReadableDraftSnapshot({
+      const draft = await this.actionDefinition.getReadableDraftSnapshot({
         workspaceId: input.workspace.id,
         initiatorUserWorkspaceId: input.userWorkspaceId,
         messageThreadId: input.threadId,
       });
+
+      draftState = { revision: draft.revision, body: draft.body };
 
       const executionState =
         await this.actionApprovalService.getInboxReplyDraftExecutionState({
@@ -108,12 +112,14 @@ export class MyahInboxReplySendService {
         return {
           status: MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN,
           reason: 'The previous delivery outcome is unknown.',
+          ...draftState,
         };
       }
       if (executionState === 'PENDING') {
         return {
           status: MyahInboxReplySendReadinessStatus.OUTCOME_PENDING,
           reason: 'The previous delivery is still being confirmed.',
+          ...draftState,
         };
       }
 
@@ -126,12 +132,21 @@ export class MyahInboxReplySendService {
       try {
         parseMyahReplyRichText(authority.canonicalGraph.draftBody);
       } catch {
-        return this.toInvalidDraftReadiness();
+        return {
+          status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
+          reason:
+            'This draft contains unsupported formatted content. Edit the draft and try again.',
+          ...draftState,
+        };
       }
 
-      return { status: MyahInboxReplySendReadinessStatus.READY, reason: null };
+      return {
+        status: MyahInboxReplySendReadinessStatus.READY,
+        reason: null,
+        ...draftState,
+      };
     } catch (error) {
-      return this.toReadiness(error);
+      return this.toReadiness(error, draftState);
     }
   }
 
@@ -146,53 +161,26 @@ export class MyahInboxReplySendService {
       return preparation.result;
     }
 
-    const { authority, receipt, renderedBody } = preparation;
-    const graph = authority.canonicalGraph;
-    let sent: SendMessageResult;
     try {
-      sent = await this.messageOutboundService.sendMessage(
-        {
-          to: [graph.recipientEmail],
-          subject: graph.subject,
-          body: renderedBody.body,
-          html: renderedBody.html,
-          attachments: [],
-          inReplyTo: graph.inReplyTo,
-          threadExternalId: graph.providerThreadExternalId ?? undefined,
-        },
-        graph.connectedAccount,
-      );
-    } catch (error) {
-      return this.recordProviderFailure(input, authority, receipt.id, error);
-    }
-
-    try {
-      await this.actionApprovalService.recordProviderAccepted(receipt.id, {
-        code: 'accepted',
-        acceptedAt: new Date(),
-        providerMessageId: sent.headerMessageId,
-        providerExternalMessageId: sent.messageExternalId,
-        providerThreadExternalId: sent.threadExternalId,
+      const execution = await this.approvedExecutionService.execute({
+        approvalBindingId: preparation.binding.id,
+        binding: preparation.authority.expectedActionBinding,
+        workspaceId: input.workspace.id,
       });
-    } catch {
-      return this.toUnknownOutcome(input, receipt.id, authority);
-    }
 
-    try {
-      await this.projector.projectReceipt(receipt.id);
+      return this.toExecutionResult(input, execution);
     } catch {
-      // Reconciliation retries this provider-free projection without issuing a send.
-    }
+      await this.invalidateBinding(input, preparation.binding.id);
 
-    return this.getStatus({ ...input, receiptId: receipt.id });
+      return this.toStaleOutcome(input);
+    }
   }
 
   private async prepareSend(input: MyahInboxReplySendRequest): Promise<
     | { result: MyahInboxReplySendResult }
     | {
         authority: MyahInboxReplyActionAuthority;
-        receipt: SafeActionExecutionReceipt;
-        renderedBody: { body: string; html: string };
+        binding: ActionApprovalBindingEntity;
       }
   > {
     try {
@@ -211,72 +199,33 @@ export class MyahInboxReplySendService {
             return { result: this.toStaleOutcome(input) };
           }
 
-          const graph = authority.canonicalGraph;
-          let renderedBody: { body: string; html: string };
           try {
-            renderedBody = await renderMyahInboxReplyBody(graph.draftBody);
+            await renderMyahInboxReplyBody(authority.canonicalGraph.draftBody);
           } catch {
             return {
               result: {
                 outcome: MyahInboxReplySendOutcome.FAILED,
                 receiptId: null,
-                revision: graph.draftRevision,
-                body: graph.draftBody,
+                revision: authority.canonicalGraph.draftRevision,
+                body: authority.canonicalGraph.draftBody,
               },
             };
           }
 
-          let binding: { id: string };
           try {
-            binding =
+            const createdBinding =
               await this.actionApprovalService.createApprovedInboxReplyBinding(
                 authority.expectedActionBinding,
               );
-          } catch {
-            return { result: this.toStaleOutcome(input) };
-          }
-
-          let rebuilt: MyahInboxReplyActionAuthority;
-          try {
-            rebuilt = await this.actionDefinition.rebuildExecutionAuthority({
-              workspaceId: input.workspace.id,
-              binding: authority.expectedActionBinding,
-            });
-          } catch {
-            await this.invalidateBinding(input, binding.id);
-
-            return { result: this.toStaleOutcome(input) };
-          }
-
-          try {
-            const reservation =
-              await this.actionApprovalService.reserveExecutionForBinding({
-                approvalBindingId: binding.id,
-                expectedActionBinding: rebuilt.expectedActionBinding,
-              });
-
-            if (
-              !reservation.created ||
-              reservation.receipt.state !==
-                ActionExecutionReceiptState.PROCESSING
-            ) {
-              return {
-                result: this.toReceiptOutcome(
-                  input,
-                  reservation.receipt,
-                  rebuilt,
-                ),
-              };
-            }
 
             return {
-              authority: rebuilt,
-              receipt: reservation.receipt,
-              renderedBody,
+              authority,
+              binding: {
+                id: createdBinding.id,
+                ...authority.expectedActionBinding,
+              } as ActionApprovalBindingEntity,
             };
           } catch {
-            await this.invalidateBinding(input, binding.id);
-
             return { result: this.toStaleOutcome(input) };
           }
         },
@@ -331,71 +280,29 @@ export class MyahInboxReplySendService {
     }
   }
 
-  private async recordProviderFailure(
+  private async toExecutionResult(
     input: MyahInboxReplySendRequest,
-    authority: MyahInboxReplyActionAuthority,
-    receiptId: string,
-    error: unknown,
+    execution: MyahInboxReplyExecutionResult,
   ): Promise<MyahInboxReplySendResult> {
-    if (classifyMessageOutboundError(error).kind !== 'rejected') {
-      return this.toUnknownOutcome(input, receiptId, authority);
+    if (
+      execution.receipt.state === ActionExecutionReceiptState.PROVIDER_ACCEPTED
+    ) {
+      return this.getStatus({ ...input, receiptId: execution.receipt.id });
     }
 
-    try {
-      const draft =
-        await this.myahInboxMutationService.saveMyahInboxDraftAfterProviderFailure(
-          {
-            ...input,
-            expectedRevision: authority.canonicalGraph.draftRevision,
-            body: authority.canonicalGraph.draftBody,
-          },
-        );
-      if (draft.status !== MyahInboxDraftSaveStatus.SAVED) {
-        return this.toUnknownOutcome(input, receiptId, authority);
-      }
-
-      const receipt =
-        await this.actionApprovalService.recordProviderTerminalState({
-          receiptId,
-          state: ActionExecutionReceiptState.FAILED,
-          code: 'failed',
-        });
-      if (receipt.state !== ActionExecutionReceiptState.FAILED) {
-        return this.toReceiptOutcome(input, receipt, authority);
-      }
-
+    if (
+      execution.receipt.state === ActionExecutionReceiptState.FAILED &&
+      execution.draft !== null
+    ) {
       return {
         outcome: MyahInboxReplySendOutcome.FAILED,
-        receiptId,
-        revision: draft.revision,
-        body: draft.body,
+        receiptId: execution.receipt.id,
+        revision: execution.draft.revision,
+        body: execution.draft.body,
       };
-    } catch {
-      return this.toUnknownOutcome(input, receiptId, authority);
-    }
-  }
-
-  private async toUnknownOutcome(
-    input: MyahInboxReplySendRequest,
-    receiptId: string,
-    authority?: MyahInboxReplyActionAuthority,
-  ): Promise<MyahInboxReplySendResult> {
-    try {
-      await this.actionApprovalService.recordProviderTerminalState({
-        receiptId,
-        state: ActionExecutionReceiptState.UNKNOWN,
-        code: 'unknown',
-      });
-    } catch {
-      // The public result remains unknown when the receipt store is unavailable.
     }
 
-    return this.toResult(
-      MyahInboxReplySendOutcome.UNKNOWN,
-      receiptId,
-      authority,
-      input,
-    );
+    return this.toReceiptOutcome(input, execution.receipt, execution.authority);
   }
 
   private async invalidateBinding(
@@ -415,19 +322,15 @@ export class MyahInboxReplySendService {
     }
   }
 
-  private toInvalidDraftReadiness(): MyahInboxReplySendReadiness {
-    return {
-      status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
-      reason:
-        'This draft contains unsupported formatted content. Edit the draft and try again.',
-    };
-  }
-
-  private toReadiness(error: unknown): MyahInboxReplySendReadiness {
+  private toReadiness(
+    error: unknown,
+    draftState: Pick<MyahInboxReplySendReadiness, 'revision' | 'body'>,
+  ): MyahInboxReplySendReadiness {
     if (error instanceof MyahInboxReplyUnavailableError) {
       return {
         status: readinessStatuses[error.code],
         reason: readinessReasons[error.code],
+        ...draftState,
       };
     }
 
@@ -435,13 +338,14 @@ export class MyahInboxReplySendService {
       status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
       reason:
         readinessReasons[MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE],
+      ...draftState,
     };
   }
 
   private toReceiptOutcome(
     input: MyahInboxReplySendRequest,
     receipt: SafeActionExecutionReceipt,
-    authority: MyahInboxReplyActionAuthority,
+    authority: MyahInboxReplyActionAuthority | null,
   ): MyahInboxReplySendResult {
     return this.toResult(
       this.toOutcome(receipt.state),
@@ -465,7 +369,7 @@ export class MyahInboxReplySendService {
   private toResult(
     outcome: MyahInboxReplySendOutcome,
     receiptId: string,
-    authority?: MyahInboxReplyActionAuthority,
+    authority: MyahInboxReplyActionAuthority | null | undefined,
     input?: MyahInboxReplySendRequest,
   ): MyahInboxReplySendResult {
     return {

@@ -381,6 +381,8 @@ ${tools
         return 'Action Tools (HTTP, Email, etc.)';
       case ToolCategory.WORKFLOW:
         return 'Workflow Tools (create/manage workflows)';
+      case ToolCategory.MYAH_CAMPAIGN_OUTREACH:
+        return 'Campaign Outreach Tools (manage Campaign-scoped workflows)';
       case ToolCategory.METADATA:
         return 'Metadata Tools (schema management)';
       case ToolCategory.VIEW:
@@ -397,6 +399,8 @@ ${tools
         return 'Brand Brain Tools (manage brand knowledge and campaign context)';
       case ToolCategory.MYAH_INBOX:
         return 'Myah Inbox Tools (read context and generate reply proposals)';
+      case ToolCategory.MYAH_CREATOR_OPS:
+        return 'Myah Creator Ops Tools (manage Creator Lists and Campaign audiences)';
       default:
         return assertUnreachable(category);
     }

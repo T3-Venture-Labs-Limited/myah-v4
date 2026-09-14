@@ -7,6 +7,7 @@ import { useAtomValue } from 'jotai';
 import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxContactConversation } from '@/myah/inbox/components/MyahInboxContactConversation';
+import { MyahInboxContextEffect } from '@/myah/inbox/components/MyahInboxContextEffect';
 import { MyahInboxContactList } from '@/myah/inbox/components/MyahInboxContactList';
 import { useMyahInboxEmailHistory } from '@/myah/inbox/hooks/useMyahInboxEmailHistory';
 import { useMyahInboxContacts } from '@/myah/inbox/hooks/useMyahInboxContacts';
@@ -750,6 +751,10 @@ const MyahInboxPageContent = ({
         />
       }
     >
+      <MyahInboxContextEffect
+        workspaceId={workspaceId}
+        thread={selectedThread.thread}
+      />
       {status?.workspaceId === workspaceId ? (
         <StyledSelectionStatus role="status" aria-live="polite">
           {status.message}

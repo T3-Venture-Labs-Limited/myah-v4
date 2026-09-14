@@ -4,6 +4,7 @@ import { type Repository } from 'typeorm';
 
 import { CustomerAccountEntity } from 'src/engine/core-modules/customer-account/entities/customer-account.entity';
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 export class CustomerAccountWorkspaceConflictError extends Error {
   constructor(workspaceId: string) {
@@ -52,6 +53,47 @@ export class CustomerAccountService {
     return await this.myahWorkspaceInstallationRepository.findOneBy({
       workspaceId,
     });
+  }
+
+  async ensureWorkspaceInstallation(
+    workspaceId: string,
+  ): Promise<MyahWorkspaceInstallationEntity> {
+    return await this.myahWorkspaceInstallationRepository.manager.transaction(
+      async (manager) => {
+        const workspace = await manager.findOne(WorkspaceEntity, {
+          lock: { mode: 'pessimistic_write' },
+          where: { id: workspaceId },
+        });
+
+        if (!workspace) {
+          throw new Error('Workspace was not found');
+        }
+
+        const existingInstallation = await manager.findOneBy(
+          MyahWorkspaceInstallationEntity,
+          { workspaceId },
+        );
+
+        if (existingInstallation) {
+          return existingInstallation;
+        }
+
+        const customerAccount = manager.create(CustomerAccountEntity, {});
+        const savedCustomerAccount = await manager.save(
+          CustomerAccountEntity,
+          customerAccount,
+        );
+        const installation = manager.create(MyahWorkspaceInstallationEntity, {
+          customerAccountId: savedCustomerAccount.id,
+          workspaceId,
+        });
+
+        return await manager.save(
+          MyahWorkspaceInstallationEntity,
+          installation,
+        );
+      },
+    );
   }
 
   async attachWorkspace({

@@ -29,4 +29,33 @@ describe('createExecuteToolTool', () => {
       { compactOutput: undefined, spillLargeOutput: undefined },
     );
   });
+
+  it('allows an approved write exactly once', async () => {
+    const result = { success: true, message: 'Write complete' };
+    const toolRegistry = {
+      resolveAndExecute: jest.fn().mockResolvedValue(result),
+    } as unknown as ToolRegistryService;
+    const executeTool = createExecuteToolTool(toolRegistry, context, {
+      singleUseToolName: 'approved-write',
+    });
+
+    await expect(
+      executeTool.execute({
+        toolName: 'approved-write',
+        arguments: { id: 'record-id' },
+      }),
+    ).resolves.toEqual(result);
+    await expect(
+      executeTool.execute({
+        toolName: 'approved-write',
+        arguments: { id: 'other-record-id' },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        success: false,
+        message: 'Tool "approved-write" approval is already consumed',
+      }),
+    );
+    expect(toolRegistry.resolveAndExecute).toHaveBeenCalledTimes(1);
+  });
 });

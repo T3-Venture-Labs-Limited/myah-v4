@@ -1,5 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
 import { FormProvider } from 'react-hook-form';
+import { useLocation } from 'react-router-dom';
 
 import { SaveAndCancelButtons } from '@/settings/components/SaveAndCancelButtons/SaveAndCancelButtons';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
@@ -12,9 +13,28 @@ import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 import { SettingsAccountsConnectionForm } from '@/settings/accounts/components/SettingsAccountsConnectionForm';
 import { useImapSmtpCaldavConnectionForm } from '@/settings/accounts/hooks/useImapSmtpCaldavConnectionForm';
 
+const getRelativeReturnPath = (search: string): string | undefined => {
+  const returnTo = new URLSearchParams(search).get('returnTo');
+
+  if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(returnTo, window.location.origin);
+    return url.origin === window.location.origin
+      ? `${url.pathname}${url.search}${url.hash}`
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export const SettingsAccountsNewImapSmtpCaldavConnection = () => {
   const { t } = useLingui();
   const navigate = useNavigateSettings();
+  const location = useLocation();
+  const returnTo = getRelativeReturnPath(location.search);
 
   const {
     formMethods,
@@ -23,7 +43,7 @@ export const SettingsAccountsNewImapSmtpCaldavConnection = () => {
     canSave,
     isSubmitting,
     loading,
-  } = useImapSmtpCaldavConnectionForm({});
+  } = useImapSmtpCaldavConnectionForm({ returnTo });
 
   const { control } = formMethods;
 

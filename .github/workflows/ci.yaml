@@ -23,11 +23,20 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up dependencies
-        uses: ./.github/actions/setup-yarn
+        uses: ./.github/actions/yarn-install
+      - name: Restore lint cache
+        id: restore-lint-cache
+        uses: ./.github/actions/restore-cache
+        with:
+          key: ci-lint
       - name: Lint affected projects
         run: >-
           npx nx affected -t lint --base=origin/${{ github.base_ref }}
           --head=${{ github.sha }} --parallel=3
+      - name: Save lint cache
+        uses: ./.github/actions/save-cache
+        with:
+          key: ${{ steps.restore-lint-cache.outputs.cache-primary-key }}
 
   typecheck:
     name: typecheck
@@ -39,11 +48,20 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up dependencies
-        uses: ./.github/actions/setup-yarn
+        uses: ./.github/actions/yarn-install
+      - name: Restore typecheck cache
+        id: restore-typecheck-cache
+        uses: ./.github/actions/restore-cache
+        with:
+          key: ci-typecheck
       - name: Typecheck affected projects
         run: >-
           npx nx affected -t typecheck --base=origin/${{ github.base_ref }}
           --head=${{ github.sha }} --parallel=2
+      - name: Save typecheck cache
+        uses: ./.github/actions/save-cache
+        with:
+          key: ${{ steps.restore-typecheck-cache.outputs.cache-primary-key }}
 
   unit-tests:
     name: unit tests
@@ -55,13 +73,22 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up dependencies
-        uses: ./.github/actions/setup-yarn
-      # These integration suites provision their services in dedicated workflows.
+        uses: ./.github/actions/yarn-install
+      - name: Restore unit test cache
+        id: restore-unit-test-cache
+        uses: ./.github/actions/restore-cache
+        with:
+          key: ci-unit-tests
+      # Integration suites provision their services in dedicated workflows.
       - name: Test affected unit projects
         run: >-
           npx nx affected -t test --configuration=ci
           --base=origin/${{ github.base_ref }} --head=${{ github.sha }}
           --exclude=twenty-e2e-testing,twenty-zapier --parallel=1
+      - name: Save unit test cache
+        uses: ./.github/actions/save-cache
+        with:
+          key: ${{ steps.restore-unit-test-cache.outputs.cache-primary-key }}
 
   container-build:
     name: container build

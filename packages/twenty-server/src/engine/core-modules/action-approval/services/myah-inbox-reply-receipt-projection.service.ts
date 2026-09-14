@@ -106,7 +106,7 @@ export class MyahInboxReplyReceiptProjectionService {
       const { canonicalGraph } = authority;
 
       if (
-        canonicalGraph.messageThreadId !== input.threadId ||
+        canonicalGraph.messageThreadId !== input.draftId ||
         canonicalGraph.draftRevision !== currentDraft.myahReplyDraftRevision ||
         currentDraft.myahReplyDraftBody === null
       ) {
@@ -213,7 +213,8 @@ export class MyahInboxReplyReceiptProjectionService {
   ): MyahInboxReplyExpectedActionBindingWithWorkspace {
     if (
       input.actionVersion !== 1 ||
-      input.draftId !== input.threadId ||
+      !isNonEmptyString(input.draftId) ||
+      !isNonEmptyString(input.threadId) ||
       !isNonEmptyString(input.contentDigest) ||
       !isNonEmptyString(input.recipientFingerprint) ||
       !isNonEmptyString(input.sendingAccountFingerprint) ||
@@ -268,7 +269,7 @@ export class MyahInboxReplyReceiptProjectionService {
     const exactEvidence = [
       {
         objectMetadataId: messageThreadMetadataId,
-        recordId: input.threadId,
+        recordId: input.draftId,
         role: 'draft',
       },
       {
@@ -412,7 +413,7 @@ export class MyahInboxReplyReceiptProjectionService {
   ): boolean {
     return (
       isNonEmptyString(message.id) &&
-      message.messageThreadId === input.threadId &&
+      message.messageThreadId === input.draftId &&
       isNonEmptyString(message.messageChannelId) &&
       isNonEmptyString(message.connectedAccountId) &&
       message.subject !== null &&
@@ -435,7 +436,7 @@ export class MyahInboxReplyReceiptProjectionService {
         JSON.stringify([
           approvedRevision,
           message.parentHeaderMessageId,
-          input.threadId,
+          input.draftId,
           message.parentMessageId,
           message.parentAssociationDirection,
           message.parentThreadExternalId,

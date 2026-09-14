@@ -1,3 +1,5 @@
+import { ManagedProviderBillingException } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.exception';
+
 import { AiException } from 'src/engine/metadata-modules/ai/ai.exception';
 
 export const STREAM_EXECUTION_FAILED_CODE = 'STREAM_EXECUTION_FAILED';
@@ -17,6 +19,15 @@ const truncateMessage = (message: string): string =>
 export const mapErrorToStreamError = (error: unknown): StreamErrorPayload => {
   if (error instanceof AiException) {
     return { code: error.code, message: truncateMessage(error.message) };
+  }
+
+  if (error instanceof ManagedProviderBillingException) {
+    return {
+      code: error.code,
+      message: truncateMessage(
+        error.userFriendlyMessage.message ?? error.message,
+      ),
+    };
   }
 
   return {

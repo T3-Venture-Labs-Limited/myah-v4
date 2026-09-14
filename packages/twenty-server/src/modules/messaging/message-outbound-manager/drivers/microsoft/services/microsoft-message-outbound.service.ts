@@ -20,6 +20,16 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
     private readonly microsoftOAuth2ClientProvider: MicrosoftOAuth2ClientProvider,
   ) {}
 
+  async assertSendable(
+    connectedAccount: ConnectedAccountEntity,
+  ): Promise<void> {
+    const microsoftClient = await this.microsoftOAuth2ClientProvider.getClient(
+      connectedAccount.id,
+    );
+
+    await microsoftClient.api('/me').get();
+  }
+
   async sendMessage(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,

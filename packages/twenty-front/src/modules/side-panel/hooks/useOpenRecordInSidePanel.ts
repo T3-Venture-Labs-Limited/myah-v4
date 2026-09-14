@@ -1,6 +1,7 @@
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { viewableRecordIdComponentState } from '@/side-panel/pages/record-page/states/viewableRecordIdComponentState';
 import { viewableRecordNameSingularComponentState } from '@/side-panel/pages/record-page/states/viewableRecordNameSingularComponentState';
+import { shouldCloseAfterCreationComponentState } from '@/side-panel/pages/record-page/states/shouldCloseAfterCreationComponentState';
 import { sidePanelNavigationMorphItemsByPageState } from '@/side-panel/states/sidePanelNavigationMorphItemsByPageState';
 import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
@@ -43,11 +44,13 @@ export const useOpenRecordInSidePanel = () => {
       objectNameSingular,
       isNewRecord = false,
       resetNavigationStack = false,
+      shouldCloseAfterCreation = false,
     }: {
       recordId: string;
       objectNameSingular: string;
       isNewRecord?: boolean;
       resetNavigationStack?: boolean;
+      shouldCloseAfterCreation?: boolean;
     }) => {
       const navigationStack = store.get(sidePanelNavigationStackState.atom);
 
@@ -80,6 +83,12 @@ export const useOpenRecordInSidePanel = () => {
         recordId,
       );
       store.set(viewableRecordIdState.atom, recordId);
+      store.set(
+        shouldCloseAfterCreationComponentState.atomFamily({
+          instanceId: pageComponentInstanceId,
+        }),
+        shouldCloseAfterCreation,
+      );
 
       const objectMetadataItem = store.get(
         objectMetadataItemFamilySelector.selectorFamily({

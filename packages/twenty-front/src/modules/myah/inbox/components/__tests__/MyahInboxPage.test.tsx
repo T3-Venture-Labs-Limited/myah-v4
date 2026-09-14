@@ -31,6 +31,7 @@ const mockUseMyahInboxContacts = jest.fn();
 const mockUseMyahInboxContactEmailMessages = jest.fn();
 const mockUseMyahInboxEmailHistory = jest.fn();
 const mockUseMyahInboxSelectedEmailThread = jest.fn();
+const mockContextEffect = jest.fn();
 let isMobile = false;
 let mockThreadUpdated: (message: string) => void;
 let mockContactLinked: (id: string) => void | Promise<void>;
@@ -104,6 +105,16 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxEmailHistory', () => ({
 jest.mock('@/myah/inbox/hooks/useMyahInboxSelectedEmailThread', () => ({
   useMyahInboxSelectedEmailThread: (...args: unknown[]) =>
     mockUseMyahInboxSelectedEmailThread(...args),
+}));
+
+jest.mock('@/myah/inbox/components/MyahInboxContextEffect', () => ({
+  MyahInboxContextEffect: (props: {
+    workspaceId: string | null;
+    thread: { id: string } | null;
+  }) => {
+    mockContextEffect(props);
+    return null;
+  },
 }));
 
 jest.mock('@/myah/inbox/components/MyahInboxContactList', () => ({
@@ -492,6 +503,25 @@ describe('MyahInboxPage contact-first flow', () => {
     )?.[1];
     expect(historyStyles).toContain('scrollbar-gutter: stable;');
     expect(wrapperStyles).toContain('scrollbar-gutter: stable;');
+  });
+
+  it('publishes only the authorized selected Email thread to the context sidecar', async () => {
+    renderPage();
+
+    await waitFor(() =>
+      expect(mockContextEffect).toHaveBeenLastCalledWith({
+        workspaceId: 'workspace-1',
+        thread: expect.objectContaining({ id: 'thread-2' }),
+      }),
+    );
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' })),
+    );
+    expect(mockContextEffect).toHaveBeenLastCalledWith({
+      workspaceId: 'workspace-1',
+      thread: null,
+    });
   });
 
   beforeEach(() => {

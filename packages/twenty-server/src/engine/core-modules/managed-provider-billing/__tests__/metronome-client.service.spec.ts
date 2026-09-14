@@ -4905,9 +4905,7 @@ describe('MetronomeClientService', () => {
       {
         add_billing_provider_configuration_update: {
           billing_provider_configuration: {
-            billing_provider: 'stripe',
             billing_provider_configuration_id: 'billing-configuration-id',
-            delivery_method: 'direct_to_billing_provider',
           },
           schedule: { effective_at: 'START_OF_CURRENT_PERIOD' },
         },

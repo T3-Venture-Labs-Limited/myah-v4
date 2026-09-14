@@ -763,7 +763,7 @@ export class ManagedEmailCustomerService {
     );
   }
 
-  private assertAcquisitionAvailable(workspaceId: string): void {
+  assertAcquisitionAvailable(workspaceId: string): void {
     if (!this.isAcquisitionAvailable(workspaceId)) {
       throw new Error('Managed email acquisition is unavailable');
     }

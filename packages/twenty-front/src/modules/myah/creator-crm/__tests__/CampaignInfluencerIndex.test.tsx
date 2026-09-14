@@ -400,7 +400,6 @@ describe('CampaignInfluencerIndex', () => {
         },
       },
     });
-    expect(indexSurfaceProps).not.toHaveProperty('headerActionButton');
     expect(indexSurfaceProps).not.toHaveProperty('headerTitle');
 
     expect(

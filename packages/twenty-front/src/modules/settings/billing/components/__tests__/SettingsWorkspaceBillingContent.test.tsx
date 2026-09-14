@@ -36,11 +36,12 @@ const readyViewModel = {
     taxId: { country: 'US', type: 'us_ein' },
   },
   customerFundingPaymentMethodReady: true,
-  customerFundingPresets: [
-    { id: 'AI_25_USD', principalCents: 2_500 },
-    { id: 'AI_50_USD', principalCents: 5_000 },
-    { id: 'AI_100_USD', principalCents: 10_000 },
-  ],
+  customerFundingPolicy: {
+    incrementCents: 100,
+    maximumPrincipalCents: 50_000,
+    minimumPrincipalCents: 500,
+    suggestedPrincipalCents: [2_500, 5_000, 10_000],
+  },
   fundingHistory: [
     {
       actionRequired: true,
@@ -50,7 +51,6 @@ const readyViewModel = {
       fundingType: 'PURCHASED',
       id: 'funding-action-id',
       invoiceUrl: 'https://invoice.example/in_1',
-      presetId: 'AI_50_USD',
       principalCents: 5_000,
       state: 'AWAITING_PAYMENT',
       taxCents: 500,
@@ -67,7 +67,7 @@ const renderFunding = (
   viewModel: WorkspaceBillingViewModel = readyViewModel,
   onManagePaymentDetails = jest.fn(),
 ) => {
-  const onRequestTopUp = jest.fn();
+  const onRequestFunding = jest.fn();
 
   render(
     <JotaiProvider>
@@ -76,7 +76,7 @@ const renderFunding = (
           <SettingsWorkspaceBillingContent
             managedEmailSubscriptions={{ state: 'ready', subscriptions: [] }}
             onManagePaymentDetails={onManagePaymentDetails}
-            onRequestTopUp={onRequestTopUp}
+            onRequestFunding={onRequestFunding}
             viewModel={viewModel}
           />
         </ThemeProvider>
@@ -84,7 +84,7 @@ const renderFunding = (
     </JotaiProvider>,
   );
 
-  return { onManagePaymentDetails, onRequestTopUp };
+  return { onManagePaymentDetails, onRequestFunding };
 };
 
 describe('SettingsWorkspaceBillingContent customer funding', () => {
@@ -105,13 +105,102 @@ describe('SettingsWorkspaceBillingContent customer funding', () => {
     ).toBeInTheDocument();
   });
 
-  it('uses fixed presets and requests the selected amount', () => {
-    const { onRequestTopUp } = renderFunding();
+  it('renders policy suggestions and sends each amount through one funding callback', () => {
+    const { onRequestFunding } = renderFunding();
 
-    fireEvent.click(screen.getByRole('button', { name: '$50' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add $50 credit' }));
+    for (const label of ['$25', '$50', '$100']) {
+      expect(screen.getByRole('button', { name: label })).toBeVisible();
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      fireEvent.click(
+        screen.getByRole('button', { name: `Add ${label} credit` }),
+      );
+    }
 
-    expect(onRequestTopUp).toHaveBeenCalledWith('AI_50_USD');
+    expect(onRequestFunding).toHaveBeenNthCalledWith(1, 2_500);
+    expect(onRequestFunding).toHaveBeenNthCalledWith(2, 5_000);
+    expect(onRequestFunding).toHaveBeenNthCalledWith(3, 10_000);
+  });
+
+  it('submits valid custom whole-dollar amounts as cents', () => {
+    const { onRequestFunding } = renderFunding();
+    const customAmountInput = screen.getByRole('textbox', {
+      name: 'Custom amount',
+    });
+
+    for (const [dollars, principalCents] of [
+      ['5', 500],
+      ['37', 3_700],
+      ['500', 50_000],
+    ]) {
+      fireEvent.change(customAmountInput, { target: { value: dollars } });
+      fireEvent.click(
+        screen.getByRole('button', { name: `Add $${dollars} credit` }),
+      );
+      expect(onRequestFunding).toHaveBeenLastCalledWith(principalCents);
+    }
+  });
+
+  it.each(['', '5.5', '1e2', '+5', '4', '501'])(
+    'rejects invalid custom dollar amount %p',
+    (invalidAmount) => {
+      const { onRequestFunding } = renderFunding();
+      const customAmountInput = screen.getByRole('textbox', {
+        name: 'Custom amount',
+      });
+
+      if (invalidAmount === '') {
+        fireEvent.change(customAmountInput, { target: { value: '5' } });
+      }
+      fireEvent.change(customAmountInput, {
+        target: { value: invalidAmount },
+      });
+
+      expect(customAmountInput).toHaveAttribute('aria-invalid', 'true');
+      expect(
+        screen.getByText('Enter a whole-dollar amount from $5 to $500.'),
+      ).toBeInTheDocument();
+      const chargeButton = screen.getByRole('button', {
+        name: 'Add AI credit',
+      });
+      expect(chargeButton).toBeDisabled();
+      fireEvent.click(chargeButton);
+      expect(onRequestFunding).not.toHaveBeenCalled();
+    },
+  );
+
+  it('locks a retry to its pending amount despite subsequent input changes', () => {
+    const { onRequestFunding } = renderFunding({
+      ...readyViewModel,
+      retryPrincipalCents: 3_700,
+    } satisfies WorkspaceBillingViewModel);
+    const customAmountInput = screen.getByRole('textbox', {
+      name: 'Custom amount',
+    });
+
+    expect(customAmountInput).toHaveValue('37');
+    expect(customAmountInput).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: '$25' })).toBeDisabled();
+    fireEvent.change(customAmountInput, { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry $37 credit' }));
+
+    expect(onRequestFunding).toHaveBeenCalledWith(3_700);
+  });
+
+  it('shows immediate-charge disclosures before the funding action', () => {
+    renderFunding();
+
+    const disclosure = screen.getByText(
+      'Your saved payment method will be charged immediately. Applicable tax may be added. Purchased credit expires 12 months after payment. Purchases are non-refundable except where law requires.',
+    );
+    const chargeButton = screen.getByRole('button', {
+      name: 'Add $25 credit',
+    });
+
+    expect(disclosure).toBeVisible();
+    expect(
+      disclosure.compareDocumentPosition(chargeButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('hides payment-detail management when customer funding is unavailable and explains why', () => {

@@ -107,6 +107,25 @@ describe('ActionApprovalService overdue authority', () => {
     );
   });
 
+  it('rejects an approved Inbox reply from a different agent chat', async () => {
+    binding = {
+      ...binding,
+      state: ActionApprovalBindingState.APPROVED,
+      expiresAt: new Date('2099-07-18T00:00:00.000Z'),
+    };
+    manager.findOne.mockResolvedValue(binding);
+
+    await expect(
+      service.getApprovedBinding({
+        workspaceId,
+        approvalBindingId,
+        initiatorUserWorkspaceId: userWorkspaceId,
+        threadId: '00000000-0000-4000-8000-000000000099',
+      }),
+    ).rejects.toThrow('An approved action binding is required');
+    expect(manager.find).not.toHaveBeenCalled();
+  });
+
   it('reads a consumed binding so an accepted receipt can be projected without provider replay', async () => {
     manager.findOne.mockResolvedValue({
       ...binding,

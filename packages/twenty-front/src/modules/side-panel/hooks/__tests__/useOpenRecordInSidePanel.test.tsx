@@ -11,11 +11,13 @@ import { SIDE_PANEL_COMPONENT_INSTANCE_ID } from '@/side-panel/constants/SidePan
 import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
 import { viewableRecordIdComponentState } from '@/side-panel/pages/record-page/states/viewableRecordIdComponentState';
 import { viewableRecordNameSingularComponentState } from '@/side-panel/pages/record-page/states/viewableRecordNameSingularComponentState';
+import { shouldCloseAfterCreationComponentState } from '@/side-panel/pages/record-page/states/shouldCloseAfterCreationComponentState';
 import { sidePanelNavigationMorphItemsByPageState } from '@/side-panel/states/sidePanelNavigationMorphItemsByPageState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { ContextStorePageType, SidePanelPages } from 'twenty-shared/types';
 import { useIcons } from 'twenty-ui/icon';
+import { v4 } from 'uuid';
 import { getJestMetadataAndApolloMocksAndCommandMenuWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksAndCommandMenuWrapper';
 import { getTestEnrichedObjectMetadataItemsMock } from '~/testing/utils/getTestEnrichedObjectMetadataItemsMock';
 
@@ -203,6 +205,46 @@ describe('useOpenRecordInSidePanel', () => {
         personMockObjectMetadataItem,
       )?.name,
     });
+  });
+
+  it('should isolate close-after-creation from a subsequent normal record', () => {
+    const { result } = renderHooks();
+    jest
+      .mocked(v4 as () => string)
+      .mockReturnValueOnce('scoped-creation-page')
+      .mockReturnValueOnce('normal-record-page');
+
+    act(() => {
+      result.current.openRecordInSidePanel({
+        recordId: 'new-record-123',
+        objectNameSingular: 'person',
+        isNewRecord: true,
+        shouldCloseAfterCreation: true,
+      });
+    });
+
+    expect(
+      jotaiStore.get(
+        shouldCloseAfterCreationComponentState.atomFamily({
+          instanceId: 'scoped-creation-page',
+        }),
+      ),
+    ).toBe(true);
+
+    act(() => {
+      result.current.openRecordInSidePanel({
+        recordId: 'record-123',
+        objectNameSingular: 'person',
+      });
+    });
+
+    expect(
+      jotaiStore.get(
+        shouldCloseAfterCreationComponentState.atomFamily({
+          instanceId: 'normal-record-page',
+        }),
+      ),
+    ).toBe(false);
   });
 
   it('should not open title cell when isNewRecord is false', () => {

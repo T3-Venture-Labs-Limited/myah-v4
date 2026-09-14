@@ -16,6 +16,57 @@ const buildConnectedAccount = (
     provider,
   }) as unknown as ConnectedAccountEntity;
 
+describe('MessagingMessageOutboundService sendability assertion', () => {
+  const assertGmailSendable = jest.fn();
+  const assertMicrosoftSendable = jest.fn();
+  const assertImapSmtpSendable = jest.fn();
+  const assertEmailGroupSendable = jest.fn();
+  const service = new MessagingMessageOutboundService(
+    {
+      assertSendable: assertGmailSendable,
+    } as unknown as GmailMessageOutboundService,
+    {
+      assertSendable: assertMicrosoftSendable,
+    } as unknown as MicrosoftMessageOutboundService,
+    {
+      assertSendable: assertImapSmtpSendable,
+    } as unknown as ImapSmtpMessageOutboundService,
+    {
+      assertSendable: assertEmailGroupSendable,
+    } as unknown as EmailGroupMessageOutboundService,
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it.each([
+    [ConnectedAccountProvider.GOOGLE, assertGmailSendable],
+    [ConnectedAccountProvider.MICROSOFT, assertMicrosoftSendable],
+    [ConnectedAccountProvider.IMAP_SMTP_CALDAV, assertImapSmtpSendable],
+    [ConnectedAccountProvider.EMAIL_GROUP, assertEmailGroupSendable],
+  ])(
+    'preflights %s credentials through its outbound driver',
+    async (provider, assertSendable) => {
+      const connectedAccount = buildConnectedAccount(provider);
+
+      await service.assertConnectedAccountSendable(connectedAccount);
+
+      expect(assertSendable).toHaveBeenCalledWith(connectedAccount);
+    },
+  );
+
+  it.each([
+    ConnectedAccountProvider.APP,
+    ConnectedAccountProvider.OIDC,
+    ConnectedAccountProvider.SAML,
+  ])('rejects unsupported provider %s', async (provider) => {
+    await expect(
+      service.assertConnectedAccountSendable(buildConnectedAccount(provider)),
+    ).rejects.toThrow(`Provider ${provider} does not support sending messages`);
+  });
+});
+
 describe('MessagingMessageOutboundService deleteDraft', () => {
   const deleteGmailDraft = jest.fn();
   const deleteMicrosoftDraft = jest.fn();

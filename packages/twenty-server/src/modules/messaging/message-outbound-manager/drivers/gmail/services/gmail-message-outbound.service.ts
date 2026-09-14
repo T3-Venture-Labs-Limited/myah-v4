@@ -24,6 +24,20 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     private readonly googleOAuth2ClientProvider: GoogleOAuth2ClientProvider,
   ) {}
 
+  async assertSendable(
+    connectedAccount: ConnectedAccountEntity,
+  ): Promise<void> {
+    const oAuth2Client = await this.googleOAuth2ClientProvider.getClient(
+      connectedAccount.id,
+    );
+    const gmailClient = google.gmail({
+      version: 'v1',
+      auth: oAuth2Client,
+    });
+
+    await gmailClient.users.getProfile({ userId: 'me' });
+  }
+
   async sendMessage(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,

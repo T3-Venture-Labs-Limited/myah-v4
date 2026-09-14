@@ -4,6 +4,8 @@ import { type SendMessageInput } from 'src/modules/messaging/message-outbound-ma
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 
 export type MessageOutboundDriver = {
+  assertSendable(connectedAccount: ConnectedAccountEntity): Promise<void>;
+
   sendMessage(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,

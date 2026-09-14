@@ -1,3 +1,4 @@
+import { registerCampaignCreationOrigin } from '@/object-record/record-index/states/campaignCreationState';
 import { getCommandMenuIdFromRecordIndexId } from '@/command-menu-item/utils/getCommandMenuIdFromRecordIndexId';
 import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
@@ -20,6 +21,7 @@ import { RecordIndexPageHeader } from '@/object-record/record-index/components/R
 import { RecordIndexSurfaceContextStoreInitEffect } from '@/object-record/record-index/components/RecordIndexSurfaceContextStoreInitEffect';
 import { RecordIndexViewBar } from '@/object-record/record-index/components/RecordIndexViewBar';
 import { RecordIndexViewFieldsSSESyncEffect } from '@/object-record/record-index/components/RecordIndexViewFieldsSSESyncEffect';
+import { recordIndexCreationOptionsComponentState } from '@/object-record/record-index/states/recordIndexCreationOptionsComponentState';
 import { useRecordIndexFieldMetadataDerivedStates } from '@/object-record/record-index/hooks/useRecordIndexFieldMetadataDerivedStates';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
@@ -52,13 +54,14 @@ export type RecordIndexSurfaceProps = {
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
   shouldPreserveParentViewStateOnOpen?: boolean;
   shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
+  shouldCloseAfterCreation?: boolean;
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
   hideQueryOnlyRecordFilters?: boolean;
   hideEmptyStateSubtitle?: boolean;
   headerTitle?: string;
-  headerActionButton?: ReactNode;
+  headerLeadingAction?: ReactNode;
   embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;
 };
 
@@ -92,6 +95,47 @@ const RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect = ({
   return null;
 };
 
+type RecordIndexSurfaceCreationOptionsEffectProps = Pick<
+  RecordIndexSurfaceProps,
+  'onRecordCreated' | 'shouldCloseAfterCreation' | 'objectNameSingular'
+> & {
+  recordIndexId: string;
+};
+
+export const RecordIndexSurfaceCreationOptionsEffect = ({
+  objectNameSingular,
+  recordIndexId,
+  onRecordCreated,
+  shouldCloseAfterCreation,
+}: RecordIndexSurfaceCreationOptionsEffectProps) => {
+  const store = useStore();
+  useEffect(() => {
+    if (objectNameSingular === 'campaign')
+      return registerCampaignCreationOrigin(store, recordIndexId);
+  }, [store, recordIndexId, objectNameSingular]);
+  const setRecordIndexCreationOptions = useSetAtomComponentState(
+    recordIndexCreationOptionsComponentState,
+    recordIndexId,
+  );
+
+  useEffect(() => {
+    setRecordIndexCreationOptions({
+      onRecordCreated,
+      shouldCloseAfterCreation,
+    });
+
+    return () => {
+      setRecordIndexCreationOptions({});
+    };
+  }, [
+    onRecordCreated,
+    setRecordIndexCreationOptions,
+    shouldCloseAfterCreation,
+  ]);
+
+  return null;
+};
+
 const RecordIndexSurfaceInstance = ({
   contextStoreInstanceId,
   objectNameSingular,
@@ -100,13 +144,14 @@ const RecordIndexSurfaceInstance = ({
   onOpenRecordFromIndexView,
   shouldPreserveParentViewStateOnOpen,
   shouldUseIndexIdentifierUrlOnFullPageOpen,
+  shouldCloseAfterCreation,
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters = [],
   hideQueryOnlyRecordFilters,
   hideEmptyStateSubtitle,
   headerTitle,
-  headerActionButton,
+  headerLeadingAction,
   embeddedSurfaceOptions,
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
@@ -152,6 +197,12 @@ const RecordIndexSurfaceInstance = ({
     <ContextStoreComponentInstanceContext.Provider
       value={{ instanceId: contextStoreInstanceId }}
     >
+      <RecordIndexSurfaceCreationOptionsEffect
+        objectNameSingular={objectNameSingular}
+        recordIndexId={recordIndexId}
+        onRecordCreated={onRecordCreated}
+        shouldCloseAfterCreation={shouldCloseAfterCreation}
+      />
       {isIsolatedSurface && (
         <RecordIndexSurfaceContextStoreInitEffect
           contextStoreInstanceId={contextStoreInstanceId}
@@ -178,7 +229,6 @@ const RecordIndexSurfaceInstance = ({
               embeddedSurfaceOptions,
               hideEmptyStateSubtitle,
               onViewChange,
-              onRecordCreated,
               recordFieldByFieldMetadataItemId,
               labelIdentifierFieldMetadataItem,
               fieldMetadataItemByFieldMetadataItemId,
@@ -220,7 +270,7 @@ const RecordIndexSurfaceInstance = ({
                       embeddedSurfaceOptions?.hidePageHeader ? undefined : (
                         <RecordIndexPageHeader
                           contextStoreInstanceId={contextStoreInstanceId}
-                          headerActionButton={headerActionButton}
+                          headerLeadingAction={headerLeadingAction}
                           headerTitle={headerTitle}
                         />
                       )
@@ -287,13 +337,14 @@ export const RecordIndexSurface = ({
   onOpenRecordFromIndexView,
   shouldPreserveParentViewStateOnOpen,
   shouldUseIndexIdentifierUrlOnFullPageOpen,
+  shouldCloseAfterCreation,
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters,
   hideQueryOnlyRecordFilters,
   hideEmptyStateSubtitle,
   headerTitle,
-  headerActionButton,
+  headerLeadingAction,
   embeddedSurfaceOptions,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -321,12 +372,13 @@ export const RecordIndexSurface = ({
       shouldUseIndexIdentifierUrlOnFullPageOpen={
         shouldUseIndexIdentifierUrlOnFullPageOpen
       }
+      shouldCloseAfterCreation={shouldCloseAfterCreation}
       onViewChange={onViewChange}
       onRecordCreated={onRecordCreated}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
       hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
       hideEmptyStateSubtitle={hideEmptyStateSubtitle}
-      headerActionButton={headerActionButton}
+      headerLeadingAction={headerLeadingAction}
       headerTitle={headerTitle}
       embeddedSurfaceOptions={embeddedSurfaceOptions}
     />

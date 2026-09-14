@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { type ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { isManagedProviderWorkspaceAllowed } from 'src/engine/core-modules/managed-provider-billing/utils/is-managed-provider-workspace-allowed.util';
 import { DefaultAiCatalogService } from 'src/engine/metadata-modules/ai/ai-models/services/default-ai-catalog.service';
 import { MANAGED_OPENROUTER_PROVIDER_NAME } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 
@@ -42,9 +43,12 @@ export class ProviderConfigService {
     return (
       this.isManagedOpenRouterEnabled() &&
       typeof workspaceId === 'string' &&
-      this.twentyConfigService
-        .get('MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS')
-        .includes(workspaceId)
+      isManagedProviderWorkspaceAllowed({
+        allowedWorkspaceIds: this.twentyConfigService.get(
+          'MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS',
+        ),
+        workspaceId,
+      })
     );
   }
 

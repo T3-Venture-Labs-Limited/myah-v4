@@ -10,6 +10,7 @@ import {
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { ManagedProviderOperationService } from 'src/engine/core-modules/managed-provider-billing/services/managed-provider-operation.service';
+import { isManagedProviderWorkspaceAllowed } from 'src/engine/core-modules/managed-provider-billing/utils/is-managed-provider-workspace-allowed.util';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import {
   AiException,
@@ -115,7 +116,10 @@ export class ManagedOpenRouterModelService {
 
     return (
       Array.isArray(eligibleWorkspaceIds) &&
-      eligibleWorkspaceIds.includes(workspaceId)
+      isManagedProviderWorkspaceAllowed({
+        allowedWorkspaceIds: eligibleWorkspaceIds,
+        workspaceId,
+      })
     );
   }
   private isGemmaTestWorkspaceEligible(workspaceId: string): boolean {

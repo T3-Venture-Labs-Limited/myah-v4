@@ -7,7 +7,14 @@ import {
 import { setContext } from '@apollo/client/link/context';
 import { ErrorLink } from '@apollo/client/link/error';
 import { RetryLink } from '@apollo/client/link/retry';
-import { from, switchMap, throwError } from 'rxjs';
+import { defer, from, switchMap, tap, throwError } from 'rxjs';
+import {
+  assertCampaignCreationCurrent,
+  CampaignCreationBoundaryError,
+  isCampaignCreationTransportUncertain,
+} from '@/apollo/utils/campaignCreationOperation';
+import { campaignCreationState } from '@/object-record/record-index/states/campaignCreationState';
+import { type CampaignCreationOperationContext } from '@/object-record/record-index/types/CampaignCreationAttempt';
 import { RestLink } from 'apollo-link-rest';
 import UploadHttpLink from 'apollo-upload-client/UploadHttpLink.mjs';
 
@@ -108,12 +115,17 @@ export class ApolloFactory implements ApolloManager {
         uri: REST_API_BASE_URL,
       });
 
-      const authLink = setContext(async (_, { headers }) => {
+      const authLink = setContext(async (_, { headers, campaignCreation }) => {
         const tokenPair = getTokenPair();
 
         const locale = this.currentWorkspaceMember?.locale ?? i18n.locale;
 
         if (isUndefinedOrNull(tokenPair)) {
+          if (campaignCreation)
+            assertCampaignCreationCurrent(
+              campaignCreation,
+              headers?.authorization ?? '',
+            );
           return {
             headers: {
               ...headers,
@@ -124,6 +136,11 @@ export class ApolloFactory implements ApolloManager {
         }
 
         const token = tokenPair.accessOrWorkspaceAgnosticToken?.token;
+        if (campaignCreation)
+          assertCampaignCreationCurrent(
+            campaignCreation,
+            token ? `Bearer ${token}` : '',
+          );
 
         return {
           headers: {
@@ -146,6 +163,7 @@ export class ApolloFactory implements ApolloManager {
         attempts: {
           max: 2,
           retryIf: (error) => {
+            if (error instanceof CampaignCreationBoundaryError) return false;
             // oxlint-disable-next-line no-console
             console.log('retryIf error from retryLink', error);
             if (this.isAuthenticationError(error)) {
@@ -158,6 +176,48 @@ export class ApolloFactory implements ApolloManager {
           },
         },
       });
+
+      const campaignCreationLink = new ApolloLink((operation, forward) =>
+        defer(() => {
+          const context = operation.getContext().campaignCreation as
+            | CampaignCreationOperationContext
+            | undefined;
+          if (!context) return forward(operation);
+          const authorization = () =>
+            operation.getContext().headers?.authorization ?? '';
+          assertCampaignCreationCurrent(context, authorization());
+          context.transport.dispatched = true;
+          return forward(operation).pipe(
+            tap({
+              next: () =>
+                assertCampaignCreationCurrent(context, authorization()),
+              error: (error: unknown) => {
+                assertCampaignCreationCurrent(context, authorization());
+                if (
+                  context.kind === 'create' &&
+                  isCampaignCreationTransportUncertain(error)
+                ) {
+                  context.transport.uncertain = true;
+                  const state = context.store.get(campaignCreationState.atom);
+                  const attempt = state.attempts[context.attemptKey];
+                  if (
+                    attempt?.runId === context.runId &&
+                    state.sessionGeneration === context.sessionGeneration
+                  ) {
+                    context.store.set(campaignCreationState.atom, {
+                      ...state,
+                      attempts: {
+                        ...state.attempts,
+                        [context.attemptKey]: { ...attempt, uncertain: true },
+                      },
+                    });
+                  }
+                }
+              },
+            }),
+          );
+        }),
+      );
 
       const attemptTokenRenewal = async (): Promise<void> => {
         const graphqlUri = `${REACT_APP_SERVER_BASE_URL}/metadata`;
@@ -271,6 +331,21 @@ export class ApolloFactory implements ApolloManager {
       };
 
       const errorLink = new ErrorLink(({ error, operation, forward }) => {
+        const campaignCreation = operation.getContext().campaignCreation as
+          | CampaignCreationOperationContext
+          | undefined;
+        if (campaignCreation) {
+          if (error instanceof CampaignCreationBoundaryError) return;
+          try {
+            // RetryLink awaits even retryIf(false), so recheck after that yield.
+            assertCampaignCreationCurrent(
+              campaignCreation,
+              operation.getContext().headers?.authorization ?? '',
+            );
+          } catch (boundaryError) {
+            return throwError(() => boundaryError);
+          }
+        }
         if (CombinedGraphQLErrors.is(error)) {
           onErrorCb?.(error.errors);
           for (const graphQLError of error.errors) {
@@ -351,6 +426,7 @@ export class ApolloFactory implements ApolloManager {
         ...(extraLinks || []),
         ...(isDebugMode ? [logger] : []),
         retryLink,
+        campaignCreationLink,
         streamingRestLink,
         restLink,
         uploadLink,

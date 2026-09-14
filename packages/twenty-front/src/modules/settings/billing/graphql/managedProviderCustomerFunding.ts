@@ -5,7 +5,6 @@ export const MANAGED_PROVIDER_CUSTOMER_FUNDING_ITEM_FRAGMENT = gql`
     id
     fundingType
     state
-    presetId
     principalCents
     taxCents
     collectedTotalCents
@@ -26,9 +25,11 @@ export const GET_MANAGED_PROVIDER_BILLING_STATUS = gql`
       reconciliationRequiredOperationCount
       customerFundingAvailable
       customerFundingPaymentMethodReady
-      customerFundingPresets {
-        id
-        principalCents
+      customerFundingPolicy {
+        incrementCents
+        minimumPrincipalCents
+        maximumPrincipalCents
+        suggestedPrincipalCents
       }
       customerFundingBillingSummary {
         name
@@ -70,8 +71,12 @@ export const GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION = gql`
 `;
 
 export const PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD = gql`
-  mutation PrepareManagedProviderCustomerFundingPaymentMethod {
-    prepareManagedProviderCustomerFundingPaymentMethod {
+  mutation PrepareManagedProviderCustomerFundingPaymentMethod(
+    $replaceExistingPaymentMethod: Boolean = false
+  ) {
+    prepareManagedProviderCustomerFundingPaymentMethod(
+      replaceExistingPaymentMethod: $replaceExistingPaymentMethod
+    ) {
       ready
       clientSecret
       publishableKey
@@ -159,11 +164,11 @@ export const COMPLETE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD = gql`
 
 export const REQUEST_MANAGED_PROVIDER_CUSTOMER_FUNDING = gql`
   mutation RequestManagedProviderCustomerFunding(
-    $preset: String!
+    $principalCents: Int!
     $idempotencyKey: String!
   ) {
     requestManagedProviderCustomerFunding(
-      preset: $preset
+      principalCents: $principalCents
       idempotencyKey: $idempotencyKey
     ) {
       ...ManagedProviderCustomerFundingItem
@@ -178,6 +183,7 @@ export const PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION = gql`
   ) {
     prepareManagedProviderCustomerFundingPaymentAction(actionId: $actionId) {
       clientSecret
+      publishableKey
     }
   }
 `;

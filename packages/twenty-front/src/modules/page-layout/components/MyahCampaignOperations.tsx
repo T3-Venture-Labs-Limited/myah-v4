@@ -1,3 +1,4 @@
+import { MyahCampaignEmailAccounts } from '@/page-layout/components/MyahCampaignEmailAccounts';
 import { MyahCampaignRichTextSettings } from '@/page-layout/components/MyahCampaignRichTextSettings';
 import { type PageLayoutWidget } from '@/page-layout/types/PageLayoutWidget';
 import { FieldsWidget } from '@/page-layout/widgets/fields/components/FieldsWidget';
@@ -37,10 +38,13 @@ export const MyahCampaignOperations = ({
         unsavedChangesSubtitle: t`Your Email signature changes have not been saved.`,
       }}
       contentBeforeFields={
-        <FieldsWidget
-          widget={fieldsWidget}
-          includeFieldNames={CAMPAIGN_OPERATIONS_STATUS_FIELD_NAMES}
-        />
+        <>
+          <FieldsWidget
+            widget={fieldsWidget}
+            includeFieldNames={CAMPAIGN_OPERATIONS_STATUS_FIELD_NAMES}
+          />
+          <MyahCampaignEmailAccounts campaignId={campaignId} />
+        </>
       }
     />
   );
