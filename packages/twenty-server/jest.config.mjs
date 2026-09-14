@@ -9,10 +9,7 @@ const jestConfig = {
   prettierPath: null,
   // to enable logs, comment out the following line
   silent: true,
-  ...(isCI && {
-    reporters: ['./jest-failures-only-reporter.js'],
-    workerIdleMemoryLimit: '1GB',
-  }),
+  ...(isCI && { reporters: ['./jest-failures-only-reporter.js'] }),
   errorOnDeprecated: true,
   clearMocks: true,
   displayName: 'twenty-server',
