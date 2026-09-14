@@ -4,16 +4,19 @@ import { makeRestAPIRequest } from 'test/integration/rest/utils/make-rest-api-re
 
 const ERROR =
   'Campaign lifecycle and execution authority require a dedicated operation.';
+const SEQUENCE_AUTHORIZATION_ERROR =
+  'Campaign sequence authorization requires a dedicated operation.';
 
 const expectRejected = async (
   method: 'post' | 'patch' | 'delete',
   path: string,
   body: object | object[] = {},
+  error = ERROR,
 ) => {
   const response = await makeRestAPIRequest({ method, path, body });
 
   expect(response.status).toBe(400);
-  expect(JSON.stringify(response.body)).toContain(ERROR);
+  expect(JSON.stringify(response.body)).toContain(error);
 };
 
 const quoteIdentifier = (identifier: string) =>
@@ -99,21 +102,31 @@ describe('Campaign REST lifecycle write guards', () => {
     }
 
     const authorityId = trackId();
-    await expectRejected('post', '/campaigns', {
-      id: authorityId,
-      name: 'Denied authority',
-      sequenceAuthorization: { authorizationId: 'forged' },
-    });
+    await expectRejected(
+      'post',
+      '/campaigns',
+      {
+        id: authorityId,
+        name: 'Denied authority',
+        sequenceAuthorization: { authorizationId: 'forged' },
+      },
+      SEQUENCE_AUTHORIZATION_ERROR,
+    );
     expect((await readCampaign(authorityId)).status).toBe(404);
 
     const bulkAuthorityId = trackId();
-    await expectRejected('post', '/batch/campaigns', [
-      {
-        id: bulkAuthorityId,
-        name: 'Denied bulk authority',
-        sequenceAuthorization: { authorizationId: 'forged-bulk' },
-      },
-    ]);
+    await expectRejected(
+      'post',
+      '/batch/campaigns',
+      [
+        {
+          id: bulkAuthorityId,
+          name: 'Denied bulk authority',
+          sequenceAuthorization: { authorizationId: 'forged-bulk' },
+        },
+      ],
+      SEQUENCE_AUTHORIZATION_ERROR,
+    );
     expect((await readCampaign(bulkAuthorityId)).status).toBe(404);
 
     for (const deletedAt of [null, '2026-09-11T00:00:00.000Z']) {
@@ -181,12 +194,18 @@ describe('Campaign REST lifecycle write guards', () => {
     await expectRejected('patch', `/campaigns?filter=id[eq]:${id}`, {
       lifecycleStatus: 'PAUSED',
     });
-    await expectRejected('patch', `/campaigns/${id}`, {
-      sequenceAuthorization: { authorizationId: 'forged' },
-    });
-    await expectRejected('patch', `/campaigns?filter=id[eq]:${id}`, {
-      sequenceAuthorization: { authorizationId: 'forged-bulk' },
-    });
+    await expectRejected(
+      'patch',
+      `/campaigns/${id}`,
+      { sequenceAuthorization: { authorizationId: 'forged' } },
+      SEQUENCE_AUTHORIZATION_ERROR,
+    );
+    await expectRejected(
+      'patch',
+      `/campaigns?filter=id[eq]:${id}`,
+      { sequenceAuthorization: { authorizationId: 'forged-bulk' } },
+      SEQUENCE_AUTHORIZATION_ERROR,
+    );
     await expectRejected('patch', `/campaigns/${id}`, { deletedAt: null });
     await expectRejected('patch', `/campaigns?filter=id[eq]:${id}`, {
       deletedAt: '2026-09-11T00:00:00.000Z',
