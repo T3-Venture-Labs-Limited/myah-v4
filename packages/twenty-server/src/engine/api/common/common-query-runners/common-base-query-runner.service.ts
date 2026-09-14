@@ -200,6 +200,18 @@ export abstract class CommonBaseQueryRunnerService<
   ): Promise<CommonInput<Args>> {
     const { authContext, flatObjectMetadata } = queryRunnerContext;
 
+    await this.workspaceQueryHookService.executeRawInputPreQueryHooks(
+      authContext,
+      flatObjectMetadata.nameSingular,
+      operationName,
+      args as WorkspacePreQueryHookPayload<CommonQueryNames>,
+      {
+        objectMetadataId: flatObjectMetadata.id,
+        objectMetadataUniversalIdentifier:
+          flatObjectMetadata.universalIdentifier,
+      },
+    );
+
     const computedArgs = await this.computeArgs(args, queryRunnerContext);
 
     const hookedArgs =
