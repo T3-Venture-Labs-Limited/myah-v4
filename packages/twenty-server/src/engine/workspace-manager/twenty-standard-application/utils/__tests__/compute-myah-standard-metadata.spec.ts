@@ -638,6 +638,7 @@ describe('Myah standard metadata contract', () => {
     expect(campaignLifecycleStatus).toMatchObject({
       universalIdentifier: 'e169ef65-ded7-4060-9c7a-c9b92d359c8a',
       type: FieldMetadataType.SELECT,
+      isUIEditable: false,
       defaultValue: "'DRAFT'",
       options: expect.arrayContaining([
         expect.objectContaining({ value: 'DRAFT' }),
