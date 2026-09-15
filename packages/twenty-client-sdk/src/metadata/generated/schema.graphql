@@ -4800,7 +4800,7 @@ input ApproveCampaignCreatorListAdditionsInput {
 input DetachCampaignCreatorListInput {
   campaignId: UUID!
   creatorListId: UUID!
-  confirmedCreatorIds: [UUID!]!
+  confirmedCreatorIds: [UUID!]
   confirmationToken: String
 }
 

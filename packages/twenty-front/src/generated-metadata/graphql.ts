@@ -1750,7 +1750,7 @@ export type DestroyViewSortInput = {
 export type DetachCampaignCreatorListInput = {
   campaignId: Scalars['UUID']['input'];
   confirmationToken?: InputMaybe<Scalars['String']['input']>;
-  confirmedCreatorIds: Array<Scalars['UUID']['input']>;
+  confirmedCreatorIds?: InputMaybe<Array<Scalars['UUID']['input']>>;
   creatorListId: Scalars['UUID']['input'];
 };
 

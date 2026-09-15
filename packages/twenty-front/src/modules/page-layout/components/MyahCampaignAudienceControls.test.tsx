@@ -809,7 +809,19 @@ describe('MyahCampaignAudienceControls', () => {
     mockRecords({
       creatorLists: [{ id: 'list-1', name: 'VIP Creators' }],
     });
-    mockDetach.mockResolvedValue(undefined);
+    const writeQuery = jest.fn();
+    mockDetach.mockImplementation(async ({ update }) =>
+      update(
+        { writeQuery },
+        {
+          data: {
+            detachCampaignCreatorList: {
+              campaignCreatorLists: [],
+            },
+          },
+        },
+      ),
+    );
 
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
 
@@ -847,6 +859,13 @@ describe('MyahCampaignAudienceControls', () => {
         }),
       ),
     );
+    expect(writeQuery).toHaveBeenCalledWith({
+      data: {
+        campaignInfluencerSnapshot: { campaignCreatorLists: [] },
+      },
+      query: expect.stringContaining('CampaignInfluencerSnapshot'),
+      variables: { input: { campaignId: 'campaign-1' } },
+    });
     expect(mockRefetchQueries).not.toHaveBeenCalled();
   });
 });
