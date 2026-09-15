@@ -1,5 +1,6 @@
 import { EmailingDomainStatus } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-status.type';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { EmailGroupMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/email-group/services/email-group-message-outbound.service';
 
 describe('EmailGroupMessageOutboundService', () => {
@@ -27,6 +28,12 @@ describe('EmailGroupMessageOutboundService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     findOne.mockResolvedValue(emailingDomain);
+  });
+
+  it('exposes the fixed provider request timeout', () => {
+    expect(service.providerRequestTimeoutMs).toBe(
+      OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
   });
 
   it('forwards reply headers through the emailing-domain sender', async () => {

@@ -87,6 +87,15 @@ describe('campaign sequence launch authority contract', () => {
     );
   });
 
+  it('accepts aliases that are exact shared IANA list members', () => {
+    expect(
+      campaignSequenceAuthorizationRequestSchema.safeParse({
+        ...request,
+        reviewedWindow: { ...request.reviewedWindow, timeZone: 'US/Eastern' },
+      }).success,
+    ).toBe(true);
+  });
+
   it.each([
     ['an unknown request key', { ...request, extra: true }],
     [
@@ -107,10 +116,10 @@ describe('campaign sequence launch authority contract', () => {
       },
     ],
     [
-      'an IANA alias rather than its canonical identifier',
+      'a timezone not in the shared IANA list',
       {
         ...request,
-        reviewedWindow: { ...request.reviewedWindow, timeZone: 'US/Eastern' },
+        reviewedWindow: { ...request.reviewedWindow, timeZone: 'Mars/Olympus' },
       },
     ],
     [

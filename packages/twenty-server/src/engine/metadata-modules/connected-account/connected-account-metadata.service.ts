@@ -4,6 +4,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityNotFoundError, In, Repository } from 'typeorm';
 
 import { AppOAuthRevokeService } from 'src/engine/core-modules/application/connection-provider/refresh/services/app-oauth-revoke.service';
+import {
+  CAMPAIGN_SEND_EVIDENCE_IN_FLIGHT,
+  CampaignMailboxDeletionFenceError,
+  CampaignMailboxDeletionFenceService,
+} from 'src/engine/core-modules/campaign-execution/services/campaign-mailbox-deletion-fence.service';
 import { MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME } from 'src/engine/core-modules/myah/constants/workspace-mailbox-connected-account-name.constant';
 import { CALENDAR_CHANNEL_DELETED_EVENT } from 'src/engine/metadata-modules/calendar-channel/constants/calendar-channel-deleted.constant';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
@@ -33,6 +38,7 @@ export class ConnectedAccountMetadataService {
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly appOAuthRevokeService: AppOAuthRevokeService,
     private readonly workspaceEventEmitter: WorkspaceEventEmitter,
+    private readonly campaignMailboxDeletionFence: CampaignMailboxDeletionFenceService,
   ) {}
 
   async findByUserWorkspaceId({
@@ -240,59 +246,73 @@ export class ConnectedAccountMetadataService {
     id: string;
     workspaceId: string;
   }): Promise<ConnectedAccountEntity> {
-    let connectedAccount: ConnectedAccountEntity;
+    let connectedAccount!: ConnectedAccountEntity;
+    let messageChannels!: Pick<MessageChannelEntity, 'id'>[];
+    let calendarChannels!: Pick<CalendarChannelEntity, 'id'>[];
 
     try {
-      connectedAccount = await this.repository.findOneOrFail({
-        where: { id, workspaceId },
+      await this.repository.manager.transaction(async (manager) => {
+        const messageChannelIds =
+          await this.campaignMailboxDeletionFence.assertDeletionAllowedInTransaction(
+            { connectedAccountId: id, workspaceId },
+            manager,
+          );
+        const connectedAccountRepository = manager.getRepository(
+          ConnectedAccountEntity,
+        );
+        const calendarChannelRepository = manager.getRepository(
+          CalendarChannelEntity,
+        );
+        connectedAccount = await connectedAccountRepository.findOneOrFail({
+          where: { id, workspaceId },
+        });
+        if (
+          connectedAccount.name ===
+            MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME &&
+          connectedAccount.visibility === 'workspace' &&
+          !allowWorkspaceMailbox
+        )
+          throw new EntityNotFoundError(ConnectedAccountEntity, {
+            id,
+            workspaceId,
+          });
+        messageChannels = messageChannelIds.map((messageChannelId) => ({
+          id: messageChannelId,
+        }));
+        calendarChannels = await calendarChannelRepository.find({
+          where: { connectedAccountId: id, workspaceId },
+          select: { id: true },
+        });
+        const deleteResult = await connectedAccountRepository.delete({
+          id,
+          workspaceId,
+        });
+        if (deleteResult?.affected === 0)
+          throw new EntityNotFoundError(ConnectedAccountEntity, {
+            id,
+            workspaceId,
+          });
       });
     } catch (error) {
+      if (error instanceof CampaignMailboxDeletionFenceError) {
+        throw new ConnectedAccountException(
+          CAMPAIGN_SEND_EVIDENCE_IN_FLIGHT,
+          ConnectedAccountExceptionCode.INVALID_CONNECTED_ACCOUNT_INPUT,
+        );
+      }
       if (error instanceof EntityNotFoundError) {
         throw new ConnectedAccountException(
           'Connected account not found',
           ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
         );
       }
-
       throw error;
     }
 
-    if (
-      connectedAccount.name === MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME &&
-      connectedAccount.visibility === 'workspace' &&
-      !allowWorkspaceMailbox
-    ) {
-      throw new ConnectedAccountException(
-        'Connected account not found',
-        ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
-      );
-    }
-
-    const [messageChannels, calendarChannels] = await Promise.all([
-      this.messageChannelRepository.find({
-        where: { connectedAccountId: id, workspaceId },
-        select: { id: true },
-      }),
-      this.calendarChannelRepository.find({
-        where: { connectedAccountId: id, workspaceId },
-        select: { id: true },
-      }),
-    ]);
-
     this.logger.log(
-      `WorkspaceId: ${workspaceId} Deleting connected account ${id} with ${messageChannels.length} message channel(s) and ${calendarChannels.length} calendar channel(s)`,
+      `WorkspaceId: ${workspaceId} Deleted connected account ${id} with ${messageChannels.length} message channel(s) and ${calendarChannels.length} calendar channel(s)`,
     );
-
     await this.appOAuthRevokeService.revokeIfApp(connectedAccount);
-
-    const deleteResult = await this.repository.delete({ id, workspaceId });
-
-    if (deleteResult?.affected === 0) {
-      throw new ConnectedAccountException(
-        'Connected account not found',
-        ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
-      );
-    }
 
     this.workspaceEventEmitter.emitCustomBatchEvent<MessageChannelDeletedEvent>(
       MESSAGE_CHANNEL_DELETED_EVENT,

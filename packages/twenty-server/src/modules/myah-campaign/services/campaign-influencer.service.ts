@@ -1,5 +1,6 @@
 import { isUUID } from 'class-validator';
 import { Injectable } from '@nestjs/common';
+import { MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE } from 'twenty-shared/metadata';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -77,6 +78,7 @@ type RecordRow = {
   creatorListId?: string;
   isDirectlyAdded?: boolean;
   assignedManagedMailboxId?: string | null;
+  stage?: string;
   deletedAt?: unknown;
 };
 type CampaignCreatorRow = RecordRow & {
@@ -483,22 +485,22 @@ export class CampaignInfluencerService {
       (creatorId) => !existing.some((row) => row.creatorId === creatorId),
     );
     if (missingIds.length)
-      try {
-        await campaignCreators.upsert(
+      await campaignCreators
+        .createQueryBuilder(undefined, manager.queryRunner)
+        .insert()
+        .values(
           missingIds.map((creatorId) => ({
             campaignId: input.campaignId,
             creatorId,
             isDirectlyAdded: false,
+            stage: MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE,
           })),
-          {
-            conflictPaths: ['campaignId', 'creatorId'],
-            indexPredicate: '"deletedAt" IS NULL',
-          },
-          manager,
-        );
-      } catch (error) {
-        if (!this.isUniqueViolation(error)) throw error;
-      }
+        )
+        // READY is insert-only. A concurrent restore/conflict winner retains
+        // its current stage rather than receiving an admission-stage reset.
+        .orIgnore()
+        .returning(['id'])
+        .execute();
     const resolved = (
       await campaignCreators.find(
         { where: { campaignId: input.campaignId } },
@@ -756,23 +758,55 @@ export class CampaignInfluencerService {
         (id) => creators.restore(id, manager),
       );
 
-      await creators.upsert(
-        ids.map((creatorId) => ({
-          campaignId: input.campaignId,
-          creatorId,
-          isDirectlyAdded: true,
-          ...(input.assignedManagedMailboxId !== undefined
-            ? {
-                assignedManagedMailboxId: input.assignedManagedMailboxId,
-              }
-            : {}),
-        })),
+      const activeCampaignCreators = await creators.find(
         {
-          conflictPaths: ['campaignId', 'creatorId'],
-          indexPredicate: '"deletedAt" IS NULL',
+          where: ids.map((creatorId) => ({
+            campaignId: input.campaignId,
+            creatorId,
+          })),
         },
         manager,
       );
+      const existingCreatorIds = new Set(
+        activeCampaignCreators.map(({ creatorId }) => creatorId),
+      );
+      const missingIds = ids.filter((id) => !existingCreatorIds.has(id));
+      const directCreatorValues = (creatorId: string) => ({
+        campaignId: input.campaignId,
+        creatorId,
+        isDirectlyAdded: true,
+        ...(input.assignedManagedMailboxId !== undefined
+          ? { assignedManagedMailboxId: input.assignedManagedMailboxId }
+          : {}),
+      });
+
+      if (missingIds.length > 0) {
+        await creators
+          .createQueryBuilder(undefined, manager.queryRunner)
+          .insert()
+          .values(
+            missingIds.map((creatorId) => ({
+              ...directCreatorValues(creatorId),
+              stage: MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE,
+            })),
+          )
+          // A concurrent restore wins without READY entering an update.
+          .orIgnore()
+          .returning(['id'])
+          .execute();
+      }
+      if (ids.length > 0) {
+        // Apply direct-membership and mailbox intent without carrying stage
+        // into the conflict update.
+        await creators.upsert(
+          ids.map(directCreatorValues),
+          {
+            conflictPaths: ['campaignId', 'creatorId'],
+            indexPredicate: '"deletedAt" IS NULL',
+          },
+          manager,
+        );
+      }
       return this.snapshotInTransaction(input.campaignId, authContext, manager);
     });
   }

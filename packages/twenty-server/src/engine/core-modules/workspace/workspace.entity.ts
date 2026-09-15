@@ -193,6 +193,9 @@ export class WorkspaceEntity {
   @Column({ type: 'timestamptz', nullable: true })
   suspendedAt: Date | null;
 
+  @Column({ type: 'text', nullable: true })
+  campaignCapacityTimeZone: string | null;
+
   @OneToMany(
     () => WorkspaceSSOIdentityProviderEntity,
     (workspaceSSOIdentityProviders) => workspaceSSOIdentityProviders.workspace,

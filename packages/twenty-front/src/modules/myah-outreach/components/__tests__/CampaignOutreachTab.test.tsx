@@ -1,285 +1,185 @@
-import { createElement, type ReactNode } from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { type MockedResponse } from '@apollo/client/testing';
+import { MockedProvider } from '@apollo/client/testing/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { CampaignOutreachTab } from '@/myah-outreach/components/CampaignOutreachTab';
 import {
+  CAMPAIGN_SEQUENCE,
   CREATE_CAMPAIGN_OUTREACH_WORKFLOW,
-  FIND_CAMPAIGN_OUTREACH_WORKFLOW,
+  REPLACE_LEGACY_CAMPAIGN_SEQUENCE,
 } from '@/myah-outreach/graphql/operations';
 
-const mockQuery = jest.fn();
-const mockMutate = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
-const mockApolloCoreClient = {
-  mutate: mockMutate,
-  query: mockQuery,
-};
-
-type CampaignOutreachWorkflowQueryResult = {
-  findCampaignOutreachWorkflow: {
-    campaignId: string;
-    currentVersionId: string | null;
-    name: string | null;
-    workflowId: string;
-  } | null;
-};
-
-jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
-  useApolloCoreClient: () => mockApolloCoreClient,
-}));
 
 jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
-  useSnackBar: () => ({
-    enqueueErrorSnackBar: mockEnqueueErrorSnackBar,
-  }),
+  useSnackBar: () => ({ enqueueErrorSnackBar: mockEnqueueErrorSnackBar }),
 }));
-jest.mock('@/myah-outreach/components/CampaignOutreachWorkflowEditor', () => ({
-  CampaignOutreachWorkflowEditor: ({ workflowId }: { workflowId: string }) => (
-    <div data-testid="campaign-outreach-workflow-editor">{workflowId}</div>
+
+jest.mock('../CampaignOutreachWorkflowEditor', () => ({
+  CampaignOutreachWorkflowEditor: ({
+    sequenceState,
+  }: {
+    sequenceState: { snapshot: { versionId: string } };
+  }) => (
+    <div data-testid="campaign-outreach-workflow-editor">
+      {sequenceState.snapshot.versionId}
+    </div>
   ),
 }));
 
-jest.mock('@linaria/react', () => {
-  const styled = new Proxy(
-    {},
-    {
-      get: () => (strings: TemplateStringsArray) => {
-        const css = strings.join('');
-        const display = css.match(/display:\s*([^;]+)/)?.[1];
-        const flex = css.match(/flex:\s*([^;]+)/)?.[1];
-        const height = css.match(/height:\s*([^;]+)/)?.[1];
-        const minHeight = css.match(/min-height:\s*([^;]+)/)?.[1];
+const campaignId = 'a0000000-0000-4000-8000-000000000001';
+const workflowId = 'b0000000-0000-4000-8000-000000000002';
+const versionId = 'c0000000-0000-4000-8000-000000000003';
 
-        return ({ children, ...props }: { children?: ReactNode }) =>
-          createElement(
-            'div',
-            {
-              ...props,
-              style: {
-                display,
-                flex,
-                height,
-                minHeight,
-              },
-            },
-            children,
-          );
-      },
+const loadResult = (kind: 'ABSENT' | 'LEGACY' | 'SEQUENCE') => {
+  if (kind === 'ABSENT') {
+    return {
+      __typename: 'CampaignSequenceAbsent',
+      kind,
+      campaignId,
+    };
+  }
+  if (kind === 'LEGACY') {
+    return {
+      __typename: 'CampaignSequenceLegacy',
+      kind,
+      campaignId,
+      workflowId,
+    };
+  }
+  return {
+    __typename: 'CampaignSequencePresent',
+    kind,
+    snapshot: {
+      __typename: 'CampaignSequenceSnapshot',
+      campaignId,
+      workflowId,
+      versionId,
+      sequence: { schemaVersion: 1, messages: [], delaysSeconds: [] },
+      lifecycleStatus: 'DRAFT',
+      editable: true,
+      issues: [],
     },
-  );
+  };
+};
 
-  return { styled, __esModule: true };
+const loadMock = (kind: 'ABSENT' | 'LEGACY' | 'SEQUENCE'): MockedResponse => ({
+  request: { query: CAMPAIGN_SEQUENCE, variables: { campaignId } },
+  result: { data: { campaignSequence: loadResult(kind) } },
 });
 
-describe('CampaignOutreachTab', () => {
-  beforeEach(() => {
-    mockQuery.mockReset();
-    mockMutate.mockReset();
-    mockEnqueueErrorSnackBar.mockReset();
-  });
+const renderTab = (mocks: MockedResponse[]) =>
+  render(
+    <MockedProvider mocks={mocks}>
+      <CampaignOutreachTab campaignId={campaignId} />
+    </MockedProvider>,
+  );
 
-  it('creates the only Outreach workflow from the empty state', async () => {
-    mockQuery.mockResolvedValue({
-      data: { findCampaignOutreachWorkflow: null },
-    });
-    mockMutate.mockResolvedValue({
-      data: {
-        createCampaignOutreachWorkflow: {
-          campaignId: 'campaign-a',
-          currentVersionId: 'workflow-version-1',
-          name: 'New outreach workflow',
-          workflowId: 'outreach-workflow-1',
+describe('CampaignOutreachTab', () => {
+  beforeEach(() => mockEnqueueErrorSnackBar.mockReset());
+
+  it('loads ABSENT without a read-time write and creates only after explicit action', async () => {
+    let createCalls = 0;
+    const mocks: MockedResponse[] = [
+      loadMock('ABSENT'),
+      {
+        request: {
+          query: CREATE_CAMPAIGN_OUTREACH_WORKFLOW,
+          variables: { campaignId },
+        },
+        result: () => {
+          createCalls += 1;
+          return {
+            data: {
+              createCampaignOutreachWorkflow: {
+                campaignId,
+                currentVersionId: versionId,
+                name: 'Campaign Outreach',
+                workflowId,
+              },
+            },
+          };
         },
       },
-    });
-    const user = userEvent.setup();
+      loadMock('SEQUENCE'),
+    ];
+    renderTab(mocks);
 
-    render(<CampaignOutreachTab campaignId="campaign-a" />);
+    expect(
+      await screen.findByRole('button', { name: 'Create Campaign sequence' }),
+    ).toBeVisible();
+    expect(createCalls).toBe(0);
 
-    await user.click(
-      await screen.findByRole('button', {
-        name: 'Create outreach workflow',
-      }),
-    );
-
-    await waitFor(() =>
-      expect(mockMutate).toHaveBeenCalledWith({
-        mutation: CREATE_CAMPAIGN_OUTREACH_WORKFLOW,
-        variables: { campaignId: 'campaign-a' },
-      }),
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Create Campaign sequence' }),
     );
     expect(
       await screen.findByTestId('campaign-outreach-workflow-editor'),
-    ).toHaveTextContent('outreach-workflow-1');
+    ).toHaveTextContent(versionId);
+    expect(createCalls).toBe(1);
   });
 
-  it('fills the native Campaign tab pane when the workflow editor is rendered', async () => {
-    mockQuery.mockResolvedValue({
-      data: {
-        findCampaignOutreachWorkflow: {
-          campaignId: 'campaign-a',
-          currentVersionId: 'workflow-version-1',
-          name: 'Campaign Outreach',
-          workflowId: 'outreach-workflow-1',
+  it('requires explicit revision-bound replacement for LEGACY', async () => {
+    let replacementCalls = 0;
+    renderTab([
+      loadMock('LEGACY'),
+      {
+        request: {
+          query: REPLACE_LEGACY_CAMPAIGN_SEQUENCE,
+          variables: { input: { campaignId, expectedWorkflowId: workflowId } },
+        },
+        result: () => {
+          replacementCalls += 1;
+          return {
+            data: {
+              replaceLegacyCampaignSequence: loadResult('SEQUENCE').snapshot,
+            },
+          };
         },
       },
-    });
+      loadMock('SEQUENCE'),
+    ]);
 
-    render(<CampaignOutreachTab campaignId="campaign-a" />);
+    expect(await screen.findByText('Legacy Campaign outreach')).toBeVisible();
+    expect(replacementCalls).toBe(0);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Replace legacy outreach' }),
+    );
 
     await screen.findByTestId('campaign-outreach-workflow-editor');
-
-    expect(screen.getByTestId('campaign-outreach-tab')).toHaveStyle({
-      display: 'flex',
-      flex: '1',
-      height: '100%',
-      minHeight: '0',
-    });
+    expect(replacementCalls).toBe(1);
   });
 
-  it('renders native loading and request-error feedback', async () => {
-    mockQuery.mockRejectedValue(new Error('Network unavailable'));
-
-    render(<CampaignOutreachTab campaignId="campaign-a" />);
-
-    expect(screen.getByLabelText('Loading Campaign Outreach')).toBeVisible();
-    expect(
-      await screen.findByText('Campaign Outreach could not load. Retry.'),
-    ).toBeVisible();
-    expect(screen.getByRole('button', { name: /Retry/ })).toBeVisible();
-  });
-
-  it('renders permission feedback when Campaign Outreach is forbidden', async () => {
-    mockQuery.mockRejectedValue({ code: 'FORBIDDEN' });
-
-    render(<CampaignOutreachTab campaignId="campaign-a" />);
-
-    expect(
-      await screen.findByText(
-        "You don't have permission to view Campaign Outreach.",
-      ),
-    ).toBeVisible();
-  });
-
-  it('does not render a General source picker or Copy action', async () => {
-    mockQuery.mockResolvedValue({
-      data: { findCampaignOutreachWorkflow: null },
-    });
-
-    render(<CampaignOutreachTab campaignId="campaign-a" />);
-
-    await screen.findByRole('button', { name: 'Create outreach workflow' });
-
-    expect(screen.queryByText(/copy general/i)).not.toBeInTheDocument();
-  });
-
-  it('loads the requested Campaign Outreach workflow from the server', async () => {
-    mockQuery.mockResolvedValue({
-      data: { findCampaignOutreachWorkflow: null },
-    });
-
-    render(<CampaignOutreachTab campaignId="campaign-a" />);
-
-    await waitFor(() =>
-      expect(mockQuery).toHaveBeenCalledWith({
-        fetchPolicy: 'network-only',
-        query: FIND_CAMPAIGN_OUTREACH_WORKFLOW,
-        variables: { campaignId: 'campaign-a' },
-      }),
-    );
-  });
-
-  it('ignores a stale response after navigating to another Campaign', async () => {
-    let resolveCampaignA:
-      | ((result: CampaignOutreachWorkflowQueryResult) => void)
-      | undefined;
-    let resolveCampaignB:
-      | ((result: CampaignOutreachWorkflowQueryResult) => void)
-      | undefined;
-    mockQuery
-      .mockImplementationOnce(
-        () =>
-          new Promise<{ data: CampaignOutreachWorkflowQueryResult }>(
-            (resolve) => {
-              resolveCampaignA = ({ findCampaignOutreachWorkflow }) =>
-                resolve({ data: { findCampaignOutreachWorkflow } });
-            },
-          ),
-      )
-      .mockImplementationOnce(
-        () =>
-          new Promise<{ data: CampaignOutreachWorkflowQueryResult }>(
-            (resolve) => {
-              resolveCampaignB = ({ findCampaignOutreachWorkflow }) =>
-                resolve({ data: { findCampaignOutreachWorkflow } });
-            },
-          ),
-      );
-    const { rerender } = render(
-      <CampaignOutreachTab campaignId="campaign-a" />,
-    );
-
-    rerender(<CampaignOutreachTab campaignId="campaign-b" />);
-
-    await act(async () => {
-      resolveCampaignB?.({
-        findCampaignOutreachWorkflow: {
-          campaignId: 'campaign-b',
-          currentVersionId: 'version-b',
-          name: 'Campaign B Outreach',
-          workflowId: 'workflow-b',
-        },
-      });
-    });
+  it('renders SEQUENCE and reports request failure without generic graph fallback', async () => {
+    renderTab([loadMock('SEQUENCE')]);
     expect(
       await screen.findByTestId('campaign-outreach-workflow-editor'),
-    ).toHaveTextContent('workflow-b');
-
-    await act(async () => {
-      resolveCampaignA?.({
-        findCampaignOutreachWorkflow: {
-          campaignId: 'campaign-a',
-          currentVersionId: 'version-a',
-          name: 'Campaign A Outreach',
-          workflowId: 'workflow-a',
-        },
-      });
-    });
-
-    expect(
-      screen.getByTestId('campaign-outreach-workflow-editor'),
-    ).toHaveTextContent('workflow-b');
+    ).toBeVisible();
+    expect(screen.queryByText(/workflow canvas/i)).not.toBeInTheDocument();
   });
 
-  it('ignores a failed creation after navigating to another Campaign', async () => {
-    let rejectCreate: (error: Error) => void = () => {};
-    const createResult = new Promise<unknown>((_resolve, reject) => {
-      rejectCreate = reject;
-    });
+  it('keeps failed explicit creation recoverable', async () => {
+    renderTab([
+      loadMock('ABSENT'),
+      {
+        request: {
+          query: CREATE_CAMPAIGN_OUTREACH_WORKFLOW,
+          variables: { campaignId },
+        },
+        error: new Error('failed'),
+      },
+    ]);
 
-    mockQuery.mockResolvedValue({
-      data: { findCampaignOutreachWorkflow: null },
-    });
-    mockMutate.mockReturnValueOnce(createResult);
-    const user = userEvent.setup();
-    const { rerender } = render(
-      <CampaignOutreachTab campaignId="campaign-a" />,
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create Campaign sequence' }),
     );
-
-    await user.click(
-      await screen.findByRole('button', {
-        name: 'Create outreach workflow',
+    await waitFor(() =>
+      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
+        message: 'Unable to create the Campaign sequence.',
       }),
     );
-    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(1));
-
-    rerender(<CampaignOutreachTab campaignId="campaign-b" />);
-
-    await act(async () => {
-      rejectCreate(new Error('Campaign A failed'));
-    });
-
-    expect(mockEnqueueErrorSnackBar).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Create Campaign sequence' }),
+    ).toBeEnabled();
   });
 });

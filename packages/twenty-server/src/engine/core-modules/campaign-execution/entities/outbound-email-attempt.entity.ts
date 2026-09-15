@@ -1,0 +1,369 @@
+import {
+  Check,
+  Column,
+  CreateDateColumn,
+  Entity,
+  ForeignKey,
+  Index,
+  PrimaryColumn,
+  Unique,
+  UpdateDateColumn,
+} from 'typeorm';
+
+import { CampaignTestPreparationProofEntity } from 'src/engine/core-modules/campaign-test-authority/entities/campaign-test-preparation-proof.entity';
+import { CampaignActivationEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-activation.entity';
+import { CampaignEnrollmentEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-enrollment.entity';
+import { CampaignOccurrenceEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-occurrence.entity';
+import {
+  type OutboundEmailAttemptSource,
+  type OutboundEmailAttemptState,
+  type OutboundEmailCapacityState,
+  type OutboundEmailSelectionConstraintKind,
+} from 'src/engine/core-modules/campaign-execution/types/outbound-email-attempt-persistence.type';
+
+@ForeignKey(
+  () => CampaignOccurrenceEntity,
+  [
+    'workspaceId',
+    'campaignId',
+    'enrollmentId',
+    'occurrenceId',
+    'workflowVersionId',
+    'messageId',
+  ],
+  [
+    'workspaceId',
+    'campaignId',
+    'enrollmentId',
+    'id',
+    'workflowVersionId',
+    'messageId',
+  ],
+  {
+    name: 'FK_OEA_OCCURRENCE_BINDING',
+    onDelete: 'NO ACTION',
+    onUpdate: 'NO ACTION',
+  },
+)
+@ForeignKey(
+  () => CampaignActivationEntity,
+  ['workspaceId', 'campaignId', 'authorizationId', 'workflowVersionId'],
+  ['workspaceId', 'campaignId', 'authorizationId', 'workflowVersionId'],
+  {
+    name: 'FK_OEA_ACTIVATION_BINDING',
+    onDelete: 'NO ACTION',
+    onUpdate: 'NO ACTION',
+  },
+)
+@ForeignKey(
+  () => CampaignEnrollmentEntity,
+  ['workspaceId', 'campaignId', 'authorizationId', 'enrollmentId'],
+  ['workspaceId', 'campaignId', 'authorizationId', 'id'],
+  {
+    name: 'FK_OEA_ENROLLMENT_AUTHORIZATION_SCOPE',
+    onDelete: 'NO ACTION',
+    onUpdate: 'NO ACTION',
+  },
+)
+@ForeignKey(
+  () => CampaignTestPreparationProofEntity,
+  ['workspaceId', 'attemptId', 'testPreparationProofId'],
+  ['workspaceId', 'attemptId', 'testPreparationProofId'],
+  {
+    name: 'FK_OEA_TEST_PREPARATION_PROOF',
+    onDelete: 'NO ACTION',
+    onUpdate: 'NO ACTION',
+  },
+)
+@Index(
+  'IDX_OUTBOUND_EMAIL_ATTEMPT_RECONCILIATION',
+  ['attemptState', 'unknownAfter', 'updatedAt', 'attemptId'],
+  {
+    where: `"attemptState" IN ('RESERVED', 'PROCESSING', 'UNKNOWN', 'ACCEPTED')`,
+  },
+)
+@Unique('UQ_OEA_EXACT_CAMPAIGN_ATTEMPT', [
+  'workspaceId',
+  'campaignId',
+  'enrollmentId',
+  'occurrenceId',
+  'authorizationId',
+  'workflowVersionId',
+  'messageId',
+  'attemptId',
+  'renderDigest',
+])
+@Index(
+  'UQ_OUTBOUND_EMAIL_ATTEMPT_ACCEPTED_OCCURRENCE',
+  ['workspaceId', 'occurrenceId'],
+  {
+    unique: true,
+    where: '"source" = \'CAMPAIGN_SEQUENCE\' AND "attemptState" = \'ACCEPTED\'',
+  },
+)
+@Index(
+  'UQ_OUTBOUND_EMAIL_ATTEMPT_UNRESOLVED_OCCURRENCE',
+  ['workspaceId', 'occurrenceId'],
+  {
+    unique: true,
+    where:
+      "\"source\" = 'CAMPAIGN_SEQUENCE' AND \"attemptState\" IN ('RESERVED', 'PROCESSING', 'UNKNOWN')",
+  },
+)
+@Index(
+  'UQ_OUTBOUND_EMAIL_ATTEMPT_OCCURRENCE_NUMBER',
+  ['workspaceId', 'occurrenceId', 'attemptNumber'],
+  { unique: true, where: '"source" = \'CAMPAIGN_SEQUENCE\'' },
+)
+@Index(
+  'UQ_OUTBOUND_EMAIL_ATTEMPT_PROJECTED_MESSAGE',
+  ['workspaceId', 'projectedMessageId'],
+  { unique: true, where: '"projectedMessageId" IS NOT NULL' },
+)
+@Index(
+  'UQ_OEA_CAMPAIGN_MICROSOFT_EXTERNAL',
+  [
+    'workspaceId',
+    'connectedAccountId',
+    'messageChannelId',
+    'providerMessageExternalId',
+  ],
+  {
+    unique: true,
+    where: `"source" = 'CAMPAIGN_SEQUENCE' AND "provider" = 'microsoft' AND "providerMessageExternalId" IS NOT NULL`,
+  },
+)
+@Index(
+  'UQ_OUTBOUND_EMAIL_ATTEMPT_PROVIDER_MESSAGE',
+  ['workspaceId', 'connectedAccountId', 'provider', 'providerMessageId'],
+  { unique: true, where: '"providerMessageId" IS NOT NULL' },
+)
+@Check(
+  'CHK_OUTBOUND_EMAIL_ATTEMPT_SELECTION_EVIDENCE',
+  `(
+    ("selectionConstraintKind" = 'PINNED_REPLY' AND "priorAcceptedEvidenceId" IS NOT NULL)
+    OR
+    ("selectionConstraintKind" IN ('ROTATE', 'EXPLICIT') AND "priorAcceptedEvidenceId" IS NULL)
+  )`,
+)
+@Check(
+  'CHK_OUTBOUND_EMAIL_ATTEMPT_UNKNOWN_AFTER',
+  `"unknownAfter" = "claimedAt" + interval '60 seconds'`,
+)
+@Check(
+  'CHK_OUTBOUND_EMAIL_ATTEMPT_STATE_CAPACITY_SHAPE',
+  `(
+    ("attemptState" IN ('RESERVED', 'PROCESSING') AND "capacityState" = 'RESERVED')
+    OR ("attemptState" = 'BLOCKED' AND "capacityState" = 'RELEASED')
+    OR ("attemptState" = 'ACCEPTED' AND "capacityState" = 'CONSUMED')
+    OR ("attemptState" = 'DEFINITELY_UNACCEPTED' AND "capacityState" = 'RELEASED')
+    OR ("attemptState" = 'UNKNOWN' AND "capacityState" = 'PROVISIONAL_UNKNOWN')
+  )`,
+)
+@Check(
+  'CHK_OEA_CAMPAIGN_ACCEPTED_EVIDENCE',
+  `COALESCE("source" <> 'CAMPAIGN_SEQUENCE' OR ("attemptState" = 'ACCEPTED' AND "capacityState" = 'CONSUMED' AND "providerAcceptedAt" IS NOT NULL AND "providerAcceptedAt" <> 'infinity'::timestamptz AND "providerAcceptedAt" <> '-infinity'::timestamptz AND NULLIF(btrim("providerMessageId"),'') IS NOT NULL AND "finalEvidenceDigest" ~ '^[0-9a-f]{64}$' AND "safeOutcomeReason" IS NULL AND "retryable" IS FALSE AND (NULLIF(btrim("providerHeaderMessageId"),'') IS NOT NULL OR NULLIF(btrim("providerMessageExternalId"),'') IS NOT NULL) AND ("providerThreadExternalId" IS NULL OR NULLIF(btrim("providerThreadExternalId"),'') IS NOT NULL) AND NULLIF(btrim("resolvedThreadExternalId"),'') IS NOT NULL AND ("reconciledProviderHeaderMessageId" IS NULL OR NULLIF(btrim("reconciledProviderHeaderMessageId"),'') IS NOT NULL) AND ("providerDeliveredRecipients" IS NULL OR (jsonb_typeof("providerDeliveredRecipients")='object' AND "providerDeliveredRecipients" ?& ARRAY['to','cc','bcc'] AND "providerDeliveredRecipients" - 'to' - 'cc' - 'bcc' = '{}'::jsonb AND jsonb_typeof("providerDeliveredRecipients"->'to')='array' AND jsonb_typeof("providerDeliveredRecipients"->'cc')='array' AND jsonb_typeof("providerDeliveredRecipients"->'bcc')='array' AND NOT jsonb_path_exists("providerDeliveredRecipients", '$.*[*] ? (@.type() != "string" || @ == "" || !(@ like_regex "^[^A-Z\\s](?:.*[^\\s])?$"))'))) AND (("projectedMessageId" IS NULL AND "projectedMessageThreadId" IS NULL) OR ("projectedMessageId" IS NOT NULL AND "projectedMessageThreadId" IS NOT NULL))) OR ("attemptState" <> 'ACCEPTED' AND "providerHeaderMessageId" IS NULL AND "providerMessageExternalId" IS NULL AND "reconciledProviderHeaderMessageId" IS NULL AND "providerThreadExternalId" IS NULL AND "resolvedThreadExternalId" IS NULL AND "providerDeliveredRecipients" IS NULL AND "projectedMessageId" IS NULL AND "projectedMessageThreadId" IS NULL), FALSE)`,
+)
+@Check(
+  'CHK_OEA_LEGACY_NEW_EVIDENCE_NULL',
+  `COALESCE("source" = 'CAMPAIGN_SEQUENCE' OR ("providerHeaderMessageId" IS NULL AND "providerMessageExternalId" IS NULL AND "reconciledProviderHeaderMessageId" IS NULL AND "providerThreadExternalId" IS NULL AND "resolvedThreadExternalId" IS NULL AND "providerDeliveredRecipients" IS NULL AND "projectedMessageThreadId" IS NULL), FALSE)`,
+)
+@Check(
+  'CHK_OUTBOUND_EMAIL_ATTEMPT_SOURCE_SHAPE',
+  `(
+    (
+      "source" = 'CAMPAIGN_SEQUENCE'
+      AND "selectionConstraintKind" IN ('ROTATE', 'PINNED_REPLY')
+      AND "campaignId" IS NOT NULL
+      AND "enrollmentId" IS NOT NULL
+      AND "occurrenceId" IS NOT NULL
+      AND "authorizationId" IS NOT NULL
+      AND "workflowVersionId" IS NOT NULL
+      AND "messageId" IS NOT NULL
+      AND "attemptNumber" IS NOT NULL
+      AND "attemptNumber" > 0
+      AND "renderDigest" IS NOT NULL
+      AND "senderPoolFingerprint" IS NOT NULL
+      AND "testPreparationProofId" IS NULL
+      AND "requesterUserWorkspaceId" IS NULL
+      AND "previewDigest" IS NULL
+      AND "testTransportDigest" IS NULL
+      AND "directReservationCapabilityId" IS NULL
+    ) OR (
+      "source" = 'CAMPAIGN_TEST'
+      AND "selectionConstraintKind" IN ('ROTATE', 'PINNED_REPLY')
+      AND "campaignId" IS NOT NULL
+      AND "workflowVersionId" IS NOT NULL
+      AND "messageId" IS NOT NULL
+      AND "testPreparationProofId" IS NOT NULL
+      AND "requesterUserWorkspaceId" IS NOT NULL
+      AND "renderDigest" IS NOT NULL
+      AND "previewDigest" IS NOT NULL
+      AND "testTransportDigest" IS NOT NULL
+      AND "senderPoolFingerprint" IS NOT NULL
+      AND "enrollmentId" IS NULL
+      AND "occurrenceId" IS NULL
+      AND "authorizationId" IS NULL
+      AND "attemptNumber" IS NULL
+      AND "directReservationCapabilityId" IS NULL
+    ) OR (
+      "source" IN ('INBOX', 'AUTOMATED_REPLY')
+      AND "directReservationCapabilityId" IS NOT NULL
+      AND "selectionConstraintKind" IN ('PINNED_REPLY', 'EXPLICIT')
+      AND "campaignId" IS NULL
+      AND "enrollmentId" IS NULL
+      AND "occurrenceId" IS NULL
+      AND "authorizationId" IS NULL
+      AND "workflowVersionId" IS NULL
+      AND "messageId" IS NULL
+      AND "attemptNumber" IS NULL
+      AND "renderDigest" IS NULL
+      AND "testPreparationProofId" IS NULL
+      AND "requesterUserWorkspaceId" IS NULL
+      AND "previewDigest" IS NULL
+      AND "testTransportDigest" IS NULL
+      AND "senderPoolFingerprint" IS NULL
+    )
+  )`,
+)
+@Entity({ name: 'outboundEmailAttempt', schema: 'core' })
+export class OutboundEmailAttemptEntity {
+  @PrimaryColumn({ type: 'uuid' })
+  attemptId: string;
+
+  @Column({ nullable: false, type: 'uuid' })
+  workspaceId: string;
+
+  @Column({ nullable: false, type: 'text' })
+  source: OutboundEmailAttemptSource;
+
+  @Column({ nullable: false, type: 'text' })
+  attemptState: OutboundEmailAttemptState;
+
+  @Column({ nullable: false, type: 'text' })
+  capacityState: OutboundEmailCapacityState;
+
+  @Column({ nullable: false, type: 'uuid' })
+  connectedAccountId: string;
+
+  @Column({ nullable: false, type: 'uuid' })
+  messageChannelId: string;
+
+  @Column({ nullable: false, type: 'text' })
+  provider: string;
+
+  @Column({ nullable: false, type: 'text' })
+  normalizedSenderHandle: string;
+
+  @Column({ nullable: false, type: 'text' })
+  normalizedRecipient: string;
+
+  @Column({ nullable: false, type: 'text' })
+  selectionConstraintKind: OutboundEmailSelectionConstraintKind;
+
+  @Column({ nullable: true, type: 'uuid' })
+  priorAcceptedEvidenceId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  senderPoolFingerprint: string | null;
+
+  @Column({ nullable: false, type: 'date' })
+  localDate: string;
+
+  @Column({ nullable: false, type: 'timestamptz' })
+  claimedAt: Date;
+
+  @Column({ nullable: false, type: 'timestamptz' })
+  slotAt: Date;
+
+  @Column({ nullable: false, type: 'timestamptz' })
+  unknownAfter: Date;
+
+  @Column({ nullable: true, type: 'uuid' })
+  campaignId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  enrollmentId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  occurrenceId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  authorizationId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  workflowVersionId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  messageId: string | null;
+
+  @Column({ nullable: true, type: 'integer' })
+  attemptNumber: number | null;
+
+  @Column({ nullable: true, type: 'text' })
+  renderDigest: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  testPreparationProofId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  requesterUserWorkspaceId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  previewDigest: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  testTransportDigest: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  directReservationCapabilityId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  finalEvidenceDigest: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  providerMessageId: string | null;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  providerAcceptedAt: Date | null;
+
+  @Column({ nullable: true, type: 'text' })
+  providerHeaderMessageId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  providerMessageExternalId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  reconciledProviderHeaderMessageId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  providerThreadExternalId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  resolvedThreadExternalId: string | null;
+
+  @Column({ nullable: true, type: 'jsonb' })
+  providerDeliveredRecipients: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+  } | null;
+
+  @Column({ nullable: true, type: 'text' })
+  safeOutcomeReason: string | null;
+
+  @Column({ nullable: true, type: 'boolean' })
+  retryable: boolean | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  projectedMessageId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  projectedMessageThreadId: string | null;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt: Date;
+}

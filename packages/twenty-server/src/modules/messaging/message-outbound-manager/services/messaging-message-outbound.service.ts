@@ -8,6 +8,7 @@ import { EmailGroupMessageOutboundService } from 'src/modules/messaging/message-
 import { GmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/gmail-message-outbound.service';
 import { ImapSmtpMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/imap/services/imap-smtp-message-outbound.service';
 import { MicrosoftMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/microsoft/services/microsoft-message-outbound.service';
+import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
 import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
@@ -20,6 +21,12 @@ export class MessagingMessageOutboundService {
     private readonly imapSmtpMessageOutboundService: ImapSmtpMessageOutboundService,
     private readonly emailGroupMessageOutboundService: EmailGroupMessageOutboundService,
   ) {}
+
+  public getProviderRequestTimeoutMs(
+    connectedAccount: ConnectedAccountEntity,
+  ): number {
+    return this.getOutboundDriver(connectedAccount).providerRequestTimeoutMs;
+  }
 
   public async assertConnectedAccountSendable(
     connectedAccount: ConnectedAccountEntity,
@@ -160,6 +167,32 @@ export class MessagingMessageOutboundService {
         assertUnreachable(
           connectedAccount.provider,
           `Provider ${connectedAccount.provider} not supported for deleting drafts`,
+        );
+    }
+  }
+
+  private getOutboundDriver(
+    connectedAccount: ConnectedAccountEntity,
+  ): MessageOutboundDriver {
+    switch (connectedAccount.provider) {
+      case ConnectedAccountProvider.GOOGLE:
+        return this.gmailMessageOutboundService;
+      case ConnectedAccountProvider.MICROSOFT:
+        return this.microsoftMessageOutboundService;
+      case ConnectedAccountProvider.IMAP_SMTP_CALDAV:
+        return this.imapSmtpMessageOutboundService;
+      case ConnectedAccountProvider.EMAIL_GROUP:
+        return this.emailGroupMessageOutboundService;
+      case ConnectedAccountProvider.OIDC:
+      case ConnectedAccountProvider.SAML:
+      case ConnectedAccountProvider.APP:
+        throw new Error(
+          `Provider ${connectedAccount.provider} does not support sending messages`,
+        );
+      default:
+        return assertUnreachable(
+          connectedAccount.provider,
+          `Provider ${connectedAccount.provider} not supported for sending messages`,
         );
     }
   }

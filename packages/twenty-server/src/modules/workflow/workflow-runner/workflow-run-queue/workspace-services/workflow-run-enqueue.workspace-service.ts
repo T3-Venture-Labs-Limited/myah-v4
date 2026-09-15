@@ -13,6 +13,7 @@ import {
   WorkflowRunStatus,
   WorkflowRunWorkspaceEntity,
 } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { RunWorkflowJob } from 'src/modules/workflow/workflow-runner/jobs/run-workflow.job';
 import { type RunWorkflowJobData } from 'src/modules/workflow/workflow-runner/types/run-workflow-job-data.type';
 import { NOT_STARTED_RUNS_FIND_OPTIONS } from 'src/modules/workflow/workflow-runner/workflow-run-queue/constants/not-started-runs-find-options';
@@ -27,6 +28,7 @@ export class WorkflowRunEnqueueWorkspaceService {
     @InjectMessageQueue(MessageQueue.workflowQueue)
     private readonly messageQueueService: MessageQueueService,
     private readonly metricsService: MetricsService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async enqueueRunsForWorkspace({
@@ -89,12 +91,14 @@ export class WorkflowRunEnqueueWorkspaceService {
             const batchRuns = await workflowRunRepository.find({
               where: NOT_STARTED_RUNS_FIND_OPTIONS,
               select: {
+                createdAt: true,
                 id: true,
               },
               order: {
                 createdAt: 'ASC',
               },
               take: batchSize,
+              withDeleted: true,
             });
 
             if (batchRuns.length === 0) {
@@ -105,12 +109,26 @@ export class WorkflowRunEnqueueWorkspaceService {
               (workflowRun: WorkflowRunWorkspaceEntity) => workflowRun.id,
             );
 
-            await workflowRunRepository.update(batchIds, {
-              enqueuedAt: new Date().toISOString(),
-              status: WorkflowRunStatus.ENQUEUED,
-            });
+            await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationsAllowed(
+              { workflowRunIds: batchIds, workspaceId },
+            );
 
             for (const workflowRunId of batchIds) {
+              const updateResult = await workflowRunRepository.update(
+                {
+                  id: workflowRunId,
+                  status: WorkflowRunStatus.NOT_STARTED,
+                },
+                {
+                  enqueuedAt: new Date().toISOString(),
+                  status: WorkflowRunStatus.ENQUEUED,
+                },
+              );
+
+              if (updateResult.affected !== 1) {
+                continue;
+              }
+
               await this.messageQueueService.add<RunWorkflowJobData>(
                 RunWorkflowJob.name,
                 {
@@ -118,10 +136,9 @@ export class WorkflowRunEnqueueWorkspaceService {
                   workspaceId,
                 },
               );
+              totalEnqueuedCount += 1;
+              remainingWorkflowRunToEnqueueCount -= 1;
             }
-
-            totalEnqueuedCount += batchRuns.length;
-            remainingWorkflowRunToEnqueueCount -= batchRuns.length;
           }
 
           if (totalEnqueuedCount === 0) {

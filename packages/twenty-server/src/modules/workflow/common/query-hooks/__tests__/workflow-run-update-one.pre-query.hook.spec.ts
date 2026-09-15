@@ -14,6 +14,7 @@ const authContext = {
 describe('WorkflowRunUpdateOnePreQueryHook', () => {
   it('authorizes the owning Campaign before renaming a Workflow run', async () => {
     const workflowOutreachAccessGuardService = {
+      assertGenericWorkflowRunMutationAllowed: jest.fn(),
       assertWorkflowRunIsAccessible: jest.fn(),
     } as unknown as WorkflowOutreachAccessGuardService;
     const hook =
@@ -25,9 +26,8 @@ describe('WorkflowRunUpdateOnePreQueryHook', () => {
     await hook.execute(authContext, 'workflowRun', payload as never);
 
     expect(
-      workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible,
+      workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed,
     ).toHaveBeenCalledWith({
-      authContext,
       workflowRunId: 'workflow-run-a',
       workspaceId: 'workspace-a',
     });

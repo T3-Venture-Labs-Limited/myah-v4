@@ -112,6 +112,12 @@ export class ConnectedAccountEntity extends WorkspaceRelatedEntity {
   @Column({ type: 'varchar', nullable: false, default: 'user' })
   visibility: ConnectedAccountVisibility;
 
+  @Column({ type: 'integer', nullable: false, default: 50 })
+  dailySendLimit: number;
+
+  @Column({ type: 'integer', nullable: false, default: 300_000 })
+  minimumSendIntervalMs: number;
+
   @OneToMany(
     'MessageChannelEntity',
     (messageChannel: MessageChannelEntity) => messageChannel.connectedAccount,

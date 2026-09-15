@@ -7,7 +7,9 @@ export const resolveOutboundThreadExternalId = ({
   parentThreadExternalId,
   inReplyTo,
 }: {
-  sendResult: SendMessageResult;
+  sendResult: Omit<SendMessageResult, 'headerMessageId'> & {
+    headerMessageId: string | null;
+  };
   parentThreadExternalId?: string;
   inReplyTo?: string;
 }): string => {
@@ -26,5 +28,11 @@ export const resolveOutboundThreadExternalId = ({
 
   // New IMAP/SMTP send: own Message-ID is unique per RFC822, so unrelated
   // sends never collide on a shared empty thread key.
-  return sendResult.headerMessageId;
+  if (isNonEmptyString(sendResult.headerMessageId)) {
+    return sendResult.headerMessageId;
+  }
+  if (isNonEmptyString(sendResult.messageExternalId)) {
+    return sendResult.messageExternalId;
+  }
+  throw new Error('Sent message has no stable provider thread identity');
 };

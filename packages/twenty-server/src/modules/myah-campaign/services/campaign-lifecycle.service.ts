@@ -38,6 +38,11 @@ import {
   type CampaignUpdateFilter,
   type CampaignWorkspaceRecord,
 } from 'src/modules/myah-campaign/types/campaign-workspace-record.type';
+import {
+  isForbiddenGenericCampaignCreateData,
+  isForbiddenGenericCampaignUpdateData,
+  rejectGenericCampaignLifecycleOperation,
+} from 'src/modules/myah-campaign/utils/reject-generic-campaign-lifecycle-operation.util';
 
 type CampaignCreateOneArgs = CreateOneResolverArgs<CampaignMutationData>;
 type CampaignCreateManyArgs = CreateManyResolverArgs<CampaignMutationData>;
@@ -105,7 +110,9 @@ const isNonEmptyTrimmedString = (value: unknown): value is string =>
 const hasRequiredText = (value: string | null | undefined): boolean =>
   isNonEmptyTrimmedString(value);
 
-const hasOwn = (value: object, key: PropertyKey): boolean =>
+const hasOwn = (value: unknown, key: PropertyKey): boolean =>
+  value !== null &&
+  (typeof value === 'object' || typeof value === 'function') &&
   Object.prototype.hasOwnProperty.call(value, key);
 
 const hasOwnSequenceAuthorization = (data: unknown): boolean =>
@@ -113,19 +120,66 @@ const hasOwnSequenceAuthorization = (data: unknown): boolean =>
   (typeof data === 'object' || typeof data === 'function') &&
   Object.prototype.hasOwnProperty.call(data, 'sequenceAuthorization');
 
+const isMyahCampaignRawInput = (
+  context: WorkspaceRawInputPreQueryHookContext,
+): boolean =>
+  context.objectMetadataUniversalIdentifier ===
+  MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER;
+
 @Injectable()
 export class CampaignLifecycleService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
-  validateRawCampaignMutation(
+  validateRawCreateOne(
+    context: WorkspaceRawInputPreQueryHookContext,
+    payload: CampaignCreateOneArgs,
+  ): void {
+    this.validateRawCampaignMutation(context, payload.data);
+
+    if (
+      isMyahCampaignRawInput(context) &&
+      isForbiddenGenericCampaignCreateData(payload.data)
+    ) {
+      rejectGenericCampaignLifecycleOperation();
+    }
+  }
+
+  validateRawCreateMany(
+    context: WorkspaceRawInputPreQueryHookContext,
+    payload: CampaignCreateManyArgs,
+  ): void {
+    this.validateRawCampaignMutation(context, payload.data);
+
+    if (
+      isMyahCampaignRawInput(context) &&
+      payload.data.some(isForbiddenGenericCampaignCreateData)
+    ) {
+      rejectGenericCampaignLifecycleOperation();
+    }
+  }
+
+  validateRawUpdate(
+    context: WorkspaceRawInputPreQueryHookContext,
+    payload: CampaignUpdateOneArgs | CampaignUpdateManyArgs,
+  ): void {
+    this.validateRawCampaignMutation(context, payload.data);
+
+    if (
+      isMyahCampaignRawInput(context) &&
+      isForbiddenGenericCampaignUpdateData(payload.data)
+    ) {
+      rejectGenericCampaignLifecycleOperation();
+    }
+  }
+
+  private validateRawCampaignMutation(
     context: WorkspaceRawInputPreQueryHookContext,
     data: unknown | unknown[],
   ): void {
     if (
-      context.objectMetadataUniversalIdentifier ===
-        MYAH_CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER &&
+      isMyahCampaignRawInput(context) &&
       (Array.isArray(data)
         ? data.some(hasOwnSequenceAuthorization)
         : hasOwnSequenceAuthorization(data))

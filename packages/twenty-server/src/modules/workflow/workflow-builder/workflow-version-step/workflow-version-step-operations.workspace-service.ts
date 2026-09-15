@@ -39,6 +39,7 @@ import {
   WorkflowVersionStepException,
   WorkflowVersionStepExceptionCode,
 } from 'src/modules/workflow/common/exceptions/workflow-version-step.exception';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { type WorkflowVersionWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 import { type OutputSchema } from 'src/modules/workflow/workflow-builder/workflow-schema/types/output-schema.type';
@@ -84,6 +85,7 @@ export class WorkflowVersionStepOperationsWorkspaceService {
     private readonly aiAgentRoleService: AiAgentRoleService,
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async runWorkflowVersionStepDeletionSideEffects({
@@ -165,6 +167,10 @@ export class WorkflowVersionStepOperationsWorkspaceService {
     builtStep: WorkflowAction;
     additionalCreatedSteps?: WorkflowAction[];
   }> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const baseStep = {
       id: id || v4(),
       position,
@@ -884,6 +890,10 @@ export class WorkflowVersionStepOperationsWorkspaceService {
     workspaceId: string;
     iteratorPosition?: WorkflowStepPositionInput;
   }): Promise<WorkflowAction> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -954,6 +964,10 @@ export class WorkflowVersionStepOperationsWorkspaceService {
     ifFilterGroupId: string;
     branches: StepIfElseBranch[];
   }> {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(

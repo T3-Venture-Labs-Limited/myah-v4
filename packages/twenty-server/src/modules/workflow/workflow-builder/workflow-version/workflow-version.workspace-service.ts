@@ -29,29 +29,30 @@ import {
 import { assertWorkflowVersionHasSteps } from 'src/modules/workflow/common/utils/assert-workflow-version-has-steps';
 import { assertWorkflowVersionIsDraft } from 'src/modules/workflow/common/utils/assert-workflow-version-is-draft.util';
 import { assertWorkflowVersionTriggerIsDefined } from 'src/modules/workflow/common/utils/assert-workflow-version-trigger-is-defined.util';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 import { WorkflowVersionStepOperationsWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step-operations.workspace-service';
 import { WorkflowVersionStepWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step.workspace-service';
 import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
 
-const remapWorkflowStepReferences = (
-  value: unknown,
+const remapWorkflowStepReferences = <T>(
+  value: T,
   sourceToClonedStepIdMap: ReadonlyMap<string, string>,
-): unknown => {
+): T => {
   if (typeof value === 'string') {
-    let remappedValue = value;
+    let remappedValue: string = value;
 
     for (const [sourceStepId, clonedStepId] of sourceToClonedStepIdMap) {
       remappedValue = remappedValue.split(sourceStepId).join(clonedStepId);
     }
 
-    return remappedValue;
+    return remappedValue as T;
   }
 
   if (Array.isArray(value)) {
     return value.map((item) =>
       remapWorkflowStepReferences(item, sourceToClonedStepIdMap),
-    );
+    ) as T;
   }
 
   if (typeof value === 'object' && value !== null) {
@@ -60,7 +61,7 @@ const remapWorkflowStepReferences = (
         key,
         remapWorkflowStepReferences(item, sourceToClonedStepIdMap),
       ]),
-    );
+    ) as T;
   }
 
   return value;
@@ -74,6 +75,7 @@ export class WorkflowVersionWorkspaceService {
     private readonly workflowVersionStepOperationsWorkspaceService: WorkflowVersionStepOperationsWorkspaceService,
     private readonly recordPositionService: RecordPositionService,
     private readonly workflowCommonWorkspaceService: WorkflowCommonWorkspaceService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   @WithLock('workflowId')
@@ -86,6 +88,13 @@ export class WorkflowVersionWorkspaceService {
     workflowId: string;
     workflowVersionIdToCopy: string;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed(
+      { workflowId, workspaceId },
+    );
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId: workflowVersionIdToCopy, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -197,6 +206,13 @@ export class WorkflowVersionWorkspaceService {
     workflowIdToDuplicate: string;
     workflowVersionIdToCopy: string;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowMutationAllowed(
+      { workflowId: workflowIdToDuplicate, workspaceId },
+    );
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId: workflowVersionIdToCopy, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -435,6 +451,10 @@ export class WorkflowVersionWorkspaceService {
     positions: WorkflowStepPositionUpdateInput[];
     workspaceId: string;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const authContext = buildSystemAuthContext(workspaceId);
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
@@ -496,6 +516,10 @@ export class WorkflowVersionWorkspaceService {
     workflowVersionId: string;
     workspaceId: string;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const workflowVersion =
       await this.workflowCommonWorkspaceService.getWorkflowVersionOrFail({
         workspaceId,

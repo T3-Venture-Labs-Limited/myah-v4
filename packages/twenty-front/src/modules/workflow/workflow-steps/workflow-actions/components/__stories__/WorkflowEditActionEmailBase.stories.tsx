@@ -33,6 +33,8 @@ const mockedConnectedAccounts = [
     visibility: 'SHARE_EVERYTHING',
     lastCredentialsRefreshedAt: null,
     connectionParameters: null,
+    dailySendLimit: 50,
+    minimumSendIntervalMs: 300_000,
     createdAt: '2026-02-27T01:17:25.392Z',
     updatedAt: '2026-02-27T01:17:25.392Z',
   },
@@ -199,6 +201,17 @@ const meta: Meta<typeof WorkflowEditActionEmailBase> = {
           return HttpResponse.json({
             data: {
               myConnectedAccounts: mockedConnectedAccounts,
+            },
+          });
+        }),
+        graphql.query('WorkflowStepConnectedAccountHandle', () => {
+          return HttpResponse.json({
+            data: {
+              workflowStepConnectedAccountHandle: {
+                id: MOCK_CONNECTED_ACCOUNT_ID,
+                handle: 'tim@apple.dev',
+                provider: 'google',
+              },
             },
           });
         }),

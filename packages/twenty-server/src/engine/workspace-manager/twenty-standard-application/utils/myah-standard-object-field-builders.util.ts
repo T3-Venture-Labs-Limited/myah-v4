@@ -3,7 +3,10 @@ import {
   RelationOnDeleteAction,
   RelationType,
 } from 'twenty-shared/types';
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import {
+  MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE,
+  MYAH_STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import {
@@ -2689,9 +2692,10 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             fieldName: 'stage',
             type: FieldMetadataType.TEXT,
             label: 'Stage',
-            description: 'Stage',
+            description: 'Campaign outreach stage',
             icon: 'IconProgress',
             isNullable: true,
+            defaultValue: `'${MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE}'`,
           },
           standardObjectMetadataRelatedEntityIds:
             args.standardObjectMetadataRelatedEntityIds,

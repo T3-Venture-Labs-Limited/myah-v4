@@ -1,7 +1,6 @@
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { CampaignOutreachWorkflowLifecycleWorkspaceService } from 'src/modules/myah-campaign/services/campaign-outreach-workflow-lifecycle.workspace-service';
-import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 
 jest.mock(
   'src/engine/twenty-orm/storage/orm-workspace-context.storage',
@@ -18,13 +17,10 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
     const executeInWorkspaceContext = jest.fn(
       async (callback: () => Promise<void>) => await callback(),
     );
-    const service = new CampaignOutreachWorkflowLifecycleWorkspaceService(
-      {
-        executeInWorkspaceContext,
-        getRepository: jest.fn().mockResolvedValue(campaignRepository),
-      } as unknown as GlobalWorkspaceOrmManager,
-      {} as WorkflowCommonWorkspaceService,
-    );
+    const service = new CampaignOutreachWorkflowLifecycleWorkspaceService({
+      executeInWorkspaceContext,
+      getRepository: jest.fn().mockResolvedValue(campaignRepository),
+    } as unknown as GlobalWorkspaceOrmManager);
     const authContext = {
       type: 'user',
       userWorkspaceId: 'user-workspace-a',

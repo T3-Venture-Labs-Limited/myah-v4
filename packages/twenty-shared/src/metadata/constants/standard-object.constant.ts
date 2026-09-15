@@ -2916,6 +2916,9 @@ export const STANDARD_OBJECTS = {
       trigger: {
         universalIdentifier: '20202020-4eae-43e7-86e0-212b41a30b48',
       },
+      campaignSequence: {
+        universalIdentifier: '9a791319-798c-4a65-9eb9-1731b407d2a8',
+      },
       status: {
         universalIdentifier: '20202020-5a34-440e-8a25-39d8c3d1d4cf',
       },

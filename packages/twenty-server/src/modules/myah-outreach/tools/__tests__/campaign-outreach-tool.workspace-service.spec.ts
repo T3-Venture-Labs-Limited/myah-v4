@@ -10,6 +10,7 @@ jest.mock(
 );
 
 import { CampaignOutreachToolWorkspaceService } from 'src/modules/myah-outreach/tools/campaign-outreach-tool.workspace-service';
+import { AUTHORIZED_CAMPAIGN_OUTREACH_TRIGGER_MUTATION } from 'src/modules/workflow/workflow-tools/tools/update-workflow-version-trigger.tool';
 
 const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const campaignId = '20202020-1c25-4d02-bf25-6aeccf7ea420';
@@ -126,6 +127,19 @@ describe('CampaignOutreachToolWorkspaceService', () => {
       target: { type: 'workflow', id: workflowId },
     });
     expect(execute).toHaveBeenCalledWith({ workflowId }, {});
+
+    await tools.update_campaign_outreach_workflow_trigger.execute!(
+      { campaignId, workflowVersionId: workflowId },
+      {} as never,
+    );
+    expect(execute).toHaveBeenLastCalledWith(
+      {
+        workflowVersionId: workflowId,
+        [AUTHORIZED_CAMPAIGN_OUTREACH_TRIGGER_MUTATION]: true,
+      },
+      {},
+    );
+
     await tools.create_campaign_outreach_workflow_step.execute!(
       {
         campaignId,

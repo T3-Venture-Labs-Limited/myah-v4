@@ -23,7 +23,29 @@ export class SentMessagePersistenceService {
   async persistSentMessage(
     input: PersistSentMessageInput,
   ): Promise<PersistedSentMessage | undefined> {
-    const messageChannel = await this.messageChannelRepository.findOneOrFail({
+    if (
+      (input.expectedMessageId !== undefined &&
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+          input.expectedMessageId,
+        )) ||
+      (input.providerAcceptedAt !== undefined &&
+        Number.isNaN(input.providerAcceptedAt.getTime()))
+    ) {
+      throw new Error('Deterministic sent Message evidence is invalid');
+    }
+    const suppliedRunner = input.transactionManager?.queryRunner;
+    if (
+      input.transactionManager !== undefined &&
+      (!suppliedRunner?.isTransactionActive ||
+        suppliedRunner.isReleased ||
+        suppliedRunner.manager !== input.transactionManager)
+    ) {
+      throw new Error('Sent Message persistence requires active manager');
+    }
+    const messageChannelRepository = suppliedRunner
+      ? suppliedRunner.manager.getRepository(MessageChannelEntity)
+      : this.messageChannelRepository;
+    const messageChannel = await messageChannelRepository.findOneOrFail({
       where: {
         id: input.messageChannelId,
         workspaceId: input.workspaceId,
@@ -76,6 +98,7 @@ export class SentMessagePersistenceService {
         messageChannel,
         connectedAccount,
         input.workspaceId,
+        input.transactionManager,
       );
 
     const messageId = savedMessagesResult?.messageExternalIdsAndIdsMap.get(
@@ -89,7 +112,6 @@ export class SentMessagePersistenceService {
     if (!isDefined(messageId) || !isDefined(messageThreadId)) {
       return undefined;
     }
-
     return { messageId, messageThreadId };
   }
 }

@@ -1,5 +1,12 @@
 import { WorkflowVersionWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version/workflow-version.workspace-service';
 
+const allowGenericMutations = {
+  assertGenericWorkflowMutationAllowed: jest.fn().mockResolvedValue(undefined),
+  assertGenericWorkflowVersionMutationAllowed: jest
+    .fn()
+    .mockResolvedValue(undefined),
+};
+
 describe('WorkflowVersionWorkspaceService', () => {
   it('compensates cloned step resources when the copy transaction rolls back', async () => {
     const queryRunner = {
@@ -90,6 +97,7 @@ describe('WorkflowVersionWorkspaceService', () => {
         buildRecordPosition: jest.fn().mockResolvedValue('position'),
       } as never,
       {} as never,
+      allowGenericMutations as never,
     );
 
     await expect(
@@ -148,6 +156,7 @@ describe('WorkflowVersionWorkspaceService', () => {
       {} as never,
       {} as never,
       {} as never,
+      allowGenericMutations as never,
     );
 
     await expect(
@@ -252,6 +261,7 @@ describe('WorkflowVersionWorkspaceService', () => {
         buildRecordPosition: jest.fn().mockResolvedValue('position'),
       } as never,
       {} as never,
+      allowGenericMutations as never,
     );
 
     await service.duplicateWorkflow({
@@ -313,6 +323,7 @@ describe('WorkflowVersionWorkspaceService', () => {
       {} as never,
       {} as never,
       {} as never,
+      allowGenericMutations as never,
     );
 
     await expect(

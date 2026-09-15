@@ -15,6 +15,7 @@ import {
   WorkflowVersionStepException,
   WorkflowVersionStepExceptionCode,
 } from 'src/modules/workflow/common/exceptions/workflow-version-step.exception';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkflowRunStatus } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import { setAllIteratorsStepInfosAsStopped } from 'src/modules/workflow/common/utils/set-all-iterators-step-infos-as-stopped.util';
 import { workflowHasRunningSteps } from 'src/modules/workflow/common/utils/workflow-has-running-steps.util';
@@ -49,6 +50,7 @@ export class WorkflowRunnerWorkspaceService {
     private readonly workflowVersionStepOperationsWorkspaceService: WorkflowVersionStepOperationsWorkspaceService,
     private readonly workflowThrottlingWorkspaceService: WorkflowThrottlingWorkspaceService,
     private readonly metricsService: MetricsService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   async run({
@@ -64,6 +66,10 @@ export class WorkflowRunnerWorkspaceService {
     source: ActorMetadata;
     workflowRunId?: string;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowVersionMutationAllowed(
+      { workflowVersionId, workspaceId },
+    );
+
     const canFeatureBeUsed =
       await this.billingUsageService.canFeatureBeUsed(workspaceId);
 
@@ -123,6 +129,10 @@ export class WorkflowRunnerWorkspaceService {
     workflowRunId: string;
     lastExecutedStepId: string;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     await this.messageQueueService.add<RunWorkflowJobData>(
       RunWorkflowJob.name,
       {
@@ -144,6 +154,10 @@ export class WorkflowRunnerWorkspaceService {
     workflowRunId: string;
     response: object;
   }) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     const workflowRun =
       await this.workflowRunWorkspaceService.getWorkflowRunOrFail({
         workflowRunId,
@@ -198,17 +212,48 @@ export class WorkflowRunnerWorkspaceService {
   }
 
   async stopWorkflowRun(workspaceId: string, workflowRunId: string) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
+    return this.stopWorkflowRunDefinition(workspaceId, workflowRunId, false);
+  }
+
+  async stopPendingLegacyCampaignWorkflowRunForReplacement(
+    workspaceId: string,
+    workflowRunId: string,
+  ) {
+    await this.workflowOutreachAccessGuardService.assertLegacyCampaignWorkflowRunReplacementAllowed(
+      { workflowRunId, workspaceId },
+    );
+
+    return this.stopWorkflowRunDefinition(workspaceId, workflowRunId, true);
+  }
+
+  private async stopWorkflowRunDefinition(
+    workspaceId: string,
+    workflowRunId: string,
+    pendingOnly: boolean,
+  ) {
     const workflowRun =
       await this.workflowRunWorkspaceService.getWorkflowRunOrFail({
         workflowRunId,
         workspaceId,
       });
 
-    const stoppableStatuses = [
+    const pendingStatuses = [
       WorkflowRunStatus.NOT_STARTED,
       WorkflowRunStatus.ENQUEUED,
-      WorkflowRunStatus.RUNNING,
     ];
+
+    if (pendingOnly && !pendingStatuses.includes(workflowRun.status)) {
+      throw new WorkflowRunException(
+        'Legacy Campaign sequence run is no longer pending',
+        WorkflowRunExceptionCode.INVALID_OPERATION,
+      );
+    }
+
+    const stoppableStatuses = [...pendingStatuses, WorkflowRunStatus.RUNNING];
 
     if (!stoppableStatuses.includes(workflowRun.status)) {
       return {
@@ -280,6 +325,10 @@ export class WorkflowRunnerWorkspaceService {
   }
 
   async retryWorkflowRun(workspaceId: string, workflowRunId: string) {
+    await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
+      { workflowRunId, workspaceId },
+    );
+
     const workflowRun =
       await this.workflowRunWorkspaceService.getWorkflowRunOrFail({
         workflowRunId,

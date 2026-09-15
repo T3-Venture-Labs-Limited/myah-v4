@@ -6,6 +6,8 @@ import { ManagedProviderBillingRecoveryCronCommand } from 'src/engine/core-modul
 import { ManagedEmailReconciliationCronCommand } from 'src/engine/core-modules/managed-email/crons/commands/managed-email-reconciliation.cron.command';
 import { ManagedEmailModule } from 'src/engine/core-modules/managed-email/managed-email.module';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
+import { CampaignEmailRuntimeCronCommand } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.command';
 import { MyahUnipileModule } from 'src/modules/myah-unipile/myah-unipile.module';
 import { UnipileInstagramAccountRecoveryCronCommand } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.cron-command';
 
@@ -26,6 +28,9 @@ const runAggregate = async (
   unipileInstagramEnabled = false,
 ) => {
   const otherCronCommand = { run: jest.fn().mockResolvedValue(undefined) };
+  const campaignEmailRuntimeCronCommand = {
+    run: jest.fn().mockResolvedValue(undefined),
+  };
   const managedProviderBillingRecoveryCronCommand = {
     run: jest.fn().mockResolvedValue(undefined),
   };
@@ -53,15 +58,17 @@ const runAggregate = async (
       ...dependencies.map((provide) => ({
         provide,
         useValue:
-          provide === ManagedProviderBillingRecoveryCronCommand
-            ? managedProviderBillingRecoveryCronCommand
-            : provide === ManagedEmailReconciliationCronCommand
-              ? managedEmailReconciliationCronCommand
-              : provide === UnipileInstagramAccountRecoveryCronCommand
-                ? unipileInstagramAccountRecoveryCronCommand
-                : provide === TwentyConfigService
-                  ? twentyConfigService
-                  : otherCronCommand,
+          provide === CampaignEmailRuntimeCronCommand
+            ? campaignEmailRuntimeCronCommand
+            : provide === ManagedProviderBillingRecoveryCronCommand
+              ? managedProviderBillingRecoveryCronCommand
+              : provide === ManagedEmailReconciliationCronCommand
+                ? managedEmailReconciliationCronCommand
+                : provide === UnipileInstagramAccountRecoveryCronCommand
+                  ? unipileInstagramAccountRecoveryCronCommand
+                  : provide === TwentyConfigService
+                    ? twentyConfigService
+                    : otherCronCommand,
       })),
     ],
   }).compile();
@@ -72,6 +79,7 @@ const runAggregate = async (
   await module.close();
 
   return {
+    campaignEmailRuntimeCronCommand,
     managedEmailReconciliationCronCommand,
     managedProviderBillingRecoveryCronCommand,
     unipileInstagramAccountRecoveryCronCommand,
@@ -79,6 +87,11 @@ const runAggregate = async (
 };
 
 describe('CronRegisterAllCommand', () => {
+  it('registers Campaign email runtime', async () => {
+    const { campaignEmailRuntimeCronCommand } = await runAggregate(false);
+    expect(campaignEmailRuntimeCronCommand.run).toHaveBeenCalledTimes(1);
+  });
+
   it('registers managed-provider billing recovery when Metronome is enabled', async () => {
     const { managedProviderBillingRecoveryCronCommand } =
       await runAggregate(true);
@@ -137,6 +150,20 @@ describe('CronRegisterAllCommand', () => {
     expect(
       unipileInstagramAccountRecoveryCronCommand.run,
     ).not.toHaveBeenCalled();
+  });
+
+  it('imports the Campaign runtime command through the real database command module', () => {
+    const databaseImports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      DatabaseCommandModule,
+    ) as unknown[];
+    const campaignExports = Reflect.getMetadata(
+      MODULE_METADATA.EXPORTS,
+      CampaignExecutionOrchestrationModule,
+    ) as unknown[];
+
+    expect(databaseImports).toContain(CampaignExecutionOrchestrationModule);
+    expect(campaignExports).toContain(CampaignEmailRuntimeCronCommand);
   });
 
   it('wires managed-email and Unipile recovery into the real database command module', () => {

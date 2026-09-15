@@ -13,6 +13,7 @@ import {
 } from 'src/engine/metadata-modules/message-channel/message-channel.exception';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
 import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
@@ -21,6 +22,9 @@ import { getDomainFromEmail } from 'src/utils/get-domain-from-email';
 
 @Injectable()
 export class EmailGroupMessageOutboundService implements MessageOutboundDriver {
+  readonly providerRequestTimeoutMs =
+    OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS;
+
   constructor(
     @InjectWorkspaceScopedRepository(EmailingDomainEntity)
     private readonly emailingDomainRepository: WorkspaceScopedRepository<EmailingDomainEntity>,

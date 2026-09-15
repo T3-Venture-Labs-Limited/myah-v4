@@ -182,6 +182,9 @@ export class SynchronizeSourceControlledMyahMetadataService {
           isDefined(field?.objectMetadataUniversalIdentifier) &&
           fromAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
             fieldUniversalIdentifier
+          ] === undefined &&
+          fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+            field.objectMetadataUniversalIdentifier
           ] === undefined
         ) {
           selectedObjectMetadataUniversalIdentifiers.add(
