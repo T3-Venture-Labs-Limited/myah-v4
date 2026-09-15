@@ -34,7 +34,8 @@ describe('CampaignEmailRuntimeService', () => {
     const query = jest.fn(async (sql: string) =>
       sql.includes('WITH pending') ? work : [routingRow],
     );
-    const manager = { queryRunner: { isTransactionActive: true } };
+    const manager = { queryRunner: { isTransactionActive: true, query } };
+    Object.assign(manager.queryRunner, { manager });
     const dataSource = {
       query,
       transaction: jest.fn(async (work) => work(manager)),
@@ -47,6 +48,7 @@ describe('CampaignEmailRuntimeService', () => {
     const projection = { reconcile: jest.fn(async () => projectionResult) };
     const dispatch = { dispatch: jest.fn() };
     return {
+      query,
       service: new CampaignEmailRuntimeService(
         {
           getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
@@ -88,6 +90,17 @@ describe('CampaignEmailRuntimeService', () => {
       ids.attemptId,
     );
     expect(progression.reconcileAcceptedInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('reads due work through an active transaction runner without datasource queries', async () => {
+    const { service, query } = setup('PROJECTED');
+
+    await service.runDueOccurrences();
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('WITH pending'),
+      [],
+    );
   });
 
   it('routes persisted definite and unknown outcomes without provider redispatch', async () => {

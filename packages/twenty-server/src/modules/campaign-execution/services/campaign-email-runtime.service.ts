@@ -27,9 +27,8 @@ export class CampaignEmailRuntimeService {
 
   async runDueOccurrences(): Promise<void> {
     const dataSource = await this.orm.getGlobalWorkspaceDataSource();
-    const work = records(
-      await dataSource.query(
-        `WITH pending AS (
+    const work = await this.query(
+      `WITH pending AS (
            SELECT 'PENDING' AS kind,"workspaceId","campaignId",id,NULL::uuid AS "attemptId"
              FROM core."campaignOccurrence" WHERE state='PENDING' AND "dueAt" <= clock_timestamp()
              ORDER BY "dueAt",id LIMIT 100
@@ -66,7 +65,6 @@ export class CampaignEmailRuntimeService {
             WHERE a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='BLOCKED' AND o.state='IN_FLIGHT'
             ORDER BY a."updatedAt",a."attemptId" LIMIT 100
          ) SELECT * FROM pending UNION ALL SELECT * FROM reserved UNION ALL SELECT * FROM processing UNION ALL SELECT * FROM accepted UNION ALL SELECT * FROM definitelyUnaccepted UNION ALL SELECT * FROM unknown UNION ALL SELECT * FROM blocked`,
-      ),
     );
     for (const item of work) {
       try {
@@ -138,6 +136,20 @@ export class CampaignEmailRuntimeService {
         console.error('Campaign email runtime item failed', error);
       }
     }
+  }
+
+  private async query(
+    sql: string,
+    parameters: unknown[] = [],
+  ): Promise<Record<string, unknown>[]> {
+    const dataSource = await this.orm.getGlobalWorkspaceDataSource();
+
+    return dataSource.transaction(async (manager) => {
+      const runner = manager.queryRunner;
+      if (!runner?.isTransactionActive || runner.manager !== manager)
+        throw new Error('Campaign runtime requires active manager');
+      return records(await runner.query(sql, parameters));
+    });
   }
 
   private async dispatchAttempt(
@@ -390,14 +402,12 @@ export class CampaignEmailRuntimeService {
     state: 'DEFINITELY_UNACCEPTED' | 'UNKNOWN',
   ): Promise<void> {
     const dataSource = await this.orm.getGlobalWorkspaceDataSource();
-    const rows = records(
-      await dataSource.query(
-        `SELECT a.*,act.id AS "activationId",act."campaignExecutionId",auth.generation AS "authorizationGeneration"
+    const rows = await this.query(
+      `SELECT a.*,act.id AS "activationId",act."campaignExecutionId",auth.generation AS "authorizationGeneration"
          FROM core."outboundEmailAttempt" a JOIN core."campaignSequenceAuthorization" auth ON auth."authorizationId"=a."authorizationId"
          JOIN core."campaignActivation" act ON act."workspaceId"=a."workspaceId" AND act."campaignId"=a."campaignId" AND act."authorizationId"=a."authorizationId" AND act."authorizationGeneration"=auth.generation AND act."workflowVersionId"=a."workflowVersionId"
         WHERE a."attemptId"=$1 AND a."workspaceId"=$2 AND a."campaignId"=$3 AND a."attemptState"=$4`,
-        [attemptId, workspaceId, campaignId, state],
-      ),
+      [attemptId, workspaceId, campaignId, state],
     );
     if (rows.length !== 1) return;
     const row = rows[0];
@@ -435,15 +445,12 @@ export class CampaignEmailRuntimeService {
     campaignId: string,
     attemptId: string,
   ): Promise<void> {
-    const dataSource = await this.orm.getGlobalWorkspaceDataSource();
-    const rows = records(
-      await dataSource.query(
-        `SELECT a.*,act.id AS "activationId",act."campaignExecutionId",auth.generation AS "authorizationGeneration"
+    const rows = await this.query(
+      `SELECT a.*,act.id AS "activationId",act."campaignExecutionId",auth.generation AS "authorizationGeneration"
          FROM core."outboundEmailAttempt" a JOIN core."campaignSequenceAuthorization" auth ON auth."authorizationId"=a."authorizationId"
          JOIN core."campaignActivation" act ON act."workspaceId"=a."workspaceId" AND act."campaignId"=a."campaignId" AND act."authorizationId"=a."authorizationId" AND act."authorizationGeneration"=auth.generation AND act."workflowVersionId"=a."workflowVersionId"
         WHERE a."attemptId"=$1 AND a."workspaceId"=$2 AND a."campaignId"=$3 AND a."attemptState"='ACCEPTED'`,
-        [attemptId, workspaceId, campaignId],
-      ),
+      [attemptId, workspaceId, campaignId],
     );
     if (rows.length !== 1) return;
     const row = rows[0];

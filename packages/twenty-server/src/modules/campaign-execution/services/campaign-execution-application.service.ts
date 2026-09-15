@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { CampaignExecutionService } from 'src/modules/campaign-execution/services/campaign-execution.service';
 import {
   buildCampaignFixedMaterialDigest,
@@ -14,6 +13,12 @@ import { CampaignSequenceService } from 'src/modules/myah-outreach/services/camp
 import { CampaignSequenceFixedMaterialService } from 'src/modules/myah-outreach/services/campaign-sequence-fixed-material.service';
 
 import { type CampaignExecutionMutationResultDTO } from '../dtos/campaign-execution.dto';
+
+const DEFAULT_SENDING_WINDOW = {
+  timeZone: 'UTC',
+  startLocalTime: '00:00:00',
+  endLocalTime: '23:59:00',
+} as const;
 
 const blocked = (reason: string): CampaignExecutionMutationResultDTO => ({
   status: 'BLOCKED',
@@ -30,7 +35,6 @@ export class CampaignExecutionApplicationService {
     private readonly execution: CampaignExecutionService,
     private readonly sequence: CampaignSequenceService,
     private readonly senderReadiness: CampaignSenderReadinessService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly fixedMaterial: CampaignSequenceFixedMaterialService,
   ) {}
 
@@ -73,21 +77,24 @@ export class CampaignExecutionApplicationService {
     if (snapshot.issues.length > 0 || snapshot.sequence.messages.length === 0)
       return blocked('SEQUENCE_UNAVAILABLE');
     if (
-      snapshot.sequence.messages.some((message) => message.channel !== 'EMAIL')
+      snapshot.sequence.messages.some(
+        (message: { channel: string }) => message.channel !== 'EMAIL',
+      )
     )
       return blocked('EMAIL_ONLY');
 
     const emails = snapshot.sequence.messages.filter(
-      (message) => message.channel === 'EMAIL',
+      (
+        message,
+      ): message is Extract<
+        (typeof snapshot.sequence.messages)[number],
+        { channel: 'EMAIL' }
+      > => message.channel === 'EMAIL',
     );
     // Attachment byte proofs require the controlled material-storage boundary.
     // Until that boundary is runtime-wired, fail closed rather than authorizing
     // unverifiable attachment material.
-    if (
-      emails.some(
-        (message) => message.channel === 'EMAIL' && message.files.length > 0,
-      )
-    )
+    if (emails.some((message) => message.files.length > 0))
       return blocked('ATTACHMENTS_UNAVAILABLE');
 
     const senderPool = await this.senderReadiness.getCampaignEmailSenderPool(
@@ -102,41 +109,11 @@ export class CampaignExecutionApplicationService {
     if (readySenders.length === 0)
       return blocked('AT_LEAST_ONE_READY_EMAIL_MAILBOX_REQUIRED');
 
-    const dataSource =
-      await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-    const queryRunner = dataSource.createQueryRunner();
-    await queryRunner.connect();
-    let queryResult: unknown;
-    try {
-      queryResult = await queryRunner.query(
-        `SELECT ce."timeZone", ce."startLocalTime"::text, ce."endLocalTime"::text,
-                ce."campaignCapacityTimeZone", workspace."campaignCapacityTimeZone" AS "workspaceCapacityTimeZone"
-           FROM core."campaignExecution" ce
-           JOIN core.workspace workspace ON workspace.id = ce."workspaceId"
-          WHERE ce."workspaceId" = $1 AND ce."campaignId" = $2`,
-        [authContext.workspace.id, campaignId],
-      );
-    } finally {
-      await queryRunner.release();
-    }
-    const rows = (
-      Array.isArray(queryResult) && Array.isArray(queryResult[0])
-        ? queryResult[0]
-        : queryResult
-    ) as Record<string, unknown>[];
-    if (!Array.isArray(rows) || rows.length !== 1)
-      return blocked('MISSING_SENDING_WINDOW');
-    const row = rows[0];
-    if (
-      typeof row.timeZone !== 'string' ||
-      typeof row.startLocalTime !== 'string' ||
-      typeof row.endLocalTime !== 'string' ||
-      typeof row.campaignCapacityTimeZone !== 'string' ||
-      row.campaignCapacityTimeZone !== row.workspaceCapacityTimeZone
-    )
-      return blocked('WORKSPACE_CAPACITY_TIMEZONE_UNAVAILABLE');
-
-    const nodes = emails.map((message) => ({
+    const nodes: Array<{
+      messageId: string;
+      channel: 'EMAIL';
+      replyToThread: boolean;
+    }> = emails.map((message) => ({
       messageId: message.id,
       channel: 'EMAIL' as const,
       replyToThread: message.replyToThread,
@@ -180,7 +157,7 @@ export class CampaignExecutionApplicationService {
       workflowVersionId: snapshot.versionId,
       nodes,
       delaysSeconds: snapshot.sequence.delaysSeconds.map(
-        (delaySeconds) => delaySeconds as number,
+        (delaySeconds: number) => delaySeconds,
       ),
     });
     const senderAuthorityDigest = buildCampaignSenderAuthorityDigest({
@@ -229,12 +206,8 @@ export class CampaignExecutionApplicationService {
           senderPoolSerializationRevision: senderPool.serializationRevision,
           senderPoolRotationPolicyId: senderPool.rotationPolicyId,
         },
-        reviewedWindow: {
-          timeZone: row.timeZone,
-          startLocalTime: row.startLocalTime,
-          endLocalTime: row.endLocalTime,
-        },
-        campaignCapacityTimeZone: row.campaignCapacityTimeZone,
+        reviewedWindow: DEFAULT_SENDING_WINDOW,
+        campaignCapacityTimeZone: 'UTC',
       },
     });
 

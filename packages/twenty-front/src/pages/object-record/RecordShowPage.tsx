@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 
 import { SidePanelToggleButton } from '@/side-panel/components/SidePanelToggleButton';
+import { MyahCampaignExecutionControls } from '@/page-layout/components/MyahCampaignExecutionControls';
 import { RecordShowCommandMenu } from '@/command-menu-item/components/RecordShowCommandMenu';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
@@ -56,6 +57,12 @@ export const RecordShowPage = () => {
                 objectNameSingular={objectNameSingular}
                 objectRecordId={objectRecordId}
               >
+                {objectNameSingular === 'campaign' ? (
+                  <MyahCampaignExecutionControls
+                    campaignId={objectRecordId}
+                    variant="header"
+                  />
+                ) : null}
                 <RecordShowCommandMenu />
                 {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
               </RecordShowPageHeader>

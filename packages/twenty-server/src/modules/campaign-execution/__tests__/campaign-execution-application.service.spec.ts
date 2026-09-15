@@ -38,27 +38,6 @@ const makeService = (messages: Record<string, unknown>[]) => {
       rotationPolicyId: 'single',
     }),
   };
-  const query = jest.fn().mockResolvedValue([
-    {
-      timeZone: 'UTC',
-      startLocalTime: '09:00:00',
-      endLocalTime: '17:00:00',
-      campaignCapacityTimeZone: 'UTC',
-      workspaceCapacityTimeZone: 'UTC',
-    },
-  ]);
-  const connect = jest.fn().mockResolvedValue(undefined);
-  const release = jest.fn().mockResolvedValue(undefined);
-  const createQueryRunner = jest.fn().mockReturnValue({
-    connect,
-    query,
-    release,
-  });
-  const manager = {
-    getGlobalWorkspaceDataSource: jest
-      .fn()
-      .mockResolvedValue({ createQueryRunner }),
-  };
   const fixedMaterial = {
     loadSequenceFixedMaterial: jest.fn().mockResolvedValue({
       kind: 'READY',
@@ -85,17 +64,12 @@ const makeService = (messages: Record<string, unknown>[]) => {
       execution as never,
       sequence as never,
       sender as never,
-      manager as never,
       fixedMaterial as never,
     ),
     execution,
     sequence,
     sender,
     fixedMaterial,
-    createQueryRunner,
-    connect,
-    query,
-    release,
   };
 };
 
@@ -137,7 +111,6 @@ describe('CampaignExecutionApplicationService', () => {
     });
     expect(harness.sender.getCampaignEmailSenderPool).not.toHaveBeenCalled();
     expect(harness.execution.startCampaign).not.toHaveBeenCalled();
-    expect(harness.query).not.toHaveBeenCalled();
   });
 
   it('server-prepares an email-only request and delegates exactly once without provider sends', async () => {
@@ -159,10 +132,6 @@ describe('CampaignExecutionApplicationService', () => {
     await expect(
       harness.service.start(campaignId, key, authContext),
     ).resolves.toMatchObject({ status: 'STARTED', changed: true });
-    expect(harness.createQueryRunner).toHaveBeenCalledTimes(1);
-    expect(harness.connect).toHaveBeenCalledTimes(1);
-    expect(harness.query).toHaveBeenCalledTimes(1);
-    expect(harness.release).toHaveBeenCalledTimes(1);
     expect(harness.execution.startCampaign).toHaveBeenCalledTimes(1);
     expect(
       harness.fixedMaterial.loadSequenceFixedMaterial,
@@ -181,7 +150,11 @@ describe('CampaignExecutionApplicationService', () => {
           usedChannels: ['EMAIL'],
           orderedMessageIds: ['90000000-0000-4000-8000-000000000009'],
         },
-        reviewedWindow: { timeZone: 'UTC' },
+        reviewedWindow: {
+          timeZone: 'UTC',
+          startLocalTime: '00:00:00',
+          endLocalTime: '23:59:00',
+        },
         campaignCapacityTimeZone: 'UTC',
       },
     });
@@ -304,7 +277,6 @@ describe('CampaignExecutionApplicationService', () => {
       status: 'BLOCKED',
       reason: 'AT_LEAST_ONE_READY_EMAIL_MAILBOX_REQUIRED',
     });
-    expect(harness.query).not.toHaveBeenCalled();
     expect(harness.execution.startCampaign).not.toHaveBeenCalled();
   });
 
@@ -335,26 +307,6 @@ describe('CampaignExecutionApplicationService', () => {
       changed: false,
       inFlightCount: null,
     });
-  });
-
-  it('releases the preflight query runner when the sending-window read fails', async () => {
-    const harness = makeService([
-      {
-        id: '90000000-0000-4000-8000-000000000009',
-        channel: 'EMAIL',
-        subject: 'Hello',
-        body: 'Body',
-        files: [],
-        replyToThread: false,
-      },
-    ]);
-    harness.query.mockRejectedValueOnce(new Error('window read failed'));
-
-    await expect(
-      harness.service.start(campaignId, key, authContext),
-    ).rejects.toThrow('window read failed');
-    expect(harness.release).toHaveBeenCalledTimes(1);
-    expect(harness.execution.startCampaign).not.toHaveBeenCalled();
   });
 
   it('delegates the editable Campaign sending window without a workspace-timezone fallback', async () => {

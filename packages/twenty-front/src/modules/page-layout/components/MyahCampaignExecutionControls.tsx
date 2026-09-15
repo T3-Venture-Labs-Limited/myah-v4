@@ -92,17 +92,6 @@ const START_CAMPAIGN_EXECUTION = gql`
   }
 `;
 
-const UPDATE_CAMPAIGN_SENDING_WINDOW = gql`
-  mutation UpdateCampaignSendingWindow(
-    $input: UpdateCampaignSendingWindowInput!
-  ) {
-    updateCampaignSendingWindow(input: $input) {
-      status
-      reason
-    }
-  }
-`;
-
 const STOP_CAMPAIGN_EXECUTION = gql`
   mutation StopCampaignExecution($input: StopCampaignExecutionInput!) {
     stopCampaignExecution(input: $input) {
@@ -204,8 +193,10 @@ const newAttemptKey = () => uuidv4();
 
 export const MyahCampaignExecutionControls = ({
   campaignId,
+  variant = 'page',
 }: {
   campaignId: string;
+  variant?: 'header' | 'page';
 }) => {
   const apolloCoreClient = useApolloCoreClient();
   const metadataClient = useApolloClient();
@@ -221,12 +212,7 @@ export const MyahCampaignExecutionControls = ({
   const permissions = useObjectPermissionsForObject(objectMetadataItem.id);
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
   const { openModal } = useModal();
-  const [pending, setPending] = useState<'START' | 'STOP' | 'WINDOW' | null>(
-    null,
-  );
-  const [timeZone, setTimeZone] = useState('');
-  const [startLocalTime, setStartLocalTime] = useState('');
-  const [endLocalTime, setEndLocalTime] = useState('');
+  const [pending, setPending] = useState<'START' | 'STOP' | null>(null);
   // A failed or response-lost Start retries with the same key. It is cleared
   // only after a canonical successful response.
   // oxlint-disable-next-line twenty/no-state-useref
@@ -329,50 +315,6 @@ export const MyahCampaignExecutionControls = ({
     ]);
   };
 
-  const saveWindow = async () => {
-    if (
-      pending !== null ||
-      campaignQuery.loading ||
-      campaignQuery.error !== undefined ||
-      !permissions.canUpdateObjectRecords ||
-      (lifecycle !== 'DRAFT' && lifecycle !== 'PAUSED') ||
-      timeZone.trim().length === 0 ||
-      startLocalTime.length === 0 ||
-      endLocalTime.length === 0
-    )
-      return;
-    setPending('WINDOW');
-    try {
-      const response = await metadataClient.mutate<{
-        updateCampaignSendingWindow: { status: string; reason: string | null };
-      }>({
-        mutation: UPDATE_CAMPAIGN_SENDING_WINDOW,
-        variables: {
-          input: {
-            campaignId,
-            timeZone: timeZone.trim(),
-            startLocalTime: `${startLocalTime}:00`,
-            endLocalTime: `${endLocalTime}:00`,
-          },
-        },
-      });
-      const result = response.data?.updateCampaignSendingWindow;
-      if (!result || result.status === 'BLOCKED')
-        throw new Error(result?.reason ?? 'Sending window could not be saved.');
-      await reload();
-      enqueueSuccessSnackBar({ message: 'Campaign sending window saved.' });
-    } catch (error) {
-      enqueueErrorSnackBar({
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Sending window could not be saved.',
-      });
-    } finally {
-      setPending(null);
-    }
-  };
-
   const start = async () => {
     if (!canStart) return;
     const attemptKey = startAttemptKeyRef.current ?? newAttemptKey();
@@ -468,6 +410,48 @@ export const MyahCampaignExecutionControls = ({
                       ? 'Select at least one ready email mailbox before Start.'
                       : null;
 
+  const controls =
+    lifecycle === 'ACTIVE' && !hasOutstandingStart ? (
+      <Button
+        disabled={!canStop}
+        isLoading={pending === 'STOP'}
+        onClick={() => openModal(stopModalId)}
+        title="Stop"
+        type="button"
+        variant="secondary"
+      />
+    ) : lifecycle === 'DRAFT' ||
+      lifecycle === 'PAUSED' ||
+      hasOutstandingStart ? (
+      <Button
+        disabled={!canStart}
+        isLoading={pending === 'START'}
+        onClick={() => void start()}
+        title="Start"
+        type="button"
+        variant="primary"
+      />
+    ) : null;
+
+  const confirmation = (
+    <ConfirmationModal
+      confirmButtonText="Stop Campaign"
+      loading={pending === 'STOP'}
+      modalInstanceId={stopModalId}
+      onConfirmClick={() => void stop()}
+      subtitle="Stops new outreach dispatch and preserves unsent work. Messages already accepted by a provider cannot be recalled."
+      title="Stop this Campaign?"
+    />
+  );
+
+  if (variant === 'header')
+    return (
+      <>
+        {controls}
+        {confirmation}
+      </>
+    );
+
   return (
     <Section>
       <H2Title title="Campaign execution" />
@@ -509,82 +493,8 @@ export const MyahCampaignExecutionControls = ({
           <p role="alert">Campaign audience review is unavailable.</p>
         )}
       </section>
-      {(lifecycle === 'DRAFT' || lifecycle === 'PAUSED') &&
-      permissions.canUpdateObjectRecords ? (
-        <div>
-          <label>
-            Sending timezone
-            <input
-              aria-label="Sending timezone"
-              onChange={(event) => setTimeZone(event.target.value)}
-              placeholder="America/New_York"
-              value={timeZone}
-            />
-          </label>
-          <label>
-            Start time
-            <input
-              aria-label="Start time"
-              onChange={(event) => setStartLocalTime(event.target.value)}
-              type="time"
-              value={startLocalTime}
-            />
-          </label>
-          <label>
-            End time
-            <input
-              aria-label="End time"
-              onChange={(event) => setEndLocalTime(event.target.value)}
-              type="time"
-              value={endLocalTime}
-            />
-          </label>
-          <Button
-            disabled={
-              pending !== null ||
-              campaignQuery.loading ||
-              campaignQuery.error !== undefined ||
-              !timeZone.trim() ||
-              !startLocalTime ||
-              !endLocalTime
-            }
-            isLoading={pending === 'WINDOW'}
-            onClick={() => void saveWindow()}
-            title="Save sending window"
-            type="button"
-            variant="secondary"
-          />
-        </div>
-      ) : null}
-      {lifecycle === 'ACTIVE' && !hasOutstandingStart ? (
-        <Button
-          disabled={!canStop}
-          isLoading={pending === 'STOP'}
-          onClick={() => openModal(stopModalId)}
-          title="Stop"
-          type="button"
-          variant="secondary"
-        />
-      ) : lifecycle === 'DRAFT' ||
-        lifecycle === 'PAUSED' ||
-        hasOutstandingStart ? (
-        <Button
-          disabled={!canStart}
-          isLoading={pending === 'START'}
-          onClick={() => void start()}
-          title="Start"
-          type="button"
-          variant="primary"
-        />
-      ) : null}
-      <ConfirmationModal
-        confirmButtonText="Stop Campaign"
-        loading={pending === 'STOP'}
-        modalInstanceId={stopModalId}
-        onConfirmClick={() => void stop()}
-        subtitle="Stops new outreach dispatch and preserves unsent work. Messages already accepted by a provider cannot be recalled."
-        title="Stop this Campaign?"
-      />
+      {controls}
+      {confirmation}
     </Section>
   );
 };
