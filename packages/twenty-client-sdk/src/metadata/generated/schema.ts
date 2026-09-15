@@ -7688,7 +7688,7 @@ export interface AddDirectCampaignCreatorsInput {campaignId: Scalars['UUID'],cre
 
 export interface ApproveCampaignCreatorListAdditionsInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
 
-export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds?: (Scalars['UUID'][] | null),confirmationToken?: (Scalars['String'] | null)}
 
 export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
 
