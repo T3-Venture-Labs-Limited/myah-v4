@@ -67,7 +67,13 @@ type HarnessOptions = {
   observedAt?: Date;
   localDate?: string;
   nextLocalMidnightAt?: Date;
+  workerDateDecoding?: boolean;
 };
+
+const workerDecodedLocalDate = (sql: string, localDate: string) =>
+  sql.includes('"localDate"::text AS "localDate"')
+    ? localDate
+    : new Date(`${localDate}T00:00:00.000Z`);
 
 const createHarness = (options: HarnessOptions = {}) => {
   const calls: Array<{ params: unknown[]; sql: string }> = [];
@@ -103,7 +109,12 @@ const createHarness = (options: HarnessOptions = {}) => {
         options.dayRows?.[id] ?? [
           { acceptedCount: 0, connectedAccountId: id, reservedCount: 0 },
         ]
-      ).map((row) => ({ localDate: params[2], ...row }));
+      ).map((row) => ({
+        localDate: options.workerDateDecoding
+          ? workerDecodedLocalDate(sql, params[2] as string)
+          : params[2],
+        ...row,
+      }));
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   });
@@ -184,6 +195,26 @@ describe('MailboxCapacityService', () => {
       reason: 'INVALID_CAPACITY_INPUT',
       status: 'BLOCKED',
     });
+  });
+
+  it('normalizes worker-decoded capacity day dates to text before ranking', async () => {
+    const harness = createHarness({ workerDateDecoding: true });
+
+    await expect(
+      harness.service.lockAndRankForReservation(
+        rotateInput([candidate(accountA, channelA)]),
+        harness.manager,
+      ),
+    ).resolves.toMatchObject({
+      selected: { localDate: '2026-03-10' },
+      status: 'ELIGIBLE_NOW',
+    });
+
+    const dayLockSql = harness.calls.find(({ sql }) =>
+      sql.includes('FROM "core"."mailboxCapacityDay"'),
+    )?.sql;
+
+    expect(dayLockSql).toContain('"localDate"::text AS "localDate"');
   });
 
   it('revalidates from a final post-new-day-lock sample before choosing the decisive winner', async () => {
@@ -1190,7 +1221,7 @@ describe('MailboxCapacityService mutation revalidation and CAS', () => {
               {
                 acceptedCount: 4,
                 connectedAccountId: accountA,
-                localDate: '2026-03-10',
+                localDate: workerDecodedLocalDate(sql, '2026-03-10'),
                 reservedCount: 6,
               },
             ],
@@ -1231,6 +1262,49 @@ describe('MailboxCapacityService mutation revalidation and CAS', () => {
     expect(calls).toHaveLength(2);
     expect(calls.every(({ structured }) => structured === true)).toBe(true);
     expect(calls[0].sql).toContain('"reservedCount" + 1');
+    expect(calls[0].sql).toContain('"localDate"::text AS "localDate"');
     expect(calls[1].sql).toContain('GREATEST');
   });
+
+  it.each([
+    ['release', 4, 4],
+    ['consume', 5, 4],
+  ] as const)(
+    'normalizes worker-decoded local dates when it %ss reserved capacity',
+    async (operation, acceptedCount, reservedCount) => {
+      const query = jest.fn(async (sql: string) => ({
+        affected: 1,
+        records: [
+          {
+            acceptedCount,
+            connectedAccountId: accountA,
+            localDate: workerDecodedLocalDate(sql, '2026-03-10'),
+            reservedCount,
+          },
+        ],
+      }));
+      const lockedDay = {
+        acceptedCount: 4,
+        connectedAccountId: accountA,
+        localDate: '2026-03-10',
+        reservedCount: 5,
+        workspaceId,
+      };
+      const service = new MailboxCapacityService();
+      const manager = {
+        queryRunner: { isTransactionActive: true, query },
+      } as unknown as EntityManager;
+
+      if (operation === 'release') {
+        await service.releaseReserved(lockedDay, manager);
+      } else {
+        await service.consumeReserved(lockedDay, manager);
+      }
+
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(query.mock.calls[0][0]).toContain(
+        '"localDate"::text AS "localDate"',
+      );
+    },
+  );
 });
