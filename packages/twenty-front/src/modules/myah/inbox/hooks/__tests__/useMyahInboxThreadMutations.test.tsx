@@ -1,3 +1,5 @@
+import { getDefaultStore } from 'jotai';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { act, renderHook } from '@testing-library/react';
 
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
@@ -28,6 +30,9 @@ jest.mock('~/generated/graphql', () => ({
 describe('useMyahInboxThreadMutations', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getDefaultStore().set(currentWorkspaceState.atom, {
+      id: 'workspace-1',
+    } as never);
     mockUseMutation.mockImplementation((document: { name: string }) => {
       if (document.name === 'UpdateMyahInboxThread') {
         return [mockUpdate, { loading: false }];
@@ -37,6 +42,36 @@ describe('useMyahInboxThreadMutations', () => {
       }
       return [mockGenerate, { loading: false }];
     });
+  });
+
+  it('rejects captured-workspace operations before transport if the workspace switches', async () => {
+    const { result } = renderHook(() => useMyahInboxThreadMutations());
+    const captured = {
+      expectedWorkspaceId: 'workspace-1',
+      threadId: 'thread-1',
+    };
+    getDefaultStore().set(currentWorkspaceState.atom, {
+      id: 'workspace-2',
+    } as never);
+    await expect(
+      result.current.saveDraft({
+        ...captured,
+        expectedRevision: 2,
+        body: { markdown: 'recovery', blocknote: null },
+      }),
+    ).rejects.toThrow('workspace');
+    await expect(
+      result.current.generateProposal({
+        ...captured,
+        operatorInstructions: 'draft',
+      }),
+    ).rejects.toThrow('workspace');
+    await expect(result.current.updateThread(captured)).rejects.toThrow(
+      'workspace',
+    );
+    expect(mockSave).not.toHaveBeenCalled();
+    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it('uses only the Task 4 triage and draft mutations with the supplied inputs', async () => {
@@ -64,6 +99,7 @@ describe('useMyahInboxThreadMutations', () => {
     let updateResult;
     await act(async () => {
       updateResult = await result.current.updateThread({
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         inboxState: 'CLOSED' as UpdateMyahInboxThreadInput['inboxState'],
       });
@@ -71,13 +107,18 @@ describe('useMyahInboxThreadMutations', () => {
     expect(updateResult).toEqual(updatedThread);
     expect(mockUpdate).toHaveBeenCalledWith({
       variables: {
-        input: { threadId: 'thread-1', inboxState: 'CLOSED' },
+        input: {
+          expectedWorkspaceId: 'workspace-1',
+          threadId: 'thread-1',
+          inboxState: 'CLOSED',
+        },
       },
     });
 
     let saveResult;
     await act(async () => {
       saveResult = await result.current.saveDraft({
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         expectedRevision: 2,
         body: { markdown: 'draft', blocknote: null },
@@ -87,6 +128,7 @@ describe('useMyahInboxThreadMutations', () => {
     expect(mockSave).toHaveBeenCalledWith({
       variables: {
         input: {
+          expectedWorkspaceId: 'workspace-1',
           threadId: 'thread-1',
           expectedRevision: 2,
           body: { markdown: 'draft', blocknote: null },
@@ -108,6 +150,7 @@ describe('useMyahInboxThreadMutations', () => {
     let proposalResult;
     await act(async () => {
       proposalResult = await result.current.generateProposal({
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         operatorInstructions: 'Keep it concise',
       });
@@ -116,6 +159,7 @@ describe('useMyahInboxThreadMutations', () => {
     expect(mockGenerate).toHaveBeenCalledWith({
       variables: {
         input: {
+          expectedWorkspaceId: 'workspace-1',
           threadId: 'thread-1',
           operatorInstructions: 'Keep it concise',
         },

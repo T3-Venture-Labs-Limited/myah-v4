@@ -173,7 +173,6 @@ type GetActionApprovalProposalData = {
 
 type ExactActionApprovalProposalBase =
   GetActionApprovalProposalData['getActionApprovalProposal'] & {
-    actionVersion: 1;
     body: string;
     recipientLabel: string;
     sendingAccountLabel: string;
@@ -182,21 +181,30 @@ type ExactActionApprovalProposalBase =
 
 type InstagramApprovalProposal = ExactActionApprovalProposalBase & {
   action: 'send_instagram_reply';
+  actionVersion: 1;
+};
+
+type InstagramMessageApprovalProposal = ExactActionApprovalProposalBase & {
+  action: 'send_instagram_message';
+  actionVersion: 2;
 };
 
 type OutreachEmailApprovalProposal = ExactActionApprovalProposalBase & {
   action: 'send_outreach_email';
+  actionVersion: 1;
   subject: string;
 };
 
 type MyahInboxReplyApprovalProposal = ExactActionApprovalProposalBase & {
   action: 'send_inbox_reply';
+  actionVersion: 1;
   subject: string;
   draftRevision: number;
 };
 
 type ExactActionApprovalProposal =
   | InstagramApprovalProposal
+  | InstagramMessageApprovalProposal
   | OutreachEmailApprovalProposal
   | MyahInboxReplyApprovalProposal;
 
@@ -207,7 +215,6 @@ const isExactActionApprovalProposal = (
 ): proposal is ExactActionApprovalProposal => {
   if (
     !proposal ||
-    proposal.actionVersion !== 1 ||
     proposal.state !== 'PENDING' ||
     typeof proposal.body !== 'string' ||
     typeof proposal.recipientLabel !== 'string' ||
@@ -217,10 +224,15 @@ const isExactActionApprovalProposal = (
   }
 
   if (proposal.action === 'send_instagram_reply') {
-    return true;
+    return proposal.actionVersion === 1;
+  }
+
+  if (proposal.action === 'send_instagram_message') {
+    return proposal.actionVersion === 2;
   }
 
   return (
+    proposal.actionVersion === 1 &&
     (proposal.action === 'send_outreach_email' ||
       proposal.action === 'send_inbox_reply') &&
     typeof proposal.subject === 'string' &&
@@ -238,6 +250,11 @@ export const AiChatApprovalCard = ({
     Pick<RequestApprovalToolInput, 'title' | 'summary' | 'consequences'>
   > = {
     send_instagram_reply: {
+      title: t`Review Instagram reply`,
+      summary: t`Review the exact server-derived Instagram reply before it is sent.`,
+      consequences: [t`The reply will be sent to the existing conversation.`],
+    },
+    send_instagram_message: {
       title: t`Review Instagram reply`,
       summary: t`Review the exact server-derived Instagram reply before it is sent.`,
       consequences: [t`The reply will be sent to the existing conversation.`],

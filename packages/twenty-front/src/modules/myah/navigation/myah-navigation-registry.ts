@@ -1,4 +1,4 @@
-import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
+import { lazy } from 'react';
 import {
   type MyahNavigationPageId,
   type MyahNavigationRoute,
@@ -22,6 +22,12 @@ import {
   IconVersions,
   IconVideo,
 } from 'twenty-ui/icon';
+
+const MyahInboxPage = lazy(() =>
+  import('@/myah/inbox/components/MyahInboxPage').then((module) => ({
+    default: module.MyahInboxPage,
+  })),
+);
 
 const CREATOR_OBJECT_UNIVERSAL_IDENTIFIER =
   '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de';

@@ -2,6 +2,14 @@ import { ActionExecutionReceiptState } from 'src/engine/core-modules/action-appr
 import { MyahInboxDraftSaveStatus } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-draft-save-result.dto';
 import { MyahInboxReplyApprovedExecutionService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-approved-execution.service';
 
+jest.mock(
+  'src/engine/core-modules/myah-inbox/utils/render-myah-inbox-reply-body.util',
+  () => ({ renderMyahInboxReplyBody: jest.fn() }),
+);
+const { renderMyahInboxReplyBody } = jest.requireMock(
+  'src/engine/core-modules/myah-inbox/utils/render-myah-inbox-reply-body.util',
+) as { renderMyahInboxReplyBody: jest.Mock };
+
 const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
 const userId = '20202020-1234-4678-9012-345678901235';
@@ -172,6 +180,13 @@ const createService = (overrides?: {
 };
 
 describe('MyahInboxReplyApprovedExecutionService', () => {
+  beforeEach(() => {
+    renderMyahInboxReplyBody.mockReset().mockResolvedValue({
+      body: 'Projected plain text',
+      html: '<p><strong>Projected HTML</strong></p>',
+    });
+  });
+
   it('reserves one receipt, sends once, records acceptance, and projects it', async () => {
     const setup = createService();
 
@@ -189,6 +204,9 @@ describe('MyahInboxReplyApprovedExecutionService', () => {
       workspaceId,
       binding: expectedActionBinding,
     });
+    expect(renderMyahInboxReplyBody).toHaveBeenCalledWith(
+      authority.canonicalGraph.draftBody,
+    );
     expect(setup.reserveExecutionForBinding).toHaveBeenCalledWith({
       approvalBindingId,
       expectedActionBinding,
@@ -197,8 +215,8 @@ describe('MyahInboxReplyApprovedExecutionService', () => {
       {
         to: ['creator@example.com'],
         subject: 'Re: Partnership',
-        body: 'Thanks for the update',
-        html: 'Thanks for the update',
+        body: 'Projected plain text',
+        html: '<p><strong>Projected HTML</strong></p>',
         attachments: [],
         inReplyTo: '<incoming@example.com>',
         threadExternalId: 'provider-thread-id',
@@ -218,6 +236,19 @@ describe('MyahInboxReplyApprovedExecutionService', () => {
       authority,
       draft: null,
     });
+  });
+
+  it('rejects invalid rich content before reserving or sending', async () => {
+    renderMyahInboxReplyBody.mockRejectedValueOnce(
+      new Error('invalid rich content'),
+    );
+    const setup = createService();
+
+    await expect(
+      setup.service.execute({ approvalBindingId, binding, workspaceId }),
+    ).rejects.toThrow('invalid rich content');
+    expect(setup.reserveExecutionForBinding).not.toHaveBeenCalled();
+    expect(setup.sendMessage).not.toHaveBeenCalled();
   });
 
   it('returns an existing sent receipt without rebuilding mutable draft authority or another provider call', async () => {

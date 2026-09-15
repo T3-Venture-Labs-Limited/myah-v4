@@ -46,6 +46,83 @@ describe('PermissionsService', () => {
 
     service = module.get<PermissionsService>(PermissionsService);
   });
+  describe('Instagram forward cutover explicit-grant boundary', () => {
+    it.each([
+      PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
+      PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
+      PermissionFlagType.RESOLVE_INSTAGRAM_SEND_OUTCOME,
+    ])(
+      '%s defaults and blanket tools deny, valid explicit grants allow',
+      (flag) => {
+        expect(
+          service.getDefaultUserWorkspacePermissions().permissionFlags[flag],
+        ).toBe(false);
+        for (const blanket of [false, true]) {
+          const role = {
+            canAccessAllTools: blanket,
+            canUpdateAllSettings: blanket,
+            rolePermissionFlags: [],
+          } as unknown as RoleEntity;
+          expect(service.checkRolePermissions(role, flag)).toBe(false);
+          role.rolePermissionFlags = [
+            {
+              permissionFlag: {
+                universalIdentifier: SystemPermissionFlag.SEND_EMAIL_TOOL,
+              },
+            },
+          ] as never;
+          expect(service.checkRolePermissions(role, flag)).toBe(false);
+          role.rolePermissionFlags = [
+            {
+              permissionFlag: {
+                universalIdentifier: SystemPermissionFlag[flag],
+              },
+            },
+          ] as never;
+          expect(service.checkRolePermissions(role, flag)).toBe(true);
+        }
+      },
+    );
+  });
+
+  describe('getDefaultUserWorkspacePermissions', () => {
+    it('returns an exhaustive disabled permission map including Instagram send controls', () => {
+      expect(service.getDefaultUserWorkspacePermissions()).toEqual({
+        permissionFlags: {
+          API_KEYS_AND_WEBHOOKS: false,
+          WORKSPACE: false,
+          WORKSPACE_MEMBERS: false,
+          ROLES: false,
+          DATA_MODEL: false,
+          SECURITY: false,
+          WORKFLOWS: false,
+          IMPERSONATE: false,
+          SSO_BYPASS: false,
+          APPLICATIONS: false,
+          MARKETPLACE_APPS: false,
+          LAYOUTS: false,
+          BILLING: false,
+          AI_SETTINGS: false,
+          AI: false,
+          VIEWS: false,
+          UPLOAD_FILE: false,
+          DOWNLOAD_FILE: false,
+          SEND_EMAIL_TOOL: false,
+          SEND_INSTAGRAM_REPLY_TOOL: false,
+          SEND_INSTAGRAM_FIRST_MESSAGE_TOOL: false,
+          RESOLVE_INSTAGRAM_SEND_OUTCOME: false,
+          CREATE_CALENDAR_EVENT_TOOL: false,
+          HTTP_REQUEST_TOOL: false,
+          CODE_INTERPRETER_TOOL: false,
+          IMPORT_CSV: false,
+          EXPORT_CSV: false,
+          CONNECTED_ACCOUNTS: false,
+          PROFILE_INFORMATION: false,
+        },
+        objectsPermissions: {},
+      });
+    });
+  });
 
   describe('checkRolePermissions', () => {
     describe('canAccessAllTools for tool permissions', () => {
@@ -120,6 +197,24 @@ describe('PermissionsService', () => {
             PermissionFlagType.CONNECTED_ACCOUNTS,
           ),
         ).toBe(true);
+        expect(
+          service.checkRolePermissions(
+            roleWithAllTools as RoleEntity,
+            PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
+          ),
+        ).toBe(false);
+        expect(
+          service.checkRolePermissions(
+            roleWithAllTools as RoleEntity,
+            PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
+          ),
+        ).toBe(false);
+        expect(
+          service.checkRolePermissions(
+            roleWithAllTools as RoleEntity,
+            PermissionFlagType.RESOLVE_INSTAGRAM_SEND_OUTCOME,
+          ),
+        ).toBe(false);
       });
 
       it('should NOT grant settings permissions when canAccessAllTools is true', () => {

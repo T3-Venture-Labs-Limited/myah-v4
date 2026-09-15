@@ -839,3 +839,110 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
     );
   });
 });
+
+describe('ActionApprovalService Instagram message v2 authority', () => {
+  const directBinding = {
+    workspaceId,
+    actionName: 'send_instagram_message' as const,
+    actionVersion: 2 as const,
+    actionKind: 'START_CHAT' as const,
+    draftId: '00000000-0000-4000-8000-000000000050',
+    contentDigest: 'a'.repeat(64),
+    recipientFingerprint: 'b'.repeat(64),
+    sendingAccountFingerprint: 'c'.repeat(64),
+    actionContextFingerprint: 'd'.repeat(64),
+    threadId: null,
+    interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT' as const,
+    interactionContextId: '00000000-0000-4000-8000-000000000050',
+    initiatorUserWorkspaceId: userWorkspaceId,
+    evidenceLinks: [
+      {
+        objectMetadataId: '00000000-0000-4000-8000-000000000051',
+        recordId: '00000000-0000-4000-8000-000000000050',
+        role: 'INSTAGRAM_MESSAGE_DRAFT',
+      },
+    ],
+  };
+
+  it('creates a direct Instagram binding already approved by the exact Send click', async () => {
+    const manager = {
+      create: jest.fn((_entity, value) => value),
+      save: jest.fn(async (_entity, value) =>
+        value.actionName === 'send_instagram_message'
+          ? { ...value, id: approvalBindingId }
+          : value,
+      ),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.createApprovedInstagramMessageBinding(directBinding),
+    ).resolves.toEqual({ id: approvalBindingId });
+    expect(manager.save).toHaveBeenCalledWith(
+      ActionApprovalBindingEntity,
+      expect.objectContaining({
+        actionName: 'send_instagram_message',
+        actionVersion: 2,
+        actionKind: 'START_CHAT',
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+        interactionContextId: directBinding.draftId,
+        state: ActionApprovalBindingState.APPROVED,
+        decidedAt: expect.any(Date),
+      }),
+    );
+  });
+
+  it('reconstructs only the exact direct interaction context', async () => {
+    const storedBinding = {
+      id: approvalBindingId,
+      ...directBinding,
+      state: ActionApprovalBindingState.APPROVED,
+      expiresAt: new Date('2099-07-18T00:00:00.000Z'),
+      inboundMessageId: null,
+      inboundSenderIgsid: null,
+      inboundDirection: null,
+      inboundReceivedAt: null,
+    };
+    const manager = {
+      findOne: jest.fn().mockResolvedValue(storedBinding),
+      find: jest.fn().mockResolvedValue(directBinding.evidenceLinks),
+      save: jest.fn(),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.getApprovedBinding({
+        workspaceId,
+        approvalBindingId,
+        initiatorUserWorkspaceId: userWorkspaceId,
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+        interactionContextId: directBinding.draftId,
+      }),
+    ).resolves.toEqual({
+      ...directBinding,
+      evidenceLinks: directBinding.evidenceLinks,
+    });
+    await expect(
+      service.getApprovedBinding({
+        workspaceId,
+        approvalBindingId,
+        initiatorUserWorkspaceId: userWorkspaceId,
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+        interactionContextId: '00000000-0000-4000-8000-000000000099',
+      }),
+    ).rejects.toThrow('An approved action binding is required');
+  });
+});

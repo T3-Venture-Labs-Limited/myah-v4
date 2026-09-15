@@ -136,4 +136,36 @@ describe('ToolRegistryService', () => {
       descriptor('LOGIC_FUNCTION'),
     ]);
   });
+  it('never exposes retired Instagram app tools from stale installed metadata', async () => {
+    const retiredToolNames = [
+      'app_myah_list_instagram_conversations',
+      'app_myah_list_instagram_messages',
+      'app_myah_send_instagram_reply',
+    ];
+    const logicFunctionProvider = {
+      category: 'LOGIC_FUNCTION',
+      isAvailable: jest.fn().mockResolvedValue(true),
+      generateDescriptors: jest.fn().mockResolvedValue(
+        retiredToolNames.map((name) => ({
+          name,
+          label: name,
+          description: 'Retired Instagram app tool.',
+          inputSchema: { type: 'object', properties: {} },
+          category: 'LOGIC_FUNCTION',
+          executionRef: {
+            kind: 'logic_function',
+            logicFunctionUniversalIdentifier: `${name}-id`,
+          },
+        })),
+      ),
+      executeStaticTool: jest.fn(),
+    };
+    const registry = new ToolRegistryService(
+      [logicFunctionProvider] as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(registry.getCatalog(context)).resolves.toEqual([]);
+  });
 });

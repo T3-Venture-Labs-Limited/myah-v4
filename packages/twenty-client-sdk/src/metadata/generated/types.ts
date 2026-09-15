@@ -70,9 +70,9 @@ export default {
         244,
         259,
         263,
-        315,
         318,
         321,
+        324,
         348,
         350,
         381,
@@ -85,7 +85,7 @@ export default {
         418,
         429,
         430,
-        577
+        574
     ],
     "types": {
         "BillingProductDTO": {
@@ -5715,6 +5715,69 @@ export default {
                 1
             ]
         },
+        "WorkspaceMailboxConnectionStatus": {
+            "connectedAccountId": [
+                3
+            ],
+            "errorCode": [
+                1
+            ],
+            "errorMessage": [
+                1
+            ],
+            "lastSafeOperation": [
+                1
+            ],
+            "maskedHandle": [
+                1
+            ],
+            "messageChannelId": [
+                3
+            ],
+            "state": [
+                1
+            ],
+            "syncStage": [
+                1
+            ],
+            "syncStatus": [
+                1
+            ],
+            "updatedAt": [
+                4
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "WorkspaceMailboxConnectionResult": {
+            "connectedAccountId": [
+                3
+            ],
+            "messageChannelId": [
+                3
+            ],
+            "status": [
+                312
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "RevokeWorkspaceMailboxResult": {
+            "connectedAccountId": [
+                3
+            ],
+            "revoked": [
+                6
+            ],
+            "state": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
         "BillingTrialPeriod": {
             "duration": [
                 12
@@ -5745,7 +5808,7 @@ export default {
                 1
             ],
             "modelFamily": [
-                315
+                318
             ],
             "modelFamilyLabel": [
                 1
@@ -5760,7 +5823,7 @@ export default {
                 12
             ],
             "nativeCapabilities": [
-                313
+                316
             ],
             "isDeprecated": [
                 6
@@ -5799,7 +5862,7 @@ export default {
                 1
             ],
             "trialPeriods": [
-                312
+                315
             ],
             "__typename": [
                 1
@@ -5807,7 +5870,7 @@ export default {
         },
         "Support": {
             "supportDriver": [
-                318
+                321
             ],
             "supportFrontChatId": [
                 1
@@ -5833,7 +5896,7 @@ export default {
         },
         "Captcha": {
             "provider": [
-                321
+                324
             ],
             "siteKey": [
                 1
@@ -5870,7 +5933,7 @@ export default {
                 263
             ],
             "metadata": [
-                323
+                326
             ],
             "__typename": [
                 1
@@ -5898,10 +5961,10 @@ export default {
                 265
             ],
             "billing": [
-                316
+                319
             ],
             "aiModels": [
-                314
+                317
             ],
             "signInPrefilled": [
                 6
@@ -5925,25 +5988,25 @@ export default {
                 6
             ],
             "support": [
-                317
+                320
             ],
             "isAttachmentPreviewEnabled": [
                 6
             ],
             "sentry": [
-                319
+                322
             ],
             "captcha": [
-                320
+                323
             ],
             "api": [
-                322
+                325
             ],
             "canManageFeatureFlags": [
                 6
             ],
             "publicFeatureFlags": [
-                324
+                327
             ],
             "isMicrosoftMessagingEnabled": [
                 6
@@ -5985,7 +6048,7 @@ export default {
                 6
             ],
             "maintenance": [
-                325
+                328
             ],
             "__typename": [
                 1
@@ -6032,7 +6095,7 @@ export default {
                 1
             ],
             "dailyUsage": [
-                329
+                332
             ],
             "__typename": [
                 1
@@ -6040,16 +6103,16 @@ export default {
         },
         "UsageAnalytics": {
             "usageByUser": [
-                327
+                330
             ],
             "usageByOperationType": [
-                327
+                330
             ],
             "usageByModel": [
-                327
+                330
             ],
             "timeSeries": [
-                329
+                332
             ],
             "periodStart": [
                 4
@@ -6058,7 +6121,7 @@ export default {
                 4
             ],
             "userDailyUsage": [
-                330
+                333
             ],
             "__typename": [
                 1
@@ -6162,7 +6225,7 @@ export default {
                 1
             ],
             "location": [
-                337
+                340
             ],
             "__typename": [
                 1
@@ -6321,69 +6384,6 @@ export default {
             ],
             "inputSchema": [
                 7
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "WorkspaceMailboxConnectionStatus": {
-            "connectedAccountId": [
-                3
-            ],
-            "errorCode": [
-                1
-            ],
-            "errorMessage": [
-                1
-            ],
-            "lastSafeOperation": [
-                1
-            ],
-            "maskedHandle": [
-                1
-            ],
-            "messageChannelId": [
-                3
-            ],
-            "state": [
-                1
-            ],
-            "syncStage": [
-                1
-            ],
-            "syncStatus": [
-                1
-            ],
-            "updatedAt": [
-                4
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "WorkspaceMailboxConnectionResult": {
-            "connectedAccountId": [
-                3
-            ],
-            "messageChannelId": [
-                3
-            ],
-            "status": [
-                343
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "RevokeWorkspaceMailboxResult": {
-            "connectedAccountId": [
-                3
-            ],
-            "revoked": [
-                6
-            ],
-            "state": [
-                1
             ],
             "__typename": [
                 1
@@ -6798,7 +6798,7 @@ export default {
                 1
             ],
             "parts": [
-                339
+                342
             ],
             "processedAt": [
                 4
@@ -7153,7 +7153,7 @@ export default {
         },
         "Query": {
             "getWorkspaceMailboxStatus": [
-                343,
+                312,
                 {
                     "connectedAccountId": [
                         3,
@@ -7899,17 +7899,26 @@ export default {
             "getSSOIdentityProviders": [
                 246
             ],
-            "campaignOutreachAudienceReview": [
-                349,
+            "getPageLayoutWidgets": [
+                82,
                 {
-                    "campaignId": [
-                        3,
-                        "UUID!"
+                    "pageLayoutTabId": [
+                        1,
+                        "String!"
+                    ]
+                }
+            ],
+            "getPageLayoutWidget": [
+                82,
+                {
+                    "id": [
+                        1,
+                        "String!"
                     ]
                 }
             ],
             "getToolIndex": [
-                342
+                345
             ],
             "getToolInputSchema": [
                 7,
@@ -7921,10 +7930,10 @@ export default {
                 }
             ],
             "webhooks": [
-                341
+                344
             ],
             "webhook": [
-                341,
+                344,
                 {
                     "id": [
                         3,
@@ -7947,24 +7956,6 @@ export default {
                     "bindingId": [
                         3,
                         "UUID!"
-                    ]
-                }
-            ],
-            "getPageLayoutWidgets": [
-                82,
-                {
-                    "pageLayoutTabId": [
-                        1,
-                        "String!"
-                    ]
-                }
-            ],
-            "getPageLayoutWidget": [
-                82,
-                {
-                    "id": [
-                        1,
-                        "String!"
                     ]
                 }
             ],
@@ -8080,8 +8071,17 @@ export default {
                     ]
                 }
             ],
+            "campaignOutreachAudienceReview": [
+                349,
+                {
+                    "campaignId": [
+                        3,
+                        "UUID!"
+                    ]
+                }
+            ],
             "getAutoCompleteAddress": [
-                336,
+                339,
                 {
                     "address": [
                         1,
@@ -8100,7 +8100,7 @@ export default {
                 }
             ],
             "getAddressDetails": [
-                338,
+                341,
                 {
                     "placeId": [
                         1,
@@ -8113,7 +8113,7 @@ export default {
                 }
             ],
             "getUsageAnalytics": [
-                331,
+                334,
                 {
                     "input": [
                         417
@@ -8121,7 +8121,7 @@ export default {
                 }
             ],
             "findManyPublicDomains": [
-                335
+                338
             ],
             "__typename": [
                 1
@@ -8404,7 +8404,7 @@ export default {
         "UsageOperationType": {},
         "Mutation": {
             "connectWorkspaceMailbox": [
-                344,
+                313,
                 {
                     "input": [
                         420,
@@ -8413,7 +8413,7 @@ export default {
                 }
             ],
             "rotateWorkspaceMailbox": [
-                344,
+                313,
                 {
                     "input": [
                         423,
@@ -8422,7 +8422,7 @@ export default {
                 }
             ],
             "reconnectWorkspaceMailbox": [
-                344,
+                313,
                 {
                     "input": [
                         423,
@@ -8431,7 +8431,7 @@ export default {
                 }
             ],
             "revokeWorkspaceMailbox": [
-                345,
+                314,
                 {
                     "connectedAccountId": [
                         3,
@@ -10475,74 +10475,11 @@ export default {
                     ]
                 }
             ],
-            "startCampaignExecution": [
-                352,
-                {
-                    "input": [
-                        558,
-                        "StartCampaignExecutionInput!"
-                    ]
-                }
-            ],
-            "updateCampaignSendingWindow": [
-                351,
-                {
-                    "input": [
-                        559,
-                        "UpdateCampaignSendingWindowInput!"
-                    ]
-                }
-            ],
-            "stopCampaignExecution": [
-                352,
-                {
-                    "input": [
-                        560,
-                        "StopCampaignExecutionInput!"
-                    ]
-                }
-            ],
-            "createWebhook": [
-                341,
-                {
-                    "input": [
-                        561,
-                        "CreateWebhookInput!"
-                    ]
-                }
-            ],
-            "updateWebhook": [
-                341,
-                {
-                    "input": [
-                        562,
-                        "UpdateWebhookInput!"
-                    ]
-                }
-            ],
-            "deleteWebhook": [
-                341,
-                {
-                    "id": [
-                        3,
-                        "UUID!"
-                    ]
-                }
-            ],
-            "runAgent": [
-                340,
-                {
-                    "input": [
-                        564,
-                        "RunAgentInput!"
-                    ]
-                }
-            ],
             "createPageLayoutWidget": [
                 82,
                 {
                     "input": [
-                        565,
+                        558,
                         "CreatePageLayoutWidgetInput!"
                     ]
                 }
@@ -10555,7 +10492,7 @@ export default {
                         "String!"
                     ],
                     "input": [
-                        566,
+                        559,
                         "UpdatePageLayoutWidgetInput!"
                     ]
                 }
@@ -10569,11 +10506,47 @@ export default {
                     ]
                 }
             ],
+            "createWebhook": [
+                344,
+                {
+                    "input": [
+                        560,
+                        "CreateWebhookInput!"
+                    ]
+                }
+            ],
+            "updateWebhook": [
+                344,
+                {
+                    "input": [
+                        561,
+                        "UpdateWebhookInput!"
+                    ]
+                }
+            ],
+            "deleteWebhook": [
+                344,
+                {
+                    "id": [
+                        3,
+                        "UUID!"
+                    ]
+                }
+            ],
+            "runAgent": [
+                343,
+                {
+                    "input": [
+                        563,
+                        "RunAgentInput!"
+                    ]
+                }
+            ],
             "updateMessageFolder": [
                 385,
                 {
                     "input": [
-                        567,
+                        564,
                         "UpdateMessageFolderInput!"
                     ]
                 }
@@ -10582,7 +10555,7 @@ export default {
                 385,
                 {
                     "input": [
-                        569,
+                        566,
                         "UpdateMessageFoldersInput!"
                     ]
                 }
@@ -10591,7 +10564,7 @@ export default {
                 380,
                 {
                     "input": [
-                        570,
+                        567,
                         "UpdateCalendarChannelInput!"
                     ]
                 }
@@ -10621,7 +10594,7 @@ export default {
                         1
                     ],
                     "fileAttachments": [
-                        572,
+                        569,
                         "[FileAttachmentInput!]"
                     ]
                 }
@@ -10653,7 +10626,7 @@ export default {
                         "UUID!"
                     ],
                     "answers": [
-                        573,
+                        570,
                         "[AgentChatQuestionAnswerInput!]!"
                     ],
                     "modelId": [
@@ -10673,7 +10646,7 @@ export default {
                         "UUID!"
                     ],
                     "decision": [
-                        574,
+                        571,
                         "AgentChatApprovalDecisionInput!"
                     ],
                     "modelId": [
@@ -10743,7 +10716,7 @@ export default {
                 368,
                 {
                     "input": [
-                        575,
+                        572,
                         "CreateSkillInput!"
                     ]
                 }
@@ -10752,7 +10725,7 @@ export default {
                 368,
                 {
                     "input": [
-                        576,
+                        573,
                         "UpdateSkillInput!"
                     ]
                 }
@@ -10830,7 +10803,7 @@ export default {
                 364,
                 {
                     "type": [
-                        577,
+                        574,
                         "AnalyticsType!"
                     ],
                     "name": [
@@ -10854,7 +10827,7 @@ export default {
                 }
             ],
             "impersonate": [
-                328,
+                331,
                 {
                     "userId": [
                         3,
@@ -10863,6 +10836,33 @@ export default {
                     "workspaceId": [
                         3,
                         "UUID!"
+                    ]
+                }
+            ],
+            "startCampaignExecution": [
+                352,
+                {
+                    "input": [
+                        575,
+                        "StartCampaignExecutionInput!"
+                    ]
+                }
+            ],
+            "updateCampaignSendingWindow": [
+                351,
+                {
+                    "input": [
+                        576,
+                        "UpdateCampaignSendingWindowInput!"
+                    ]
+                }
+            ],
+            "stopCampaignExecution": [
+                352,
+                {
+                    "input": [
+                        577,
+                        "StopCampaignExecutionInput!"
                     ]
                 }
             ],
@@ -10903,7 +10903,7 @@ export default {
                 }
             ],
             "createPublicDomain": [
-                335,
+                338,
                 {
                     "domain": [
                         1,
@@ -10943,7 +10943,7 @@ export default {
                 }
             ],
             "createDevelopmentApplication": [
-                332,
+                335,
                 {
                     "universalIdentifier": [
                         1,
@@ -10956,7 +10956,7 @@ export default {
                 }
             ],
             "syncApplication": [
-                333,
+                336,
                 {
                     "manifest": [
                         7,
@@ -10968,7 +10968,7 @@ export default {
                 }
             ],
             "uploadApplicationFile": [
-                334,
+                337,
                 {
                     "file": [
                         430,
@@ -13541,104 +13541,6 @@ export default {
                 1
             ]
         },
-        "StartCampaignExecutionInput": {
-            "campaignId": [
-                3
-            ],
-            "startIdempotencyKey": [
-                3
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UpdateCampaignSendingWindowInput": {
-            "campaignId": [
-                3
-            ],
-            "timeZone": [
-                1
-            ],
-            "startLocalTime": [
-                1
-            ],
-            "endLocalTime": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "StopCampaignExecutionInput": {
-            "campaignId": [
-                3
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "CreateWebhookInput": {
-            "id": [
-                3
-            ],
-            "targetUrl": [
-                1
-            ],
-            "operations": [
-                1
-            ],
-            "description": [
-                1
-            ],
-            "secret": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UpdateWebhookInput": {
-            "id": [
-                3
-            ],
-            "update": [
-                563
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UpdateWebhookInputUpdates": {
-            "targetUrl": [
-                1
-            ],
-            "operations": [
-                1
-            ],
-            "description": [
-                1
-            ],
-            "secret": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "RunAgentInput": {
-            "agentUniversalIdentifier": [
-                1
-            ],
-            "prompt": [
-                1
-            ],
-            "operationId": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
         "CreatePageLayoutWidgetInput": {
             "pageLayoutTabId": [
                 3
@@ -13697,12 +13599,74 @@ export default {
                 1
             ]
         },
+        "CreateWebhookInput": {
+            "id": [
+                3
+            ],
+            "targetUrl": [
+                1
+            ],
+            "operations": [
+                1
+            ],
+            "description": [
+                1
+            ],
+            "secret": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UpdateWebhookInput": {
+            "id": [
+                3
+            ],
+            "update": [
+                562
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UpdateWebhookInputUpdates": {
+            "targetUrl": [
+                1
+            ],
+            "operations": [
+                1
+            ],
+            "description": [
+                1
+            ],
+            "secret": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "RunAgentInput": {
+            "agentUniversalIdentifier": [
+                1
+            ],
+            "prompt": [
+                1
+            ],
+            "operationId": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
         "UpdateMessageFolderInput": {
             "id": [
                 3
             ],
             "update": [
-                568
+                565
             ],
             "__typename": [
                 1
@@ -13721,7 +13685,7 @@ export default {
                 3
             ],
             "update": [
-                568
+                565
             ],
             "__typename": [
                 1
@@ -13732,7 +13696,7 @@ export default {
                 3
             ],
             "update": [
-                571
+                568
             ],
             "__typename": [
                 1
@@ -13841,6 +13805,42 @@ export default {
             ]
         },
         "AnalyticsType": {},
+        "StartCampaignExecutionInput": {
+            "campaignId": [
+                3
+            ],
+            "startIdempotencyKey": [
+                3
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UpdateCampaignSendingWindowInput": {
+            "campaignId": [
+                3
+            ],
+            "timeZone": [
+                1
+            ],
+            "startLocalTime": [
+                1
+            ],
+            "endLocalTime": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "StopCampaignExecutionInput": {
+            "campaignId": [
+                3
+            ],
+            "__typename": [
+                1
+            ]
+        },
         "CreateCalendarEventInput": {
             "connectedAccountId": [
                 1

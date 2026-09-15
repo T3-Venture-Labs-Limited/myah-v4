@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
+import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
 import { TokenModule } from 'src/engine/core-modules/auth/token/token.module';
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { WorkspaceDomainsModule } from 'src/engine/core-modules/domain/workspace-domains/workspace-domains.module';
@@ -55,6 +56,7 @@ import { SystemPromptBuilderService } from './services/system-prompt-builder.ser
     ]),
     AiAgentExecutionModule,
     ActionApprovalModule,
+    InstagramMessageModule,
     BillingModule,
     ThrottlerModule,
     FileModule,

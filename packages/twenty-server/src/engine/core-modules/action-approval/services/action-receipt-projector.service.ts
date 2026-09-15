@@ -28,6 +28,18 @@ export class ActionReceiptProjectorService {
     receiptId: string,
     faultHooks?: Pick<ActionApprovalFaultHooks, 'afterWorkspaceProjection'>,
   ): Promise<{ projected: boolean }> {
+    return this.projectReceiptWithWriter(
+      receiptId,
+      this.projectionWriter,
+      faultHooks,
+    );
+  }
+
+  async projectReceiptWithWriter(
+    receiptId: string,
+    projectionWriter: ActionReceiptProjectionWriter,
+    faultHooks?: Pick<ActionApprovalFaultHooks, 'afterWorkspaceProjection'>,
+  ): Promise<{ projected: boolean }> {
     const receipt = await this.receiptRepository.findOne({
       where: { id: receiptId },
       relations: {
@@ -39,7 +51,7 @@ export class ActionReceiptProjectorService {
       return { projected: false };
     }
 
-    await this.projectionWriter.project(this.toProjectionInput(receipt));
+    await projectionWriter.project(this.toProjectionInput(receipt));
     await faultHooks?.afterWorkspaceProjection?.(receipt.id);
     await this.receiptRepository.update(
       { id: receipt.id, state: ActionExecutionReceiptState.PROVIDER_ACCEPTED },
@@ -57,7 +69,6 @@ export class ActionReceiptProjectorService {
       receiptId: receipt.id,
       workspaceId: receipt.workspaceId,
       draftId: binding.draftId,
-      threadId: binding.threadId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
       contentDigest: binding.contentDigest,
       providerMessageId: receipt.providerMessageId,
@@ -67,9 +78,41 @@ export class ActionReceiptProjectorService {
     };
 
     switch (binding.actionName) {
+      case 'send_instagram_message':
+        if (
+          binding.actionVersion !== 2 ||
+          (binding.actionKind !== 'START_CHAT' &&
+            binding.actionKind !== 'REPLY') ||
+          binding.recipientFingerprint === null ||
+          binding.sendingAccountFingerprint === null ||
+          binding.actionContextFingerprint === null ||
+          binding.inboundMessageId !== null ||
+          binding.inboundSenderIgsid !== null ||
+          binding.inboundDirection !== null ||
+          binding.inboundReceivedAt !== null
+        ) {
+          break;
+        }
+
+        return {
+          ...base,
+          actionName: 'send_instagram_message',
+          actionVersion: 2,
+          actionKind: binding.actionKind,
+          threadId: binding.threadId,
+          interactionContextType:
+            binding.interactionContextType === 'MYAH_INBOX_INSTAGRAM_DRAFT'
+              ? binding.interactionContextType
+              : null,
+          interactionContextId: binding.interactionContextId,
+          recipientFingerprint: binding.recipientFingerprint,
+          sendingAccountFingerprint: binding.sendingAccountFingerprint,
+          actionContextFingerprint: binding.actionContextFingerprint,
+        };
       case 'send_instagram_reply':
         if (
           binding.actionVersion !== 1 ||
+          binding.threadId === null ||
           binding.actionContextFingerprint !== null ||
           binding.recipientFingerprint === null ||
           binding.sendingAccountFingerprint === null ||
@@ -85,6 +128,7 @@ export class ActionReceiptProjectorService {
           ...base,
           actionName: 'send_instagram_reply',
           actionVersion: 1,
+          threadId: binding.threadId,
           recipientFingerprint: binding.recipientFingerprint,
           sendingAccountFingerprint: binding.sendingAccountFingerprint,
           actionContextFingerprint: null,
@@ -97,6 +141,7 @@ export class ActionReceiptProjectorService {
       case 'send_inbox_reply':
         if (
           binding.actionVersion !== 1 ||
+          binding.threadId === null ||
           binding.recipientFingerprint === null ||
           binding.sendingAccountFingerprint === null ||
           binding.actionContextFingerprint === null ||
@@ -112,6 +157,7 @@ export class ActionReceiptProjectorService {
           ...base,
           actionName: binding.actionName,
           actionVersion: 1,
+          threadId: binding.threadId,
           recipientFingerprint: binding.recipientFingerprint,
           sendingAccountFingerprint: binding.sendingAccountFingerprint,
           actionContextFingerprint: binding.actionContextFingerprint,

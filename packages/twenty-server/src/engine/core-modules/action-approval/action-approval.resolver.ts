@@ -10,12 +10,15 @@ import {
   ActionExecutionReceiptDTO,
   toActionExecutionReceiptDTO,
 } from 'src/engine/core-modules/action-approval/dtos/action-approval-evidence.dto';
-import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
-import { ActionApprovalBindingState } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
+import {
+  ActionApprovalBindingState,
+  type ActionApprovalBindingEntity,
+} from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import { InstagramMessageProposalReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-proposal-reader.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
@@ -28,7 +31,7 @@ export class ActionApprovalResolver {
   constructor(
     private readonly dataSource: DataSource,
     private readonly actionApprovalService: ActionApprovalService,
-    private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
+    private readonly instagramMessageProposalReader: InstagramMessageProposalReaderService,
     private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
     private readonly myahInboxReplyActionDefinition: MyahInboxReplyActionDefinition,
   ) {}
@@ -45,8 +48,15 @@ export class ActionApprovalResolver {
       userWorkspaceId,
     });
 
+    if (
+      binding.actionName === 'send_instagram_message' &&
+      binding.actionVersion === 2 &&
+      binding.actionKind === 'REPLY'
+    ) {
+      return this.getInstagramMessageProposal(binding, userWorkspaceId);
+    }
+
     const actionDefinitions = {
-      send_instagram_reply: this.instagramReplyActionDefinition,
       send_outreach_email: this.outreachEmailActionDefinition,
       send_inbox_reply: this.myahInboxReplyActionDefinition,
     } as const;
@@ -54,7 +64,29 @@ export class ActionApprovalResolver {
       actionDefinitions[binding.actionName as keyof typeof actionDefinitions];
 
     if (!actionDefinition) {
-      throw new Error(`Unsupported action approval "${binding.actionName}".`);
+      if (binding.state === ActionApprovalBindingState.PENDING) {
+        throw new Error(`Unsupported action approval "${binding.actionName}".`);
+      }
+
+      return {
+        action: binding.actionName,
+        actionVersion: binding.actionVersion,
+        body: null,
+        recipientLabel: null,
+        sendingAccountLabel: null,
+        subject: null,
+        draftRevision: null,
+        state: binding.state,
+        expiresAt: binding.expiresAt,
+        occurredAt: binding.decidedAt ?? binding.createdAt,
+        evidenceLinks: binding.evidenceLinks.map(
+          ({ objectMetadataId, recordId, role }) => ({
+            objectMetadataId,
+            recordId,
+            role,
+          }),
+        ),
+      };
     }
 
     try {
@@ -108,6 +140,36 @@ export class ActionApprovalResolver {
         ),
       };
     }
+  }
+
+  private async getInstagramMessageProposal(
+    binding: ActionApprovalBindingEntity,
+    userWorkspaceId: string,
+  ): Promise<ActionApprovalProposalDTO> {
+    const proposal = await this.instagramMessageProposalReader.read(
+      binding,
+      userWorkspaceId,
+    );
+
+    return {
+      action: binding.actionName,
+      actionVersion: binding.actionVersion,
+      body: proposal.body,
+      recipientLabel: proposal.recipientUsername,
+      sendingAccountLabel: proposal.accountLabel,
+      subject: null,
+      draftRevision: null,
+      state: binding.state,
+      expiresAt: binding.expiresAt,
+      occurredAt: binding.decidedAt ?? binding.createdAt,
+      evidenceLinks: binding.evidenceLinks.map(
+        ({ objectMetadataId, recordId, role }) => ({
+          objectMetadataId,
+          recordId,
+          role,
+        }),
+      ),
+    };
   }
 
   @Query(() => ActionExecutionReceiptDTO, { nullable: true })

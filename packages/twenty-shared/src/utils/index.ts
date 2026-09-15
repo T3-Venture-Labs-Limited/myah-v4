@@ -173,6 +173,20 @@ export {
 export { getUniqueConstraintsFields } from './indexMetadata/getUniqueConstraintsFields';
 export { isAutoSelectModelId } from './isAutoSelectModelId';
 export { fastDeepEqual } from './json/fast-deep-equal';
+export type {
+  MyahReplyTextStyles,
+  MyahReplyText,
+  MyahReplyLink,
+  MyahReplyInlineContent,
+  MyahReplyBlock,
+  MyahReplyBody,
+  ParsedMyahReplyBody,
+} from './myahReplyRichText';
+export {
+  createMyahReplyBlocksFromPlainText,
+  serializeMyahReplyBlocks,
+  parseMyahReplyRichText,
+} from './myahReplyRichText';
 export { getAppPath } from './navigation/getAppPath';
 export { getSettingsPath } from './navigation/getSettingsPath';
 export { parseJson } from './parseJson';

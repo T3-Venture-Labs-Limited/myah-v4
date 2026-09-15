@@ -28,7 +28,26 @@ export type MyahInboxDraftAutosaveConflict = {
   body: MyahInboxRichText | null;
 };
 
+export type MyahInboxDraftOperationKind =
+  | 'generating'
+  | 'applying'
+  | 'sending'
+  | 'pending'
+  | 'unknown';
+
+export type MyahInboxDraftOperationCapture = {
+  key: MyahInboxDraftAutosaveKey;
+  token: symbol;
+  targetToken: symbol;
+  editorOwner: symbol | null;
+  confirmedRevision: number;
+  debounceVersion: number;
+  editorVersion: number;
+};
+
 export type MyahInboxDraftAutosaveEntry = {
+  operation: { token: symbol; kind: MyahInboxDraftOperationKind } | null;
+  editorOwner: symbol | null;
   localBody: MyahInboxRichText;
   confirmedBody: MyahInboxRichText | null;
   confirmedRevision: number;

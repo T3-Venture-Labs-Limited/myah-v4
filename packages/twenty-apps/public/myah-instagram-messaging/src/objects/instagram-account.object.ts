@@ -3,6 +3,7 @@ import { defineObject, FieldType, RelationType } from 'twenty-sdk/define';
 import {
   INSTAGRAM_ACCOUNT_AFTER_CURSOR_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_AUTH_CONFIG_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_ACCOUNT_COMPLETED_CHAT_SYNC_AT_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_COMPOSIO_USER_ID_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_CONNECTED_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_CONVERSATIONS_FIELD_UNIVERSAL_IDENTIFIER,
@@ -13,12 +14,14 @@ import {
   INSTAGRAM_ACCOUNT_LAST_ERROR_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_OBJECT_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_STATUS_FIELD_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_ACCOUNT_UNIPILE_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_ACCOUNT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_ACCOUNT_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
-  INSTAGRAM_ACCOUNT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
 enum InstagramAccountStatus {
+  CONNECTING = 'CONNECTING',
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
   NEEDS_RECONNECT = 'NEEDS_RECONNECT',
@@ -32,7 +35,7 @@ export default defineObject({
   labelSingular: 'Myah Instagram account',
   labelPlural: 'Myah Instagram accounts',
   description:
-    'Workspace Instagram Business or Creator account connected for approved Myah message reads and replies.',
+    'Workspace Instagram account metadata retained for server-managed messaging.',
   icon: 'IconBrandInstagram',
   labelIdentifierFieldMetadataUniversalIdentifier:
     INSTAGRAM_ACCOUNT_LABEL_FIELD_UNIVERSAL_IDENTIFIER,
@@ -48,31 +51,30 @@ export default defineObject({
       universalIdentifier:
         INSTAGRAM_ACCOUNT_CONNECTED_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
-      label: 'Connected account ID',
+      label: 'Legacy connected account ID',
       name: 'connectedAccountId',
       isUnique: true,
       description:
-        'Composio connected account id for this workspace Instagram account. Hidden from normal user copy but used for server-side tool execution.',
+        'Legacy provider connection id retained with this workspace Instagram account.',
     },
     {
       universalIdentifier:
         INSTAGRAM_ACCOUNT_COMPOSIO_USER_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
-      label: 'Composio user ID',
+      label: 'Legacy provider user ID',
       name: 'composioUserId',
-      description:
-        'Workspace-scoped Composio user id, e.g. workspace:<workspaceId>:instagram.',
+      description: 'Legacy workspace user id retained for historical records.',
     },
     {
       universalIdentifier:
         INSTAGRAM_ACCOUNT_AUTH_CONFIG_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
-      label: 'Auth config ID',
+      label: 'Legacy authorization config ID',
       name: 'authConfigId',
       isNullable: true,
       defaultValue: null,
       description:
-        'Composio Instagram auth config id used to create this link.',
+        'Legacy authorization configuration id retained for historical records.',
     },
     {
       universalIdentifier:
@@ -81,9 +83,21 @@ export default defineObject({
       label: 'Instagram account ID',
       name: 'igUserId',
       isNullable: true,
+      isUnique: true,
       defaultValue: null,
       description:
         'Instagram-scoped account id when returned by provider data.',
+    },
+    {
+      universalIdentifier:
+        INSTAGRAM_ACCOUNT_UNIPILE_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      label: 'Unipile account ID',
+      name: 'unipileAccountId',
+      isNullable: true,
+      isUnique: true,
+      defaultValue: null,
+      description: 'Unipile account id for this workspace Instagram account.',
     },
     {
       universalIdentifier:
@@ -130,6 +144,13 @@ export default defineObject({
           position: 3,
           color: 'red',
         },
+        {
+          id: 'b14dcff4-87a7-47b4-ad0b-507f825620cb',
+          value: InstagramAccountStatus.CONNECTING,
+          label: 'Connecting',
+          position: 4,
+          color: 'blue',
+        },
       ],
     },
     {
@@ -153,6 +174,16 @@ export default defineObject({
       defaultValue: null,
       description:
         'Most recent manual conversation sync time. Polling is disabled.',
+    },
+    {
+      universalIdentifier:
+        INSTAGRAM_ACCOUNT_COMPLETED_CHAT_SYNC_AT_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.DATE_TIME,
+      label: 'Completed chat sync at',
+      name: 'completedChatSyncAt',
+      isNullable: true,
+      defaultValue: null,
+      description: 'When the initial chat synchronization completed.',
     },
     {
       universalIdentifier:

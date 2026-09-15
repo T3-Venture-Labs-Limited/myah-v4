@@ -14,7 +14,7 @@ import {
   type MyahInboxDraftSaveResult,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-draft-save-result.dto';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
-import { escapeHtml } from 'src/engine/core-modules/emailing-domain/utils/escape-html.util';
+import { renderMyahInboxReplyBody } from 'src/engine/core-modules/myah-inbox/utils/render-myah-inbox-reply-body.util';
 import { AgentActorContextService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-actor-context.service';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import { classifyMessageOutboundError } from 'src/modules/messaging/message-outbound-manager/utils/classify-message-outbound-error.util';
@@ -61,6 +61,7 @@ export class MyahInboxReplyApprovedExecutionService {
               authority: null,
               created: false,
               receipt: existingReceipt,
+              renderedBody: null,
             };
           }
 
@@ -69,6 +70,9 @@ export class MyahInboxReplyApprovedExecutionService {
               workspaceId: input.workspaceId,
               binding,
             });
+          const renderedBody = await renderMyahInboxReplyBody(
+            authority.canonicalGraph.draftBody,
+          );
           const receiptReservation =
             await this.actionApprovalService.reserveExecutionForBinding({
               approvalBindingId: input.approvalBindingId,
@@ -79,6 +83,7 @@ export class MyahInboxReplyApprovedExecutionService {
             authority,
             created: receiptReservation.created,
             receipt: receiptReservation.receipt,
+            renderedBody,
           };
         },
       );
@@ -116,6 +121,7 @@ export class MyahInboxReplyApprovedExecutionService {
       binding: input.binding,
       receipt: reservation.receipt,
       authority: reservation.authority,
+      renderedBody: reservation.renderedBody,
     });
   }
 
@@ -123,10 +129,12 @@ export class MyahInboxReplyApprovedExecutionService {
     binding,
     receipt,
     authority,
+    renderedBody,
   }: {
     binding: MyahInboxReplyExpectedActionBindingWithWorkspace;
     receipt: SafeActionExecutionReceipt;
     authority: MyahInboxReplyActionAuthority;
+    renderedBody: { body: string; html: string };
   }): Promise<MyahInboxReplyExecutionResult> {
     const graph = authority.canonicalGraph;
 
@@ -135,8 +143,8 @@ export class MyahInboxReplyApprovedExecutionService {
         {
           to: [graph.recipientEmail],
           subject: graph.subject,
-          body: graph.draftBody.markdown,
-          html: escapeHtml(graph.draftBody.markdown),
+          body: renderedBody.body,
+          html: renderedBody.html,
           attachments: [],
           inReplyTo: graph.inReplyTo,
           threadExternalId: graph.providerThreadExternalId ?? undefined,

@@ -1,9 +1,6 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { myahInboxContextState } from '@/myah/inbox/states/myahInboxContextState';
-import {
-  myahInboxSelectedThreadIdState,
-  myahInboxSelectionWorkspaceIdState,
-} from '@/myah/inbox/states/myahInboxSelectionState';
+import { myahInboxContactSelectionState } from '@/myah/inbox/states/myahInboxSelectionState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useLocation } from 'react-router-dom';
 
@@ -20,11 +17,8 @@ const StyledStatus = styled.div`
 export const SidePanelMyahInboxContextPage = () => {
   const myahInboxContext = useAtomStateValue(myahInboxContextState);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
-  const myahInboxSelectedThreadId = useAtomStateValue(
-    myahInboxSelectedThreadIdState,
-  );
-  const myahInboxSelectionWorkspaceId = useAtomStateValue(
-    myahInboxSelectionWorkspaceIdState,
+  const myahInboxContactSelection = useAtomStateValue(
+    myahInboxContactSelectionState,
   );
   const { pathname } = useLocation();
   const thread = myahInboxContext?.thread;
@@ -35,8 +29,8 @@ export const SidePanelMyahInboxContextPage = () => {
     !myahInboxContext ||
     !thread ||
     myahInboxContext.workspaceId !== currentWorkspace.id ||
-    myahInboxSelectionWorkspaceId !== currentWorkspace.id ||
-    myahInboxSelectedThreadId !== thread.id
+    myahInboxContactSelection.workspaceId !== currentWorkspace.id ||
+    myahInboxContactSelection.emailThreadId !== thread.id
   ) {
     return <StyledStatus>No conversation selected.</StyledStatus>;
   }

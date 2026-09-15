@@ -1,5 +1,8 @@
+import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 import { ForbiddenException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
+import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { MyahInboxEmailDraft } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-email-draft.dto';
 
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
@@ -38,9 +41,35 @@ export class MyahInboxResolver {
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<MyahInboxThreadConnection> {
     const { authContext, user } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
 
     return this.myahInboxQueryService.listThreads({
       ...input,
+      authContext,
+      user,
+      workspace,
+      workspaceMemberId,
+    });
+  }
+
+  @Query(() => MyahInboxEmailDraft)
+  async myahInboxEmailDraft(
+    @Args('threadId', { type: () => UUIDScalarType }) threadId: string,
+    @Args('expectedWorkspaceId', { type: () => UUIDScalarType })
+    expectedWorkspaceId: string,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<MyahInboxEmailDraft> {
+    const { authContext, user } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      expectedWorkspaceId,
+    );
+    return this.myahInboxQueryService.readEmailDraft({
+      threadId,
       authContext,
       user,
       workspace,
@@ -55,6 +84,10 @@ export class MyahInboxResolver {
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<MyahInboxThreadSummary> {
     const { authContext, user } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
 
     return this.myahInboxMutationService.updateMyahInboxThread({
       ...input,
@@ -72,6 +105,10 @@ export class MyahInboxResolver {
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<MyahInboxDraftSaveResult> {
     const { authContext, user } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
 
     return this.myahInboxMutationService.saveMyahInboxDraft({
       ...input,
@@ -89,6 +126,10 @@ export class MyahInboxResolver {
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<MyahInboxReplyProposal> {
     const { authContext } = this.getAuthenticatedUserContext();
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
 
     if (
       authContext.workspace.id !== workspace.id ||

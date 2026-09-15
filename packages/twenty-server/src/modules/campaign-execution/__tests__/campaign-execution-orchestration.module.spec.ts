@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 
 import { CampaignSequenceAuthorityModule } from 'src/engine/core-modules/campaign-sequence-authority/campaign-sequence-authority.module';
+import { CoreEngineModule } from 'src/engine/core-modules/core-engine.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
@@ -26,9 +27,11 @@ import {
   CAMPAIGN_OCCURRENCE_CLAIM_PORT,
   CAMPAIGN_PROGRESSION_PORT,
   CAMPAIGN_FINAL_SUBMISSION_AUTHORITY_PORT,
+  CAMPAIGN_REPLY_EVIDENCE_PORT,
   CAMPAIGN_SENT_PROJECTION_PORT,
 } from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
 import { CampaignExecutionService } from 'src/modules/campaign-execution/services/campaign-execution.service';
+import { CampaignEmailRuntimeCronJob } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.job';
 import { EmailingModule } from 'src/modules/emailing/emailing.module';
 import { MessageSuppressionService } from 'src/modules/emailing/services/message-suppression.service';
 import { CampaignLifecycleTransactionService } from 'src/modules/campaign-execution/services/campaign-lifecycle-transaction.service';
@@ -39,6 +42,7 @@ import { CampaignLifecycleService } from 'src/modules/myah-campaign/services/cam
 import { CampaignOutreachWorkflowLifecycleWorkspaceService } from 'src/modules/myah-campaign/services/campaign-outreach-workflow-lifecycle.workspace-service';
 import { CampaignSenderReadinessService } from 'src/modules/myah-campaign/services/campaign-sender-readiness.service';
 import { MyahCreatorOpsToolWorkspaceService } from 'src/modules/myah-campaign/tools/myah-creator-ops-tool.workspace-service';
+import { ModulesModule } from 'src/modules/modules.module';
 import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbound-manager/messaging-send-manager.module';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
@@ -51,6 +55,7 @@ import { CampaignSequenceService } from 'src/modules/myah-outreach/services/camp
 import { LegacyCampaignSequenceCleanupWorkspaceService } from 'src/modules/myah-outreach/services/legacy-campaign-sequence-cleanup.workspace-service';
 import { WorkflowCommonModule } from 'src/modules/workflow/common/workflow-common.module';
 import { WorkflowTriggerModule } from 'src/modules/workflow/workflow-trigger/workflow-trigger.module';
+import { QueueWorkerModule } from 'src/queue-worker/queue-worker.module';
 
 const dataSource = {
   entityMetadatas: [],
@@ -99,6 +104,18 @@ class OrchestrationTestInfrastructureModule {}
 class EmptyExternalInfrastructureModule {}
 
 describe('CampaignExecutionOrchestrationModule', () => {
+  it('registers with the runtime HTTP, GraphQL, and worker composition roots', () => {
+    expect(
+      Reflect.getMetadata(MODULE_METADATA.IMPORTS, ModulesModule),
+    ).toContain(CampaignExecutionOrchestrationModule);
+    expect(
+      Reflect.getMetadata(MODULE_METADATA.IMPORTS, CoreEngineModule),
+    ).toContain(CampaignExecutionOrchestrationModule);
+    expect(
+      Reflect.getMetadata(MODULE_METADATA.IMPORTS, QueueWorkerModule),
+    ).toContain(CampaignExecutionOrchestrationModule);
+  });
+
   it('owns the concrete execution, authority, audience, outreach, lifecycle, and capacity imports', () => {
     expect(
       Reflect.getMetadata(
@@ -182,6 +199,10 @@ describe('CampaignExecutionOrchestrationModule', () => {
     expect(module.get(CAMPAIGN_OCCURRENCE_CLAIM_PORT)).toBeDefined();
     expect(module.get(CAMPAIGN_FINAL_SUBMISSION_AUTHORITY_PORT)).toBeDefined();
     expect(module.get(CAMPAIGN_SENT_PROJECTION_PORT)).toBeDefined();
+    expect(module.get(CAMPAIGN_REPLY_EVIDENCE_PORT)).toBeDefined();
+    expect(module.get(CampaignEmailRuntimeCronJob)).toBeInstanceOf(
+      CampaignEmailRuntimeCronJob,
+    );
 
     await module.close();
   });

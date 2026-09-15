@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, parseMyahReplyRichText } from 'twenty-shared/utils';
 
 import {
   MyahInboxReplyActionDefinition,
@@ -26,6 +26,7 @@ import {
   MyahInboxReplyApprovedExecutionService,
   type MyahInboxReplyExecutionResult,
 } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-approved-execution.service';
+import { renderMyahInboxReplyBody } from 'src/engine/core-modules/myah-inbox/utils/render-myah-inbox-reply-body.util';
 
 type MyahInboxReplySendRequestContext = {
   authContext: WorkspaceAuthContext;
@@ -122,11 +123,22 @@ export class MyahInboxReplySendService {
         };
       }
 
-      await this.actionDefinition.buildAuthority({
+      const authority = await this.actionDefinition.buildAuthority({
         workspaceId: input.workspace.id,
         initiatorUserWorkspaceId: input.userWorkspaceId,
         messageThreadId: input.threadId,
       });
+
+      try {
+        parseMyahReplyRichText(authority.canonicalGraph.draftBody);
+      } catch {
+        return {
+          status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
+          reason:
+            'This draft contains unsupported formatted content. Edit the draft and try again.',
+          ...draftState,
+        };
+      }
 
       return {
         status: MyahInboxReplySendReadinessStatus.READY,
@@ -185,6 +197,19 @@ export class MyahInboxReplySendService {
             });
           } catch {
             return { result: this.toStaleOutcome(input) };
+          }
+
+          try {
+            await renderMyahInboxReplyBody(authority.canonicalGraph.draftBody);
+          } catch {
+            return {
+              result: {
+                outcome: MyahInboxReplySendOutcome.FAILED,
+                receiptId: null,
+                revision: authority.canonicalGraph.draftRevision,
+                body: authority.canonicalGraph.draftBody,
+              },
+            };
           }
 
           try {

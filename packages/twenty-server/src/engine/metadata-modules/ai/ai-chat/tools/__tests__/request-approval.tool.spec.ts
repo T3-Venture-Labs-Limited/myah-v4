@@ -92,24 +92,32 @@ describe('request_approval tool', () => {
     };
     const expectedActionBinding = {
       workspaceId: 'workspace-id',
-      actionName: 'send_instagram_reply',
-      actionVersion: 1,
+      actionName: 'send_instagram_message',
+      actionVersion: 2,
+      actionKind: 'REPLY',
       draftId,
       contentDigest: 'a'.repeat(64),
       recipientFingerprint: 'b'.repeat(64),
       sendingAccountFingerprint: 'c'.repeat(64),
-      inboundMessageId: 'provider-inbound-message-id',
-      inboundSenderIgsid: 'recipient-igsid',
-      inboundDirection: 'INBOUND',
-      inboundReceivedAt: new Date('2026-07-17T11:30:00.000Z'),
+      actionContextFingerprint: 'd'.repeat(64),
       initiatorUserWorkspaceId: 'member-id',
       threadId: 'thread-id',
+      interactionContextType: null,
+      interactionContextId: null,
       evidenceLinks: [],
     };
     const instagramDefinition = {
-      propose: jest.fn().mockResolvedValue({ expectedActionBinding }),
+      createThreadReplyAuthority: jest
+        .fn()
+        .mockResolvedValue({ expectedActionBinding }),
     };
     const outreachDefinition = { propose: jest.fn() };
+    const instagramMessagePermissionService = {
+      assertCanSend: jest.fn().mockResolvedValue(undefined),
+    };
+    const instagramMessageRecordAccessService = {
+      assertCanReadDraft: jest.fn().mockResolvedValue(undefined),
+    };
     const actionApprovalService = {
       createPendingBinding: jest
         .fn()
@@ -132,6 +140,9 @@ describe('request_approval tool', () => {
           send_outreach_email: outreachDefinition,
         },
         actionApprovalService,
+        instagramMessagePermissionService,
+        instagramMessageRecordAccessService,
+        rolePermissionConfig: { shouldBypassPermissionChecks: true },
       }).execute(input),
     ).resolves.toEqual({
       success: true,
@@ -141,12 +152,28 @@ describe('request_approval tool', () => {
         actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
       },
     });
-    expect(instagramDefinition.propose).toHaveBeenCalledWith({
-      workspaceId: 'workspace-id',
-      initiatorUserWorkspaceId: 'member-id',
-      threadId: 'thread-id',
-      input: { draftId },
-    });
+    expect(
+      instagramMessagePermissionService.assertCanSend.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      instagramMessageRecordAccessService.assertCanReadDraft.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      instagramMessageRecordAccessService.assertCanReadDraft.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      instagramDefinition.createThreadReplyAuthority.mock
+        .invocationCallOrder[0],
+    );
+    expect(instagramDefinition.createThreadReplyAuthority).toHaveBeenCalledWith(
+      {
+        workspaceId: 'workspace-id',
+        initiatorUserWorkspaceId: 'member-id',
+        threadId: 'thread-id',
+        draftId,
+      },
+    );
     expect(outreachDefinition.propose).not.toHaveBeenCalled();
     expect(actionApprovalService.createPendingBinding).toHaveBeenCalledWith(
       expectedActionBinding,

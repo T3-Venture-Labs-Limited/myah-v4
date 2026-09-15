@@ -7,22 +7,24 @@ import {
   currentWorkspaceState,
 } from '@/auth/states/currentWorkspaceState';
 import { useGetBrowsingContext } from '@/ai/hooks/useBrowsingContext';
-import {
-  myahInboxSelectionWorkspaceIdState,
-  myahInboxSelectedThreadIdState,
-} from '@/myah/inbox/states/myahInboxSelectionState';
+import { myahInboxContactSelectionState } from '@/myah/inbox/states/myahInboxSelectionState';
 
 const SELECTED_THREAD_ID = '3ceef358-55fc-4d47-a7a8-2d8ac543641b';
 
 describe('useGetBrowsingContext Inbox bridge', () => {
-  it('exposes only the current workspace selected thread as trusted Inbox context', () => {
+  it('exposes only the current workspace exact selected Email thread as trusted Inbox context', () => {
     const store = createStore();
 
     store.set(currentWorkspaceState.atom, {
       id: 'workspace-1',
     } as CurrentWorkspace);
-    store.set(myahInboxSelectedThreadIdState.atom, SELECTED_THREAD_ID);
-    store.set(myahInboxSelectionWorkspaceIdState.atom, 'workspace-1');
+    store.set(myahInboxContactSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      contactId: 'contact-1',
+      channel: 'EMAIL',
+      emailThreadId: SELECTED_THREAD_ID,
+      instagramConversationId: null,
+    });
 
     const { result } = renderHook(() => useGetBrowsingContext(), {
       wrapper: ({ children }: PropsWithChildren) => (
@@ -36,11 +38,22 @@ describe('useGetBrowsingContext Inbox bridge', () => {
       threadId: SELECTED_THREAD_ID,
     });
 
-    store.set(myahInboxSelectedThreadIdState.atom, null);
+    store.set(myahInboxContactSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      contactId: 'contact-1',
+      channel: 'INSTAGRAM',
+      emailThreadId: null,
+      instagramConversationId: 'conversation-1',
+    });
     expect(result.current.getBrowsingContext()).toBeNull();
 
-    store.set(myahInboxSelectedThreadIdState.atom, SELECTED_THREAD_ID);
-    store.set(myahInboxSelectionWorkspaceIdState.atom, 'workspace-2');
+    store.set(myahInboxContactSelectionState.atom, {
+      workspaceId: 'workspace-2',
+      contactId: 'contact-1',
+      channel: 'EMAIL',
+      emailThreadId: SELECTED_THREAD_ID,
+      instagramConversationId: null,
+    });
     expect(result.current.getBrowsingContext()).toBeNull();
   });
 });

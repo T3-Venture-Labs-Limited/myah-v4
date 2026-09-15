@@ -1,3 +1,5 @@
+import { getDefaultStore } from 'jotai';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as ReactType from 'react';
 
@@ -262,6 +264,9 @@ const unlinkedThread = {
 describe('MyahInboxThreadActions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getDefaultStore().set(currentWorkspaceState.atom, {
+      id: 'workspace-1',
+    } as never);
     mockUpdateThread.mockResolvedValue({});
   });
 
@@ -359,7 +364,13 @@ describe('MyahInboxThreadActions', () => {
         content: 'Open Inbox context',
       }),
     );
-    expect(mockAppTooltip).toHaveBeenCalledTimes(6);
+    expect(
+      new Set(
+        mockAppTooltip.mock.calls.map(
+          ([props]) => (props as { anchorSelect: string }).anchorSelect,
+        ),
+      ).size,
+    ).toBe(6);
   });
 
   it('uses dialog popups and writes only the selected creator for an unlinked thread', async () => {
@@ -381,6 +392,7 @@ describe('MyahInboxThreadActions', () => {
     await waitFor(() => {
       expect(mockUpdateThread).toHaveBeenCalledTimes(1);
       expect(mockUpdateThread).toHaveBeenCalledWith({
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         creatorId: 'creator-1',
       });
@@ -406,6 +418,7 @@ describe('MyahInboxThreadActions', () => {
     await waitFor(() => {
       expect(mockUpdateThread).toHaveBeenCalledTimes(1);
       expect(mockUpdateThread).toHaveBeenCalledWith({
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         creatorId: null,
       });
@@ -431,6 +444,7 @@ describe('MyahInboxThreadActions', () => {
     await waitFor(() => {
       expect(mockUpdateThread).toHaveBeenCalledTimes(1);
       expect(mockUpdateThread).toHaveBeenCalledWith({
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         campaignId: 'campaign-1',
       });
@@ -456,6 +470,7 @@ describe('MyahInboxThreadActions', () => {
     await waitFor(() => {
       expect(mockUpdateThread).toHaveBeenCalledTimes(1);
       expect(mockUpdateThread).toHaveBeenCalledWith({
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         campaignId: null,
       });
@@ -515,23 +530,28 @@ describe('MyahInboxThreadActions', () => {
 
     await waitFor(() => {
       expect(mockUpdateThread).toHaveBeenNthCalledWith(1, {
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         campaignId: null,
       });
       expect(mockUpdateThread).toHaveBeenNthCalledWith(2, {
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         inboxOwnerId: null,
       });
       expect(mockUpdateThread).toHaveBeenNthCalledWith(3, {
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         inboxState: 'CLOSED',
       });
       expect(mockUpdateThread).toHaveBeenNthCalledWith(4, {
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         inboxState: 'SNOOZED',
         snoozedUntil: '2099-01-01T12:00:00.000Z',
       });
       expect(mockUpdateThread).toHaveBeenNthCalledWith(5, {
+        expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         inboxState: 'NEEDS_REPLY',
         snoozedUntil: null,

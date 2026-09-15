@@ -32,6 +32,7 @@ import { EventLogCleanupModule } from 'src/engine/core-modules/event-logs/cleanu
 import { EventLogEmitterModule } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
+import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
 import { ManagedEmailModule } from 'src/engine/core-modules/managed-email/managed-email.module';
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
@@ -59,6 +60,7 @@ import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace
 import { WorkspaceVersionModule } from 'src/engine/workspace-manager/workspace-version/workspace-version.module';
 import { CalendarEventImportManagerModule } from 'src/modules/calendar/calendar-event-import-manager/calendar-event-import-manager.module';
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
+import { MyahUnipileModule } from 'src/modules/myah-unipile/myah-unipile.module';
 import { WorkflowRunQueueModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-run-queue.module';
 import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/automated-trigger/automated-trigger.module';
 
@@ -75,6 +77,8 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     // Cron command dependencies
     MessagingImportManagerModule,
     CalendarEventImportManagerModule,
+    MyahUnipileModule,
+    InstagramMessageModule,
     AutomatedTriggerModule,
     FileModule,
     WorkspaceModule,

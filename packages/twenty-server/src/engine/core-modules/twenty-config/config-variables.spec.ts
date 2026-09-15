@@ -42,6 +42,207 @@ describe('ConfigVariables', () => {
   });
 });
 
+type UnipileConfigVariables = ConfigVariables & {
+  UNIPILE_INSTAGRAM_ENABLED: boolean;
+  UNIPILE_DSN_BASE_URL: string;
+  UNIPILE_API_KEY: string;
+  UNIPILE_WEBHOOK_SECRET: string;
+  UNIPILE_INSTAGRAM_CALLBACK_BASE_URL: string | undefined;
+};
+
+const validUnipileWebhookSecret =
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+const createEnabledUnipileConfig = (
+  overrides: Partial<UnipileConfigVariables> = {},
+): UnipileConfigVariables =>
+  Object.assign(new ConfigVariables(), {
+    UNIPILE_INSTAGRAM_ENABLED: true,
+    UNIPILE_DSN_BASE_URL: 'https://api49.unipile.com:17981/api/v1/',
+    UNIPILE_API_KEY: 'synthetic-api-key',
+    UNIPILE_WEBHOOK_SECRET: validUnipileWebhookSecret,
+    ...overrides,
+  }) as UnipileConfigVariables;
+
+const getValidationProperties = (config: ConfigVariables): string[] =>
+  validateSync(config, { strictGroups: true }).map(({ property }) => property);
+
+describe('Unipile Instagram configuration', () => {
+  it('defaults to disabled without requiring Unipile strings', () => {
+    const config = new ConfigVariables() as UnipileConfigVariables;
+
+    expect(config.UNIPILE_INSTAGRAM_ENABLED).toBe(false);
+    expect(config.UNIPILE_DSN_BASE_URL).toBe(
+      'https://api49.unipile.com:17981/api/v1/',
+    );
+    expect(config.UNIPILE_API_KEY).toBe('');
+    expect(config.UNIPILE_WEBHOOK_SECRET).toBe('');
+    expect(config.UNIPILE_INSTAGRAM_CALLBACK_BASE_URL).toBeUndefined();
+    expect(getValidationProperties(config)).not.toEqual(
+      expect.arrayContaining([
+        'UNIPILE_DSN_BASE_URL',
+        'UNIPILE_API_KEY',
+        'UNIPILE_WEBHOOK_SECRET',
+      ]),
+    );
+
+    const disabledConfigWithUnsafeBaseUrl = Object.assign(
+      new ConfigVariables(),
+      {
+        UNIPILE_DSN_BASE_URL: 'http://untrusted.example.test/api/v1/',
+      },
+    );
+
+    expect(
+      getValidationProperties(disabledConfigWithUnsafeBaseUrl),
+    ).not.toContain('UNIPILE_DSN_BASE_URL');
+  });
+
+  it('registers Unipile provider values as hidden env-only configuration and secrets as sensitive', () => {
+    const metadata = TypedReflect.getMetadata(
+      'config-variables',
+      ConfigVariables,
+    );
+
+    expect(metadata?.UNIPILE_INSTAGRAM_ENABLED).toMatchObject({
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.BOOLEAN,
+    });
+    expect(metadata?.UNIPILE_DSN_BASE_URL).toMatchObject({
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.STRING,
+    });
+    expect(metadata?.UNIPILE_API_KEY).toMatchObject({
+      isSensitive: true,
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.STRING,
+    });
+    expect(metadata?.UNIPILE_WEBHOOK_SECRET).toMatchObject({
+      isSensitive: true,
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.STRING,
+    });
+    expect(metadata?.UNIPILE_INSTAGRAM_CALLBACK_BASE_URL).toMatchObject({
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.STRING,
+    });
+  });
+
+  it.each([
+    'http://callbacks.example',
+    'https://user:password@callbacks.example',
+    'https://callbacks.example/path',
+    'https://callbacks.example/?query=value',
+    'https://callbacks.example/#fragment',
+    'https://localhost',
+    'https://127.0.0.1',
+    'https://[::1]',
+    'https://callbacks.local',
+  ])('rejects an unsafe explicit callback base URL: %s', (url) => {
+    const config = createEnabledUnipileConfig({
+      UNIPILE_INSTAGRAM_CALLBACK_BASE_URL: url,
+    });
+
+    expect(getValidationProperties(config)).toContain(
+      'UNIPILE_INSTAGRAM_CALLBACK_BASE_URL',
+    );
+  });
+
+  it.each([
+    'https://callback-tunnel.trycloudflare.com',
+    'https://callback-tunnel.trycloudflare.com/',
+    '',
+  ])(
+    'accepts a public HTTPS callback origin or an empty backward-compatible override: %s',
+    (UNIPILE_INSTAGRAM_CALLBACK_BASE_URL) => {
+      expect(
+        getValidationProperties(
+          createEnabledUnipileConfig({
+            UNIPILE_INSTAGRAM_CALLBACK_BASE_URL,
+          }),
+        ),
+      ).not.toContain('UNIPILE_INSTAGRAM_CALLBACK_BASE_URL');
+    },
+  );
+
+  it('rejects an unsafe explicit callback override while disabled instead of falling back', () => {
+    const config = Object.assign(new ConfigVariables(), {
+      UNIPILE_INSTAGRAM_CALLBACK_BASE_URL: 'http://localhost',
+    });
+
+    expect(getValidationProperties(config)).toContain(
+      'UNIPILE_INSTAGRAM_CALLBACK_BASE_URL',
+    );
+  });
+
+  it('requires API and webhook secrets when enabled', () => {
+    const config = Object.assign(new ConfigVariables(), {
+      UNIPILE_INSTAGRAM_ENABLED: true,
+    });
+
+    expect(getValidationProperties(config)).toEqual(
+      expect.arrayContaining(['UNIPILE_API_KEY', 'UNIPILE_WEBHOOK_SECRET']),
+    );
+  });
+
+  it.each(['', ' ', '\t'])(
+    'rejects a %p API key when enabled',
+    (UNIPILE_API_KEY) => {
+      const config = createEnabledUnipileConfig({ UNIPILE_API_KEY });
+
+      expect(getValidationProperties(config)).toContain('UNIPILE_API_KEY');
+    },
+  );
+
+  it.each([
+    ['empty default', ''],
+    ['blank', ' '],
+    ['whitespace', '\t'],
+    ['short', '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd'],
+    ['long', `${validUnipileWebhookSecret}0`],
+    ['uppercase', validUnipileWebhookSecret.toUpperCase()],
+    ['nonhex', `${validUnipileWebhookSecret.slice(0, -1)}g`],
+  ])(
+    'rejects a %s webhook secret when enabled',
+    (_reason, UNIPILE_WEBHOOK_SECRET) => {
+      const config = createEnabledUnipileConfig({ UNIPILE_WEBHOOK_SECRET });
+
+      expect(getValidationProperties(config)).toContain(
+        'UNIPILE_WEBHOOK_SECRET',
+      );
+    },
+  );
+
+  it.each([
+    'http://api49.unipile.com:17981/api/v1/',
+    'https://api.unipile.com:17981/api/v1/',
+    'https://api49.unipile.com:443/api/v1/',
+    'https://api49.unipile.com:17981/api/v2/',
+    'https://user:password@api49.unipile.com:17981/api/v1/',
+    'https://api49.unipile.com:17981/api/v1/?tenant=test',
+    'https://api49.unipile.com:17981/api/v1/#fragment',
+  ])('rejects an unsafe Unipile API base URL when enabled', (url) => {
+    const config = createEnabledUnipileConfig({ UNIPILE_DSN_BASE_URL: url });
+
+    expect(getValidationProperties(config)).toContain('UNIPILE_DSN_BASE_URL');
+  });
+
+  it('accepts an enabled configuration with a nonblank API key and an exact lowercase hexadecimal webhook secret', () => {
+    expect(getValidationProperties(createEnabledUnipileConfig())).not.toEqual(
+      expect.arrayContaining([
+        'UNIPILE_DSN_BASE_URL',
+        'UNIPILE_API_KEY',
+        'UNIPILE_WEBHOOK_SECRET',
+      ]),
+    );
+  });
+});
+
 describe('managed provider billing configuration', () => {
   it('requires the Metronome API key and rate-card alias when enabled', () => {
     const errors = validateSync(

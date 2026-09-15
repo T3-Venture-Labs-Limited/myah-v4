@@ -15,23 +15,12 @@ const READ_ONLY_DATABASE_OPERATIONS: Readonly<Record<string, true>> = {
   group_by: true,
 };
 
-// These Composio functions are bounded, read-only calls. They remain
-// executable before approval so the agent can discover current Instagram
-// state. The application runtime can materialize these as static or logic
-// function entries, so the source-controlled generated tool name is the gate.
-export const PRE_APPROVAL_READ_ONLY_TOOL_NAMES: Readonly<Record<string, true>> =
-  {
-    app_myah_list_instagram_conversations: true,
-    app_myah_list_instagram_messages: true,
-  };
-
-// Read, proposal, and status tools are safe before generic approval. Every
-// mutation remains excluded until generic or registered approval enables it.
+// Read, proposal, and status tools are safe before generic approval. Retired
+// Composio Instagram tools and every mutation remain excluded.
 export const PRE_APPROVAL_SAFE_TOOL_NAMES: Readonly<Record<string, true>> =
   Object.freeze(
     Object.fromEntries(
       [
-        ...Object.keys(PRE_APPROVAL_READ_ONLY_TOOL_NAMES),
         ...MYAH_CREATOR_OPS_READ_TOOL_NAMES,
         ...MYAH_CAMPAIGN_OUTREACH_READ_TOOL_NAMES,
         ...MYAH_INBOX_READ_TOOL_NAMES,

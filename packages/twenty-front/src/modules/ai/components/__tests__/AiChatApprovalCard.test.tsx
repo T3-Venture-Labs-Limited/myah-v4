@@ -143,6 +143,25 @@ describe('AiChatApprovalCard', () => {
     ).toBeVisible();
   });
 
+  it('renders a guarded send_instagram_message version-2 reply proposal', () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        getActionApprovalProposal: {
+          ...serverDerivedProposal,
+          action: 'send_instagram_message',
+          actionVersion: 2,
+        },
+      },
+      loading: false,
+      error: undefined,
+    });
+
+    renderApprovalCard(boundApproval);
+
+    expect(screen.getByText(serverDerivedProposal.body)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
   it('classifies a bound outreach proposal as a high-risk email send and shows every exact transport field', () => {
     const outreachProposal = {
       ...serverDerivedProposal,

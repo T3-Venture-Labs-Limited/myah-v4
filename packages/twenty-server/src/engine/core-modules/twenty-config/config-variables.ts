@@ -73,7 +73,70 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-models/utils/load-default-model-preferences.util';
 
 import { type ManagedEmailCatalog } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
+import { IsUnipileApiBaseUrlSafe } from 'src/modules/myah-unipile/validators/is-unipile-api-base-url-safe.validator';
+import { IsUnipileInstagramCallbackBaseUrlSafe } from 'src/modules/myah-unipile/validators/is-unipile-instagram-callback-base-url-safe.validator';
 export class ConfigVariables {
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description: 'Enable the server-owned Unipile Instagram integration',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  UNIPILE_INSTAGRAM_ENABLED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description: 'Unipile v1 API base URL',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.UNIPILE_INSTAGRAM_ENABLED === true)
+  @IsString()
+  @IsUnipileApiBaseUrlSafe()
+  UNIPILE_DSN_BASE_URL = 'https://api49.unipile.com:17981/api/v1/';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description: 'Unipile API key',
+    isSensitive: true,
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.UNIPILE_INSTAGRAM_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  UNIPILE_API_KEY = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description: 'Unipile webhook verification secret',
+    isSensitive: true,
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.UNIPILE_INSTAGRAM_ENABLED === true)
+  @IsString()
+  @Matches(/^[0-9a-f]{64}$/)
+  UNIPILE_WEBHOOK_SECRET = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description: 'Public HTTPS base URL for Unipile Instagram callbacks',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((_env, value) => value !== undefined && value !== '')
+  @IsString()
+  @IsUnipileInstagramCallbackBaseUrlSafe()
+  UNIPILE_INSTAGRAM_CALLBACK_BASE_URL: string | undefined = undefined;
+
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
     description: 'Enable managed email services',

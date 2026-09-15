@@ -89,6 +89,16 @@ export const useActionRolePermissionFlagConfig = ({
         isRelevantForUsers: true,
       },
       {
+        key: PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
+        name: t`Send Instagram First Message`,
+        description: t`Send approved first messages to start Instagram conversations`,
+        Icon: IconMail,
+        isToolPermission: true,
+        isRelevantForAgents: false,
+        isRelevantForApiKeys: false,
+        isRelevantForUsers: true,
+      },
+      {
         key: PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL,
         name: t`Create Calendar Event`,
         description: t`Create calendar events via connected accounts`,
@@ -180,6 +190,14 @@ export const useActionRolePermissionFlagConfig = ({
       canBeAssignedToUsers && !canBeAssignedToAgents && !canBeAssignedToApiKeys;
 
     return allPermissions.filter((permission) => {
+      if (
+        permission.key ===
+          PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL &&
+        !canBeAssignedOnlyToUsers
+      ) {
+        return false;
+      }
+
       if (hasAssignmentCapabilities) {
         if (canBeAssignedOnlyToAgents && !permission.isRelevantForAgents) {
           return false;

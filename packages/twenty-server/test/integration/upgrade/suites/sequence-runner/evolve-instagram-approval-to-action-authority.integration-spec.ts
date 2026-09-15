@@ -5,8 +5,8 @@ import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/up
 import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963058-evolve-instagram-approval-to-action-authority';
 import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784106536001-add-instagram-reply-approval-provider-binding';
 import { FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784112963059-finalize-instagram-approval-action-authority';
+import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
 jest.useRealTimers();
-
 
 type LegacyFixture =
   | 'absent'
@@ -68,7 +68,9 @@ const getColumns = async (queryRunner: QueryRunner, tableName: string) => {
 };
 
 const dropFixtureSchema = async (queryRunner: QueryRunner) => {
-  await queryRunner.query('DROP TABLE IF EXISTS core."agentMessagePart" CASCADE');
+  await queryRunner.query(
+    'DROP TABLE IF EXISTS core."agentMessagePart" CASCADE',
+  );
   await queryRunner.query(
     'DROP TABLE IF EXISTS core."actionApprovalBindingEvidenceLink" CASCADE',
   );
@@ -335,7 +337,8 @@ const installLegacyFixture = async (
 
 const assertGenericAuthoritySchema = async (queryRunner: QueryRunner) => {
   await expect(
-    queryRaw(queryRunner,
+    queryRaw(
+      queryRunner,
       `SELECT
         to_regclass('core."actionApprovalBinding"') AS binding,
         to_regclass('core."actionApprovalBindingEvidenceLink"') AS link,
@@ -349,14 +352,18 @@ const assertGenericAuthoritySchema = async (queryRunner: QueryRunner) => {
     },
   ]);
   await expect(
-    queryRaw(queryRunner,
+    queryRaw(
+      queryRunner,
       `SELECT to_regclass('core."instagramReplyApprovalRequest"') AS binding,
               to_regclass('core."instagramReplyExecutionReceipt"') AS receipt`,
     ),
   ).resolves.toStrictEqual([{ binding: null, receipt: null }]);
 
   const bindingColumns = await getColumns(queryRunner, 'actionApprovalBinding');
-  const receiptColumns = await getColumns(queryRunner, 'actionExecutionReceipt');
+  const receiptColumns = await getColumns(
+    queryRunner,
+    'actionExecutionReceipt',
+  );
 
   expect(bindingColumns.map(({ column_name }) => column_name)).toEqual(
     expect.arrayContaining([
@@ -464,7 +471,8 @@ const assertFinalizedInboundProof = async (queryRunner: QueryRunner) => {
 
 const assertGenericIdDefaults = async (queryRunner: QueryRunner) => {
   await expect(
-    queryRaw(queryRunner,
+    queryRaw(
+      queryRunner,
       `SELECT table_name, column_default
        FROM information_schema.columns
        WHERE table_schema = 'core'
@@ -494,7 +502,8 @@ const assertGenericIdDefaults = async (queryRunner: QueryRunner) => {
 
 const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
   await expect(
-    queryRaw(queryRunner,
+    queryRaw(
+      queryRunner,
       `SELECT table_name, array_agg(column_name ORDER BY column_name) AS columns
        FROM information_schema.columns
        WHERE table_schema = 'core'
@@ -518,7 +527,8 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
     },
   ]);
   await expect(
-    queryRaw(queryRunner,
+    queryRaw(
+      queryRunner,
       `SELECT table_name, column_name
        FROM information_schema.columns
        WHERE table_schema = 'core'
@@ -537,7 +547,8 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
     ),
   ).resolves.toHaveLength(19);
   await expect(
-    queryRaw(queryRunner,
+    queryRaw(
+      queryRunner,
       `SELECT table_name, column_default
        FROM information_schema.columns
        WHERE table_schema = 'core'
@@ -559,7 +570,8 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
     },
   ]);
   await expect(
-    queryRaw(queryRunner,
+    queryRaw(
+      queryRunner,
       `SELECT conname, contype
        FROM pg_constraint
        WHERE conrelid IN (
@@ -590,7 +602,8 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
     { conname: 'PK_1ecd8d74d2ebde2854db62b469e', contype: 'p' },
   ]);
   await expect(
-    queryRaw(queryRunner,
+    queryRaw(
+      queryRunner,
       `SELECT indexname
        FROM pg_indexes
        WHERE schemaname = 'core'
@@ -815,8 +828,6 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     await assertFinalizedInboundProof(queryRunner);
   });
 
-
-
   it('only prepares nullable generic shape before legacy data backfill', async () => {
     await installLegacyFixture(queryRunner, 'populated');
     const command =
@@ -998,7 +1009,6 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       '00000000-0000-0000-0000-000000000402'
     )`);
 
-
     await prepare.up(queryRunner);
     await finalize.runDataMigration({
       query: queryRunner.query.bind(queryRunner),
@@ -1124,10 +1134,131 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       },
     ]);
 
-
     await finalize.up(queryRunner);
     await assertGenericAuthoritySchema(queryRunner);
     await assertFinalizedInboundProof(queryRunner);
+  });
+
+  it('expires only legacy Instagram reply authorities and creates idempotent provider-cutover evidence', async () => {
+    await installLegacyFixture(queryRunner, 'absent');
+    await new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand().up(
+      queryRunner,
+    );
+    await queryRunner.query(`INSERT INTO core."actionApprovalBinding" (
+      "id", "workspaceId", "initiatorUserWorkspaceId", "actionName",
+      "actionVersion", "draftId", "contentDigest", "threadId", "state",
+      "expiresAt"
+    ) VALUES
+      ('00000000-0000-0000-0000-000000000701', '${workspaceId}',
+       '00000000-0000-0000-0000-000000000702', 'send_instagram_reply',
+       1, '00000000-0000-0000-0000-000000000703', 'pending',
+       '00000000-0000-0000-0000-000000000704', 'PENDING', now()),
+      ('00000000-0000-0000-0000-000000000705', '${workspaceId}',
+       '00000000-0000-0000-0000-000000000706', 'send_instagram_reply',
+       1, '00000000-0000-0000-0000-000000000707', 'approved',
+       '00000000-0000-0000-0000-000000000708', 'APPROVED', now()),
+      ('00000000-0000-0000-0000-000000000709', '${workspaceId}',
+       '00000000-0000-0000-0000-000000000710', 'send_instagram_message',
+       2, '00000000-0000-0000-0000-000000000711', 'unipile',
+       '00000000-0000-0000-0000-000000000712', 'PENDING', now()),
+      ('00000000-0000-0000-0000-000000000713', '${workspaceId}',
+       '00000000-0000-0000-0000-000000000714', 'send_email',
+       1, '00000000-0000-0000-0000-000000000715', 'email',
+       '00000000-0000-0000-0000-000000000716', 'APPROVED', now()),
+      ('00000000-0000-0000-0000-000000000717', '${workspaceId}',
+       '00000000-0000-0000-0000-000000000718', 'send_instagram_reply',
+       1, '00000000-0000-0000-0000-000000000719', 'expired',
+       '00000000-0000-0000-0000-000000000720', 'EXPIRED', now())`);
+    await queryRunner.query(`INSERT INTO core."actionApprovalBindingEvidenceLink" (
+      "actionApprovalBindingId", "objectMetadataId", "recordId", "role"
+    ) VALUES
+      ('00000000-0000-0000-0000-000000000701',
+       '00000000-0000-0000-0000-000000000721',
+       '00000000-0000-0000-0000-000000000722', 'draft'),
+      ('00000000-0000-0000-0000-000000000705',
+       '00000000-0000-0000-0000-000000000723',
+       '00000000-0000-0000-0000-000000000724', 'draft')`);
+
+    const commandDataSource = {
+      query: queryRunner.query.bind(queryRunner),
+    } as unknown as DataSource;
+    const command = new InvalidateComposioInstagramAuthoritiesWorkspaceCommand(
+      {} as never,
+      commandDataSource,
+    );
+    const commandArgs = {
+      workspaceId,
+      options: { dryRun: false },
+      index: 0,
+      total: 1,
+      dataSource: commandDataSource as never,
+    };
+
+    await command.runOnWorkspace(commandArgs);
+    await command.runOnWorkspace(commandArgs);
+
+    await expect(
+      queryRunner.query(`SELECT id, "actionName", state
+        FROM core."actionApprovalBinding" ORDER BY id`),
+    ).resolves.toStrictEqual([
+      {
+        id: '00000000-0000-0000-0000-000000000701',
+        actionName: 'send_instagram_reply',
+        state: 'EXPIRED',
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000705',
+        actionName: 'send_instagram_reply',
+        state: 'EXPIRED',
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000709',
+        actionName: 'send_instagram_message',
+        state: 'PENDING',
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000713',
+        actionName: 'send_email',
+        state: 'APPROVED',
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000717',
+        actionName: 'send_instagram_reply',
+        state: 'EXPIRED',
+      },
+    ]);
+    await expect(
+      queryRunner.query(`SELECT
+        "actionApprovalBindingId", "objectMetadataId", "recordId", role
+        FROM core."actionApprovalBindingEvidenceLink"
+        ORDER BY "actionApprovalBindingId",
+          CASE WHEN role = 'draft' THEN 0 ELSE 1 END`),
+    ).resolves.toStrictEqual([
+      {
+        actionApprovalBindingId: '00000000-0000-0000-0000-000000000701',
+        objectMetadataId: '00000000-0000-0000-0000-000000000721',
+        recordId: '00000000-0000-0000-0000-000000000722',
+        role: 'draft',
+      },
+      {
+        actionApprovalBindingId: '00000000-0000-0000-0000-000000000701',
+        objectMetadataId: '00000000-0000-0000-0000-000000000721',
+        recordId: '00000000-0000-0000-0000-000000000722',
+        role: 'PROVIDER_CUTOVER',
+      },
+      {
+        actionApprovalBindingId: '00000000-0000-0000-0000-000000000705',
+        objectMetadataId: '00000000-0000-0000-0000-000000000723',
+        recordId: '00000000-0000-0000-0000-000000000724',
+        role: 'draft',
+      },
+      {
+        actionApprovalBindingId: '00000000-0000-0000-0000-000000000705',
+        objectMetadataId: '00000000-0000-0000-0000-000000000723',
+        recordId: '00000000-0000-0000-0000-000000000724',
+        role: 'PROVIDER_CUTOVER',
+      },
+    ]);
   });
 
   it.each<LegacyFixture>([
@@ -1146,7 +1277,8 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
 
       await prepare.up(queryRunner);
 
-      const beforeSecondPrepare = await queryRaw(queryRunner,
+      const beforeSecondPrepare = await queryRaw(
+        queryRunner,
         `SELECT
           (SELECT count(*) FROM core."actionApprovalBinding") AS bindings,
           (SELECT count(*) FROM core."actionExecutionReceipt") AS receipts`,
@@ -1156,7 +1288,9 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       await prepare.up(queryRunner);
       expect(
         secondPrepareQuery.mock.calls.map(([query]) => String(query)),
-      ).not.toEqual(expect.arrayContaining([expect.stringMatching(/^ALTER TABLE/)]));
+      ).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/^ALTER TABLE/)]),
+      );
       secondPrepareQuery.mockRestore();
 
       await finalize.runDataMigration({
@@ -1168,13 +1302,13 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       await assertFinalizedInboundProof(queryRunner);
 
       await expect(
-        queryRaw(queryRunner,
+        queryRaw(
+          queryRunner,
           `SELECT
             (SELECT count(*) FROM core."actionApprovalBinding") AS bindings,
             (SELECT count(*) FROM core."actionExecutionReceipt") AS receipts`,
         ),
       ).resolves.toStrictEqual(beforeSecondPrepare);
-
     },
   );
   it.each([
@@ -1258,7 +1392,8 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     await prepare.down(queryRunner);
 
     await expect(
-      queryRaw(queryRunner,
+      queryRaw(
+        queryRunner,
         `SELECT
           to_regclass('core."instagramReplyApprovalRequest"') AS binding,
           to_regclass('core."instagramReplyExecutionReceipt"') AS receipt,

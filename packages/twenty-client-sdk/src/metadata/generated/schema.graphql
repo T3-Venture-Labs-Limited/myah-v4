@@ -167,6 +167,8 @@ enum PermissionFlagType {
   DOWNLOAD_FILE
   SEND_EMAIL_TOOL
   SEND_INSTAGRAM_REPLY_TOOL
+  SEND_INSTAGRAM_FIRST_MESSAGE_TOOL
+  RESOLVE_INSTAGRAM_SEND_OUTCOME
   CREATE_CALENDAR_EVENT_TOOL
   HTTP_REQUEST_TOOL
   CODE_INTERPRETER_TOOL
@@ -2833,6 +2835,31 @@ type ManagedEmailActionResult {
   operationId: String!
 }
 
+type WorkspaceMailboxConnectionStatus {
+  connectedAccountId: UUID!
+  errorCode: String
+  errorMessage: String
+  lastSafeOperation: String!
+  maskedHandle: String!
+  messageChannelId: UUID!
+  state: String!
+  syncStage: String!
+  syncStatus: String!
+  updatedAt: DateTime!
+}
+
+type WorkspaceMailboxConnectionResult {
+  connectedAccountId: UUID!
+  messageChannelId: UUID!
+  status: WorkspaceMailboxConnectionStatus!
+}
+
+type RevokeWorkspaceMailboxResult {
+  connectedAccountId: UUID!
+  revoked: Boolean!
+  state: String!
+}
+
 type BillingTrialPeriod {
   duration: Float!
   isCreditCardRequired: Boolean!
@@ -3090,31 +3117,6 @@ type ToolIndexEntry {
   objectName: String
   icon: String
   inputSchema: JSON
-}
-
-type WorkspaceMailboxConnectionStatus {
-  connectedAccountId: UUID!
-  errorCode: String
-  errorMessage: String
-  lastSafeOperation: String!
-  maskedHandle: String!
-  messageChannelId: UUID!
-  state: String!
-  syncStage: String!
-  syncStatus: String!
-  updatedAt: DateTime!
-}
-
-type WorkspaceMailboxConnectionResult {
-  connectedAccountId: UUID!
-  messageChannelId: UUID!
-  status: WorkspaceMailboxConnectionStatus!
-}
-
-type RevokeWorkspaceMailboxResult {
-  connectedAccountId: UUID!
-  revoked: Boolean!
-  state: String!
 }
 
 type CampaignOutreachAudienceCreator {
@@ -3636,15 +3638,14 @@ type Query {
   findOneAgent(input: AgentIdInput!): Agent!
   getRoles: [Role!]!
   getSSOIdentityProviders: [FindAvailableSSOIDP!]!
-  campaignOutreachAudienceReview(campaignId: UUID!): CampaignOutreachAudienceReview!
+  getPageLayoutWidgets(pageLayoutTabId: String!): [PageLayoutWidget!]!
+  getPageLayoutWidget(id: String!): PageLayoutWidget!
   getToolIndex: [ToolIndexEntry!]!
   getToolInputSchema(toolName: String!): JSON
   webhooks: [Webhook!]!
   webhook(id: UUID!): Webhook
   getActionApprovalProposal(bindingId: UUID!): ActionApprovalProposal!
   getActionExecutionReceipt(bindingId: UUID!): ActionExecutionReceipt
-  getPageLayoutWidgets(pageLayoutTabId: String!): [PageLayoutWidget!]!
-  getPageLayoutWidget(id: String!): PageLayoutWidget!
   myMessageFolders(messageChannelId: UUID): [MessageFolder!]!
   myCalendarChannels(connectedAccountId: UUID): [CalendarChannel!]!
   minimalMetadata: MinimalMetadata!
@@ -3661,6 +3662,7 @@ type Query {
   pieChartData(input: PieChartDataInput!): PieChartData!
   lineChartData(input: LineChartDataInput!): LineChartData!
   barChartData(input: BarChartDataInput!): BarChartData!
+  campaignOutreachAudienceReview(campaignId: UUID!): CampaignOutreachAudienceReview!
   getAutoCompleteAddress(address: String!, token: String!, country: String, isFieldCity: Boolean): [AutocompleteResult!]!
   getAddressDetails(placeId: String!, token: String!): PlaceDetailsResult!
   getUsageAnalytics(input: UsageAnalyticsInput): UsageAnalytics!
@@ -4022,16 +4024,13 @@ type Mutation {
   createSAMLIdentityProvider(input: SetupSAMLSsoInput!): SetupSso!
   deleteSSOIdentityProvider(input: DeleteSsoInput!): DeleteSso!
   editSSOIdentityProvider(input: EditSsoInput!): EditSso!
-  startCampaignExecution(input: StartCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
-  updateCampaignSendingWindow(input: UpdateCampaignSendingWindowInput!): CampaignSendingWindowMutationResultDTO!
-  stopCampaignExecution(input: StopCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
+  createPageLayoutWidget(input: CreatePageLayoutWidgetInput!): PageLayoutWidget!
+  updatePageLayoutWidget(id: String!, input: UpdatePageLayoutWidgetInput!): PageLayoutWidget!
+  destroyPageLayoutWidget(id: String!): Boolean!
   createWebhook(input: CreateWebhookInput!): Webhook!
   updateWebhook(input: UpdateWebhookInput!): Webhook!
   deleteWebhook(id: UUID!): Webhook!
   runAgent(input: RunAgentInput!): RunAgentResult!
-  createPageLayoutWidget(input: CreatePageLayoutWidgetInput!): PageLayoutWidget!
-  updatePageLayoutWidget(id: String!, input: UpdatePageLayoutWidgetInput!): PageLayoutWidget!
-  destroyPageLayoutWidget(id: String!): Boolean!
   updateMessageFolder(input: UpdateMessageFolderInput!): MessageFolder!
   updateMessageFolders(input: UpdateMessageFoldersInput!): [MessageFolder!]!
   updateCalendarChannel(input: UpdateCalendarChannelInput!): CalendarChannel!
@@ -4057,6 +4056,9 @@ type Mutation {
   trackAnalytics(type: AnalyticsType!, name: String, event: String, properties: JSON): Analytics!
   duplicateDashboard(id: UUID!): DuplicatedDashboard!
   impersonate(userId: UUID!, workspaceId: UUID!): Impersonate!
+  startCampaignExecution(input: StartCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
+  updateCampaignSendingWindow(input: UpdateCampaignSendingWindowInput!): CampaignSendingWindowMutationResultDTO!
+  stopCampaignExecution(input: StopCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
   createCalendarEvent(input: CreateCalendarEventInput!): CreateCalendarEventOutput!
   sendEmail(input: SendEmailInput!): SendEmailOutput!
   startChannelSync(connectedAccountId: UUID!): ChannelSyncSuccess!
@@ -5193,20 +5195,26 @@ input EditSsoInput {
   status: SSOIdentityProviderStatus!
 }
 
-input StartCampaignExecutionInput {
-  campaignId: UUID!
-  startIdempotencyKey: UUID!
+input CreatePageLayoutWidgetInput {
+  pageLayoutTabId: UUID!
+  title: String!
+  type: WidgetType!
+  objectMetadataId: UUID
+  gridPosition: GridPositionInput!
+  position: JSON
+  configuration: JSON!
 }
 
-input UpdateCampaignSendingWindowInput {
-  campaignId: UUID!
-  timeZone: String!
-  startLocalTime: String!
-  endLocalTime: String!
-}
-
-input StopCampaignExecutionInput {
-  campaignId: UUID!
+input UpdatePageLayoutWidgetInput {
+  pageLayoutTabId: UUID
+  title: String
+  type: WidgetType
+  objectMetadataId: UUID
+  gridPosition: GridPositionInput
+  position: JSON
+  configuration: JSON
+  conditionalDisplay: JSON
+  conditionalAvailabilityExpression: String
 }
 
 input CreateWebhookInput {
@@ -5236,28 +5244,6 @@ input RunAgentInput {
   agentUniversalIdentifier: String!
   prompt: String!
   operationId: String
-}
-
-input CreatePageLayoutWidgetInput {
-  pageLayoutTabId: UUID!
-  title: String!
-  type: WidgetType!
-  objectMetadataId: UUID
-  gridPosition: GridPositionInput!
-  position: JSON
-  configuration: JSON!
-}
-
-input UpdatePageLayoutWidgetInput {
-  pageLayoutTabId: UUID
-  title: String
-  type: WidgetType
-  objectMetadataId: UUID
-  gridPosition: GridPositionInput
-  position: JSON
-  configuration: JSON
-  conditionalDisplay: JSON
-  conditionalAvailabilityExpression: String
 }
 
 input UpdateMessageFolderInput {
@@ -5324,6 +5310,22 @@ input UpdateSkillInput {
 enum AnalyticsType {
   PAGEVIEW
   TRACK
+}
+
+input StartCampaignExecutionInput {
+  campaignId: UUID!
+  startIdempotencyKey: UUID!
+}
+
+input UpdateCampaignSendingWindowInput {
+  campaignId: UUID!
+  timeZone: String!
+  startLocalTime: String!
+  endLocalTime: String!
+}
+
+input StopCampaignExecutionInput {
+  campaignId: UUID!
 }
 
 input CreateCalendarEventInput {

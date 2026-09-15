@@ -1,503 +1,547 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
-import type * as ReactType from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
+import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
+import {
+  ApolloClient,
+  ApolloLink,
+  InMemoryCache,
+  Observable,
+} from '@apollo/client';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { createStore, Provider } from 'jotai';
+import { type ReactNode } from 'react';
+import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
+
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxReplyWorkspace } from '@/myah/inbox/components/MyahInboxReplyWorkspace';
-import { type MyahInboxDraftAutosaveController } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
+import {
+  MyahInboxDraftAutosaveProvider,
+  useMyahInboxDraftAutosaveController,
+} from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
+import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
+import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import { type MyahInboxDraftAutosaveEntry } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 
-jest.mock('twenty-ui/theme-constants', () => ({
-  themeCssVariables: {
-    background: { transparent: { lighter: 'whitesmoke' } },
-    border: { color: { light: 'lightgray' }, radius: { md: '8px' } },
-    font: {
-      color: { primary: 'black', secondary: 'gray' },
-      size: { sm: '13px', xs: '11px' },
-      weight: { medium: 500 },
-    },
-    spacing: { 1: '4px', 2: '8px', 3: '12px' },
-  },
+let mockClient: ApolloClient;
+jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
+  useApolloCoreClient: () => mockClient,
 }));
-
-const mockUseFindOneRecord = jest.fn();
-const mockController = {
-  reconcile: jest.fn(),
-  updateDraft: jest.fn(),
-  flush: jest.fn(),
-  retry: jest.fn(),
-  reloadConflict: jest.fn(),
-  applyProposal: jest.fn(),
-  flushWorkspace: jest.fn(),
-} as jest.Mocked<MyahInboxDraftAutosaveController>;
-
-let mockCurrentWorkspace: { id: string } | null = { id: 'workspace-1' };
-let mockDraftEntry: MyahInboxDraftAutosaveEntry | null = {
-  localBody: { markdown: 'Saved draft', blocknote: null },
-  confirmedBody: { markdown: 'Saved draft', blocknote: null },
-  confirmedRevision: 3,
-  dirty: false,
-  status: 'idle',
-  error: null,
-  conflict: null,
-  debounceVersion: 0,
-  pendingDebounceVersion: null,
-  editorVersion: 0,
-};
-let mockObjectMetadataItems = [{ nameSingular: 'messageThread' }];
-
-type MockSendActionMode = 'deferred' | 'pending' | 'sending' | 'unknown';
-
-let mockSendActionMode: MockSendActionMode = 'sending';
-let mockIsGenerating = false;
-let mockSendActionDeferred: {
-  promise: Promise<void>;
-  resolve: (value: void) => void;
-} | null = null;
-
-jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
-  useFindOneRecord: (...args: unknown[]) => mockUseFindOneRecord(...args),
-}));
-
-jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
-  useObjectMetadataItems: () => ({
-    objectMetadataItems: mockObjectMetadataItems,
+jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
+  useSnackBar: () => ({
+    enqueueSuccessSnackBar: jest.fn(),
+    enqueueWarningSnackBar: jest.fn(),
+    enqueueInfoSnackBar: jest.fn(),
+    enqueueErrorSnackBar: jest.fn(),
   }),
 }));
-
-jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
-  useAtomStateValue: () => mockCurrentWorkspace,
+jest.mock('twenty-ui/input', () => ({
+  Button: ({
+    title,
+    ariaLabel,
+    disabled,
+    onClick,
+  }: {
+    title: string;
+    ariaLabel?: string;
+    disabled?: boolean;
+    onClick: () => void;
+  }) => (
+    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
+      {title}
+    </button>
+  ),
 }));
-
-jest.mock('jotai', () => ({
-  ...jest.requireActual('jotai'),
-  useAtomValue: () => mockDraftEntry,
+jest.mock('twenty-ui/layout', () => ({
+  AnimatedCircleLoading: ({ children }: { children: ReactNode }) => (
+    <>{children}</>
+  ),
 }));
-
-jest.mock('@/myah/inbox/hooks/useMyahInboxDraftAutosaveController', () => ({
-  useMyahInboxDraftAutosaveControllerContext: () => mockController,
-}));
-
 jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
   MyahInboxDraftEditor: ({
     entry,
-    onDraftChange,
-    onRetry,
-    onReloadConflict,
-    actions,
     disabled,
+    onDraftChange,
+    actions,
+    presentation,
+    subject,
   }: {
     entry: MyahInboxDraftAutosaveEntry;
-    onDraftChange: (body: { markdown: string; blocknote: null }) => void;
-    onRetry: () => void;
-    onReloadConflict: () => void;
-    actions: ReactType.ReactNode;
     disabled: boolean;
+    onDraftChange: (body: { markdown: string; blocknote: null }) => void;
+    actions: ReactNode;
+    presentation?: 'default' | 'main';
+    subject?: string;
   }) => (
-    <div aria-label="Shared reply draft editor">
-      <output aria-label="Draft status">{entry.status}</output>
-      <button
+    <div data-presentation={presentation}>
+      <input
+        aria-label="Real shared draft"
+        value={entry.localBody.markdown}
         disabled={disabled}
-        onClick={() =>
-          onDraftChange({ markdown: 'pending local edit', blocknote: null })
+        onChange={(event) =>
+          onDraftChange({ markdown: event.target.value, blocknote: null })
         }
-      >
-        Make pending local edit
-      </button>
-      <button onClick={onRetry}>Retry draft save</button>
-      <button onClick={onReloadConflict}>Reload draft conflict</button>
-      <div aria-label="Draft actions">{actions}</div>
+      />
+      {subject && <output data-testid="draft-subject">{subject}</output>}
+      {actions}
     </div>
   ),
 }));
-jest.mock(
-  '@/myah/inbox/components/MyahInboxReplySendAction',
-  () => {
-    const React = jest.requireActual('react') as typeof ReactType;
 
-    return {
-      MyahInboxReplySendAction: ({
-        disabled,
-        onSendingChange,
-      }: {
-        disabled?: boolean;
-        onSendingChange: (sending: boolean) => void;
-      }) => {
-        const [isLocked, setIsLocked] = React.useState(false);
-        const [isUnknown, setIsUnknown] = React.useState(false);
-
-        const handleSend = () => {
-          onSendingChange(true);
-
-          if (mockSendActionMode === 'unknown') {
-            setIsUnknown(true);
-            setIsLocked(true);
-          }
-          if (
-            mockSendActionMode === 'pending' ||
-            mockSendActionMode === 'deferred'
-          ) {
-            setIsLocked(true);
-          }
-          if (mockSendActionMode === 'deferred') {
-            void mockSendActionDeferred?.promise.finally(() =>
-              onSendingChange(false),
-            );
-          }
-        };
-
-        return (
-          <>
-            <button
-              data-variant="primary"
-              disabled={disabled || isLocked}
-              onClick={handleSend}
-            >
-              Send
-            </button>
-            {isUnknown && <span role="alert">Unknown delivery</span>}
-          </>
-        );
-      },
-    };
-  },
-  { virtual: true },
-);
-
-jest.mock('@/myah/inbox/components/MyahInboxProposalPreview', () => ({
-  MyahInboxProposalPreview: ({
-    disabled,
-    onApply,
-    renderGenerateAction,
-  }: {
-    disabled: boolean;
-    onApply: (body: { markdown: string; blocknote: null }) => void;
-    renderGenerateAction: (
-      generateAction: ReactType.ReactNode,
-      isGenerating: boolean,
-    ) => ReactType.ReactNode;
-  }) =>
-    renderGenerateAction(
-      <button
-        data-variant="secondary"
-        disabled={disabled || mockIsGenerating}
-        onClick={() =>
-          onApply({ markdown: 'generated reply', blocknote: null })
-        }
-      >
-        Generate Reply
-      </button>,
-      mockIsGenerating,
-    ),
-}));
-const thread = {
-  id: 'thread-1',
-  lastActivityAt: '2026-07-24T12:00:00.000Z',
-  subject: 'First conversation',
-  lastMessagePreview: 'First preview',
-  lastMessageSender: 'Ada',
-  state: 'NEEDS_REPLY' as const,
-  snoozedUntil: null,
-  creator: { id: 'creator-1', name: 'Ada Creator' },
-  campaign: null,
-  inboxOwner: { id: 'member-1', name: 'Zachary' },
+const key = { workspaceId: 'workspace-1', threadId: 'thread-1' };
+const thread = { id: key.threadId } as MyahInboxThread;
+const body = { markdown: 'server draft', blocknote: null };
+type Request = {
+  name: string;
+  variables: Record<string, unknown>;
+  resolve: (
+    data: Record<string, unknown>,
+    errors?: { message: string }[],
+  ) => void;
+  reject: () => void;
+};
+let requests: Request[];
+const take = (name: string) => {
+  const request = requests.find((request) => request.name === name);
+  if (!request)
+    throw new Error(
+      `Missing ${name}; got ${requests.map((request) => request.name)}`,
+    );
+  requests.splice(requests.indexOf(request), 1);
+  return request;
+};
+const completeRead = async () => {
+  await act(async () =>
+    take('MyahInboxEmailDraft').resolve({
+      myahInboxEmailDraft: { ...key, revision: 2, body },
+    }),
+  );
+  await act(async () =>
+    take('MyahInboxReplySendReadiness').resolve({
+      myahInboxReplySendReadiness: { status: 'READY', reason: null },
+    }),
+  );
+};
+const Harness = ({ children }: { children: ReactNode }) => {
+  const controller = useMyahInboxDraftAutosaveController();
+  return (
+    <MyahInboxDraftAutosaveProvider controller={controller}>
+      {children}
+    </MyahInboxDraftAutosaveProvider>
+  );
+};
+const setup = (
+  duplicateEditor = false,
+  presentation: 'default' | 'main' = 'default',
+  subject: string | null = 'Re: First subject',
+) => {
+  const store = createStore();
+  store.set(currentWorkspaceMemberState.atom, { id: 'member-1' } as never);
+  store.set(currentWorkspaceState.atom, { id: key.workspaceId } as never);
+  const view = render(
+    <Provider store={store}>
+      <Harness>
+        <MyahInboxReplyWorkspace
+          thread={{ ...thread, subject }}
+          scopeGeneration="1"
+          targetAvailable
+          presentation={presentation}
+        />
+        {duplicateEditor && (
+          <MyahInboxReplyWorkspace
+            thread={{ ...thread, subject }}
+            scopeGeneration="1"
+            targetAvailable
+            presentation={presentation}
+          />
+        )}
+      </Harness>
+    </Provider>,
+  );
+  return {
+    ...view,
+    store,
+    entry: () => store.get(myahInboxDraftAutosaveFamilyState.atomFamily(key)),
+    refresh: (generation: string, available = true) =>
+      view.rerender(
+        <Provider store={store}>
+          <Harness>
+            <MyahInboxReplyWorkspace
+              thread={{ ...thread, subject }}
+              scopeGeneration={generation}
+              targetAvailable={available}
+              presentation={presentation}
+            />
+          </Harness>
+        </Provider>,
+      ),
+  };
 };
 
-const createDeferred = <T,>() => {
-  let resolve: (value: T) => void = () => {};
-  const promise = new Promise<T>((promiseResolve) => {
-    resolve = promiseResolve;
-  });
-
-  return { promise, resolve };
-};
-
-describe('MyahInboxReplyWorkspace', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockCurrentWorkspace = { id: 'workspace-1' };
-    mockSendActionMode = 'sending';
-    mockIsGenerating = false;
-    mockSendActionDeferred = null;
-    mockDraftEntry = {
-      localBody: { markdown: 'Saved draft', blocknote: null },
-      confirmedBody: { markdown: 'Saved draft', blocknote: null },
-      confirmedRevision: 3,
-      dirty: false,
-      status: 'idle',
-      error: null,
-      conflict: null,
-      debounceVersion: 0,
-      pendingDebounceVersion: null,
-      editorVersion: 0,
-    };
-    mockObjectMetadataItems = [{ nameSingular: 'messageThread' }];
-    mockUseFindOneRecord.mockReturnValue({
-      record: {
-        id: 'thread-1',
-        __typename: 'MessageThread',
-        myahReplyDraftBody: { markdown: 'Saved draft', blocknote: null },
-        myahReplyDraftRevision: 3,
-      },
-      loading: false,
-    });
-  });
-
-  it('defers the draft lookup until MessageThread metadata is available', () => {
-    mockObjectMetadataItems = [];
-
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Loading shared draft',
-    );
-    expect(mockUseFindOneRecord).not.toHaveBeenCalled();
-  });
-
-  it('reconciles native draft reads with the workspace-scoped controller entry', async () => {
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    await waitFor(() =>
-      expect(mockController.reconcile).toHaveBeenCalledWith({
-        key: { workspaceId: 'workspace-1', threadId: 'thread-1' },
-        revision: 3,
-        body: { markdown: 'Saved draft', blocknote: null },
-      }),
-    );
-    expect(mockUseFindOneRecord).toHaveBeenCalledWith({
-      objectNameSingular: 'messageThread',
-      objectRecordId: 'thread-1',
-      recordGqlFields: {
-        id: true,
-        myahReplyDraftBody: { markdown: true, blocknote: true },
-        myahReplyDraftRevision: true,
-      },
-      skip: false,
-    });
-  });
-
-  it('delegates editor transitions to the workspace-scoped controller', () => {
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Make pending local edit' }),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Retry draft save' }));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Reload draft conflict' }),
+describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
+  it('preserves the floating main card with its animated border and reduced-motion fallback', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'packages/twenty-front/src/modules/myah/inbox/components/MyahInboxReplyWorkspace.tsx',
+      ),
+      'utf8',
     );
 
-    const key = { workspaceId: 'workspace-1', threadId: 'thread-1' };
-    expect(mockController.updateDraft).toHaveBeenCalledWith({
-      key,
-      body: { markdown: 'pending local edit', blocknote: null },
-    });
-    expect(mockController.retry).toHaveBeenCalledWith(key);
-    expect(mockController.reloadConflict).toHaveBeenCalledWith(key);
-  });
-
-  it('renders Generate Reply then Send as the only normal action row controls', () => {
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    const buttons = within(screen.getByLabelText('Draft actions')).getAllByRole(
-      'button',
+    const mainStyles = source.match(
+      /const StyledMainReplyWorkspace = styled\(StyledReplyWorkspace\)`([\s\S]*?)`;/,
+    )?.[1];
+    expect(mainStyles).toBeDefined();
+    expect(mainStyles).toContain(
+      'animation: myahReplyCardBorder 12s ease-in-out infinite alternate;',
     );
-
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      'Generate Reply',
-      'Send',
-    ]);
-    expect(buttons[0]).toHaveAttribute('data-variant', 'secondary');
-    expect(buttons[1]).toHaveAttribute('data-variant', 'primary');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.queryByText('Approve & send')).not.toBeInTheDocument();
-  });
-
-  it('locks Send and draft mutation while reply generation is active', () => {
-    mockIsGenerating = true;
-
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    expect(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate Reply',
-      }),
-    ).toBeDisabled();
-    expect(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Send',
-      }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole('button', { name: 'Make pending local edit' }),
-    ).toBeDisabled();
-  });
-
-  it('locks generation and draft mutation while direct delivery is unresolved', () => {
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    fireEvent.click(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Send',
-      }),
+    expect(mainStyles).toContain('linear-gradient(');
+    expect(mainStyles).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(mainStyles).not.toContain('border: 0');
+    expect(source).toContain(
+      'const MYAH_REPLY_CARD_SURFACE = themeCssVariables.background.primary;',
     );
-
-    expect(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate Reply',
-      }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole('button', { name: 'Make pending local edit' }),
-    ).toBeDisabled();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Make pending local edit' }),
+    expect(source).toContain(
+      'border: 1px solid ${themeCssVariables.border.color.light}',
     );
-    expect(mockController.updateDraft).not.toHaveBeenCalled();
+    expect(source).toContain("{presentation !== 'main' && (");
   });
-  it.each(['unknown', 'pending'] as const)(
-    'resets the %s delivery lock when the same thread enters another workspace',
-    (mode) => {
-      mockSendActionMode = mode;
-      const workspace = render(<MyahInboxReplyWorkspace thread={thread} />);
 
-      fireEvent.click(
-        within(screen.getByLabelText('Draft actions')).getByRole('button', {
-          name: 'Send',
-        }),
+  it('removes the main-only composer heading while preserving the default heading', async () => {
+    const main = setup(false, 'main');
+    await completeRead();
+    expect(screen.queryByText('Reply draft')).not.toBeInTheDocument();
+
+    main.unmount();
+    setup();
+    await completeRead();
+    expect(screen.getByText('Reply draft')).toBeVisible();
+  });
+
+  it.each([
+    ['Re: RE: September update', 'September update'],
+    ['Re: Project Re: status', 'Project Re: status'],
+    [null, 'No subject'],
+    [FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED, 'Restricted subject'],
+  ])(
+    'passes the safe presentation-only main subject %p only after authorization',
+    async (subject, expectedSubject) => {
+      setup(false, 'main', subject);
+      expect(screen.queryByTestId('draft-subject')).not.toBeInTheDocument();
+
+      await completeRead();
+
+      expect(screen.getByTestId('draft-subject')).toHaveTextContent(
+        expectedSubject,
       );
-      expect(
-        screen.getByRole('button', { name: 'Make pending local edit' }),
-      ).toBeDisabled();
-
-      mockCurrentWorkspace = { id: 'workspace-2' };
-      workspace.rerender(<MyahInboxReplyWorkspace thread={thread} />);
-
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
-      expect(
-        screen.getByRole('button', { name: 'Make pending local edit' }),
-      ).toBeEnabled();
     },
   );
 
-  it('keeps a new workspace delivery locked when an old send completes', async () => {
-    const oldSend = createDeferred<void>();
-    mockSendActionMode = 'deferred';
-    mockSendActionDeferred = oldSend;
-    const workspace = render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    fireEvent.click(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Send',
-      }),
-    );
-
-    mockCurrentWorkspace = { id: 'workspace-2' };
-    mockSendActionMode = 'pending';
-    workspace.rerender(<MyahInboxReplyWorkspace thread={thread} />);
-    fireEvent.click(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Send',
-      }),
-    );
-
-    await act(async () => {
-      oldSend.resolve(undefined);
-      await oldSend.promise;
+  beforeEach(() => {
+    jest.useFakeTimers();
+    requests = [];
+    mockClient = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: new ApolloLink(
+        (operation) =>
+          new Observable((observer) => {
+            requests.push({
+              name: operation.operationName ?? '',
+              variables: operation.variables,
+              resolve: (data, errors) => {
+                observer.next({ data, errors });
+                observer.complete();
+              },
+              reject: () => observer.error(new Error('Forbidden')),
+            });
+          }),
+      ),
     });
-
-    expect(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate Reply',
-      }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole('button', { name: 'Make pending local edit' }),
-    ).toBeDisabled();
+  });
+  afterEach(() => {
+    mockClient.stop();
+    jest.useRealTimers();
   });
 
-  it('serializes direct generated replies through the autosave controller', async () => {
-    const application = createDeferred<boolean>();
-    mockController.applyProposal.mockReturnValue(application.promise);
-
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Make pending local edit' }),
-    );
-    fireEvent.click(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate Reply',
-      }),
-    );
-
-    expect(mockController.updateDraft).toHaveBeenCalledWith({
-      key: { workspaceId: 'workspace-1', threadId: 'thread-1' },
-      body: { markdown: 'pending local edit', blocknote: null },
-    });
-    expect(mockController.applyProposal).toHaveBeenCalledTimes(1);
-    expect(mockController.applyProposal).toHaveBeenCalledWith({
-      key: { workspaceId: 'workspace-1', threadId: 'thread-1' },
-      body: { markdown: 'generated reply', blocknote: null },
-    });
-    expect(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate Reply',
-      }),
-    ).toBeDisabled();
-
-    await act(async () => {
-      application.resolve(false);
-      await application.promise;
-    });
+  it('uses the AI-first action order only for the opted-in main composer', async () => {
+    setup(false, 'main');
+    await completeRead();
 
     expect(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate Reply',
-      }),
-    ).toBeEnabled();
+      screen.getByLabelText('Real shared draft').parentElement,
+    ).toHaveAttribute('data-presentation', 'main');
+    expect(screen.getByRole('button', { name: 'Send reply' })).toBeVisible();
     expect(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate Reply',
-      }),
+      screen.queryByRole('button', { name: 'Generate Reply' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders only one editor and send authority when two surfaces mount the same key', async () => {
+    setup(true);
+    expect(
+      requests.filter(({ name }) => name === 'MyahInboxEmailDraft'),
+    ).toHaveLength(1);
+    await completeRead();
+    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Send' })).toHaveLength(1);
+    expect(
+      screen.getByText('This draft is open in another editor.'),
     ).toBeVisible();
   });
 
-  it.each(['saving', 'error', 'conflict'] as const)(
-    'disables generation while the draft controller reports %s',
-    (status) => {
-      mockDraftEntry = {
-        localBody: { markdown: 'Saved draft', blocknote: null },
-        confirmedBody: { markdown: 'Saved draft', blocknote: null },
-        confirmedRevision: 3,
-        dirty: false,
-        status,
-        error: status === 'error' ? 'Draft save failed' : null,
-        conflict:
-          status === 'conflict'
-            ? {
-                revision: 4,
-                body: { markdown: 'Newer saved draft', blocknote: null },
-              }
-            : null,
-        debounceVersion: 0,
-        pendingDebounceVersion: null,
-        editorVersion: 0,
-      };
+  it('does not resurrect an older authorized read over a newer denied generation', async () => {
+    const view = setup();
+    const oldRead = take('MyahInboxEmailDraft');
+    view.refresh('2');
+    await act(async () => take('MyahInboxEmailDraft').reject());
+    await act(async () =>
+      oldRead.resolve({ myahInboxEmailDraft: { ...key, revision: 2, body } }),
+    );
+    expect(
+      screen.queryByLabelText('Real shared draft'),
+    ).not.toBeInTheDocument();
+    expect(view.entry()?.confirmedBody).toBeNull();
+  });
 
-      render(<MyahInboxReplyWorkspace thread={thread} />);
+  it('rejects partial GraphQL draft projections instead of granting cached-body authority', async () => {
+    const view = setup();
+    await act(async () =>
+      take('MyahInboxEmailDraft').resolve(
+        { myahInboxEmailDraft: { ...key, revision: 2, body } },
+        [{ message: 'Forbidden' }],
+      ),
+    );
+    expect(
+      screen.queryByLabelText('Real shared draft'),
+    ).not.toBeInTheDocument();
+    expect(view.entry()?.confirmedBody).toBeNull();
+  });
 
-      expect(
-        within(screen.getByLabelText('Draft actions')).getByRole('button', {
-          name: 'Generate Reply',
+  it('reads the exact guarded draft and saves an actual edit with its captured workspace', async () => {
+    const view = setup();
+    expect(take('MyahInboxEmailDraft').variables).toEqual({
+      threadId: key.threadId,
+      expectedWorkspaceId: key.workspaceId,
+    });
+    // Restart the interrupted read through the real UI authorization lifecycle.
+    view.refresh('2');
+    await completeRead();
+    expect(screen.getByLabelText('Real shared draft')).toHaveValue(
+      'server draft',
+    );
+    fireEvent.change(screen.getByLabelText('Real shared draft'), {
+      target: { value: 'operator edit' },
+    });
+    await act(async () => jest.advanceTimersByTimeAsync(750));
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables).toEqual({
+      input: {
+        expectedWorkspaceId: key.workspaceId,
+        threadId: key.threadId,
+        expectedRevision: 2,
+        body: { markdown: 'operator edit', blocknote: null },
+      },
+    });
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'operator edit', blocknote: null },
+        },
+      }),
+    );
+    expect(view.entry()).toMatchObject({
+      status: 'saved',
+      confirmedRevision: 3,
+    });
+  });
+
+  it('masks denied drafts, retains recovery bytes and does not resume autosave', async () => {
+    const view = setup();
+    await completeRead();
+    fireEvent.change(screen.getByLabelText('Real shared draft'), {
+      target: { value: 'recovery' },
+    });
+    view.refresh('2');
+    expect(
+      screen.queryByLabelText('Real shared draft'),
+    ).not.toBeInTheDocument();
+    await act(async () => take('MyahInboxEmailDraft').reject());
+    await act(async () => jest.advanceTimersByTimeAsync(1500));
+    expect(
+      screen.queryByLabelText('Real shared draft'),
+    ).not.toBeInTheDocument();
+    expect(view.entry()?.localBody.markdown).toBe('recovery');
+    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+      false,
+    );
+  });
+
+  it('resumes the pending debounce on a successful UI reauthorization without a new edit', async () => {
+    const view = setup();
+    await completeRead();
+    fireEvent.change(screen.getByLabelText('Real shared draft'), {
+      target: { value: 'pending' },
+    });
+    view.refresh('2');
+    await act(async () => jest.advanceTimersByTimeAsync(1000));
+    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+      false,
+    );
+    await completeRead();
+    await act(async () => jest.advanceTimersByTimeAsync(750));
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables).toMatchObject({
+      input: { expectedRevision: 2, body: { markdown: 'pending' } },
+    });
+  });
+
+  it('rejects a wrong-workspace draft response rather than hydrating its body', async () => {
+    const view = setup();
+    await act(async () =>
+      take('MyahInboxEmailDraft').resolve({
+        myahInboxEmailDraft: {
+          ...key,
+          workspaceId: 'workspace-2',
+          revision: 2,
+          body,
+        },
+      }),
+    );
+    expect(
+      screen.queryByLabelText('Real shared draft'),
+    ).not.toBeInTheDocument();
+    expect(view.entry()?.confirmedBody).not.toEqual(body);
+  });
+
+  it('applies a generated proposal through real controller CAS and the save transport', async () => {
+    const view = setup();
+    await completeRead();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' })),
+    );
+    const generation = take('GenerateMyahInboxReplyProposal');
+    expect(generation.variables).toMatchObject({
+      input: { expectedWorkspaceId: key.workspaceId, threadId: key.threadId },
+    });
+    expect(screen.getByLabelText('Real shared draft')).toBeDisabled();
+    await act(async () =>
+      generation.resolve({
+        generateMyahInboxReplyProposal: {
+          body: { markdown: 'generated', blocknote: null },
+        },
+      }),
+    );
+    const save = take('SaveMyahInboxDraft');
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'generated', blocknote: null },
+        },
+      }),
+    );
+    expect(view.entry()).toMatchObject({
+      operation: null,
+      status: 'saved',
+      localBody: { markdown: 'generated' },
+    });
+  });
+
+  it('never applies a delayed generation after forced target loss', async () => {
+    const view = setup();
+    await completeRead();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' })),
+    );
+    const generation = take('GenerateMyahInboxReplyProposal');
+    view.refresh('2', false);
+    await act(async () =>
+      generation.resolve({
+        generateMyahInboxReplyProposal: {
+          body: { markdown: 'stale', blocknote: null },
+        },
+      }),
+    );
+    expect(view.entry()?.localBody).toEqual(body);
+    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+      false,
+    );
+  });
+
+  it.each(['OUTCOME_PENDING', 'OUTCOME_UNKNOWN'])(
+    'locks every editor action for persisted %s readiness',
+    async (status) => {
+      const view = setup();
+      await act(async () =>
+        take('MyahInboxEmailDraft').resolve({
+          myahInboxEmailDraft: { ...key, revision: 2, body },
         }),
+      );
+      await act(async () =>
+        take('MyahInboxReplySendReadiness').resolve({
+          myahInboxReplySendReadiness: { status, reason: null },
+        }),
+      );
+      expect(screen.getByLabelText('Real shared draft')).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Generate Reply' }),
       ).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+      expect(view.entry()?.operation?.kind).toBe(
+        status === 'OUTCOME_PENDING' ? 'pending' : 'unknown',
+      );
     },
   );
+
+  it('rechecks the exact draft when the workspace member changes without a contact change', async () => {
+    const view = setup();
+    await completeRead();
+    act(() =>
+      view.store.set(currentWorkspaceMemberState.atom, {
+        id: 'another-member',
+      } as never),
+    );
+    expect(
+      screen.queryByLabelText('Real shared draft'),
+    ).not.toBeInTheDocument();
+    await act(async () => take('MyahInboxEmailDraft').reject());
+    expect(
+      screen.queryByLabelText('Real shared draft'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps an Unknown send locked after the editor remounts', async () => {
+    const view = setup();
+    await completeRead();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Send' })),
+    );
+    const send = take('SendMyahInboxReply');
+    expect(send.variables).toEqual({
+      input: {
+        expectedWorkspaceId: key.workspaceId,
+        threadId: key.threadId,
+        expectedDraftRevision: 2,
+      },
+    });
+    await act(async () =>
+      send.resolve({
+        sendMyahInboxReply: {
+          outcome: 'UNKNOWN',
+          receiptId: null,
+          revision: 2,
+          body,
+        },
+      }),
+    );
+    expect(view.entry()?.operation?.kind).toBe('unknown');
+    view.refresh('2');
+    await completeRead();
+    expect(screen.getByLabelText('Real shared draft')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(view.entry()?.operation?.kind).toBe('unknown');
+  });
 });

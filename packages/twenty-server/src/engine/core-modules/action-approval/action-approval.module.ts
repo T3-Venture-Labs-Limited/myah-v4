@@ -1,10 +1,14 @@
+import { InstagramMessageLocalAuthorityReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-local-authority-reader.service';
+import { InstagramMessageProposalReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-proposal-reader.service';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
+import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { InstagramActionBudgetModule } from 'src/engine/core-modules/instagram-action-budget/instagram-action-budget.module';
 import { ActionApprovalReconciliationCronCommand } from 'src/engine/core-modules/action-approval/crons/commands/action-approval-reconciliation.cron.command';
 import { ActionApprovalReconciliationCronJob } from 'src/engine/core-modules/action-approval/crons/action-approval-reconciliation.cron.job';
 import { ActionApprovalResolver } from 'src/engine/core-modules/action-approval/action-approval.resolver';
-import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-authority-context.service';
@@ -32,12 +36,14 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
 @Module({
   imports: [
     ManagedEmailModule,
+    InstagramActionBudgetModule,
     GlobalWorkspaceDataSourceModule,
     WorkspaceCacheModule,
     PermissionsModule,
     MessagingSendManagerModule,
     MyahCampaignLifecycleModule,
     TypeOrmModule.forFeature([
+      UnipileInstagramAccountBindingEntity,
       ActionApprovalBindingEntity,
       ActionApprovalBindingEvidenceLinkEntity,
       ActionExecutionReceiptEntity,
@@ -49,6 +55,9 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ]),
   ],
   providers: [
+    InstagramMessageLocalAuthorityReaderService,
+    InstagramMessageProposalReaderService,
+    provideWorkspaceScopedRepository(UnipileInstagramAccountBindingEntity),
     ActionApprovalService,
     ActionReceiptProjectorService,
     ActionApprovalResolver,
@@ -56,7 +65,6 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ActionReceiptWorkspaceProjectionWriterService,
     MyahInboxReplyAuthorityContextService,
     MyahInboxReplyReceiptProjectionService,
-    InstagramReplyActionDefinition,
     OutreachEmailActionDefinition,
     MyahInboxReplyActionDefinition,
     ActionApprovalReconciliationCronJob,
@@ -70,7 +78,6 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ActionApprovalService,
     ActionReceiptProjectorService,
     ActionReceiptRedactionService,
-    InstagramReplyActionDefinition,
     OutreachEmailActionDefinition,
     ActionApprovalReconciliationCronCommand,
     MyahInboxReplyActionDefinition,

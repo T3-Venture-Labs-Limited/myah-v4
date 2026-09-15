@@ -1,3 +1,8 @@
+import { DiscoveryService } from '@nestjs/core';
+import { UpgradeCommandRegistryService } from 'src/engine/core-modules/upgrade/services/upgrade-command-registry.service';
+import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619348-create-unipile-instagram-foundation';
+import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
+import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619373-backfill-composio-instagram-history.command';
 import 'reflect-metadata';
 
 import { Test } from '@nestjs/testing';
@@ -154,4 +159,86 @@ describe('UpgradeAwareEntityMetadataAdapter', () => {
 
     expect(metadata.columns).toEqual([visibleColumn]);
   });
+});
+
+const INSTAGRAM_FAST_D =
+  '2.20.0_CreateUnipileInstagramFoundationFastInstanceCommand_1799201000000';
+const INSTAGRAM_SLOW_D =
+  '2.20.0_InvalidateComposioInstagramAuthoritiesSlowInstanceCommand_1799201004000';
+
+// Reflect real command prototypes only; these fixtures never invoke production command bodies.
+const buildInstagramSequenceReader = () => {
+  const providers = [
+    CreateUnipileInstagramFoundationFastInstanceCommand,
+    InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
+    BackfillComposioInstagramHistoryWorkspaceCommand,
+  ].map((metatype) => ({
+    metatype,
+    instance: Object.create(metatype.prototype),
+  }));
+  const registry = new UpgradeCommandRegistryService({
+    getProviders: () => providers,
+  } as unknown as DiscoveryService);
+  registry.onModuleInit();
+  const reader = new UpgradeSequenceReaderService(registry);
+  expect(reader.getUpgradeSequence().map(({ timestamp }) => timestamp)).toEqual(
+    [1789307619348, 1789307619363, 1789307619373],
+  );
+  return reader;
+};
+
+class InstagramGatedMetadata {
+  @WasIntroducedInUpgrade({ upgradeCommandName: INSTAGRAM_FAST_D })
+  foundation!: string;
+
+  @WasIntroducedInUpgrade({ upgradeCommandName: INSTAGRAM_SLOW_D })
+  cutover!: string;
+}
+
+describe('Instagram durable metadata boundary', () => {
+  it.each(['completed', 'failed'] as const)(
+    'retains the correct %s old instance position, not cursor zero',
+    async (status) => {
+      const foundation = buildColumn('foundation');
+      const cutover = buildColumn('cutover');
+      const metadata = {
+        target: InstagramGatedMetadata,
+        tableName: 'syntheticInstagram',
+        tablePath: 'core.syntheticInstagram',
+        givenTableName: 'syntheticInstagram',
+        schema: 'core',
+        columns: [foundation, cutover],
+      } as unknown as EntityMetadata;
+      const moduleRef = await Test.createTestingModule({
+        providers: [
+          UpgradeAwareEntityMetadataAdapter,
+          {
+            provide: UpgradeMigrationService,
+            useValue: {
+              getLastAttemptedInstanceCommand: jest
+                .fn()
+                .mockResolvedValue({ name: INSTAGRAM_SLOW_D, status }),
+            },
+          },
+          {
+            provide: UpgradeSequenceReaderService,
+            useValue: buildInstagramSequenceReader(),
+          },
+          {
+            provide: getDataSourceToken(),
+            useValue: { entityMetadatas: [metadata] },
+          },
+        ],
+      }).compile();
+      await moduleRef.get(UpgradeAwareEntityMetadataAdapter).onModuleInit();
+      await moduleRef.get(UpgradeAwareEntityMetadataAdapter).refresh();
+      expect(foundation.isSelect).toBe(true);
+      expect(cutover.isSelect).toBe(status === 'completed');
+      expect(cutover.isInsert).toBe(status === 'completed');
+      expect(cutover.isUpdate).toBe(status === 'completed');
+      expect(metadata.columns).toEqual(
+        status === 'completed' ? [foundation, cutover] : [foundation],
+      );
+    },
+  );
 });

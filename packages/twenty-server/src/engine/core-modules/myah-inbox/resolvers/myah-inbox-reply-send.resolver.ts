@@ -1,3 +1,4 @@
+import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 import { ForbiddenException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 
@@ -42,6 +43,8 @@ export class MyahInboxReplySendResolver {
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
+    @Args('expectedWorkspaceId', { type: () => UUIDScalarType, nullable: true })
+    expectedWorkspaceId?: string | null,
   ): Promise<MyahInboxReplySendReadiness> {
     return this.myahInboxReplySendService.getReadiness({
       threadId,
@@ -49,6 +52,7 @@ export class MyahInboxReplySendResolver {
         workspace,
         userWorkspaceId,
         workspaceMemberId,
+        expectedWorkspaceId,
       ),
     });
   }
@@ -67,6 +71,7 @@ export class MyahInboxReplySendResolver {
         workspace,
         userWorkspaceId,
         workspaceMemberId,
+        input.expectedWorkspaceId,
       ),
     });
   }
@@ -85,6 +90,7 @@ export class MyahInboxReplySendResolver {
         workspace,
         userWorkspaceId,
         workspaceMemberId,
+        input.expectedWorkspaceId,
       ),
     });
   }
@@ -93,6 +99,7 @@ export class MyahInboxReplySendResolver {
     workspace: WorkspaceEntity,
     userWorkspaceId: string,
     workspaceMemberId: string,
+    expectedWorkspaceId?: string | null,
   ) {
     const authContext = getWorkspaceAuthContext();
 
@@ -107,6 +114,11 @@ export class MyahInboxReplySendResolver {
         'The Myah Inbox requires matching authenticated user context',
       );
     }
+
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      expectedWorkspaceId,
+    );
 
     return {
       authContext,

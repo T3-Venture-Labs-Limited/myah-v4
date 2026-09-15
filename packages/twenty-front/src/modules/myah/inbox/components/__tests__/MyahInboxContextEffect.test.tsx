@@ -8,8 +8,8 @@ import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { useOpenMyahInboxContextInSidePanel } from '@/myah/inbox/hooks/useOpenMyahInboxContextInSidePanel';
 import { myahInboxContextState } from '@/myah/inbox/states/myahInboxContextState';
 import {
-  myahInboxSelectedThreadIdState,
-  myahInboxSelectionWorkspaceIdState,
+  EMPTY_MYAH_INBOX_CONTACT_SELECTION,
+  myahInboxContactSelectionState,
 } from '@/myah/inbox/states/myahInboxSelectionState';
 import { SidePanelMyahInboxContextPage } from '@/side-panel/pages/myah-inbox-context/components/SidePanelMyahInboxContextPage';
 import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
@@ -139,8 +139,11 @@ const setup = ({
   strict?: boolean;
 } = {}) => {
   const select = (value: MyahInboxThread | null) => {
-    store.set(myahInboxSelectionWorkspaceIdState.atom, mockWorkspaceId);
-    store.set(myahInboxSelectedThreadIdState.atom, value?.id ?? null);
+    store.set(myahInboxContactSelectionState.atom, {
+      ...EMPTY_MYAH_INBOX_CONTACT_SELECTION,
+      workspaceId: mockWorkspaceId,
+      emailThreadId: value?.id ?? null,
+    });
   };
   select(thread);
   mockNavigate.mockImplementation(
@@ -254,13 +257,19 @@ it('masks mismatched selection/workspace before publication updates', async () =
   fireEvent.click(screen.getByRole('button', { name: 'Conversation details' }));
   await drain();
   act(() => {
-    view.store.set(myahInboxSelectedThreadIdState.atom, second.id);
+    view.store.set(myahInboxContactSelectionState.atom, {
+      ...view.store.get(myahInboxContactSelectionState.atom),
+      emailThreadId: second.id,
+    });
   });
   expect(screen.queryByLabelText('Live context')).not.toBeInTheDocument();
   view.update(first);
   mockWorkspaceId = 'workspace-2';
   act(() => {
-    view.store.set(myahInboxSelectionWorkspaceIdState.atom, 'workspace-2');
+    view.store.set(myahInboxContactSelectionState.atom, {
+      ...view.store.get(myahInboxContactSelectionState.atom),
+      workspaceId: 'workspace-2',
+    });
   });
   expect(screen.queryByLabelText('Live context')).not.toBeInTheDocument();
   view.update({ ...first, creator: { id: 'workspace-2-creator', name: null } });

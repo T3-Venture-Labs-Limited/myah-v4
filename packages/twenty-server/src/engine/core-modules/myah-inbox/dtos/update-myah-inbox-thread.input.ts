@@ -7,6 +7,11 @@ import { MyahInboxState } from 'src/engine/core-modules/myah-inbox/dtos/myah-inb
 
 @InputType('UpdateMyahInboxThreadInput')
 export class UpdateMyahInboxThreadInput {
+  @Field(() => UUIDScalarType, { nullable: true })
+  @IsOptional()
+  @IsUUID()
+  expectedWorkspaceId?: string | null;
+
   @Field(() => UUIDScalarType)
   @IsUUID()
   threadId: string;

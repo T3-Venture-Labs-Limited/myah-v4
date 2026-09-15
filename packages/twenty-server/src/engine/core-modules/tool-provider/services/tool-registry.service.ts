@@ -20,6 +20,12 @@ import { ToolOutputSpillService } from 'src/engine/core-modules/tool/services/to
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
+const DISABLED_TOOL_NAMES: Record<string, true> = {
+  app_myah_list_instagram_conversations: true,
+  app_myah_list_instagram_messages: true,
+  app_myah_send_instagram_reply: true,
+};
+
 @Injectable()
 export class ToolRegistryService {
   private readonly logger = new Logger(ToolRegistryService.name);
@@ -44,7 +50,9 @@ export class ToolRegistryService {
       }),
     );
 
-    return this.preferNativeDescriptors(results.flat());
+    return this.preferNativeDescriptors(results.flat()).filter(
+      ({ name }) => DISABLED_TOOL_NAMES[name] !== true,
+    );
   }
 
   async resolveSchemas({
@@ -435,6 +443,7 @@ export class ToolRegistryService {
       actorContext: context.actorContext,
       userId: context.userId,
       userWorkspaceId: context.userWorkspaceId,
+      workspaceMemberId: context.workspaceMemberId,
       threadId: context.threadId,
       locale: context.locale,
       onCodeExecutionUpdate: context.onCodeExecutionUpdate,

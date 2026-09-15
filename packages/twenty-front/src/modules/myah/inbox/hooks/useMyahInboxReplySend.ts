@@ -1,3 +1,5 @@
+import { useStore } from 'jotai';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { useCallback, useEffect, useRef } from 'react';
 
@@ -88,9 +90,11 @@ const waitForNextPoll = (operation: PollingOperation) => {
 };
 
 export const useMyahInboxReplySend = (
+  workspaceId: string,
   threadId: string,
   confirmedRevision: number,
 ) => {
+  const store = useStore();
   const apolloCoreClient = useApolloCoreClient();
   const {
     data: readinessData,
@@ -99,7 +103,7 @@ export const useMyahInboxReplySend = (
   } = useQuery(MyahInboxReplySendReadinessDocument, {
     client: apolloCoreClient,
     fetchPolicy: 'network-only',
-    variables: { threadId },
+    variables: { threadId, expectedWorkspaceId: workspaceId },
   });
   const [sendMyahInboxReply, { loading: sending }] = useMutation(
     SendMyahInboxReplyDocument,
@@ -113,6 +117,9 @@ export const useMyahInboxReplySend = (
   const nextPollingOperationTokenRef = useRef(0);
   // oxlint-disable-next-line twenty/no-state-useref
   const readinessKeyRef = useRef({ threadId, confirmedRevision });
+  // oxlint-disable-next-line twenty/no-state-useref
+  const scopeRef = useRef({ workspaceId, threadId });
+  scopeRef.current = { workspaceId, threadId };
 
   useEffect(() => {
     const activePollingOperations = activePollingOperationsRef.current;
@@ -121,7 +128,7 @@ export const useMyahInboxReplySend = (
       activePollingOperations.forEach(cancelPollingOperation);
       activePollingOperations.clear();
     };
-  }, []);
+  }, [workspaceId, threadId]);
 
   useEffect(() => {
     const previousReadinessKey = readinessKeyRef.current;
@@ -140,6 +147,18 @@ export const useMyahInboxReplySend = (
       threadId: draftThreadId,
       expectedDraftRevision,
     }: SendMyahInboxReplyInput): Promise<MyahInboxReplySendResult> => {
+      if (
+        store.get(currentWorkspaceState.atom)?.id !== workspaceId ||
+        draftThreadId !== threadId ||
+        scopeRef.current.workspaceId !== workspaceId ||
+        scopeRef.current.threadId !== threadId
+      ) {
+        throw new Error('Inbox send target changed');
+      }
+      const isScopeCurrent = () =>
+        store.get(currentWorkspaceState.atom)?.id === workspaceId &&
+        scopeRef.current.workspaceId === workspaceId &&
+        scopeRef.current.threadId === threadId;
       const token = nextPollingOperationTokenRef.current++;
       const operation: PollingOperation = {
         cancelled: false,
@@ -160,6 +179,7 @@ export const useMyahInboxReplySend = (
         const response = await sendMyahInboxReply({
           variables: {
             input: {
+              expectedWorkspaceId: workspaceId,
               threadId: draftThreadId,
               expectedDraftRevision,
             },
@@ -173,7 +193,7 @@ export const useMyahInboxReplySend = (
 
         lastResult = toSafeResult(directResult);
 
-        if (operation.cancelled) {
+        if (operation.cancelled || !isScopeCurrent()) {
           return lastResult;
         }
 
@@ -192,7 +212,11 @@ export const useMyahInboxReplySend = (
         }
 
         for (let attempt = 0; attempt < MAX_STATUS_POLL_ATTEMPTS; attempt++) {
-          if (!(await waitForNextPoll(operation)) || operation.cancelled) {
+          if (
+            !(await waitForNextPoll(operation)) ||
+            operation.cancelled ||
+            !isScopeCurrent()
+          ) {
             return lastResult;
           }
 
@@ -201,6 +225,7 @@ export const useMyahInboxReplySend = (
               query: MyahInboxReplySendStatusDocument,
               variables: {
                 input: {
+                  expectedWorkspaceId: workspaceId,
                   threadId: draftThreadId,
                   receiptId: initialReceiptId,
                 },
@@ -208,7 +233,7 @@ export const useMyahInboxReplySend = (
               fetchPolicy: 'network-only',
             });
 
-            if (operation.cancelled) {
+            if (operation.cancelled || !isScopeCurrent()) {
               return lastResult;
             }
 
@@ -228,7 +253,7 @@ export const useMyahInboxReplySend = (
               return lastResult;
             }
           } catch {
-            if (operation.cancelled) {
+            if (operation.cancelled || !isScopeCurrent()) {
               return lastResult;
             }
 
@@ -252,7 +277,7 @@ export const useMyahInboxReplySend = (
         activePollingOperations.delete(token);
       }
     },
-    [apolloCoreClient, sendMyahInboxReply],
+    [apolloCoreClient, sendMyahInboxReply, store, threadId, workspaceId],
   );
 
   return {

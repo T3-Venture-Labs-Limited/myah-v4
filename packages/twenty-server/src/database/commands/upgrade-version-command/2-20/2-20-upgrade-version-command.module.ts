@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
@@ -20,6 +21,9 @@ import { SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand } from 'src
 
 import { MigrateMyahCreatorSocialLinksService } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
 import { RemoveReplacedTwentyCrmMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302002-remove-replaced-twenty-crm-metadata.command';
+import { SynchronizeInstagramMessagePermissionsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619366-synchronize-instagram-message-permissions.command';
+import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
+import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619373-backfill-composio-instagram-history.command';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/workspace-metadata-version/workspace-metadata-version.module';
@@ -53,10 +57,15 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     SynchronizeCampaignSequenceMetadataCommand,
     MigrateMyahCreatorSocialLinksService,
     RemoveReplacedTwentyCrmMetadataCommand,
+    SynchronizeInstagramMessagePermissionsCommand,
+    InvalidateComposioInstagramAuthoritiesWorkspaceCommand,
+    BackfillComposioInstagramHistoryWorkspaceCommand,
+    VerifyInstagramSecurityCutoverWorkspaceCommand,
     RepairOrphanedObjectNavigationCommandsCommand,
     SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand,
   ],
   exports: [
+    VerifyInstagramSecurityCutoverWorkspaceCommand,
     SynchronizeMyahStandardMetadataCommand,
     MigrateMyahCreatorSocialLinksService,
   ],

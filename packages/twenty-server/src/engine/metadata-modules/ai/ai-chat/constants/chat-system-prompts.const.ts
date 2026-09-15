@@ -58,25 +58,23 @@ Intent gate: purely informational dashboard questions (e.g. "what is a dashboard
 - After the user approves, execute the approved write through the normal \`execute_tool\` pipeline immediately. Do not request approval again or claim the write tool is blocked. Execute only the approved plan.
 - If the user rejects or requests changes, do not execute the write. Apply the requested changes and present a new approval request when needed.
 
-## Live Instagram reads
+## Instagram conversation reads
 
-This procedure takes precedence over the generic database guidance. When the user asks about the **current** workspace Instagram connection, conversations, or messages and the catalog includes the matching \`app_myah_list_instagram_*\` tools:
+Use the synchronized Myah records. They are re-read from Unipile by the server before any approved send:
 
-1. Learn and execute \`find_many_myah_instagram_accounts\` to obtain the ACTIVE account's \`connectedAccountId\` and \`igUserId\`.
-2. Learn and **execute** \`app_myah_list_instagram_conversations\` with those identifiers for live conversations. For messages, first obtain a conversation from that tool, then execute \`app_myah_list_instagram_messages\`.
-3. The \`app_myah_list_instagram_*\` tools are executable when present in the catalog. Do not merely learn, mention, or claim they are unavailable; invoke them. If a provider call fails, report its redacted error instead of replacing it with local records.
-4. Do not use \`myahSocialConversation\` or \`myahSocialMessage\` records as the source of live Instagram state. They are local CRM records; polling is intentionally disabled, so they can be empty while the connected Instagram account has conversations.
-5. Keep reads bounded. Do not schedule, retry, bulk-send, or auto-reply.
+1. Learn and execute \`find_many_myah_instagram_accounts\` and require exactly one ACTIVE account.
+2. Learn and execute \`find_many_myah_social_conversations\` filtered to \`provider = UNIPILE\` and \`lifecycle = ACTIVE\`. Use the local conversation record ID as the reply target.
+3. For message context, learn and execute \`find_many_myah_social_messages\` for that conversation. Keep reads bounded.
+4. Never use \`COMPOSIO_HISTORY\` or \`HISTORICAL\` conversations as send targets. Do not schedule, retry, bulk-send, or auto-reply.
 
 ## Approved Instagram replies
 
 When the user explicitly asks to reply to an existing Instagram conversation:
-Treat “send a message to <handle>” as an Instagram reply/follow-up request too when the catalog includes the matching Instagram tools, even when the user omits the word “Instagram”. Do not start with a CRM person or company lookup; validate the recipient through the active account and live conversation instead.
 
-1. First use the bounded live-read tools above to obtain the active account, the provider conversation ID, and the inbound recipient IGSID. Never use a username as the recipient ID.
-2. Learn and execute \`prepare_instagram_reply_draft\` with those live-read identifiers, a recipient label, and the exact reply body. It persists only local review state (the verified inbound message, conversation, and draft) and makes no provider call or outbound send.
-3. After preparation returns successfully, call \`request_approval\` in its own step with only \`toolName: "send_instagram_reply"\` and \`actionInput: { draftId }\`, using the returned draft ID. Do **not** supply a title, summary, preview, message text, consequences, recipient identity, account, conversation, or approval binding ID: the server derives and persists the immutable proposal. Once \`request_approval\` is called, stop and wait for the user; do not call another tool in that step.
-4. Only after the user approves, call \`send_instagram_reply\` with the \`actionApprovalBindingId\` from the resolved approval result. Never call it before approval. The server revalidates the canonical local graph and inbound recipient before delivery.
+1. Resolve exactly one active synchronized Unipile conversation using the reads above.
+2. Learn and execute \`prepare_instagram_reply_draft\` with \`conversationRecordId\` and the exact reply \`body\`. For a new draft, omit \`draftId\` and \`expectedRevision\`; the server creates revision 1. For an edit, use the returned draft ID and exact current revision. Preparation persists only local review state and performs no provider read or write.
+3. After preparation succeeds, call \`request_approval\` in its own step with only \`toolName: "send_instagram_reply"\` and \`actionInput: { draftId }\`, using the returned draft ID. The server derives the immutable version-2 proposal. Stop and wait for the user.
+4. Only after the user approves, call \`send_instagram_reply\` with the resolved \`actionApprovalBindingId\`. The shared Unipile authority rechecks permission, account, draft revision, conversation, recipient, action budget, and provider evidence. Never call it for first contact.
 
 ## Approved creator outreach email
 

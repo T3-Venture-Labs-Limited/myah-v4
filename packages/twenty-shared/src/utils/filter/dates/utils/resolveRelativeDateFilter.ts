@@ -3,7 +3,6 @@ import { getNextPeriodStart } from '@/utils/filter/dates/utils/getNextPeriodStar
 import { getPeriodStart } from '@/utils/filter/dates/utils/getPeriodStart';
 import { type RelativeDateFilter } from '@/utils/filter/dates/utils/relativeDateFilterSchema';
 import { subUnitFromZonedDateTime } from '@/utils/filter/dates/utils/subUnitFromZonedDateTime';
-import { isDefined } from 'class-validator';
 import { type Temporal } from 'temporal-polyfill';
 
 export const resolveRelativeDateFilter = (
@@ -14,7 +13,7 @@ export const resolveRelativeDateFilter = (
 
   switch (direction) {
     case 'NEXT': {
-      if (!isDefined(amount)) {
+      if (amount == null) {
         throw new Error('Amount is required');
       }
 
@@ -37,7 +36,7 @@ export const resolveRelativeDateFilter = (
       };
     }
     case 'PAST': {
-      if (!isDefined(amount)) {
+      if (amount == null) {
         throw new Error('Amount is required');
       }
 

@@ -463,3 +463,311 @@ describe('UpgradeCommandRegistryService', () => {
     ]);
   });
 });
+
+const INSTAGRAM_IDENTITIES = [
+  {
+    version: '2.20.0',
+    kind: 'fast-instance',
+    className: 'CreateUnipileInstagramFoundationFastInstanceCommand',
+    timestamp: 1789307619348,
+    durableName:
+      '2.20.0_CreateUnipileInstagramFoundationFastInstanceCommand_1799201000000',
+  },
+  {
+    version: '2.20.0',
+    kind: 'fast-instance',
+    className: 'AddUnipileInstagramSyncStateFastInstanceCommand',
+    timestamp: 1789307619352,
+    durableName:
+      '2.20.0_AddUnipileInstagramSyncStateFastInstanceCommand_1799201001000',
+  },
+  {
+    version: '2.20.0',
+    kind: 'fast-instance',
+    className: 'CreateInstagramActionBudgetFastInstanceCommand',
+    timestamp: 1789307619356,
+    durableName:
+      '2.20.0_CreateInstagramActionBudgetFastInstanceCommand_1799201002000',
+  },
+  {
+    version: '2.20.0',
+    kind: 'fast-instance',
+    className: 'AddInstagramDirectActionContextFastInstanceCommand',
+    timestamp: 1789307619359,
+    durableName:
+      '2.20.0_AddInstagramDirectActionContextFastInstanceCommand_1799201003000',
+  },
+  {
+    version: '2.20.0',
+    kind: 'slow-instance',
+    className: 'InvalidateComposioInstagramAuthoritiesSlowInstanceCommand',
+    timestamp: 1789307619363,
+    durableName:
+      '2.20.0_InvalidateComposioInstagramAuthoritiesSlowInstanceCommand_1799201004000',
+  },
+  {
+    version: '2.20.0',
+    kind: 'workspace',
+    className: 'SynchronizeInstagramMessagePermissionsCommand',
+    timestamp: 1789307619366,
+    durableName:
+      '2.20.0_SynchronizeInstagramMessagePermissionsCommand_1799201011000',
+  },
+  {
+    version: '2.20.0',
+    kind: 'workspace',
+    className: 'InvalidateComposioInstagramAuthoritiesWorkspaceCommand',
+    timestamp: 1789307619370,
+    durableName:
+      '2.20.0_InvalidateComposioInstagramAuthoritiesWorkspaceCommand_1799201011500',
+  },
+  {
+    version: '2.20.0',
+    kind: 'workspace',
+    className: 'BackfillComposioInstagramHistoryWorkspaceCommand',
+    timestamp: 1789307619373,
+    durableName:
+      '2.20.0_BackfillComposioInstagramHistoryWorkspaceCommand_1799201012000',
+  },
+] as const;
+
+const buildInstagramProvider = (entry: {
+  version: string;
+  kind: string;
+  className: string;
+  timestamp: number;
+}) => {
+  class MetadataOnlyCommand {}
+  Object.defineProperty(MetadataOnlyCommand, 'name', {
+    value: entry.className,
+  });
+  if (entry.kind === 'workspace') {
+    RegisteredWorkspaceCommand(
+      entry.version as typeof VERSION_A,
+      entry.timestamp,
+    )(MetadataOnlyCommand);
+  } else {
+    RegisteredInstanceCommand(
+      entry.version as typeof VERSION_A,
+      entry.timestamp,
+      {
+        type: entry.kind === 'slow-instance' ? 'slow' : 'fast',
+      },
+    )(MetadataOnlyCommand);
+  }
+  return new MetadataOnlyCommand();
+};
+
+describe('Instagram 2.20 durable identities', () => {
+  it('substitutes all eight exact tuples, keeping corrected scheduling and old durable order', async () => {
+    const registry = await buildRegistryService([
+      ...[...INSTAGRAM_IDENTITIES].reverse().map(buildInstagramProvider),
+      new MigrationA1770000000000(),
+      new WorkspaceCommandA(),
+    ]);
+    const bundle = registry.getBundleForVersion('2.20.0');
+    const entries = [
+      ...bundle.fastInstanceCommands,
+      ...bundle.slowInstanceCommands,
+      ...bundle.workspaceCommands,
+    ];
+    const mapped = entries.filter((entry) =>
+      INSTAGRAM_IDENTITIES.some(
+        (identity) => identity.className === entry.command.constructor.name,
+      ),
+    );
+    expect(mapped.map(({ name }) => name)).toEqual(
+      INSTAGRAM_IDENTITIES.map(({ durableName }) => durableName),
+    );
+    expect(mapped.map(({ timestamp }) => timestamp)).toEqual(
+      INSTAGRAM_IDENTITIES.map(({ timestamp }) => timestamp),
+    );
+    expect(mapped.map(({ version }) => version)).toEqual(
+      INSTAGRAM_IDENTITIES.map(({ version }) => version),
+    );
+    expect(bundle.fastInstanceCommands.slice(-1)[0]?.name).toBe(
+      INSTAGRAM_IDENTITIES[3].durableName,
+    );
+    expect(bundle.slowInstanceCommands.slice(-1)[0]?.name).toBe(
+      INSTAGRAM_IDENTITIES[4].durableName,
+    );
+    expect(bundle.workspaceCommands.slice(-1)[0]?.name).toBe(
+      INSTAGRAM_IDENTITIES[7].durableName,
+    );
+  });
+
+  it.each(INSTAGRAM_IDENTITIES)(
+    'permits partial discovery of $className',
+    async (entry) => {
+      const registry = await buildRegistryService([
+        buildInstagramProvider(entry),
+        new WorkspaceCommandA(),
+      ]);
+      const bundle = registry.getBundleForVersion('2.20.0');
+      expect(
+        [
+          ...bundle.fastInstanceCommands,
+          ...bundle.slowInstanceCommands,
+          ...bundle.workspaceCommands,
+        ].map(({ name }) => name),
+      ).toContain(entry.durableName);
+    },
+  );
+
+  it.each(
+    INSTAGRAM_IDENTITIES.flatMap((entry) => [
+      { ...entry, version: '99.0.0' },
+      { ...entry, version: '2.19.0' },
+      { ...entry, timestamp: entry.timestamp + 1 },
+      {
+        ...entry,
+        timestamp: Number(entry.durableName.split('_').slice(-1)[0]),
+      },
+      {
+        ...entry,
+        kind: entry.kind === 'workspace' ? 'fast-instance' : 'workspace',
+      },
+      {
+        ...entry,
+        kind:
+          entry.kind === 'slow-instance' ? 'fast-instance' : 'slow-instance',
+      },
+    ]),
+  )(
+    'rejects reserved $className with $version / $kind / $timestamp',
+    async (entry) => {
+      await expect(
+        buildRegistryService([
+          buildInstagramProvider(entry),
+          new WorkspaceCommandA(),
+        ]),
+      ).rejects.toThrow('Instagram upgrade');
+    },
+  );
+
+  it.each(INSTAGRAM_IDENTITIES)(
+    'rejects duplicate corrected $className',
+    async (entry) => {
+      await expect(
+        buildRegistryService([
+          buildInstagramProvider(entry),
+          buildInstagramProvider(entry),
+          new WorkspaceCommandA(),
+        ]),
+      ).rejects.toThrow('Duplicate');
+    },
+  );
+
+  it.each(INSTAGRAM_IDENTITIES)(
+    'rejects old and corrected $className together',
+    async (entry) => {
+      await expect(
+        buildRegistryService([
+          buildInstagramProvider(entry),
+          buildInstagramProvider({
+            ...entry,
+            timestamp: Number(entry.durableName.split('_').slice(-1)[0]),
+          }),
+          new WorkspaceCommandA(),
+        ]),
+      ).rejects.toThrow('Instagram upgrade');
+    },
+  );
+
+  it('retains the no-workspace requirement with a valid partial mapped instance', async () => {
+    await expect(
+      buildRegistryService([buildInstagramProvider(INSTAGRAM_IDENTITIES[0])]),
+    ).rejects.toThrow(
+      'Upgrade sequence must contain at least one workspace command',
+    );
+  });
+
+  it.each([
+    [
+      'missing entry',
+      (entries: Array<Record<string, unknown>>) => entries.slice(1),
+    ],
+    [
+      'extra entry',
+      (entries: Array<Record<string, unknown>>) => [...entries, entries[0]],
+    ],
+    ...['version', 'kind', 'className', 'timestamp', 'durableName'].map(
+      (key) =>
+        [
+          `invalid ${key}`,
+          (entries: Array<Record<string, unknown>>) =>
+            entries.map((entry, index) =>
+              index === 0
+                ? { ...entry, [key]: key === 'timestamp' ? NaN : 'invalid' }
+                : entry,
+            ),
+        ] as const,
+    ),
+    [
+      'duplicate source',
+      (entries: Array<Record<string, unknown>>) =>
+        entries.map((entry, index) =>
+          index === 1 ? { ...entries[0] } : entry,
+        ),
+    ],
+    [
+      'duplicate durable',
+      (entries: Array<Record<string, unknown>>) =>
+        entries.map((entry, index) =>
+          index === 1
+            ? { ...entry, durableName: entries[0].durableName }
+            : entry,
+        ),
+    ],
+    [
+      'source-durable overlap',
+      (entries: Array<Record<string, unknown>>) =>
+        entries.map((entry, index) =>
+          index === 0 ? { ...entry, timestamp: 1799201000000 } : entry,
+        ),
+    ],
+    [
+      'wrong old epoch',
+      (entries: Array<Record<string, unknown>>) =>
+        entries.map((entry, index) =>
+          index === 0
+            ? {
+                ...entry,
+                durableName:
+                  '2.20.0_CreateUnipileInstagramFoundationFastInstanceCommand_1799201000001',
+              }
+            : entry,
+        ),
+    ],
+  ] as const)(
+    'rejects malformed fixed configuration: %s even in unrelated discovery',
+    (_label, change) => {
+      const modulePath =
+        'src/engine/core-modules/upgrade/constants/instagram-2-20-upgrade-name-compatibility.constant';
+      try {
+        jest.doMock(
+          modulePath,
+          () => ({
+            INSTAGRAM_2_20_UPGRADE_NAME_COMPATIBILITY: change(
+              INSTAGRAM_IDENTITIES.map((entry) => ({ ...entry })),
+            ),
+          }),
+          { virtual: true },
+        );
+        jest.isolateModules(() => {
+          const {
+            UpgradeCommandRegistryService: Registry,
+          } = require('src/engine/core-modules/upgrade/services/upgrade-command-registry.service');
+          const registry = new Registry({
+            getProviders: () => [buildProviderWrapper(new WorkspaceCommandA())],
+          });
+          expect(() => registry.onModuleInit()).toThrow(
+            'Instagram upgrade compatibility',
+          );
+        });
+      } finally {
+        jest.dontMock(modulePath);
+      }
+    },
+  );
+});

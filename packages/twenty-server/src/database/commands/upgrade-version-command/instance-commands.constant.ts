@@ -125,6 +125,11 @@ import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/datab
 import { CreateCampaignSequenceAuthorizationSchemaFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065457681-create-campaign-sequence-authorization-schema';
 import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794327-create-campaign-execution-authority-foundation';
 import { AddCampaignDispatchEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789066100000-add-campaign-dispatch-evidence';
+import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619348-create-unipile-instagram-foundation';
+import { AddUnipileInstagramSyncStateFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619352-add-unipile-instagram-sync-state';
+import { CreateInstagramActionBudgetFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619356-create-instagram-action-budget';
+import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619359-add-instagram-direct-action-context';
+import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -251,4 +256,9 @@ export const INSTANCE_COMMANDS = [
   CreateCampaignSequenceAuthorizationSchemaFastInstanceCommand,
   CreateCampaignExecutionAuthorityFoundationFastInstanceCommand,
   AddCampaignDispatchEvidenceFastInstanceCommand,
+  CreateUnipileInstagramFoundationFastInstanceCommand,
+  AddUnipileInstagramSyncStateFastInstanceCommand,
+  CreateInstagramActionBudgetFastInstanceCommand,
+  AddInstagramDirectActionContextFastInstanceCommand,
+  InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
 ];

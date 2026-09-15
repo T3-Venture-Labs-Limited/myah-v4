@@ -4,9 +4,9 @@ import { DEFAULT_ROLE_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-ident
 
 export default defineApplicationRole({
   universalIdentifier: DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
-  label: 'Myah Instagram messaging tools role',
+  label: 'Myah Instagram metadata role',
   description:
-    'No CRM data access. Tools only call the narrow Composio Instagram messaging adapter while reply polling is disabled.',
+    'No CRM data access or executable tools. This metadata-only app preserves Instagram records for server-managed messaging.',
   canReadAllObjectRecords: false,
   canUpdateAllObjectRecords: false,
   canSoftDeleteAllObjectRecords: false,

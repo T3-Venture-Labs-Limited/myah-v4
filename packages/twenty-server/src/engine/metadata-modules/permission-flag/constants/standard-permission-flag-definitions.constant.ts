@@ -124,6 +124,17 @@ const STANDARD_PERMISSION_FLAG_METADATA: Record<
     description: 'Send an approved reply in an existing Instagram conversation',
     icon: 'IconMessage',
   },
+  [PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL]: {
+    label: 'Send Instagram First Message',
+    description:
+      'Send an approved first message to start an Instagram conversation',
+    icon: 'IconMessage',
+  },
+  [PermissionFlagType.RESOLVE_INSTAGRAM_SEND_OUTCOME]: {
+    label: 'Resolve Instagram Send Outcome',
+    description: 'Resolve the outcome of an Instagram send',
+    icon: 'IconMessage',
+  },
   [PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL]: {
     label: 'Create Calendar Event',
     description: 'Create calendar events via connected accounts',

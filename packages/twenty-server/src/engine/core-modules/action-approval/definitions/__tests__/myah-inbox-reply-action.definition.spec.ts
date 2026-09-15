@@ -1051,4 +1051,24 @@ describe('MyahInboxReplyActionDefinition', () => {
       setup.definition.getProposal({ workspaceId, binding: binding as never }),
     ).rejects.toThrow(MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE);
   });
+
+  it('rejects an Inbox approval binding without its agent-chat thread', async () => {
+    const setup = createDefinition();
+    const authority = await buildAuthority(setup.definition);
+
+    await expect(
+      setup.definition.getProposal({
+        workspaceId,
+        binding: {
+          id: '00000000-0000-4000-8000-000000000011',
+          ...authority.expectedActionBinding,
+          threadId: null,
+          state: 'PENDING',
+          expiresAt: new Date('2026-09-03T00:00:00.000Z'),
+          createdAt: new Date('2026-09-02T00:00:00.000Z'),
+          decidedAt: null,
+        } as never,
+      }),
+    ).rejects.toThrow(MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE);
+  });
 });

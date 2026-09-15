@@ -18,6 +18,7 @@ import { LoggerService } from 'src/engine/core-modules/logger/logger.service';
 import { getSessionStorageOptions } from 'src/engine/core-modules/session-storage/session-storage.module-factory';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { configTransformers } from 'src/engine/core-modules/twenty-config/utils/config-transformers.util';
+import { redactJsonParserErrorMiddleware } from 'src/engine/middlewares/redact-json-parser-error.middleware';
 import { shouldCaptureException } from 'src/engine/utils/global-exception-handler.util';
 import { UnhandledExceptionFilter } from 'src/filters/unhandled-exception.filter';
 
@@ -89,6 +90,7 @@ const bootstrap = async () => {
     extended: true,
   });
   app.useBodyParser('text', { type: 'text/plain', limit: '1024kb' });
+  app.use(redactJsonParserErrorMiddleware);
 
   // Graphql file upload
   app.use(

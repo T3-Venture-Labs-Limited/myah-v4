@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -20,7 +21,45 @@ export enum ActionApprovalBindingState {
   CONSUMED = 'CONSUMED',
 }
 
+export const ActionApprovalInteractionContextType = {
+  MYAH_INBOX_INSTAGRAM_DRAFT: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+} as const;
+
+export type ActionApprovalInteractionContextType =
+  (typeof ActionApprovalInteractionContextType)[keyof typeof ActionApprovalInteractionContextType];
+
 @Entity({ name: 'actionApprovalBinding', schema: 'core' })
+@Check(
+  'CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT',
+  `(
+    (
+      "actionName" = 'send_instagram_message'
+      AND "actionVersion" = 2
+      AND "actionKind" IN ('START_CHAT', 'REPLY')
+      AND (
+        (
+          "threadId" IS NOT NULL
+          AND "interactionContextType" IS NULL
+          AND "interactionContextId" IS NULL
+        )
+        OR
+        (
+          "threadId" IS NULL
+          AND "interactionContextType" = 'MYAH_INBOX_INSTAGRAM_DRAFT'
+          AND "interactionContextId" = "draftId"
+        )
+      )
+    )
+    OR
+    (
+      "actionName" <> 'send_instagram_message'
+      AND "actionKind" IS NULL
+      AND "threadId" IS NOT NULL
+      AND "interactionContextType" IS NULL
+      AND "interactionContextId" IS NULL
+    )
+  ) IS TRUE`,
+)
 export class ActionApprovalBindingEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -36,6 +75,9 @@ export class ActionApprovalBindingEntity {
 
   @Column({ type: 'integer' })
   actionVersion: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  actionKind: 'START_CHAT' | 'REPLY' | null;
 
   @Column({ type: 'uuid' })
   draftId: string;
@@ -64,8 +106,14 @@ export class ActionApprovalBindingEntity {
   @Column({ type: 'timestamptz', nullable: true })
   inboundReceivedAt: Date | null;
 
-  @Column({ type: 'uuid' })
-  threadId: string;
+  @Column({ type: 'uuid', nullable: true })
+  threadId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  interactionContextType: ActionApprovalInteractionContextType | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  interactionContextId: string | null;
 
   @Column({
     type: 'enum',

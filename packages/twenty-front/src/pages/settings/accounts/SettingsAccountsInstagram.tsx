@@ -2,6 +2,7 @@ import { getTokenPair } from '@/apollo/utils/getTokenPair';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { navigateToHostedAuth } from '~/pages/settings/accounts/utils/navigateToHostedAuth';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
@@ -76,13 +77,6 @@ const StyledStatusPill = styled.div<{ connected: boolean }>`
   padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
 `;
 
-const StyledAccountList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
-  width: 100%;
-`;
-
 const StyledAccountRow = styled.div`
   background: ${themeCssVariables.background.primary};
   border: 1px solid ${themeCssVariables.border.color.light};
@@ -93,23 +87,21 @@ const StyledAccountRow = styled.div`
   padding: ${themeCssVariables.spacing[3]};
 `;
 
-type OAuthLinkResponse = {
+type HostedAuthResponse = {
+  attemptId: string;
   redirectUrl: string;
 };
 
-type InstagramAccount = {
-  connectedAccountId: string;
+type HostedAuthAttemptStatusResponse = {
   status: string;
-  composioUserId?: string;
-  authConfigId?: string;
-  username?: string;
-  toolkitSlug: string;
-  createdAt?: string;
-  updatedAt?: string;
 };
 
-type InstagramAccountsResponse = {
-  accounts: InstagramAccount[];
+type InstagramAccount = {
+  id: string;
+  username: string | null;
+  status: string;
+  lastCheckedAt: string | null;
+  lastError: string | null;
 };
 
 const getAccessToken = () =>
@@ -117,10 +109,18 @@ const getAccessToken = () =>
 
 export const SettingsAccountsInstagram = () => {
   const { t } = useLingui();
-  const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
+  const {
+    enqueueErrorSnackBar,
+    enqueueSuccessSnackBar,
+    enqueueWarningSnackBar,
+  } = useSnackBar();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
-  const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
+  const [account, setAccount] = useState<InstagramAccount | null>(null);
+  const isDisconnectPending = account?.status === 'DELETE_UNKNOWN';
+  const hostedAuthReturn = new URLSearchParams(window.location.search);
+  const attemptId = hostedAuthReturn.get('attemptId');
+  const didHostedAuthFail = hostedAuthReturn.get('connection') === 'failed';
 
   const loadAccounts = async () => {
     const token = getAccessToken();
@@ -134,7 +134,7 @@ export const SettingsAccountsInstagram = () => {
 
     try {
       const response = await fetch(
-        `${REACT_APP_SERVER_BASE_URL}/rest/myah/instagram/accounts`,
+        `${REACT_APP_SERVER_BASE_URL}/rest/myah/unipile/instagram/account`,
         {
           method: 'GET',
           headers: {
@@ -148,9 +148,10 @@ export const SettingsAccountsInstagram = () => {
         throw new Error('Instagram account status request failed.');
       }
 
-      const body = (await response.json()) as InstagramAccountsResponse;
-
-      setAccounts(body.accounts ?? []);
+      const body = await response.text();
+      setAccount(
+        body === '' ? null : (JSON.parse(body) as InstagramAccount | null),
+      );
     } catch {
       enqueueErrorSnackBar({
         message: t`Could not load Instagram connection status.`,
@@ -161,12 +162,126 @@ export const SettingsAccountsInstagram = () => {
   };
 
   useEffect(() => {
-    void loadAccounts();
+    if (!attemptId || didHostedAuthFail) {
+      void loadAccounts();
+    }
     // loadAccounts depends on snackbar callbacks; run once on page entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attemptId, didHostedAuthFail]);
 
-  const handleConnectInstagram = async () => {
+  useEffect(() => {
+    if (!attemptId || didHostedAuthFail) {
+      return;
+    }
+
+    let isCancelled = false;
+    let isPolling = false;
+    let attempts = 0;
+
+    const stopPolling = () => clearInterval(interval);
+    const showPollingError = () => {
+      setIsLoadingAccounts(false);
+      enqueueErrorSnackBar({
+        message: t`Could not confirm Instagram authorization.`,
+      });
+    };
+
+    const pollAttempt = async () => {
+      if (isCancelled || isPolling) {
+        return;
+      }
+
+      if (attempts >= 30) {
+        stopPolling();
+        showPollingError();
+        await loadAccounts();
+        return;
+      }
+
+      const token = getAccessToken();
+
+      if (!token) {
+        stopPolling();
+        showPollingError();
+        return;
+      }
+
+      isPolling = true;
+      attempts += 1;
+
+      try {
+        const response = await fetch(
+          `${REACT_APP_SERVER_BASE_URL}/rest/myah/unipile/instagram/hosted-auth/${attemptId}/status`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'content-type': 'application/json',
+            },
+          },
+        );
+
+        if (!response.ok) {
+          if (!isCancelled) {
+            stopPolling();
+            showPollingError();
+          }
+          return;
+        }
+
+        const { status } =
+          (await response.json()) as HostedAuthAttemptStatusResponse;
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (status === 'COMPLETED') {
+          stopPolling();
+          await loadAccounts();
+          return;
+        }
+
+        if (status === 'FAILED') {
+          stopPolling();
+          showPollingError();
+          await loadAccounts();
+          return;
+        }
+
+        if (status !== 'PENDING' && status !== 'PROCESSING') {
+          stopPolling();
+          showPollingError();
+        }
+      } catch {
+        if (!isCancelled) {
+          stopPolling();
+          showPollingError();
+        }
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    const interval = setInterval(() => void pollAttempt(), 1_000);
+    void pollAttempt();
+
+    return () => {
+      isCancelled = true;
+      stopPolling();
+    };
+    // loadAccounts depends on snackbar callbacks; run once per authorization attempt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attemptId, didHostedAuthFail]);
+
+  const handleHostedAuth = async (
+    path: 'connect' | 'reconnect',
+    errorMessage: string,
+  ) => {
+    if (isDisconnectPending) {
+      return;
+    }
+
     const token = getAccessToken();
 
     if (!token) {
@@ -178,7 +293,7 @@ export const SettingsAccountsInstagram = () => {
 
     try {
       const response = await fetch(
-        `${REACT_APP_SERVER_BASE_URL}/rest/myah/instagram/oauth-link`,
+        `${REACT_APP_SERVER_BASE_URL}/rest/myah/unipile/instagram/hosted-auth/${path}`,
         {
           method: 'POST',
           headers: {
@@ -189,25 +304,106 @@ export const SettingsAccountsInstagram = () => {
       );
 
       if (!response.ok) {
-        throw new Error('Instagram OAuth link request failed.');
+        throw new Error('Instagram hosted authorization request failed.');
       }
 
-      const body = (await response.json()) as OAuthLinkResponse;
+      const body = (await response.json()) as HostedAuthResponse;
 
-      window.open(body.redirectUrl, '_blank', 'noopener,noreferrer');
-      enqueueSuccessSnackBar({
-        message: t`Instagram authorization opened in a new tab.`,
+      navigateToHostedAuth(body.redirectUrl);
+    } catch {
+      enqueueErrorSnackBar({ message: errorMessage });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnectInstagram = async () => {
+    if (isDisconnectPending) {
+      return;
+    }
+
+    if (!window.confirm(t`Disconnect this Instagram account?`)) {
+      return;
+    }
+
+    const token = getAccessToken();
+
+    if (!token) {
+      enqueueErrorSnackBar({ message: t`You need to sign in again first.` });
+      return;
+    }
+
+    setIsConnecting(true);
+
+    try {
+      const response = await fetch(
+        `${REACT_APP_SERVER_BASE_URL}/rest/myah/unipile/instagram/disconnect`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'content-type': 'application/json',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error('Instagram disconnect request failed.');
+      }
+
+      const { status } = (await response.json()) as { status: string };
+
+      if (status === 'DISCONNECTED') {
+        enqueueSuccessSnackBar({
+          message: t`Instagram account disconnected.`,
+        });
+        await loadAccounts();
+        return;
+      }
+
+      if (status === 'PENDING_RECOVERY') {
+        setAccount((currentAccount) =>
+          currentAccount
+            ? { ...currentAccount, status: 'DELETE_UNKNOWN' }
+            : currentAccount,
+        );
+        enqueueWarningSnackBar({
+          message: t`Instagram disconnect is still being confirmed.`,
+        });
+        await loadAccounts();
+        return;
+      }
+
+      enqueueErrorSnackBar({
+        message: t`Could not disconnect the Instagram account.`,
       });
     } catch {
       enqueueErrorSnackBar({
-        message: t`Could not start Instagram authorization. Check the server Instagram configuration.`,
+        message: t`Could not disconnect the Instagram account.`,
       });
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const isConnected = accounts.some((account) => account.status === 'ACTIVE');
+  const isActive = account?.status === 'ACTIVE';
+  const statusLabel = isLoadingAccounts
+    ? t`Checking status`
+    : account === null
+      ? t`Not connected`
+      : account.status === 'ACTIVE'
+        ? t`Active`
+        : account.status === 'INACTIVE'
+          ? t`Inactive`
+          : account.status === 'DELETE_UNKNOWN'
+            ? t`Disconnect pending`
+            : account.status === 'NEEDS_RECONNECT'
+              ? t`Needs reconnect`
+              : account.status === 'CONNECTING'
+                ? t`Connecting`
+                : account.status === 'ERROR'
+                  ? t`Error`
+                  : t`Connection unavailable`;
 
   return (
     <SettingsPageLayout
@@ -243,48 +439,81 @@ export const SettingsAccountsInstagram = () => {
                   </StyledDescription>
                 </div>
               </StyledTitleRow>
-              <StyledStatusPill connected={isConnected}>
-                {isLoadingAccounts
-                  ? t`Checking status`
-                  : isConnected
-                    ? t`Connected`
-                    : t`Not connected`}
+              <StyledStatusPill connected={isActive}>
+                {statusLabel}
               </StyledStatusPill>
             </StyledCardHeader>
             <StyledDescription>
               {t`Read your existing Instagram conversations and reply when you're ready. Myah will always ask for your approval before sending a reply.`}
             </StyledDescription>
-            {accounts.length > 0 && (
-              <StyledAccountList>
-                {accounts.map((account) => (
-                  <StyledAccountRow key={account.connectedAccountId}>
-                    <StyledTitle>
-                      {account.username
-                        ? `@${account.username}`
-                        : t`Workspace Instagram account`}
-                    </StyledTitle>
-                    <StyledDescription>
-                      {t`Status`}: {account.status}
-                    </StyledDescription>
-                    {account.updatedAt && (
-                      <StyledDescription>
-                        {t`Last checked`}: {account.updatedAt}
-                      </StyledDescription>
-                    )}
-                  </StyledAccountRow>
-                ))}
-              </StyledAccountList>
+            {account && (
+              <StyledAccountRow>
+                <StyledTitle>
+                  {account.username
+                    ? `@${account.username}`
+                    : t`Workspace Instagram account`}
+                </StyledTitle>
+                <StyledDescription>
+                  {t`Status`}: {statusLabel}
+                </StyledDescription>
+                {account.lastCheckedAt && (
+                  <StyledDescription>
+                    {t`Last checked`}: {account.lastCheckedAt}
+                  </StyledDescription>
+                )}
+              </StyledAccountRow>
             )}
-            <Button
-              Icon={IconExternalLink}
-              title={
-                isConnected ? t`Reconnect Instagram` : t`Connect Instagram`
-              }
-              variant="primary"
-              accent="brand"
-              isLoading={isConnecting}
-              onClick={handleConnectInstagram}
-            />
+            {account === null || account.status === 'INACTIVE' ? (
+              <Button
+                Icon={IconExternalLink}
+                title={t`Connect Instagram`}
+                variant="primary"
+                accent="brand"
+                disabled={isLoadingAccounts}
+                isLoading={isConnecting}
+                onClick={() =>
+                  void handleHostedAuth(
+                    'connect',
+                    t`Could not start Instagram authorization.`,
+                  )
+                }
+              />
+            ) : account.status === 'NEEDS_RECONNECT' ||
+              account.status === 'ERROR' ? (
+              <>
+                <Button
+                  Icon={IconExternalLink}
+                  title={t`Reconnect Instagram`}
+                  variant="primary"
+                  accent="brand"
+                  isLoading={isConnecting}
+                  onClick={() =>
+                    void handleHostedAuth(
+                      'reconnect',
+                      t`Could not start Instagram authorization.`,
+                    )
+                  }
+                />
+                <Button
+                  Icon={IconExternalLink}
+                  title={t`Disconnect Instagram`}
+                  variant="primary"
+                  accent="brand"
+                  isLoading={isConnecting}
+                  onClick={handleDisconnectInstagram}
+                />
+              </>
+            ) : (
+              <Button
+                Icon={IconExternalLink}
+                title={t`Disconnect Instagram`}
+                variant="primary"
+                accent="brand"
+                disabled={isDisconnectPending}
+                isLoading={isConnecting}
+                onClick={handleDisconnectInstagram}
+              />
+            )}
             <Button
               Icon={IconRefresh}
               title={t`Refresh status`}

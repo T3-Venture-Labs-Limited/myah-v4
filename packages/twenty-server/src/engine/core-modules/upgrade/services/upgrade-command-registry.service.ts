@@ -3,6 +3,7 @@ import { DiscoveryService } from '@nestjs/core';
 
 import { type ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { type WorkspaceCommandRunner } from 'src/database/commands/command-runners/workspace.command-runner';
+import { INSTAGRAM_2_20_UPGRADE_NAME_COMPATIBILITY } from 'src/engine/core-modules/upgrade/constants/instagram-2-20-upgrade-name-compatibility.constant';
 import {
   TWENTY_ALL_VERSIONS,
   type TwentyAllVersion,
@@ -66,6 +67,8 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
   constructor(private readonly discoveryService: DiscoveryService) {}
 
   onModuleInit(): void {
+    this.validateInstagramNameCompatibility();
+
     for (const version of TWENTY_ALL_VERSIONS) {
       this.bundlesByVersion.set(version, {
         fastInstanceCommands: [],
@@ -87,6 +90,12 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
         getRegisteredInstanceCommandMetadata(metatype);
 
       if (isDefined(instanceCommandMetadata)) {
+        const name = this.resolveCommandName(
+          instanceCommandMetadata.version,
+          `${instanceCommandMetadata.type}-instance`,
+          (instance as FastInstanceCommand).constructor.name,
+          instanceCommandMetadata.timestamp,
+        );
         const bundle = this.bundlesByVersion.get(
           instanceCommandMetadata.version,
         );
@@ -96,11 +105,7 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
         }
 
         const entry = {
-          name: this.computeCommandName(
-            instanceCommandMetadata.version,
-            (instance as FastInstanceCommand).constructor.name,
-            instanceCommandMetadata.timestamp,
-          ),
+          name,
           version: instanceCommandMetadata.version,
           timestamp: instanceCommandMetadata.timestamp,
         };
@@ -124,6 +129,12 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
         getRegisteredWorkspaceCommandMetadata(metatype);
 
       if (isDefined(workspaceCommandMetadata)) {
+        const name = this.resolveCommandName(
+          workspaceCommandMetadata.version,
+          'workspace',
+          (instance as WorkspaceCommand).constructor.name,
+          workspaceCommandMetadata.timestamp,
+        );
         const bundle = this.bundlesByVersion.get(
           workspaceCommandMetadata.version,
         );
@@ -133,11 +144,7 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
         }
 
         bundle.workspaceCommands.push({
-          name: this.computeCommandName(
-            workspaceCommandMetadata.version,
-            (instance as WorkspaceCommand).constructor.name,
-            workspaceCommandMetadata.timestamp,
-          ),
+          name,
           command: instance as WorkspaceCommand,
           version: workspaceCommandMetadata.version,
           timestamp: workspaceCommandMetadata.timestamp,
@@ -212,6 +219,93 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
     timestamp: number,
   ): string {
     return `${version}_${className}_${timestamp}`;
+  }
+
+  private resolveCommandName(
+    version: TwentyAllVersion,
+    kind: 'fast-instance' | 'slow-instance' | 'workspace',
+    className: string,
+    timestamp: number,
+  ): string {
+    const sourceName = this.computeCommandName(version, className, timestamp);
+    const compatibility = INSTAGRAM_2_20_UPGRADE_NAME_COMPATIBILITY.find(
+      (entry) => entry.className === className,
+    );
+
+    if (!isDefined(compatibility)) {
+      return sourceName;
+    }
+
+    // Reserved providers must fail before unsupported-version discovery skips.
+    if (
+      compatibility.version !== version ||
+      compatibility.kind !== kind ||
+      compatibility.timestamp !== timestamp
+    ) {
+      throw new Error(
+        `Invalid Instagram upgrade provider "${sourceName}" (${kind})`,
+      );
+    }
+
+    return compatibility.durableName;
+  }
+
+  private validateInstagramNameCompatibility(): void {
+    const entries = INSTAGRAM_2_20_UPGRADE_NAME_COMPATIBILITY;
+    const oldTimestamps = [
+      1799201000000, 1799201001000, 1799201002000, 1799201003000, 1799201004000,
+      1799201011000, 1799201011500, 1799201012000,
+    ];
+    const sourceNames = new Set<string>();
+    const durableNames = new Set<string>();
+    const classNames = new Set<string>();
+
+    if (entries.length !== 8 || !TWENTY_ALL_VERSIONS.includes('2.20.0')) {
+      throw new Error('Invalid Instagram upgrade compatibility configuration');
+    }
+
+    for (const [index, entry] of entries.entries()) {
+      const sourceName = this.computeCommandName(
+        entry.version,
+        entry.className,
+        entry.timestamp,
+      );
+      const expectedKind =
+        index < 4
+          ? 'fast-instance'
+          : index === 4
+            ? 'slow-instance'
+            : 'workspace';
+
+      if (
+        entry.version !== '2.20.0' ||
+        entry.kind !== expectedKind ||
+        !/^[A-Za-z_$][\w$]*$/.test(entry.className) ||
+        !Number.isSafeInteger(entry.timestamp) ||
+        entry.timestamp <= 0 ||
+        entry.durableName !==
+          this.computeCommandName(
+            entry.version,
+            entry.className,
+            oldTimestamps[index],
+          ) ||
+        sourceNames.has(sourceName) ||
+        durableNames.has(entry.durableName) ||
+        classNames.has(entry.className)
+      ) {
+        throw new Error('Invalid Instagram upgrade compatibility entry');
+      }
+
+      sourceNames.add(sourceName);
+      durableNames.add(entry.durableName);
+      classNames.add(entry.className);
+    }
+
+    if ([...sourceNames].some((name) => durableNames.has(name))) {
+      throw new Error(
+        'Instagram upgrade compatibility source and durable identities must be disjoint',
+      );
+    }
   }
 
   private validateNoDuplicates(): void {

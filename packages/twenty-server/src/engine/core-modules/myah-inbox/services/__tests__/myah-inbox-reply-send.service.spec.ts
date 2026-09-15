@@ -590,6 +590,48 @@ describe('MyahInboxReplySendService', () => {
     },
   );
 
+  it('keeps invalid rich content recoverable without creating a binding or receipt', async () => {
+    const invalidAuthority = {
+      ...authority,
+      canonicalGraph: {
+        ...authority.canonicalGraph,
+        draftBody: { markdown: 'Recover this draft', blocknote: '{' },
+      },
+    };
+    const setup = createService({
+      buildAuthority: jest.fn().mockResolvedValue(invalidAuthority),
+    });
+
+    await expect(setup.service.send(request())).resolves.toEqual({
+      outcome: MyahInboxReplySendOutcome.FAILED,
+      receiptId: null,
+      revision: 4,
+      body: invalidAuthority.canonicalGraph.draftBody,
+    });
+    expect(setup.createApprovedInboxReplyBinding).not.toHaveBeenCalled();
+    expect(setup.execute).not.toHaveBeenCalled();
+  });
+
+  it('reports invalid rich content with an actionable readiness reason', async () => {
+    const setup = createService({
+      buildAuthority: jest.fn().mockResolvedValue({
+        ...authority,
+        canonicalGraph: {
+          ...authority.canonicalGraph,
+          draftBody: { markdown: 'Recover this draft', blocknote: '{' },
+        },
+      }),
+    });
+
+    await expect(setup.service.getReadiness(request())).resolves.toEqual({
+      status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
+      reason:
+        'This draft contains unsupported formatted content. Edit the draft and try again.',
+      revision: draftSnapshot.revision,
+      body: draftSnapshot.body,
+    });
+  });
+
   it('returns the current draft snapshot with send readiness', async () => {
     const setup = createService();
 

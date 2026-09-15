@@ -126,7 +126,7 @@ export interface UserWorkspace {
     __typename: 'UserWorkspace'
 }
 
-export type PermissionFlagType = 'API_KEYS_AND_WEBHOOKS' | 'WORKSPACE' | 'WORKSPACE_MEMBERS' | 'ROLES' | 'DATA_MODEL' | 'SECURITY' | 'WORKFLOWS' | 'IMPERSONATE' | 'SSO_BYPASS' | 'APPLICATIONS' | 'MARKETPLACE_APPS' | 'LAYOUTS' | 'BILLING' | 'AI_SETTINGS' | 'AI' | 'VIEWS' | 'UPLOAD_FILE' | 'DOWNLOAD_FILE' | 'SEND_EMAIL_TOOL' | 'SEND_INSTAGRAM_REPLY_TOOL' | 'CREATE_CALENDAR_EVENT_TOOL' | 'HTTP_REQUEST_TOOL' | 'CODE_INTERPRETER_TOOL' | 'IMPORT_CSV' | 'EXPORT_CSV' | 'CONNECTED_ACCOUNTS' | 'PROFILE_INFORMATION'
+export type PermissionFlagType = 'API_KEYS_AND_WEBHOOKS' | 'WORKSPACE' | 'WORKSPACE_MEMBERS' | 'ROLES' | 'DATA_MODEL' | 'SECURITY' | 'WORKFLOWS' | 'IMPERSONATE' | 'SSO_BYPASS' | 'APPLICATIONS' | 'MARKETPLACE_APPS' | 'LAYOUTS' | 'BILLING' | 'AI_SETTINGS' | 'AI' | 'VIEWS' | 'UPLOAD_FILE' | 'DOWNLOAD_FILE' | 'SEND_EMAIL_TOOL' | 'SEND_INSTAGRAM_REPLY_TOOL' | 'SEND_INSTAGRAM_FIRST_MESSAGE_TOOL' | 'RESOLVE_INSTAGRAM_SEND_OUTCOME' | 'CREATE_CALENDAR_EVENT_TOOL' | 'HTTP_REQUEST_TOOL' | 'CODE_INTERPRETER_TOOL' | 'IMPORT_CSV' | 'EXPORT_CSV' | 'CONNECTED_ACCOUNTS' | 'PROFILE_INFORMATION'
 
 export interface FullName {
     firstName: Scalars['String']
@@ -2518,6 +2518,34 @@ export interface ManagedEmailActionResult {
     __typename: 'ManagedEmailActionResult'
 }
 
+export interface WorkspaceMailboxConnectionStatus {
+    connectedAccountId: Scalars['UUID']
+    errorCode?: Scalars['String']
+    errorMessage?: Scalars['String']
+    lastSafeOperation: Scalars['String']
+    maskedHandle: Scalars['String']
+    messageChannelId: Scalars['UUID']
+    state: Scalars['String']
+    syncStage: Scalars['String']
+    syncStatus: Scalars['String']
+    updatedAt: Scalars['DateTime']
+    __typename: 'WorkspaceMailboxConnectionStatus'
+}
+
+export interface WorkspaceMailboxConnectionResult {
+    connectedAccountId: Scalars['UUID']
+    messageChannelId: Scalars['UUID']
+    status: WorkspaceMailboxConnectionStatus
+    __typename: 'WorkspaceMailboxConnectionResult'
+}
+
+export interface RevokeWorkspaceMailboxResult {
+    connectedAccountId: Scalars['UUID']
+    revoked: Scalars['Boolean']
+    state: Scalars['String']
+    __typename: 'RevokeWorkspaceMailboxResult'
+}
+
 export interface BillingTrialPeriod {
     duration: Scalars['Float']
     isCreditCardRequired: Scalars['Boolean']
@@ -2790,34 +2818,6 @@ export interface ToolIndexEntry {
     icon?: Scalars['String']
     inputSchema?: Scalars['JSON']
     __typename: 'ToolIndexEntry'
-}
-
-export interface WorkspaceMailboxConnectionStatus {
-    connectedAccountId: Scalars['UUID']
-    errorCode?: Scalars['String']
-    errorMessage?: Scalars['String']
-    lastSafeOperation: Scalars['String']
-    maskedHandle: Scalars['String']
-    messageChannelId: Scalars['UUID']
-    state: Scalars['String']
-    syncStage: Scalars['String']
-    syncStatus: Scalars['String']
-    updatedAt: Scalars['DateTime']
-    __typename: 'WorkspaceMailboxConnectionStatus'
-}
-
-export interface WorkspaceMailboxConnectionResult {
-    connectedAccountId: Scalars['UUID']
-    messageChannelId: Scalars['UUID']
-    status: WorkspaceMailboxConnectionStatus
-    __typename: 'WorkspaceMailboxConnectionResult'
-}
-
-export interface RevokeWorkspaceMailboxResult {
-    connectedAccountId: Scalars['UUID']
-    revoked: Scalars['Boolean']
-    state: Scalars['String']
-    __typename: 'RevokeWorkspaceMailboxResult'
 }
 
 export interface CampaignOutreachAudienceCreator {
@@ -3280,15 +3280,14 @@ export interface Query {
     findOneAgent: Agent
     getRoles: Role[]
     getSSOIdentityProviders: FindAvailableSSOIDP[]
-    campaignOutreachAudienceReview: CampaignOutreachAudienceReview
+    getPageLayoutWidgets: PageLayoutWidget[]
+    getPageLayoutWidget: PageLayoutWidget
     getToolIndex: ToolIndexEntry[]
     getToolInputSchema?: Scalars['JSON']
     webhooks: Webhook[]
     webhook?: Webhook
     getActionApprovalProposal: ActionApprovalProposal
     getActionExecutionReceipt?: ActionExecutionReceipt
-    getPageLayoutWidgets: PageLayoutWidget[]
-    getPageLayoutWidget: PageLayoutWidget
     myMessageFolders: MessageFolder[]
     myCalendarChannels: CalendarChannel[]
     minimalMetadata: MinimalMetadata
@@ -3305,6 +3304,7 @@ export interface Query {
     pieChartData: PieChartData
     lineChartData: LineChartData
     barChartData: BarChartData
+    campaignOutreachAudienceReview: CampaignOutreachAudienceReview
     getAutoCompleteAddress: AutocompleteResult[]
     getAddressDetails: PlaceDetailsResult
     getUsageAnalytics: UsageAnalytics
@@ -3529,16 +3529,13 @@ export interface Mutation {
     createSAMLIdentityProvider: SetupSso
     deleteSSOIdentityProvider: DeleteSso
     editSSOIdentityProvider: EditSso
-    startCampaignExecution: CampaignExecutionMutationResultDTO
-    updateCampaignSendingWindow: CampaignSendingWindowMutationResultDTO
-    stopCampaignExecution: CampaignExecutionMutationResultDTO
+    createPageLayoutWidget: PageLayoutWidget
+    updatePageLayoutWidget: PageLayoutWidget
+    destroyPageLayoutWidget: Scalars['Boolean']
     createWebhook: Webhook
     updateWebhook: Webhook
     deleteWebhook: Webhook
     runAgent: RunAgentResult
-    createPageLayoutWidget: PageLayoutWidget
-    updatePageLayoutWidget: PageLayoutWidget
-    destroyPageLayoutWidget: Scalars['Boolean']
     updateMessageFolder: MessageFolder
     updateMessageFolders: MessageFolder[]
     updateCalendarChannel: CalendarChannel
@@ -3564,6 +3561,9 @@ export interface Mutation {
     trackAnalytics: Analytics
     duplicateDashboard: DuplicatedDashboard
     impersonate: Impersonate
+    startCampaignExecution: CampaignExecutionMutationResultDTO
+    updateCampaignSendingWindow: CampaignSendingWindowMutationResultDTO
+    stopCampaignExecution: CampaignExecutionMutationResultDTO
     createCalendarEvent: CreateCalendarEventOutput
     sendEmail: SendEmailOutput
     startChannelSync: ChannelSyncSuccess
@@ -6246,6 +6246,37 @@ export interface ManagedEmailActionResultGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface WorkspaceMailboxConnectionStatusGenqlSelection{
+    connectedAccountId?: boolean | number
+    errorCode?: boolean | number
+    errorMessage?: boolean | number
+    lastSafeOperation?: boolean | number
+    maskedHandle?: boolean | number
+    messageChannelId?: boolean | number
+    state?: boolean | number
+    syncStage?: boolean | number
+    syncStatus?: boolean | number
+    updatedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface WorkspaceMailboxConnectionResultGenqlSelection{
+    connectedAccountId?: boolean | number
+    messageChannelId?: boolean | number
+    status?: WorkspaceMailboxConnectionStatusGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface RevokeWorkspaceMailboxResultGenqlSelection{
+    connectedAccountId?: boolean | number
+    revoked?: boolean | number
+    state?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface BillingTrialPeriodGenqlSelection{
     duration?: boolean | number
     isCreditCardRequired?: boolean | number
@@ -6538,37 +6569,6 @@ export interface ToolIndexEntryGenqlSelection{
     objectName?: boolean | number
     icon?: boolean | number
     inputSchema?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface WorkspaceMailboxConnectionStatusGenqlSelection{
-    connectedAccountId?: boolean | number
-    errorCode?: boolean | number
-    errorMessage?: boolean | number
-    lastSafeOperation?: boolean | number
-    maskedHandle?: boolean | number
-    messageChannelId?: boolean | number
-    state?: boolean | number
-    syncStage?: boolean | number
-    syncStatus?: boolean | number
-    updatedAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface WorkspaceMailboxConnectionResultGenqlSelection{
-    connectedAccountId?: boolean | number
-    messageChannelId?: boolean | number
-    status?: WorkspaceMailboxConnectionStatusGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface RevokeWorkspaceMailboxResultGenqlSelection{
-    connectedAccountId?: boolean | number
-    revoked?: boolean | number
-    state?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -7073,15 +7073,14 @@ export interface QueryGenqlSelection{
     findOneAgent?: (AgentGenqlSelection & { __args: {input: AgentIdInput} })
     getRoles?: RoleGenqlSelection
     getSSOIdentityProviders?: FindAvailableSSOIDPGenqlSelection
-    campaignOutreachAudienceReview?: (CampaignOutreachAudienceReviewGenqlSelection & { __args: {campaignId: Scalars['UUID']} })
+    getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
+    getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
     getToolIndex?: ToolIndexEntryGenqlSelection
     getToolInputSchema?: { __args: {toolName: Scalars['String']} }
     webhooks?: WebhookGenqlSelection
     webhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
     getActionApprovalProposal?: (ActionApprovalProposalGenqlSelection & { __args: {bindingId: Scalars['UUID']} })
     getActionExecutionReceipt?: (ActionExecutionReceiptGenqlSelection & { __args: {bindingId: Scalars['UUID']} })
-    getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
-    getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
     myMessageFolders?: (MessageFolderGenqlSelection & { __args?: {messageChannelId?: (Scalars['UUID'] | null)} })
     myCalendarChannels?: (CalendarChannelGenqlSelection & { __args?: {connectedAccountId?: (Scalars['UUID'] | null)} })
     minimalMetadata?: MinimalMetadataGenqlSelection
@@ -7098,6 +7097,7 @@ export interface QueryGenqlSelection{
     pieChartData?: (PieChartDataGenqlSelection & { __args: {input: PieChartDataInput} })
     lineChartData?: (LineChartDataGenqlSelection & { __args: {input: LineChartDataInput} })
     barChartData?: (BarChartDataGenqlSelection & { __args: {input: BarChartDataInput} })
+    campaignOutreachAudienceReview?: (CampaignOutreachAudienceReviewGenqlSelection & { __args: {campaignId: Scalars['UUID']} })
     getAutoCompleteAddress?: (AutocompleteResultGenqlSelection & { __args: {address: Scalars['String'], token: Scalars['String'], country?: (Scalars['String'] | null), isFieldCity?: (Scalars['Boolean'] | null)} })
     getAddressDetails?: (PlaceDetailsResultGenqlSelection & { __args: {placeId: Scalars['String'], token: Scalars['String']} })
     getUsageAnalytics?: (UsageAnalyticsGenqlSelection & { __args?: {input?: (UsageAnalyticsInput | null)} })
@@ -7371,16 +7371,13 @@ export interface MutationGenqlSelection{
     createSAMLIdentityProvider?: (SetupSsoGenqlSelection & { __args: {input: SetupSAMLSsoInput} })
     deleteSSOIdentityProvider?: (DeleteSsoGenqlSelection & { __args: {input: DeleteSsoInput} })
     editSSOIdentityProvider?: (EditSsoGenqlSelection & { __args: {input: EditSsoInput} })
-    startCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StartCampaignExecutionInput} })
-    updateCampaignSendingWindow?: (CampaignSendingWindowMutationResultDTOGenqlSelection & { __args: {input: UpdateCampaignSendingWindowInput} })
-    stopCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StopCampaignExecutionInput} })
+    createPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {input: CreatePageLayoutWidgetInput} })
+    updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
+    destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
     createWebhook?: (WebhookGenqlSelection & { __args: {input: CreateWebhookInput} })
     updateWebhook?: (WebhookGenqlSelection & { __args: {input: UpdateWebhookInput} })
     deleteWebhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
     runAgent?: (RunAgentResultGenqlSelection & { __args: {input: RunAgentInput} })
-    createPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {input: CreatePageLayoutWidgetInput} })
-    updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
-    destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
     updateMessageFolder?: (MessageFolderGenqlSelection & { __args: {input: UpdateMessageFolderInput} })
     updateMessageFolders?: (MessageFolderGenqlSelection & { __args: {input: UpdateMessageFoldersInput} })
     updateCalendarChannel?: (CalendarChannelGenqlSelection & { __args: {input: UpdateCalendarChannelInput} })
@@ -7406,6 +7403,9 @@ export interface MutationGenqlSelection{
     trackAnalytics?: (AnalyticsGenqlSelection & { __args: {type: AnalyticsType, name?: (Scalars['String'] | null), event?: (Scalars['String'] | null), properties?: (Scalars['JSON'] | null)} })
     duplicateDashboard?: (DuplicatedDashboardGenqlSelection & { __args: {id: Scalars['UUID']} })
     impersonate?: (ImpersonateGenqlSelection & { __args: {userId: Scalars['UUID'], workspaceId: Scalars['UUID']} })
+    startCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StartCampaignExecutionInput} })
+    updateCampaignSendingWindow?: (CampaignSendingWindowMutationResultDTOGenqlSelection & { __args: {input: UpdateCampaignSendingWindowInput} })
+    stopCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StopCampaignExecutionInput} })
     createCalendarEvent?: (CreateCalendarEventOutputGenqlSelection & { __args: {input: CreateCalendarEventInput} })
     sendEmail?: (SendEmailOutputGenqlSelection & { __args: {input: SendEmailInput} })
     startChannelSync?: (ChannelSyncSuccessGenqlSelection & { __args: {connectedAccountId: Scalars['UUID']} })
@@ -7798,11 +7798,9 @@ export interface DeleteSsoInput {identityProviderId: Scalars['UUID']}
 
 export interface EditSsoInput {id: Scalars['UUID'],status: SSOIdentityProviderStatus}
 
-export interface StartCampaignExecutionInput {campaignId: Scalars['UUID'],startIdempotencyKey: Scalars['UUID']}
+export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
 
-export interface UpdateCampaignSendingWindowInput {campaignId: Scalars['UUID'],timeZone: Scalars['String'],startLocalTime: Scalars['String'],endLocalTime: Scalars['String']}
-
-export interface StopCampaignExecutionInput {campaignId: Scalars['UUID']}
+export interface UpdatePageLayoutWidgetInput {pageLayoutTabId?: (Scalars['UUID'] | null),title?: (Scalars['String'] | null),type?: (WidgetType | null),objectMetadataId?: (Scalars['UUID'] | null),gridPosition?: (GridPositionInput | null),position?: (Scalars['JSON'] | null),configuration?: (Scalars['JSON'] | null),conditionalDisplay?: (Scalars['JSON'] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null)}
 
 export interface CreateWebhookInput {id?: (Scalars['UUID'] | null),targetUrl: Scalars['String'],operations: Scalars['String'][],description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
 
@@ -7815,10 +7813,6 @@ update: UpdateWebhookInputUpdates}
 export interface UpdateWebhookInputUpdates {targetUrl?: (Scalars['String'] | null),operations?: (Scalars['String'][] | null),description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
 
 export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId?: (Scalars['String'] | null)}
-
-export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
-
-export interface UpdatePageLayoutWidgetInput {pageLayoutTabId?: (Scalars['UUID'] | null),title?: (Scalars['String'] | null),type?: (WidgetType | null),objectMetadataId?: (Scalars['UUID'] | null),gridPosition?: (GridPositionInput | null),position?: (Scalars['JSON'] | null),configuration?: (Scalars['JSON'] | null),conditionalDisplay?: (Scalars['JSON'] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null)}
 
 export interface UpdateMessageFolderInput {id: Scalars['UUID'],update: UpdateMessageFolderInputUpdates}
 
@@ -7839,6 +7833,12 @@ export interface AgentChatApprovalDecisionInput {decision: Scalars['String'],com
 export interface CreateSkillInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],label: Scalars['String'],icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content: Scalars['String']}
 
 export interface UpdateSkillInput {id: Scalars['UUID'],name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null)}
+
+export interface StartCampaignExecutionInput {campaignId: Scalars['UUID'],startIdempotencyKey: Scalars['UUID']}
+
+export interface UpdateCampaignSendingWindowInput {campaignId: Scalars['UUID'],timeZone: Scalars['String'],startLocalTime: Scalars['String'],endLocalTime: Scalars['String']}
+
+export interface StopCampaignExecutionInput {campaignId: Scalars['UUID']}
 
 export interface CreateCalendarEventInput {connectedAccountId: Scalars['String'],title: Scalars['String'],description?: (Scalars['String'] | null),location?: (Scalars['String'] | null),startsAt: Scalars['String'],endsAt: Scalars['String'],isFullDay?: (Scalars['Boolean'] | null),timeZone?: (Scalars['String'] | null),attendees?: (Scalars['String'] | null),sendInvitations?: (Scalars['Boolean'] | null),addConferencing?: (Scalars['Boolean'] | null)}
 
@@ -9754,6 +9754,30 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
 
 
 
+    const WorkspaceMailboxConnectionStatus_possibleTypes: string[] = ['WorkspaceMailboxConnectionStatus']
+    export const isWorkspaceMailboxConnectionStatus = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionStatus => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionStatus"')
+      return WorkspaceMailboxConnectionStatus_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const WorkspaceMailboxConnectionResult_possibleTypes: string[] = ['WorkspaceMailboxConnectionResult']
+    export const isWorkspaceMailboxConnectionResult = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionResult"')
+      return WorkspaceMailboxConnectionResult_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const RevokeWorkspaceMailboxResult_possibleTypes: string[] = ['RevokeWorkspaceMailboxResult']
+    export const isRevokeWorkspaceMailboxResult = (obj?: { __typename?: any } | null): obj is RevokeWorkspaceMailboxResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isRevokeWorkspaceMailboxResult"')
+      return RevokeWorkspaceMailboxResult_possibleTypes.includes(obj.__typename)
+    }
+
+
+
     const BillingTrialPeriod_possibleTypes: string[] = ['BillingTrialPeriod']
     export const isBillingTrialPeriod = (obj?: { __typename?: any } | null): obj is BillingTrialPeriod => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingTrialPeriod"')
@@ -9974,30 +9998,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isToolIndexEntry = (obj?: { __typename?: any } | null): obj is ToolIndexEntry => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isToolIndexEntry"')
       return ToolIndexEntry_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const WorkspaceMailboxConnectionStatus_possibleTypes: string[] = ['WorkspaceMailboxConnectionStatus']
-    export const isWorkspaceMailboxConnectionStatus = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionStatus => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionStatus"')
-      return WorkspaceMailboxConnectionStatus_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const WorkspaceMailboxConnectionResult_possibleTypes: string[] = ['WorkspaceMailboxConnectionResult']
-    export const isWorkspaceMailboxConnectionResult = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionResult => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionResult"')
-      return WorkspaceMailboxConnectionResult_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const RevokeWorkspaceMailboxResult_possibleTypes: string[] = ['RevokeWorkspaceMailboxResult']
-    export const isRevokeWorkspaceMailboxResult = (obj?: { __typename?: any } | null): obj is RevokeWorkspaceMailboxResult => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isRevokeWorkspaceMailboxResult"')
-      return RevokeWorkspaceMailboxResult_possibleTypes.includes(obj.__typename)
     }
 
 
@@ -10381,6 +10381,8 @@ export const enumPermissionFlagType = {
    DOWNLOAD_FILE: 'DOWNLOAD_FILE' as const,
    SEND_EMAIL_TOOL: 'SEND_EMAIL_TOOL' as const,
    SEND_INSTAGRAM_REPLY_TOOL: 'SEND_INSTAGRAM_REPLY_TOOL' as const,
+   SEND_INSTAGRAM_FIRST_MESSAGE_TOOL: 'SEND_INSTAGRAM_FIRST_MESSAGE_TOOL' as const,
+   RESOLVE_INSTAGRAM_SEND_OUTCOME: 'RESOLVE_INSTAGRAM_SEND_OUTCOME' as const,
    CREATE_CALENDAR_EVENT_TOOL: 'CREATE_CALENDAR_EVENT_TOOL' as const,
    HTTP_REQUEST_TOOL: 'HTTP_REQUEST_TOOL' as const,
    CODE_INTERPRETER_TOOL: 'CODE_INTERPRETER_TOOL' as const,

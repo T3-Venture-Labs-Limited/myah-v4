@@ -29,6 +29,14 @@ import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
+const EXPLICIT_TOOL_PERMISSION_FLAGS: Partial<
+  Record<PermissionFlagType, true>
+> = {
+  [PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL]: true,
+  [PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL]: true,
+  [PermissionFlagType.RESOLVE_INSTAGRAM_SEND_OUTCOME]: true,
+};
+
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -72,18 +80,10 @@ export class PermissionsService {
     const defaultSettingsPermissions =
       this.getDefaultUserWorkspacePermissions().permissionFlags;
     const permissionFlags = Object.values(PermissionFlagType).reduce(
-      (acc, feature) => {
-        const hasBasePermission = this.isToolPermission(feature)
-          ? roleOfUserWorkspace.canAccessAllTools
-          : roleOfUserWorkspace.canUpdateAllSettings;
-
-        return {
-          ...acc,
-          [feature]:
-            hasBasePermission ||
-            this.roleHasPermissionFlag(roleOfUserWorkspace, feature),
-        };
-      },
+      (acc, feature) => ({
+        ...acc,
+        [feature]: this.checkRolePermissions(roleOfUserWorkspace, feature),
+      }),
       defaultSettingsPermissions,
     );
 
@@ -120,6 +120,8 @@ export class PermissionsService {
         [PermissionFlagType.DOWNLOAD_FILE]: false,
         [PermissionFlagType.SEND_EMAIL_TOOL]: false,
         [PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL]: false,
+        [PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL]: false,
+        [PermissionFlagType.RESOLVE_INSTAGRAM_SEND_OUTCOME]: false,
         [PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL]: false,
         [PermissionFlagType.HTTP_REQUEST_TOOL]: false,
         [PermissionFlagType.CODE_INTERPRETER_TOOL]: false,
@@ -243,9 +245,12 @@ export class PermissionsService {
     role: RoleEntity,
     setting: PermissionFlagType,
   ): boolean {
-    const hasBasePermission = this.isToolPermission(setting)
-      ? role.canAccessAllTools
-      : role.canUpdateAllSettings;
+    const hasBasePermission =
+      EXPLICIT_TOOL_PERMISSION_FLAGS[setting] === true
+        ? false
+        : this.isToolPermission(setting)
+          ? role.canAccessAllTools
+          : role.canUpdateAllSettings;
 
     if (hasBasePermission === true) {
       return true;
@@ -349,13 +354,8 @@ export class PermissionsService {
 
       const { roles, useIntersection } = result;
 
-      const checkRoleHasPermission = (role: RoleEntity) => {
-        if (role.canAccessAllTools === true) {
-          return true;
-        }
-
-        return this.roleHasPermissionFlag(role, flag);
-      };
+      const checkRoleHasPermission = (role: RoleEntity) =>
+        this.checkRolePermissions(role, flag);
 
       return useIntersection
         ? roles.every(checkRoleHasPermission)

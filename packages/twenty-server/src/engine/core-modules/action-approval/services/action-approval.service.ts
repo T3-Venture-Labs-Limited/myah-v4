@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { DataSource, In, type EntityManager } from 'typeorm';
+import { Injectable, Optional } from '@nestjs/common';
+import { DataSource, In, LessThan, type EntityManager } from 'typeorm';
 
 import {
   ActionApprovalBindingEntity,
@@ -17,6 +17,7 @@ import {
   type ActionExecutionReservation,
   type ExpectedActionBindingWithWorkspace,
   type MyahInboxReplyExpectedActionBinding,
+  type InstagramMessageExpectedActionBinding,
   type ProviderAcceptedOutcomeInput,
   type SafeActionExecutionReceipt,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
@@ -25,6 +26,7 @@ import {
   getMyahInboxReplyAdvisoryLockKey,
   MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY,
 } from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-advisory-lock.util';
+import { InstagramActionReceiptReconciliationService } from 'src/engine/core-modules/instagram-action-budget/services/instagram-action-receipt-reconciliation.service';
 import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
 
 const ACTION_APPROVAL_TTL_MS = 30 * 60 * 1000;
@@ -49,6 +51,8 @@ export class ActionApprovalService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly projector: ActionReceiptProjectorService,
+    @Optional()
+    private readonly instagramActionReceiptReconciliationService?: InstagramActionReceiptReconciliationService,
   ) {}
 
   async executeInTransaction<T>(
@@ -85,6 +89,10 @@ export class ActionApprovalService {
           contentDigest: input.contentDigest,
           recipientFingerprint: input.recipientFingerprint,
           sendingAccountFingerprint: input.sendingAccountFingerprint,
+          actionKind:
+            input.actionName === 'send_instagram_message'
+              ? input.actionKind
+              : null,
           actionContextFingerprint: input.actionContextFingerprint ?? null,
           inboundMessageId:
             input.actionName === 'send_instagram_reply'
@@ -101,6 +109,14 @@ export class ActionApprovalService {
           inboundReceivedAt:
             input.actionName === 'send_instagram_reply'
               ? input.inboundReceivedAt
+              : null,
+          interactionContextType:
+            input.actionName === 'send_instagram_message'
+              ? input.interactionContextType
+              : null,
+          interactionContextId:
+            input.actionName === 'send_instagram_message'
+              ? input.interactionContextId
               : null,
           threadId: input.threadId,
           state: ActionApprovalBindingState.PENDING,
@@ -139,11 +155,58 @@ export class ActionApprovalService {
           recipientFingerprint: input.recipientFingerprint,
           sendingAccountFingerprint: input.sendingAccountFingerprint,
           actionContextFingerprint: input.actionContextFingerprint,
+          actionKind: null,
           inboundMessageId: null,
           inboundSenderIgsid: null,
           inboundDirection: null,
           inboundReceivedAt: null,
           threadId: input.threadId,
+          interactionContextType: null,
+          interactionContextId: null,
+          state: ActionApprovalBindingState.APPROVED,
+          expiresAt: new Date(decidedAt.getTime() + ACTION_APPROVAL_TTL_MS),
+          decidedAt,
+        }),
+      );
+      await manager.save(
+        ActionApprovalBindingEvidenceLinkEntity,
+        input.evidenceLinks.map((evidence) =>
+          manager.create(ActionApprovalBindingEvidenceLinkEntity, {
+            actionApprovalBindingId: binding.id,
+            ...evidence,
+          }),
+        ),
+      );
+
+      return { id: binding.id };
+    });
+  }
+
+  async createApprovedInstagramMessageBinding(
+    input: InstagramMessageExpectedActionBinding & { workspaceId: string },
+  ): Promise<{ id: string }> {
+    return this.dataSource.transaction(async (manager) => {
+      const decidedAt = new Date();
+      const binding = await manager.save(
+        ActionApprovalBindingEntity,
+        manager.create(ActionApprovalBindingEntity, {
+          workspaceId: input.workspaceId,
+          initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
+          actionName: input.actionName,
+          actionVersion: input.actionVersion,
+          actionKind: input.actionKind,
+          draftId: input.draftId,
+          contentDigest: input.contentDigest,
+          recipientFingerprint: input.recipientFingerprint,
+          sendingAccountFingerprint: input.sendingAccountFingerprint,
+          actionContextFingerprint: input.actionContextFingerprint,
+          inboundMessageId: null,
+          inboundSenderIgsid: null,
+          inboundDirection: null,
+          inboundReceivedAt: null,
+          threadId: input.threadId,
+          interactionContextType: input.interactionContextType,
+          interactionContextId: input.interactionContextId,
           state: ActionApprovalBindingState.APPROVED,
           expiresAt: new Date(decidedAt.getTime() + ACTION_APPROVAL_TTL_MS),
           decidedAt,
@@ -178,7 +241,11 @@ export class ActionApprovalService {
         where: { id: bindingId, workspaceId },
         relations: { evidenceLinks: true },
       });
-    if (!binding || binding.initiatorUserWorkspaceId !== userWorkspaceId) {
+    if (
+      !binding ||
+      !binding.threadId ||
+      binding.initiatorUserWorkspaceId !== userWorkspaceId
+    ) {
       throw new Error('Action approval evidence was not found');
     }
     const thread = await this.dataSource
@@ -195,6 +262,43 @@ export class ActionApprovalService {
     }
 
     return binding;
+  }
+
+  async getDirectInstagramReceiptForViewer(input: {
+    receiptId: string;
+    workspaceId: string;
+    userWorkspaceId: string;
+    allowWorkspaceOperator?: boolean;
+  }): Promise<{
+    actionKind: 'START_CHAT' | 'REPLY';
+    receipt: SafeActionExecutionReceipt;
+  }> {
+    const receipt = await this.dataSource
+      .getRepository(ActionExecutionReceiptEntity)
+      .findOne({
+        where: { id: input.receiptId, workspaceId: input.workspaceId },
+        relations: { actionApprovalBinding: true },
+      });
+    const binding = receipt?.actionApprovalBinding;
+    if (
+      !receipt ||
+      !binding ||
+      binding.actionName !== 'send_instagram_message' ||
+      binding.actionVersion !== 2 ||
+      (binding.actionKind !== 'START_CHAT' && binding.actionKind !== 'REPLY') ||
+      binding.threadId !== null ||
+      binding.interactionContextType !== 'MYAH_INBOX_INSTAGRAM_DRAFT' ||
+      !binding.interactionContextId ||
+      (!input.allowWorkspaceOperator &&
+        binding.initiatorUserWorkspaceId !== input.userWorkspaceId)
+    ) {
+      throw new Error('Instagram message receipt was not found');
+    }
+
+    return {
+      actionKind: binding.actionKind,
+      receipt: this.redactionService.toSafeReceipt(receipt),
+    };
   }
 
   async decidePendingBinding(
@@ -339,11 +443,15 @@ export class ActionApprovalService {
     approvalBindingId,
     initiatorUserWorkspaceId,
     threadId,
+    interactionContextType = null,
+    interactionContextId = null,
   }: {
     workspaceId: string;
     approvalBindingId: string;
     initiatorUserWorkspaceId: string;
-    threadId: string;
+    threadId: string | null;
+    interactionContextType?: 'MYAH_INBOX_INSTAGRAM_DRAFT' | null;
+    interactionContextId?: string | null;
   }): Promise<ExpectedActionBindingWithWorkspace> {
     const authorizedBinding = await this.dataSource.transaction(
       async (manager) => {
@@ -365,7 +473,9 @@ export class ActionApprovalService {
           (binding.state !== ActionApprovalBindingState.APPROVED &&
             binding.state !== ActionApprovalBindingState.CONSUMED) ||
           binding.initiatorUserWorkspaceId !== initiatorUserWorkspaceId ||
-          binding.threadId !== threadId
+          binding.threadId !== threadId ||
+          (binding.interactionContextType ?? null) !== interactionContextType ||
+          (binding.interactionContextId ?? null) !== interactionContextId
         ) {
           return null;
         }
@@ -376,7 +486,6 @@ export class ActionApprovalService {
           contentDigest: binding.contentDigest,
           recipientFingerprint: binding.recipientFingerprint ?? '',
           sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
-          threadId: binding.threadId,
           initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
           evidenceLinks,
         };
@@ -385,6 +494,7 @@ export class ActionApprovalService {
           case 'send_instagram_reply':
             if (
               binding.actionVersion !== 1 ||
+              binding.threadId == null ||
               binding.actionContextFingerprint != null ||
               binding.inboundMessageId == null ||
               binding.inboundSenderIgsid == null ||
@@ -399,14 +509,45 @@ export class ActionApprovalService {
               actionName: 'send_instagram_reply' as const,
               actionVersion: 1 as const,
               actionContextFingerprint: null,
+              threadId: binding.threadId,
               inboundMessageId: binding.inboundMessageId,
               inboundSenderIgsid: binding.inboundSenderIgsid,
               inboundDirection: binding.inboundDirection,
               inboundReceivedAt: binding.inboundReceivedAt,
             };
+          case 'send_instagram_message':
+            if (
+              binding.actionVersion !== 2 ||
+              (binding.actionKind !== 'START_CHAT' &&
+                binding.actionKind !== 'REPLY') ||
+              binding.actionContextFingerprint?.length !== 64 ||
+              binding.recipientFingerprint == null ||
+              binding.sendingAccountFingerprint == null ||
+              binding.inboundMessageId != null ||
+              binding.inboundSenderIgsid != null ||
+              binding.inboundDirection != null ||
+              binding.inboundReceivedAt != null
+            ) {
+              return null;
+            }
+
+            return {
+              ...commonBinding,
+              actionName: 'send_instagram_message' as const,
+              actionVersion: 2 as const,
+              actionKind: binding.actionKind,
+              threadId: binding.threadId,
+              actionContextFingerprint: binding.actionContextFingerprint,
+              interactionContextType:
+                binding.interactionContextType === 'MYAH_INBOX_INSTAGRAM_DRAFT'
+                  ? binding.interactionContextType
+                  : null,
+              interactionContextId: binding.interactionContextId,
+            };
           case 'send_outreach_email':
             if (
               binding.actionVersion !== 1 ||
+              binding.threadId == null ||
               binding.actionContextFingerprint?.length !== 64 ||
               binding.recipientFingerprint == null ||
               binding.sendingAccountFingerprint == null ||
@@ -423,10 +564,12 @@ export class ActionApprovalService {
               actionName: 'send_outreach_email' as const,
               actionVersion: 1 as const,
               actionContextFingerprint: binding.actionContextFingerprint,
+              threadId: binding.threadId,
             };
           case 'send_inbox_reply':
             if (
               binding.actionVersion !== 1 ||
+              binding.threadId == null ||
               binding.actionContextFingerprint?.length !== 64 ||
               binding.recipientFingerprint == null ||
               binding.sendingAccountFingerprint == null ||
@@ -443,6 +586,7 @@ export class ActionApprovalService {
               actionName: 'send_inbox_reply' as const,
               actionVersion: 1 as const,
               actionContextFingerprint: binding.actionContextFingerprint,
+              threadId: binding.threadId,
             };
           default:
             return null;
@@ -844,26 +988,38 @@ export class ActionApprovalService {
     const receiptRepository = this.dataSource.getRepository(
       ActionExecutionReceiptEntity,
     );
-    const staleReceiptIds = await receiptRepository
-      .createQueryBuilder('receipt')
-      .select('receipt.id', 'id')
-      .where('receipt.state = :state', {
+    const staleReceipts = await receiptRepository.find({
+      where: {
         state: ActionExecutionReceiptState.PROCESSING,
-      })
-      .andWhere('receipt."updatedAt" < :processingBefore', { processingBefore })
-      .orderBy('receipt.updatedAt', 'ASC')
-      .addOrderBy('receipt.id', 'ASC')
-      .take(RECONCILIATION_BATCH_SIZE)
-      .getRawMany<{ id: string }>();
+        updatedAt: LessThan(processingBefore),
+      },
+      relations: { actionApprovalBinding: true },
+      order: { updatedAt: 'ASC', id: 'ASC' },
+      take: RECONCILIATION_BATCH_SIZE,
+    });
+    const instagramReceipts = staleReceipts.filter(
+      ({ actionApprovalBinding }) =>
+        actionApprovalBinding.actionName === 'send_instagram_message' &&
+        actionApprovalBinding.actionVersion === 2,
+    );
+    for (const receipt of instagramReceipts) {
+      await this.instagramActionReceiptReconciliationService?.reconcile({
+        workspaceId: receipt.workspaceId,
+        actionExecutionReceiptId: receipt.id,
+      });
+    }
+    const genericReceiptIds = staleReceipts
+      .filter((receipt) => !instagramReceipts.includes(receipt))
+      .map(({ id }) => id);
     const staleProcessing =
-      staleReceiptIds.length === 0
+      genericReceiptIds.length === 0
         ? { affected: 0 }
         : await this.dataSource
             .createQueryBuilder()
             .update(ActionExecutionReceiptEntity)
             .set({ state: ActionExecutionReceiptState.UNKNOWN })
             .where('id IN (:...ids)', {
-              ids: staleReceiptIds.map(({ id }) => id),
+              ids: genericReceiptIds,
             })
             .andWhere('state = :state', {
               state: ActionExecutionReceiptState.PROCESSING,
@@ -902,7 +1058,15 @@ export class ActionApprovalService {
       }
     }
 
-    return { unknown: staleProcessing.affected ?? 0, projected, failed };
+    return {
+      unknown:
+        (staleProcessing.affected ?? 0) +
+        (this.instagramActionReceiptReconciliationService
+          ? instagramReceipts.length
+          : 0),
+      projected,
+      failed,
+    };
   }
 
   private async reserveBindingInTransaction(
@@ -1065,6 +1229,26 @@ export class ActionApprovalService {
         .andWhere('binding."inboundSenderIgsid" IS NULL')
         .andWhere('binding."inboundDirection" IS NULL')
         .andWhere('binding."inboundReceivedAt" IS NULL');
+      if (input.actionName === 'send_instagram_message') {
+        candidateQuery.andWhere('binding."actionKind" = :actionKind', input);
+        if (input.threadId === null) {
+          candidateQuery
+            .andWhere('binding."threadId" IS NULL')
+            .andWhere(
+              'binding."interactionContextType" = :interactionContextType',
+              input,
+            )
+            .andWhere(
+              'binding."interactionContextId" = :interactionContextId',
+              input,
+            );
+        } else {
+          candidateQuery
+            .andWhere('binding."threadId" = :threadId', input)
+            .andWhere('binding."interactionContextType" IS NULL')
+            .andWhere('binding."interactionContextId" IS NULL');
+        }
+      }
     }
 
     const candidates = await candidateQuery
@@ -1162,6 +1346,19 @@ export class ActionApprovalService {
         (input.actionContextFingerprint ?? null) ||
       binding.threadId !== input.threadId ||
       binding.initiatorUserWorkspaceId !== input.initiatorUserWorkspaceId
+    ) {
+      throw new Error('Action binding does not match execution request');
+    }
+
+    if (
+      input.actionName === 'send_instagram_message'
+        ? binding.actionKind !== input.actionKind ||
+          (binding.interactionContextType ?? null) !==
+            input.interactionContextType ||
+          (binding.interactionContextId ?? null) !== input.interactionContextId
+        : binding.actionKind != null ||
+          binding.interactionContextType != null ||
+          binding.interactionContextId != null
     ) {
       throw new Error('Action binding does not match execution request');
     }

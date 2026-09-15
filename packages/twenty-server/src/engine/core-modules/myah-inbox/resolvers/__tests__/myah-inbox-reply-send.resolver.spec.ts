@@ -205,6 +205,44 @@ describe('MyahInboxReplySendResolver', () => {
     });
   });
 
+  it.each(['readiness', 'send', 'status'] as const)(
+    'rejects captured workspace mismatch before %s dispatch',
+    async (operation) => {
+      const { resolver, send, getReadiness, getStatus } = createResolver();
+      const expectedWorkspaceId = '20202020-0b5c-4178-bed7-d371f6411e99';
+      const result =
+        operation === 'readiness'
+          ? resolver.myahInboxReplySendReadiness(
+              threadId,
+              workspace as never,
+              userWorkspaceId,
+              workspaceMemberId,
+              expectedWorkspaceId,
+            )
+          : operation === 'send'
+            ? resolver.sendMyahInboxReply(
+                {
+                  threadId,
+                  expectedDraftRevision: 4,
+                  expectedWorkspaceId,
+                } as never,
+                workspace as never,
+                userWorkspaceId,
+                workspaceMemberId,
+              )
+            : resolver.myahInboxReplySendStatus(
+                { threadId, receiptId, expectedWorkspaceId } as never,
+                workspace as never,
+                userWorkspaceId,
+                workspaceMemberId,
+              );
+      await expect(result).rejects.toBeInstanceOf(ForbiddenException);
+      expect(send).not.toHaveBeenCalled();
+      expect(getReadiness).not.toHaveBeenCalled();
+      expect(getStatus).not.toHaveBeenCalled();
+    },
+  );
+
   it('fails closed when the decorated ids do not match authenticated user context', async () => {
     const { resolver, send } = createResolver();
 

@@ -1,0 +1,1 @@
+export const INSTAGRAM_MESSAGE_RECONCILIATION_CRON_PATTERN = '*/5 * * * *';

@@ -34,10 +34,32 @@ export type MyahInboxReplyExpectedActionBinding = ActionBindingBase & {
   actionContextFingerprint: string;
 };
 
+export type InstagramMessageActionKind = 'START_CHAT' | 'REPLY';
+
+export type InstagramMessageInteractionContextType =
+  'MYAH_INBOX_INSTAGRAM_DRAFT';
+
+export type InstagramMessageExpectedActionBinding = {
+  actionName: 'send_instagram_message';
+  actionVersion: 2;
+  actionKind: InstagramMessageActionKind;
+  draftId: string;
+  contentDigest: string;
+  recipientFingerprint: string;
+  sendingAccountFingerprint: string;
+  actionContextFingerprint: string;
+  threadId: string | null;
+  interactionContextType: InstagramMessageInteractionContextType | null;
+  interactionContextId: string | null;
+  initiatorUserWorkspaceId: string;
+  evidenceLinks: readonly ActionEvidenceLinkInput[];
+};
+
 export type ExpectedActionBinding =
   | InstagramReplyExpectedActionBinding
   | OutreachEmailExpectedActionBinding
-  | MyahInboxReplyExpectedActionBinding;
+  | MyahInboxReplyExpectedActionBinding
+  | InstagramMessageExpectedActionBinding;
 
 export type ExpectedActionBindingWithWorkspace = ExpectedActionBinding & {
   workspaceId: string;

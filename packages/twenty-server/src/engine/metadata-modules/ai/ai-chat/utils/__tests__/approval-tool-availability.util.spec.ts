@@ -107,8 +107,8 @@ describe('approval tool availability', () => {
     expect(excluded.has('prepare_instagram_reply_draft')).toBe(false);
     expect(excluded.has('prepare_outreach_email_draft')).toBe(false);
     expect(excluded.has('send_outreach_email')).toBe(true);
-    expect(excluded.has('app_myah_list_instagram_conversations')).toBe(false);
-    expect(excluded.has('app_myah_list_instagram_messages')).toBe(false);
+    expect(excluded.has('app_myah_list_instagram_conversations')).toBe(true);
+    expect(excluded.has('app_myah_list_instagram_messages')).toBe(true);
     expect(excluded.has('app_myah_send_instagram_reply')).toBe(true);
   });
 
@@ -162,7 +162,7 @@ describe('approval tool availability', () => {
     expect(excluded).toEqual(new Set(['send_email']));
   });
 
-  it('allows the intentional read-only app function by its generated tool name', () => {
+  it('keeps legacy Instagram app functions excluded after Unipile cutover', () => {
     const excluded = getPreApprovalExcludedToolNames([
       {
         name: 'app_myah_list_instagram_conversations',
@@ -176,7 +176,7 @@ describe('approval tool availability', () => {
       } as ToolIndexEntry,
     ]);
 
-    expect(excluded.has('app_myah_list_instagram_conversations')).toBe(false);
+    expect(excluded.has('app_myah_list_instagram_conversations')).toBe(true);
   });
 
   it('returns only the exact tool named by the latest approved generic request', () => {

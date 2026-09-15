@@ -35,6 +35,17 @@ describe('AppModule middleware configuration', () => {
       /\.exclude\(\.\.\.MYAH_SHOPIFY_REST_ROUTES\)\s*\.forRoutes/,
     );
   });
+  it('keeps Unipile Instagram REST routes out of the generic REST object middleware', () => {
+    const appModuleSource = readFileSync(
+      join(__dirname, '../app.module.ts'),
+      'utf8',
+    );
+
+    expect(appModuleSource).toContain(
+      "{ path: 'rest/myah/unipile/instagram/*path', method: RequestMethod.ALL }",
+    );
+  });
+
   it('hydrates optional auth context for the public client config endpoint', () => {
     const appModuleSource = readFileSync(
       join(__dirname, '../app.module.ts'),

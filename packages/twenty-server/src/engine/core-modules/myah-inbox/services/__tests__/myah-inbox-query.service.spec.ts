@@ -336,6 +336,45 @@ const allSelectSql = (calls: QueryBuilderCalls) =>
   calls.selects.map(([expression]) => expression).join('\n');
 
 describe('MyahInboxQueryService', () => {
+  it('reads the exact authoritative draft revision and rejects visibility lost during the read', async () => {
+    const { service, queryBuilder } = createService({
+      rows: [row(tiedThreadAId, '2026-09-01T00:00:00Z')],
+    });
+    queryBuilder.getRawMany
+      .mockResolvedValueOnce([row(tiedThreadAId, '2026-09-01T00:00:00Z')])
+      .mockResolvedValueOnce([
+        {
+          threadId: tiedThreadAId,
+          revision: 9,
+          markdown: 'shared body',
+          blocknote: null,
+        },
+      ]);
+    await expect(
+      (async () =>
+        service.readEmailDraft({ ...listInput(), threadId: tiedThreadAId }))(),
+    ).resolves.toEqual({
+      workspaceId,
+      threadId: tiedThreadAId,
+      revision: 9,
+      body: { markdown: 'shared body', blocknote: null },
+    });
+    queryBuilder.getRawMany
+      .mockResolvedValueOnce([row(tiedThreadAId, '2026-09-01T00:00:00Z')])
+      .mockResolvedValueOnce([
+        {
+          threadId: tiedThreadAId,
+          revision: 9,
+          markdown: 'shared body',
+          blocknote: null,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    await expect(
+      (async () =>
+        service.readEmailDraft({ ...listInput(), threadId: tiedThreadAId }))(),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
   it('orders and pages only policy-visible latest messages with the exact connection shape', async () => {
     const { service, calls } = createService({
       rows: [

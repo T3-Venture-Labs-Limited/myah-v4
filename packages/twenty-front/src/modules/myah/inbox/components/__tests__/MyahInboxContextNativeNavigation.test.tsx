@@ -16,6 +16,7 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from 'react';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MainAppLayoutWithSidePanel } from '@/ui/layout/page/components/MainAppLayoutWithSidePanel';
 import { useSidePanelCloseAnimationCompleteCleanup } from '@/side-panel/hooks/useSidePanelCloseAnimationCompleteCleanup';
 import {
@@ -240,7 +241,8 @@ const OpenCompetingPanel = () => {
   );
 };
 const Harness = ({ thread }: { thread: MyahInboxThread }) => {
-  const { reconcile, updateDraft } = useMyahInboxDraftAutosaveController();
+  const { authorizeTarget, beginTargetRead, invalidateTarget, updateDraft } =
+    useMyahInboxDraftAutosaveController();
   const entry = useAtomValue(myahInboxDraftAutosaveFamilyState.atomFamily(key));
   const { closeSidePanelMenu } = useSidePanelMenu();
   const { openMyahInboxContextInSidePanel } =
@@ -249,12 +251,16 @@ const Harness = ({ thread }: { thread: MyahInboxThread }) => {
     mockMount();
   }, []);
   useEffect(() => {
-    reconcile({
+    const capture = beginTargetRead(key, () => true);
+
+    authorizeTarget(capture, {
       key,
       revision: 2,
       body: { markdown: '', blocknote: null },
     });
-  }, [reconcile]);
+
+    return () => invalidateTarget(capture);
+  }, [authorizeTarget, beginTargetRead, invalidateTarget]);
   return (
     <>
       <MyahInboxContextEffect workspaceId={key.workspaceId} thread={thread} />
@@ -444,6 +450,7 @@ it('uses real native navigation once and preserves stack/focus on context synchr
 
 it('does not remount or prematurely save the real draft on close/reopen and resize', async () => {
   const store = createStore();
+  store.set(currentWorkspaceState.atom, { id: key.workspaceId } as never);
   const tree = () => (
     <Provider store={store}>
       <MemoryRouter
@@ -488,6 +495,7 @@ it('does not remount or prematurely save the real draft on close/reopen and resi
   });
   expect(mockSaveDraft).toHaveBeenCalledTimes(1);
   expect(mockSaveDraft).toHaveBeenCalledWith({
+    expectedWorkspaceId: key.workspaceId,
     threadId: key.threadId,
     expectedRevision: 2,
     body: { markdown: 'Keep this draft', blocknote: null },

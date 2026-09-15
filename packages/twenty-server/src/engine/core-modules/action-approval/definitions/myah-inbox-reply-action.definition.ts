@@ -560,6 +560,7 @@ export class MyahInboxReplyActionDefinition {
       binding.recipientFingerprint === null ||
       binding.sendingAccountFingerprint === null ||
       binding.actionContextFingerprint === null ||
+      binding.threadId === null ||
       !Array.isArray(binding.evidenceLinks)
     ) {
       throw new MyahInboxReplyUnavailableError(
