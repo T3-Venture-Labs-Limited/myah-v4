@@ -68,7 +68,8 @@ const DAY_UPSERT_SQL = `
 `;
 
 const DAY_LOCK_SQL = `
-  SELECT "connectedAccountId", "localDate", "acceptedCount", "reservedCount"
+  SELECT "connectedAccountId", "localDate"::text AS "localDate",
+    "acceptedCount", "reservedCount"
   FROM "core"."mailboxCapacityDay"
   WHERE "workspaceId" = $1
     AND "connectedAccountId" = $2
@@ -82,7 +83,8 @@ const INCREMENT_RESERVED_SQL = `
   WHERE "workspaceId" = $1
     AND "connectedAccountId" = $2
     AND "localDate" = $3
-  RETURNING "connectedAccountId", "localDate", "acceptedCount", "reservedCount"
+  RETURNING "connectedAccountId", "localDate"::text AS "localDate",
+    "acceptedCount", "reservedCount"
 `;
 
 const ADVANCE_CLOCK_SQL = `
@@ -102,7 +104,8 @@ const RELEASE_RESERVED_SQL = `
     AND "connectedAccountId" = $2
     AND "localDate" = $3
     AND "reservedCount" > 0
-  RETURNING "connectedAccountId", "localDate", "acceptedCount", "reservedCount"
+  RETURNING "connectedAccountId", "localDate"::text AS "localDate",
+    "acceptedCount", "reservedCount"
 `;
 
 const CONSUME_RESERVED_SQL = `
@@ -113,7 +116,8 @@ const CONSUME_RESERVED_SQL = `
     AND "connectedAccountId" = $2
     AND "localDate" = $3
     AND "reservedCount" > 0
-  RETURNING "connectedAccountId", "localDate", "acceptedCount", "reservedCount"
+  RETURNING "connectedAccountId", "localDate"::text AS "localDate",
+    "acceptedCount", "reservedCount"
 `;
 
 const isNonEmptyString = (value: unknown): value is string =>
