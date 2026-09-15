@@ -20,6 +20,8 @@ const CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER =
 const CAMPAIGN_SEQUENCE_AUTHORIZATION_FIELD_UNIVERSAL_IDENTIFIER =
   MYAH_STANDARD_OBJECTS.campaign.fields.sequenceAuthorization
     .universalIdentifier;
+const CAMPAIGN_LIFECYCLE_STATUS_FIELD_UNIVERSAL_IDENTIFIER =
+  MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus.universalIdentifier;
 const INBOX_RELATION_FIELD_UNIVERSAL_IDENTIFIERS = [
   MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.creator,
   MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.myahCampaign,
@@ -357,6 +359,88 @@ describe('SynchronizeSourceControlledMyahMetadataService', () => {
       migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
         .byUniversalIdentifier[CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER],
     ).toMatchObject({ labelSingular: canonicalCampaign.labelSingular });
+  });
+
+  it('synchronizes an existing Campaign lifecycle field to non-editable metadata and leaves reruns unchanged', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        now: '2026-09-15T00:00:00.000Z',
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+      });
+    const editableLifecycleMetadata = structuredClone(allFlatEntityMaps);
+    const lifecycleStatus =
+      editableLifecycleMetadata.flatFieldMetadataMaps.byUniversalIdentifier[
+        CAMPAIGN_LIFECYCLE_STATUS_FIELD_UNIVERSAL_IDENTIFIER
+      ];
+
+    if (!lifecycleStatus) {
+      throw new Error('Campaign lifecycle status metadata is required by the test fixture');
+    }
+
+    lifecycleStatus.isUIEditable = true;
+    const synchronizedLifecycleMetadata = structuredClone(
+      editableLifecycleMetadata,
+    );
+    synchronizedLifecycleMetadata.flatFieldMetadataMaps.byUniversalIdentifier[
+      CAMPAIGN_LIFECYCLE_STATUS_FIELD_UNIVERSAL_IDENTIFIER
+    ]!.isUIEditable = false;
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService(
+        { ...editableLifecycleMetadata, featureFlagsMap: {} },
+        { ...synchronizedLifecycleMetadata, featureFlagsMap: {} },
+      );
+    const selection = {
+      fieldMetadata: new Set([
+        CAMPAIGN_LIFECYCLE_STATUS_FIELD_UNIVERSAL_IDENTIFIER,
+      ]),
+    };
+
+    await service.synchronizeWorkspace(createArgs(), selection, {
+      synchronizeExistingSelectedMetadata: true,
+    });
+    await service.synchronizeWorkspace(createArgs(), selection, {
+      synchronizeExistingSelectedMetadata: true,
+    });
+
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).toHaveBeenCalledTimes(2);
+    const [firstMigrationInput, rerunMigrationInput] =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls.map(
+        ([migrationInput]) => migrationInput,
+      );
+    const firstFields =
+      firstMigrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps;
+    const rerunFields =
+      rerunMigrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps;
+
+    expect(
+      firstFields.from.byUniversalIdentifier[
+        CAMPAIGN_LIFECYCLE_STATUS_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toMatchObject({ isUIEditable: true });
+    expect(
+      firstFields.to.byUniversalIdentifier[
+        CAMPAIGN_LIFECYCLE_STATUS_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toMatchObject({ isUIEditable: false });
+    expect(
+      rerunFields.from.byUniversalIdentifier[
+        CAMPAIGN_LIFECYCLE_STATUS_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toMatchObject({ isUIEditable: false });
+    expect(
+      rerunFields.to.byUniversalIdentifier[
+        CAMPAIGN_LIFECYCLE_STATUS_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toMatchObject({ isUIEditable: false });
+    expect(
+      firstMigrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.from
+        .byUniversalIdentifier[CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER],
+    ).toBeUndefined();
+    expect(
+      firstMigrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier[CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER],
+    ).toBeUndefined();
   });
 
   it('creates a selected missing source-controlled field and its missing parent without inferring deletion', async () => {

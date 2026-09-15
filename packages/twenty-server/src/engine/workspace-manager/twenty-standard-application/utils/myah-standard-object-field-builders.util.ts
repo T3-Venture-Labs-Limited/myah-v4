@@ -2963,6 +2963,7 @@ export const buildMyahStandardFlatFieldMetadatas = ({
               },
             ],
             isNullable: true,
+            isUIEditable: false,
             defaultValue: "'DRAFT'",
           },
           standardObjectMetadataRelatedEntityIds:

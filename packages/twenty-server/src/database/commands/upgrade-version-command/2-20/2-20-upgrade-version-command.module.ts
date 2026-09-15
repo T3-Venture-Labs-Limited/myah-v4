@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
+import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
@@ -63,6 +64,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     VerifyInstagramSecurityCutoverWorkspaceCommand,
     RepairOrphanedObjectNavigationCommandsCommand,
     SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand,
+    SynchronizeCampaignLifecycleStatusMetadataCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,
