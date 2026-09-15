@@ -66,12 +66,16 @@ describe('SynchronizeCampaignLifecycleStatusMetadataCommand', () => {
 
     await command.runOnWorkspace(args);
 
-    expect(synchronizeWorkspace).toHaveBeenCalledWith(args, {
-      fieldMetadata: new Set([
-        MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus
-          .universalIdentifier,
-      ]),
-    });
+    expect(synchronizeWorkspace).toHaveBeenCalledWith(
+      args,
+      {
+        fieldMetadata: new Set([
+          MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus
+            .universalIdentifier,
+        ]),
+      },
+      { synchronizeExistingSelectedMetadata: true },
+    );
   });
 
   it('delegates reruns to the idempotent source-controlled synchronizer', async () => {
@@ -81,6 +85,16 @@ describe('SynchronizeCampaignLifecycleStatusMetadataCommand', () => {
     await command.runOnWorkspace(args);
 
     expect(synchronizeWorkspace).toHaveBeenCalledTimes(2);
+    expect(synchronizeWorkspace).toHaveBeenLastCalledWith(
+      args,
+      {
+        fieldMetadata: new Set([
+          MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus
+            .universalIdentifier,
+        ]),
+      },
+      { synchronizeExistingSelectedMetadata: true },
+    );
   });
 
   it('skips workspaces without canonical Campaign metadata', async () => {

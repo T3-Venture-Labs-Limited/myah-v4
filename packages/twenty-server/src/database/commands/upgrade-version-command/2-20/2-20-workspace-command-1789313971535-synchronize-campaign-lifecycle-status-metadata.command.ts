@@ -40,11 +40,15 @@ export class SynchronizeCampaignLifecycleStatusMetadataCommand extends ActiveOrS
       return;
     }
 
-    await this.synchronizer.synchronizeWorkspace(args, {
-      fieldMetadata: new Set([
-        MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus
-          .universalIdentifier,
-      ]),
-    });
+    await this.synchronizer.synchronizeWorkspace(
+      args,
+      {
+        fieldMetadata: new Set([
+          MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus
+            .universalIdentifier,
+        ]),
+      },
+      { synchronizeExistingSelectedMetadata: true },
+    );
   }
 }
