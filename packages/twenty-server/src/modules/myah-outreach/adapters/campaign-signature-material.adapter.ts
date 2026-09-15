@@ -24,6 +24,11 @@ type CampaignRichTextSignature = Readonly<{
   blocknote: string;
 }>;
 
+type CampaignSignatureStorageRow = Readonly<{
+  emailSignatureMarkdown: unknown;
+  emailSignatureBlocknote: unknown;
+}>;
+
 const getSignatureMaterial = (
   emailSignature: unknown,
 ): CampaignSignatureMaterial | undefined => {
@@ -40,6 +45,33 @@ const getSignatureMaterial = (
     typeof (emailSignature as CampaignRichTextSignature).blocknote === 'string'
   ) {
     return { html: (emailSignature as CampaignRichTextSignature).markdown };
+  }
+
+  return undefined;
+};
+
+const getSignatureMaterialFromStorageRow = (
+  row: unknown,
+): CampaignSignatureMaterial | undefined => {
+  if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+    return undefined;
+  }
+
+  const { emailSignatureMarkdown, emailSignatureBlocknote } =
+    row as CampaignSignatureStorageRow;
+
+  if (emailSignatureMarkdown === null && emailSignatureBlocknote === null) {
+    return getSignatureMaterial(null);
+  }
+
+  if (
+    typeof emailSignatureMarkdown === 'string' &&
+    typeof emailSignatureBlocknote === 'string'
+  ) {
+    return getSignatureMaterial({
+      markdown: emailSignatureMarkdown,
+      blocknote: emailSignatureBlocknote,
+    });
   }
 
   return undefined;
@@ -81,13 +113,13 @@ export class CampaignSignatureMaterialAdapter implements CampaignSignatureMateri
         )
           return signatureUnavailable();
         const rows = await runner.query(
-          `SELECT "emailSignature" FROM "${getWorkspaceSchemaName(workspaceId)}".campaign
+          `SELECT "emailSignatureMarkdown", "emailSignatureBlocknote" FROM "${getWorkspaceSchemaName(workspaceId)}".campaign
             WHERE id=$1 AND "deletedAt" IS NULL FOR KEY SHARE`,
           [campaignId],
         );
         if (!Array.isArray(rows) || rows.length !== 1)
           return signatureUnavailable();
-        const signatureMaterial = getSignatureMaterial(rows[0].emailSignature);
+        const signatureMaterial = getSignatureMaterialFromStorageRow(rows[0]);
         if (signatureMaterial === undefined) return signatureUnavailable();
         return { kind: 'READY', value: signatureMaterial };
       }
