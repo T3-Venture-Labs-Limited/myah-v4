@@ -154,7 +154,11 @@ const readExactRecord = (
 };
 
 const readDenseArray = (value: unknown): readonly unknown[] | null => {
-  if (nodeUtilTypes.isProxy(value) || !Array.isArray(value)) {
+  if (
+    nodeUtilTypes.isProxy(value) ||
+    !Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Array.prototype
+  ) {
     return null;
   }
 

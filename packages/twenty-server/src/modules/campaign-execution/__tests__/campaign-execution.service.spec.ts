@@ -551,6 +551,40 @@ describe('CampaignExecutionService', () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    [
+      'null-prototype',
+      () => Object.setPrototypeOf([firstMessageId, secondMessageId], null),
+    ],
+    [
+      'subclass',
+      () => {
+        class NonstandardMessageIds extends Array<string> {}
+
+        return new NonstandardMessageIds(firstMessageId, secondMessageId);
+      },
+    ],
+  ] as const)(
+    'rejects a nested %s request array before opening a transaction',
+    async (_label, createOrderedMessageIds) => {
+      const harness = createHarness();
+
+      await expect(
+        harness.service.startCampaign({
+          ...startInput(),
+          request: {
+            ...request,
+            preparedProof: {
+              ...request.preparedProof,
+              orderedMessageIds: createOrderedMessageIds(),
+            },
+          },
+        }),
+      ).rejects.toThrow('Campaign Start input was invalid');
+      expect(harness.transaction.run).not.toHaveBeenCalled();
+    },
+  );
+
   it('creates a reviewed immutable activation graph in canonical order', async () => {
     const harness = createHarness();
 
