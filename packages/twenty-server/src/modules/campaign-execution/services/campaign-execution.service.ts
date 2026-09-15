@@ -154,7 +154,11 @@ const readExactRecord = (
 };
 
 const readDenseArray = (value: unknown): readonly unknown[] | null => {
-  if (nodeUtilTypes.isProxy(value) || !Array.isArray(value)) {
+  if (
+    nodeUtilTypes.isProxy(value) ||
+    !Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Array.prototype
+  ) {
     return null;
   }
 
@@ -248,7 +252,9 @@ const snapshotJson = (
     throw new Error(errorMessage);
   }
 
-  const clone = Object.create(null) as Record<string, JsonSnapshot>;
+  // Authorization parsers accept ordinary data records; readDataRecord has
+  // already rejected unsafe keys and property shapes before this boundary.
+  const clone: Record<string, JsonSnapshot> = {};
 
   for (const [key, item] of Object.entries(record)) {
     Object.defineProperty(clone, key, {

@@ -1,4 +1,5 @@
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { CampaignExecutionService } from 'src/modules/campaign-execution/services/campaign-execution.service';
 import { type CampaignLifecycleTransactionService } from 'src/modules/campaign-execution/services/campaign-lifecycle-transaction.service';
@@ -467,6 +468,123 @@ const createHarness = (overrides?: {
 };
 
 describe('CampaignExecutionService', () => {
+  it('passes detached frozen request snapshots to the strict authorization parser', async () => {
+    const sourceRequest: CampaignSequenceAuthorizationRequest = {
+      ...request,
+      preparedProof: {
+        ...request.preparedProof,
+        orderedMessageIds: [firstMessageId, secondMessageId],
+        usedChannels: ['EMAIL'],
+        fixedMaterialProofs: [
+          {
+            messageId: firstMessageId,
+            orderedAttachmentProofs: [],
+          },
+          {
+            messageId: secondMessageId,
+            orderedAttachmentProofs: [],
+          },
+        ],
+      },
+      reviewedWindow: { ...request.reviewedWindow },
+    };
+    const matchingAuthority = authorityRecord({
+      binding: {
+        ...authorityRecord().binding,
+        request: sourceRequest,
+      },
+    });
+    const harness = createHarness({
+      createdAuthority: {
+        kind: 'CREATED',
+        authorization: matchingAuthority,
+      },
+    });
+    const strictAuthority = new CampaignSequenceAuthorizationService({
+      generateAuthorizationId: () => authorizationId,
+      now: () => new Date(authorizedAt),
+    });
+    const query = jest.fn().mockResolvedValue([]);
+
+    Object.assign(harness.manager.queryRunner!, { query });
+    jest
+      .mocked(harness.authority.lookupStartRequestInTransaction)
+      .mockImplementation((context, input) =>
+        strictAuthority.lookupStartRequestInTransaction(
+          context as never,
+          input,
+        ),
+      );
+
+    await expect(
+      harness.service.startCampaign({
+        ...startInput(),
+        request: sourceRequest,
+      }),
+    ).resolves.toMatchObject({ status: 'ACTIVATED' });
+
+    const snapshottedRequest = jest.mocked(
+      harness.authority.lookupStartRequestInTransaction,
+    ).mock.calls[0][1].request;
+
+    expect(snapshottedRequest).not.toBe(sourceRequest);
+    expect(snapshottedRequest.preparedProof).not.toBe(
+      sourceRequest.preparedProof,
+    );
+    expect(Object.getPrototypeOf(snapshottedRequest)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(snapshottedRequest.preparedProof)).toBe(
+      Object.prototype,
+    );
+    expect(
+      Object.getPrototypeOf(
+        snapshottedRequest.preparedProof.fixedMaterialProofs[0],
+      ),
+    ).toBe(Object.prototype);
+    expect(Object.isFrozen(snapshottedRequest)).toBe(true);
+    expect(Object.isFrozen(snapshottedRequest.preparedProof)).toBe(true);
+    expect(
+      Object.isFrozen(
+        snapshottedRequest.preparedProof.fixedMaterialProofs[0]
+          .orderedAttachmentProofs,
+      ),
+    ).toBe(true);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      'null-prototype',
+      () => Object.setPrototypeOf([firstMessageId, secondMessageId], null),
+    ],
+    [
+      'subclass',
+      () => {
+        class NonstandardMessageIds extends Array<string> {}
+
+        return new NonstandardMessageIds(firstMessageId, secondMessageId);
+      },
+    ],
+  ] as const)(
+    'rejects a nested %s request array before opening a transaction',
+    async (_label, createOrderedMessageIds) => {
+      const harness = createHarness();
+
+      await expect(
+        harness.service.startCampaign({
+          ...startInput(),
+          request: {
+            ...request,
+            preparedProof: {
+              ...request.preparedProof,
+              orderedMessageIds: createOrderedMessageIds(),
+            },
+          },
+        }),
+      ).rejects.toThrow('Campaign Start input was invalid');
+      expect(harness.transaction.run).not.toHaveBeenCalled();
+    },
+  );
+
   it('creates a reviewed immutable activation graph in canonical order', async () => {
     const harness = createHarness();
 
