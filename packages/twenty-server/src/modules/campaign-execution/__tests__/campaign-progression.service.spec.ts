@@ -48,6 +48,16 @@ const ids = {
 };
 
 const routing = { ...ids, authorizationGeneration: 1 };
+const localDate = '2026-09-11';
+const projectAttemptLikeQueueWorker = (
+  sql: string,
+  row: Record<string, unknown>,
+): Record<string, unknown> => ({
+  ...row,
+  localDate: sql.includes('"localDate"::text AS "localDate"')
+    ? localDate
+    : new Date(`${localDate}T00:00:00.000Z`),
+});
 
 describe('CampaignProgressionService', () => {
   it('rejects a manager that is not the active transaction owner', async () => {
@@ -123,7 +133,7 @@ describe('CampaignProgressionService', () => {
             claimedAt: new Date('2026-09-11T00:00:00Z'),
             connectedAccountId: ids.connectedAccountId,
             enrollmentId,
-            localDate: '2026-09-11',
+            localDate,
             messageChannelId: ids.messageChannelId,
             messageId: '20202020-cccc-4ccc-8ccc-cccccccccccc',
             normalizedRecipient: 'recipient@example.com',
@@ -142,7 +152,7 @@ describe('CampaignProgressionService', () => {
             workflowVersionId,
             workspaceId,
           },
-        ];
+        ].map((row) => projectAttemptLikeQueueWorker(sql, row));
       if (sql.includes('clock_timestamp() AS'))
         return [{ observedAt: new Date() }];
       return [];
@@ -171,7 +181,10 @@ describe('CampaignProgressionService', () => {
       'INSERT INTO core."outboundEmailAttempt"',
     );
     expect(blockReservedAttemptBeforeProvider).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: 'WORKSPACE_NOT_ACTIVE' }),
+      expect.objectContaining({
+        reason: 'WORKSPACE_NOT_ACTIVE',
+        reservation: expect.objectContaining({ localDate }),
+      }),
       expect.anything(),
     );
 
@@ -305,7 +318,12 @@ describe('CampaignProgressionService', () => {
       if (sql.includes('campaignOccurrence') && sql.includes('SELECT'))
         return [{ id: ids.occurrenceId, state: 'IN_FLIGHT' }];
       if (sql.includes('outboundEmailAttempt'))
-        return [{ ...routing, attemptState: 'UNKNOWN' }];
+        return [
+          projectAttemptLikeQueueWorker(sql, {
+            ...routing,
+            attemptState: 'UNKNOWN',
+          }),
+        ];
       return [];
     });
     const service = new CampaignProgressionService();
@@ -317,6 +335,9 @@ describe('CampaignProgressionService', () => {
       ),
     ).resolves.toEqual({ status: 'UNKNOWN' });
     const statements = query.mock.calls.map(([sql]) => String(sql));
+    expect(
+      statements.find((sql) => sql.includes('outboundEmailAttempt')),
+    ).toContain('"localDate"::text AS "localDate"');
     expect(
       statements.map((sql) =>
         [
@@ -742,7 +763,7 @@ describe('CampaignProgressionService', () => {
         ];
       if (sql.includes('outboundEmailAttempt'))
         return [
-          {
+          projectAttemptLikeQueueWorker(sql, {
             ...routing,
             source: 'CAMPAIGN_SEQUENCE',
             attemptState: 'RESERVED',
@@ -750,7 +771,7 @@ describe('CampaignProgressionService', () => {
             attemptNumber: 1,
             renderDigest: 'digest',
             unknownAfter,
-          },
+          }),
         ];
       if (sql.includes('clock_timestamp')) return [{ observedAt: new Date() }];
       if (sql.includes('campaignOutboundRender'))
@@ -783,6 +804,11 @@ describe('CampaignProgressionService', () => {
     });
     expect(render.renderSequenceEmail).not.toHaveBeenCalled();
     expect(reserve.reserveAttempt).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.find(([sql]) =>
+        String(sql).includes('outboundEmailAttempt'),
+      )?.[0],
+    ).toContain('"localDate"::text AS "localDate"');
   });
 
   it('blocks an expired RESERVED claim and holds its occurrence', async () => {
@@ -826,7 +852,7 @@ describe('CampaignProgressionService', () => {
         ];
       if (sql.includes('outboundEmailAttempt'))
         return [
-          {
+          projectAttemptLikeQueueWorker(sql, {
             ...routing,
             source: 'CAMPAIGN_SEQUENCE',
             attemptState: 'RESERVED',
@@ -834,7 +860,7 @@ describe('CampaignProgressionService', () => {
             attemptNumber: 1,
             renderDigest: 'digest',
             unknownAfter: new Date(0),
-          },
+          }),
         ];
       if (sql.includes('clock_timestamp')) return [{ observedAt: new Date() }];
       return [];
@@ -857,13 +883,92 @@ describe('CampaignProgressionService', () => {
       reason: 'DISPATCH_CONTRACT_CONFLICT',
     });
     expect(blockReservedAttemptBeforeProvider).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: 'RESERVATION_EXPIRED' }),
+      expect.objectContaining({
+        reason: 'RESERVATION_EXPIRED',
+        reservation: expect.objectContaining({ localDate }),
+      }),
       expect.anything(),
     );
     expect(query.mock.calls.map(([sql]) => String(sql)).join('\n')).toContain(
       "state='HELD'",
     );
   });
+
+  it.each(['CAMPAIGN_PAUSED', 'AUTHORIZATION_REVOKED'] as const)(
+    'normalizes reserved attempt dates before %s cancellation cleanup',
+    async (reason) => {
+      const blockReservedAttemptBeforeProvider = jest
+        .fn()
+        .mockResolvedValue({ status: 'RECORDED' });
+      const query = jest.fn(async (sql: string) => {
+        if (sql.includes('FROM core.workspace'))
+          return [{ id: ids.workspaceId }];
+        if (sql.includes('pg_advisory_xact_lock')) return [];
+        if (sql.includes('.campaign WHERE')) return [{ id: ids.campaignId }];
+        if (sql.includes('SELECT "enrollmentId"'))
+          return [{ enrollmentId: ids.enrollmentId }];
+        if (sql.includes('campaignEnrollment'))
+          return [{ id: ids.enrollmentId }];
+        if (
+          sql.includes('campaignOccurrence') &&
+          sql.includes('SELECT id, state')
+        )
+          return [{ id: ids.occurrenceId, state: 'IN_FLIGHT' }];
+        if (sql.includes('campaignOccurrence') && sql.includes('SELECT *'))
+          return [{ id: ids.occurrenceId, state: 'IN_FLIGHT' }];
+        if (sql.includes('outboundEmailAttempt'))
+          return [
+            projectAttemptLikeQueueWorker(sql, {
+              ...routing,
+              attemptNumber: 1,
+              claimedAt: new Date('2026-09-11T00:00:00.000Z'),
+              messageId: '20202020-cccc-4ccc-8ccc-cccccccccccc',
+              normalizedRecipient: 'recipient@example.com',
+              normalizedSenderHandle: 'sender@example.com',
+              priorAcceptedEvidenceId: null,
+              provider: 'google',
+              renderDigest: 'a'.repeat(64),
+              selectionConstraintKind: 'ROTATE',
+              senderPoolFingerprint: 'b'.repeat(64),
+              slotAt: new Date('2026-09-11T00:00:01.000Z'),
+              source: 'CAMPAIGN_SEQUENCE',
+              attemptState: 'RESERVED',
+              capacityState: 'RESERVED',
+              unknownAfter: new Date('2026-09-11T00:01:00.000Z'),
+            }),
+          ];
+        if (sql.includes('UPDATE core."campaignOccurrence"'))
+          return [{ id: ids.occurrenceId }];
+        return [];
+      });
+      const service = new CampaignProgressionService({
+        blockReservedAttemptBeforeProvider,
+      } as never);
+
+      await expect(
+        service.cancelBeforeSubmissionInTransaction(
+          {
+            workspaceId: ids.workspaceId,
+            campaignId: ids.campaignId,
+            occurrenceId: ids.occurrenceId,
+            reason,
+          },
+          managerWith(query) as never,
+        ),
+      ).resolves.toEqual({ status: 'CANCELLED' });
+      expect(blockReservedAttemptBeforeProvider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reservation: expect.objectContaining({ localDate }),
+        }),
+        expect.anything(),
+      );
+      expect(
+        query.mock.calls.find(([sql]) =>
+          String(sql).includes('outboundEmailAttempt'),
+        )?.[0],
+      ).toContain('"localDate"::text AS "localDate"');
+    },
+  );
 
   it.each([
     ['cancelOccurrenceInTransaction', 'CAMPAIGN_PAUSED', 'CANCELLED'],
@@ -910,12 +1015,12 @@ describe('CampaignProgressionService', () => {
         ];
       if (sql.includes('outboundEmailAttempt'))
         return [
-          {
+          projectAttemptLikeQueueWorker(sql, {
             attemptId: ids.attemptId,
             attemptState: 'ACCEPTED',
             projectedMessageId: 'message',
             projectedMessageThreadId: 'thread',
-          },
+          }),
         ];
       if (sql.includes("SET state='SUCCEEDED'")) {
         succeeded = true;
@@ -955,6 +1060,9 @@ describe('CampaignProgressionService', () => {
       status: 'EXACT_REPLAY',
     });
     const statements = query.mock.calls.map(([sql]) => String(sql));
+    expect(
+      statements.find((sql) => sql.includes('outboundEmailAttempt')),
+    ).toContain('"localDate"::text AS "localDate"');
     expect(
       statements.filter((sql) => sql.includes("SET state='SUCCEEDED'")),
     ).toHaveLength(1);

@@ -3,7 +3,10 @@ import { type EntityManager, getMetadataArgsStorage } from 'typeorm';
 
 import { OutboundEmailAttemptEntity } from 'src/engine/core-modules/campaign-execution/entities/outbound-email-attempt.entity';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
-import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
+import {
+  OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION,
+  OutboundEmailAttemptService,
+} from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
 import {
   OUTBOUND_EMAIL_ATTEMPT_TRANSITIONS,
   type AttemptOutcomeResult,
@@ -630,6 +633,34 @@ describe('OutboundEmailAttempt entity contract', () => {
     expect(
       columns.find(({ propertyName }) => propertyName === 'attemptId')?.options,
     ).toMatchObject({ primary: true, type: 'uuid' });
+  });
+
+  it('projects every persisted receipt field exactly once and normalizes only localDate', () => {
+    const persistedFields = getMetadataArgsStorage()
+      .columns.filter(({ target }) => target === OutboundEmailAttemptEntity)
+      .map(({ propertyName }) => propertyName);
+    const expressions = OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION.split(
+      ',',
+    ).map((expression) => expression.trim());
+    const projectedFields = expressions.map((expression) => {
+      const alias = expression.match(/ AS "([^"]+)"$/)?.[1];
+      const field = expression.match(/^"([^"]+)"$/)?.[1];
+
+      return alias ?? field;
+    });
+
+    expect(OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION).not.toContain('*');
+    expect(expressions).toHaveLength(persistedFields.length);
+    expect(projectedFields).toEqual(persistedFields);
+    expect(new Set(projectedFields).size).toBe(persistedFields.length);
+    expect(
+      expressions.filter(
+        (expression) => expression === '"localDate"::text AS "localDate"',
+      ),
+    ).toHaveLength(1);
+    expect(
+      expressions.filter((expression) => expression.includes('::text')),
+    ).toHaveLength(1);
   });
 
   it('declares stable source/state checks and separately scoped partial indexes', () => {
@@ -2400,6 +2431,15 @@ const createStatefulCompositionHarness = (options?: {
 
     return value;
   };
+  const projectAttemptReceiptLikeQueueWorker = (
+    sql: string,
+    receipt: OutboundEmailAttemptReceipt,
+  ): OutboundEmailAttemptReceipt => ({
+    ...clone(receipt),
+    localDate: sql.includes('"localDate"::text AS "localDate"')
+      ? receipt.localDate
+      : (new Date(`${receipt.localDate}T00:00:00.000Z`) as unknown as string),
+  });
   const consumeFault = (family: StatefulFaultFamily) => {
     const mode = faults[family];
 
@@ -2410,6 +2450,7 @@ const createStatefulCompositionHarness = (options?: {
   const structuredResult = (
     family: StatefulFaultFamily,
     record: Record<string, unknown> | null,
+    sql?: string,
   ) => {
     const mode = consumeFault(family);
 
@@ -2446,7 +2487,15 @@ const createStatefulCompositionHarness = (options?: {
       };
     }
 
-    return { affected: 1, records: [clone(record)] };
+    const projected =
+      sql !== undefined && 'localDate' in record
+        ? projectAttemptReceiptLikeQueueWorker(
+            sql,
+            record as unknown as OutboundEmailAttemptReceipt,
+          )
+        : clone(record);
+
+    return { affected: 1, records: [projected] };
   };
   const query = jest.fn(
     async (
@@ -2551,7 +2600,7 @@ const createStatefulCompositionHarness = (options?: {
           return [{ ...clone(inserted), connectedAccountId: ids.evidence }];
         }
 
-        return [clone(inserted)];
+        return [projectAttemptReceiptLikeQueueWorker(sql, inserted)];
       }
 
       if (sql.includes('UPDATE "core"."mailboxCapacityDay"')) {
@@ -2617,7 +2666,7 @@ const createStatefulCompositionHarness = (options?: {
           }
           if (updated !== null) attempts.set(row.attemptId, clone(updated));
 
-          return structuredResult('acceptedCas', updated);
+          return structuredResult('acceptedCas', updated, sql);
         }
 
         if (sql.includes('SET "attemptState" = \'BLOCKED\'')) {
@@ -2711,7 +2760,7 @@ const createStatefulCompositionHarness = (options?: {
 
         if (updated !== null) attempts.set(row.attemptId, clone(updated));
 
-        return structuredResult(family, updated);
+        return structuredResult(family, updated, sql);
       }
 
       if (sql.includes('FROM "core"."outboundEmailAttempt"')) {
@@ -2727,7 +2776,7 @@ const createStatefulCompositionHarness = (options?: {
           return [];
         }
 
-        return [clone(row)];
+        return [projectAttemptReceiptLikeQueueWorker(sql, row)];
       }
 
       throw new Error(`Unexpected SQL: ${sql}`);
