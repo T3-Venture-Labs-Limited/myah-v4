@@ -494,6 +494,39 @@ export const isRecordMatchingFilter = ({
           return false;
         }
 
+        const targetObjectMetadataItem = objectMetadataItems?.find(
+          (item) =>
+            item.nameSingular ===
+            objectMetadataField.relation?.targetObjectMetadata.nameSingular,
+        );
+        const isNestedTargetRecordFilter =
+          isObject(filterValue) &&
+          !Array.isArray(filterValue) &&
+          isDefined(targetObjectMetadataItem) &&
+          Object.keys(filterValue).some(
+            (key) =>
+              key === 'and' ||
+              key === 'or' ||
+              key === 'not' ||
+              targetObjectMetadataItem.fields.some(
+                (field) => field.name === key,
+              ),
+          );
+
+        if (isNestedTargetRecordFilter) {
+          if (!isObject(record[filterKey])) {
+            return false;
+          }
+
+          return isRecordMatchingFilter({
+            record: record[filterKey],
+            filter: filterValue as RecordGqlOperationFilter,
+            objectMetadataItem: targetObjectMetadataItem,
+            objectMetadataItems,
+            shouldMatchUnloadedOneToManyRelations,
+          });
+        }
+
         return isMatchingUUIDFilter({
           uuidFilter: filterValue as UUIDFilter,
           value: record[filterKey]?.id ?? null,
