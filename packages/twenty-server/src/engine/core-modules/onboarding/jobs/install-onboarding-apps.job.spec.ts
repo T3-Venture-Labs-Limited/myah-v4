@@ -13,8 +13,8 @@ describe('InstallOnboardingAppsJob', () => {
   let onboardingService: OnboardingService;
 
   const workspaceId = 'workspace-id';
-  const callRecorderId = 'call-recorder-uid';
-  const peopleDataLabsId = 'people-data-labs-uid';
+  const firstAppId = 'first-app-uid';
+  const secondAppId = 'second-app-uid';
 
   const buildRegistration = (id: string) =>
     ({ id }) as ApplicationRegistrationEntity;
@@ -70,7 +70,7 @@ describe('InstallOnboardingAppsJob', () => {
 
     await job.handle({
       workspaceId,
-      universalIdentifiers: [callRecorderId, peopleDataLabsId],
+      universalIdentifiers: [firstAppId, secondAppId],
     });
 
     expect(onboardingService.creditInstallAppsReward).toHaveBeenCalledWith({
@@ -94,7 +94,7 @@ describe('InstallOnboardingAppsJob', () => {
 
     await job.handle({
       workspaceId,
-      universalIdentifiers: [callRecorderId],
+      universalIdentifiers: [firstAppId],
     });
 
     const creditOrder = (onboardingService.creditInstallAppsReward as jest.Mock)
@@ -118,7 +118,7 @@ describe('InstallOnboardingAppsJob', () => {
 
     await job.handle({
       workspaceId,
-      universalIdentifiers: [callRecorderId, peopleDataLabsId],
+      universalIdentifiers: [firstAppId, secondAppId],
     });
 
     expect(onboardingService.creditInstallAppsReward).toHaveBeenCalledWith({
@@ -134,7 +134,7 @@ describe('InstallOnboardingAppsJob', () => {
     jest
       .spyOn(applicationRegistrationService, 'findOneByUniversalIdentifier')
       .mockImplementation(async (universalIdentifier) =>
-        universalIdentifier === callRecorderId
+        universalIdentifier === firstAppId
           ? null
           : buildRegistration(`registration-${universalIdentifier}`),
       );
@@ -144,7 +144,7 @@ describe('InstallOnboardingAppsJob', () => {
 
     await job.handle({
       workspaceId,
-      universalIdentifiers: [callRecorderId, peopleDataLabsId],
+      universalIdentifiers: [firstAppId, secondAppId],
     });
 
     expect(onboardingService.creditInstallAppsReward).toHaveBeenCalledWith({

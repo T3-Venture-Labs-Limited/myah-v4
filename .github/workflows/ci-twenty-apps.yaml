@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       application:
-        description: 'App folder name to test (e.g. "twenty-linear"). Leave empty to test all apps.'
+        description: 'App folder name to test (e.g. "myah-shopify"). Leave empty to test all apps.'
         required: false
         default: ''
         type: string
