@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 
 import { CampaignSequenceAuthorityModule } from 'src/engine/core-modules/campaign-sequence-authority/campaign-sequence-authority.module';
+import { CoreEngineModule } from 'src/engine/core-modules/core-engine.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
@@ -103,9 +104,12 @@ class OrchestrationTestInfrastructureModule {}
 class EmptyExternalInfrastructureModule {}
 
 describe('CampaignExecutionOrchestrationModule', () => {
-  it('registers with the runtime HTTP and worker composition roots', () => {
+  it('registers with the runtime HTTP, GraphQL, and worker composition roots', () => {
     expect(
       Reflect.getMetadata(MODULE_METADATA.IMPORTS, ModulesModule),
+    ).toContain(CampaignExecutionOrchestrationModule);
+    expect(
+      Reflect.getMetadata(MODULE_METADATA.IMPORTS, CoreEngineModule),
     ).toContain(CampaignExecutionOrchestrationModule);
     expect(
       Reflect.getMetadata(MODULE_METADATA.IMPORTS, QueueWorkerModule),

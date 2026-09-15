@@ -2546,114 +2546,6 @@ export interface RevokeWorkspaceMailboxResult {
     __typename: 'RevokeWorkspaceMailboxResult'
 }
 
-export interface CampaignOutreachAudienceCreator {
-    campaignCreatorId: Scalars['UUID']
-    creatorId: Scalars['UUID']
-    creatorName: Scalars['String']
-    __typename: 'CampaignOutreachAudienceCreator'
-}
-
-export interface CampaignOutreachAudienceExcludedCreator {
-    campaignCreatorId: Scalars['UUID']
-    creatorId?: Scalars['UUID']
-    creatorName?: Scalars['String']
-    reasons: CampaignOutreachAudienceExclusionReason[]
-    __typename: 'CampaignOutreachAudienceExcludedCreator'
-}
-
-export type CampaignOutreachAudienceExclusionReason = 'INVALID_MEMBERSHIP' | 'MISSING_CREATOR' | 'INVALID_STAGE' | 'NON_EMAIL_CONTACT_METHOD' | 'INVALID_EMAIL' | 'SUPPRESSED_EMAIL' | 'DUPLICATE_CREATOR_EMAIL'
-
-export interface CampaignOutreachAudienceReview {
-    state: CampaignOutreachAudienceReviewState
-    campaignId: Scalars['UUID']
-    errorCode?: Scalars['String']
-    eligibleCount: Scalars['Int']
-    eligibleCreators: CampaignOutreachAudienceCreator[]
-    excludedCount: Scalars['Int']
-    excludedCreators: CampaignOutreachAudienceExcludedCreator[]
-    __typename: 'CampaignOutreachAudienceReview'
-}
-
-export type CampaignOutreachAudienceReviewState = 'LOADED' | 'ERROR'
-
-export interface CampaignSendingWindowMutationResultDTO {
-    status: Scalars['String']
-    reason?: Scalars['String']
-    __typename: 'CampaignSendingWindowMutationResultDTO'
-}
-
-export interface CampaignExecutionMutationResultDTO {
-    status: Scalars['String']
-    lifecycleStatus?: Scalars['String']
-    reason?: Scalars['String']
-    replayed: Scalars['Boolean']
-    changed: Scalars['Boolean']
-    inFlightCount?: Scalars['Int']
-    __typename: 'CampaignExecutionMutationResultDTO'
-}
-
-export interface Webhook {
-    id: Scalars['UUID']
-    targetUrl: Scalars['String']
-    operations: Scalars['String'][]
-    description?: Scalars['String']
-    secret: Scalars['String']
-    applicationId: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    deletedAt?: Scalars['DateTime']
-    __typename: 'Webhook'
-}
-
-export interface ToolIndexEntry {
-    name: Scalars['String']
-    label: Scalars['String']
-    description: Scalars['String']
-    category: Scalars['String']
-    objectName?: Scalars['String']
-    icon?: Scalars['String']
-    inputSchema?: Scalars['JSON']
-    __typename: 'ToolIndexEntry'
-}
-
-export interface AgentMessagePart {
-    id: Scalars['UUID']
-    messageId: Scalars['UUID']
-    orderIndex: Scalars['Int']
-    type: Scalars['String']
-    textContent?: Scalars['String']
-    reasoningContent?: Scalars['String']
-    toolName?: Scalars['String']
-    toolCallId?: Scalars['String']
-    toolInput?: Scalars['JSON']
-    toolOutput?: Scalars['JSON']
-    state?: Scalars['String']
-    providerExecuted?: Scalars['Boolean']
-    errorMessage?: Scalars['String']
-    errorDetails?: Scalars['JSON']
-    sourceUrlSourceId?: Scalars['String']
-    sourceUrlUrl?: Scalars['String']
-    sourceUrlTitle?: Scalars['String']
-    sourceDocumentSourceId?: Scalars['String']
-    sourceDocumentMediaType?: Scalars['String']
-    sourceDocumentTitle?: Scalars['String']
-    sourceDocumentFilename?: Scalars['String']
-    fileMediaType?: Scalars['String']
-    fileFilename?: Scalars['String']
-    fileId?: Scalars['UUID']
-    fileUrl?: Scalars['String']
-    providerMetadata?: Scalars['JSON']
-    createdAt: Scalars['DateTime']
-    __typename: 'AgentMessagePart'
-}
-
-export interface RunAgentResult {
-    result?: Scalars['JSON']
-    error?: Scalars['String']
-    success: Scalars['Boolean']
-    __typename: 'RunAgentResult'
-}
-
 export interface BillingTrialPeriod {
     duration: Scalars['Float']
     isCreditCardRequired: Scalars['Boolean']
@@ -2864,6 +2756,114 @@ export interface PlaceDetailsResult {
     country?: Scalars['String']
     location?: Location
     __typename: 'PlaceDetailsResult'
+}
+
+export interface AgentMessagePart {
+    id: Scalars['UUID']
+    messageId: Scalars['UUID']
+    orderIndex: Scalars['Int']
+    type: Scalars['String']
+    textContent?: Scalars['String']
+    reasoningContent?: Scalars['String']
+    toolName?: Scalars['String']
+    toolCallId?: Scalars['String']
+    toolInput?: Scalars['JSON']
+    toolOutput?: Scalars['JSON']
+    state?: Scalars['String']
+    providerExecuted?: Scalars['Boolean']
+    errorMessage?: Scalars['String']
+    errorDetails?: Scalars['JSON']
+    sourceUrlSourceId?: Scalars['String']
+    sourceUrlUrl?: Scalars['String']
+    sourceUrlTitle?: Scalars['String']
+    sourceDocumentSourceId?: Scalars['String']
+    sourceDocumentMediaType?: Scalars['String']
+    sourceDocumentTitle?: Scalars['String']
+    sourceDocumentFilename?: Scalars['String']
+    fileMediaType?: Scalars['String']
+    fileFilename?: Scalars['String']
+    fileId?: Scalars['UUID']
+    fileUrl?: Scalars['String']
+    providerMetadata?: Scalars['JSON']
+    createdAt: Scalars['DateTime']
+    __typename: 'AgentMessagePart'
+}
+
+export interface RunAgentResult {
+    result?: Scalars['JSON']
+    error?: Scalars['String']
+    success: Scalars['Boolean']
+    __typename: 'RunAgentResult'
+}
+
+export interface Webhook {
+    id: Scalars['UUID']
+    targetUrl: Scalars['String']
+    operations: Scalars['String'][]
+    description?: Scalars['String']
+    secret: Scalars['String']
+    applicationId: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    deletedAt?: Scalars['DateTime']
+    __typename: 'Webhook'
+}
+
+export interface ToolIndexEntry {
+    name: Scalars['String']
+    label: Scalars['String']
+    description: Scalars['String']
+    category: Scalars['String']
+    objectName?: Scalars['String']
+    icon?: Scalars['String']
+    inputSchema?: Scalars['JSON']
+    __typename: 'ToolIndexEntry'
+}
+
+export interface CampaignOutreachAudienceCreator {
+    campaignCreatorId: Scalars['UUID']
+    creatorId: Scalars['UUID']
+    creatorName: Scalars['String']
+    __typename: 'CampaignOutreachAudienceCreator'
+}
+
+export interface CampaignOutreachAudienceExcludedCreator {
+    campaignCreatorId: Scalars['UUID']
+    creatorId?: Scalars['UUID']
+    creatorName?: Scalars['String']
+    reasons: CampaignOutreachAudienceExclusionReason[]
+    __typename: 'CampaignOutreachAudienceExcludedCreator'
+}
+
+export type CampaignOutreachAudienceExclusionReason = 'INVALID_MEMBERSHIP' | 'MISSING_CREATOR' | 'INVALID_STAGE' | 'NON_EMAIL_CONTACT_METHOD' | 'INVALID_EMAIL' | 'SUPPRESSED_EMAIL' | 'DUPLICATE_CREATOR_EMAIL'
+
+export interface CampaignOutreachAudienceReview {
+    state: CampaignOutreachAudienceReviewState
+    campaignId: Scalars['UUID']
+    errorCode?: Scalars['String']
+    eligibleCount: Scalars['Int']
+    eligibleCreators: CampaignOutreachAudienceCreator[]
+    excludedCount: Scalars['Int']
+    excludedCreators: CampaignOutreachAudienceExcludedCreator[]
+    __typename: 'CampaignOutreachAudienceReview'
+}
+
+export type CampaignOutreachAudienceReviewState = 'LOADED' | 'ERROR'
+
+export interface CampaignSendingWindowMutationResultDTO {
+    status: Scalars['String']
+    reason?: Scalars['String']
+    __typename: 'CampaignSendingWindowMutationResultDTO'
+}
+
+export interface CampaignExecutionMutationResultDTO {
+    status: Scalars['String']
+    lifecycleStatus?: Scalars['String']
+    reason?: Scalars['String']
+    replayed: Scalars['Boolean']
+    changed: Scalars['Boolean']
+    inFlightCount?: Scalars['Int']
+    __typename: 'CampaignExecutionMutationResultDTO'
 }
 
 export interface ChannelSyncSuccess {
@@ -3280,15 +3280,14 @@ export interface Query {
     findOneAgent: Agent
     getRoles: Role[]
     getSSOIdentityProviders: FindAvailableSSOIDP[]
-    campaignOutreachAudienceReview: CampaignOutreachAudienceReview
+    getPageLayoutWidgets: PageLayoutWidget[]
+    getPageLayoutWidget: PageLayoutWidget
     getToolIndex: ToolIndexEntry[]
     getToolInputSchema?: Scalars['JSON']
     webhooks: Webhook[]
     webhook?: Webhook
     getActionApprovalProposal: ActionApprovalProposal
     getActionExecutionReceipt?: ActionExecutionReceipt
-    getPageLayoutWidgets: PageLayoutWidget[]
-    getPageLayoutWidget: PageLayoutWidget
     myMessageFolders: MessageFolder[]
     myCalendarChannels: CalendarChannel[]
     minimalMetadata: MinimalMetadata
@@ -3305,6 +3304,7 @@ export interface Query {
     pieChartData: PieChartData
     lineChartData: LineChartData
     barChartData: BarChartData
+    campaignOutreachAudienceReview: CampaignOutreachAudienceReview
     getAutoCompleteAddress: AutocompleteResult[]
     getAddressDetails: PlaceDetailsResult
     getUsageAnalytics: UsageAnalytics
@@ -3529,16 +3529,13 @@ export interface Mutation {
     createSAMLIdentityProvider: SetupSso
     deleteSSOIdentityProvider: DeleteSso
     editSSOIdentityProvider: EditSso
-    startCampaignExecution: CampaignExecutionMutationResultDTO
-    updateCampaignSendingWindow: CampaignSendingWindowMutationResultDTO
-    stopCampaignExecution: CampaignExecutionMutationResultDTO
+    createPageLayoutWidget: PageLayoutWidget
+    updatePageLayoutWidget: PageLayoutWidget
+    destroyPageLayoutWidget: Scalars['Boolean']
     createWebhook: Webhook
     updateWebhook: Webhook
     deleteWebhook: Webhook
     runAgent: RunAgentResult
-    createPageLayoutWidget: PageLayoutWidget
-    updatePageLayoutWidget: PageLayoutWidget
-    destroyPageLayoutWidget: Scalars['Boolean']
     updateMessageFolder: MessageFolder
     updateMessageFolders: MessageFolder[]
     updateCalendarChannel: CalendarChannel
@@ -3564,6 +3561,9 @@ export interface Mutation {
     trackAnalytics: Analytics
     duplicateDashboard: DuplicatedDashboard
     impersonate: Impersonate
+    startCampaignExecution: CampaignExecutionMutationResultDTO
+    updateCampaignSendingWindow: CampaignSendingWindowMutationResultDTO
+    stopCampaignExecution: CampaignExecutionMutationResultDTO
     createCalendarEvent: CreateCalendarEventOutput
     sendEmail: SendEmailOutput
     startChannelSync: ChannelSyncSuccess
@@ -6277,119 +6277,6 @@ export interface RevokeWorkspaceMailboxResultGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface CampaignOutreachAudienceCreatorGenqlSelection{
-    campaignCreatorId?: boolean | number
-    creatorId?: boolean | number
-    creatorName?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignOutreachAudienceExcludedCreatorGenqlSelection{
-    campaignCreatorId?: boolean | number
-    creatorId?: boolean | number
-    creatorName?: boolean | number
-    reasons?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignOutreachAudienceReviewGenqlSelection{
-    state?: boolean | number
-    campaignId?: boolean | number
-    errorCode?: boolean | number
-    eligibleCount?: boolean | number
-    eligibleCreators?: CampaignOutreachAudienceCreatorGenqlSelection
-    excludedCount?: boolean | number
-    excludedCreators?: CampaignOutreachAudienceExcludedCreatorGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignSendingWindowMutationResultDTOGenqlSelection{
-    status?: boolean | number
-    reason?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignExecutionMutationResultDTOGenqlSelection{
-    status?: boolean | number
-    lifecycleStatus?: boolean | number
-    reason?: boolean | number
-    replayed?: boolean | number
-    changed?: boolean | number
-    inFlightCount?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface WebhookGenqlSelection{
-    id?: boolean | number
-    targetUrl?: boolean | number
-    operations?: boolean | number
-    description?: boolean | number
-    secret?: boolean | number
-    applicationId?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    deletedAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ToolIndexEntryGenqlSelection{
-    name?: boolean | number
-    label?: boolean | number
-    description?: boolean | number
-    category?: boolean | number
-    objectName?: boolean | number
-    icon?: boolean | number
-    inputSchema?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface AgentMessagePartGenqlSelection{
-    id?: boolean | number
-    messageId?: boolean | number
-    orderIndex?: boolean | number
-    type?: boolean | number
-    textContent?: boolean | number
-    reasoningContent?: boolean | number
-    toolName?: boolean | number
-    toolCallId?: boolean | number
-    toolInput?: boolean | number
-    toolOutput?: boolean | number
-    state?: boolean | number
-    providerExecuted?: boolean | number
-    errorMessage?: boolean | number
-    errorDetails?: boolean | number
-    sourceUrlSourceId?: boolean | number
-    sourceUrlUrl?: boolean | number
-    sourceUrlTitle?: boolean | number
-    sourceDocumentSourceId?: boolean | number
-    sourceDocumentMediaType?: boolean | number
-    sourceDocumentTitle?: boolean | number
-    sourceDocumentFilename?: boolean | number
-    fileMediaType?: boolean | number
-    fileFilename?: boolean | number
-    fileId?: boolean | number
-    fileUrl?: boolean | number
-    providerMetadata?: boolean | number
-    createdAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface RunAgentResultGenqlSelection{
-    result?: boolean | number
-    error?: boolean | number
-    success?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface BillingTrialPeriodGenqlSelection{
     duration?: boolean | number
     isCreditCardRequired?: boolean | number
@@ -6616,6 +6503,119 @@ export interface PlaceDetailsResultGenqlSelection{
     city?: boolean | number
     country?: boolean | number
     location?: LocationGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface AgentMessagePartGenqlSelection{
+    id?: boolean | number
+    messageId?: boolean | number
+    orderIndex?: boolean | number
+    type?: boolean | number
+    textContent?: boolean | number
+    reasoningContent?: boolean | number
+    toolName?: boolean | number
+    toolCallId?: boolean | number
+    toolInput?: boolean | number
+    toolOutput?: boolean | number
+    state?: boolean | number
+    providerExecuted?: boolean | number
+    errorMessage?: boolean | number
+    errorDetails?: boolean | number
+    sourceUrlSourceId?: boolean | number
+    sourceUrlUrl?: boolean | number
+    sourceUrlTitle?: boolean | number
+    sourceDocumentSourceId?: boolean | number
+    sourceDocumentMediaType?: boolean | number
+    sourceDocumentTitle?: boolean | number
+    sourceDocumentFilename?: boolean | number
+    fileMediaType?: boolean | number
+    fileFilename?: boolean | number
+    fileId?: boolean | number
+    fileUrl?: boolean | number
+    providerMetadata?: boolean | number
+    createdAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface RunAgentResultGenqlSelection{
+    result?: boolean | number
+    error?: boolean | number
+    success?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface WebhookGenqlSelection{
+    id?: boolean | number
+    targetUrl?: boolean | number
+    operations?: boolean | number
+    description?: boolean | number
+    secret?: boolean | number
+    applicationId?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    deletedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ToolIndexEntryGenqlSelection{
+    name?: boolean | number
+    label?: boolean | number
+    description?: boolean | number
+    category?: boolean | number
+    objectName?: boolean | number
+    icon?: boolean | number
+    inputSchema?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignOutreachAudienceCreatorGenqlSelection{
+    campaignCreatorId?: boolean | number
+    creatorId?: boolean | number
+    creatorName?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignOutreachAudienceExcludedCreatorGenqlSelection{
+    campaignCreatorId?: boolean | number
+    creatorId?: boolean | number
+    creatorName?: boolean | number
+    reasons?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignOutreachAudienceReviewGenqlSelection{
+    state?: boolean | number
+    campaignId?: boolean | number
+    errorCode?: boolean | number
+    eligibleCount?: boolean | number
+    eligibleCreators?: CampaignOutreachAudienceCreatorGenqlSelection
+    excludedCount?: boolean | number
+    excludedCreators?: CampaignOutreachAudienceExcludedCreatorGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignSendingWindowMutationResultDTOGenqlSelection{
+    status?: boolean | number
+    reason?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignExecutionMutationResultDTOGenqlSelection{
+    status?: boolean | number
+    lifecycleStatus?: boolean | number
+    reason?: boolean | number
+    replayed?: boolean | number
+    changed?: boolean | number
+    inFlightCount?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -7073,15 +7073,14 @@ export interface QueryGenqlSelection{
     findOneAgent?: (AgentGenqlSelection & { __args: {input: AgentIdInput} })
     getRoles?: RoleGenqlSelection
     getSSOIdentityProviders?: FindAvailableSSOIDPGenqlSelection
-    campaignOutreachAudienceReview?: (CampaignOutreachAudienceReviewGenqlSelection & { __args: {campaignId: Scalars['UUID']} })
+    getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
+    getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
     getToolIndex?: ToolIndexEntryGenqlSelection
     getToolInputSchema?: { __args: {toolName: Scalars['String']} }
     webhooks?: WebhookGenqlSelection
     webhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
     getActionApprovalProposal?: (ActionApprovalProposalGenqlSelection & { __args: {bindingId: Scalars['UUID']} })
     getActionExecutionReceipt?: (ActionExecutionReceiptGenqlSelection & { __args: {bindingId: Scalars['UUID']} })
-    getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
-    getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
     myMessageFolders?: (MessageFolderGenqlSelection & { __args?: {messageChannelId?: (Scalars['UUID'] | null)} })
     myCalendarChannels?: (CalendarChannelGenqlSelection & { __args?: {connectedAccountId?: (Scalars['UUID'] | null)} })
     minimalMetadata?: MinimalMetadataGenqlSelection
@@ -7098,6 +7097,7 @@ export interface QueryGenqlSelection{
     pieChartData?: (PieChartDataGenqlSelection & { __args: {input: PieChartDataInput} })
     lineChartData?: (LineChartDataGenqlSelection & { __args: {input: LineChartDataInput} })
     barChartData?: (BarChartDataGenqlSelection & { __args: {input: BarChartDataInput} })
+    campaignOutreachAudienceReview?: (CampaignOutreachAudienceReviewGenqlSelection & { __args: {campaignId: Scalars['UUID']} })
     getAutoCompleteAddress?: (AutocompleteResultGenqlSelection & { __args: {address: Scalars['String'], token: Scalars['String'], country?: (Scalars['String'] | null), isFieldCity?: (Scalars['Boolean'] | null)} })
     getAddressDetails?: (PlaceDetailsResultGenqlSelection & { __args: {placeId: Scalars['String'], token: Scalars['String']} })
     getUsageAnalytics?: (UsageAnalyticsGenqlSelection & { __args?: {input?: (UsageAnalyticsInput | null)} })
@@ -7371,16 +7371,13 @@ export interface MutationGenqlSelection{
     createSAMLIdentityProvider?: (SetupSsoGenqlSelection & { __args: {input: SetupSAMLSsoInput} })
     deleteSSOIdentityProvider?: (DeleteSsoGenqlSelection & { __args: {input: DeleteSsoInput} })
     editSSOIdentityProvider?: (EditSsoGenqlSelection & { __args: {input: EditSsoInput} })
-    startCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StartCampaignExecutionInput} })
-    updateCampaignSendingWindow?: (CampaignSendingWindowMutationResultDTOGenqlSelection & { __args: {input: UpdateCampaignSendingWindowInput} })
-    stopCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StopCampaignExecutionInput} })
+    createPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {input: CreatePageLayoutWidgetInput} })
+    updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
+    destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
     createWebhook?: (WebhookGenqlSelection & { __args: {input: CreateWebhookInput} })
     updateWebhook?: (WebhookGenqlSelection & { __args: {input: UpdateWebhookInput} })
     deleteWebhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
     runAgent?: (RunAgentResultGenqlSelection & { __args: {input: RunAgentInput} })
-    createPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {input: CreatePageLayoutWidgetInput} })
-    updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
-    destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
     updateMessageFolder?: (MessageFolderGenqlSelection & { __args: {input: UpdateMessageFolderInput} })
     updateMessageFolders?: (MessageFolderGenqlSelection & { __args: {input: UpdateMessageFoldersInput} })
     updateCalendarChannel?: (CalendarChannelGenqlSelection & { __args: {input: UpdateCalendarChannelInput} })
@@ -7406,6 +7403,9 @@ export interface MutationGenqlSelection{
     trackAnalytics?: (AnalyticsGenqlSelection & { __args: {type: AnalyticsType, name?: (Scalars['String'] | null), event?: (Scalars['String'] | null), properties?: (Scalars['JSON'] | null)} })
     duplicateDashboard?: (DuplicatedDashboardGenqlSelection & { __args: {id: Scalars['UUID']} })
     impersonate?: (ImpersonateGenqlSelection & { __args: {userId: Scalars['UUID'], workspaceId: Scalars['UUID']} })
+    startCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StartCampaignExecutionInput} })
+    updateCampaignSendingWindow?: (CampaignSendingWindowMutationResultDTOGenqlSelection & { __args: {input: UpdateCampaignSendingWindowInput} })
+    stopCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StopCampaignExecutionInput} })
     createCalendarEvent?: (CreateCalendarEventOutputGenqlSelection & { __args: {input: CreateCalendarEventInput} })
     sendEmail?: (SendEmailOutputGenqlSelection & { __args: {input: SendEmailInput} })
     startChannelSync?: (ChannelSyncSuccessGenqlSelection & { __args: {connectedAccountId: Scalars['UUID']} })
@@ -7798,11 +7798,9 @@ export interface DeleteSsoInput {identityProviderId: Scalars['UUID']}
 
 export interface EditSsoInput {id: Scalars['UUID'],status: SSOIdentityProviderStatus}
 
-export interface StartCampaignExecutionInput {campaignId: Scalars['UUID'],startIdempotencyKey: Scalars['UUID']}
+export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
 
-export interface UpdateCampaignSendingWindowInput {campaignId: Scalars['UUID'],timeZone: Scalars['String'],startLocalTime: Scalars['String'],endLocalTime: Scalars['String']}
-
-export interface StopCampaignExecutionInput {campaignId: Scalars['UUID']}
+export interface UpdatePageLayoutWidgetInput {pageLayoutTabId?: (Scalars['UUID'] | null),title?: (Scalars['String'] | null),type?: (WidgetType | null),objectMetadataId?: (Scalars['UUID'] | null),gridPosition?: (GridPositionInput | null),position?: (Scalars['JSON'] | null),configuration?: (Scalars['JSON'] | null),conditionalDisplay?: (Scalars['JSON'] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null)}
 
 export interface CreateWebhookInput {id?: (Scalars['UUID'] | null),targetUrl: Scalars['String'],operations: Scalars['String'][],description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
 
@@ -7815,10 +7813,6 @@ update: UpdateWebhookInputUpdates}
 export interface UpdateWebhookInputUpdates {targetUrl?: (Scalars['String'] | null),operations?: (Scalars['String'][] | null),description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
 
 export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId?: (Scalars['String'] | null)}
-
-export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
-
-export interface UpdatePageLayoutWidgetInput {pageLayoutTabId?: (Scalars['UUID'] | null),title?: (Scalars['String'] | null),type?: (WidgetType | null),objectMetadataId?: (Scalars['UUID'] | null),gridPosition?: (GridPositionInput | null),position?: (Scalars['JSON'] | null),configuration?: (Scalars['JSON'] | null),conditionalDisplay?: (Scalars['JSON'] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null)}
 
 export interface UpdateMessageFolderInput {id: Scalars['UUID'],update: UpdateMessageFolderInputUpdates}
 
@@ -7839,6 +7833,12 @@ export interface AgentChatApprovalDecisionInput {decision: Scalars['String'],com
 export interface CreateSkillInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],label: Scalars['String'],icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content: Scalars['String']}
 
 export interface UpdateSkillInput {id: Scalars['UUID'],name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null)}
+
+export interface StartCampaignExecutionInput {campaignId: Scalars['UUID'],startIdempotencyKey: Scalars['UUID']}
+
+export interface UpdateCampaignSendingWindowInput {campaignId: Scalars['UUID'],timeZone: Scalars['String'],startLocalTime: Scalars['String'],endLocalTime: Scalars['String']}
+
+export interface StopCampaignExecutionInput {campaignId: Scalars['UUID']}
 
 export interface CreateCalendarEventInput {connectedAccountId: Scalars['String'],title: Scalars['String'],description?: (Scalars['String'] | null),location?: (Scalars['String'] | null),startsAt: Scalars['String'],endsAt: Scalars['String'],isFullDay?: (Scalars['Boolean'] | null),timeZone?: (Scalars['String'] | null),attendees?: (Scalars['String'] | null),sendInvitations?: (Scalars['Boolean'] | null),addConferencing?: (Scalars['Boolean'] | null)}
 
@@ -9778,78 +9778,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
 
 
 
-    const CampaignOutreachAudienceCreator_possibleTypes: string[] = ['CampaignOutreachAudienceCreator']
-    export const isCampaignOutreachAudienceCreator = (obj?: { __typename?: any } | null): obj is CampaignOutreachAudienceCreator => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignOutreachAudienceCreator"')
-      return CampaignOutreachAudienceCreator_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const CampaignOutreachAudienceExcludedCreator_possibleTypes: string[] = ['CampaignOutreachAudienceExcludedCreator']
-    export const isCampaignOutreachAudienceExcludedCreator = (obj?: { __typename?: any } | null): obj is CampaignOutreachAudienceExcludedCreator => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignOutreachAudienceExcludedCreator"')
-      return CampaignOutreachAudienceExcludedCreator_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const CampaignOutreachAudienceReview_possibleTypes: string[] = ['CampaignOutreachAudienceReview']
-    export const isCampaignOutreachAudienceReview = (obj?: { __typename?: any } | null): obj is CampaignOutreachAudienceReview => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignOutreachAudienceReview"')
-      return CampaignOutreachAudienceReview_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const CampaignSendingWindowMutationResultDTO_possibleTypes: string[] = ['CampaignSendingWindowMutationResultDTO']
-    export const isCampaignSendingWindowMutationResultDTO = (obj?: { __typename?: any } | null): obj is CampaignSendingWindowMutationResultDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSendingWindowMutationResultDTO"')
-      return CampaignSendingWindowMutationResultDTO_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const CampaignExecutionMutationResultDTO_possibleTypes: string[] = ['CampaignExecutionMutationResultDTO']
-    export const isCampaignExecutionMutationResultDTO = (obj?: { __typename?: any } | null): obj is CampaignExecutionMutationResultDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignExecutionMutationResultDTO"')
-      return CampaignExecutionMutationResultDTO_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const Webhook_possibleTypes: string[] = ['Webhook']
-    export const isWebhook = (obj?: { __typename?: any } | null): obj is Webhook => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWebhook"')
-      return Webhook_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const ToolIndexEntry_possibleTypes: string[] = ['ToolIndexEntry']
-    export const isToolIndexEntry = (obj?: { __typename?: any } | null): obj is ToolIndexEntry => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isToolIndexEntry"')
-      return ToolIndexEntry_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const AgentMessagePart_possibleTypes: string[] = ['AgentMessagePart']
-    export const isAgentMessagePart = (obj?: { __typename?: any } | null): obj is AgentMessagePart => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAgentMessagePart"')
-      return AgentMessagePart_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const RunAgentResult_possibleTypes: string[] = ['RunAgentResult']
-    export const isRunAgentResult = (obj?: { __typename?: any } | null): obj is RunAgentResult => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isRunAgentResult"')
-      return RunAgentResult_possibleTypes.includes(obj.__typename)
-    }
-
-
-
     const BillingTrialPeriod_possibleTypes: string[] = ['BillingTrialPeriod']
     export const isBillingTrialPeriod = (obj?: { __typename?: any } | null): obj is BillingTrialPeriod => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingTrialPeriod"')
@@ -10038,6 +9966,78 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isPlaceDetailsResult = (obj?: { __typename?: any } | null): obj is PlaceDetailsResult => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isPlaceDetailsResult"')
       return PlaceDetailsResult_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AgentMessagePart_possibleTypes: string[] = ['AgentMessagePart']
+    export const isAgentMessagePart = (obj?: { __typename?: any } | null): obj is AgentMessagePart => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAgentMessagePart"')
+      return AgentMessagePart_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const RunAgentResult_possibleTypes: string[] = ['RunAgentResult']
+    export const isRunAgentResult = (obj?: { __typename?: any } | null): obj is RunAgentResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isRunAgentResult"')
+      return RunAgentResult_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const Webhook_possibleTypes: string[] = ['Webhook']
+    export const isWebhook = (obj?: { __typename?: any } | null): obj is Webhook => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWebhook"')
+      return Webhook_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ToolIndexEntry_possibleTypes: string[] = ['ToolIndexEntry']
+    export const isToolIndexEntry = (obj?: { __typename?: any } | null): obj is ToolIndexEntry => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isToolIndexEntry"')
+      return ToolIndexEntry_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignOutreachAudienceCreator_possibleTypes: string[] = ['CampaignOutreachAudienceCreator']
+    export const isCampaignOutreachAudienceCreator = (obj?: { __typename?: any } | null): obj is CampaignOutreachAudienceCreator => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignOutreachAudienceCreator"')
+      return CampaignOutreachAudienceCreator_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignOutreachAudienceExcludedCreator_possibleTypes: string[] = ['CampaignOutreachAudienceExcludedCreator']
+    export const isCampaignOutreachAudienceExcludedCreator = (obj?: { __typename?: any } | null): obj is CampaignOutreachAudienceExcludedCreator => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignOutreachAudienceExcludedCreator"')
+      return CampaignOutreachAudienceExcludedCreator_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignOutreachAudienceReview_possibleTypes: string[] = ['CampaignOutreachAudienceReview']
+    export const isCampaignOutreachAudienceReview = (obj?: { __typename?: any } | null): obj is CampaignOutreachAudienceReview => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignOutreachAudienceReview"')
+      return CampaignOutreachAudienceReview_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignSendingWindowMutationResultDTO_possibleTypes: string[] = ['CampaignSendingWindowMutationResultDTO']
+    export const isCampaignSendingWindowMutationResultDTO = (obj?: { __typename?: any } | null): obj is CampaignSendingWindowMutationResultDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSendingWindowMutationResultDTO"')
+      return CampaignSendingWindowMutationResultDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignExecutionMutationResultDTO_possibleTypes: string[] = ['CampaignExecutionMutationResultDTO']
+    export const isCampaignExecutionMutationResultDTO = (obj?: { __typename?: any } | null): obj is CampaignExecutionMutationResultDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignExecutionMutationResultDTO"')
+      return CampaignExecutionMutationResultDTO_possibleTypes.includes(obj.__typename)
     }
 
 
@@ -10907,21 +10907,6 @@ export const enumFeatureFlagKey = {
    IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED: 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED' as const
 }
 
-export const enumCampaignOutreachAudienceExclusionReason = {
-   INVALID_MEMBERSHIP: 'INVALID_MEMBERSHIP' as const,
-   MISSING_CREATOR: 'MISSING_CREATOR' as const,
-   INVALID_STAGE: 'INVALID_STAGE' as const,
-   NON_EMAIL_CONTACT_METHOD: 'NON_EMAIL_CONTACT_METHOD' as const,
-   INVALID_EMAIL: 'INVALID_EMAIL' as const,
-   SUPPRESSED_EMAIL: 'SUPPRESSED_EMAIL' as const,
-   DUPLICATE_CREATOR_EMAIL: 'DUPLICATE_CREATOR_EMAIL' as const
-}
-
-export const enumCampaignOutreachAudienceReviewState = {
-   LOADED: 'LOADED' as const,
-   ERROR: 'ERROR' as const
-}
-
 export const enumModelFamily = {
    GPT: 'GPT' as const,
    CLAUDE: 'CLAUDE' as const,
@@ -10939,6 +10924,21 @@ export const enumSupportDriver = {
 export const enumCaptchaDriverType = {
    GOOGLE_RECAPTCHA: 'GOOGLE_RECAPTCHA' as const,
    TURNSTILE: 'TURNSTILE' as const
+}
+
+export const enumCampaignOutreachAudienceExclusionReason = {
+   INVALID_MEMBERSHIP: 'INVALID_MEMBERSHIP' as const,
+   MISSING_CREATOR: 'MISSING_CREATOR' as const,
+   INVALID_STAGE: 'INVALID_STAGE' as const,
+   NON_EMAIL_CONTACT_METHOD: 'NON_EMAIL_CONTACT_METHOD' as const,
+   INVALID_EMAIL: 'INVALID_EMAIL' as const,
+   SUPPRESSED_EMAIL: 'SUPPRESSED_EMAIL' as const,
+   DUPLICATE_CREATOR_EMAIL: 'DUPLICATE_CREATOR_EMAIL' as const
+}
+
+export const enumCampaignOutreachAudienceReviewState = {
+   LOADED: 'LOADED' as const,
+   ERROR: 'ERROR' as const
 }
 
 export const enumCalendarChannelSyncStatus = {

@@ -70,11 +70,11 @@ export default {
         244,
         259,
         263,
-        317,
-        319,
-        329,
-        332,
-        335,
+        318,
+        321,
+        324,
+        348,
+        350,
         381,
         382,
         383,
@@ -85,7 +85,7 @@ export default {
         418,
         429,
         430,
-        577
+        574
     ],
     "types": {
         "BillingProductDTO": {
@@ -5778,114 +5778,403 @@ export default {
                 1
             ]
         },
-        "CampaignOutreachAudienceCreator": {
-            "campaignCreatorId": [
-                3
+        "BillingTrialPeriod": {
+            "duration": [
+                12
             ],
-            "creatorId": [
-                3
-            ],
-            "creatorName": [
-                1
+            "isCreditCardRequired": [
+                6
             ],
             "__typename": [
                 1
             ]
         },
-        "CampaignOutreachAudienceExcludedCreator": {
-            "campaignCreatorId": [
-                3
+        "NativeModelCapabilities": {
+            "webSearch": [
+                6
             ],
-            "creatorId": [
-                3
-            ],
-            "creatorName": [
-                1
-            ],
-            "reasons": [
-                317
+            "twitterSearch": [
+                6
             ],
             "__typename": [
                 1
             ]
         },
-        "CampaignOutreachAudienceExclusionReason": {},
-        "CampaignOutreachAudienceReview": {
-            "state": [
-                319
-            ],
-            "campaignId": [
-                3
-            ],
-            "errorCode": [
+        "ClientAiModelConfig": {
+            "modelId": [
                 1
             ],
-            "eligibleCount": [
-                21
+            "label": [
+                1
             ],
-            "eligibleCreators": [
-                315
+            "modelFamily": [
+                318
             ],
-            "excludedCount": [
-                21
+            "modelFamilyLabel": [
+                1
             ],
-            "excludedCreators": [
+            "sdkPackage": [
+                1
+            ],
+            "inputCostPerMillionTokens": [
+                12
+            ],
+            "outputCostPerMillionTokens": [
+                12
+            ],
+            "nativeCapabilities": [
                 316
             ],
-            "__typename": [
-                1
-            ]
-        },
-        "CampaignOutreachAudienceReviewState": {},
-        "CampaignSendingWindowMutationResultDTO": {
-            "status": [
-                1
-            ],
-            "reason": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "CampaignExecutionMutationResultDTO": {
-            "status": [
-                1
-            ],
-            "lifecycleStatus": [
-                1
-            ],
-            "reason": [
-                1
-            ],
-            "replayed": [
+            "isDeprecated": [
                 6
             ],
-            "changed": [
+            "isRecommended": [
                 6
             ],
-            "inFlightCount": [
-                21
+            "providerName": [
+                1
+            ],
+            "providerLabel": [
+                1
+            ],
+            "contextWindowTokens": [
+                12
+            ],
+            "maxOutputTokens": [
+                12
+            ],
+            "dataResidency": [
+                1
             ],
             "__typename": [
                 1
             ]
         },
-        "Webhook": {
-            "id": [
-                3
+        "ModelFamily": {},
+        "Billing": {
+            "isBillingEnabled": [
+                6
             ],
-            "targetUrl": [
+            "billingUrl": [
                 1
             ],
-            "operations": [
+            "stripePublishableKey": [
+                1
+            ],
+            "trialPeriods": [
+                315
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "Support": {
+            "supportDriver": [
+                321
+            ],
+            "supportFrontChatId": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "SupportDriver": {},
+        "Sentry": {
+            "environment": [
+                1
+            ],
+            "release": [
+                1
+            ],
+            "dsn": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "Captcha": {
+            "provider": [
+                324
+            ],
+            "siteKey": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "CaptchaDriverType": {},
+        "ApiConfig": {
+            "mutationMaximumAffectedRecords": [
+                12
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "PublicFeatureFlagMetadata": {
+            "label": [
                 1
             ],
             "description": [
                 1
             ],
-            "secret": [
+            "imagePath": [
                 1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "PublicFeatureFlag": {
+            "key": [
+                263
+            ],
+            "metadata": [
+                326
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "ClientConfigMaintenanceMode": {
+            "startAt": [
+                4
+            ],
+            "endAt": [
+                4
+            ],
+            "link": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "ClientConfig": {
+            "appVersion": [
+                1
+            ],
+            "authProviders": [
+                265
+            ],
+            "billing": [
+                319
+            ],
+            "aiModels": [
+                317
+            ],
+            "signInPrefilled": [
+                6
+            ],
+            "isMultiWorkspaceEnabled": [
+                6
+            ],
+            "isEmailVerificationRequired": [
+                6
+            ],
+            "defaultSubdomain": [
+                1
+            ],
+            "frontDomain": [
+                1
+            ],
+            "publicFunctionDomain": [
+                1
+            ],
+            "analyticsEnabled": [
+                6
+            ],
+            "support": [
+                320
+            ],
+            "isAttachmentPreviewEnabled": [
+                6
+            ],
+            "sentry": [
+                322
+            ],
+            "captcha": [
+                323
+            ],
+            "api": [
+                325
+            ],
+            "canManageFeatureFlags": [
+                6
+            ],
+            "publicFeatureFlags": [
+                327
+            ],
+            "isMicrosoftMessagingEnabled": [
+                6
+            ],
+            "isMicrosoftCalendarEnabled": [
+                6
+            ],
+            "isGoogleMessagingEnabled": [
+                6
+            ],
+            "isGoogleCalendarEnabled": [
+                6
+            ],
+            "isConfigVariablesInDbEnabled": [
+                6
+            ],
+            "isImapSmtpCaldavEnabled": [
+                6
+            ],
+            "isManagedEmailEnabled": [
+                6
+            ],
+            "isEmailingDomainInDemoMode": [
+                6
+            ],
+            "allowRequestsToTwentyIcons": [
+                6
+            ],
+            "calendarBookingPageId": [
+                1
+            ],
+            "isCloudflareIntegrationEnabled": [
+                6
+            ],
+            "isClickHouseConfigured": [
+                6
+            ],
+            "isWorkspaceSchemaDDLLocked": [
+                6
+            ],
+            "maintenance": [
+                328
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UsageBreakdownItem": {
+            "key": [
+                1
+            ],
+            "label": [
+                1
+            ],
+            "creditsUsed": [
+                12
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "Impersonate": {
+            "loginToken": [
+                32
+            ],
+            "workspace": [
+                279
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UsageTimeSeries": {
+            "date": [
+                1
+            ],
+            "creditsUsed": [
+                12
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UsageUserDaily": {
+            "userWorkspaceId": [
+                1
+            ],
+            "dailyUsage": [
+                332
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UsageAnalytics": {
+            "usageByUser": [
+                330
+            ],
+            "usageByOperationType": [
+                330
+            ],
+            "usageByModel": [
+                330
+            ],
+            "timeSeries": [
+                332
+            ],
+            "periodStart": [
+                4
+            ],
+            "periodEnd": [
+                4
+            ],
+            "userDailyUsage": [
+                333
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "DevelopmentApplication": {
+            "id": [
+                1
+            ],
+            "universalIdentifier": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "WorkspaceMigration": {
+            "applicationUniversalIdentifier": [
+                1
+            ],
+            "actions": [
+                7
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "File": {
+            "id": [
+                3
+            ],
+            "path": [
+                1
+            ],
+            "size": [
+                12
+            ],
+            "createdAt": [
+                4
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "PublicDomain": {
+            "id": [
+                3
+            ],
+            "domain": [
+                1
+            ],
+            "isValidated": [
+                6
             ],
             "applicationId": [
                 3
@@ -5893,37 +6182,50 @@ export default {
             "createdAt": [
                 4
             ],
-            "updatedAt": [
-                4
+            "__typename": [
+                1
+            ]
+        },
+        "AutocompleteResult": {
+            "text": [
+                1
             ],
-            "deletedAt": [
-                4
+            "placeId": [
+                1
             ],
             "__typename": [
                 1
             ]
         },
-        "ToolIndexEntry": {
-            "name": [
+        "Location": {
+            "lat": [
+                12
+            ],
+            "lng": [
+                12
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "PlaceDetailsResult": {
+            "street": [
                 1
             ],
-            "label": [
+            "state": [
                 1
             ],
-            "description": [
+            "postcode": [
                 1
             ],
-            "category": [
+            "city": [
                 1
             ],
-            "objectName": [
+            "country": [
                 1
             ],
-            "icon": [
-                1
-            ],
-            "inputSchema": [
-                7
+            "location": [
+                340
             ],
             "__typename": [
                 1
@@ -6029,403 +6331,21 @@ export default {
                 1
             ]
         },
-        "BillingTrialPeriod": {
-            "duration": [
-                12
+        "Webhook": {
+            "id": [
+                3
             ],
-            "isCreditCardRequired": [
-                6
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "NativeModelCapabilities": {
-            "webSearch": [
-                6
-            ],
-            "twitterSearch": [
-                6
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "ClientAiModelConfig": {
-            "modelId": [
+            "targetUrl": [
                 1
             ],
-            "label": [
-                1
-            ],
-            "modelFamily": [
-                329
-            ],
-            "modelFamilyLabel": [
-                1
-            ],
-            "sdkPackage": [
-                1
-            ],
-            "inputCostPerMillionTokens": [
-                12
-            ],
-            "outputCostPerMillionTokens": [
-                12
-            ],
-            "nativeCapabilities": [
-                327
-            ],
-            "isDeprecated": [
-                6
-            ],
-            "isRecommended": [
-                6
-            ],
-            "providerName": [
-                1
-            ],
-            "providerLabel": [
-                1
-            ],
-            "contextWindowTokens": [
-                12
-            ],
-            "maxOutputTokens": [
-                12
-            ],
-            "dataResidency": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "ModelFamily": {},
-        "Billing": {
-            "isBillingEnabled": [
-                6
-            ],
-            "billingUrl": [
-                1
-            ],
-            "stripePublishableKey": [
-                1
-            ],
-            "trialPeriods": [
-                326
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "Support": {
-            "supportDriver": [
-                332
-            ],
-            "supportFrontChatId": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "SupportDriver": {},
-        "Sentry": {
-            "environment": [
-                1
-            ],
-            "release": [
-                1
-            ],
-            "dsn": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "Captcha": {
-            "provider": [
-                335
-            ],
-            "siteKey": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "CaptchaDriverType": {},
-        "ApiConfig": {
-            "mutationMaximumAffectedRecords": [
-                12
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "PublicFeatureFlagMetadata": {
-            "label": [
+            "operations": [
                 1
             ],
             "description": [
                 1
             ],
-            "imagePath": [
+            "secret": [
                 1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "PublicFeatureFlag": {
-            "key": [
-                263
-            ],
-            "metadata": [
-                337
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "ClientConfigMaintenanceMode": {
-            "startAt": [
-                4
-            ],
-            "endAt": [
-                4
-            ],
-            "link": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "ClientConfig": {
-            "appVersion": [
-                1
-            ],
-            "authProviders": [
-                265
-            ],
-            "billing": [
-                330
-            ],
-            "aiModels": [
-                328
-            ],
-            "signInPrefilled": [
-                6
-            ],
-            "isMultiWorkspaceEnabled": [
-                6
-            ],
-            "isEmailVerificationRequired": [
-                6
-            ],
-            "defaultSubdomain": [
-                1
-            ],
-            "frontDomain": [
-                1
-            ],
-            "publicFunctionDomain": [
-                1
-            ],
-            "analyticsEnabled": [
-                6
-            ],
-            "support": [
-                331
-            ],
-            "isAttachmentPreviewEnabled": [
-                6
-            ],
-            "sentry": [
-                333
-            ],
-            "captcha": [
-                334
-            ],
-            "api": [
-                336
-            ],
-            "canManageFeatureFlags": [
-                6
-            ],
-            "publicFeatureFlags": [
-                338
-            ],
-            "isMicrosoftMessagingEnabled": [
-                6
-            ],
-            "isMicrosoftCalendarEnabled": [
-                6
-            ],
-            "isGoogleMessagingEnabled": [
-                6
-            ],
-            "isGoogleCalendarEnabled": [
-                6
-            ],
-            "isConfigVariablesInDbEnabled": [
-                6
-            ],
-            "isImapSmtpCaldavEnabled": [
-                6
-            ],
-            "isManagedEmailEnabled": [
-                6
-            ],
-            "isEmailingDomainInDemoMode": [
-                6
-            ],
-            "allowRequestsToTwentyIcons": [
-                6
-            ],
-            "calendarBookingPageId": [
-                1
-            ],
-            "isCloudflareIntegrationEnabled": [
-                6
-            ],
-            "isClickHouseConfigured": [
-                6
-            ],
-            "isWorkspaceSchemaDDLLocked": [
-                6
-            ],
-            "maintenance": [
-                339
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UsageBreakdownItem": {
-            "key": [
-                1
-            ],
-            "label": [
-                1
-            ],
-            "creditsUsed": [
-                12
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "Impersonate": {
-            "loginToken": [
-                32
-            ],
-            "workspace": [
-                279
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UsageTimeSeries": {
-            "date": [
-                1
-            ],
-            "creditsUsed": [
-                12
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UsageUserDaily": {
-            "userWorkspaceId": [
-                1
-            ],
-            "dailyUsage": [
-                343
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UsageAnalytics": {
-            "usageByUser": [
-                341
-            ],
-            "usageByOperationType": [
-                341
-            ],
-            "usageByModel": [
-                341
-            ],
-            "timeSeries": [
-                343
-            ],
-            "periodStart": [
-                4
-            ],
-            "periodEnd": [
-                4
-            ],
-            "userDailyUsage": [
-                344
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "DevelopmentApplication": {
-            "id": [
-                1
-            ],
-            "universalIdentifier": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "WorkspaceMigration": {
-            "applicationUniversalIdentifier": [
-                1
-            ],
-            "actions": [
-                7
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "File": {
-            "id": [
-                3
-            ],
-            "path": [
-                1
-            ],
-            "size": [
-                12
-            ],
-            "createdAt": [
-                4
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "PublicDomain": {
-            "id": [
-                3
-            ],
-            "domain": [
-                1
-            ],
-            "isValidated": [
-                6
             ],
             "applicationId": [
                 3
@@ -6433,50 +6353,130 @@ export default {
             "createdAt": [
                 4
             ],
-            "__typename": [
-                1
-            ]
-        },
-        "AutocompleteResult": {
-            "text": [
-                1
+            "updatedAt": [
+                4
             ],
-            "placeId": [
-                1
+            "deletedAt": [
+                4
             ],
             "__typename": [
                 1
             ]
         },
-        "Location": {
-            "lat": [
-                12
+        "ToolIndexEntry": {
+            "name": [
+                1
             ],
-            "lng": [
-                12
+            "label": [
+                1
+            ],
+            "description": [
+                1
+            ],
+            "category": [
+                1
+            ],
+            "objectName": [
+                1
+            ],
+            "icon": [
+                1
+            ],
+            "inputSchema": [
+                7
             ],
             "__typename": [
                 1
             ]
         },
-        "PlaceDetailsResult": {
-            "street": [
+        "CampaignOutreachAudienceCreator": {
+            "campaignCreatorId": [
+                3
+            ],
+            "creatorId": [
+                3
+            ],
+            "creatorName": [
                 1
             ],
+            "__typename": [
+                1
+            ]
+        },
+        "CampaignOutreachAudienceExcludedCreator": {
+            "campaignCreatorId": [
+                3
+            ],
+            "creatorId": [
+                3
+            ],
+            "creatorName": [
+                1
+            ],
+            "reasons": [
+                348
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "CampaignOutreachAudienceExclusionReason": {},
+        "CampaignOutreachAudienceReview": {
             "state": [
+                350
+            ],
+            "campaignId": [
+                3
+            ],
+            "errorCode": [
                 1
             ],
-            "postcode": [
+            "eligibleCount": [
+                21
+            ],
+            "eligibleCreators": [
+                346
+            ],
+            "excludedCount": [
+                21
+            ],
+            "excludedCreators": [
+                347
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "CampaignOutreachAudienceReviewState": {},
+        "CampaignSendingWindowMutationResultDTO": {
+            "status": [
                 1
             ],
-            "city": [
+            "reason": [
                 1
             ],
-            "country": [
+            "__typename": [
+                1
+            ]
+        },
+        "CampaignExecutionMutationResultDTO": {
+            "status": [
                 1
             ],
-            "location": [
-                351
+            "lifecycleStatus": [
+                1
+            ],
+            "reason": [
+                1
+            ],
+            "replayed": [
+                6
+            ],
+            "changed": [
+                6
+            ],
+            "inFlightCount": [
+                21
             ],
             "__typename": [
                 1
@@ -6798,7 +6798,7 @@ export default {
                 1
             ],
             "parts": [
-                324
+                342
             ],
             "processedAt": [
                 4
@@ -7899,17 +7899,26 @@ export default {
             "getSSOIdentityProviders": [
                 246
             ],
-            "campaignOutreachAudienceReview": [
-                318,
+            "getPageLayoutWidgets": [
+                82,
                 {
-                    "campaignId": [
-                        3,
-                        "UUID!"
+                    "pageLayoutTabId": [
+                        1,
+                        "String!"
+                    ]
+                }
+            ],
+            "getPageLayoutWidget": [
+                82,
+                {
+                    "id": [
+                        1,
+                        "String!"
                     ]
                 }
             ],
             "getToolIndex": [
-                323
+                345
             ],
             "getToolInputSchema": [
                 7,
@@ -7921,10 +7930,10 @@ export default {
                 }
             ],
             "webhooks": [
-                322
+                344
             ],
             "webhook": [
-                322,
+                344,
                 {
                     "id": [
                         3,
@@ -7947,24 +7956,6 @@ export default {
                     "bindingId": [
                         3,
                         "UUID!"
-                    ]
-                }
-            ],
-            "getPageLayoutWidgets": [
-                82,
-                {
-                    "pageLayoutTabId": [
-                        1,
-                        "String!"
-                    ]
-                }
-            ],
-            "getPageLayoutWidget": [
-                82,
-                {
-                    "id": [
-                        1,
-                        "String!"
                     ]
                 }
             ],
@@ -8080,8 +8071,17 @@ export default {
                     ]
                 }
             ],
+            "campaignOutreachAudienceReview": [
+                349,
+                {
+                    "campaignId": [
+                        3,
+                        "UUID!"
+                    ]
+                }
+            ],
             "getAutoCompleteAddress": [
-                350,
+                339,
                 {
                     "address": [
                         1,
@@ -8100,7 +8100,7 @@ export default {
                 }
             ],
             "getAddressDetails": [
-                352,
+                341,
                 {
                     "placeId": [
                         1,
@@ -8113,7 +8113,7 @@ export default {
                 }
             ],
             "getUsageAnalytics": [
-                345,
+                334,
                 {
                     "input": [
                         417
@@ -8121,7 +8121,7 @@ export default {
                 }
             ],
             "findManyPublicDomains": [
-                349
+                338
             ],
             "__typename": [
                 1
@@ -10475,74 +10475,11 @@ export default {
                     ]
                 }
             ],
-            "startCampaignExecution": [
-                321,
-                {
-                    "input": [
-                        558,
-                        "StartCampaignExecutionInput!"
-                    ]
-                }
-            ],
-            "updateCampaignSendingWindow": [
-                320,
-                {
-                    "input": [
-                        559,
-                        "UpdateCampaignSendingWindowInput!"
-                    ]
-                }
-            ],
-            "stopCampaignExecution": [
-                321,
-                {
-                    "input": [
-                        560,
-                        "StopCampaignExecutionInput!"
-                    ]
-                }
-            ],
-            "createWebhook": [
-                322,
-                {
-                    "input": [
-                        561,
-                        "CreateWebhookInput!"
-                    ]
-                }
-            ],
-            "updateWebhook": [
-                322,
-                {
-                    "input": [
-                        562,
-                        "UpdateWebhookInput!"
-                    ]
-                }
-            ],
-            "deleteWebhook": [
-                322,
-                {
-                    "id": [
-                        3,
-                        "UUID!"
-                    ]
-                }
-            ],
-            "runAgent": [
-                325,
-                {
-                    "input": [
-                        564,
-                        "RunAgentInput!"
-                    ]
-                }
-            ],
             "createPageLayoutWidget": [
                 82,
                 {
                     "input": [
-                        565,
+                        558,
                         "CreatePageLayoutWidgetInput!"
                     ]
                 }
@@ -10555,7 +10492,7 @@ export default {
                         "String!"
                     ],
                     "input": [
-                        566,
+                        559,
                         "UpdatePageLayoutWidgetInput!"
                     ]
                 }
@@ -10569,11 +10506,47 @@ export default {
                     ]
                 }
             ],
+            "createWebhook": [
+                344,
+                {
+                    "input": [
+                        560,
+                        "CreateWebhookInput!"
+                    ]
+                }
+            ],
+            "updateWebhook": [
+                344,
+                {
+                    "input": [
+                        561,
+                        "UpdateWebhookInput!"
+                    ]
+                }
+            ],
+            "deleteWebhook": [
+                344,
+                {
+                    "id": [
+                        3,
+                        "UUID!"
+                    ]
+                }
+            ],
+            "runAgent": [
+                343,
+                {
+                    "input": [
+                        563,
+                        "RunAgentInput!"
+                    ]
+                }
+            ],
             "updateMessageFolder": [
                 385,
                 {
                     "input": [
-                        567,
+                        564,
                         "UpdateMessageFolderInput!"
                     ]
                 }
@@ -10582,7 +10555,7 @@ export default {
                 385,
                 {
                     "input": [
-                        569,
+                        566,
                         "UpdateMessageFoldersInput!"
                     ]
                 }
@@ -10591,7 +10564,7 @@ export default {
                 380,
                 {
                     "input": [
-                        570,
+                        567,
                         "UpdateCalendarChannelInput!"
                     ]
                 }
@@ -10621,7 +10594,7 @@ export default {
                         1
                     ],
                     "fileAttachments": [
-                        572,
+                        569,
                         "[FileAttachmentInput!]"
                     ]
                 }
@@ -10653,7 +10626,7 @@ export default {
                         "UUID!"
                     ],
                     "answers": [
-                        573,
+                        570,
                         "[AgentChatQuestionAnswerInput!]!"
                     ],
                     "modelId": [
@@ -10673,7 +10646,7 @@ export default {
                         "UUID!"
                     ],
                     "decision": [
-                        574,
+                        571,
                         "AgentChatApprovalDecisionInput!"
                     ],
                     "modelId": [
@@ -10743,7 +10716,7 @@ export default {
                 368,
                 {
                     "input": [
-                        575,
+                        572,
                         "CreateSkillInput!"
                     ]
                 }
@@ -10752,7 +10725,7 @@ export default {
                 368,
                 {
                     "input": [
-                        576,
+                        573,
                         "UpdateSkillInput!"
                     ]
                 }
@@ -10830,7 +10803,7 @@ export default {
                 364,
                 {
                     "type": [
-                        577,
+                        574,
                         "AnalyticsType!"
                     ],
                     "name": [
@@ -10854,7 +10827,7 @@ export default {
                 }
             ],
             "impersonate": [
-                342,
+                331,
                 {
                     "userId": [
                         3,
@@ -10863,6 +10836,33 @@ export default {
                     "workspaceId": [
                         3,
                         "UUID!"
+                    ]
+                }
+            ],
+            "startCampaignExecution": [
+                352,
+                {
+                    "input": [
+                        575,
+                        "StartCampaignExecutionInput!"
+                    ]
+                }
+            ],
+            "updateCampaignSendingWindow": [
+                351,
+                {
+                    "input": [
+                        576,
+                        "UpdateCampaignSendingWindowInput!"
+                    ]
+                }
+            ],
+            "stopCampaignExecution": [
+                352,
+                {
+                    "input": [
+                        577,
+                        "StopCampaignExecutionInput!"
                     ]
                 }
             ],
@@ -10903,7 +10903,7 @@ export default {
                 }
             ],
             "createPublicDomain": [
-                349,
+                338,
                 {
                     "domain": [
                         1,
@@ -10943,7 +10943,7 @@ export default {
                 }
             ],
             "createDevelopmentApplication": [
-                346,
+                335,
                 {
                     "universalIdentifier": [
                         1,
@@ -10956,7 +10956,7 @@ export default {
                 }
             ],
             "syncApplication": [
-                347,
+                336,
                 {
                     "manifest": [
                         7,
@@ -10968,7 +10968,7 @@ export default {
                 }
             ],
             "uploadApplicationFile": [
-                348,
+                337,
                 {
                     "file": [
                         430,
@@ -13541,104 +13541,6 @@ export default {
                 1
             ]
         },
-        "StartCampaignExecutionInput": {
-            "campaignId": [
-                3
-            ],
-            "startIdempotencyKey": [
-                3
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UpdateCampaignSendingWindowInput": {
-            "campaignId": [
-                3
-            ],
-            "timeZone": [
-                1
-            ],
-            "startLocalTime": [
-                1
-            ],
-            "endLocalTime": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "StopCampaignExecutionInput": {
-            "campaignId": [
-                3
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "CreateWebhookInput": {
-            "id": [
-                3
-            ],
-            "targetUrl": [
-                1
-            ],
-            "operations": [
-                1
-            ],
-            "description": [
-                1
-            ],
-            "secret": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UpdateWebhookInput": {
-            "id": [
-                3
-            ],
-            "update": [
-                563
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UpdateWebhookInputUpdates": {
-            "targetUrl": [
-                1
-            ],
-            "operations": [
-                1
-            ],
-            "description": [
-                1
-            ],
-            "secret": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "RunAgentInput": {
-            "agentUniversalIdentifier": [
-                1
-            ],
-            "prompt": [
-                1
-            ],
-            "operationId": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
         "CreatePageLayoutWidgetInput": {
             "pageLayoutTabId": [
                 3
@@ -13697,12 +13599,74 @@ export default {
                 1
             ]
         },
+        "CreateWebhookInput": {
+            "id": [
+                3
+            ],
+            "targetUrl": [
+                1
+            ],
+            "operations": [
+                1
+            ],
+            "description": [
+                1
+            ],
+            "secret": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UpdateWebhookInput": {
+            "id": [
+                3
+            ],
+            "update": [
+                562
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UpdateWebhookInputUpdates": {
+            "targetUrl": [
+                1
+            ],
+            "operations": [
+                1
+            ],
+            "description": [
+                1
+            ],
+            "secret": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "RunAgentInput": {
+            "agentUniversalIdentifier": [
+                1
+            ],
+            "prompt": [
+                1
+            ],
+            "operationId": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
         "UpdateMessageFolderInput": {
             "id": [
                 3
             ],
             "update": [
-                568
+                565
             ],
             "__typename": [
                 1
@@ -13721,7 +13685,7 @@ export default {
                 3
             ],
             "update": [
-                568
+                565
             ],
             "__typename": [
                 1
@@ -13732,7 +13696,7 @@ export default {
                 3
             ],
             "update": [
-                571
+                568
             ],
             "__typename": [
                 1
@@ -13841,6 +13805,42 @@ export default {
             ]
         },
         "AnalyticsType": {},
+        "StartCampaignExecutionInput": {
+            "campaignId": [
+                3
+            ],
+            "startIdempotencyKey": [
+                3
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UpdateCampaignSendingWindowInput": {
+            "campaignId": [
+                3
+            ],
+            "timeZone": [
+                1
+            ],
+            "startLocalTime": [
+                1
+            ],
+            "endLocalTime": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "StopCampaignExecutionInput": {
+            "campaignId": [
+                3
+            ],
+            "__typename": [
+                1
+            ]
+        },
         "CreateCalendarEventInput": {
             "connectedAccountId": [
                 1
