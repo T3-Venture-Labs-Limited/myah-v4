@@ -1645,6 +1645,31 @@ describe('OutboundEmailAttemptService processing CAS and receipt', () => {
       ),
     ).resolves.toBeNull();
   });
+
+  it('normalizes a queue-worker decoded receipt localDate in the read projection', async () => {
+    const receipt = receiptFrom(sequenceReservation());
+    const query = jest.fn(async (sql: string) => [
+      {
+        ...receipt,
+        localDate: sql.includes('"localDate"::text AS "localDate"')
+          ? receipt.localDate
+          : new Date(`${receipt.localDate}T00:00:00.000Z`),
+      },
+    ]);
+    const manager = {
+      queryRunner: { isTransactionActive: true, query },
+    } as unknown as EntityManager;
+
+    await expect(
+      new OutboundEmailAttemptService().getReceipt(
+        { attemptId: ids.attempt, workspaceId: ids.workspace },
+        manager,
+      ),
+    ).resolves.toMatchObject({ localDate: receipt.localDate });
+    expect(query.mock.calls[0][0]).toContain(
+      '"localDate"::text AS "localDate"',
+    );
+  });
 });
 
 describe('frozen outcome semantics', () => {
