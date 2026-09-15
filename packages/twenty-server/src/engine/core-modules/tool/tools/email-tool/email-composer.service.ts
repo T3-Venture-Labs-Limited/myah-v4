@@ -40,6 +40,61 @@ type ParentThreadContext = {
   references?: string[];
 };
 
+type ConnectedAccountCompositionResolution = {
+  connectedAccount: ConnectedAccountEntity;
+  hasImapConfiguration: boolean;
+  hasSmtpConfiguration: boolean;
+};
+
+type TransactionalConnectedAccountRow = {
+  id: unknown;
+  workspaceId: unknown;
+  handle: unknown;
+  provider: unknown;
+  scopes: unknown;
+  hasImapConfiguration: unknown;
+  hasSmtpConfiguration: unknown;
+  messageChannels: unknown;
+};
+
+const TRANSACTIONAL_CONNECTED_ACCOUNT_SQL = `
+  SELECT
+    ca.id,
+    ca."workspaceId",
+    ca.handle,
+    ca.provider,
+    ca.scopes,
+    COALESCE(
+      ca."connectionParameters" ? 'IMAP'
+      AND ca."connectionParameters"->'IMAP' <> 'null'::jsonb,
+      false
+    ) AS "hasImapConfiguration",
+    COALESCE(
+      ca."connectionParameters" ? 'SMTP'
+      AND ca."connectionParameters"->'SMTP' <> 'null'::jsonb,
+      false
+    ) AS "hasSmtpConfiguration",
+    COALESCE(
+      jsonb_agg(
+        jsonb_build_object('id', mc.id, 'handle', mc.handle)
+        ORDER BY mc."createdAt", mc.id
+      ) FILTER (WHERE mc.id IS NOT NULL),
+      '[]'::jsonb
+    ) AS "messageChannels"
+  FROM core."connectedAccount" ca
+  LEFT JOIN core."messageChannel" mc
+    ON mc."workspaceId" = ca."workspaceId"
+    AND mc."connectedAccountId" = ca.id
+  WHERE ca.id = $1 AND ca."workspaceId" = $2
+  GROUP BY ca.id
+`;
+
+const TRANSACTIONAL_FIRST_CONNECTED_ACCOUNT_SQL = `
+  SELECT id
+  FROM core."connectedAccount"
+  WHERE "workspaceId" = $1 AND "archivedAt" IS NULL
+`;
+
 @Injectable()
 export class EmailComposerService {
   constructor(
@@ -55,7 +110,7 @@ export class EmailComposerService {
     connectedAccountId: string,
     workspaceId: string,
     transactionManager?: WorkspaceEntityManager,
-  ): Promise<ConnectedAccountEntity> {
+  ): Promise<ConnectedAccountCompositionResolution> {
     if (!isValidUuid(connectedAccountId)) {
       throw new EmailToolException(
         `Connected account id is not a valid UUID`,
@@ -72,12 +127,32 @@ export class EmailComposerService {
           },
         },
       });
-    const connectedAccount = transactionManager
-      ? await find(transactionManager.getRepository(ConnectedAccountEntity))
-      : await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-          () => find(this.connectedAccountRepository),
-          buildSystemAuthContext(workspaceId),
-        );
+    if (transactionManager) {
+      const rows = (await transactionManager.queryRunner!.query(
+        TRANSACTIONAL_CONNECTED_ACCOUNT_SQL,
+        [connectedAccountId, workspaceId],
+      )) as TransactionalConnectedAccountRow[];
+      const resolution = this.parseTransactionalConnectedAccount(
+        rows,
+        connectedAccountId,
+        workspaceId,
+      );
+
+      if (resolution !== null) {
+        return resolution;
+      }
+
+      throw new EmailToolException(
+        `No connected account found for id '${connectedAccountId}'`,
+        EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      );
+    }
+
+    const connectedAccount =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        () => find(this.connectedAccountRepository),
+        buildSystemAuthContext(workspaceId),
+      );
 
     if (!isDefined(connectedAccount)) {
       throw new EmailToolException(
@@ -86,7 +161,69 @@ export class EmailComposerService {
       );
     }
 
-    return connectedAccount;
+    return {
+      connectedAccount,
+      hasImapConfiguration: isDefined(
+        connectedAccount.connectionParameters?.IMAP,
+      ),
+      hasSmtpConfiguration: isDefined(
+        connectedAccount.connectionParameters?.SMTP,
+      ),
+    };
+  }
+
+  private parseTransactionalConnectedAccount(
+    rows: TransactionalConnectedAccountRow[],
+    connectedAccountId: string,
+    workspaceId: string,
+  ): ConnectedAccountCompositionResolution | null {
+    if (rows.length !== 1) {
+      return null;
+    }
+
+    const row = rows[0];
+    const messageChannels = row.messageChannels;
+
+    if (
+      row.id !== connectedAccountId ||
+      row.workspaceId !== workspaceId ||
+      typeof row.handle !== 'string' ||
+      row.handle.trim().length === 0 ||
+      !Object.values(ConnectedAccountProvider).includes(
+        row.provider as ConnectedAccountProvider,
+      ) ||
+      (row.scopes !== null &&
+        (!Array.isArray(row.scopes) ||
+          !row.scopes.every((scope) => typeof scope === 'string'))) ||
+      typeof row.hasImapConfiguration !== 'boolean' ||
+      typeof row.hasSmtpConfiguration !== 'boolean' ||
+      !Array.isArray(messageChannels) ||
+      !messageChannels.every(
+        (channel) =>
+          channel !== null &&
+          typeof channel === 'object' &&
+          isValidUuid(Reflect.get(channel, 'id')) &&
+          typeof Reflect.get(channel, 'handle') === 'string',
+      )
+    ) {
+      return null;
+    }
+
+    const connectedAccount = Object.assign(new ConnectedAccountEntity(), {
+      id: row.id,
+      workspaceId: row.workspaceId,
+      handle: row.handle,
+      provider: row.provider as ConnectedAccountProvider,
+      scopes: row.scopes,
+      connectionParameters: null,
+      messageChannels,
+    });
+
+    return {
+      connectedAccount,
+      hasImapConfiguration: row.hasImapConfiguration,
+      hasSmtpConfiguration: row.hasSmtpConfiguration,
+    };
   }
 
   private async getOrThrowFirstConnectedAccountId(
@@ -98,7 +235,10 @@ export class EmailComposerService {
         where: { workspaceId, archivedAt: IsNull() },
       });
     const allAccounts = transactionManager
-      ? await find(transactionManager.getRepository(ConnectedAccountEntity))
+      ? ((await transactionManager.queryRunner!.query(
+          TRANSACTIONAL_FIRST_CONNECTED_ACCOUNT_SQL,
+          [workspaceId],
+        )) as Array<{ id?: unknown }>)
       : await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
           () => find(this.connectedAccountRepository),
           buildSystemAuthContext(workspaceId),
@@ -111,7 +251,19 @@ export class EmailComposerService {
       );
     }
 
-    return allAccounts[0].id;
+    const firstConnectedAccountId = allAccounts[0].id;
+
+    if (
+      typeof firstConnectedAccountId !== 'string' ||
+      !isValidUuid(firstConnectedAccountId)
+    ) {
+      throw new EmailToolException(
+        'No connected accounts found for this workspace',
+        EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      );
+    }
+
+    return firstConnectedAccountId;
   }
 
   private normalizeRecipients(parameters: ComposeEmailParams): {
@@ -385,11 +537,12 @@ export class EmailComposerService {
       );
     }
 
-    const connectedAccount = await this.getConnectedAccountOrThrow(
-      connectedAccountId,
-      workspaceId,
-      transactionManager,
-    );
+    const { connectedAccount, hasImapConfiguration, hasSmtpConfiguration } =
+      await this.getConnectedAccountOrThrow(
+        connectedAccountId,
+        workspaceId,
+        transactionManager,
+      );
 
     const messageChannel =
       connectedAccount.provider === ConnectedAccountProvider.EMAIL_GROUP
@@ -400,12 +553,9 @@ export class EmailComposerService {
 
     const isSmtpOnlyAccount =
       connectedAccount.provider === ConnectedAccountProvider.IMAP_SMTP_CALDAV &&
-      !isDefined(connectedAccount.connectionParameters?.IMAP);
+      !hasImapConfiguration;
 
-    if (
-      isSmtpOnlyAccount &&
-      !isDefined(connectedAccount.connectionParameters?.SMTP)
-    ) {
+    if (isSmtpOnlyAccount && !hasSmtpConfiguration) {
       throw new EmailToolException(
         `SMTP is not configured for connected account '${connectedAccountId}'`,
         EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
