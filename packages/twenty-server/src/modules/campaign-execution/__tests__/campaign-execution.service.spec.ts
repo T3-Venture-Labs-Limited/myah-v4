@@ -491,7 +491,6 @@ describe('CampaignExecutionService', () => {
       'inspect-authority',
       'lookup-start',
       'load-execution',
-      'capacity',
       'load-plan',
       'revalidate',
       'history',
@@ -918,12 +917,6 @@ describe('CampaignExecutionService', () => {
   });
 
   it.each([
-    ['missing execution', { execution: null }, 'MISSING_SENDING_WINDOW'],
-    [
-      'missing capacity timezone',
-      { capacityResult: { status: 'BLOCKED', reason: 'NOT_CONFIGURED' } },
-      'WORKSPACE_CAPACITY_TIMEZONE_UNAVAILABLE',
-    ],
     [
       'blocked plan',
       {
@@ -955,6 +948,71 @@ describe('CampaignExecutionService', () => {
       ).not.toHaveBeenCalled();
     },
   );
+
+  it('normalizes an existing configurable execution to UTC all day before Start review', async () => {
+    const defaultWindow: CampaignSendingWindow = {
+      timeZone: 'UTC',
+      startLocalTime: '00:00:00',
+      endLocalTime: '23:59:00',
+    };
+    const defaultRequest = {
+      ...request,
+      reviewedWindow: defaultWindow,
+      campaignCapacityTimeZone: 'UTC',
+    };
+    const harness = createHarness({
+      execution: {
+        campaignExecutionId,
+        workspaceId,
+        campaignId,
+        window,
+        campaignCapacityTimeZone: 'America/New_York',
+      },
+      createdAuthority: {
+        kind: 'CREATED',
+        authorization: authorityRecord({
+          binding: {
+            ...authorityRecord().binding,
+            request: defaultRequest,
+          },
+        }),
+      },
+      writeWindow: {
+        status: 'UPDATED',
+        createdExecution: false,
+        execution: {
+          campaignExecutionId,
+          workspaceId,
+          campaignId,
+          window: defaultWindow,
+          campaignCapacityTimeZone: 'UTC',
+        },
+      },
+    });
+
+    await expect(
+      harness.service.startCampaign({
+        ...startInput(),
+        request: defaultRequest,
+      }),
+    ).resolves.toMatchObject({ status: 'ACTIVATED' });
+    expect(
+      harness.persistence.writeSendingWindowInTransaction,
+    ).toHaveBeenCalledWith(harness.context, {
+      window: defaultWindow,
+      campaignCapacityTimeZone: 'UTC',
+    });
+    expect(
+      harness.review.revalidateNewActivationInTransaction,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        execution: expect.objectContaining({
+          window: defaultWindow,
+          campaignCapacityTimeZone: 'UTC',
+        }),
+      }),
+    );
+  });
 
   it('reconsiders authorization-local skips but suppresses accepted history in a new generation', async () => {
     const harness = createHarness({
@@ -1109,6 +1167,28 @@ describe('CampaignExecutionService', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('creates execution without a configured workspace timezone', async () => {
+    const harness = createHarness({
+      execution: null,
+      capacityResult: { status: 'BLOCKED', reason: 'NOT_CONFIGURED' },
+    });
+
+    await expect(
+      harness.service.startCampaign(startInput()),
+    ).resolves.toMatchObject({
+      status: 'ACTIVATED',
+    });
+    expect(
+      harness.persistence.writeSendingWindowInTransaction,
+    ).toHaveBeenCalledWith(harness.context, {
+      window,
+      campaignCapacityTimeZone: 'America/New_York',
+    });
+    expect(
+      harness.capacity.readCampaignCapacityTimeZoneInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed server-authored authority and graph acknowledgements', async () => {
     const badAuthority = createHarness({
       createdAuthority: {
@@ -1214,33 +1294,6 @@ describe('CampaignExecutionService', () => {
       expect(harness.transaction.run).not.toHaveBeenCalled();
     },
   );
-
-  it('fails capacity-result proxies closed without invoking traps', async () => {
-    let trapCalls = 0;
-    const harness = createHarness({
-      capacityResult: new Proxy(
-        {
-          status: 'CONFIGURED',
-          campaignCapacityTimeZone: 'America/New_York',
-        },
-        {
-          ownKeys: () => {
-            trapCalls += 1;
-            return ['status', 'campaignCapacityTimeZone'];
-          },
-        },
-      ),
-    });
-
-    await expect(harness.service.startCampaign(startInput())).resolves.toEqual({
-      status: 'BLOCKED',
-      reason: 'WORKSPACE_CAPACITY_TIMEZONE_UNAVAILABLE',
-    });
-    expect(trapCalls).toBe(0);
-    expect(
-      harness.authority.createNewAuthorizationInTransaction,
-    ).not.toHaveBeenCalled();
-  });
 
   it('blocks window mutation while ACTIVE and does not read capacity or write', async () => {
     const harness = createHarness({ lifecycleStatus: 'ACTIVE' });

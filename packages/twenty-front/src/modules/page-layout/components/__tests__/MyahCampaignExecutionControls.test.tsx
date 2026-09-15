@@ -227,6 +227,34 @@ it('uses a stable Start attempt key across a failed retry and prevents double su
   expect(refetchSenderPool).toHaveBeenCalled();
 });
 
+it('resets a failed Start retry when the record header navigates to another Campaign', async () => {
+  metadataMutate.mockRejectedValueOnce(new Error('network'));
+  const { rerender } = render(
+    <MyahCampaignExecutionControls
+      campaignId="campaign-a"
+      key="campaign-a"
+      variant="header"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  await waitFor(() => expect(metadataMutate).toHaveBeenCalledTimes(1));
+
+  lifecycleStatus = 'ACTIVE';
+  rerender(
+    <MyahCampaignExecutionControls
+      campaignId="campaign-b"
+      key="campaign-b"
+      variant="header"
+    />,
+  );
+
+  expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled();
+  expect(
+    screen.queryByRole('button', { name: 'Start' }),
+  ).not.toBeInTheDocument();
+});
+
 it.each([
   [
     'the sender pool no longer has a READY mailbox',
@@ -264,35 +292,15 @@ it.each([
   },
 );
 
-it('saves only an explicitly entered Campaign sending window', async () => {
-  metadataMutate.mockResolvedValue({
-    data: { updateCampaignSendingWindow: { status: 'UPDATED', reason: null } },
-  });
+it('uses UTC all-day defaults without showing timezone or window inputs', () => {
   render(<MyahCampaignExecutionControls campaignId="campaign" />);
-  fireEvent.change(screen.getByLabelText('Sending timezone'), {
-    target: { value: 'America/New_York' },
-  });
-  fireEvent.change(screen.getByLabelText('Start time'), {
-    target: { value: '09:00' },
-  });
-  fireEvent.change(screen.getByLabelText('End time'), {
-    target: { value: '17:00' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Save sending window' }));
-  await waitFor(() =>
-    expect(metadataMutate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variables: {
-          input: {
-            campaignId: 'campaign',
-            timeZone: 'America/New_York',
-            startLocalTime: '09:00:00',
-            endLocalTime: '17:00:00',
-          },
-        },
-      }),
-    ),
-  );
+
+  expect(screen.queryByLabelText('Sending timezone')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Start time')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('End time')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Save sending window' }),
+  ).not.toBeInTheDocument();
 });
 
 it('routes sequence readiness to core and audience, sender readiness, plus mutations to metadata', async () => {
@@ -554,6 +562,17 @@ it('rejects a stale audience response owned by another Campaign', () => {
   expect(
     screen.getByText('Campaign audience review is unavailable.'),
   ).toBeVisible();
+});
+
+it('renders the applicable action in the compact record-header variant', () => {
+  lifecycleStatus = 'ACTIVE';
+
+  render(
+    <MyahCampaignExecutionControls campaignId="campaign" variant="header" />,
+  );
+
+  expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled();
+  expect(screen.queryByText('Campaign execution')).not.toBeInTheDocument();
 });
 
 it('uses Stop language and explicitly does not promise provider recall', async () => {
