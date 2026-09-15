@@ -1774,7 +1774,15 @@ export class CampaignExecutionService {
       context,
     );
 
-    if (execution === null) {
+    const createsDefaultExecution = execution === null;
+    const requiresDefaultExecution =
+      execution === null
+        ? true
+        : execution.campaignCapacityTimeZone !==
+            input.request.campaignCapacityTimeZone ||
+          !jsonEqual(execution.window, input.request.reviewedWindow);
+
+    if (requiresDefaultExecution) {
       const created = readExactRecord(
         await this.persistence.writeSendingWindowInTransaction(
           context,
@@ -1789,11 +1797,15 @@ export class CampaignExecutionService {
 
       if (
         created?.status !== 'UPDATED' ||
-        created.createdExecution !== true ||
+        created.createdExecution !== createsDefaultExecution ||
         execution === null
       ) {
-        throw new Error('Campaign default execution creation was inconsistent');
+        throw new Error('Campaign default execution write was inconsistent');
       }
+    }
+
+    if (execution === null) {
+      throw new Error('Campaign default execution was not available');
     }
 
     const capacity = execution.campaignCapacityTimeZone;

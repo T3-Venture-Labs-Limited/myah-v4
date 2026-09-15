@@ -949,6 +949,71 @@ describe('CampaignExecutionService', () => {
     },
   );
 
+  it('normalizes an existing configurable execution to UTC all day before Start review', async () => {
+    const defaultWindow: CampaignSendingWindow = {
+      timeZone: 'UTC',
+      startLocalTime: '00:00:00',
+      endLocalTime: '23:59:00',
+    };
+    const defaultRequest = {
+      ...request,
+      reviewedWindow: defaultWindow,
+      campaignCapacityTimeZone: 'UTC',
+    };
+    const harness = createHarness({
+      execution: {
+        campaignExecutionId,
+        workspaceId,
+        campaignId,
+        window,
+        campaignCapacityTimeZone: 'America/New_York',
+      },
+      createdAuthority: {
+        kind: 'CREATED',
+        authorization: authorityRecord({
+          binding: {
+            ...authorityRecord().binding,
+            request: defaultRequest,
+          },
+        }),
+      },
+      writeWindow: {
+        status: 'UPDATED',
+        createdExecution: false,
+        execution: {
+          campaignExecutionId,
+          workspaceId,
+          campaignId,
+          window: defaultWindow,
+          campaignCapacityTimeZone: 'UTC',
+        },
+      },
+    });
+
+    await expect(
+      harness.service.startCampaign({
+        ...startInput(),
+        request: defaultRequest,
+      }),
+    ).resolves.toMatchObject({ status: 'ACTIVATED' });
+    expect(
+      harness.persistence.writeSendingWindowInTransaction,
+    ).toHaveBeenCalledWith(harness.context, {
+      window: defaultWindow,
+      campaignCapacityTimeZone: 'UTC',
+    });
+    expect(
+      harness.review.revalidateNewActivationInTransaction,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        execution: expect.objectContaining({
+          window: defaultWindow,
+          campaignCapacityTimeZone: 'UTC',
+        }),
+      }),
+    );
+  });
+
   it('reconsiders authorization-local skips but suppresses accepted history in a new generation', async () => {
     const harness = createHarness({
       history: {

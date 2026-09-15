@@ -85,12 +85,12 @@ beforeEach(() => {
   };
 });
 
-it('shows read-only readiness and directs Start/Stop to Operations without generic lifecycle actions', () => {
+it('shows read-only readiness and directs Start/Stop to the Campaign record header without generic lifecycle actions', () => {
   render(<MyahCampaignReadiness campaignId="campaign" />);
   expect(screen.getByText('Campaign readiness')).toBeVisible();
   expect(screen.getByText('Draft')).toBeVisible();
   expect(
-    screen.getByText('Use Start and Stop in Campaign Operations.'),
+    screen.getByText('Use Start and Stop in the Campaign record header.'),
   ).toBeVisible();
   expect(
     screen.queryByRole('button', { name: /activate|pause|resume|complete/i }),

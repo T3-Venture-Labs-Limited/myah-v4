@@ -59,6 +59,7 @@ export const RecordShowPage = () => {
               >
                 {objectNameSingular === 'campaign' ? (
                   <MyahCampaignExecutionControls
+                    key={objectRecordId}
                     campaignId={objectRecordId}
                     variant="header"
                   />

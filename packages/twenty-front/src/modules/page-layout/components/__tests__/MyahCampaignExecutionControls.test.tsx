@@ -227,6 +227,34 @@ it('uses a stable Start attempt key across a failed retry and prevents double su
   expect(refetchSenderPool).toHaveBeenCalled();
 });
 
+it('resets a failed Start retry when the record header navigates to another Campaign', async () => {
+  metadataMutate.mockRejectedValueOnce(new Error('network'));
+  const { rerender } = render(
+    <MyahCampaignExecutionControls
+      campaignId="campaign-a"
+      key="campaign-a"
+      variant="header"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  await waitFor(() => expect(metadataMutate).toHaveBeenCalledTimes(1));
+
+  lifecycleStatus = 'ACTIVE';
+  rerender(
+    <MyahCampaignExecutionControls
+      campaignId="campaign-b"
+      key="campaign-b"
+      variant="header"
+    />,
+  );
+
+  expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled();
+  expect(
+    screen.queryByRole('button', { name: 'Start' }),
+  ).not.toBeInTheDocument();
+});
+
 it.each([
   [
     'the sender pool no longer has a READY mailbox',
