@@ -1,4 +1,5 @@
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -14,6 +15,94 @@ import {
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const campaignId = '22222222-2222-4222-8222-222222222222';
+const authorizationId = '33333333-3333-4333-8333-333333333333';
+const campaignExecutionId = '44444444-4444-4444-8444-444444444444';
+const workflowId = '55555555-5555-4555-8555-555555555555';
+const workflowVersionId = '66666666-6666-4666-8666-666666666666';
+const initiatingUserWorkspaceId = '77777777-7777-4777-8777-777777777777';
+const initiatingUserId = '88888888-8888-4888-8888-888888888888';
+const initiatingWorkspaceMemberId = '99999999-9999-4999-8999-999999999999';
+const messageId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const startIdempotencyKey = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const authorizedAt = '2026-09-16T00:00:00.000Z';
+const revokedAt = '2026-09-16T00:01:00.000Z';
+const digest = 'a'.repeat(64);
+
+const authorizationRequest = {
+  preparedProof: {
+    kind: 'PREPARED' as const,
+    workspaceId,
+    campaignId,
+    workflowId,
+    workflowVersionId,
+    initiatingUserWorkspaceId,
+    initiatingUserId,
+    initiatingWorkspaceMemberId,
+    orderedMessageIds: [messageId],
+    usedChannels: ['EMAIL'] as const,
+    sequenceDigest: digest,
+    fixedMaterialDigest: digest,
+    senderAuthorityDigest: digest,
+    preparedFingerprint: digest,
+    signatureDigest: null,
+    fixedMaterialProofs: [{ messageId, orderedAttachmentProofs: [] }],
+    senderPoolFingerprint: digest,
+    senderPoolSerializationRevision: 'CAMPAIGN_SENDER_POOL_V2',
+    senderPoolRotationPolicyId:
+      'EARLIEST_ELIGIBLE_LOWEST_DAILY_USAGE_STABLE_ACCOUNT_V1',
+  },
+  reviewedWindow: {
+    timeZone: 'UTC',
+    startLocalTime: '00:00:00',
+    endLocalTime: '23:59:00',
+  },
+  campaignCapacityTimeZone: 'UTC',
+};
+
+const currentAuthorityProjection = () => ({
+  schemaVersion: 1 as const,
+  authorizationId,
+  generation: 1,
+  state: 'ACTIVE' as const,
+  workflowVersionId,
+  preparedFingerprint: digest,
+  authorizedAt,
+  revokedAt: null,
+  revocationReason: null,
+});
+
+const authorizationRow = (overrides: Record<string, unknown> = {}) => ({
+  authorizationId,
+  workspaceId,
+  campaignId,
+  campaignExecutionId,
+  generation: 1,
+  startIdempotencyKey,
+  preparedFingerprint: digest,
+  workflowId,
+  workflowVersionId,
+  initiatingUserWorkspaceId,
+  state: 'ACTIVE' as const,
+  authorizedAt,
+  revokedAt: null,
+  revocationReason: null,
+  binding: {
+    schemaVersion: 1 as const,
+    authorizationId,
+    generation: 1,
+    startIdempotencyKey,
+    workspaceId,
+    campaignId,
+    campaignExecutionId,
+    workflowVersionId,
+    request: authorizationRequest,
+    futureEligibleCampaignCreatorsAuthorized: true as const,
+    authorizedAt,
+  },
+  createdAt: authorizedAt,
+  updatedAt: authorizedAt,
+  ...overrides,
+});
 
 const makeAuthContext = () =>
   ({
@@ -708,7 +797,100 @@ describe('CampaignLifecycleTransactionService', () => {
     },
   );
 
-  it('preserves arbitrary JSON keys as setter-free own properties', async () => {
+  it('passes the locked current authority snapshot through real Stop revocation', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql === WORKSPACE_LOCK_SQL) return [makeWorkspaceRow()];
+      if (sql === CAMPAIGN_ADVISORY_LOCK_SQL) return [];
+      if (
+        sql.startsWith('SELECT * FROM core."campaignSequenceAuthorization"')
+      ) {
+        return [authorizationRow()];
+      }
+      if (sql.startsWith('UPDATE core."campaignSequenceAuthorization"')) {
+        const revoked = authorizationRow({
+          state: 'REVOKED',
+          revokedAt,
+          revocationReason: 'CAMPAIGN_PAUSED',
+          updatedAt: revokedAt,
+        });
+
+        return { affected: 1, raw: [revoked], records: [revoked] };
+      }
+      if (sql.includes('SET "sequenceAuthorization" = $1::jsonb')) {
+        const projected = { id: campaignId };
+
+        return { affected: 1, raw: [projected], records: [projected] };
+      }
+
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const harness = createHarness({
+      campaign: {
+        id: campaignId,
+        lifecycleStatus: 'ACTIVE',
+        sequenceAuthorization: currentAuthorityProjection(),
+      },
+      queryRunner: { query: query as never },
+    });
+    const strictAuthority = new CampaignSequenceAuthorizationService({
+      generateAuthorizationId: () => authorizationId,
+      now: () => new Date(revokedAt),
+    });
+
+    await expect(
+      run(harness, async (context) =>
+        strictAuthority.revokeCurrentAuthorizationInTransaction(
+          {
+            manager: context.manager,
+            workspaceId: context.workspaceId,
+            campaignId: context.campaignId,
+            lockedCampaign: {
+              id: context.campaign.id,
+              lifecycleStatus: 'ACTIVE',
+              currentAuthorityProjection:
+                context.campaign.sequenceAuthorization,
+            },
+          },
+          { reason: 'CAMPAIGN_PAUSED' },
+        ),
+      ),
+    ).resolves.toMatchObject({
+      kind: 'REVOKED',
+      authorization: {
+        authorizationId,
+        generation: 1,
+        state: 'REVOKED',
+        revocationReason: 'CAMPAIGN_PAUSED',
+      },
+    });
+    expect(query).toHaveBeenCalledTimes(5);
+  });
+
+  it.each([
+    [
+      'custom record prototype',
+      () =>
+        Object.setPrototypeOf(currentAuthorityProjection(), { custom: true }),
+    ],
+    ['nonstandard array prototype', () => Object.setPrototypeOf([], null)],
+  ])('rejects a current authority with a %s', async (_label, factory) => {
+    const harness = createHarness({
+      campaign: {
+        ...makeCampaignRow(),
+        lifecycleStatus: 'ACTIVE',
+        sequenceAuthorization:
+          factory() as RawCampaignLifecycleProjection['sequenceAuthorization'],
+      },
+    });
+    const operation = jest.fn(async () => undefined);
+
+    await expect(run(harness, operation)).rejects.toThrow(
+      'Campaign lock projection was invalid',
+    );
+    expect(operation).not.toHaveBeenCalled();
+  });
+
+  it('preserves arbitrary JSON keys as setter-free ordinary own properties', async () => {
     const sequenceAuthorization = Object.create(null) as Record<
       string,
       unknown
@@ -736,7 +918,7 @@ describe('CampaignLifecycleTransactionService', () => {
       unknown
     >;
 
-    expect(Object.getPrototypeOf(snapshot)).toBeNull();
+    expect(Object.getPrototypeOf(snapshot)).toBe(Object.prototype);
     expect(Object.prototype.hasOwnProperty.call(snapshot, '__proto__')).toBe(
       true,
     );
@@ -801,6 +983,15 @@ describe('CampaignLifecycleTransactionService', () => {
     expect(received?.campaign.sequenceAuthorization).toEqual({
       rules: [{ channel: 'email' }],
     });
+    expect(
+      Object.getPrototypeOf(received?.campaign.sequenceAuthorization),
+    ).toBe(Object.prototype);
+    expect(
+      Object.getPrototypeOf(
+        (received?.campaign.sequenceAuthorization as { rules: object[] })
+          .rules[0],
+      ),
+    ).toBe(Object.prototype);
     expect(Object.isFrozen(received)).toBe(true);
     expect(
       Object.isFrozen(received?.actorPermissionContext.authContext.workspace),
