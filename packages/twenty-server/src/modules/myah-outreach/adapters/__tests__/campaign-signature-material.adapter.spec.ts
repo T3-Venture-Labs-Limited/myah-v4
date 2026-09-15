@@ -82,21 +82,68 @@ describe('CampaignSignatureMaterialAdapter', () => {
   });
 
   it.each([
-    ['null', null],
-    ['blank', ''],
-  ])('preserves an accepted %s signature', async (_label, emailSignature) => {
-    campaignRepository.findOne.mockResolvedValue({
-      id: campaignId,
-      emailSignature,
-      deletedAt: null,
-    });
+    ['null', null, null],
+    ['blank', '', ''],
+    ['legacy string', '<p>Legacy signature</p>', '<p>Legacy signature</p>'],
+    [
+      'rich text',
+      {
+        markdown: 'Kind regards,\nDaryll',
+        blocknote: '[{"type":"paragraph","content":"Kind regards"}]',
+      },
+      'Kind regards,\nDaryll',
+    ],
+  ])(
+    'loads an accepted %s signature as deterministic markdown material',
+    async (_label, emailSignature, expectedHtml) => {
+      campaignRepository.findOne.mockResolvedValue({
+        id: campaignId,
+        emailSignature,
+        deletedAt: null,
+      });
+
+      await expect(
+        adapter.load({ authContext, campaignId, workspaceId }),
+      ).resolves.toEqual({
+        kind: 'READY',
+        value: { html: expectedHtml },
+      });
+    },
+  );
+
+  it('loads rich-text signature markdown through the locked transaction path', async () => {
+    const query = jest.fn().mockResolvedValue([
+      {
+        emailSignature: {
+          markdown: 'Kind regards,\nDaryll',
+          blocknote: '[{"type":"paragraph","content":"Kind regards"}]',
+        },
+      },
+    ]);
+    const transactionManager = { queryRunner: undefined as unknown };
+
+    transactionManager.queryRunner = {
+      isTransactionActive: true,
+      isReleased: false,
+      manager: transactionManager,
+      query,
+    };
 
     await expect(
-      adapter.load({ authContext, campaignId, workspaceId }),
+      adapter.load({
+        authContext,
+        campaignId,
+        workspaceId,
+        transactionManager: transactionManager as never,
+      }),
     ).resolves.toEqual({
       kind: 'READY',
-      value: { html: emailSignature },
+      value: { html: 'Kind regards,\nDaryll' },
     });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('FOR KEY SHARE'),
+      [campaignId],
+    );
   });
 
   it('blocks a workspace mismatch before repository access', async () => {
@@ -115,7 +162,21 @@ describe('CampaignSignatureMaterialAdapter', () => {
 
   it.each([
     ['missing Campaign', null],
-    ['malformed signature', { id: campaignId, emailSignature: 42 }],
+    ['unsupported number signature', { id: campaignId, emailSignature: 42 }],
+    [
+      'rich-text signature without markdown',
+      {
+        id: campaignId,
+        emailSignature: { blocknote: '[]' },
+      },
+    ],
+    [
+      'rich-text signature with non-string blocknote',
+      {
+        id: campaignId,
+        emailSignature: { markdown: 'Kind regards', blocknote: null },
+      },
+    ],
   ])('blocks a %s', async (_label, campaign) => {
     campaignRepository.findOne.mockResolvedValue(campaign);
 
