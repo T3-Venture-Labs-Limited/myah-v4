@@ -3,6 +3,7 @@ import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
 import { CampaignSentProjectionService } from 'src/modules/campaign-execution/services/campaign-sent-projection.service';
 import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
@@ -67,69 +68,76 @@ export class CampaignEmailRuntimeService {
          ) SELECT * FROM pending UNION ALL SELECT * FROM reserved UNION ALL SELECT * FROM processing UNION ALL SELECT * FROM accepted UNION ALL SELECT * FROM definitelyUnaccepted UNION ALL SELECT * FROM unknown UNION ALL SELECT * FROM blocked`,
     );
     for (const item of work) {
+      const workspaceId = String(item.workspaceId);
+
       try {
-        if (item.kind === 'ACCEPTED') {
-          await this.reconcileAcceptedAttempt(
-            String(item.workspaceId),
-            String(item.campaignId),
-            String(item.attemptId),
-          );
-          continue;
-        }
-        if (item.kind === 'RESERVED') {
-          await this.dispatchAttempt(
-            String(item.workspaceId),
-            String(item.campaignId),
-            String(item.attemptId),
-          );
-          continue;
-        }
-        if (item.kind === 'PROCESSING') {
-          await this.recoverProcessing(
-            String(item.workspaceId),
-            String(item.campaignId),
-            String(item.attemptId),
-          );
-          continue;
-        }
-        if (item.kind === 'DEFINITELY_UNACCEPTED' || item.kind === 'UNKNOWN') {
-          await this.reconcilePersistedOutcome(
-            String(item.workspaceId),
-            String(item.campaignId),
-            String(item.attemptId),
-            item.kind,
-          );
-          continue;
-        }
-        if (item.kind === 'BLOCKED') {
-          await dataSource.transaction((manager) =>
-            this.progression.holdOccurrenceInTransaction(
-              String(item.id),
-              'DISPATCH_CONTRACT_CONFLICT',
-              manager,
+        await this.orm.executeInWorkspaceContext(async () => {
+          if (item.kind === 'ACCEPTED') {
+            await this.reconcileAcceptedAttempt(
+              workspaceId,
+              String(item.campaignId),
+              String(item.attemptId),
+            );
+            return;
+          }
+          if (item.kind === 'RESERVED') {
+            await this.dispatchAttempt(
+              workspaceId,
+              String(item.campaignId),
+              String(item.attemptId),
+            );
+            return;
+          }
+          if (item.kind === 'PROCESSING') {
+            await this.recoverProcessing(
+              workspaceId,
+              String(item.campaignId),
+              String(item.attemptId),
+            );
+            return;
+          }
+          if (
+            item.kind === 'DEFINITELY_UNACCEPTED' ||
+            item.kind === 'UNKNOWN'
+          ) {
+            await this.reconcilePersistedOutcome(
+              workspaceId,
+              String(item.campaignId),
+              String(item.attemptId),
+              item.kind,
+            );
+            return;
+          }
+          if (item.kind === 'BLOCKED') {
+            await dataSource.transaction((manager) =>
+              this.progression.holdOccurrenceInTransaction(
+                String(item.id),
+                'DISPATCH_CONTRACT_CONFLICT',
+                manager,
+              ),
+            );
+            return;
+          }
+          const result = await dataSource.transaction((manager) =>
+            this.progression.claimAndReserveDueOccurrenceInTransaction(
+              {
+                workspaceId,
+                campaignId: String(item.campaignId),
+                occurrenceId: String(item.id),
+              },
+              manager as never,
             ),
           );
-          continue;
-        }
-        const result = await dataSource.transaction((manager) =>
-          this.progression.claimAndReserveDueOccurrenceInTransaction(
-            {
-              workspaceId: String(item.workspaceId),
-              campaignId: String(item.campaignId),
-              occurrenceId: String(item.id),
-            },
-            manager as never,
-          ),
-        );
-        if (
-          result.status === 'RESERVED' ||
-          result.status === 'DISPATCHABLE_REPLAY'
-        )
-          await this.dispatchAttempt(
-            String(item.workspaceId),
-            String(item.campaignId),
-            result.attemptId,
-          );
+          if (
+            result.status === 'RESERVED' ||
+            result.status === 'DISPATCHABLE_REPLAY'
+          )
+            await this.dispatchAttempt(
+              workspaceId,
+              String(item.campaignId),
+              result.attemptId,
+            );
+        }, buildSystemAuthContext(workspaceId));
       } catch (error) {
         // One bad occurrence must not prevent independently safe Campaign work.
         // oxlint-disable-next-line no-console
