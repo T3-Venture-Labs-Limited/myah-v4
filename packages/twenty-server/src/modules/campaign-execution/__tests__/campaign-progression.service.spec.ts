@@ -1,6 +1,24 @@
-import { type EntityManager } from 'typeorm';
+import { ConnectedAccountProvider } from 'twenty-shared/types';
+import { DataSource, type EntityManager, type QueryRunner } from 'typeorm';
 
+import { EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
+import { WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
+import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
+import { CampaignMessageMaterializerService } from 'src/modules/myah-outreach/services/campaign-message-materializer.service';
+import { CampaignMessageRenderService } from 'src/modules/myah-outreach/services/campaign-message-render.service';
+import { type CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
+
+jest.mock(
+  'src/engine/core-modules/tool/tools/email-tool/utils/render-rich-text-to-html.util',
+  () => ({
+    renderRichTextToHtml: jest.fn(
+      async (document: unknown) =>
+        `<rendered>${JSON.stringify(document)}</rendered>`,
+    ),
+  }),
+);
 
 const managerWith = (query: jest.Mock): EntityManager => {
   const queryRunner = {
@@ -367,6 +385,319 @@ describe('CampaignProgressionService', () => {
     },
   );
 
+  it('reserves through the real materializer, renderer, and composer before provider I/O', async () => {
+    const campaignCreatorId = '20202020-cccc-4ccc-8ccc-cccccccccccc';
+    const messageId = '20202020-dddd-4ddd-8ddd-dddddddddddd';
+    const workflowId = '20202020-eeee-4eee-8eee-eeeeeeeeeeee';
+    const initiatingUserWorkspaceId = '20202020-ffff-4fff-8fff-ffffffffffff';
+    const creatorId = '30303030-1111-4111-8111-111111111111';
+    const senderHandle = 'sender@example.com';
+    const recipient = 'creator@example.com';
+    const senderPoolFingerprint = 'sender-pool-fingerprint';
+    const fixedMaterialDigest = 'fixed-material-digest';
+    const senderPoolSerializationRevision = 'sender-pool/v1';
+    const senderPoolRotationPolicyId = 'rotate/v1';
+    const preparedFingerprint = 'prepared-fingerprint';
+    const observedAt = new Date('2026-09-15T21:00:00.000Z');
+    const email = {
+      workspaceId: ids.workspaceId,
+      campaignId: ids.campaignId,
+      workflowId,
+      workflowVersionId: ids.workflowVersionId,
+      messageId,
+      subject: 'Hello {{creator.name}}',
+      body: JSON.stringify({
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'A controlled message' }],
+          },
+        ],
+      }),
+      files: [],
+      replyToThread: false,
+      issues: [],
+    };
+    const sender = {
+      bindingStatus: 'RESOLVED_BINDING',
+      status: 'READY',
+      connectedAccountId: ids.connectedAccountId,
+      messageChannelId: ids.messageChannelId,
+      senderHandle,
+      provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+      dailySendLimit: 50,
+      minimumSendIntervalMs: 300_000,
+    } as const;
+    const sequenceService = {
+      loadExecutionPlanInTransaction: jest.fn().mockResolvedValue({
+        kind: 'READY',
+        nodes: [
+          {
+            messageId,
+            channel: 'EMAIL',
+            replyToThread: false,
+          },
+        ],
+      }),
+      loadEmailByVersionInTransaction: jest.fn().mockResolvedValue(email),
+    } as unknown as CampaignSequenceService;
+    const materializer = new CampaignMessageMaterializerService(
+      sequenceService,
+      {
+        load: jest.fn().mockResolvedValue({
+          kind: 'READY',
+          value: {
+            creatorId,
+            normalizedRecipient: recipient,
+            variables: {
+              'creator.name': 'Ada Creator',
+              'creator.email': recipient,
+            },
+          },
+        }),
+      },
+      {
+        load: jest.fn().mockResolvedValue({ kind: 'READY', value: null }),
+      },
+      {
+        load: jest.fn().mockResolvedValue({
+          kind: 'READY',
+          value: {
+            connectedAccountId: ids.connectedAccountId,
+            messageChannelId: ids.messageChannelId,
+            handle: senderHandle,
+            provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+            senderPoolFingerprint,
+            authorizedEmailSenderPool: [],
+            projectedSlotAt: observedAt,
+            isPreviewProjection: false,
+          },
+        }),
+      },
+      { load: jest.fn() },
+      {
+        load: jest.fn().mockResolvedValue({
+          kind: 'READY',
+          value: { kind: 'NEW_THREAD' },
+        }),
+      },
+    );
+    const composer = new EmailComposerService(
+      {
+        executeInWorkspaceContext: jest.fn(),
+        getRepository: jest.fn(),
+      } as never,
+      { findOne: jest.fn(), find: jest.fn() } as never,
+      { find: jest.fn() } as never,
+      {} as never,
+    );
+    const renderer = new CampaignMessageRenderService(materializer, composer);
+    const renderSequenceEmail = jest.spyOn(renderer, 'renderSequenceEmail');
+    const attemptService = {
+      reserveWithMailboxCapacity: jest
+        .fn()
+        .mockResolvedValue({ status: 'RESERVED' }),
+    };
+    const capacityService = {
+      lockAndRankForReservation: jest.fn().mockResolvedValue({
+        status: 'ELIGIBLE_NOW',
+        observedAt,
+        selected: { sender },
+        lockedCandidates: [],
+      }),
+    };
+    const audienceService = {
+      reviewInTransaction: jest.fn().mockResolvedValue({
+        eligible: [{ campaignCreatorId, normalizedEmail: recipient }],
+        excluded: [],
+      }),
+    };
+    const senderService = {
+      getCampaignEmailSenderPoolInTransaction: jest.fn().mockResolvedValue({
+        senderPoolFingerprint,
+        serializationRevision: senderPoolSerializationRevision,
+        rotationPolicyId: senderPoolRotationPolicyId,
+        mailboxes: [sender],
+      }),
+    };
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM core.workspace'))
+        return [
+          { activationStatus: 'ACTIVE', suspendedAt: null, deletedAt: null },
+        ];
+      if (sql.includes('pg_advisory_xact_lock')) return [];
+      if (sql.includes('.campaign WHERE'))
+        return [
+          {
+            id: ids.campaignId,
+            lifecycleStatus: 'ACTIVE',
+            sequenceAuthorization: {
+              authorizationId: ids.authorizationId,
+              workflowVersionId: ids.workflowVersionId,
+              generation: 1,
+              state: 'ACTIVE',
+              preparedFingerprint,
+            },
+          },
+        ];
+      if (sql.includes('campaignSequenceAuthorization'))
+        return [
+          {
+            authorizationId: ids.authorizationId,
+            state: 'ACTIVE',
+            preparedFingerprint,
+            initiatingUserWorkspaceId,
+            binding: {
+              request: {
+                preparedProof: {
+                  orderedMessageIds: [messageId],
+                  senderPoolFingerprint,
+                  senderPoolSerializationRevision,
+                  senderPoolRotationPolicyId,
+                  fixedMaterialDigest,
+                  signatureDigest: null,
+                  fixedMaterialProofs: [
+                    { messageId, orderedAttachmentProofs: [] },
+                  ],
+                },
+              },
+            },
+          },
+        ];
+      if (sql.includes('campaignActivation'))
+        return [{ campaignExecutionId: ids.campaignExecutionId }];
+      if (sql.includes('SELECT "enrollmentId"'))
+        return [{ enrollmentId: ids.enrollmentId }];
+      if (sql.includes('campaignEnrollment') && sql.includes('SELECT'))
+        return [
+          {
+            id: ids.enrollmentId,
+            campaignCreatorId,
+            state: 'ACTIVE',
+            nextAuthoredMessageIndex: 0,
+          },
+        ];
+      if (sql.includes('campaignOccurrence') && sql.includes('SELECT'))
+        return [
+          {
+            id: ids.occurrenceId,
+            enrollmentId: ids.enrollmentId,
+            state: 'PENDING',
+            authoredMessageIndex: 0,
+            messageId,
+            dueAt: new Date(observedAt.getTime() - 1_000),
+          },
+        ];
+      if (sql.includes('outboundEmailAttempt')) return [];
+      if (sql.includes('clock_timestamp() AS')) return [{ observedAt }];
+      if (sql.includes('FROM core."campaignExecution"'))
+        return [
+          {
+            campaignCapacityTimeZone: 'UTC',
+            insideWindow: true,
+            nextWindowAt: null,
+          },
+        ];
+      if (sql.includes('FROM core."connectedAccount"'))
+        return [
+          {
+            id: ids.connectedAccountId,
+            workspaceId: ids.workspaceId,
+            handle: senderHandle,
+            provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+            scopes: ['email'],
+            hasImapConfiguration: true,
+            hasSmtpConfiguration: true,
+            messageChannels: [
+              { id: ids.messageChannelId, handle: senderHandle },
+            ],
+          },
+        ];
+      if (sql.includes('INSERT INTO core."campaignOutboundRender"'))
+        return [{ attemptId: ids.attemptId }];
+      if (sql.includes("SET state='IN_FLIGHT'"))
+        return [{ id: ids.occurrenceId }];
+      return [];
+    });
+    const dataSource = new DataSource({
+      type: 'postgres',
+      entities: [],
+    }) as GlobalWorkspaceDataSource;
+    const queryRunnerShape = {
+      connection: dataSource,
+      isTransactionActive: true,
+      isReleased: false,
+      query,
+      manager: undefined as unknown as WorkspaceEntityManager,
+    };
+    const queryRunner = queryRunnerShape as unknown as QueryRunner;
+    const manager = new WorkspaceEntityManager(dataSource, queryRunner);
+
+    queryRunnerShape.manager = manager;
+    const providerNetworkSeam = jest
+      .spyOn(MessagingMessageOutboundService.prototype, 'sendMessage')
+      .mockRejectedValue(new Error('Provider network I/O is forbidden'));
+    const service = new CampaignProgressionService(
+      attemptService as never,
+      capacityService as never,
+      sequenceService,
+      audienceService as never,
+      senderService as never,
+      renderer,
+    );
+
+    try {
+      const result = await service.claimAndReserveDueOccurrenceInTransaction(
+        {
+          workspaceId: ids.workspaceId,
+          campaignId: ids.campaignId,
+          occurrenceId: ids.occurrenceId,
+        },
+        manager,
+      );
+
+      expect(result).toEqual({
+        status: 'RESERVED',
+        attemptId: expect.any(String),
+      });
+      expect(providerNetworkSeam).not.toHaveBeenCalled();
+    } finally {
+      providerNetworkSeam.mockRestore();
+    }
+
+    expect(renderSequenceEmail).toHaveBeenCalledTimes(1);
+    expect(
+      sequenceService.loadEmailByVersionInTransaction,
+    ).toHaveBeenCalledTimes(1);
+    expect(attemptService.reserveWithMailboxCapacity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: ids.workspaceId,
+        campaignId: ids.campaignId,
+        occurrenceId: ids.occurrenceId,
+        connectedAccountId: ids.connectedAccountId,
+        messageChannelId: ids.messageChannelId,
+        renderDigest: expect.any(String),
+      }),
+      manager,
+    );
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO core."campaignOutboundRender"'),
+      ),
+    ).toBe(true);
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes("SET state='IN_FLIGHT'"),
+      ),
+    ).toBe(true);
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('FROM core."connectedAccount"'),
+      ),
+    ).toBe(true);
+  });
+
   it('replays an unexpired RESERVED claim without reserving or rendering again', async () => {
     const unknownAfter = new Date(Date.now() + 120_000);
     const query = jest.fn(async (sql: string) => {
@@ -537,7 +868,7 @@ describe('CampaignProgressionService', () => {
   it.each([
     ['cancelOccurrenceInTransaction', 'CAMPAIGN_PAUSED', 'CANCELLED'],
     ['markUnknownInTransaction', undefined, 'UNKNOWN'],
-  ] as const)('applies %s with a locked CAS', async (method, reason, state) => {
+  ] as const)('applies %s with a locked CAS', async (_, reason, state) => {
     const query = jest
       .fn()
       .mockResolvedValueOnce([{ id: ids.occurrenceId, state: 'IN_FLIGHT' }])

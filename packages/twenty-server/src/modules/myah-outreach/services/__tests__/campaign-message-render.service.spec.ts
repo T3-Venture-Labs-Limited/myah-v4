@@ -1,6 +1,10 @@
 import { ConnectedAccountProvider } from 'twenty-shared/types';
+import { DataSource, type QueryRunner } from 'typeorm';
 
-import { type EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
+import { EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
+import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { type CampaignMessageMaterializerService } from 'src/modules/myah-outreach/services/campaign-message-materializer.service';
 import {
   CAMPAIGN_EMAIL_RENDER_SCHEMA_VERSION,
@@ -267,6 +271,83 @@ const readyRender = async (
 };
 
 describe('CampaignMessageRenderService', () => {
+  it('reaches READY through the real composer without core metadata on the workspace manager', async () => {
+    const material = baseMaterial();
+    const connectedAccountId = '20202020-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const messageChannelId = '20202020-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+    material.sender.connectedAccountId = connectedAccountId;
+    material.sender.messageChannelId = messageChannelId;
+    material.authored.orderedFileRefs = [];
+    material.attachments = [];
+
+    const dataSource = new DataSource({
+      type: 'postgres',
+      entities: [],
+    }) as GlobalWorkspaceDataSource;
+    const query = jest.fn().mockResolvedValue([
+      {
+        id: connectedAccountId,
+        workspaceId,
+        handle: material.sender.handle,
+        provider: material.sender.provider,
+        scopes: ['email'],
+        hasImapConfiguration: false,
+        hasSmtpConfiguration: false,
+        messageChannels: [
+          { id: messageChannelId, handle: material.sender.handle },
+        ],
+      },
+    ]);
+    const queryRunnerShape = {
+      connection: dataSource,
+      isTransactionActive: true,
+      isReleased: false,
+      query,
+      manager: undefined as unknown as WorkspaceEntityManager,
+    };
+    const queryRunner = queryRunnerShape as unknown as QueryRunner;
+    const transactionManager = new WorkspaceEntityManager(
+      dataSource,
+      queryRunner,
+    );
+
+    queryRunnerShape.manager = transactionManager;
+    expect(dataSource.hasMetadata(ConnectedAccountEntity)).toBe(false);
+
+    const composer = new EmailComposerService(
+      {
+        executeInWorkspaceContext: jest.fn(),
+        getRepository: jest.fn(),
+      } as never,
+      { findOne: jest.fn(), find: jest.fn() } as never,
+      { find: jest.fn() } as never,
+      {} as never,
+    );
+    const load = jest.fn().mockResolvedValue({ kind: 'READY', material });
+    const service = new CampaignMessageRenderService(
+      { load } as unknown as CampaignMessageMaterializerService,
+      composer,
+    );
+
+    await expect(
+      service.renderSequenceEmail(material.coordinates, {
+        kind: 'DISPATCH',
+        transactionManager,
+      } as unknown as CampaignMessageRenderContext),
+    ).resolves.toMatchObject({
+      kind: 'READY',
+      render: {
+        sender: { connectedAccountId, messageChannelId },
+        composedEmail: {
+          connectedAccount: { id: connectedAccountId, workspaceId },
+          messageChannelId,
+        },
+      },
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   it('resolves only canonical variable nodes, appends signature once, and reuses EmailComposerService', async () => {
     const { service, composeEmail } = makeHarness();
 
