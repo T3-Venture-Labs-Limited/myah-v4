@@ -4185,11 +4185,6 @@ msgstr "Vista Calendario"
 msgid "Calendars"
 msgstr "Calendari"
 
-#. js-lingui-id: cHma9m
-#: src/modules/onboarding/constants/OnboardingInstallableApps.ts
-msgid "Call recorder"
-msgstr ""
-
 #. js-lingui-id: qIlodj
 #: src/modules/object-record/record-field/ui/form-types/components/FormPhoneFieldInput.tsx
 msgid "Calling Code"
@@ -8842,16 +8837,6 @@ msgstr "Aumenta la sicurezza richiedendo un codice insieme alla tua password"
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
 msgid "Enjoy a 30-day free trial"
 msgstr "Approfitta di una prova gratuita di 30 giorni"
-
-#. js-lingui-id: 4frL7T
-#: src/modules/onboarding/constants/OnboardingInstallableApps.ts
-msgid "Enrich your leads with People Data Labs"
-msgstr ""
-
-#. js-lingui-id: D7NFK8
-#: src/modules/onboarding/constants/OnboardingInstallableApps.ts
-msgid "Enrichment"
-msgstr ""
 
 #. js-lingui-id: s7Zz7R
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.spec.ts
@@ -17682,11 +17667,6 @@ msgstr "Impostazioni della tabella dei record"
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerDatabaseEventForm.tsx
 msgid "Record Type"
 msgstr "Tipo di record"
-
-#. js-lingui-id: bSHWVY
-#: src/modules/onboarding/constants/OnboardingInstallableApps.ts
-msgid "Record your calls and get transcripts"
-msgstr ""
 
 #. js-lingui-id: uMOyEH
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx

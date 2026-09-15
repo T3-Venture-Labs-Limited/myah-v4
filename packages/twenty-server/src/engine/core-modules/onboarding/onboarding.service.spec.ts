@@ -189,16 +189,16 @@ describe('OnboardingService', () => {
   });
 
   describe('triggerInstallAppsOnboardingStep', () => {
-    const [callRecorderId, peopleDataLabsId] =
-      ONBOARDING_INSTALLABLE_APP_UNIVERSAL_IDENTIFIERS;
+    const [lastContactId] = ONBOARDING_INSTALLABLE_APP_UNIVERSAL_IDENTIFIERS;
+    const removedCallRecorderId = '8da4b8b5-5edf-4880-b51f-ab6e679ec617';
 
-    it('should claim the step and enqueue the install job for the installable apps without crediting', async () => {
+    it('should claim the step and enqueue only retained installable apps without crediting', async () => {
       jest.spyOn(userVarsService, 'delete').mockResolvedValue(1);
 
       await service.triggerInstallAppsOnboardingStep({
         userId,
         workspaceId,
-        universalIdentifiers: [callRecorderId, peopleDataLabsId],
+        universalIdentifiers: [lastContactId, removedCallRecorderId],
       });
 
       expect(userVarsService.delete).toHaveBeenCalledWith({
@@ -210,7 +210,7 @@ describe('OnboardingService', () => {
         INSTALL_ONBOARDING_APPS_JOB_NAME,
         {
           workspaceId,
-          universalIdentifiers: [callRecorderId, peopleDataLabsId],
+          universalIdentifiers: [lastContactId],
         },
         { id: `${INSTALL_ONBOARDING_APPS_JOB_NAME}-${workspaceId}` },
       );
@@ -225,7 +225,7 @@ describe('OnboardingService', () => {
       await service.triggerInstallAppsOnboardingStep({
         userId,
         workspaceId,
-        universalIdentifiers: [callRecorderId],
+        universalIdentifiers: [lastContactId],
       });
 
       expect(messageQueueService.add).not.toHaveBeenCalled();

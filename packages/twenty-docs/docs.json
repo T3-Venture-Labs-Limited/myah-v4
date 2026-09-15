@@ -6381,10 +6381,6 @@
       "destination": "/developers/contribute/capabilities/backend-development/queue"
     },
     {
-      "source": "/developers/backend-development/zapier",
-      "destination": "/developers/contribute/capabilities/backend-development/zapier"
-    },
-    {
       "source": "/user-guide/getting-started/what-is-twenty",
       "destination": "/user-guide/getting-started/capabilities/what-is-twenty"
     },
