@@ -328,7 +328,7 @@ describe('CampaignEmailRuntimeService', () => {
 
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(
-        /FROM core\."connectedAccount"\s+WHERE id=\$1 AND "workspaceId"=\$2/s,
+        /^\s*SELECT id, "workspaceId", handle, provider, "connectionParameters"\s+FROM core\."connectedAccount"\s+WHERE id=\$1 AND "workspaceId"=\$2\s*$/s,
       ),
       [ids.accountId, ids.workspaceId],
     );
