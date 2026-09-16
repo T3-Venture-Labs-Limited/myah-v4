@@ -203,6 +203,111 @@ describe('CampaignEmailRuntimeService', () => {
       expect(call).toHaveLength(2);
   });
 
+  it('loads the core mailbox through the active runner without a class repository', async () => {
+    const account = {
+      id: ids.accountId,
+      workspaceId: ids.workspaceId,
+      handle: 'sender@example.com',
+      provider: 'imap_smtp_caldav',
+      connectionParameters: {
+        IMAP: {
+          host: 'imap.example.com',
+          port: 993,
+          username: 'sender@example.com',
+          password: 'enc:v2:imap-password',
+          connectionSecurity: 'SSL_TLS',
+        },
+        SMTP: {
+          host: 'smtp.example.com',
+          port: 587,
+          username: 'sender@example.com',
+          password: 'enc:v2:smtp-password',
+          connectionSecurity: 'STARTTLS',
+        },
+      },
+    };
+    const row = {
+      attemptNumber: 1,
+      authorizationGeneration: 1,
+      authorizationId: ids.authorizationId,
+      activationId: ids.activationId,
+      campaignExecutionId: ids.executionId,
+      campaignId: ids.campaignId,
+      claimedAt: '2026-09-16T12:00:00.000Z',
+      connectedAccountId: ids.accountId,
+      enrollmentId: ids.enrollmentId,
+      html: '<p>Body</p>',
+      localDate: '2026-09-16',
+      messageChannelId: ids.channelId,
+      messageId: '00000000-0000-4000-8000-000000000012',
+      normalizedRecipient: 'recipient@example.com',
+      normalizedSenderHandle: 'sender@example.com',
+      occurrenceId: ids.occurrenceId,
+      provider: 'imap_smtp_caldav',
+      renderDigest: 'render-digest',
+      senderPoolFingerprint: 'sender-pool-fingerprint',
+      slotAt: '2026-09-16T12:00:00.000Z',
+      subject: 'Subject',
+      text: 'Body',
+      toRecipient: 'recipient@example.com',
+      unknownAfter: '2026-09-16T12:05:00.000Z',
+      workflowVersionId: ids.versionId,
+      references: [],
+      inReplyTo: null,
+      threadExternalId: null,
+      selectionConstraintKind: 'EXPLICIT',
+      priorAcceptedEvidenceId: null,
+    };
+    const { service, query, dispatch } = setup();
+    let accountRows: Record<string, unknown>[] = [account];
+
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM core."connectedAccount"')) return accountRows;
+      return [row];
+    });
+    dispatch.dispatch.mockResolvedValue({ status: 'CONTRACT_CONFLICT' });
+
+    await (service as any).dispatchAttempt(
+      ids.workspaceId,
+      ids.campaignId,
+      ids.attemptId,
+    );
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'SELECT id, "workspaceId", handle, provider, "connectionParameters"',
+      ),
+      [ids.accountId, ids.workspaceId],
+    );
+    expect(dispatch.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        material: expect.objectContaining({
+          connectedAccount: account,
+        }),
+      }),
+    );
+
+    for (const rows of [
+      [],
+      [{ ...account, handle: '' }],
+      [{ ...account, provider: 'invalid-provider' }],
+      [{ ...account, workspaceId: 'other-workspace' }],
+      [account, account],
+    ]) {
+      accountRows = rows;
+      dispatch.dispatch.mockClear();
+
+      await expect(
+        (service as any).dispatchAttempt(
+          ids.workspaceId,
+          ids.campaignId,
+          ids.attemptId,
+        ),
+      ).rejects.toThrow('Campaign runtime account was invalid');
+      expect(dispatch.dispatch).not.toHaveBeenCalled();
+    }
+  });
+
   it.each(['RESERVED', 'DISPATCHABLE_REPLAY'] as const)(
     'keeps pending claim dispatch inside context for %s',
     async (status) => {

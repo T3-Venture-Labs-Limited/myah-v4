@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
-import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
@@ -16,6 +16,42 @@ const records = (value: unknown): Record<string, unknown>[] =>
     : Array.isArray(value)
       ? value
       : [];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const loadConnectedAccount = (
+  rows: Record<string, unknown>[],
+  connectedAccountId: string,
+  workspaceId: string,
+): ConnectedAccountEntity => {
+  if (rows.length !== 1)
+    throw new Error('Campaign runtime account was invalid');
+  const account = rows[0];
+  if (
+    account.id !== connectedAccountId ||
+    account.workspaceId !== workspaceId ||
+    typeof account.handle !== 'string' ||
+    account.handle.length === 0 ||
+    typeof account.provider !== 'string' ||
+    !Object.values(ConnectedAccountProvider).includes(
+      account.provider as ConnectedAccountProvider,
+    ) ||
+    (account.provider === ConnectedAccountProvider.IMAP_SMTP_CALDAV &&
+      !isRecord(account.connectionParameters))
+  )
+    throw new Error('Campaign runtime account was invalid');
+
+  return {
+    id: account.id,
+    workspaceId: account.workspaceId,
+    handle: account.handle,
+    provider: account.provider,
+    ...(account.provider === ConnectedAccountProvider.IMAP_SMTP_CALDAV
+      ? { connectionParameters: account.connectionParameters }
+      : {}),
+  } as ConnectedAccountEntity;
+};
 
 @Injectable()
 export class CampaignEmailRuntimeService {
@@ -191,12 +227,19 @@ export class CampaignEmailRuntimeService {
       );
       if (rows.length !== 1) return null;
       const row = rows[0];
-      const account = await manager
-        .getRepository(ConnectedAccountEntity)
-        .findOneByOrFail({
-          id: String(row.connectedAccountId),
-          workspaceId,
-        });
+      const connectedAccountId = String(row.connectedAccountId);
+      const account = loadConnectedAccount(
+        records(
+          await runner.query(
+            `SELECT id, "workspaceId", handle, provider, "connectionParameters"
+               FROM core."connectedAccount"
+              WHERE id=$1 AND "workspaceId"=$2`,
+            [connectedAccountId, workspaceId],
+          ),
+        ),
+        connectedAccountId,
+        workspaceId,
+      );
       const references = Array.isArray(row.references) ? row.references : [];
       const claimedAt = new Date(String(row.claimedAt));
       const slotAt = new Date(String(row.slotAt));
