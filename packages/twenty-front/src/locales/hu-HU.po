@@ -7557,11 +7557,6 @@ msgstr ""
 msgid "Deleting this method will remove it permanently from your account."
 msgstr "Ha ezt a módszert törli, az véglegesen eltávolításra kerül a fiókjából."
 
-#. js-lingui-id: pSPj8a
-#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
-msgid "Delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here."
-msgstr ""
-
 #. js-lingui-id: kJHy3o
 #: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 msgid "Delivery outcome is unknown. This draft is locked to prevent a duplicate send."
