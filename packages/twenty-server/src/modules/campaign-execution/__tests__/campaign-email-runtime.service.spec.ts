@@ -3,6 +3,7 @@ import {
   withWorkspaceContext,
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { CampaignEmailRuntimeService } from 'src/modules/campaign-execution/services/campaign-email-runtime.service';
+import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 
 const ids = {
   workspaceId: '00000000-0000-4000-8000-000000000001',
@@ -38,7 +39,13 @@ describe('CampaignEmailRuntimeService', () => {
     const query = jest.fn(async (sql: string) =>
       sql.includes('WITH pending') ? work : [routingRow],
     );
-    const manager = { queryRunner: { isTransactionActive: true, query } };
+    const getRepository = jest.fn(() => {
+      throw new Error('Campaign runtime must not use a class repository');
+    });
+    const manager = {
+      getRepository,
+      queryRunner: { isTransactionActive: true, query },
+    };
     Object.assign(manager.queryRunner, { manager });
     const dataSource = {
       query,
@@ -72,6 +79,7 @@ describe('CampaignEmailRuntimeService', () => {
         projection as never,
       ),
       dispatch,
+      getRepository,
       orm,
       progression,
       projection,
@@ -201,6 +209,179 @@ describe('CampaignEmailRuntimeService', () => {
     expect(orm.executeInWorkspaceContext).toHaveBeenCalledTimes(work.length);
     for (const call of orm.executeInWorkspaceContext.mock.calls)
       expect(call).toHaveLength(2);
+  });
+
+  it('loads the core mailbox through the active runner without a class repository', async () => {
+    const account = {
+      id: ids.accountId,
+      workspaceId: ids.workspaceId,
+      handle: 'sender@example.com',
+      provider: 'imap_smtp_caldav',
+      connectionParameters: {
+        IMAP: {
+          host: 'imap.example.com',
+          port: 993,
+          username: 'sender@example.com',
+          password: 'enc:v2:imap-password',
+          connectionSecurity: 'SSL_TLS',
+        },
+        SMTP: {
+          host: 'smtp.example.com',
+          port: 587,
+          username: 'sender@example.com',
+          password: 'enc:v2:smtp-password',
+          connectionSecurity: 'STARTTLS',
+        },
+      },
+    };
+    const row = {
+      attemptNumber: 1,
+      authorizationGeneration: 1,
+      authorizationId: ids.authorizationId,
+      activationId: ids.activationId,
+      campaignExecutionId: ids.executionId,
+      campaignId: ids.campaignId,
+      claimedAt: '2026-09-16T12:00:00.000Z',
+      connectedAccountId: ids.accountId,
+      enrollmentId: ids.enrollmentId,
+      html: '<p>Body</p>',
+      localDate: '2026-09-16',
+      messageChannelId: ids.channelId,
+      messageId: '00000000-0000-4000-8000-000000000012',
+      normalizedRecipient: 'recipient@example.com',
+      normalizedSenderHandle: 'sender@example.com',
+      occurrenceId: ids.occurrenceId,
+      provider: 'imap_smtp_caldav',
+      renderDigest: 'a'.repeat(64),
+      senderPoolFingerprint: 'b'.repeat(64),
+      slotAt: '2026-09-16T12:00:00.000Z',
+      subject: 'Subject',
+      text: 'Body',
+      toRecipient: 'recipient@example.com',
+      unknownAfter: '2026-09-16T12:01:00.000Z',
+      workflowVersionId: ids.versionId,
+      references: [],
+      inReplyTo: null,
+      threadExternalId: null,
+      selectionConstraintKind: 'ROTATE',
+      priorAcceptedEvidenceId: null,
+    };
+    const { service, getRepository, query } = setup();
+    const receipt = {
+      unknownAfter: new Date('2026-09-16T12:01:00.000Z'),
+      updatedAt: new Date('2026-09-16T12:00:00.000Z'),
+    };
+    const sendMessage = jest.fn(async () => ({
+      headerMessageId: '<header@example.com>',
+      messageExternalId: 'provider-123',
+    }));
+    const dispatch = new OutboundEmailDispatchService(
+      {
+        runInTransaction: async (work) => work({} as never),
+        runPreProviderTransaction: async (work) => work({} as never),
+      },
+      {
+        revalidate: jest.fn(async ({ materialEvidence, submission }) => ({
+          projectedMessageId: materialEvidence.projectedMessageId,
+          status: 'AUTHORIZED' as const,
+          submission,
+        })),
+      },
+      { now: jest.fn(() => 10_000) },
+      {
+        beginSubmission: jest.fn(async () => ({
+          receipt,
+          status: 'PROCESSING_ACQUIRED' as const,
+        })),
+        blockReservedAttemptBeforeProvider: jest.fn(async () => ({
+          receipt,
+          status: 'RECORDED' as const,
+        })),
+        recheckProcessingWindowBeforeProvider: jest.fn(async () => ({
+          receipt,
+          status: 'SAFE' as const,
+        })),
+        recordAccepted: jest.fn(async () => ({
+          receipt,
+          status: 'RECORDED' as const,
+        })),
+      } as never,
+      {
+        getProviderRequestTimeoutMs: jest.fn(() => 30_000),
+        sendMessage,
+      } as never,
+    );
+    const dispatchSpy = jest.spyOn(dispatch, 'dispatch');
+    (service as any).dispatch = dispatch;
+    let accountRows: Record<string, unknown>[] = [account];
+
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM core."connectedAccount"')) return accountRows;
+      return [row];
+    });
+
+    await (service as any).dispatchAttempt(
+      ids.workspaceId,
+      ids.campaignId,
+      ids.attemptId,
+    );
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^\s*SELECT id, "workspaceId", handle, provider, "connectionParameters"\s+FROM core\."connectedAccount"\s+WHERE id=\$1 AND "workspaceId"=\$2\s*$/s,
+      ),
+      [ids.accountId, ids.workspaceId],
+    );
+    expect(getRepository).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'recipient@example.com' }),
+      expect.objectContaining({
+        connectionParameters: account.connectionParameters,
+        handle: account.handle,
+        id: account.id,
+        provider: account.provider,
+      }),
+    );
+
+    for (const rows of [
+      [],
+      [{ ...account, handle: '' }],
+      [{ ...account, provider: 'invalid-provider' }],
+      [{ ...account, workspaceId: 'other-workspace' }],
+      [account, account],
+      [{ ...account, connectionParameters: undefined }],
+    ]) {
+      accountRows = rows;
+      dispatchSpy.mockClear();
+      sendMessage.mockClear();
+
+      await expect(
+        (service as any).dispatchAttempt(
+          ids.workspaceId,
+          ids.campaignId,
+          ids.attemptId,
+        ),
+      ).rejects.toThrow('Campaign runtime account was invalid');
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(sendMessage).not.toHaveBeenCalled();
+    }
+
+    for (const connectionParameters of [{}, { IMAP: {} }]) {
+      accountRows = [{ ...account, connectionParameters }];
+      dispatchSpy.mockClear();
+      sendMessage.mockClear();
+
+      await (service as any).dispatchAttempt(
+        ids.workspaceId,
+        ids.campaignId,
+        ids.attemptId,
+      );
+
+      await expect(dispatchSpy.mock.results[0].value).resolves.toMatchObject({
+        status: 'BLOCKED',
+      });
+      expect(sendMessage).not.toHaveBeenCalled();
+    }
   });
 
   it.each(['RESERVED', 'DISPATCHABLE_REPLAY'] as const)(
