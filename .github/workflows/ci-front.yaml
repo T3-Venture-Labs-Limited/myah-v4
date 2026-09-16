@@ -27,6 +27,7 @@ jobs:
     uses: ./.github/workflows/changed-files.yaml
     with:
       files: |
+        .github/workflows/ci-front.yaml
         package.json
         yarn.lock
         packages/twenty-front/**
@@ -211,7 +212,7 @@ jobs:
       TASK_CACHE_KEY: front-task-${{ matrix.task }}
     strategy:
       matrix:
-        task: [lint, typecheck, test, lingui:extract, lingui:compile]
+        task: [lint, typecheck, test]
     steps:
       - name: Fetch custom Github Actions and base branch history
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

@@ -97,7 +97,7 @@ jobs:
                     path: appPath,
                     hasTypecheck: Boolean(scripts.typecheck),
                     hasUnit: Boolean(scripts['test:unit']),
-                    hasIntegration: Boolean(scripts.test),
+                    hasIntegration: Boolean(scripts.test && scripts.test !== scripts['test:unit']),
                   };
                 })
             );
