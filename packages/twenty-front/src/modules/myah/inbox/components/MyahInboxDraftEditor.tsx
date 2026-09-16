@@ -28,6 +28,11 @@ const StyledDraftEditor = styled.section`
   &[data-main-reply-card] {
     container-type: inline-size;
   }
+
+  button[aria-disabled='true'] {
+    color: ${themeCssVariables.font.color.light};
+    cursor: not-allowed;
+  }
 `;
 
 const StyledActions = styled.div<{ $mainCard?: boolean }>`
@@ -158,6 +163,10 @@ type MyahInboxDraftEditorProps = {
   presentation?: 'default' | 'main';
   previewScope?: string;
   subject?: string;
+  onOpenAiGuidance?: () => void | Promise<void>;
+  guidanceUnavailableReason?: string;
+  initialIsEditing?: boolean;
+  onEditingChange?: (isEditing: boolean) => void;
 };
 
 export const MyahInboxDraftEditor = ({
@@ -170,10 +179,14 @@ export const MyahInboxDraftEditor = ({
   presentation = 'default',
   previewScope = '',
   subject,
+  onOpenAiGuidance,
+  guidanceUnavailableReason,
+  initialIsEditing = false,
+  onEditingChange,
 }: MyahInboxDraftEditorProps) => {
   const conflictPanelRef = useRef<HTMLDivElement>(null);
   const editorId = useId();
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(initialIsEditing);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const isMainCard = presentation === 'main';
   const { getIcon } = useIcons();
@@ -192,6 +205,7 @@ export const MyahInboxDraftEditor = ({
     setFeedback(null);
   }, [entry.localBody.markdown, previewScope]);
 
+  const hasDraftContent = entry.localBody.markdown.trim().length > 0;
   const hasStructuredBody = entry.localBody.blocknote !== null;
   const hasUnsupportedStructuredBody = useMemo(() => {
     if (!hasStructuredBody) return false;
@@ -254,13 +268,15 @@ export const MyahInboxDraftEditor = ({
       data-main-reply-card={isMainCard || undefined}
     >
       {isMainCard && !isEditing ? (
-        <StyledDraftPreview
-          role="region"
-          aria-label="Reply draft preview"
-          tabIndex={0}
-        >
-          {entry.localBody.markdown || 'No reply draft yet.'}
-        </StyledDraftPreview>
+        hasDraftContent ? (
+          <StyledDraftPreview
+            role="region"
+            aria-label="Reply draft preview"
+            tabIndex={0}
+          >
+            {entry.localBody.markdown}
+          </StyledDraftPreview>
+        ) : null
       ) : (
         editor
       )}
@@ -279,7 +295,13 @@ export const MyahInboxDraftEditor = ({
                 variant="tertiary"
                 size="small"
                 disabled={disabled}
-                onClick={() => setIsEditing((editing) => !editing)}
+                onClick={() =>
+                  setIsEditing((editing) => {
+                    const nextIsEditing = !editing;
+                    onEditingChange?.(nextIsEditing);
+                    return nextIsEditing;
+                  })
+                }
               />
             </StyledActionGroup>
             {subject && (
@@ -297,8 +319,19 @@ export const MyahInboxDraftEditor = ({
                   title="Open AI guidance"
                   variant="tertiary"
                   size="small"
-                  disabled
-                  aria-describedby={guidanceDescriptionId}
+                  disabled={disabled}
+                  aria-disabled={
+                    Boolean(guidanceUnavailableReason || !onOpenAiGuidance) ||
+                    undefined
+                  }
+                  aria-describedby={
+                    guidanceUnavailableReason
+                      ? guidanceDescriptionId
+                      : undefined
+                  }
+                  onClick={
+                    guidanceUnavailableReason ? undefined : onOpenAiGuidance
+                  }
                 />
               </div>
               <Button
@@ -356,18 +389,22 @@ export const MyahInboxDraftEditor = ({
       )}
       {isMainCard && (
         <>
-          <StyledAccessibleDescription id={guidanceDescriptionId}>
-            Campaign navigation is not connected yet.
-          </StyledAccessibleDescription>
+          {guidanceUnavailableReason && (
+            <>
+              <StyledAccessibleDescription id={guidanceDescriptionId}>
+                {guidanceUnavailableReason}
+              </StyledAccessibleDescription>
+              <AppTooltip
+                anchorSelect="[data-testid='myah-inbox-guidance-tooltip-anchor']"
+                content={guidanceUnavailableReason}
+                delay={TooltipDelay.shortDelay}
+                place={TooltipPosition.Top}
+              />
+            </>
+          )}
           <StyledAccessibleDescription id={feedbackDescriptionId}>
             Feedback is a local preview and is not saved.
           </StyledAccessibleDescription>
-          <AppTooltip
-            anchorSelect="[data-testid='myah-inbox-guidance-tooltip-anchor']"
-            content="Campaign navigation is not connected yet."
-            delay={TooltipDelay.shortDelay}
-            place={TooltipPosition.Top}
-          />
           <AppTooltip
             anchorSelect="[data-testid^='myah-inbox-feedback-tooltip-']"
             content="Feedback is a local preview and is not saved."

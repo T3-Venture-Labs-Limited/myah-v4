@@ -7,6 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import { Provider } from 'jotai';
+import { MemoryRouter } from 'react-router-dom';
 
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { MyahCampaignAgent } from '@/page-layout/components/MyahCampaignAgent';
@@ -219,6 +220,9 @@ jest.mock(
 
 const renderAgent = (
   record: typeof persistedCampaign | null = persistedCampaign,
+  navigationState?: {
+    myahCampaignAgentGuidanceFocusCampaignId: string;
+  },
 ) => {
   const store = resetJotaiStore();
   const recordAtom = recordStoreFamilyState.atomFamily('campaign-1');
@@ -229,9 +233,15 @@ const renderAgent = (
     store.set(recordAtom, null);
   }
   const view = render(
-    <Provider store={store}>
-      <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
-    </Provider>,
+    <MemoryRouter
+      initialEntries={[
+        { pathname: '/object/campaign/campaign-1', state: navigationState },
+      ]}
+    >
+      <Provider store={store}>
+        <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
+      </Provider>
+    </MemoryRouter>,
   );
 
   return { store, view };
@@ -258,6 +268,37 @@ describe('MyahCampaignAgent', () => {
       },
     ];
   });
+
+  it('focuses a non-editing guidance region once for an exact Campaign navigation state', () => {
+    const focus = jest.spyOn(HTMLElement.prototype, 'focus');
+    renderAgent(persistedCampaign, {
+      myahCampaignAgentGuidanceFocusCampaignId: 'campaign-1',
+    });
+
+    const region = screen.getByRole('region', {
+      name: 'Campaign AI guidance',
+    });
+    expect(region).toHaveFocus();
+    expect(focus).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit campaignBrief' }));
+    expect(focus).toHaveBeenCalledTimes(1);
+    focus.mockRestore();
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['mismatched', { myahCampaignAgentGuidanceFocusCampaignId: 'campaign-2' }],
+  ] as const)(
+    'does not focus guidance for %s navigation state',
+    (_label, state) => {
+      renderAgent(persistedCampaign, state);
+
+      expect(
+        screen.getByRole('region', { name: 'Campaign AI guidance' }),
+      ).not.toHaveFocus();
+    },
+  );
 
   it('renders five toolbar-free manual editors in metadata order', () => {
     renderAgent();
@@ -393,9 +434,11 @@ describe('MyahCampaignAgent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     mockBlockerState = 'blocked';
     view.rerender(
-      <Provider store={store}>
-        <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
-      </Provider>,
+      <MemoryRouter initialEntries={['/object/campaign/campaign-1']}>
+        <Provider store={store}>
+          <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
+        </Provider>
+      </MemoryRouter>,
     );
 
     const discardButton = await screen.findByRole('button', {
@@ -451,9 +494,11 @@ describe('MyahCampaignAgent', () => {
 
     mockBlockerState = 'blocked';
     view.rerender(
-      <Provider store={store}>
-        <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
-      </Provider>,
+      <MemoryRouter initialEntries={['/object/campaign/campaign-1']}>
+        <Provider store={store}>
+          <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
+        </Provider>
+      </MemoryRouter>,
     );
 
     await waitFor(() => {
