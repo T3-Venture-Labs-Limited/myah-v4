@@ -53,14 +53,24 @@ jest.mock('twenty-ui/input', () => ({
     disabled,
     Icon,
     ariaLabel,
+    'aria-disabled': ariaDisabled,
+    'aria-describedby': ariaDescribedBy,
   }: {
     title: string;
-    onClick: () => void;
+    onClick?: () => void;
     disabled?: boolean;
     Icon?: ComponentType;
     ariaLabel?: string;
+    'aria-disabled'?: boolean;
+    'aria-describedby'?: string;
   }) => (
-    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
+    <button
+      aria-disabled={ariaDisabled}
+      aria-describedby={ariaDescribedBy}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={onClick}
+    >
       {Icon && (
         <span data-testid="generate-reply-spinner">
           <Icon />
@@ -93,7 +103,7 @@ describe('MyahInboxProposalPreview', () => {
       screen.queryByLabelText('Proposal instructions'),
     ).not.toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Generate reply' }));
     });
 
     expect(mockGenerateProposal).toHaveBeenCalledWith({
@@ -124,7 +134,7 @@ describe('MyahInboxProposalPreview', () => {
     );
 
     expect(screen.getByLabelText('Draft actions')).toContainElement(
-      screen.getByRole('button', { name: 'Generate Reply' }),
+      screen.getByRole('button', { name: 'Generate reply' }),
     );
     expect(
       screen.queryByRole('button', { name: 'Save draft' }),
@@ -141,7 +151,7 @@ describe('MyahInboxProposalPreview', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate reply' }));
 
     expect(
       screen.getByRole('button', { name: 'Generating reply' }),
@@ -162,7 +172,7 @@ describe('MyahInboxProposalPreview', () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Generate reply' }));
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -179,8 +189,47 @@ describe('MyahInboxProposalPreview', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: 'Generate Reply' }),
+      screen.getByRole('button', { name: 'Generate reply' }),
     ).toBeDisabled();
     expect(mockGenerateProposal).not.toHaveBeenCalled();
+  });
+
+  it('explains why generation requires an exact readable Campaign', () => {
+    const generateUnavailableReason =
+      'Link an exact readable Campaign to generate a reply or open AI guidance.';
+    render(
+      <MyahInboxProposalPreview
+        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        disabled={false}
+        generateUnavailableReason={generateUnavailableReason}
+      />,
+    );
+
+    const generate = screen.getByRole('button', { name: 'Generate reply' });
+    expect(generate).not.toBeDisabled();
+    expect(generate).toHaveAttribute('aria-disabled', 'true');
+    expect(generate).toHaveAccessibleDescription(generateUnavailableReason);
+    generate.focus();
+    expect(generate).toHaveFocus();
+    fireEvent.click(generate);
+    expect(mockGenerateProposal).not.toHaveBeenCalled();
+  });
+
+  it('ignores a second activation while generation is pending', async () => {
+    mockGenerateProposal.mockReturnValue(Promise.race([]));
+    render(
+      <MyahInboxProposalPreview
+        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        disabled={false}
+      />,
+    );
+
+    const generate = screen.getByRole('button', { name: 'Generate reply' });
+    await act(async () => {
+      fireEvent.click(generate);
+      fireEvent.click(generate);
+    });
+
+    expect(mockGenerateProposal).toHaveBeenCalledTimes(1);
   });
 });
