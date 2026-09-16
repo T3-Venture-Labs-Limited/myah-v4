@@ -3,6 +3,7 @@ import {
   withWorkspaceContext,
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { CampaignEmailRuntimeService } from 'src/modules/campaign-execution/services/campaign-email-runtime.service';
+import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 
 const ids = {
   workspaceId: '00000000-0000-4000-8000-000000000001',
@@ -38,7 +39,13 @@ describe('CampaignEmailRuntimeService', () => {
     const query = jest.fn(async (sql: string) =>
       sql.includes('WITH pending') ? work : [routingRow],
     );
-    const manager = { queryRunner: { isTransactionActive: true, query } };
+    const getRepository = jest.fn(() => {
+      throw new Error('Campaign runtime must not use a class repository');
+    });
+    const manager = {
+      getRepository,
+      queryRunner: { isTransactionActive: true, query },
+    };
     Object.assign(manager.queryRunner, { manager });
     const dataSource = {
       query,
@@ -72,6 +79,7 @@ describe('CampaignEmailRuntimeService', () => {
         projection as never,
       ),
       dispatch,
+      getRepository,
       orm,
       progression,
       projection,
@@ -244,28 +252,73 @@ describe('CampaignEmailRuntimeService', () => {
       normalizedSenderHandle: 'sender@example.com',
       occurrenceId: ids.occurrenceId,
       provider: 'imap_smtp_caldav',
-      renderDigest: 'render-digest',
-      senderPoolFingerprint: 'sender-pool-fingerprint',
+      renderDigest: 'a'.repeat(64),
+      senderPoolFingerprint: 'b'.repeat(64),
       slotAt: '2026-09-16T12:00:00.000Z',
       subject: 'Subject',
       text: 'Body',
       toRecipient: 'recipient@example.com',
-      unknownAfter: '2026-09-16T12:05:00.000Z',
+      unknownAfter: '2026-09-16T12:01:00.000Z',
       workflowVersionId: ids.versionId,
       references: [],
       inReplyTo: null,
       threadExternalId: null,
-      selectionConstraintKind: 'EXPLICIT',
+      selectionConstraintKind: 'ROTATE',
       priorAcceptedEvidenceId: null,
     };
-    const { service, query, dispatch } = setup();
+    const { service, getRepository, query } = setup();
+    const receipt = {
+      unknownAfter: new Date('2026-09-16T12:01:00.000Z'),
+      updatedAt: new Date('2026-09-16T12:00:00.000Z'),
+    };
+    const sendMessage = jest.fn(async () => ({
+      headerMessageId: '<header@example.com>',
+      messageExternalId: 'provider-123',
+    }));
+    const dispatch = new OutboundEmailDispatchService(
+      {
+        runInTransaction: async (work) => work({} as never),
+        runPreProviderTransaction: async (work) => work({} as never),
+      },
+      {
+        revalidate: jest.fn(async ({ materialEvidence, submission }) => ({
+          projectedMessageId: materialEvidence.projectedMessageId,
+          status: 'AUTHORIZED' as const,
+          submission,
+        })),
+      },
+      { now: jest.fn(() => 10_000) },
+      {
+        beginSubmission: jest.fn(async () => ({
+          receipt,
+          status: 'PROCESSING_ACQUIRED' as const,
+        })),
+        blockReservedAttemptBeforeProvider: jest.fn(async () => ({
+          receipt,
+          status: 'RECORDED' as const,
+        })),
+        recheckProcessingWindowBeforeProvider: jest.fn(async () => ({
+          receipt,
+          status: 'SAFE' as const,
+        })),
+        recordAccepted: jest.fn(async () => ({
+          receipt,
+          status: 'RECORDED' as const,
+        })),
+      } as never,
+      {
+        getProviderRequestTimeoutMs: jest.fn(() => 30_000),
+        sendMessage,
+      } as never,
+    );
+    const dispatchSpy = jest.spyOn(dispatch, 'dispatch');
+    (service as any).dispatch = dispatch;
     let accountRows: Record<string, unknown>[] = [account];
 
     query.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM core."connectedAccount"')) return accountRows;
       return [row];
     });
-    dispatch.dispatch.mockResolvedValue({ status: 'CONTRACT_CONFLICT' });
 
     await (service as any).dispatchAttempt(
       ids.workspaceId,
@@ -274,16 +327,19 @@ describe('CampaignEmailRuntimeService', () => {
     );
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'SELECT id, "workspaceId", handle, provider, "connectionParameters"',
+      expect.stringMatching(
+        /FROM core\."connectedAccount"\s+WHERE id=\$1 AND "workspaceId"=\$2/s,
       ),
       [ids.accountId, ids.workspaceId],
     );
-    expect(dispatch.dispatch).toHaveBeenCalledWith(
+    expect(getRepository).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'recipient@example.com' }),
       expect.objectContaining({
-        material: expect.objectContaining({
-          connectedAccount: account,
-        }),
+        connectionParameters: account.connectionParameters,
+        handle: account.handle,
+        id: account.id,
+        provider: account.provider,
       }),
     );
 
@@ -293,9 +349,11 @@ describe('CampaignEmailRuntimeService', () => {
       [{ ...account, provider: 'invalid-provider' }],
       [{ ...account, workspaceId: 'other-workspace' }],
       [account, account],
+      [{ ...account, connectionParameters: undefined }],
     ]) {
       accountRows = rows;
-      dispatch.dispatch.mockClear();
+      dispatchSpy.mockClear();
+      sendMessage.mockClear();
 
       await expect(
         (service as any).dispatchAttempt(
@@ -304,7 +362,25 @@ describe('CampaignEmailRuntimeService', () => {
           ids.attemptId,
         ),
       ).rejects.toThrow('Campaign runtime account was invalid');
-      expect(dispatch.dispatch).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(sendMessage).not.toHaveBeenCalled();
+    }
+
+    for (const connectionParameters of [{}, { IMAP: {} }]) {
+      accountRows = [{ ...account, connectionParameters }];
+      dispatchSpy.mockClear();
+      sendMessage.mockClear();
+
+      await (service as any).dispatchAttempt(
+        ids.workspaceId,
+        ids.campaignId,
+        ids.attemptId,
+      );
+
+      await expect(dispatchSpy.mock.results[0].value).resolves.toMatchObject({
+        status: 'BLOCKED',
+      });
+      expect(sendMessage).not.toHaveBeenCalled();
     }
   });
 
