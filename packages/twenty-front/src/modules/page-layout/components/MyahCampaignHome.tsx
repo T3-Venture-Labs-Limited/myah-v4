@@ -1,3 +1,4 @@
+import { MyahCampaignActivity } from '@/page-layout/components/MyahCampaignActivity';
 import { MyahCampaignReadiness } from '@/page-layout/components/MyahCampaignReadiness';
 
 type MyahCampaignHomeProps = {
@@ -12,6 +13,7 @@ export const MyahCampaignHome = ({ campaignId }: MyahCampaignHomeProps) => {
   return (
     <>
       <MyahCampaignReadiness campaignId={campaignId} />
+      <MyahCampaignActivity campaignId={campaignId} />
     </>
   );
 };

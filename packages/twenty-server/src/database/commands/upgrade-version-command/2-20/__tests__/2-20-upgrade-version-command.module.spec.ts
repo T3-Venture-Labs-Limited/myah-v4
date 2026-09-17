@@ -4,6 +4,7 @@ import { CommandMeta } from 'nest-commander/src/constants';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
 import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
+import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
 import { RepairInstagramSecurityCutoverCommand } from 'src/database/commands/upgrade-version-command/2-20/repair-instagram-security-cutover.command';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -280,13 +281,18 @@ describe('Instagram production upgrade provider compatibility', () => {
       ).toBe(true);
     }
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
     );
     expect(
       getRegisteredWorkspaceCommandMetadata(
         SynchronizeCampaignLifecycleStatusMetadataCommand,
       ),
     ).toEqual({ version: '2.20.0', timestamp: 1789313971535 });
+    expect(
+      getRegisteredWorkspaceCommandMetadata(
+        SynchronizeCampaignActivityControlMetadataCommand,
+      ),
+    ).toEqual({ version: '2.20.0', timestamp: 1789313971536 });
     expect(
       sequence.filter((step) =>
         EXPECTED_INSTAGRAM_IDENTITIES.some(

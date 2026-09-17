@@ -67,7 +67,7 @@ export class CampaignEmailRuntimeService {
     const work = await this.query(
       `WITH pending AS (
            SELECT 'PENDING' AS kind,"workspaceId","campaignId",id,NULL::uuid AS "attemptId"
-             FROM core."campaignOccurrence" WHERE state='PENDING' AND "dueAt" <= clock_timestamp()
+             FROM core."campaignOccurrence" WHERE state IN ('PENDING','HELD') AND "dueAt" <= clock_timestamp()
              ORDER BY "dueAt",id LIMIT 100
          ), reserved AS (
            SELECT 'RESERVED' AS kind,a."workspaceId",a."campaignId",a."occurrenceId" AS id,a."attemptId"

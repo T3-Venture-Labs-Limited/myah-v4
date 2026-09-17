@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { type QueryRunner } from 'typeorm';
 
 import {
@@ -9,6 +9,7 @@ import {
   type CampaignExecutionPersistencePort,
   type CampaignExecutionRecord,
 } from 'src/modules/campaign-execution/types/campaign-execution.type';
+import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 import { type LockedCampaignLifecycleContext } from 'src/modules/campaign-execution/types/campaign-lifecycle-transaction.type';
 
 type DataRow = Readonly<Record<string, unknown>>;
@@ -111,6 +112,11 @@ const EXECUTION_COLUMNS = `id, "workspaceId", "campaignId", "timeZone",
 
 @Injectable()
 export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPersistencePort {
+  constructor(
+    @Optional()
+    private readonly timelineEventWriter?: CampaignTimelineEventWriterService,
+  ) {}
+
   async loadExecutionInTransaction(context: LockedCampaignLifecycleContext) {
     const result = rows(
       await runnerFor(context).query(
@@ -290,6 +296,14 @@ export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPer
       'Campaign lifecycle activation was inconsistent',
     );
 
+    await this.timelineEventWriter?.writeInTransaction(context, {
+      businessEventKey: `activation:${activation.activationId}:ACTIVATED`,
+      eventKind: 'ACTIVATED',
+      happenedAt: activation.activatedAt,
+      sourceId: activation.activationId,
+      sourceType: 'ACTIVATION',
+    });
+
     for (const enrollment of graph.enrollments) {
       exactStructuredRow(
         await runner.query(
@@ -320,6 +334,14 @@ export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPer
         enrollment.enrollmentId,
         'Campaign enrollment insert was inconsistent',
       );
+      await this.timelineEventWriter?.writeInTransaction(context, {
+        businessEventKey: `enrollment:${enrollment.enrollmentId}:ENROLLED`,
+        eventKind: 'ENROLLED',
+        happenedAt: enrollment.enrolledAt,
+        sourceId: enrollment.enrollmentId,
+        sourceType: 'ENROLLMENT',
+        creatorId: enrollment.creatorId,
+      });
 
       if (enrollment.occurrence) {
         const occurrence = enrollment.occurrence;
@@ -347,6 +369,14 @@ export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPer
           occurrence.occurrenceId,
           'Campaign occurrence insert was inconsistent',
         );
+        await this.timelineEventWriter?.writeInTransaction(context, {
+          businessEventKey: `occurrence:${occurrence.occurrenceId}:SCHEDULED`,
+          eventKind: 'SCHEDULED',
+          happenedAt: enrollment.enrolledAt,
+          sourceId: occurrence.occurrenceId,
+          sourceType: 'OCCURRENCE',
+          creatorId: enrollment.creatorId,
+        });
       }
     }
 
@@ -371,6 +401,14 @@ export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPer
       context.campaignId,
       'Campaign lifecycle transition was inconsistent',
     );
+    const happenedAt = new Date().toISOString();
+    await this.timelineEventWriter?.writeInTransaction(context, {
+      businessEventKey: `campaign:${context.campaignId}:${input.from}:${input.to}:${happenedAt}`,
+      eventKind: input.to,
+      happenedAt,
+      sourceId: context.campaignId,
+      sourceType: 'CAMPAIGN',
+    });
   }
 
   async countInFlightAttemptsInTransaction(

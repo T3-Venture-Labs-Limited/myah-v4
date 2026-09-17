@@ -1,4 +1,5 @@
 import { CampaignExecutionPersistenceAdapter } from 'src/modules/campaign-execution/adapters/campaign-execution-persistence.adapter';
+import { type CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const campaignId = '22222222-2222-4222-8222-222222222222';
@@ -102,6 +103,30 @@ describe('CampaignExecutionPersistenceAdapter', () => {
       ).rejects.toThrow('Campaign lifecycle transition was inconsistent');
     },
   );
+
+  it('writes lifecycle evidence through the same transaction and propagates projection failure', async () => {
+    const { context } = harness([
+      { affected: 1, records: [{ id: campaignId }] },
+    ]);
+    const writer = {
+      writeInTransaction: jest
+        .fn()
+        .mockRejectedValue(new Error('projection failed')),
+    } as unknown as CampaignTimelineEventWriterService;
+
+    await expect(
+      new CampaignExecutionPersistenceAdapter(
+        writer,
+      ).transitionLifecycleInTransaction(context, {
+        from: 'ACTIVE',
+        to: 'PAUSED',
+      }),
+    ).rejects.toThrow('projection failed');
+    expect(writer.writeInTransaction).toHaveBeenCalledWith(
+      context,
+      expect.objectContaining({ eventKind: 'PAUSED' }),
+    );
+  });
 
   it('counts the actual attemptState column', async () => {
     const { context, query } = harness([[{ count: 3 }]]);
