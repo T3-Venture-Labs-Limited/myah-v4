@@ -28,8 +28,14 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
   let messageQueueService: MessageQueueService;
   let messageService: MessagingMessageService;
   let messageParticipantService: MessagingMessageParticipantService;
+  let campaignReplyEvidencePort: {
+    reconcileInboundMessageInTransaction: jest.Mock;
+  };
 
   let datasourceInstance: { transaction: jest.Mock };
+  let transactionManager: Record<string, never>;
+  let commitTransaction: jest.Mock;
+  let rollbackTransaction: jest.Mock;
 
   const workspaceId = 'workspace-id';
 
@@ -108,9 +114,23 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
   ];
 
   beforeEach(async () => {
+    transactionManager = {};
+    commitTransaction = jest.fn();
+    rollbackTransaction = jest.fn();
+    campaignReplyEvidencePort = {
+      reconcileInboundMessageInTransaction: jest.fn(),
+    };
     datasourceInstance = {
       transaction: jest.fn().mockImplementation(async (callback) => {
-        return callback({});
+        try {
+          const result = await callback(transactionManager);
+
+          commitTransaction();
+          return result;
+        } catch (error) {
+          rollbackTransaction();
+          throw error;
+        }
       }),
     };
 
@@ -156,9 +176,7 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
         },
         {
           provide: CAMPAIGN_REPLY_EVIDENCE_PORT,
-          useValue: {
-            reconcileInboundMessageInTransaction: jest.fn(),
-          },
+          useValue: campaignReplyEvidencePort,
         },
         {
           provide: MessagingMessageParticipantService,
@@ -228,6 +246,67 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     expect(result?.messageExternalIdToMessageThreadIdMap.get('message-1')).toBe(
       'db-thread-id-1',
     );
+  });
+
+  it('awaits ordinary incoming Campaign reconciliation before committing the import', async () => {
+    let reconciliationAwaited = false;
+
+    campaignReplyEvidencePort.reconcileInboundMessageInTransaction.mockImplementation(
+      () => ({
+        then: (resolve: () => void) => {
+          expect(commitTransaction).not.toHaveBeenCalled();
+          reconciliationAwaited = true;
+          resolve();
+        },
+      }),
+    );
+
+    await expect(
+      service.saveMessagesAndEnqueueContactCreation(
+        [mockMessages[1]],
+        mockMessageChannel,
+        mockConnectedAccount,
+        workspaceId,
+      ),
+    ).resolves.toEqual({
+      messageExternalIdsAndIdsMap: expect.any(Map),
+      messageExternalIdToMessageThreadIdMap: expect.any(Map),
+    });
+    expect(reconciliationAwaited).toBe(true);
+    expect(
+      campaignReplyEvidencePort.reconcileInboundMessageInTransaction,
+    ).toHaveBeenCalledWith(
+      {
+        workspaceId,
+        messageChannelId: mockMessageChannel.id,
+        threadExternalId: mockMessages[1].messageThreadExternalId,
+        fromHandle: 'contact@company.com',
+        inboundEvidenceId: 'db-message-id-2',
+      },
+      transactionManager,
+    );
+    expect(commitTransaction).toHaveBeenCalledTimes(1);
+    expect(rollbackTransaction).not.toHaveBeenCalled();
+  });
+
+  it('rolls back the import when Campaign reconciliation rejects', async () => {
+    const reconciliationError = new Error('reconciliation failed');
+
+    campaignReplyEvidencePort.reconcileInboundMessageInTransaction.mockRejectedValue(
+      reconciliationError,
+    );
+
+    await expect(
+      service.saveMessagesAndEnqueueContactCreation(
+        [mockMessages[1]],
+        mockMessageChannel,
+        mockConnectedAccount,
+        workspaceId,
+      ),
+    ).rejects.toBe(reconciliationError);
+    expect(rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(commitTransaction).not.toHaveBeenCalled();
+    expect(messageQueueService.add).not.toHaveBeenCalled();
   });
 
   it('should not enqueue contact creation when it is disabled', async () => {
