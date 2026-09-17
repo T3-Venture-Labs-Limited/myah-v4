@@ -28,9 +28,10 @@ describe('SentMessagePersistenceService', () => {
     };
     const receiptService = {
       recordInTransaction: jest.fn().mockResolvedValue(undefined),
+      isTriageSchemaProvisioned: jest.fn().mockResolvedValue(true),
       lockMigrationMarkerForSourcePersistenceInTransaction: jest
         .fn()
-        .mockResolvedValue(undefined),
+        .mockResolvedValue(true),
     };
     const messageChannelRepository = {
       findOneOrFail: jest.fn().mockResolvedValue({

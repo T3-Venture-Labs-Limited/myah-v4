@@ -4,7 +4,10 @@ import { MessagingMessageService } from 'src/modules/messaging/message-import-ma
 
 describe('MessagingMessageService source locking', () => {
   it('takes the migration marker before the canonical Email source lock', async () => {
-    const query = jest.fn().mockResolvedValue([]);
+    // The receipt service probes the private triage schema before any marker lock.
+    const query = jest.fn(async (sql: string) =>
+      String(sql).includes('to_regclass') ? [{ exists: true }] : [],
+    );
     const manager = {
       internalContext: {
         workspaceId: '00000000-0000-4000-8000-000000000001',

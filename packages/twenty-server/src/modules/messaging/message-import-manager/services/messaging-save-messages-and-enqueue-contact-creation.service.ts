@@ -85,12 +85,15 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     const saveWithinTransaction = async (
       transactionManager: WorkspaceEntityManager,
     ) => {
-      if (source) {
-        // Migration marker ownership precedes every source advisory/row lock.
-        await this.myahInboxContactTriageReceiptService.lockMigrationMarkerForSourcePersistenceInTransaction(
-          transactionManager,
-        );
-      }
+      // A source is only actionable when this workspace already has the private
+      // triage schema. Without it every triage write would fail, which would
+      // abort message persistence itself, so the import stays schema-agnostic
+      // until the 2.20 command has provisioned the workspace.
+      const recordTriageSource = source
+        ? await this.myahInboxContactTriageReceiptService.lockMigrationMarkerForSourcePersistenceInTransaction(
+            transactionManager,
+          )
+        : false;
 
       const {
         messageExternalIdsAndIdsMap,
@@ -102,7 +105,7 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         messageChannel.id,
         transactionManager,
         workspaceId,
-        ...(source ? ([true] as const) : []),
+        ...(recordTriageSource ? ([true] as const) : []),
       );
 
       for (const message of messagesToSave) {
@@ -222,7 +225,7 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         transactionManager,
       );
 
-      if (source) {
+      if (recordTriageSource && source) {
         const persistedSourceMessages = messagesToSave.flatMap((message) => {
           const messageId = messageExternalIdsAndIdsMap.get(message.externalId);
           const persistence = messageExternalIdToPersistenceInfoMap.get(

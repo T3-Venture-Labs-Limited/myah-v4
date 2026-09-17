@@ -143,14 +143,24 @@ export class UnipileInstagramProjectionService {
           const initializeSourceContact = async (
             conversationRecordId: string,
           ) => {
-            await this.myahInboxContactTriageService.ensureSourceContactInTransaction(
-              {
-                sourceType: 'INSTAGRAM_CONVERSATION',
-                sourceRecordId: conversationRecordId,
-                initialDirection: null,
-                manager: querySource.manager,
-              },
-            );
+            // Without the private triage schema (for example before a rolling
+            // upgrade reaches this workspace) conversation projection must stay
+            // independent of triage.
+            const triageSchemaProvisioned =
+              await this.myahInboxContactTriageReceiptService.isTriageSchemaProvisioned(
+                querySource.manager,
+              );
+
+            if (triageSchemaProvisioned) {
+              await this.myahInboxContactTriageService.ensureSourceContactInTransaction(
+                {
+                  sourceType: 'INSTAGRAM_CONVERSATION',
+                  sourceRecordId: conversationRecordId,
+                  initialDirection: null,
+                  manager: querySource.manager,
+                },
+              );
+            }
 
             return { conversationRecordId };
           };
@@ -625,6 +635,15 @@ export class UnipileInstagramProjectionService {
     // The caller already holds marker, source-advisory, and conversation-row
     // locks. Receipt insertion and tuple initialization are therefore reentrant
     // continuations of the canonical producer lock order.
+    const triageSchemaProvisioned =
+      await this.myahInboxContactTriageReceiptService.isTriageSchemaProvisioned(
+        querySource.manager,
+      );
+
+    if (!triageSchemaProvisioned) {
+      return;
+    }
+
     await this.myahInboxContactTriageReceiptService.recordInTransaction(
       {
         channel: 'INSTAGRAM',

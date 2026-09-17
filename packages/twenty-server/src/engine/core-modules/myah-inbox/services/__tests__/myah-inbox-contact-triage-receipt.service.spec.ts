@@ -14,14 +14,47 @@ describe('MyahInboxContactTriageReceiptService', () => {
     firstPersistence: true,
   };
 
+  // The service probes the private triage schema before every triage write, so a
+  // mock that ignores the probe would silently skip the work under test.
+  const triageSchemaProbe = (sql: unknown): unknown[] | undefined =>
+    String(sql).includes('to_regclass') ? [{ exists: true }] : undefined;
+
+  it('skips every triage write when the private schema is absent', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (String(sql).includes('to_regclass')) return [{ exists: false }];
+
+      throw new Error(`No triage write may run without the schema: ${sql}`);
+    });
+    const service = new MyahInboxContactTriageReceiptService();
+    const manager = {
+      internalContext: { workspaceId },
+      queryRunner: { query },
+    } as never;
+
+    await expect(
+      service.lockMigrationMarkerForSourcePersistenceInTransaction(manager),
+    ).resolves.toBe(false);
+    await expect(
+      service.recordInTransaction(
+        { ...evidence, providerOccurredAt: null },
+        manager,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(String(query.mock.calls[0][0])).toContain('to_regclass');
+  });
+
   it('synchronizes receipt insertion with the final migration fence', async () => {
-    const query = jest
-      .fn()
-      .mockImplementation((sql: string) =>
-        sql.includes('SELECT status FROM')
-          ? Promise.resolve([{ status: 'MIGRATING' }])
-          : Promise.resolve([]),
-      );
+    const query = jest.fn().mockImplementation((sql: string) => {
+      const probe = triageSchemaProbe(sql);
+
+      if (probe) return Promise.resolve(probe);
+
+      return sql.includes('SELECT status FROM')
+        ? Promise.resolve([{ status: 'MIGRATING' }])
+        : Promise.resolve([]);
+    });
     const service = new MyahInboxContactTriageReceiptService();
 
     await service.recordInTransaction(
@@ -49,7 +82,7 @@ describe('MyahInboxContactTriageReceiptService', () => {
   });
 
   it('extends durable Email channel provenance on a replay without inserting another receipt', async () => {
-    const query = jest.fn().mockResolvedValue([]);
+    const query = jest.fn(async (sql: string) => triageSchemaProbe(sql) ?? []);
     const service = new MyahInboxContactTriageReceiptService();
 
     await service.recordInTransaction(
@@ -90,7 +123,9 @@ describe('MyahInboxContactTriageReceiptService', () => {
   ])(
     'binds %p provider evidence as %p without Date normalization',
     async (providerOccurredAt, expectedProviderOccurredAt) => {
-      const query = jest.fn().mockResolvedValue([]);
+      const query = jest.fn(
+        async (sql: string) => triageSchemaProbe(sql) ?? [],
+      );
       const service = new MyahInboxContactTriageReceiptService();
 
       await service.recordInTransaction({ ...evidence, providerOccurredAt }, {
@@ -122,6 +157,10 @@ describe('MyahInboxContactTriageReceiptService', () => {
     'does not claim receipts before the migration is drainable (%s, baseline %p)',
     async (status, baselineFenceSequence) => {
       const query = jest.fn(async (sql: string) => {
+        const probe = triageSchemaProbe(sql);
+
+        if (probe) return probe;
+
         if (sql.includes("set_config('search_path'")) return [];
         if (sql.includes('SELECT status,')) {
           return [{ status, baselineFenceSequence }];
@@ -164,6 +203,10 @@ describe('MyahInboxContactTriageReceiptService', () => {
       if (attempts === 1) throw new Error('transient apply failure');
     });
     const query = jest.fn(async (sql: string) => {
+      const probe = triageSchemaProbe(sql);
+
+      if (probe) return probe;
+
       if (sql.includes('SELECT status,')) {
         return [{ status: 'MIGRATING', baselineFenceSequence: '1' }];
       }
@@ -225,6 +268,10 @@ describe('MyahInboxContactTriageReceiptService', () => {
   it('locks every source before applying each ordered receipt and marking it complete', async () => {
     const applyReceiptInTransaction = jest.fn().mockResolvedValue(undefined);
     const query = jest.fn().mockImplementation((sql: string) => {
+      const probe = triageSchemaProbe(sql);
+
+      if (probe) return Promise.resolve(probe);
+
       if (sql.includes('SELECT status,')) {
         return Promise.resolve([
           { status: 'READY', baselineFenceSequence: '1' },

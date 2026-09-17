@@ -230,9 +230,10 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
         {
           provide: MyahInboxContactTriageReceiptService,
           useValue: {
+            isTriageSchemaProvisioned: jest.fn().mockResolvedValue(true),
             lockMigrationMarkerForSourcePersistenceInTransaction: jest
               .fn()
-              .mockResolvedValue(undefined),
+              .mockResolvedValue(true),
             recordInTransaction: jest.fn().mockResolvedValue(undefined),
           },
         },
@@ -415,6 +416,37 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
       (receiptService.recordInTransaction as jest.Mock).mock
         .invocationCallOrder[0],
     );
+  });
+
+  it('persists messages without triage when the private triage schema is absent', async () => {
+    (
+      receiptService.lockMigrationMarkerForSourcePersistenceInTransaction as jest.Mock
+    ).mockResolvedValueOnce(false);
+    const transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[0]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'generation' },
+      transactionManager,
+    );
+
+    // The batch still persists: without the private relations a triage write
+    // would abort the whole import transaction.
+    expect(messageService.saveMessagesWithinTransaction).toHaveBeenCalledWith(
+      [mockMessages[0]],
+      mockMessageChannel.id,
+      transactionManager,
+      workspaceId,
+    );
+    expect(receiptService.recordInTransaction).not.toHaveBeenCalled();
+    expect(
+      triageService.ensureSourceContactInTransaction,
+    ).not.toHaveBeenCalled();
   });
 
   it('records first-persistence receipts after the source-locked save returns', async () => {

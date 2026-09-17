@@ -34,15 +34,53 @@ export class MyahInboxContactTriageReceiptService {
     private readonly myahInboxContactTriageService?: MyahInboxContactTriageService,
   ) {}
 
-  async lockMigrationMarkerForSourcePersistenceInTransaction(
+  /**
+   * True when the private triage relations are provisioned for this workspace.
+   * The marker row is written last, so its absence proves the whole private
+   * schema is missing (for example while a rolling upgrade has not reached this
+   * workspace yet).
+   */
+  async isTriageSchemaProvisioned(
     manager: WorkspaceEntityManager,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const query = manager.queryRunner?.query.bind(manager.queryRunner);
     if (!query) {
       throw new Error(
         'Triage receipt recording requires an active transaction manager',
       );
     }
+    const [triageSchema] = (await query(
+      'SELECT to_regclass($1) IS NOT NULL AS "exists"',
+      [
+        `${getWorkspaceSchemaName(
+          manager.internalContext.workspaceId,
+        )}."myahInboxTriageMigration"`,
+      ],
+    )) as Array<{ exists: boolean }>;
+
+    return Boolean(triageSchema?.exists);
+  }
+
+  /**
+   * Returns false when this workspace has no private triage schema. Callers must
+   * then skip triage work instead of failing the message persistence around it:
+   * the migration baseline derives inbound ordering evidence from persisted
+   * messages, so nothing is lost while the schema is still absent.
+   */
+  async lockMigrationMarkerForSourcePersistenceInTransaction(
+    manager: WorkspaceEntityManager,
+  ): Promise<boolean> {
+    const query = manager.queryRunner?.query.bind(manager.queryRunner);
+    if (!query) {
+      throw new Error(
+        'Triage receipt recording requires an active transaction manager',
+      );
+    }
+
+    if (!(await this.isTriageSchemaProvisioned(manager))) {
+      return false;
+    }
+
     await query("SELECT set_config('search_path', $1, true)", [
       getWorkspaceSchemaName(manager.internalContext.workspaceId),
     ]);
@@ -63,6 +101,8 @@ export class MyahInboxContactTriageReceiptService {
         'SELECT id FROM "myahInboxTriageMigration" WHERE id=true FOR UPDATE',
       );
     }
+
+    return true;
   }
 
   async recordInTransaction(
@@ -70,7 +110,13 @@ export class MyahInboxContactTriageReceiptService {
     manager: WorkspaceEntityManager,
   ): Promise<void> {
     if (input.direction === 'UNKNOWN') return;
-    await this.lockMigrationMarkerForSourcePersistenceInTransaction(manager);
+    const triageSchemaProvisioned =
+      await this.lockMigrationMarkerForSourcePersistenceInTransaction(manager);
+
+    if (!triageSchemaProvisioned) {
+      return;
+    }
+
     const query = manager.queryRunner?.query.bind(manager.queryRunner);
     if (!query) {
       throw new Error(

@@ -165,9 +165,10 @@ const createProjectionService = (
     ensureSourceContactInTransaction: jest.fn().mockResolvedValue(undefined),
   };
   const myahInboxContactTriageReceiptService = {
+    isTriageSchemaProvisioned: jest.fn().mockResolvedValue(true),
     lockMigrationMarkerForSourcePersistenceInTransaction: jest
       .fn()
-      .mockResolvedValue(undefined),
+      .mockResolvedValue(true),
     recordInTransaction: jest.fn().mockResolvedValue(undefined),
   };
   const projectionServiceModule = loadProjectionServiceModule();
