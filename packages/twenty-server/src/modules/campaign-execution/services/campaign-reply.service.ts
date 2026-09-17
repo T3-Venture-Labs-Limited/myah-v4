@@ -31,7 +31,7 @@ export class CampaignReplyService {
     if (!from || !input.threadExternalId.trim()) return;
     const matches = rows(
       await runner.query(
-        `SELECT a."workspaceId",a."campaignId",a."enrollmentId",a."campaignExecutionId",a."authorizationId",auth.generation AS "authorizationGeneration",act.id AS "activationId",a."workflowVersionId",a."occurrenceId",a."connectedAccountId",a."messageChannelId",a."attemptId",e."campaignCreatorId"
+        `SELECT a."workspaceId",a."campaignId",a."enrollmentId",a."authorizationId",auth.generation AS "authorizationGeneration",act.id AS "activationId",a."workflowVersionId",a."occurrenceId",a."connectedAccountId",a."messageChannelId",a."attemptId",e."campaignCreatorId"
          FROM core."outboundEmailAttempt" a
          JOIN core."campaignEnrollment" e ON e.id=a."enrollmentId" AND e."workspaceId"=a."workspaceId" AND e.state='ACTIVE'
          JOIN core."campaignSequenceAuthorization" auth ON auth."authorizationId"=a."authorizationId" AND auth."workspaceId"=a."workspaceId" AND auth."campaignId"=a."campaignId"

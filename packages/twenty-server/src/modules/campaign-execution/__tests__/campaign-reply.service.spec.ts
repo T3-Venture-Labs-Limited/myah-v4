@@ -9,8 +9,11 @@ const input = {
 };
 
 describe('CampaignReplyService', () => {
-  it('does nothing for ambiguous or mismatched evidence', async () => {
+  it('does nothing when no accepted Campaign attempt matches inbound evidence', async () => {
     const progression = { terminalizeReplyInTransaction: jest.fn() };
+    const query = jest.fn(
+      async (_sql: string, _parameters: readonly unknown[]) => [],
+    );
     const manager = {
       queryRunner: undefined as any,
       createQueryBuilder: jest.fn(),
@@ -18,11 +21,12 @@ describe('CampaignReplyService', () => {
     manager.queryRunner = {
       isTransactionActive: true,
       manager,
-      query: jest.fn(async () => []),
+      query,
     };
     await new CampaignReplyService(
       progression as never,
     ).reconcileInboundMessageInTransaction(input, manager as never);
+    expect(query.mock.calls[0][0]).not.toContain('a."campaignExecutionId"');
     expect(progression.terminalizeReplyInTransaction).not.toHaveBeenCalled();
     expect(manager.createQueryBuilder).not.toHaveBeenCalled();
   });
