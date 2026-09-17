@@ -11,10 +11,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  select-runner:
-    uses: ./.github/workflows/select-runner.yaml
-    secrets: inherit
-
   changed-files-check:
     uses: ./.github/workflows/changed-files.yaml
     with:
@@ -48,7 +44,7 @@ jobs:
   sdk-e2e-test:
     timeout-minutes: 30
     runs-on: ubuntu-latest
-    needs: [changed-files-check, sdk-test, select-runner]
+    needs: [changed-files-check, sdk-test]
     if: needs.changed-files-check.outputs.any_changed == 'true'
     services:
       postgres:
@@ -101,8 +97,8 @@ jobs:
     if: always() && !cancelled()
     timeout-minutes: 5
     runs-on: ubuntu-latest
-    needs: [changed-files-check, sdk-test, sdk-e2e-test, select-runner]
+    needs: [changed-files-check, sdk-test, sdk-e2e-test]
     steps:
       - name: Fail job if any needs failed
-        if: contains(needs.*.result, 'failure') || needs.select-runner.result != 'success'
+        if: contains(needs.*.result, 'failure')
         run: exit 1
