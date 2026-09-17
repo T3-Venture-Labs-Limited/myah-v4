@@ -326,6 +326,8 @@ const MyahInboxReplyWorkspaceContent = ({
     }
   };
 
+  const sendReplyLabel = t`Send reply`;
+
   // The composer keeps its normal surface and controls when no draft can load;
   // only the status copy is omitted. Multi-editor contention still reports.
   if (
@@ -361,7 +363,7 @@ const MyahInboxReplyWorkspaceContent = ({
         disabled
         actions={
           <Button
-            title={presentation === 'main' ? t`Send reply` : t`Send`}
+            title={presentation === 'main' ? sendReplyLabel : t`Send`}
             variant="primary"
             accent="brand"
             size="small"
@@ -403,7 +405,7 @@ const MyahInboxReplyWorkspaceContent = ({
             editorOwner={editorOwner}
             entry={draftEntry}
             disabled={isGenerating || isOpeningGuidance}
-            label={presentation === 'main' ? t`Send reply` : undefined}
+            label={presentation === 'main' ? sendReplyLabel : undefined}
             onSent={onSent}
           />
         );
