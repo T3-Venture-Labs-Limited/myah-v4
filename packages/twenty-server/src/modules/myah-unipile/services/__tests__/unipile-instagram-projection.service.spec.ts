@@ -429,6 +429,57 @@ describe('UnipileInstagramProjectionService', () => {
     );
   });
 
+  it('persists Instagram rows without triage when the private schema is absent', async () => {
+    const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+    const insertedMessageIds: string[] = [];
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('_myahSocialConversation')) {
+        return Promise.resolve([{ id: conversationRecordId }]);
+      }
+      if (sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage')) {
+        insertedMessageIds.push('inserted');
+
+        return Promise.resolve([
+          {
+            id: 'b7037d71-3486-4767-80a1-d0f1e3209985',
+            createdAt: '2026-09-04T12:31:00.000Z',
+          },
+        ]);
+      }
+
+      return Promise.resolve([]);
+    });
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    subject.myahInboxContactTriageReceiptService.isTriageSchemaProvisioned.mockResolvedValue(
+      false,
+    );
+
+    await subject.service.upsertVerifiedMessage({
+      workspace,
+      binding,
+      chat,
+      conversationRecordId,
+      message: inboundMessage,
+      sourceGenerationId: 'sync-run-id',
+      triageMode: 'LIVE',
+    });
+
+    // Message rows must still be written: without the private relations a triage
+    // write would abort the projection transaction.
+    expect(insertedMessageIds).toHaveLength(1);
+    expect(
+      subject.myahInboxContactTriageReceiptService.recordInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(
+      subject.myahInboxContactTriageService.ensureSourceContactInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
   it('locks marker, source, and conversation before inserting a receipt-eligible Instagram message', async () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     const query = jest.fn().mockImplementation((sql: string) => {
