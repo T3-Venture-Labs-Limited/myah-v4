@@ -280,7 +280,7 @@ describe('Instagram production upgrade provider compatibility', () => {
       ).toBe(true);
     }
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789313971538',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     );
     const lastInstagramCommand = sequence.findIndex(
       (step) =>

@@ -8,7 +8,7 @@ import {
 } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { type EmailContextV2Binding } from 'src/engine/core-modules/action-approval/types/action-approval.type';
-import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971535-create-myah-inbox-reply-context-drafts';
+import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts';
 
 // No repository global setup or default datasource is used by this isolated suite.
 const url = process.env.MYAH_353_ISOLATED_PG_DATABASE_URL;

@@ -1,5 +1,5 @@
-import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from '../2-20-instance-command-fast-1789313971537-create-myah-inbox-email-general-provenance';
-import { InstallMyahInboxEmailGeneralProvenanceCommand } from '../2-20-workspace-command-1789313971538-install-myah-inbox-email-general-provenance.command';
+import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from '../2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
+import { InstallMyahInboxEmailGeneralProvenanceCommand } from '../2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
 
 const workspaceId = '40000000-0000-4000-8000-000000000001';
 

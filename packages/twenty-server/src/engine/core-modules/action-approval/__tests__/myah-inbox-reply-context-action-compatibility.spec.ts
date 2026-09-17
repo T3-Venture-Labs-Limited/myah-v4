@@ -117,7 +117,7 @@ describe('Email context action compatibility', () => {
 
 it('installs strict version-specific snapshot checks and a v2 immutable authority guard', async () => {
   const { CreateMyahInboxReplyContextDraftsFastInstanceCommand } =
-    await import('src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971535-create-myah-inbox-reply-context-drafts');
+    await import('src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts');
   const query = jest.fn(async (_sql: string) => []);
   await new CreateMyahInboxReplyContextDraftsFastInstanceCommand().up({
     query,

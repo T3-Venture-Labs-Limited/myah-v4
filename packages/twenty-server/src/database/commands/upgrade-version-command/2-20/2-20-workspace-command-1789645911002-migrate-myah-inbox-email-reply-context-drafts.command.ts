@@ -6,7 +6,7 @@ import { WorkspaceIteratorService } from 'src/database/commands/command-runners/
 import { EmailReplyContextActivationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-preflight.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 
-@RegisteredWorkspaceCommand('2.20.0', 1789313971536)
+@RegisteredWorkspaceCommand('2.20.0', 1789645911002)
 @Command({
   name: 'upgrade:2-20:migrate-myah-inbox-email-reply-context-drafts',
   description:
