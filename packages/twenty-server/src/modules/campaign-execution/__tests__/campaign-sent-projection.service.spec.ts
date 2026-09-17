@@ -64,10 +64,13 @@ describe('CampaignSentProjectionService', () => {
       query,
     };
     manager.queryRunner = runner;
+    const events: string[] = [];
     const dataSource = {
-      transaction: jest.fn(async (work: (value: typeof manager) => unknown) =>
-        work(manager),
-      ),
+      transaction: jest.fn(async (work: (value: typeof manager) => unknown) => {
+        const result = await work(manager);
+        events.push('commit');
+        return result;
+      }),
     };
     const orm = {
       getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
@@ -79,9 +82,15 @@ describe('CampaignSentProjectionService', () => {
         messageThreadId: '66666666-6666-4666-8666-666666666666',
       })),
     };
+    const contactCreationService = {
+      enqueueContactCreation: jest.fn().mockImplementation(async () => {
+        events.push('enqueue');
+      }),
+    };
     const service = new CampaignSentProjectionService(
       orm as never,
       sentPersistence as never,
+      contactCreationService as never,
     );
 
     return {
@@ -91,6 +100,8 @@ describe('CampaignSentProjectionService', () => {
       queries,
       manager,
       expectedMessageId,
+      contactCreationService,
+      events,
     };
   };
 
@@ -132,6 +143,36 @@ describe('CampaignSentProjectionService', () => {
     expect(indexOf('JOIN core."campaignOutboundRender"')).toBeLessThan(
       indexOf('UPDATE core."outboundEmailAttempt"'),
     );
+  });
+
+  it('enqueues captured contact creation after transactional sent persistence commits', async () => {
+    const { service, sentPersistence, contactCreationService, events } =
+      setup();
+    const contactsToCreate = [
+      {
+        messageId: '66666666-6666-4666-8666-666666666666',
+        handle: 'creator@example.com',
+        shouldCreateContact: true,
+      },
+    ];
+    (sentPersistence.persistSentMessage as jest.Mock).mockImplementation(
+      async (input) => {
+        input.captureContactsToCreate(contactsToCreate);
+        return {
+          messageId: computeCampaignProjectedMessageId(IDS.attemptId),
+          messageThreadId: '66666666-6666-4666-8666-666666666666',
+        };
+      },
+    );
+
+    await expect(service.reconcile(IDS)).resolves.toBe('PROJECTED');
+
+    expect(contactCreationService.enqueueContactCreation).toHaveBeenCalledWith({
+      workspaceId: IDS.workspaceId,
+      connectedAccount: { id: IDS.connectedAccountId },
+      contactsToCreate,
+    });
+    expect(events).toEqual(['commit', 'enqueue']);
   });
 
   it('returns exact replay without repeating persistence', async () => {

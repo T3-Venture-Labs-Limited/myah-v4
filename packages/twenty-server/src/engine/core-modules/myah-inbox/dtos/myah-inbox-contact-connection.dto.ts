@@ -1,4 +1,4 @@
-import { Field, ObjectType } from '@nestjs/graphql';
+import { Field, Int, ObjectType } from '@nestjs/graphql';
 
 import { MyahInboxContactSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-contact-summary.dto';
 
@@ -22,6 +22,9 @@ export class MyahInboxContactPageInfo {
 
 @ObjectType('MyahInboxContactConnection')
 export class MyahInboxContactConnection {
+  @Field(() => Int)
+  totalCount: number;
+
   @Field(() => [MyahInboxContactEdge])
   edges: MyahInboxContactEdge[];
 

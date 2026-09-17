@@ -32,6 +32,7 @@ export class InboundEmailParserService {
       subject: sanitizeString(parsedEmail.subject || ''),
       text: sanitizeString(parsedEmail.text || ''),
       receivedAt: parsedEmail.date ? new Date(parsedEmail.date) : new Date(),
+      providerOccurredAt: null,
       direction: MessageDirection.INCOMING,
       attachments: [],
       participants: extractParticipantsFromParsedEmail(parsedEmail),

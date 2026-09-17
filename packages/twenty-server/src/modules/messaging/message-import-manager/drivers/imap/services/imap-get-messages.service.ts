@@ -180,6 +180,7 @@ export class ImapGetMessagesService {
       subject: sanitizeString(parsed.subject || ''),
       text,
       receivedAt: parsed.date ? new Date(parsed.date) : null,
+      providerOccurredAt: null,
       direction: computeMessageDirection(senderAddress, connectedAccount),
       attachments: (parsed.attachments || []).map((attachment) => ({
         filename: attachment.filename || 'unnamed-attachment',

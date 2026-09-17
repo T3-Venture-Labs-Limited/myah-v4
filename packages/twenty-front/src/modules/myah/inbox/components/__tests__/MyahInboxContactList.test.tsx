@@ -64,6 +64,9 @@ jest.mock('@/myah/inbox/components/MyahInboxThreadFilters', () => ({
     </div>
   ),
 }));
+jest.mock('@/myah/inbox/components/MyahInboxContactTriageActions', () => ({
+  MyahInboxContactTriageActions: () => null,
+}));
 
 jest.mock('@/myah/inbox/components/MyahInboxContactRow', () => ({
   MyahInboxContactRow: ({
@@ -135,6 +138,14 @@ const contacts: MyahInboxContact[] = [
     preview: 'First preview',
     sender: 'ada@example.com',
     needsAttention: true,
+    triage: {
+      isAvailable: true,
+      inboxOwnerId: null,
+      inboxState: 'NEEDS_REPLY',
+      snoozedUntil: null,
+      revision: 1,
+      identityGeneration: '1',
+    },
     email: {
       isAvailable: true,
       threadCount: 2,
@@ -160,6 +171,14 @@ const contacts: MyahInboxContact[] = [
     preview: 'Second preview',
     sender: 'grace@example.com',
     needsAttention: false,
+    triage: {
+      isAvailable: true,
+      inboxOwnerId: null,
+      inboxState: 'CLOSED',
+      snoozedUntil: null,
+      revision: 1,
+      identityGeneration: '1',
+    },
     email: {
       isAvailable: true,
       threadCount: 1,

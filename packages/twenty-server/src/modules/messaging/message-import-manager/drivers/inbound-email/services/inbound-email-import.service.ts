@@ -101,6 +101,7 @@ export class InboundEmailImportService {
           messageChannel,
           connectedAccount,
           workspaceId,
+          { mode: 'LIVE', generationId: `inbound-email:${s3Key}` },
         );
       },
       buildSystemAuthContext(workspaceId),

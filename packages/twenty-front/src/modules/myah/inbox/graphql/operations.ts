@@ -161,6 +161,14 @@ const MYAH_INBOX_CONTACT_FIELDS = gql`
     preview
     sender
     needsAttention
+    triage {
+      isAvailable
+      inboxOwnerId
+      inboxState
+      snoozedUntil
+      revision
+      identityGeneration
+    }
     creator {
       id
       name
@@ -231,6 +239,20 @@ export const GET_MYAH_INBOX_CONTACT = gql`
   query MyahInboxContact($contactId: String!) {
     myahInboxContact(contactId: $contactId) {
       ...MyahInboxContactFields
+    }
+  }
+`;
+
+export const UPDATE_MYAH_INBOX_CONTACT_TRIAGE = gql`
+  mutation UpdateMyahInboxContactTriage(
+    $input: UpdateMyahInboxContactTriageInput!
+  ) {
+    updateMyahInboxContactTriage(input: $input) {
+      inboxOwnerId
+      inboxState
+      snoozedUntil
+      revision
+      identityGeneration
     }
   }
 `;

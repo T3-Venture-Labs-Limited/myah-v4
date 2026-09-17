@@ -101,6 +101,7 @@ const createService = ({
   projectionReadable = true,
   canUpdateMessageThread = true,
   draftExecutionLocked = false,
+  migrationStatus = 'MIGRATING',
 }: {
   thread?: ThreadRecord | null;
   readableCreatorIds?: string[];
@@ -110,6 +111,7 @@ const createService = ({
   projectionReadable?: boolean;
   canUpdateMessageThread?: boolean;
   draftExecutionLocked?: boolean;
+  migrationStatus?: 'MIGRATING' | 'READY';
 } = {}) => {
   let persistedThread = thread;
   const targets = {
@@ -237,7 +239,11 @@ const createService = ({
     ]),
   );
   const transactionManager = {
-    query: jest.fn().mockResolvedValue(undefined),
+    query: jest.fn((sql: string) =>
+      sql.includes('FROM "myahInboxTriageMigration"')
+        ? Promise.resolve([{ status: migrationStatus }])
+        : Promise.resolve(undefined),
+    ),
     getRepository: jest.fn(
       (
         target: symbol,
@@ -303,9 +309,13 @@ const createService = ({
   const isDraftExecutionLocked = jest
     .fn()
     .mockResolvedValue(draftExecutionLocked);
+  const withPreparedSourceMutationInTransaction = jest.fn(
+    async ({ mutate }: { mutate: () => Promise<unknown> }) => mutate(),
+  );
   const service = new MyahInboxMutationService(
     globalWorkspaceOrmManager as never,
     { getThreadSummary } as never,
+    { withPreparedSourceMutationInTransaction } as never,
     { isDraftExecutionLocked } as never,
     dataSource as never,
   );
@@ -321,6 +331,7 @@ const createService = ({
     coreTransactionManager,
     getThreadSummary,
     isDraftExecutionLocked,
+    withPreparedSourceMutationInTransaction,
     get persistedThread() {
       return persistedThread;
     },
@@ -414,6 +425,78 @@ describe('MyahInboxMutationService', () => {
       myahReplyDraftRevision: originalRevision,
     });
   });
+
+  it('rejects legacy owner, state, and snooze writes once canonical triage is READY', async () => {
+    const setup = createService({ migrationStatus: 'READY' });
+
+    await expect(
+      setup.service.updateMyahInboxThread({
+        ...request(),
+        threadId,
+        inboxState: MyahInboxState.CLOSED,
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
+  });
+
+  it('checks the migration marker before entering lifecycle locks for a combined relink and legacy triage write', async () => {
+    const setup = createService({ migrationStatus: 'READY' });
+
+    await expect(
+      setup.service.updateMyahInboxThread({
+        ...request(),
+        threadId,
+        creatorId,
+        inboxState: MyahInboxState.CLOSED,
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(setup.transactionManager.query).toHaveBeenCalledWith(
+      'SELECT status FROM "myahInboxTriageMigration" WHERE id=true FOR KEY SHARE',
+    );
+    expect(
+      setup.withPreparedSourceMutationInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('retains the MIGRATING marker lock before lifecycle source locks for a combined relink and triage write', async () => {
+    const setup = createService({ migrationStatus: 'MIGRATING' });
+
+    await setup.service.updateMyahInboxThread({
+      ...request(),
+      threadId,
+      creatorId,
+      inboxState: MyahInboxState.CLOSED,
+    });
+
+    expect(
+      setup.transactionManager.query.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      setup.withPreparedSourceMutationInTransaction.mock.invocationCallOrder[0],
+    );
+  });
+
+  it.each([
+    ['Creator', { creatorId }],
+    ['Campaign', { campaignId }],
+  ])(
+    'does not patch legacy triage fields for a READY %s-only update',
+    async (_label, update) => {
+      const setup = createService({ migrationStatus: 'READY' });
+
+      await setup.service.updateMyahInboxThread({
+        ...request(),
+        threadId,
+        ...update,
+      });
+
+      const patch = setup.repositories.messageThread.update.mock.calls[0]?.[1];
+
+      expect(patch).not.toHaveProperty('inboxOwnerId');
+      expect(patch).not.toHaveProperty('inboxState');
+      expect(patch).not.toHaveProperty('snoozedUntil');
+    },
+  );
 
   it('preserves relations omitted as own undefined GraphQL input properties', async () => {
     const setup = createService({
@@ -660,6 +743,15 @@ describe('MyahInboxMutationService', () => {
     });
     expect(linked.creator).toEqual({ id: creatorId, name: 'Creator' });
     expect(setup.persistedThread?.creatorId).toBe(creatorId);
+    expect(setup.withPreparedSourceMutationInTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId,
+        sourceType: 'EMAIL_THREAD',
+        sourceRecordIds: [threadId],
+        nextCreatorIds: [creatorId],
+        manager: setup.transactionManager,
+      }),
+    );
 
     const unmatched = await setup.service.updateMyahInboxThread({
       ...request(),

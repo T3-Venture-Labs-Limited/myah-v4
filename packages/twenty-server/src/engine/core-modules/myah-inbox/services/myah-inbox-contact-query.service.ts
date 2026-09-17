@@ -9,6 +9,7 @@ import { EntityMetadataNotFoundError } from 'typeorm/error/EntityMetadataNotFoun
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import {
   MessageChannelType,
+  MessageChannelVisibility,
   MessageParticipantRole,
 } from 'twenty-shared/types';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
@@ -33,6 +34,7 @@ import {
   MyahInboxSnoozeStatus,
   MyahInboxState,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
+import { MyahInboxTriageCapabilityService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
 import {
   decodeMyahInboxContactCursor,
   encodeMyahInboxContactCursor,
@@ -80,6 +82,7 @@ type PermissionAwareRepository = {
 };
 
 type ContactRaw = {
+  totalCount?: number | string;
   identityKind: ContactIdentityKind;
   identityRecordId: string;
   orderingKey: string;
@@ -96,6 +99,13 @@ type ContactRaw = {
   latestEmailThreadId: string | null;
   emailNeedsAttention: boolean;
   instagramNeedsAttention: boolean;
+  triageIsAvailable: boolean;
+  triageCapabilityAvailable?: boolean;
+  triageInboxOwnerId: string | null;
+  triageInboxState: MyahInboxState | null;
+  triageSnoozedUntil: Date | string | null;
+  triageRevision: number | string | null;
+  triageIdentityGeneration: string | null;
   instagramConversations:
     | MyahInboxContactInstagramConversation[]
     | string
@@ -153,9 +163,17 @@ const parseInstagramConversations = (
     return [];
   }
 
-  return typeof value === 'string'
-    ? (JSON.parse(value) as MyahInboxContactInstagramConversation[])
-    : value;
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value) as MyahInboxContactInstagramConversation[];
+  } catch (error) {
+    throw new Error(
+      `Invalid Instagram conversation projection JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 };
 
 const toGraphqlIdentityKind = (
@@ -176,12 +194,30 @@ export class MyahInboxContactQueryService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly messageVisibilityPolicyService: MessageVisibilityPolicyService,
+    private readonly triageCapabilityService?: MyahInboxTriageCapabilityService,
   ) {}
 
   async listContacts(
     input: MyahInboxListContactsInput,
   ): Promise<MyahInboxContactConnection> {
     this.assertUserRequest(input);
+
+    const hasTriageFilter = this.hasTriageFilter(input);
+    let canUseContactTriage: boolean | undefined;
+
+    if (hasTriageFilter) {
+      canUseContactTriage =
+        await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          async () => this.canUseContactTriage(input.authContext),
+        );
+
+      if (!canUseContactTriage) {
+        throw new ForbiddenException(
+          'Triage is unavailable with your current Inbox access',
+        );
+      }
+    }
+
     this.assertValidFilterIds(input);
 
     const cursor = input.after
@@ -207,8 +243,12 @@ export class MyahInboxContactQueryService {
         if (!rolePermissionConfig) {
           throw new ForbiddenException('Inbox role permissions are required');
         }
+        canUseContactTriage ??= await this.canUseContactTriage(
+          input.authContext,
+        );
 
         const repository = async (name: string) =>
+          // SAFETY: native workspace repositories expose this narrowed serialization port.
           (await this.globalWorkspaceOrmManager.getRepository<
             Record<string, unknown>
           >(
@@ -303,6 +343,12 @@ export class MyahInboxContactQueryService {
               .addSelect('creator."instagramUsername"', 'instagramUsername')
               .where('creator."deletedAt" IS NULL'),
           ),
+          serializePermissionQuery(
+            workspaceMemberRepository
+              .createQueryBuilder('workspace_member')
+              .select('workspace_member.id', 'id')
+              .where('workspace_member."deletedAt" IS NULL'),
+          ),
           serializeOptionalPermissionQuery(
             socialConversationRepository,
             (repository) =>
@@ -365,6 +411,7 @@ export class MyahInboxContactQueryService {
           readableParticipantsSql,
           readableThreadsSql,
           readableCreatorsSql,
+          readableWorkspaceMembersSql,
           readableSocialConversationsSql,
           readableSocialMessagesSql,
         ] = permissionQueries.map(appendPermissionQuery);
@@ -374,6 +421,8 @@ export class MyahInboxContactQueryService {
           return `$${parameters.length}`;
         };
         const workspaceSchemaName = getWorkspaceSchemaName(input.workspace.id);
+        const canonicalTriageScope = `migration.status = 'READY' AND ${canUseContactTriage ? 'triage_capability."isAvailable"' : 'FALSE'}`;
+        const canonicalTriageAvailable = `${canonicalTriageScope} AND triage.revision IS NOT NULL`;
         const emailChannelWorkspace = addParameter(input.workspace.id);
         const emailChannelTypes = addParameter([
           MessageChannelType.EMAIL,
@@ -391,13 +440,13 @@ export class MyahInboxContactQueryService {
 
         if (input.owner === 'ME') {
           eligibleConditions.push(
-            `source."inboxOwnerId" = ${addParameter(input.workspaceMemberId)}`,
+            `source."effectiveInboxOwnerId" = ${addParameter(input.workspaceMemberId)}`,
           );
         } else if (input.owner === 'UNASSIGNED') {
-          eligibleConditions.push('source."inboxOwnerId" IS NULL');
+          eligibleConditions.push('source."effectiveInboxOwnerId" IS NULL');
         } else if (input.owner) {
           eligibleConditions.push(
-            `source."inboxOwnerId" = ${addParameter(input.owner)}`,
+            `source."effectiveInboxOwnerId" = ${addParameter(input.owner)}`,
           );
         }
         if (input.campaignId) {
@@ -407,18 +456,17 @@ export class MyahInboxContactQueryService {
         }
         if (input.states?.length) {
           eligibleConditions.push(
-            `source.state = ANY(${addParameter(input.states)})`,
+            `source."effectiveState" = ANY(${addParameter(input.states)})`,
           );
         }
         if (input.snoozeStatus === MyahInboxSnoozeStatus.ACTIVE) {
           eligibleConditions.push(
-            `source.state = ${addParameter(MyahInboxState.SNOOZED)}`,
-            'source."snoozedUntil" > CURRENT_TIMESTAMP',
+            `source."effectiveState" = ${addParameter(MyahInboxState.SNOOZED)}`,
+            'source."effectiveSnoozedUntil" > CURRENT_TIMESTAMP',
           );
         } else if (input.snoozeStatus === MyahInboxSnoozeStatus.DUE) {
           eligibleConditions.push(
-            `source.state = ${addParameter(MyahInboxState.SNOOZED)}`,
-            'source."snoozedUntil" <= CURRENT_TIMESTAMP',
+            'source."persistedSnoozedUntil" <= CURRENT_TIMESTAMP',
           );
         }
         const search = input.search?.trim();
@@ -457,6 +505,7 @@ readable_messages AS (${readableMessagesSql}),
 readable_participants AS (${readableParticipantsSql}),
 readable_threads AS (${readableThreadsSql}),
 readable_creators AS (${readableCreatorsSql}),
+readable_workspace_members AS (${readableWorkspaceMembersSql}),
 readable_social_conversations AS (${readableSocialConversationsSql}),
 readable_social_messages AS (${readableSocialMessagesSql}),
 visible_email_messages AS (
@@ -588,14 +637,99 @@ all_source_rows AS (
   UNION ALL
   SELECT * FROM instagram_source_rows
 ),
+triage_migration AS (
+  SELECT COALESCE(
+    (SELECT status FROM "${workspaceSchemaName}"."myahInboxTriageMigration" WHERE id=true),
+    'MIGRATING'
+  ) AS status
+),
+triage_capability AS (
+  -- This runs inside the list statement snapshot, rather than carrying a
+  -- boolean from a prior capability query into the protected tuple projection.
+  SELECT NOT EXISTS (
+    SELECT 1
+    FROM "${workspaceSchemaName}"."messageChannelMessageAssociation" association
+    INNER JOIN "${workspaceSchemaName}".message message
+      ON message.id = association."messageId"
+     AND message."deletedAt" IS NULL
+    INNER JOIN core."messageChannel" channel
+      ON channel.id = association."messageChannelId"
+     AND channel."workspaceId" = $1
+    LEFT JOIN core."connectedAccount" connected_account
+      ON connected_account.id = channel."connectedAccountId"
+     AND connected_account."workspaceId" = $1
+    WHERE association."deletedAt" IS NULL
+      AND channel.type::text = ANY(${emailChannelTypes}::text[])
+    GROUP BY association."messageId"
+    HAVING NOT BOOL_OR(
+      channel.visibility = '${MessageChannelVisibility.SHARE_EVERYTHING}'
+      OR connected_account."userWorkspaceId" = $2
+    )
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM "${workspaceSchemaName}"."myahInboxTriageEmailChannelProvenance" provenance
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM unnest(provenance."messageChannelIds") AS channel_id(id)
+      INNER JOIN core."messageChannel" channel
+        ON channel.id = channel_id.id
+       AND channel."workspaceId" = $1
+      LEFT JOIN core."connectedAccount" connected_account
+        ON connected_account.id = channel."connectedAccountId"
+       AND connected_account."workspaceId" = $1
+      WHERE channel.visibility = '${MessageChannelVisibility.SHARE_EVERYTHING}'
+         OR connected_account."userWorkspaceId" = $2
+    )
+  ) AS "isAvailable"
+),
+canonical_triage_rows AS (
+  SELECT
+    source.*,
+    ${canonicalTriageAvailable} AS "triageIsAvailable",
+    CASE WHEN ${canonicalTriageScope} THEN triage_owner.id ELSE source."inboxOwnerId" END AS "effectiveInboxOwnerId",
+    CASE
+      WHEN ${canonicalTriageScope}
+        AND triage."inboxState" = 'SNOOZED'
+        AND triage."snoozedUntil" <= CURRENT_TIMESTAMP
+        THEN 'NEEDS_REPLY'
+      WHEN ${canonicalTriageScope} THEN triage."inboxState"
+      ELSE source.state
+    END AS "effectiveState",
+    CASE
+      WHEN ${canonicalTriageScope}
+        AND triage."inboxState" = 'SNOOZED'
+        AND triage."snoozedUntil" > CURRENT_TIMESTAMP
+        THEN triage."snoozedUntil"
+      WHEN NOT (${canonicalTriageScope}) THEN source."snoozedUntil"
+      ELSE NULL::timestamptz
+    END AS "effectiveSnoozedUntil",
+    CASE WHEN ${canonicalTriageScope} THEN triage."snoozedUntil" ELSE source."snoozedUntil" END AS "persistedSnoozedUntil",
+    CASE WHEN ${canonicalTriageAvailable} THEN triage_owner.id ELSE NULL::uuid END AS "triageInboxOwnerId",
+    CASE WHEN ${canonicalTriageAvailable} THEN triage.revision ELSE NULL::integer END AS "triageRevision",
+    CASE WHEN ${canonicalTriageAvailable} THEN triage."identityGeneration"::text ELSE NULL::text END AS "triageIdentityGeneration"
+  FROM all_source_rows source
+  CROSS JOIN triage_migration migration
+  CROSS JOIN triage_capability
+  LEFT JOIN "${workspaceSchemaName}"."myahInboxContactTriage" triage
+    ON triage."contactIdentityKey" = CONCAT(source."identityKind", ':', source."identityRecordId")
+  LEFT JOIN readable_workspace_members triage_owner
+    ON triage_owner.id = triage."inboxOwnerId"
+),
+effective_source_rows AS (
+  SELECT
+    source.*,
+    CASE WHEN source."triageIsAvailable" THEN source."effectiveState" ELSE NULL::text END AS "triageInboxState",
+    CASE WHEN source."triageIsAvailable" THEN source."effectiveSnoozedUntil" ELSE NULL::timestamptz END AS "triageSnoozedUntil"
+  FROM canonical_triage_rows source
+),
 eligible_contacts AS (
   SELECT DISTINCT source."identityKind", source."identityRecordId"
-  FROM all_source_rows source
+  FROM effective_source_rows source
   WHERE ${eligibleConditions.join('\n    AND ')}
 ),
 latest_source AS (
   SELECT DISTINCT ON (source."identityKind", source."identityRecordId") source.*
-  FROM all_source_rows source
+  FROM effective_source_rows source
   INNER JOIN eligible_contacts eligible
     ON eligible."identityKind" = source."identityKind"
    AND eligible."identityRecordId" = source."identityRecordId"
@@ -609,13 +743,13 @@ email_aggregation AS (
     (ARRAY_AGG(source."emailThreadId" ORDER BY source."activityAt" DESC, source."sourceOrderingKey" DESC)
       FILTER (WHERE source."emailThreadId" IS NOT NULL))[1] AS "latestEmailThreadId",
     BOOL_OR(
-      source.state = 'NEEDS_REPLY'
+      source."effectiveState" = 'NEEDS_REPLY'
       OR (
-        source.state = 'SNOOZED'
-        AND source."snoozedUntil" <= CURRENT_TIMESTAMP
+        source."effectiveState" = 'SNOOZED'
+        AND source."effectiveSnoozedUntil" <= CURRENT_TIMESTAMP
       )
     ) FILTER (WHERE source."emailThreadId" IS NOT NULL) AS "emailNeedsAttention"
-  FROM all_source_rows source
+  FROM effective_source_rows source
   GROUP BY source."identityKind", source."identityRecordId"
 ),
 instagram_aggregation AS (
@@ -635,7 +769,7 @@ instagram_aggregation AS (
       FILTER (WHERE source."instagramConversationId" IS NOT NULL) AS "instagramConversations",
     BOOL_OR(source."instagramDirection" = 'INBOUND')
       FILTER (WHERE source."instagramConversationId" IS NOT NULL) AS "instagramNeedsAttention"
-  FROM all_source_rows source
+  FROM effective_source_rows source
   GROUP BY source."identityKind", source."identityRecordId"
 ),
 contact AS (
@@ -657,6 +791,12 @@ contact AS (
     latest."creatorInstagramUsername",
     latest.preview,
     latest.sender,
+    latest."triageIsAvailable",
+    latest."triageInboxOwnerId",
+    latest."triageInboxState",
+    latest."triageSnoozedUntil",
+    latest."triageRevision",
+    latest."triageIdentityGeneration",
     COALESCE(email."emailThreadIds", ARRAY[]::uuid[]) AS "emailThreadIds",
     email."latestEmailThreadId",
     COALESCE(email."emailNeedsAttention", FALSE) AS "emailNeedsAttention",
@@ -669,16 +809,27 @@ contact AS (
   LEFT JOIN instagram_aggregation instagram
     ON instagram."identityKind" = latest."identityKind"
    AND instagram."identityRecordId" = latest."identityRecordId"
+),
+filtered_total AS (
+  SELECT COUNT(*) AS "totalCount" FROM contact
+),
+paged_contacts AS (
+  SELECT contact.*
+  FROM contact
+  ${cursorCondition}
+  ORDER BY contact."lastActivityAt" DESC, contact."orderingKey" DESC
+  LIMIT ${limit}
 )
-SELECT contact.*,
+SELECT paged_contacts.*, filtered_total."totalCount",
+  triage_capability."isAvailable" AS "triageCapabilityAvailable",
   to_char(
-    contact."lastActivityAt" AT TIME ZONE 'UTC',
+    paged_contacts."lastActivityAt" AT TIME ZONE 'UTC',
     'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
   ) AS "activityCursorTimestamp"
-FROM contact
-${cursorCondition}
-ORDER BY contact."lastActivityAt" DESC, contact."orderingKey" DESC
-LIMIT ${limit}`;
+FROM filtered_total
+CROSS JOIN triage_capability
+LEFT JOIN paged_contacts ON TRUE
+ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderingKey" DESC NULLS LAST`;
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const rows = await dataSource.query<ContactRaw[]>(
@@ -687,13 +838,20 @@ LIMIT ${limit}`;
           undefined,
           { shouldBypassPermissionChecks: true },
         );
-        const hasNextPage = rows.length > pageSize;
-        const pageRows = rows.slice(0, pageSize);
+        if (hasTriageFilter && rows[0]?.triageCapabilityAvailable === false) {
+          throw new ForbiddenException(
+            'Triage is unavailable with your current Inbox access',
+          );
+        }
+        const contactRows = rows.filter((row) => row.identityRecordId != null);
+        const hasNextPage = contactRows.length > pageSize;
+        const pageRows = contactRows.slice(0, pageSize);
         const edges = pageRows.map((row) =>
           this.toEdge(row, input.workspace.id),
         );
 
         return {
+          totalCount: Number(rows[0]?.totalCount ?? 0),
           edges,
           pageInfo: {
             hasNextPage,
@@ -753,7 +911,20 @@ LIMIT ${limit}`;
       latestChannel: row.latestChannel,
       preview: row.preview,
       sender: row.sender,
-      needsAttention: emailNeedsAttention || instagramNeedsAttention,
+      needsAttention: row.triageIsAvailable
+        ? row.triageInboxState === MyahInboxState.NEEDS_REPLY
+        : emailNeedsAttention || instagramNeedsAttention,
+      triage: {
+        isAvailable: Boolean(row.triageIsAvailable),
+        inboxOwnerId: row.triageInboxOwnerId ?? null,
+        inboxState: row.triageInboxState ?? null,
+        snoozedUntil: row.triageSnoozedUntil
+          ? toIsoString(row.triageSnoozedUntil)
+          : null,
+        revision:
+          row.triageRevision === null ? null : Number(row.triageRevision),
+        identityGeneration: row.triageIdentityGeneration ?? null,
+      },
       email: {
         isAvailable: emailThreadIds.length > 0,
         threadCount: emailThreadIds.length,
@@ -822,6 +993,26 @@ LIMIT ${limit}`;
       if (!owner) {
         throw new ForbiddenException('Inbox owner is not readable');
       }
+    }
+  }
+
+  private hasTriageFilter(input: MyahInboxContactsInput): boolean {
+    return (
+      isDefined(input.owner) ||
+      Boolean(input.states?.length || input.snoozeStatus)
+    );
+  }
+
+  private async canUseContactTriage(
+    authContext: WorkspaceAuthContext,
+  ): Promise<boolean> {
+    if (!this.triageCapabilityService) return false;
+    try {
+      await this.triageCapabilityService.assertRead({ authContext });
+      return true;
+    } catch (error) {
+      if (error instanceof ForbiddenException) return false;
+      throw error;
     }
   }
 

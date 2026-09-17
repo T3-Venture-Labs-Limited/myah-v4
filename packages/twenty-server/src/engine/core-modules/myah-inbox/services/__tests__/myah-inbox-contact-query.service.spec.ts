@@ -1,4 +1,11 @@
+import { ForbiddenException } from '@nestjs/common';
+
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { MyahInboxTriageCapabilityService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import {
   encodeMyahInboxContactCursor,
@@ -6,7 +13,9 @@ import {
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-cursor.util';
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 
-const rolePermissionConfig = { unionOf: ['role-id'] };
+const resolvedRolePermissionConfig = { unionOf: ['role-id'] };
+let rolePermissionConfig: typeof resolvedRolePermissionConfig | undefined =
+  resolvedRolePermissionConfig;
 
 jest.mock(
   'src/engine/twenty-orm/storage/orm-workspace-context.storage',
@@ -158,15 +167,35 @@ const loadService = (): ContactQueryServiceConstructor | undefined => {
   }
 };
 
-const buildHarness = (rows: unknown[] = rawRows) => {
+const buildHarness = (
+  rows: unknown[] = rawRows,
+  canReadCanonicalTriage = true,
+  useProductionPermissionDenial = false,
+  hasRolePermissionConfig = true,
+) => {
+  rolePermissionConfig = hasRolePermissionConfig
+    ? resolvedRolePermissionConfig
+    : undefined;
   const query = jest.fn().mockResolvedValue(rows);
+  let productionPermissionDenialPending = useProductionPermissionDenial;
   const createQueryBuilder = (objectName: string) => {
     const builder = {
       select: jest.fn(),
       addSelect: jest.fn(),
       where: jest.fn(),
       setParameters: jest.fn(),
-      validatePermissionsBeforeSerialization: jest.fn(),
+      validatePermissionsBeforeSerialization: jest.fn(() => {
+        if (
+          productionPermissionDenialPending &&
+          objectName === 'messageThread'
+        ) {
+          productionPermissionDenialPending = false;
+          throw new PermissionsException(
+            'source object read denied',
+            PermissionsExceptionCode.PERMISSION_DENIED,
+          );
+        }
+      }),
       getQueryAndParameters: jest
         .fn()
         .mockReturnValue([
@@ -213,6 +242,14 @@ const buildHarness = (rows: unknown[] = rawRows) => {
 
   expect(Service).toBeDefined();
 
+  const triageCapabilityService = useProductionPermissionDenial
+    ? new MyahInboxTriageCapabilityService(globalWorkspaceOrmManager as never)
+    : {
+        assertRead: canReadCanonicalTriage
+          ? jest.fn().mockResolvedValue(undefined)
+          : jest.fn().mockRejectedValue(new ForbiddenException('unavailable')),
+      };
+
   return {
     currentMemberRepository,
     globalWorkspaceOrmManager,
@@ -220,7 +257,9 @@ const buildHarness = (rows: unknown[] = rawRows) => {
     service: new Service!(
       globalWorkspaceOrmManager as never,
       visibilityPolicy as never,
+      triageCapabilityService as never,
     ),
+    triageCapabilityService,
     visibilityPolicy,
   };
 };
@@ -255,7 +294,7 @@ describe('MyahInboxContactQueryService', () => {
     ).toBe(exactTimestamp);
     expect(harness.query.mock.calls[0][0]).toContain(`to_char(`);
     expect(harness.query.mock.calls[0][0]).toContain(
-      `contact."lastActivityAt" AT TIME ZONE 'UTC'`,
+      `paged_contacts."lastActivityAt" AT TIME ZONE 'UTC'`,
     );
     expect(harness.query.mock.calls[0][0]).toContain(
       `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`,
@@ -387,6 +426,244 @@ describe('MyahInboxContactQueryService', () => {
     expect(creatorContact.id).not.toContain(creatorId);
   });
 
+  it('projects the READY canonical tuple and preserves total count on an empty cursor page', async () => {
+    const harness = buildHarness([
+      {
+        ...rawRows[0],
+        totalCount: '3',
+        triageIsAvailable: true,
+        triageInboxOwnerId: workspaceMemberId,
+        triageInboxState: 'SNOOZED',
+        triageSnoozedUntil: '2026-09-06T12:00:00.000Z',
+        triageRevision: '4',
+        triageIdentityGeneration: '2',
+      },
+    ]);
+    const result = await harness.service.listContacts(request());
+
+    expect(result).toMatchObject({
+      totalCount: 3,
+      edges: [
+        {
+          node: {
+            triage: {
+              isAvailable: true,
+              inboxOwnerId: workspaceMemberId,
+              inboxState: 'SNOOZED',
+              snoozedUntil: '2026-09-06T12:00:00.000Z',
+              revision: 4,
+              identityGeneration: '2',
+            },
+          },
+        },
+      ],
+    });
+    expect(harness.query.mock.calls[0][0]).toContain(
+      '"myahInboxTriageMigration"',
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      '"myahInboxContactTriage"',
+    );
+  });
+
+  it('does not expose canonical tuple data to an unrestricted list when coarse capability fails', async () => {
+    const harness = buildHarness(
+      [
+        {
+          ...rawRows[0],
+          triageIsAvailable: false,
+          triageInboxOwnerId: null,
+          triageInboxState: null,
+          triageSnoozedUntil: null,
+          triageRevision: null,
+          triageIdentityGeneration: null,
+        },
+      ],
+      false,
+    );
+
+    const result = await harness.service.listContacts(request());
+
+    expect(result).toMatchObject({
+      edges: [
+        {
+          node: {
+            needsAttention: true,
+            triage: {
+              isAvailable: false,
+              inboxOwnerId: null,
+              inboxState: null,
+              snoozedUntil: null,
+              revision: null,
+              identityGeneration: null,
+            },
+          },
+        },
+      ],
+    });
+    expect(harness.query.mock.calls[0][0]).toContain(
+      "migration.status = 'READY' AND FALSE",
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'CASE WHEN source."triageIsAvailable" THEN source."effectiveState" ELSE NULL::text END AS "triageInboxState"',
+    );
+  });
+
+  it('falls back to legacy triage for an unrestricted list after production permission denial', async () => {
+    const harness = buildHarness(
+      [
+        {
+          ...rawRows[0],
+          triageIsAvailable: false,
+          triageInboxOwnerId: null,
+          triageInboxState: null,
+          triageSnoozedUntil: null,
+          triageRevision: null,
+          triageIdentityGeneration: null,
+        },
+      ],
+      true,
+      true,
+    );
+
+    await expect(
+      harness.service.listContacts(request()),
+    ).resolves.toMatchObject({
+      edges: [
+        {
+          node: {
+            triage: {
+              isAvailable: false,
+              inboxOwnerId: null,
+              inboxState: null,
+              snoozedUntil: null,
+              revision: null,
+              identityGeneration: null,
+            },
+          },
+        },
+      ],
+    });
+    expect(harness.query.mock.calls[0][0]).toContain(
+      "migration.status = 'READY' AND FALSE",
+    );
+  });
+
+  it('rejects selected triage filters with generic unavailability after production permission denial', async () => {
+    const harness = buildHarness([], true, true);
+
+    await expect(
+      harness.service.listContacts(request({ owner: 'ME' })),
+    ).rejects.toMatchObject({
+      message: 'Triage is unavailable with your current Inbox access',
+      status: 403,
+    });
+  });
+
+  it('rejects a selected triage filter with generic unavailability before missing role permissions', async () => {
+    const harness = buildHarness([], false, false, false);
+
+    await expect(
+      harness.service.listContacts(request({ owner: 'ME' })),
+    ).rejects.toMatchObject({
+      message: 'Triage is unavailable with your current Inbox access',
+      status: 403,
+    });
+  });
+
+  it('rejects an invalid selected triage filter with generic unavailability before ID validation', async () => {
+    const harness = buildHarness([], false);
+
+    await expect(
+      harness.service.listContacts(request({ owner: 'not-a-uuid' })),
+    ).rejects.toMatchObject({
+      message: 'Triage is unavailable with your current Inbox access',
+      status: 403,
+    });
+  });
+
+  it('rejects an explicitly empty selected owner with generic unavailability before ID validation', async () => {
+    const harness = buildHarness([], false);
+
+    await expect(
+      harness.service.listContacts(request({ owner: '' })),
+    ).rejects.toEqual(
+      new ForbiddenException(
+        'Triage is unavailable with your current Inbox access',
+      ),
+    );
+  });
+
+  it('continues to reject an explicitly empty owner after capability approval', async () => {
+    const harness = buildHarness();
+
+    await expect(
+      harness.service.listContacts(request({ owner: '' })),
+    ).rejects.toMatchObject({
+      message: 'Invalid Myah inbox relation filter',
+      status: 400,
+    });
+  });
+
+  it('never falls back to legacy triage fields in READY when a canonical tuple is missing', async () => {
+    const harness = buildHarness([]);
+
+    await harness.service.listContacts(request());
+
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toContain(
+      `CASE WHEN migration.status = 'READY' AND triage_capability."isAvailable" THEN triage_owner.id ELSE source."inboxOwnerId" END`,
+    );
+    expect(sql).toContain(
+      `WHEN migration.status = 'READY' AND triage_capability."isAvailable" THEN triage."inboxState"`,
+    );
+    expect(sql).toContain(
+      `WHEN NOT (migration.status = 'READY' AND triage_capability."isAvailable") THEN source."snoozedUntil"`,
+    );
+  });
+
+  it('does not expose an existing canonical tuple while migration is not READY', async () => {
+    const harness = buildHarness([
+      {
+        ...rawRows[0],
+        triageIsAvailable: false,
+        triageInboxOwnerId: null,
+        triageInboxState: null,
+        triageSnoozedUntil: null,
+        triageRevision: null,
+        triageIdentityGeneration: null,
+      },
+    ]);
+
+    const result = await harness.service.listContacts(request());
+
+    expect(result).toMatchObject({
+      edges: [
+        {
+          node: {
+            triage: {
+              isAvailable: false,
+              inboxOwnerId: null,
+              inboxState: null,
+              snoozedUntil: null,
+              revision: null,
+              identityGeneration: null,
+            },
+          },
+        },
+      ],
+    });
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'migration.status = \'READY\' AND triage_capability."isAvailable"',
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'CASE WHEN migration.status = \'READY\' AND triage_capability."isAvailable" THEN triage_owner.id ELSE source."inboxOwnerId" END',
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'CASE WHEN migration.status = \'READY\' AND triage_capability."isAvailable" AND triage.revision IS NOT NULL THEN triage_owner.id ELSE NULL::uuid END',
+    );
+  });
+
   it('keeps unmatched Email and Instagram as separate exact-source contacts', async () => {
     const result = await buildHarness(rawRows.slice(1)).service.listContacts(
       request(),
@@ -423,6 +700,57 @@ describe('MyahInboxContactQueryService', () => {
     await expect(
       absent.service.getContact(request({ contactId })),
     ).rejects.toThrow('Inbox contact is not readable');
+  });
+
+  it('filters due snoozes by persisted canonical evidence while returning the effective NEEDS_REPLY tuple', async () => {
+    const harness = buildHarness([
+      {
+        ...rawRows[0],
+        totalCount: '1',
+        triageIsAvailable: true,
+        triageInboxOwnerId: null,
+        triageInboxState: 'NEEDS_REPLY',
+        triageSnoozedUntil: null,
+        triageRevision: '3',
+        triageIdentityGeneration: '1',
+      },
+    ]);
+
+    const result = await harness.service.listContacts(
+      request({ snoozeStatus: 'DUE' }),
+    );
+
+    expect(result).toMatchObject({
+      totalCount: 1,
+      edges: [
+        {
+          node: {
+            triage: {
+              inboxState: 'NEEDS_REPLY',
+              snoozedUntil: null,
+            },
+          },
+        },
+      ],
+    });
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toContain('AS "persistedSnoozedUntil"');
+    expect(sql).toContain(
+      'source."persistedSnoozedUntil" <= CURRENT_TIMESTAMP',
+    );
+  });
+
+  it('uses the permission-aware active workspace member projection for canonical owners and owner filters', async () => {
+    const harness = buildHarness();
+
+    await harness.service.listContacts(request({ owner: 'UNASSIGNED' }));
+
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toContain('readable_workspace_members AS');
+    expect(sql).toContain('LEFT JOIN readable_workspace_members triage_owner');
+    expect(sql).toContain(
+      'THEN triage_owner.id ELSE source."inboxOwnerId" END AS "effectiveInboxOwnerId"',
+    );
   });
 
   it('builds one server-side visibility-filtered union/group/keyset query before applying the limit', async () => {
@@ -463,10 +791,14 @@ describe('MyahInboxContactQueryService', () => {
       'COALESCE(latest."activityAt", conversation."updatedAt", conversation."createdAt")',
     );
     expect(sql).toContain('BOOL_OR(source."instagramDirection" = \'INBOUND\')');
-    expect(sql).toContain('source."snoozedUntil" <= CURRENT_TIMESTAMP');
+    expect(sql).toContain(
+      'source."effectiveSnoozedUntil" <= CURRENT_TIMESTAMP',
+    );
     expect(sql).toContain('contact."lastActivityAt" <');
     expect(sql).toContain('contact."orderingKey" <');
-    expect(sql).toMatch(/LIMIT \$\d+$/);
+    expect(sql).toContain('filtered_total AS (');
+    expect(sql).toContain('SELECT COUNT(*) AS "totalCount" FROM contact');
+    expect(sql).toContain('LIMIT $16');
     expect(parameters).toEqual(
       expect.arrayContaining([
         workspaceId,
