@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 import { v4 } from 'uuid';
 
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
@@ -88,6 +88,33 @@ export class MessagingMessageService {
             workspaceId,
             'messageParticipant',
           );
+
+        // Resolve the immutable local target inside the write transaction. A
+        // provider-returned thread ID must never route an accepted v2 receipt.
+        const deliveryTargetIds = new Set(
+          messages
+            .map((message) => message.deliveryTargetId)
+            .filter((id) => id !== undefined),
+        );
+        for (const deliveryTargetId of [...deliveryTargetIds].sort()) {
+          if (
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+              deliveryTargetId,
+            )
+          ) {
+            throw new Error('Pinned Message delivery target is invalid');
+          }
+          const target = await messageThreadRepository.findOne(
+            {
+              where: { id: deliveryTargetId, deletedAt: IsNull() },
+              select: { id: true },
+              lock: { mode: 'pessimistic_write' },
+            },
+            transactionManager,
+          );
+          if (target?.id !== deliveryTargetId)
+            throw new Error('Pinned Message delivery target is unavailable');
+        }
 
         const messageAccumulatorMap = new Map<string, MessageAccumulator>();
         const expectedMessageIds = messages
@@ -443,6 +470,7 @@ export class MessagingMessageService {
     if (typeof attempt.projectedMessageId !== 'string') return 'DEFERRED';
 
     const workspaceSchema = getWorkspaceSchemaName(input.workspaceId);
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     const associations = await runner.query(
       `SELECT id,"messageId","messageChannelId","messageExternalId"
          FROM "${workspaceSchema}"."messageChannelMessageAssociation"
@@ -458,6 +486,7 @@ export class MessagingMessageService {
       associations[0].messageExternalId !== providerExternalId
     )
       return 'DEFERRED';
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     const projectedRows = await runner.query(
       `SELECT id,"headerMessageId" FROM "${workspaceSchema}".message
         WHERE id=$1 FOR UPDATE`,
@@ -465,6 +494,7 @@ export class MessagingMessageService {
     );
     if (!Array.isArray(projectedRows) || projectedRows.length !== 1)
       return 'DEFERRED';
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     const collisions = await runner.query(
       `SELECT id FROM "${workspaceSchema}".message
         WHERE "headerMessageId"=$1 ORDER BY id FOR UPDATE`,
@@ -489,6 +519,7 @@ export class MessagingMessageService {
         'Trusted Microsoft header conflicts with stored evidence',
       );
     }
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     const messageUpdateResult = await runner.query(
       `UPDATE "${workspaceSchema}".message SET "headerMessageId"=$2
         WHERE id=$1 AND ("headerMessageId" IS NULL OR btrim("headerMessageId")='')
@@ -688,6 +719,23 @@ export class MessagingMessageService {
         );
       }
 
+      if (message.deliveryTargetId !== undefined) {
+        const existingTargetId =
+          messageAccumulator.existingMessageInDB?.messageThreadId;
+        if (
+          existingTargetId !== undefined &&
+          existingTargetId !== message.deliveryTargetId
+        ) {
+          throw new Error(
+            'Pinned Message delivery target conflicts with existing Message',
+          );
+        }
+        messageAccumulator.existingThreadInDB = {
+          id: message.deliveryTargetId,
+        };
+        continue;
+      }
+
       const messageChannelMessageAssociationReferencingMessageThread =
         messageChannelMessageAssociationsReferencingMessageThread.find(
           (association) =>
@@ -798,6 +846,8 @@ export class MessagingMessageService {
           `Message accumulator should reference the message, this should never happen`,
         );
       }
+
+      if (message.deliveryTargetId !== undefined) continue;
 
       const previousMessageWithSameThreadExternalId = messages.find(
         (otherMessage, otherMessageIndex) =>

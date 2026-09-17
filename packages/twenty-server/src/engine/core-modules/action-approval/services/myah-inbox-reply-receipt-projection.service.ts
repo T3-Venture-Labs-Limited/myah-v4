@@ -57,6 +57,11 @@ export class MyahInboxReplyReceiptProjectionService {
       throw new Error('The sent Inbox Message is unavailable for projection');
     }
     const schemaName = getWorkspaceSchemaName(input.workspaceId);
+    // SQL identifiers cannot be parameters; only the generated base36 workspace
+    // schema is allowed. Every record/provider value below remains parameterized.
+    if (!/^workspace_[a-z0-9]+$/.test(schemaName)) {
+      throw new Error('Invalid workspace schema');
+    }
     const providerMessageId = input.providerMessageId;
     const binding = this.toInboxProjectionBinding(input);
 
@@ -72,6 +77,7 @@ export class MyahInboxReplyReceiptProjectionService {
         manager,
         schemaName,
         input.draftId,
+        input,
       );
       const sentMessages = await this.findSentInboxMessages(
         manager,
@@ -106,7 +112,7 @@ export class MyahInboxReplyReceiptProjectionService {
       const { canonicalGraph } = authority;
 
       if (
-        canonicalGraph.messageThreadId !== input.draftId ||
+        canonicalGraph.messageThreadId !== this.deliveryTargetId(input) ||
         canonicalGraph.draftRevision !== currentDraft.myahReplyDraftRevision ||
         currentDraft.myahReplyDraftBody === null
       ) {
@@ -152,6 +158,12 @@ export class MyahInboxReplyReceiptProjectionService {
             parentThreadExternalId:
               canonicalGraph.providerThreadExternalId ?? undefined,
             workspaceId: input.workspaceId,
+            ...(input.actionVersion === 2
+              ? {
+                  deliveryTargetId:
+                    input.myahReplyContextSnapshot.deliveryTargetId,
+                }
+              : {}),
           });
 
         if (
@@ -187,6 +199,29 @@ export class MyahInboxReplyReceiptProjectionService {
         throw new Error('The sent Inbox Message is unavailable for projection');
       }
 
+      if (input.actionVersion === 2) {
+        const [cleared, affected] = await manager.query<
+          [{ id: string }[], number]
+        >(
+          `UPDATE core."myahInboxReplyContextDraft"
+           SET "bodyMarkdown" = NULL, "bodyBlocknote" = NULL,
+               "revision" = "revision" + 1, "updatedAt" = NOW()
+           WHERE "id" = $1 AND "revision" = $2 AND "workspaceId" = $3
+             AND "bodyMarkdown" IS NOT NULL RETURNING "id"`,
+          [
+            input.myahReplyContextSnapshot.draftId,
+            canonicalGraph.draftRevision,
+            input.workspaceId,
+          ],
+        );
+        if (affected !== 1 || cleared.length !== 1) {
+          throw new Error(
+            'The approved Inbox reply is unavailable for projection',
+          );
+        }
+        return;
+      }
+
       const [cleared] = await manager.query<[{ id: string }[], number]>(
         `UPDATE "${schemaName}"."messageThread"
           SET
@@ -212,9 +247,9 @@ export class MyahInboxReplyReceiptProjectionService {
     input: InboxProjectionInput,
   ): MyahInboxReplyExpectedActionBindingWithWorkspace {
     if (
-      input.actionVersion !== 1 ||
+      ![1, 2].includes(input.actionVersion) ||
       !isNonEmptyString(input.draftId) ||
-      !isNonEmptyString(input.threadId) ||
+      (input.actionVersion === 1 && !isNonEmptyString(input.threadId)) ||
       !isNonEmptyString(input.contentDigest) ||
       !isNonEmptyString(input.recipientFingerprint) ||
       !isNonEmptyString(input.sendingAccountFingerprint) ||
@@ -224,6 +259,25 @@ export class MyahInboxReplyReceiptProjectionService {
       throw new Error('The approved Inbox reply is unavailable for projection');
     }
 
+    if (input.actionVersion === 2) {
+      const snapshot = input.myahReplyContextSnapshot;
+      const validForm =
+        input.threadId !== null
+          ? input.interactionContextType === null &&
+            input.interactionContextId === null
+          : input.interactionContextType === 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT' &&
+            input.interactionContextId === input.draftId;
+      if (
+        !validForm ||
+        snapshot?.channel !== 'EMAIL' ||
+        snapshot.draftId !== input.draftId
+      ) {
+        throw new Error(
+          'The approved Inbox reply is unavailable for projection',
+        );
+      }
+      return input;
+    }
     return {
       workspaceId: input.workspaceId,
       actionName: input.actionName,
@@ -269,8 +323,8 @@ export class MyahInboxReplyReceiptProjectionService {
     const exactEvidence = [
       {
         objectMetadataId: messageThreadMetadataId,
-        recordId: input.draftId,
-        role: 'draft',
+        recordId: this.deliveryTargetId(input),
+        role: input.actionVersion === 2 ? 'delivery_target' : 'draft',
       },
       {
         objectMetadataId: messageMetadataId,
@@ -298,7 +352,7 @@ export class MyahInboxReplyReceiptProjectionService {
             evidenceLink.role === expected.role &&
             evidenceLink.objectMetadataId === expected.objectMetadataId &&
             evidenceLink.recordId ===
-              (expected.role === 'draft'
+              (expected.role !== 'thread_parent'
                 ? expected.recordId
                 : parentEvidence.recordId),
         ),
@@ -314,10 +368,48 @@ export class MyahInboxReplyReceiptProjectionService {
     manager: EntityManager,
     schemaName: string,
     messageThreadId: string,
+    input: InboxProjectionInput,
   ): Promise<{
     myahReplyDraftBody: MyahInboxReplyDraft | null;
     myahReplyDraftRevision: number;
   }> {
+    if (input.actionVersion === 2) {
+      const snapshot = input.myahReplyContextSnapshot;
+      const [draft] = await manager.query<
+        {
+          myahReplyDraftBodyMarkdown: string | null;
+          myahReplyDraftBodyBlocknote: string | null;
+          myahReplyDraftRevision: number;
+        }[]
+      >(
+        `SELECT "bodyMarkdown" AS "myahReplyDraftBodyMarkdown", "bodyBlocknote" AS "myahReplyDraftBodyBlocknote",
+                  "revision" AS "myahReplyDraftRevision"
+           FROM core."myahInboxReplyContextDraft"
+           WHERE "id" = $1 AND "workspaceId" = $2 AND "channel" = 'EMAIL'
+             AND "deliveryTargetId" = $3 AND "contactAnchorKind" = $4 AND "contactAnchorId" = $5
+             AND "contextKind" = $6 AND "campaignId" IS NOT DISTINCT FROM $7::uuid`,
+        [
+          snapshot.draftId,
+          input.workspaceId,
+          snapshot.deliveryTargetId,
+          snapshot.contactAnchor.kind,
+          snapshot.contactAnchor.id,
+          snapshot.replyContext.kind,
+          snapshot.replyContext.kind === 'CAMPAIGN'
+            ? snapshot.replyContext.campaignId
+            : null,
+        ],
+      );
+      if (!draft || !Number.isInteger(draft.myahReplyDraftRevision)) {
+        throw new Error(
+          'The approved Inbox reply is unavailable for projection',
+        );
+      }
+      return {
+        myahReplyDraftBody: normalizeMyahInboxReplyDraft(draft),
+        myahReplyDraftRevision: draft.myahReplyDraftRevision,
+      };
+    }
     const [draft] = await manager.query<
       {
         myahReplyDraftBodyMarkdown: string | null;
@@ -373,6 +465,11 @@ export class MyahInboxReplyReceiptProjectionService {
     providerExternalMessageId: string | null,
     parentMessageId: string,
   ): Promise<SentInboxMessageRow[]> {
+    // The only interpolated identifier is a base36 workspace schema; provider
+    // identifiers and evidence IDs are bound separately as query parameters.
+    if (!/^workspace_[a-z0-9]+$/.test(schemaName)) {
+      throw new Error('Invalid workspace schema');
+    }
     return manager.query<SentInboxMessageRow[]>(
       `SELECT
         message."id",
@@ -405,6 +502,12 @@ export class MyahInboxReplyReceiptProjectionService {
     );
   }
 
+  private deliveryTargetId(input: InboxProjectionInput): string {
+    return input.actionVersion === 2
+      ? input.myahReplyContextSnapshot.deliveryTargetId
+      : input.draftId;
+  }
+
   private isMatchingSentInboxMessage(
     message: SentInboxMessageRow,
     input: InboxProjectionInput,
@@ -413,7 +516,7 @@ export class MyahInboxReplyReceiptProjectionService {
   ): boolean {
     return (
       isNonEmptyString(message.id) &&
-      message.messageThreadId === input.draftId &&
+      message.messageThreadId === this.deliveryTargetId(input) &&
       isNonEmptyString(message.messageChannelId) &&
       isNonEmptyString(message.connectedAccountId) &&
       message.subject !== null &&
@@ -436,7 +539,7 @@ export class MyahInboxReplyReceiptProjectionService {
         JSON.stringify([
           approvedRevision,
           message.parentHeaderMessageId,
-          input.draftId,
+          this.deliveryTargetId(input),
           message.parentMessageId,
           message.parentAssociationDirection,
           message.parentThreadExternalId,
@@ -445,6 +548,9 @@ export class MyahInboxReplyReceiptProjectionService {
           message.messageChannelId,
           message.senderEmail,
           message.senderDisplayName,
+          ...(input.actionVersion === 2
+            ? [input.myahReplyContextSnapshot.contextFingerprint]
+            : []),
         ]),
       ) === input.actionContextFingerprint
     );

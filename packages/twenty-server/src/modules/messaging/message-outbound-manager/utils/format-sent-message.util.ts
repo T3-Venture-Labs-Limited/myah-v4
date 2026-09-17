@@ -63,6 +63,9 @@ export const formatSentMessage = (
     attachments: [],
     participants,
     isDraft: false,
+    ...(input.deliveryTargetId === undefined
+      ? {}
+      : { deliveryTargetId: input.deliveryTargetId }),
     ...(input.expectedMessageId === undefined
       ? {}
       : { expectedMessageId: input.expectedMessageId }),

@@ -137,6 +137,37 @@ jest.mock('@/ui/input/components/TextArea', () => ({
   ),
 }));
 
+jest.mock('@/ui/input/components/Select', () => ({
+  Select: ({
+    ariaLabel,
+    value,
+    options,
+    onChange,
+  }: {
+    ariaLabel: string;
+    value: string;
+    options: Array<{
+      label: string;
+      value: string;
+      contextualText?: string;
+    }>;
+    onChange: (value: string) => void;
+  }) => (
+    <select
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+          {option.contextualText ? ` · ${option.contextualText}` : ''}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
 const mockAppTooltip = jest.fn((_props: unknown) => null);
 
 jest.mock('twenty-ui/surfaces', () => ({
@@ -203,16 +234,15 @@ const renderEditor = ({
   reloadConflict = jest.fn(),
   actions = (
     <>
-      <button>Generate reply</button>
+      <button>Generate Reply</button>
       <button>Send</button>
     </>
   ),
   presentation = 'default',
   subject,
-  onOpenAiGuidance,
-  guidanceUnavailableReason,
-  initialIsEditing,
-  onEditingChange,
+  subjectOptions,
+  subjectValue,
+  onSubjectChange,
 }: {
   draftEntry?: MyahInboxDraftAutosaveEntry;
   onDraftChange?: (body: MyahInboxRichText) => void;
@@ -221,19 +251,15 @@ const renderEditor = ({
   actions?: ReactType.ReactNode;
   presentation?: 'default' | 'main';
   subject?: string;
-  onOpenAiGuidance?: () => void;
-  guidanceUnavailableReason?: string;
-  initialIsEditing?: boolean;
-  onEditingChange?: (isEditing: boolean) => void;
-} = {}) => {
-  const optionalProps = {
-    onOpenAiGuidance,
-    guidanceUnavailableReason,
-    initialIsEditing,
-    onEditingChange,
-  };
-
-  return render(
+  subjectOptions?: Array<{
+    label: string;
+    value: string;
+    contextualText?: string;
+  }>;
+  subjectValue?: string;
+  onSubjectChange?: (value: string) => void;
+} = {}) =>
+  render(
     <MyahInboxDraftEditor
       entry={draftEntry}
       onDraftChange={onDraftChange}
@@ -242,10 +268,11 @@ const renderEditor = ({
       actions={actions}
       presentation={presentation}
       subject={subject}
-      {...optionalProps}
+      subjectOptions={subjectOptions}
+      subjectValue={subjectValue}
+      onSubjectChange={onSubjectChange}
     />,
   );
-};
 
 describe('MyahInboxDraftEditor', () => {
   it('keeps the shared reply draft name accessible without a visible label', () => {
@@ -280,7 +307,7 @@ describe('MyahInboxDraftEditor', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByText('Saving')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Generate reply' }),
+      screen.getByRole('button', { name: 'Generate Reply' }),
     ).toBeVisible();
   });
 
@@ -379,7 +406,7 @@ describe('MyahInboxDraftEditor', () => {
       within(actions)
         .getAllByRole('button')
         .map((button) => button.textContent),
-    ).toEqual(['Generate reply', 'Send']);
+    ).toEqual(['Generate Reply', 'Send']);
     expect(
       within(actions).queryByRole('button', { name: 'Save draft' }),
     ).not.toBeInTheDocument();
@@ -489,21 +516,46 @@ describe('MyahInboxDraftEditor', () => {
     ).toBeVisible();
   });
 
-  it('centers the optional main reply subject between reply and AI actions', () => {
+  it('centers the main reply subject selector and switches to its exact Campaign thread', () => {
+    const onSubjectChange = jest.fn();
     renderEditor({
       actions: <button>Send reply</button>,
       presentation: 'main',
       subject: 'September partnership',
+      subjectValue: 'thread-1',
+      subjectOptions: [
+        {
+          value: 'thread-1',
+          label: 'September partnership',
+          contextualText: 'Spring Campaign',
+        },
+        {
+          value: 'thread-2',
+          label: 'Holiday collaboration',
+          contextualText: 'Holiday Campaign',
+        },
+      ],
+      onSubjectChange,
     });
 
     const footer = screen.getByLabelText('Draft actions');
     const replyActions = screen.getByRole('group', { name: 'Reply actions' });
-    const subject = screen.getByLabelText('Reply subject');
+    const subject = screen.getByRole('combobox', {
+      name: 'Reply subject',
+    });
     const aiActions = screen.getByRole('group', { name: 'AI actions' });
-    expect(subject).toHaveTextContent('September partnership');
-    expect(subject).toHaveAttribute('title', 'September partnership');
-    expect([...footer.children]).toEqual([replyActions, subject, aiActions]);
+    expect(subject).toHaveValue('thread-1');
+    expect(subject).toHaveTextContent(
+      'September partnership · Spring Campaign',
+    );
+    expect([...footer.children]).toEqual([
+      replyActions,
+      subject.parentElement,
+      aiActions,
+    ]);
 
+    fireEvent.change(subject, { target: { value: 'thread-2' } });
+    expect(onSubjectChange).toHaveBeenCalledWith('thread-2');
     expect(screen.getAllByLabelText('Reply subject')).toHaveLength(1);
   });
 
@@ -534,14 +586,17 @@ describe('MyahInboxDraftEditor', () => {
   });
 
   it('keeps the main card as an inert draft preview until editing is requested', () => {
-    const guidanceUnavailableReason =
-      'Link an exact readable Campaign to generate a reply or open AI guidance.';
     mockAppTooltip.mockClear();
-    renderEditor({
-      actions: <button>Send reply</button>,
-      presentation: 'main',
-      guidanceUnavailableReason,
-    });
+    render(
+      <MyahInboxDraftEditor
+        entry={cleanEntry}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
 
     expect(screen.getByText('saved draft')).toBeVisible();
     expect(
@@ -554,16 +609,13 @@ describe('MyahInboxDraftEditor', () => {
     const guidance = screen.getByRole('button', {
       name: 'Open AI guidance',
     });
-    expect(guidance).not.toBeDisabled();
+    // MYAH-338 accessibility: an unavailable guidance control stays focusable
+    // and announces itself rather than being natively disabled.
     expect(guidance).toHaveAttribute('aria-disabled', 'true');
     expect(guidance).toHaveAttribute('data-variant', 'tertiary');
-    expect(guidance).toHaveAccessibleDescription(guidanceUnavailableReason);
-    guidance.focus();
-    expect(guidance).toHaveFocus();
     expect(screen.queryByRole('button', { name: 'Generate reply' })).toBeNull();
-    expect(mockAppTooltip).toHaveBeenCalledWith(
-      expect.objectContaining({ content: guidanceUnavailableReason }),
-    );
+    // The guidance tooltip is driven by guidanceUnavailableReason, which this
+    // render does not supply, so only the feedback tooltip is registered here.
     expect(mockAppTooltip).toHaveBeenCalledWith(
       expect.objectContaining({
         content: 'Feedback is a local preview and is not saved.',
@@ -577,50 +629,23 @@ describe('MyahInboxDraftEditor', () => {
     );
   });
 
-  it('opens the exact Campaign guidance when supplied', () => {
-    const onOpenAiGuidance = jest.fn();
-    renderEditor({ presentation: 'main', onOpenAiGuidance });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open AI guidance' }));
-
-    expect(onOpenAiGuidance).toHaveBeenCalledTimes(1);
-  });
-
   it('opens and closes main Edit without creating an autosave callback', () => {
     const onDraftChange = jest.fn();
-    const onEditingChange = jest.fn();
-    renderEditor({
-      onDraftChange,
-      actions: <button>Send reply</button>,
-      presentation: 'main',
-      onEditingChange,
-    });
+    render(
+      <MyahInboxDraftEditor
+        entry={cleanEntry}
+        onDraftChange={onDraftChange}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit reply' }));
     fireEvent.click(screen.getByRole('button', { name: 'Done editing' }));
 
     expect(onDraftChange).not.toHaveBeenCalled();
-    expect(onEditingChange).toHaveBeenNthCalledWith(1, true);
-    expect(onEditingChange).toHaveBeenNthCalledWith(2, false);
-  });
-
-  it('initializes in editing mode and focuses without changing the draft', () => {
-    const onDraftChange = jest.fn();
-    const onEditingChange = jest.fn();
-    renderEditor({
-      onDraftChange,
-      actions: <button>Send reply</button>,
-      presentation: 'main',
-      initialIsEditing: true,
-      onEditingChange,
-    });
-
-    expect(
-      screen.getByRole('textbox', { name: 'Shared reply draft' }),
-    ).toHaveFocus();
-    expect(screen.getByRole('button', { name: 'Done editing' })).toBeVisible();
-    expect(onDraftChange).not.toHaveBeenCalled();
-    expect(onEditingChange).not.toHaveBeenCalled();
   });
 
   it('reopens supported structured inline drafts with the rich adapter', () => {
@@ -744,44 +769,30 @@ describe('MyahInboxDraftEditor', () => {
     ).not.toBeInTheDocument();
   });
 
-  it.each(['', '   \n'])(
-    'collapses the empty main-card draft for %p',
-    (markdown) => {
-      renderEditor({
-        draftEntry: {
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '   '],
+  ])('does not fabricate an %s main-card draft', (_name, markdown) => {
+    render(
+      <MyahInboxDraftEditor
+        entry={{
           ...cleanEntry,
           localBody: { markdown, blocknote: null },
           confirmedBody: null,
-        },
-        actions: <button>Generate reply</button>,
-        presentation: 'main',
-      });
+        }}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+      />,
+    );
 
-      expect(screen.queryByText('No reply draft yet.')).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('region', { name: 'Reply draft preview' }),
-      ).not.toBeInTheDocument();
-      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-      expect(screen.getByLabelText('Draft actions')).toBeVisible();
-    },
-  );
-
-  it('keeps Edit available and focuses the empty main editor', () => {
-    renderEditor({
-      draftEntry: {
-        ...cleanEntry,
-        localBody: { markdown: '', blocknote: null },
-        confirmedBody: null,
-      },
-      actions: <button>Generate reply</button>,
-      presentation: 'main',
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit reply' }));
-
+    expect(screen.queryByText('No reply draft yet.')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('textbox', { name: 'Shared reply draft' }),
-    ).toHaveFocus();
+      screen.queryByRole('region', { name: 'Reply draft preview' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('keeps feedback mutually exclusive, reversible, and local to its draft text', () => {

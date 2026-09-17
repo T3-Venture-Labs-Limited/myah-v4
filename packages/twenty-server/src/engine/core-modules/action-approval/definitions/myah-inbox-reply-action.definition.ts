@@ -1,3 +1,18 @@
+import { MyahInboxReplyContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
+import {
+  MyahInboxReplyContextDraftService,
+  type AnchoredReplyIdentity,
+} from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-draft.service';
+import {
+  ReplyChannel,
+  ReplyContextKind,
+  type ReplyTarget,
+  type ReplyContext,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
+import {
+  decodeMyahInboxContactId,
+  encodeMyahInboxContactId,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -14,6 +29,7 @@ import { z } from 'zod';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { resolveMyahInboxReplyRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-myah-inbox-reply-recipient.util';
 import {
+  buildMyahInboxReplyContextV2ExpectedActionBinding,
   buildMyahInboxReplyExpectedActionBinding,
   matchesMyahInboxReplyBinding,
 } from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-action-binding.util';
@@ -23,6 +39,7 @@ import {
   type MyahInboxReplyActionApprovalProposal,
   type MyahInboxReplyActionAuthority,
   type MyahInboxReplyActionProposal,
+  type MyahInboxReplyDraft,
   type MyahInboxReplyExpectedActionBindingWithWorkspace,
   type MyahInboxReplyReadableDraftSnapshot,
   MyahInboxReplyUnavailableCode,
@@ -44,6 +61,7 @@ import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
+import { type MyahReplyContextSnapshot } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 
 const isValidMessageId = (value: string): boolean => {
   const match = /^<([^@<>]+)@([^@<>]+)>$/.exec(value);
@@ -60,12 +78,35 @@ const isValidMessageId = (value: string): boolean => {
   );
 };
 
-export const MyahInboxReplyActionProposalInputZodSchema = z
-  .object({
-    messageThreadId: z.string().uuid(),
-    expectedDraftRevision: z.number().int().min(0),
-  })
-  .strict();
+export const MyahInboxReplyActionProposalInputZodSchema = z.union([
+  z
+    .object({
+      messageThreadId: z.string().uuid(),
+      expectedDraftRevision: z.number().int().min(0),
+    })
+    .strict(),
+  z
+    .object({
+      target: z
+        .object({
+          channel: z.literal(ReplyChannel.EMAIL),
+          contactId: z.string().min(1).max(512),
+          threadId: z.string().uuid(),
+        })
+        .strict(),
+      replyContext: z.union([
+        z.object({ kind: z.literal(ReplyContextKind.GENERAL) }).strict(),
+        z
+          .object({
+            kind: z.literal(ReplyContextKind.CAMPAIGN),
+            campaignId: z.string().uuid(),
+          })
+          .strict(),
+      ]),
+      expectedDraftRevision: z.number().int().min(0),
+    })
+    .strict(),
+]);
 
 export type MyahInboxReplyActionProposalInput = z.infer<
   typeof MyahInboxReplyActionProposalInputZodSchema
@@ -87,6 +128,8 @@ export class MyahInboxReplyActionDefinition {
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly managedEmailCampaignEligibilityService: ManagedEmailCampaignEligibilityService,
     private readonly messagingMessageOutboundService: MessagingMessageOutboundService,
+    private readonly contextService: MyahInboxReplyContextService,
+    private readonly contextDrafts: MyahInboxReplyContextDraftService,
   ) {}
 
   async buildAuthority({
@@ -95,12 +138,14 @@ export class MyahInboxReplyActionDefinition {
     messageThreadId,
     expectedDraftRevision,
     agentChatThreadId,
+    skipProviderPreflight,
   }: {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
     messageThreadId: string;
     expectedDraftRevision?: number;
     agentChatThreadId?: string;
+    skipProviderPreflight?: boolean;
   }): Promise<MyahInboxReplyActionAuthority> {
     const graph = await this.loadCanonicalGraph({
       workspaceId,
@@ -108,6 +153,7 @@ export class MyahInboxReplyActionDefinition {
       messageThreadId,
       expectedDraftRevision,
       mode: 'execution',
+      skipProviderPreflight,
     });
 
     return this.toAuthority({
@@ -116,6 +162,166 @@ export class MyahInboxReplyActionDefinition {
       graph,
       agentChatThreadId,
     });
+  }
+
+  async readContextDraft(input: {
+    workspaceId: string;
+    initiatorUserWorkspaceId: string;
+    target: ReplyTarget;
+    replyContext: ReplyContext;
+    forAction?: boolean;
+  }) {
+    const authContext =
+      await this.authorityContextService.getInitiatorAuthContext(
+        input.workspaceId,
+        input.initiatorUserWorkspaceId,
+      );
+    const request = {
+      authContext,
+      user: authContext.user,
+      workspace: authContext.workspace,
+      workspaceMemberId: authContext.workspaceMemberId,
+      target: input.target,
+      replyContext: input.replyContext,
+      contactIdentity: decodeMyahInboxContactId(
+        input.target.contactId,
+        input.workspaceId,
+      ),
+    };
+    const resolved = input.forAction
+      ? await this.contextService.resolveForAction(request)
+      : await this.contextService.resolveForRead(request);
+    if (
+      resolved.state === 'CONTEXT_UNAVAILABLE' ||
+      input.target.channel !== ReplyChannel.EMAIL
+    ) {
+      throw new MyahInboxReplyUnavailableError(
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      );
+    }
+    const identity: AnchoredReplyIdentity = {
+      workspaceId: input.workspaceId,
+      contactAnchorKind: resolved.target.contactAnchor.kind,
+      contactAnchorId: resolved.target.contactAnchor.id,
+      channel: resolved.target.channel,
+      deliveryTargetId: resolved.target.deliveryTargetId,
+      context: resolved.selected,
+    };
+    return {
+      resolved,
+      identity,
+      draft: await this.contextDrafts.read(identity),
+    };
+  }
+
+  async buildContextAuthority(input: {
+    workspaceId: string;
+    initiatorUserWorkspaceId: string;
+    target: ReplyTarget;
+    replyContext: ReplyContext;
+    expectedDraftRevision?: number;
+    agentChatThreadId?: string;
+    skipProviderPreflight?: boolean;
+  }): Promise<MyahInboxReplyActionAuthority> {
+    const { resolved, draft } = await this.readContextDraft({
+      ...input,
+      forAction: true,
+    });
+    const effectiveFingerprint =
+      draft.reviewedContextFingerprint ?? draft.proposalContextFingerprint;
+    if (
+      !draft.draftId ||
+      !draft.body ||
+      !effectiveFingerprint ||
+      effectiveFingerprint !== resolved.contextFingerprint ||
+      !resolved.eligibilityEvidenceDigest ||
+      (input.expectedDraftRevision !== undefined &&
+        input.expectedDraftRevision !== draft.revision)
+    ) {
+      throw new MyahInboxReplyUnavailableError(
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      );
+    }
+    return this.buildContextDraftAuthority({
+      ...input,
+      messageThreadId: resolved.target.deliveryTargetId,
+      contextDraft: {
+        draftId: draft.draftId,
+        body: draft.body,
+        revision: draft.revision,
+        snapshot: {
+          schemaVersion: 1,
+          channel: 'EMAIL',
+          deliveryTargetId: resolved.target.deliveryTargetId,
+          draftId: draft.draftId,
+          replyContext: resolved.selected,
+          contactAnchor: resolved.target
+            .contactAnchor as MyahReplyContextSnapshot['contactAnchor'],
+          creatorId: resolved.target.creatorId,
+          eligibilityEvidenceDigest: resolved.eligibilityEvidenceDigest,
+          authoredContextFingerprint: draft.proposalContextFingerprint,
+          reviewedContextFingerprint: draft.reviewedContextFingerprint,
+          contextFingerprint: effectiveFingerprint,
+        },
+      },
+    });
+  }
+
+  async buildContextDraftAuthority({
+    workspaceId,
+    initiatorUserWorkspaceId,
+    messageThreadId,
+    contextDraft,
+    agentChatThreadId,
+    skipProviderPreflight,
+  }: {
+    workspaceId: string;
+    initiatorUserWorkspaceId: string;
+    messageThreadId: string;
+    contextDraft: {
+      draftId: string;
+      revision: number;
+      body: MyahInboxReplyDraft;
+      snapshot: MyahReplyContextSnapshot;
+    };
+    agentChatThreadId?: string;
+    skipProviderPreflight?: boolean;
+  }): Promise<MyahInboxReplyActionAuthority> {
+    if (
+      contextDraft.snapshot.channel !== 'EMAIL' ||
+      contextDraft.snapshot.draftId !== contextDraft.draftId ||
+      contextDraft.snapshot.deliveryTargetId !== messageThreadId
+    ) {
+      throw new MyahInboxReplyUnavailableError(
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      );
+    }
+    const graph = await this.loadCanonicalGraph({
+      workspaceId,
+      initiatorUserWorkspaceId,
+      messageThreadId,
+      mode: 'execution',
+      skipProviderPreflight,
+      draftOverride: {
+        body: contextDraft.body,
+        revision: contextDraft.revision,
+      },
+    });
+    const evidenceObjectMetadataIds =
+      await this.authorityContextService.resolveEvidenceObjectMetadataIds(
+        workspaceId,
+      );
+    return {
+      canonicalGraph: graph,
+      expectedActionBinding: buildMyahInboxReplyContextV2ExpectedActionBinding({
+        workspaceId,
+        initiatorUserWorkspaceId,
+        graph,
+        evidenceObjectMetadataIds,
+        snapshot: contextDraft.snapshot,
+        agentChatThreadId,
+      }),
+    };
   }
 
   async propose({
@@ -129,13 +335,21 @@ export class MyahInboxReplyActionDefinition {
     agentChatThreadId: string;
     input: MyahInboxReplyActionProposalInput;
   }): Promise<MyahInboxReplyActionProposal> {
-    const authority = await this.buildAuthority({
-      workspaceId,
-      initiatorUserWorkspaceId,
-      messageThreadId: input.messageThreadId,
-      expectedDraftRevision: input.expectedDraftRevision,
-      agentChatThreadId,
-    });
+    const authority =
+      'target' in input
+        ? await this.buildContextAuthority({
+            workspaceId,
+            initiatorUserWorkspaceId,
+            agentChatThreadId,
+            ...input,
+          })
+        : await this.buildAuthority({
+            workspaceId,
+            initiatorUserWorkspaceId,
+            messageThreadId: input.messageThreadId,
+            expectedDraftRevision: input.expectedDraftRevision,
+            agentChatThreadId,
+          });
     const graph = authority.canonicalGraph;
     const targetLabel = `${graph.recipientLabel} <${graph.recipientEmail}>`;
 
@@ -168,6 +382,35 @@ export class MyahInboxReplyActionDefinition {
     });
   }
 
+  private snapshotSelection(
+    workspaceId: string,
+    snapshot: MyahReplyContextSnapshot,
+  ) {
+    return {
+      target: {
+        channel: ReplyChannel.EMAIL as const,
+        threadId: snapshot.deliveryTargetId,
+        contactId: encodeMyahInboxContactId({
+          workspaceId,
+          identity: {
+            kind:
+              snapshot.contactAnchor.kind === 'CREATOR'
+                ? 'creator'
+                : 'email-thread',
+            recordId: snapshot.contactAnchor.id,
+          },
+        }),
+      },
+      replyContext:
+        snapshot.replyContext.kind === 'CAMPAIGN'
+          ? {
+              kind: ReplyContextKind.CAMPAIGN as const,
+              campaignId: snapshot.replyContext.campaignId,
+            }
+          : { kind: ReplyContextKind.GENERAL as const },
+    };
+  }
+
   async getProposal({
     workspaceId,
     binding,
@@ -175,6 +418,16 @@ export class MyahInboxReplyActionDefinition {
     workspaceId: string;
     binding: ActionApprovalBindingEntity;
   }): Promise<MyahInboxReplyActionApprovalProposal> {
+    if (binding.actionVersion === 2 && binding.myahReplyContextSnapshot) {
+      await this.readContextDraft({
+        workspaceId,
+        initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+        ...this.snapshotSelection(
+          workspaceId,
+          binding.myahReplyContextSnapshot,
+        ),
+      });
+    }
     const authority = await this.rebuildProjectionAuthority({
       workspaceId,
       binding: this.toExpectedBinding(binding),
@@ -183,7 +436,7 @@ export class MyahInboxReplyActionDefinition {
 
     return {
       action: 'send_inbox_reply',
-      actionVersion: 1,
+      actionVersion: binding.actionVersion as 1 | 2,
       body: graph.draftBody.markdown,
       recipientLabel: `${graph.recipientLabel} <${graph.recipientEmail}>`,
       sendingAccountLabel: this.toSendingAccountLabel(graph),
@@ -205,11 +458,18 @@ export class MyahInboxReplyActionDefinition {
   async rebuildExecutionAuthority({
     workspaceId,
     binding,
+    skipProviderPreflight,
   }: {
     workspaceId: string;
     binding: MyahInboxReplyExpectedActionBindingWithWorkspace;
+    skipProviderPreflight?: boolean;
   }): Promise<MyahInboxReplyActionAuthority> {
-    return this.rebuildAuthority({ workspaceId, binding, mode: 'execution' });
+    return this.rebuildAuthority({
+      workspaceId,
+      binding,
+      mode: 'execution',
+      skipProviderPreflight,
+    });
   }
 
   async rebuildProjectionAuthority({
@@ -226,10 +486,12 @@ export class MyahInboxReplyActionDefinition {
     workspaceId,
     binding,
     mode,
+    skipProviderPreflight,
   }: {
     workspaceId: string;
     binding: MyahInboxReplyExpectedActionBindingWithWorkspace;
     mode: LoadMode;
+    skipProviderPreflight?: boolean;
   }): Promise<MyahInboxReplyActionAuthority> {
     if (
       binding.actionName !== this.actionName ||
@@ -238,6 +500,103 @@ export class MyahInboxReplyActionDefinition {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
       );
+    }
+    if (binding.actionVersion === 2) {
+      const snapshot = binding.myahReplyContextSnapshot;
+      const validForm =
+        binding.threadId !== null
+          ? binding.interactionContextType === null &&
+            binding.interactionContextId === null
+          : binding.interactionContextType ===
+              'MYAH_INBOX_EMAIL_CONTEXT_DRAFT' &&
+            binding.interactionContextId === binding.draftId;
+      if (
+        !validForm ||
+        snapshot.channel !== 'EMAIL' ||
+        snapshot.draftId !== binding.draftId
+      ) {
+        throw new MyahInboxReplyUnavailableError(
+          MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+        );
+      }
+      let authority: MyahInboxReplyActionAuthority;
+      if (mode === 'execution') {
+        authority = await this.buildContextAuthority({
+          workspaceId,
+          initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+          ...this.snapshotSelection(workspaceId, snapshot),
+          agentChatThreadId: binding.threadId ?? undefined,
+          skipProviderPreflight,
+        });
+      } else {
+        // Provider acceptance is immutable: Campaign changes must never un-send it.
+        const draft = await this.contextDrafts.read({
+          workspaceId,
+          channel: ReplyChannel.EMAIL,
+          deliveryTargetId: snapshot.deliveryTargetId,
+          contactAnchorKind: snapshot.contactAnchor.kind,
+          contactAnchorId: snapshot.contactAnchor.id,
+          context:
+            snapshot.replyContext.kind === 'CAMPAIGN'
+              ? {
+                  kind: ReplyContextKind.CAMPAIGN,
+                  campaignId: snapshot.replyContext.campaignId,
+                }
+              : { kind: ReplyContextKind.GENERAL },
+        });
+        const parentMessageId = binding.evidenceLinks.find(
+          (link) => link.role === 'thread_parent',
+        )?.recordId;
+        if (
+          draft.draftId !== snapshot.draftId ||
+          !draft.body ||
+          !parentMessageId
+        ) {
+          throw new MyahInboxReplyUnavailableError(
+            MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+          );
+        }
+        const graph = await this.loadCanonicalGraph({
+          workspaceId,
+          initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+          messageThreadId: snapshot.deliveryTargetId,
+          mode,
+          parentMessageId,
+          draftOverride: { body: draft.body, revision: draft.revision },
+        });
+        authority = {
+          canonicalGraph: graph,
+          expectedActionBinding:
+            buildMyahInboxReplyContextV2ExpectedActionBinding({
+              workspaceId,
+              initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+              graph,
+              snapshot,
+              agentChatThreadId: binding.threadId ?? undefined,
+              evidenceObjectMetadataIds:
+                await this.authorityContextService.resolveEvidenceObjectMetadataIds(
+                  workspaceId,
+                ),
+            }),
+        };
+      }
+      if (
+        !matchesMyahInboxReplyBinding(
+          mode === 'projection'
+            ? {
+                ...binding,
+                sendingAccountFingerprint:
+                  authority.expectedActionBinding.sendingAccountFingerprint,
+              }
+            : binding,
+          authority.expectedActionBinding,
+        )
+      ) {
+        throw new MyahInboxReplyUnavailableError(
+          MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+        );
+      }
+      return authority;
     }
     const projectionParentMessageId =
       mode === 'projection'
@@ -255,13 +614,14 @@ export class MyahInboxReplyActionDefinition {
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
       messageThreadId: binding.draftId,
       mode,
+      skipProviderPreflight,
       parentMessageId: projectionParentMessageId,
     });
     const authority = await this.toAuthority({
       workspaceId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
       graph,
-      agentChatThreadId: binding.threadId,
+      agentChatThreadId: binding.threadId ?? undefined,
     });
 
     const bindingForComparison =
@@ -321,6 +681,8 @@ export class MyahInboxReplyActionDefinition {
     expectedDraftRevision,
     parentMessageId,
     mode,
+    draftOverride,
+    skipProviderPreflight,
   }: {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
@@ -328,6 +690,8 @@ export class MyahInboxReplyActionDefinition {
     expectedDraftRevision?: number;
     mode: LoadMode;
     parentMessageId?: string;
+    draftOverride?: { body: MyahInboxReplyDraft; revision: number };
+    skipProviderPreflight?: boolean;
   }): Promise<CanonicalMyahInboxReplyGraph> {
     const source = await this.authorityContextService.loadAuthoritySource({
       workspaceId,
@@ -337,9 +701,11 @@ export class MyahInboxReplyActionDefinition {
       parentMessageId,
     });
 
-    const draftBody = source.messageThread
-      ? normalizeMyahInboxReplyDraft(source.messageThread)
-      : null;
+    const draftBody =
+      draftOverride?.body ??
+      (source.messageThread
+        ? normalizeMyahInboxReplyDraft(source.messageThread)
+        : null);
     const parentMessage = source.parentMessage;
     const parentSubject = parentMessage?.subject?.trim() ?? '';
 
@@ -349,7 +715,8 @@ export class MyahInboxReplyActionDefinition {
       draftBody === null ||
       draftBody.markdown.trim().length === 0 ||
       (expectedDraftRevision !== undefined &&
-        source.messageThread.myahReplyDraftRevision !==
+        (draftOverride?.revision ??
+          source.messageThread.myahReplyDraftRevision) !==
           expectedDraftRevision) ||
       !parentMessage ||
       parentMessage.id === undefined ||
@@ -473,9 +840,11 @@ export class MyahInboxReplyActionDefinition {
       }
 
       try {
-        await this.messagingMessageOutboundService.assertConnectedAccountSendable(
-          account,
-        );
+        if (!skipProviderPreflight) {
+          await this.messagingMessageOutboundService.assertConnectedAccountSendable(
+            account,
+          );
+        }
       } catch {
         throw new MyahInboxReplyUnavailableError(
           MyahInboxReplyUnavailableCode.MAILBOX_INELIGIBLE,
@@ -523,7 +892,8 @@ export class MyahInboxReplyActionDefinition {
 
     return {
       messageThreadId,
-      draftRevision: source.messageThread.myahReplyDraftRevision,
+      draftRevision:
+        draftOverride?.revision ?? source.messageThread.myahReplyDraftRevision,
       draftBody: {
         markdown: draftBody.markdown,
         blocknote: draftBody.blocknote,
@@ -556,11 +926,11 @@ export class MyahInboxReplyActionDefinition {
   ): MyahInboxReplyExpectedActionBindingWithWorkspace {
     if (
       binding.actionName !== this.actionName ||
-      binding.actionVersion !== this.actionVersion ||
+      ![1, 2].includes(binding.actionVersion) ||
       binding.recipientFingerprint === null ||
       binding.sendingAccountFingerprint === null ||
       binding.actionContextFingerprint === null ||
-      binding.threadId === null ||
+      (binding.actionVersion === 1 && binding.threadId === null) ||
       !Array.isArray(binding.evidenceLinks)
     ) {
       throw new MyahInboxReplyUnavailableError(
@@ -568,6 +938,33 @@ export class MyahInboxReplyActionDefinition {
       );
     }
 
+    if (binding.actionVersion === 2) {
+      if (
+        !binding.myahReplyContextSnapshot ||
+        (binding.interactionContextType !== null &&
+          binding.interactionContextType !== 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT')
+      ) {
+        throw new MyahInboxReplyUnavailableError(
+          MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+        );
+      }
+      return {
+        workspaceId: binding.workspaceId,
+        initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+        actionName: 'send_inbox_reply',
+        actionVersion: 2,
+        draftId: binding.draftId,
+        contentDigest: binding.contentDigest,
+        recipientFingerprint: binding.recipientFingerprint,
+        sendingAccountFingerprint: binding.sendingAccountFingerprint,
+        actionContextFingerprint: binding.actionContextFingerprint,
+        threadId: binding.threadId,
+        interactionContextType: binding.interactionContextType,
+        interactionContextId: binding.interactionContextId,
+        myahReplyContextSnapshot: binding.myahReplyContextSnapshot,
+        evidenceLinks: binding.evidenceLinks,
+      };
+    }
     return {
       workspaceId: binding.workspaceId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
@@ -578,7 +975,7 @@ export class MyahInboxReplyActionDefinition {
       recipientFingerprint: binding.recipientFingerprint,
       sendingAccountFingerprint: binding.sendingAccountFingerprint,
       actionContextFingerprint: binding.actionContextFingerprint,
-      threadId: binding.threadId,
+      threadId: binding.threadId!,
       evidenceLinks: binding.evidenceLinks.map(
         ({ objectMetadataId, recordId, role }) => ({
           objectMetadataId,

@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 
 import { type ToolSet } from 'ai';
 import { z } from 'zod';
@@ -176,6 +176,29 @@ describe('MyahInboxToolWorkspaceService', () => {
       threadId: explicitThreadId,
       inboxState: MyahInboxState.CLOSED,
     });
+  });
+
+  it('propagates the compatibility rejection for the threadId-only legacy draft tool path', async () => {
+    const { service, mutationService } = createService();
+    const toolSet = service.generateMyahInboxTools(context as never);
+    mutationService.saveMyahInboxDraft.mockRejectedValue(
+      new ConflictException(
+        'Email reply drafts require a refreshed contextual reply flow',
+      ),
+    );
+
+    await expect(
+      executeTool(toolSet, 'save_myah_inbox_reply_draft', {
+        messageThreadId: threadId,
+        expectedRevision: 2,
+        body: { markdown: 'legacy draft', blocknote: null },
+      }),
+    ).rejects.toEqual(
+      new ConflictException(
+        'Email reply drafts require a refreshed contextual reply flow',
+      ),
+    );
+    expect(mutationService.saveMyahInboxDraft).toHaveBeenCalledTimes(1);
   });
 
   it('requires explicit IDs for mutations and reply-send reads even with a selection', async () => {

@@ -1,6 +1,9 @@
 import { type ReactNode } from 'react';
 import { Button } from 'twenty-ui/input';
-import { MyahInboxEmailOutreachHistory } from '@/myah/inbox/components/MyahInboxEmailOutreachHistory';
+import {
+  getMyahInboxOutreachCards,
+  MyahInboxEmailOutreachHistory,
+} from '@/myah/inbox/components/MyahInboxEmailOutreachHistory';
 
 import {
   MYAH_INBOX_EMAIL_PANEL_ID,
@@ -76,10 +79,7 @@ export type MyahInboxContactConversationProps = {
   selectionChannel: MyahInboxChannel;
   selectedEmailThreadId: string | null;
   email: ReturnType<typeof useMyahInboxEmailHistory>;
-  inlineThreadId: string | null;
-  inlineThread: ReturnType<typeof useMyahInboxSelectedEmailThread>;
   latestThreadId: string | null;
-  onCloseInline: () => void;
   onSwitchToLatest: () => void;
   selectedThread: ReturnType<typeof useMyahInboxSelectedEmailThread>;
   onSelectChannel: (channel: MyahInboxChannel) => void;
@@ -100,10 +100,7 @@ export const MyahInboxContactConversation = ({
   selectionChannel,
   selectedEmailThreadId,
   email,
-  inlineThreadId,
-  inlineThread,
   latestThreadId,
-  onCloseInline,
   onSwitchToLatest,
   selectedThread,
   onSelectChannel,
@@ -119,42 +116,41 @@ export const MyahInboxContactConversation = ({
     contact.creator && contact.instagramUsername,
   );
 
-  const availableIds = new Set([
-    ...email.segments.flatMap((segment) =>
-      segment.pages.flatMap((page) => page.cards.map((card) => card.threadId)),
-    ),
-    ...email.windows.map((window) => window.threadId),
-    ...email.detachedCards.map(({ card }) => card.threadId),
-  ]);
-  const renderEditor = (
-    target: typeof selectedThread,
-    targetId: string | null,
-    presentation: 'default' | 'main' = 'default',
-  ) =>
-    target.loading ? (
+  const replyTargets = getMyahInboxOutreachCards(email).map(
+    ({ threadId, subject, campaignLabel }) => ({
+      threadId,
+      subject: subject ?? null,
+      campaignLabel: campaignLabel ?? null,
+    }),
+  );
+  const availableIds = new Set(replyTargets.map(({ threadId }) => threadId));
+  const renderMainEditor = () =>
+    renderEmailReplyWorkspace ? (
+      renderEmailReplyWorkspace()
+    ) : selectedThread.loading ? (
       <StyledStatus role="status">Loading reply target</StyledStatus>
-    ) : target.error ? (
-      <StyledStatus role="alert">{target.error.message}</StyledStatus>
-    ) : target.thread && target.thread.id === targetId ? (
+    ) : selectedThread.error ? (
+      <StyledStatus role="alert">{selectedThread.error.message}</StyledStatus>
+    ) : selectedThread.thread &&
+      selectedThread.thread.id === selectedEmailThreadId ? (
       <MyahInboxReplyWorkspace
-        key={`${workspaceId}:${targetId}`}
-        thread={target.thread}
+        key={`${workspaceId}:${selectedEmailThreadId}`}
+        thread={selectedThread.thread}
+        contactId={contact.id}
         scopeGeneration={draftScopeGeneration}
         targetAvailable={
           draftScopeAvailable &&
           email.status === 'ready' &&
-          availableIds.has(targetId)
+          availableIds.has(selectedThread.thread.id)
         }
+        replyTargets={replyTargets}
+        onReplyTargetChange={onReplyToCard}
         onSent={onActivity}
-        presentation={presentation}
+        presentation="main"
       />
     ) : (
       <StyledStatus>Latest Email conversation is unavailable.</StyledStatus>
     );
-  const renderMainEditor = () =>
-    renderEmailReplyWorkspace
-      ? renderEmailReplyWorkspace()
-      : renderEditor(selectedThread, selectedEmailThreadId, 'main');
 
   const StyledActiveConversation =
     selectionChannel === 'EMAIL' ? StyledEmailConversation : StyledConversation;
@@ -210,21 +206,6 @@ export const MyahInboxContactConversation = ({
           <MyahInboxEmailOutreachHistory
             history={email}
             onReply={onReplyToCard}
-            inlineThreadId={inlineThreadId}
-            inlineEditor={
-              <section aria-label="Inline reply" tabIndex={-1}>
-                <p>
-                  Replying to{' '}
-                  {getMyahInboxSafeEmailSubject(
-                    inlineThread.thread?.subject ?? null,
-                  )}
-                </p>
-                <Button title="Close inline reply" onClick={onCloseInline} />
-                {inlineThreadId === selectedEmailThreadId
-                  ? renderEditor(selectedThread, selectedEmailThreadId)
-                  : renderEditor(inlineThread, inlineThreadId)}
-              </section>
-            }
           />
           {latestThreadId &&
             selectedEmailThreadId &&
@@ -239,14 +220,7 @@ export const MyahInboxContactConversation = ({
               </div>
             )}
           <StyledReply aria-label="Main reply" tabIndex={-1}>
-            {inlineThreadId && inlineThreadId === selectedEmailThreadId ? (
-              <div role="status">
-                Editing this draft inline
-                <Button title="Return to bottom" onClick={onCloseInline} />
-              </div>
-            ) : (
-              renderMainEditor()
-            )}
+            {renderMainEditor()}
           </StyledReply>
         </StyledEmailPanel>
       ) : (

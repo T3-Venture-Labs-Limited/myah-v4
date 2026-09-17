@@ -39,6 +39,17 @@ export class MyahInboxReplyAuthorityContextService {
     private readonly workspaceCacheService: WorkspaceCacheService,
   ) {}
 
+  async getInitiatorAuthContext(
+    workspaceId: string,
+    initiatorUserWorkspaceId: string,
+  ) {
+    const workspace = await this.workspaceRepository.findOneBy({
+      id: workspaceId,
+    });
+    if (!workspace) throw this.threadUnavailable();
+    return this.buildInitiatorAuthContext(workspace, initiatorUserWorkspaceId);
+  }
+
   async getReadableDraftSnapshot({
     workspaceId,
     initiatorUserWorkspaceId,
@@ -218,8 +229,12 @@ export class MyahInboxReplyAuthorityContextService {
     }
 
     return buildUserAuthContext({
+      // SAFETY: the existing auth adapter uses the loaded workspace identity; entity
+      // and cache flat types differ in timestamp representation, not identity fields.
       workspace: workspace as unknown as FlatWorkspace,
       userWorkspaceId,
+      // SAFETY: the relation was loaded and checked above; this preserves the
+      // existing entity-to-auth user adapter without weakening the membership check.
       user: userWorkspace.user as unknown as FlatUser,
       workspaceMemberId,
       workspaceMember,

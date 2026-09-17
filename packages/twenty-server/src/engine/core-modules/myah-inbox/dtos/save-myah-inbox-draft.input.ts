@@ -5,13 +5,13 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
 
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { MyahInboxReplyDraftInput } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import {
   MYAH_INBOX_MAX_DRAFT_BLOCKNOTE_LENGTH,
   MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH,
@@ -32,15 +32,11 @@ export class MyahInboxRichTextInput {
 }
 
 @InputType('SaveMyahInboxDraftInput')
-export class SaveMyahInboxDraftInput {
-  @Field(() => UUIDScalarType, { nullable: true })
+export class SaveMyahInboxDraftInput extends MyahInboxReplyDraftInput {
+  @Field(() => String, { nullable: true })
   @IsOptional()
-  @IsUUID()
-  expectedWorkspaceId?: string | null;
-
-  @Field(() => UUIDScalarType)
-  @IsUUID()
-  threadId: string;
+  @Matches(/^[a-f0-9]{64}$/)
+  proposalContextFingerprint?: string | null;
 
   @Field(() => Int)
   @IsInt()
@@ -52,4 +48,16 @@ export class SaveMyahInboxDraftInput {
   @ValidateNested()
   @Type(() => MyahInboxRichTextInput)
   body: MyahInboxRichTextInput | null;
+}
+
+@InputType('ReviewMyahInboxReplyContextInput')
+export class ReviewMyahInboxReplyContextInput extends MyahInboxReplyDraftInput {
+  @Field(() => Int)
+  @IsInt()
+  @Min(0)
+  expectedDraftRevision: number;
+
+  @Field(() => String)
+  @Matches(/^[a-f0-9]{64}$/)
+  expectedContextFingerprint: string;
 }

@@ -86,8 +86,21 @@ jest.mock('@/ui/layout/selectable-list/components/SelectableList', () => ({
 }));
 
 jest.mock('@/ui/layout/selectable-list/components/SelectableListItem', () => ({
-  SelectableListItem: ({ children }: { children: ReactNode }) => (
-    <>{children}</>
+  SelectableListItem: ({
+    children,
+    itemId,
+    onEnter,
+  }: {
+    children: ReactNode;
+    itemId: string;
+    onEnter: () => void;
+  }) => (
+    <div
+      data-testid={`selectable-${itemId}`}
+      onKeyDown={(event) => event.key === 'Enter' && onEnter()}
+    >
+      {children}
+    </div>
   ),
 }));
 
@@ -157,6 +170,33 @@ describe('Select', () => {
     expect(
       screen.getByRole('button', { name: 'Netherlands' }),
     ).toBeInTheDocument();
+  });
+
+  it('uses option values to distinguish keyboard targets with duplicate labels', () => {
+    const onChange = jest.fn();
+
+    render(
+      <Select
+        dropdownId="reply-subject-select"
+        ariaLabel="Reply subject"
+        value="thread-1"
+        options={[
+          { label: 'Same subject', value: 'thread-1' },
+          { label: 'Same subject', value: 'thread-2' },
+        ]}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reply subject: Same subject' }),
+    );
+    fireEvent.keyDown(screen.getByTestId('selectable-string:thread-2'), {
+      key: 'Enter',
+    });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('thread-2');
   });
 
   it('keeps the selected value as the accessible name by default', () => {

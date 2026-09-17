@@ -14,6 +14,8 @@ export type PersistSentMessageInput = {
   inReplyTo?: string;
   parentThreadExternalId?: string;
   workspaceId: string;
+  // Internal accepted-receipt routing; provider thread IDs remain evidence only.
+  deliveryTargetId?: string;
   expectedMessageId?: string;
   providerAcceptedAt?: Date;
   transactionManager?: WorkspaceEntityManager;

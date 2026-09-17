@@ -1,13 +1,15 @@
+import { atom } from 'jotai';
 import { createAtomFamilyState } from '@/ui/utilities/state/jotai/utils/createAtomFamilyState';
 
 import {
+  myahInboxDraftKeyId,
   type MyahInboxDraftAutosaveEntry,
   type MyahInboxDraftAutosaveKey,
 } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 
 const draftFamily = createAtomFamilyState<
   MyahInboxDraftAutosaveEntry | null,
-  MyahInboxDraftAutosaveKey
+  string
 >({
   key: 'myahInboxDraftAutosaveFamilyState',
   defaultValue: null,
@@ -17,8 +19,9 @@ const draftFamily = createAtomFamilyState<
 export const myahInboxDraftAutosaveFamilyState = {
   ...draftFamily,
   atomFamily: (key: MyahInboxDraftAutosaveKey) =>
-    draftFamily.atomFamily({
-      workspaceId: key.workspaceId,
-      threadId: key.threadId,
-    }),
+    draftFamily.atomFamily(myahInboxDraftKeyId(key)),
 };
+
+export const myahInboxDraftAutosaveKeysState = atom<
+  MyahInboxDraftAutosaveKey[]
+>([]);

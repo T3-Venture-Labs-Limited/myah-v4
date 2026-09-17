@@ -151,10 +151,18 @@ const createService = (overrides?: {
     overrides?.buildUserAndAgentActorContext ??
     jest.fn().mockResolvedValue(actor);
 
+  const saveMyahInboxContextDraftAfterProviderFailure = jest.fn(async () => ({
+    status: 'SAVED',
+    revision: 5,
+    body: authority.canonicalGraph.draftBody,
+  }));
   return {
+    saveMyahInboxContextDraftAfterProviderFailure,
     service: new MyahInboxReplyApprovedExecutionService(
       {
         executeInboxReplyLocked,
+        executeInboxReplyTargetLocked: executeInboxReplyLocked,
+        getInboxReplyTargetExecutionState: jest.fn(async () => null),
         findExecutionReceiptForBinding,
         reserveExecutionForBinding,
         recordProviderAccepted,
@@ -163,7 +171,10 @@ const createService = (overrides?: {
       { rebuildExecutionAuthority } as never,
       { sendMessage } as never,
       { projectReceipt } as never,
-      { saveMyahInboxDraftAfterProviderFailure } as never,
+      {
+        saveMyahInboxDraftAfterProviderFailure,
+        saveMyahInboxContextDraftAfterProviderFailure,
+      } as never,
       { buildUserAndAgentActorContext } as never,
     ),
     executeInboxReplyLocked,
@@ -446,4 +457,183 @@ describe('MyahInboxReplyApprovedExecutionService', () => {
       code: 'unknown',
     });
   });
+});
+
+describe('Email v2 exact target reservation', () => {
+  it('allows one concurrent A/B reservation, never calls a provider under the target lock, and preserves UNKNOWN', async () => {
+    renderMyahInboxReplyBody.mockResolvedValue({
+      body: 'Body',
+      html: '<p>Body</p>',
+    });
+    let locked = false;
+    let claimed = false;
+    let tail = Promise.resolve();
+    const lock = jest.fn(async (_input, operation) => {
+      const previous = tail;
+      let release!: () => void;
+      tail = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await previous;
+      locked = true;
+      try {
+        return await operation({});
+      } finally {
+        locked = false;
+        release();
+      }
+    });
+    const sendMessage = jest.fn(async () => {
+      expect(locked).toBe(false);
+      throw new Error('ambiguous provider timeout');
+    });
+    const approvals = {
+      executeInboxReplyTargetLocked: lock,
+      findExecutionReceiptForBinding: jest.fn(async () => null),
+      getInboxReplyTargetExecutionState: jest.fn(async () =>
+        claimed ? 'UNKNOWN' : null,
+      ),
+      reserveExecutionForBinding: jest.fn(async () => {
+        expect(locked).toBe(true);
+        claimed = true;
+        return {
+          created: true,
+          receipt: receipt(ActionExecutionReceiptState.PROCESSING),
+        };
+      }),
+      recordProviderTerminalState: jest.fn(async () =>
+        receipt(ActionExecutionReceiptState.UNKNOWN),
+      ),
+    };
+    const service = new MyahInboxReplyApprovedExecutionService(
+      approvals as never,
+      {
+        rebuildExecutionAuthority: jest.fn(async (input) => ({
+          ...authority,
+          expectedActionBinding: input.binding,
+        })),
+      } as never,
+      { sendMessage } as never,
+      { projectReceipt: jest.fn() } as never,
+      {} as never,
+      {} as never,
+    );
+    const v2 = (id: string) => ({
+      ...binding,
+      actionVersion: 2 as const,
+      draftId: id,
+      threadId: null,
+      interactionContextType: 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT' as const,
+      interactionContextId: id,
+      myahReplyContextSnapshot: {
+        schemaVersion: 1 as const,
+        channel: 'EMAIL' as const,
+        deliveryTargetId: draftId,
+        draftId: id,
+        replyContext: { kind: 'GENERAL' as const },
+        contactAnchor: { kind: 'EMAIL_THREAD' as const, id: draftId },
+        creatorId: null,
+        eligibilityEvidenceDigest: 'a'.repeat(64),
+        authoredContextFingerprint: 'b'.repeat(64),
+        reviewedContextFingerprint: null,
+        contextFingerprint: 'b'.repeat(64),
+      },
+    });
+    const results = await Promise.allSettled(
+      ['A', 'B'].map((id) =>
+        service.execute({
+          workspaceId,
+          approvalBindingId: id,
+          binding: v2(id),
+        }),
+      ),
+    );
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(approvals.reserveExecutionForBinding).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(lock).toHaveBeenCalledWith(
+      { workspaceId, deliveryTargetId: draftId, draftId: 'A' },
+      expect.any(Function),
+    );
+  });
+});
+
+it('restores only the v2 snapshot draft after a known rejection', async () => {
+  renderMyahInboxReplyBody.mockResolvedValue({
+    body: 'Body',
+    html: '<p>Body</p>',
+  });
+  const setup = createService({
+    sendMessage: jest.fn().mockRejectedValue({ responseCode: 550 }),
+  });
+  const v2 = {
+    ...binding,
+    actionVersion: 2,
+    draftId: 'context-A',
+    threadId: null,
+    interactionContextType: 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT',
+    interactionContextId: 'context-A',
+    myahReplyContextSnapshot: {
+      deliveryTargetId: draftId,
+      draftId: 'context-A',
+      contactAnchor: { kind: 'EMAIL_THREAD', id: draftId },
+      replyContext: { kind: 'GENERAL' },
+    },
+  };
+  await expect(
+    setup.service.execute({
+      workspaceId,
+      approvalBindingId,
+      binding: v2 as never,
+    }),
+  ).resolves.toMatchObject({ receipt: { state: 'FAILED' } });
+  expect(setup.saveMyahInboxDraftAfterProviderFailure).not.toHaveBeenCalled();
+  expect(
+    setup.saveMyahInboxContextDraftAfterProviderFailure,
+  ).toHaveBeenCalledWith(
+    expect.objectContaining({
+      snapshot: v2.myahReplyContextSnapshot,
+      expectedRevision: 4,
+    }),
+  );
+});
+
+it('performs provider sendability preflight outside locks and only local authority reconstruction inside', async () => {
+  renderMyahInboxReplyBody.mockResolvedValue({
+    body: 'Body',
+    html: '<p>Body</p>',
+  });
+  let locked = false;
+  const rebuildExecutionAuthority = jest.fn(async (input) => {
+    expect(input.skipProviderPreflight === true).toBe(locked);
+    return authority;
+  });
+  const setup = createService({
+    executeInboxReplyLocked: jest.fn(async (_input, operation) => {
+      locked = true;
+      try {
+        return await operation();
+      } finally {
+        locked = false;
+      }
+    }),
+    rebuildExecutionAuthority,
+  });
+  await setup.service.execute({ workspaceId, approvalBindingId, binding });
+  expect(rebuildExecutionAuthority).toHaveBeenCalledTimes(2);
+});
+
+it('cannot reserve or send when local authority changes after provider preflight', async () => {
+  const rebuild = jest
+    .fn()
+    .mockResolvedValueOnce(authority)
+    .mockRejectedValueOnce(new Error('authority drift after preflight'));
+  const setup = createService({ rebuildExecutionAuthority: rebuild });
+  await expect(
+    setup.service.execute({ workspaceId, approvalBindingId, binding }),
+  ).rejects.toThrow('authority drift after preflight');
+  expect(setup.reserveExecutionForBinding).not.toHaveBeenCalled();
+  expect(setup.sendMessage).not.toHaveBeenCalled();
 });

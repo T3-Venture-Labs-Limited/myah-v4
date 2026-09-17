@@ -1,3 +1,7 @@
+import {
+  draftKeyFixture,
+  draftInputFixture,
+} from '@/myah/inbox/hooks/__tests__/fixtures/myahInboxDraftAutosaveTestFixture';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
 import { StrictMode, useEffect, type PropsWithChildren } from 'react';
@@ -5,6 +9,7 @@ import { StrictMode, useEffect, type PropsWithChildren } from 'react';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import {
   type MyahInboxDraftAutosaveController,
+  type MyahInboxDraftTargetCapture,
   useMyahInboxDraftAutosaveController,
 } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
@@ -22,7 +27,7 @@ const mockUseMyahInboxThreadMutations = jest.mocked(
   useMyahInboxThreadMutations,
 );
 
-const threadKey = { threadId: 'thread-1', workspaceId: 'workspace-1' };
+const threadKey = draftKeyFixture('workspace-1', 'thread-1');
 
 type DraftSaveResult = {
   status: 'SAVED';
@@ -41,6 +46,7 @@ const createDeferred = <Value,>() => {
 
 const reconcileThread = (): MyahInboxDraftAutosaveThread => ({
   key: threadKey,
+  input: draftInputFixture(threadKey),
   revision: 2,
   body: { markdown: '', blocknote: null },
 });
@@ -62,9 +68,17 @@ const renderAutosaveController = () => {
 const authorize = (
   controller: MyahInboxDraftAutosaveController,
   thread = reconcileThread(),
+  refreshAfterSave?: MyahInboxDraftTargetCapture['refreshAfterSave'],
 ) => {
-  const capture = controller.beginTargetRead(thread.key, () => true);
-  controller.authorizeTarget(capture, thread);
+  const capture = controller.beginTargetRead(
+    thread.key,
+    () => true,
+    refreshAfterSave,
+  );
+  controller.authorizeTarget(capture, {
+    ...thread,
+    input: draftInputFixture(thread.key),
+  });
   return capture;
 };
 
@@ -81,6 +95,801 @@ describe('useMyahInboxDraftAutosaveController', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  describe.each(['SAVED', 'CONFLICT', 'rejection'] as const)(
+    'revoked %s completion with a newer edit',
+    (completion) => {
+      it.each(['timer', 'flush'] as const)(
+        'continues the authorized READY edit after its %s expires before settlement',
+        async (trigger) => {
+          const deferred = createDeferred<{
+            status: string;
+            revision: number;
+            body: null;
+          }>();
+          const saveDraft = jest
+            .fn()
+            .mockReturnValueOnce(
+              deferred.promise.then((value) => {
+                if (completion === 'rejection')
+                  throw new Error('revoked failure');
+                return value;
+              }),
+            )
+            .mockResolvedValueOnce({
+              status: 'SAVED',
+              revision: 8,
+              body: { markdown: 'new edit', blocknote: null },
+            });
+          mockUseMyahInboxThreadMutations.mockReturnValue({
+            saveDraft,
+          } as never);
+          const { result } = renderAutosaveController();
+          const controller = result.current;
+          authorize(controller);
+          controller.updateDraft({
+            key: threadKey,
+            body: { markdown: 'old edit', blocknote: null },
+          });
+          // Start via debounce, not flush: no outstanding flush loop can rescue the timer.
+          await act(async () => jest.advanceTimersByTimeAsync(750));
+          authorize(controller, {
+            ...reconcileThread(),
+            revision: 7,
+            executionState: 'READY',
+          });
+          controller.updateDraft({
+            key: threadKey,
+            body: { markdown: 'new edit', blocknote: null },
+          });
+          let flushing: Promise<unknown> | undefined;
+          if (trigger === 'flush') flushing = controller.flush(threadKey);
+          else await act(async () => jest.advanceTimersByTimeAsync(750));
+          expect(saveDraft).toHaveBeenCalledTimes(1);
+          await act(async () => {
+            deferred.resolve({ status: completion, revision: 3, body: null });
+            await deferred.promise;
+            await flushing;
+          });
+          expect(saveDraft).toHaveBeenCalledTimes(2);
+          expect(saveDraft).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              expectedRevision: 7,
+              body: { markdown: 'new edit', blocknote: null },
+            }),
+          );
+          expect(controller.getEntry(threadKey)).toMatchObject({
+            confirmedRevision: 8,
+            dirty: false,
+            status: 'saved',
+            error: null,
+            conflict: null,
+          });
+          await act(async () => jest.advanceTimersByTimeAsync(1500));
+          expect(saveDraft).toHaveBeenCalledTimes(2);
+        },
+      );
+    },
+  );
+
+  it.each(['timer', 'flush'] as const)(
+    'serializes a same-base handoff newer edit after %s without another keystroke',
+    async (trigger) => {
+      const deferred = createDeferred<DraftSaveResult>();
+      const saveDraft = jest
+        .fn()
+        .mockReturnValueOnce(deferred.promise)
+        .mockResolvedValueOnce({
+          status: 'SAVED',
+          revision: 4,
+          body: { markdown: 'new edit', blocknote: null },
+        });
+      mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
+      const { result } = renderAutosaveController();
+      const controller = result.current;
+      const oldTarget = authorize(controller);
+      controller.updateDraft({
+        key: threadKey,
+        body: { markdown: 'first edit', blocknote: null },
+      });
+      await act(async () => jest.advanceTimersByTimeAsync(750));
+      controller.invalidateTarget(oldTarget);
+      authorize(controller);
+      controller.updateDraft({
+        key: threadKey,
+        body: { markdown: 'new edit', blocknote: null },
+      });
+      let flushing: Promise<unknown> | undefined;
+      if (trigger === 'flush') flushing = controller.flush(threadKey);
+      else await act(async () => jest.advanceTimersByTimeAsync(750));
+      expect(saveDraft).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        deferred.resolve({
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'first edit', blocknote: null },
+        });
+        await deferred.promise;
+        await flushing;
+      });
+      expect(saveDraft).toHaveBeenCalledTimes(2);
+      expect(saveDraft).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          expectedRevision: 3,
+          body: { markdown: 'new edit', blocknote: null },
+        }),
+      );
+      expect(controller.getEntry(threadKey)).toMatchObject({
+        confirmedRevision: 4,
+        dirty: false,
+        status: 'saved',
+      });
+    },
+  );
+
+  it('transfers a pending metadata refresh lock and rereads through the current same-base owner', async () => {
+    const firstRead = createDeferred<MyahInboxDraftAutosaveThread>();
+    const secondRead = createDeferred<MyahInboxDraftAutosaveThread>();
+    const oldRefresh = jest.fn(() => firstRead.promise);
+    const newRefresh = jest.fn(() => secondRead.promise);
+    const body = { markdown: 'manual', blocknote: null };
+    const saveDraft = jest
+      .fn()
+      .mockResolvedValue({ status: 'SAVED', revision: 3, body });
+    mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
+    const { result } = renderAutosaveController();
+    const controller = result.current;
+    const firstTarget = controller.beginTargetRead(
+      threadKey,
+      () => true,
+      oldRefresh,
+    );
+    controller.authorizeTarget(firstTarget, reconcileThread());
+    controller.updateDraft({ key: threadKey, body });
+    let saving!: Promise<unknown>;
+    await act(async () => {
+      saving = controller.flush(threadKey);
+    });
+    expect(oldRefresh).toHaveBeenCalledTimes(1);
+    controller.invalidateTarget(firstTarget);
+    const secondTarget = controller.beginTargetRead(
+      threadKey,
+      () => true,
+      newRefresh,
+    );
+    const committed = { ...reconcileThread(), revision: 3, body };
+    controller.authorizeTarget(secondTarget, committed);
+    expect(controller.acquire(threadKey, 'sending')).toBeNull();
+    await act(async () => {
+      firstRead.resolve({ ...committed, executionState: 'READY' });
+    });
+    expect(newRefresh).toHaveBeenCalledWith(3);
+    expect(controller.acquire(threadKey, 'sending')).toBeNull();
+    await act(async () => {
+      secondRead.resolve({ ...committed, executionState: 'NEEDS_REVIEW' });
+      await saving;
+    });
+    expect(controller.getEntry(threadKey)?.executionState).toBe('NEEDS_REVIEW');
+    expect(controller.acquire(threadKey, 'sending')).toBeNull();
+    expect(controller.acquire(threadKey, 'generating')).toBeNull();
+    expect(controller.acquire(threadKey, 'reviewing')).not.toBeNull();
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+  });
+
+  describe.each([
+    'readiness-pending',
+    'readiness-unknown',
+    'outcome-pending',
+    'outcome-unknown',
+    'OUTCOME_PENDING',
+    'OUTCOME_UNKNOWN',
+    'CONTEXT_UNAVAILABLE',
+  ] as const)('%s body-mask transition', (transition) => {
+    it.each(['idle', 'error', 'conflict', 'saving'] as const)(
+      'clears exposed %s state and invalidates the mounted editor',
+      (status) => {
+        mockUseMyahInboxThreadMutations.mockReturnValue({
+          saveDraft: jest.fn(),
+        } as never);
+        const { result, store } = renderAutosaveController();
+        const controller = result.current;
+        authorize(controller, {
+          ...reconcileThread(),
+          body: { markdown: 'private local', blocknote: null },
+        });
+        const operation = transition.startsWith('outcome-')
+          ? controller.acquire(threadKey, 'sending')!
+          : null;
+        const entry = controller.getEntry(threadKey)!;
+        store.set(myahInboxDraftAutosaveFamilyState.atomFamily(threadKey), {
+          ...entry,
+          status,
+          error: 'private error',
+          conflict: {
+            revision: 3,
+            body: { markdown: 'private conflict', blocknote: 'private blocks' },
+          },
+        });
+        if (
+          transition === 'readiness-pending' ||
+          transition === 'readiness-unknown'
+        )
+          controller.setReadinessLock(
+            threadKey,
+            transition === 'readiness-pending' ? 'pending' : 'unknown',
+          );
+        else if (
+          transition === 'outcome-pending' ||
+          transition === 'outcome-unknown'
+        )
+          controller.setOutcomeLock(
+            operation!,
+            transition === 'outcome-pending' ? 'pending' : 'unknown',
+          );
+        else
+          controller.reconcile({
+            ...reconcileThread(),
+            executionState: transition,
+            body: { markdown: 'private server', blocknote: null },
+          });
+        expect(controller.getEntry(threadKey)).toMatchObject({
+          localBody: { markdown: '', blocknote: null },
+          confirmedBody: null,
+          conflict: null,
+          error: null,
+          status: 'idle',
+          editorVersion: entry.editorVersion + 1,
+        });
+        if (operation)
+          expect(controller.getEntry(threadKey)?.operation?.token).toBe(
+            operation.token,
+          );
+      },
+    );
+  });
+
+  it.each(['pending', 'unknown'] as const)(
+    'masks a live %s outcome from both lock setters and keeps duplicate-send locks',
+    (kind) => {
+      mockUseMyahInboxThreadMutations.mockReturnValue({
+        saveDraft: jest.fn(),
+      } as never);
+      const { result } = renderAutosaveController();
+      const controller = result.current;
+      for (const setter of ['readiness', 'outcome']) {
+        const key = { ...threadKey, deliveryTargetId: setter };
+        authorize(controller, {
+          key,
+          revision: 2,
+          body: { markdown: 'private body', blocknote: null },
+          executionState: 'READY',
+        });
+        if (setter === 'readiness') controller.setReadinessLock(key, kind);
+        else {
+          const capture = controller.acquire(key, 'sending')!;
+          controller.setOutcomeLock(capture, kind);
+          controller.release(capture);
+        }
+        expect(controller.getEntry(key)).toMatchObject({
+          executionState:
+            kind === 'pending' ? 'OUTCOME_PENDING' : 'OUTCOME_UNKNOWN',
+          localBody: { markdown: '', blocknote: null },
+          confirmedBody: null,
+          operation: { kind },
+        });
+        expect(controller.acquire(key, 'generating')).toBeNull();
+        expect(controller.acquire(key, 'sending')).toBeNull();
+      }
+    },
+  );
+
+  describe.each(['pending', 'unknown'] as const)(
+    '%s clean recovery',
+    (kind) => {
+      it.each(['readiness', 'outcome'] as const)(
+        'uses server bytes instead of a clean snapshot after a %s lock',
+        (setter) => {
+          mockUseMyahInboxThreadMutations.mockReturnValue({
+            saveDraft: jest.fn(),
+          } as never);
+          const { result } = renderAutosaveController();
+          const controller = result.current;
+          const target = authorize(controller, {
+            ...reconcileThread(),
+            body: { markdown: 'old confirmed', blocknote: null },
+          });
+          if (setter === 'readiness')
+            controller.setReadinessLock(threadKey, kind);
+          else
+            controller.setOutcomeLock(
+              controller.acquire(threadKey, 'sending')!,
+              kind,
+            );
+          expect(controller.acquire(threadKey, 'sending')).toBeNull();
+          // An operation response is not an authorized recovery read.
+          controller.reconcile({
+            ...reconcileThread(),
+            executionState: 'READY',
+          });
+          expect(controller.getEntry(threadKey)?.operation?.kind).toBe(kind);
+          controller.authorizeTarget(target, {
+            ...reconcileThread(),
+            body: { markdown: 'authoritative', blocknote: null },
+            executionState: 'READY',
+          });
+          expect(controller.getEntry(threadKey)).toMatchObject({
+            localBody: { markdown: 'authoritative' },
+            confirmedBody: { markdown: 'authoritative' },
+            confirmedRevision: 2,
+            dirty: false,
+            pendingDebounceVersion: null,
+            operation: null,
+          });
+          expect(
+            controller.acquire(threadKey, 'sending')?.confirmedRevision,
+          ).toBe(2);
+        },
+      );
+    },
+  );
+
+  describe.each([
+    'OUTCOME_PENDING',
+    'OUTCOME_UNKNOWN',
+    'CONTEXT_UNAVAILABLE',
+  ] as const)('%s recovery with an active operation', (outcomeState) => {
+    it.each(['generating', 'sending', 'reviewing'] as const)(
+      'retains the active %s operation',
+      (kind) => {
+        mockUseMyahInboxThreadMutations.mockReturnValue({
+          saveDraft: jest.fn(),
+        } as never);
+        const { result } = renderAutosaveController();
+        const controller = result.current;
+        const target = authorize(controller, {
+          ...reconcileThread(),
+          executionState: kind === 'reviewing' ? 'NEEDS_REVIEW' : 'READY',
+        });
+        const operation = controller.acquire(threadKey, kind)!;
+        controller.authorizeTarget(target, {
+          ...reconcileThread(),
+          executionState: outcomeState,
+        });
+        controller.authorizeTarget(target, {
+          ...reconcileThread(),
+          revision: 7,
+          executionState: 'READY',
+          body: { markdown: 'server recovery', blocknote: null },
+        });
+        expect(controller.getEntry(threadKey)).toMatchObject({
+          confirmedRevision: 7,
+          localBody: { markdown: 'server recovery' },
+          operation: { token: operation.token, kind },
+        });
+      },
+    );
+  });
+
+  describe.each(['OUTCOME_PENDING', 'OUTCOME_UNKNOWN'] as const)(
+    '%s direct read recovery',
+    (outcomeState) => {
+      it.each(['READY', 'NEEDS_REVIEW'] as const)(
+        'restores a valid same-capability snapshot on an authorized %s read',
+        (executionState) => {
+          const saveDraft = jest.fn();
+          mockUseMyahInboxThreadMutations.mockReturnValue({
+            saveDraft,
+          } as never);
+          const { result } = renderAutosaveController();
+          const controller = result.current;
+          const target = authorize(controller, {
+            ...reconcileThread(),
+            body: { markdown: 'confirmed', blocknote: null },
+          });
+          controller.updateDraft({
+            key: threadKey,
+            body: { markdown: 'newer local', blocknote: 'private blocks' },
+          });
+          controller.authorizeTarget(target, {
+            ...reconcileThread(),
+            executionState: outcomeState,
+          });
+          expect(controller.getEntry(threadKey)?.operation).toBeNull();
+          expect(controller.getEntry(threadKey)?.localBody.markdown).toBe('');
+          expect(controller.acquire(threadKey, 'sending')).toBeNull();
+          expect(controller.acquire(threadKey, 'reviewing')).toBeNull();
+          controller.authorizeTarget(target, {
+            ...reconcileThread(),
+            body: { markdown: 'authoritative', blocknote: null },
+            executionState,
+          });
+          expect(controller.getEntry(threadKey)).toMatchObject({
+            executionState,
+            localBody: { markdown: 'newer local', blocknote: 'private blocks' },
+            confirmedBody: { markdown: 'authoritative' },
+            confirmedRevision: 2,
+            dirty: true,
+            operation: null,
+            pendingDebounceVersion: 1,
+          });
+          if (executionState === 'NEEDS_REVIEW') {
+            expect(controller.acquire(threadKey, 'generating')).toBeNull();
+            expect(controller.acquire(threadKey, 'sending')).toBeNull();
+            const review = controller.acquire(threadKey, 'reviewing');
+            expect(review?.confirmedRevision).toBe(2);
+            controller.release(review!);
+            act(() => jest.advanceTimersByTime(750));
+            expect(saveDraft).not.toHaveBeenCalled();
+          }
+        },
+      );
+    },
+  );
+
+  describe.each(['pending', 'unknown'] as const)('%s recovery', (kind) => {
+    it.each(['READY', 'NEEDS_REVIEW'] as const)(
+      'restores a valid same-capability snapshot on an authorized %s read',
+      (executionState) => {
+        const saveDraft = jest.fn();
+        mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
+        const { result } = renderAutosaveController();
+        const controller = result.current;
+        const target = authorize(controller, {
+          ...reconcileThread(),
+          body: { markdown: 'confirmed', blocknote: null },
+        });
+        controller.updateDraft({
+          key: threadKey,
+          body: { markdown: 'newer local', blocknote: 'private blocks' },
+        });
+        controller.setReadinessLock(threadKey, kind);
+        expect(controller.getEntry(threadKey)?.localBody.markdown).toBe('');
+        expect(controller.acquire(threadKey, 'sending')).toBeNull();
+        expect(controller.acquire(threadKey, 'reviewing')).toBeNull();
+        controller.authorizeTarget(target, {
+          ...reconcileThread(),
+          body: { markdown: 'authoritative', blocknote: null },
+          executionState,
+        });
+        expect(controller.getEntry(threadKey)).toMatchObject({
+          executionState,
+          localBody: { markdown: 'newer local', blocknote: 'private blocks' },
+          confirmedBody: { markdown: 'authoritative' },
+          confirmedRevision: 2,
+          dirty: true,
+          operation: null,
+          pendingDebounceVersion: 1,
+        });
+        if (executionState === 'NEEDS_REVIEW') {
+          expect(controller.acquire(threadKey, 'generating')).toBeNull();
+          expect(controller.acquire(threadKey, 'sending')).toBeNull();
+          const review = controller.acquire(threadKey, 'reviewing');
+          expect(review?.confirmedRevision).toBe(2);
+          controller.release(review!);
+          act(() => jest.advanceTimersByTime(750));
+          expect(saveDraft).not.toHaveBeenCalled();
+        }
+      },
+    );
+  });
+
+  it('keeps outcome bytes masked when an operation result omits execution metadata', () => {
+    mockUseMyahInboxThreadMutations.mockReturnValue({
+      saveDraft: jest.fn(),
+    } as never);
+    const { result } = renderAutosaveController();
+    const controller = result.current;
+    authorize(controller, {
+      ...reconcileThread(),
+      body: { markdown: 'confirmed', blocknote: null },
+    });
+    const capture = controller.acquire(threadKey, 'sending')!;
+    controller.setOutcomeLock(capture, 'pending');
+    controller.reconcileOperation(capture, {
+      ...reconcileThread(),
+      body: { markdown: 'sending result', blocknote: null },
+    });
+    expect(controller.getEntry(threadKey)).toMatchObject({
+      executionState: 'OUTCOME_PENDING',
+      localBody: { markdown: '' },
+      confirmedBody: null,
+    });
+  });
+
+  describe.each(['pending', 'unknown'] as const)(
+    '%s discarded snapshot recovery',
+    (kind) => {
+      it.each([
+        'capability',
+        'revision',
+        'unavailable',
+        'workspace',
+        'key',
+      ] as const)(
+        'uses the authoritative body/revision and clears dirty state after %s changes',
+        (change) => {
+          const saveDraft = jest.fn();
+          mockUseMyahInboxThreadMutations.mockReturnValue({
+            saveDraft,
+          } as never);
+          const { result } = renderAutosaveController();
+          const controller = result.current;
+          let target = authorize(controller, {
+            ...reconcileThread(),
+            body: { markdown: 'confirmed', blocknote: null },
+          });
+          controller.updateDraft({
+            key: threadKey,
+            body: { markdown: 'newer private', blocknote: 'private blocks' },
+          });
+          controller.setReadinessLock(threadKey, kind);
+          if (change === 'capability') {
+            controller.invalidateTarget(target);
+            target = controller.beginTargetRead(threadKey, () => true);
+          }
+          if (change === 'revision')
+            controller.authorizeTarget(target, {
+              ...reconcileThread(),
+              revision: 3,
+              executionState: 'OUTCOME_UNKNOWN',
+            });
+          if (change === 'unavailable')
+            controller.authorizeTarget(target, {
+              ...reconcileThread(),
+              executionState: 'CONTEXT_UNAVAILABLE',
+            });
+          if (change === 'workspace') {
+            controller.invalidateWorkspace(threadKey.workspaceId);
+            target = controller.beginTargetRead(threadKey, () => true);
+          }
+          if (change === 'key') {
+            controller.invalidateTarget(target);
+            authorize(controller, {
+              ...reconcileThread(),
+              key: { ...threadKey, campaignId: 'other-campaign' },
+              body: { markdown: 'other context', blocknote: null },
+            });
+            target = controller.beginTargetRead(threadKey, () => true);
+          }
+          expect(controller.acquire(threadKey, 'generating')).toBeNull();
+          expect(controller.acquire(threadKey, 'sending')).toBeNull();
+          expect(controller.acquire(threadKey, 'reviewing')).toBeNull();
+          controller.authorizeTarget(target, {
+            ...reconcileThread(),
+            revision: change === 'revision' ? 3 : 2,
+            body: { markdown: 'authoritative', blocknote: 'server blocks' },
+            executionState: 'NEEDS_REVIEW',
+          });
+          expect(controller.getEntry(threadKey)).toMatchObject({
+            executionState: 'NEEDS_REVIEW',
+            localBody: {
+              markdown: 'authoritative',
+              blocknote: 'server blocks',
+            },
+            confirmedBody: {
+              markdown: 'authoritative',
+              blocknote: 'server blocks',
+            },
+            confirmedRevision: change === 'revision' ? 3 : 2,
+            operation: null,
+            dirty: false,
+            pendingDebounceVersion: null,
+          });
+          expect(controller.acquire(threadKey, 'generating')).toBeNull();
+          expect(controller.acquire(threadKey, 'sending')).toBeNull();
+          const review = controller.acquire(threadKey, 'reviewing');
+          expect(review?.confirmedRevision).toBe(change === 'revision' ? 3 : 2);
+          controller.release(review!);
+          act(() => jest.advanceTimersByTime(750));
+          expect(saveDraft).not.toHaveBeenCalled();
+        },
+      );
+    },
+  );
+
+  it.each([
+    'OUTCOME_PENDING',
+    'OUTCOME_UNKNOWN',
+    'CONTEXT_UNAVAILABLE',
+  ] as const)(
+    'does not let an older post-save read unlock a newer direct %s read',
+    async (executionState) => {
+      const refresh = createDeferred<MyahInboxDraftAutosaveThread>();
+      const saveDraft = jest.fn().mockResolvedValue({
+        status: 'SAVED',
+        revision: 3,
+        body: { markdown: 'submitted', blocknote: null },
+      });
+      mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
+      const { result } = renderAutosaveController();
+      const controller = result.current;
+      const target = controller.beginTargetRead(
+        threadKey,
+        () => true,
+        () => refresh.promise,
+      );
+      controller.authorizeTarget(target, {
+        ...reconcileThread(),
+        executionState: 'READY',
+      });
+      controller.updateDraft({
+        key: threadKey,
+        body: { markdown: 'submitted', blocknote: null },
+      });
+      const saving = controller.flush(threadKey);
+      await waitFor(() =>
+        expect(controller.getEntry(threadKey)?.confirmedRevision).toBe(3),
+      );
+      controller.authorizeTarget(target, {
+        ...reconcileThread(),
+        revision: 3,
+        executionState,
+      });
+      const masked = controller.getEntry(threadKey);
+      refresh.resolve({
+        ...reconcileThread(),
+        revision: 3,
+        executionState: 'READY',
+        body: { markdown: 'old metadata', blocknote: null },
+      });
+      await saving;
+      expect(controller.getEntry(threadKey)).toEqual(masked);
+      expect(controller.getEntry(threadKey)).toMatchObject({
+        executionState,
+        localBody: { markdown: '' },
+        confirmedBody: null,
+      });
+      for (const kind of ['sending', 'generating', 'reviewing'] as const)
+        expect(controller.acquire(threadKey, kind)).toBeNull();
+      expect(saveDraft).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['dirty', 'proposal', 'error', 'conflict'] as const)(
+    'discards %s bookkeeping on direct unavailable and never restores its private bytes',
+    async (mode) => {
+      const saveDraft = jest.fn();
+      if (mode === 'error') saveDraft.mockRejectedValue(new Error('offline'));
+      else if (mode === 'conflict')
+        saveDraft.mockResolvedValue({
+          status: 'CONFLICT',
+          revision: 3,
+          body: { markdown: 'private conflict', blocknote: null },
+        });
+      else
+        saveDraft.mockResolvedValue({
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'private proposal', blocknote: null },
+        });
+      mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
+      const { result } = renderAutosaveController();
+      const controller = result.current;
+      const target = authorize(controller, {
+        ...reconcileThread(),
+        executionState: 'READY',
+        contextFingerprint: 'private proposal fingerprint',
+      });
+      if (mode === 'proposal')
+        await controller.applyProposal({
+          key: threadKey,
+          body: { markdown: 'private proposal', blocknote: null },
+        });
+      else {
+        controller.updateDraft({
+          key: threadKey,
+          body: { markdown: 'private edit', blocknote: 'private blocks' },
+        });
+        if (mode !== 'dirty') await controller.flush(threadKey);
+      }
+      const revision = controller.getEntry(threadKey)!.confirmedRevision;
+      controller.authorizeTarget(target, {
+        ...reconcileThread(),
+        revision,
+        executionState: 'CONTEXT_UNAVAILABLE',
+      });
+      expect(controller.getEntry(threadKey)).toMatchObject({
+        localBody: { markdown: '', blocknote: null },
+        confirmedBody: null,
+        dirty: false,
+        status: 'idle',
+        pendingDebounceVersion: null,
+        proposalContextFingerprint: null,
+        error: null,
+        conflict: null,
+      });
+      const calls = saveDraft.mock.calls.length;
+      controller.authorizeTarget(target, {
+        ...reconcileThread(),
+        revision,
+        executionState: 'READY',
+        body: { markdown: 'server recovery', blocknote: null },
+      });
+      await act(async () => jest.advanceTimersByTimeAsync(1500));
+      await controller.flush(threadKey);
+      expect(controller.getEntry(threadKey)).toMatchObject({
+        confirmedRevision: revision,
+        localBody: { markdown: 'server recovery' },
+        dirty: false,
+      });
+      expect(saveDraft).toHaveBeenCalledTimes(calls);
+    },
+  );
+
+  it('isolates campaign A and B on the same delivery target', () => {
+    mockUseMyahInboxThreadMutations.mockReturnValue({
+      saveDraft: jest.fn(),
+    } as never);
+    const { result } = renderAutosaveController();
+    const a = {
+      ...threadKey,
+      contactAnchorKind: 'CREATOR',
+      contactAnchorId: 'creator-1',
+      channel: 'EMAIL' as const,
+      deliveryTargetId: 'thread-1',
+      contextKind: 'CAMPAIGN' as const,
+      campaignId: 'campaign-a',
+    };
+    const b = { ...a, campaignId: 'campaign-b' };
+    authorize(result.current, {
+      key: a,
+      revision: 2,
+      body: { markdown: 'A', blocknote: null },
+    });
+    authorize(result.current, {
+      key: b,
+      revision: 2,
+      body: { markdown: 'B', blocknote: null },
+    });
+    expect(result.current.getEntry(a)?.localBody.markdown).toBe('A');
+    expect(result.current.getEntry(b)?.localBody.markdown).toBe('B');
+  });
+
+  it('rejects late A reconcile and apply once its read scope changes', async () => {
+    mockUseMyahInboxThreadMutations.mockReturnValue({
+      saveDraft: jest.fn(),
+    } as never);
+    const { result } = renderAutosaveController();
+    let current = true;
+    const target = result.current.beginTargetRead(threadKey, () => current);
+    result.current.authorizeTarget(target, reconcileThread());
+    const capture = result.current.acquire(threadKey, 'generating')!;
+    current = false;
+    result.current.reconcileOperation(capture, {
+      ...reconcileThread(),
+      revision: 3,
+      body: { markdown: 'late A', blocknote: null },
+    });
+    await expect(
+      result.current.applyProposalIfCurrent(capture, {
+        markdown: 'late A',
+        blocknote: null,
+      }),
+    ).resolves.toBe(false);
+    expect(result.current.getEntry(threadKey)?.localBody.markdown).toBe('');
+  });
+
+  it.each([
+    'NEEDS_REVIEW',
+    'OUTCOME_PENDING',
+    'OUTCOME_UNKNOWN',
+    'CONTEXT_UNAVAILABLE',
+  ] as const)('locks execution for %s', (executionState) => {
+    mockUseMyahInboxThreadMutations.mockReturnValue({
+      saveDraft: jest.fn(),
+    } as never);
+    const { result } = renderAutosaveController();
+    authorize(result.current, {
+      ...reconcileThread(),
+      executionState,
+      body: { markdown: 'stored', blocknote: null },
+    });
+    expect(result.current.acquire(threadKey, 'generating')).toBeNull();
+    expect(result.current.acquire(threadKey, 'sending')).toBeNull();
+    expect(result.current.getEntry(threadKey)?.localBody.markdown).toBe(
+      executionState === 'NEEDS_REVIEW' ? 'stored' : '',
+    );
   });
 
   it('allows navigation after a clean editor closes without making another request', async () => {
@@ -179,10 +988,10 @@ describe('useMyahInboxDraftAutosaveController', () => {
     } as never);
     const { result, store } = renderAutosaveController();
     authorize(result.current);
-    const reversed = {
-      workspaceId: threadKey.workspaceId,
-      threadId: threadKey.threadId,
-    };
+    const reversed = draftKeyFixture(
+      threadKey.workspaceId,
+      threadKey.deliveryTargetId,
+    );
     expect(myahInboxDraftAutosaveFamilyState.atomFamily(reversed)).toBe(
       myahInboxDraftAutosaveFamilyState.atomFamily(threadKey),
     );
@@ -344,7 +1153,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
       });
     mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
     const { result, store } = renderAutosaveController();
-    const secondKey = { ...threadKey, threadId: 'thread-2' };
+    const secondKey = { ...threadKey, deliveryTargetId: 'thread-2' };
     authorize(result.current);
     authorize(result.current, { ...reconcileThread(), key: secondKey });
     result.current.updateDraft({
@@ -375,7 +1184,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
       saveDraft: jest.fn().mockReturnValue(deferred.promise),
     } as never);
     const { result } = renderAutosaveController();
-    const secondKey = { ...threadKey, threadId: 'thread-2' };
+    const secondKey = { ...threadKey, deliveryTargetId: 'thread-2' };
     authorize(result.current);
     authorize(result.current, { ...reconcileThread(), key: secondKey });
     result.current.updateDraft({
@@ -403,7 +1212,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
       });
     mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
     const { result, store } = renderAutosaveController();
-    const secondKey = { ...threadKey, threadId: 'thread-2' };
+    const secondKey = { ...threadKey, deliveryTargetId: 'thread-2' };
     authorize(result.current);
     authorize(result.current, { ...reconcileThread(), key: secondKey });
     result.current.updateDraft({
@@ -454,8 +1263,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
 
     await act(async () => jest.advanceTimersByTimeAsync(1));
     expect(saveDraft).toHaveBeenCalledWith({
-      threadId: 'thread-1',
-      expectedWorkspaceId: 'workspace-1',
+      ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
       expectedRevision: 2,
       body: { markdown: 'second edit', blocknote: null },
     });
@@ -570,8 +1378,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
     await act(async () => jest.advanceTimersByTimeAsync(1));
     await waitFor(() =>
       expect(saveDraft).toHaveBeenLastCalledWith({
-        threadId: 'thread-1',
-        expectedWorkspaceId: 'workspace-1',
+        ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
         expectedRevision: 3,
         body: { markdown: 'newer edit', blocknote: null },
       }),
@@ -680,8 +1487,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
 
     await waitFor(() =>
       expect(saveDraft).toHaveBeenLastCalledWith({
-        threadId: 'thread-1',
-        expectedWorkspaceId: 'workspace-1',
+        ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
         expectedRevision: 3,
         body: { markdown: 'newer remounted edit', blocknote: null },
       }),
@@ -740,8 +1546,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
     await act(async () => jest.advanceTimersByTimeAsync(1));
     await waitFor(() =>
       expect(saveDraft).toHaveBeenLastCalledWith({
-        threadId: 'thread-1',
-        expectedWorkspaceId: 'workspace-1',
+        ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
         expectedRevision: 3,
         body: { markdown: 'newer remounted edit', blocknote: null },
       }),
@@ -824,8 +1629,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
     await act(async () => result.current.retry(threadKey));
 
     expect(saveDraft).toHaveBeenLastCalledWith({
-      threadId: 'thread-1',
-      expectedWorkspaceId: 'workspace-1',
+      ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
       expectedRevision: 2,
       body: { markdown: 'keep this', blocknote: null },
     });
@@ -841,7 +1645,15 @@ describe('useMyahInboxDraftAutosaveController', () => {
     mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
     const { result, store } = renderAutosaveController();
 
-    act(() => authorize(result.current));
+    act(() =>
+      authorize(result.current, reconcileThread(), (revision) =>
+        Promise.resolve({
+          ...reconcileThread(),
+          revision,
+          body: { markdown: 'other operator copy', blocknote: null },
+        }),
+      ),
+    );
     act(() =>
       result.current.updateDraft({
         key: threadKey,
@@ -884,13 +1696,16 @@ describe('useMyahInboxDraftAutosaveController', () => {
     });
     expect(saveDraft).toHaveBeenCalledTimes(1);
 
-    act(() => result.current.reloadConflict(threadKey));
+    await act(async () => {
+      await result.current.reloadConflict(threadKey);
+    });
 
     expect(readEntry(store, threadKey)).toMatchObject({
       localBody: { markdown: 'other operator copy', blocknote: null },
+      confirmedBody: { markdown: 'other operator copy', blocknote: null },
       confirmedRevision: 4,
       dirty: false,
-      status: 'saved',
+      status: 'idle',
       error: null,
       conflict: null,
       editorVersion: 1,
@@ -933,16 +1748,14 @@ describe('useMyahInboxDraftAutosaveController', () => {
     expect(saveDraft.mock.calls).toEqual([
       [
         {
-          threadId: 'thread-1',
-          expectedWorkspaceId: 'workspace-1',
+          ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
           expectedRevision: 2,
           body: { markdown: 'operator edit', blocknote: null },
         },
       ],
       [
         {
-          threadId: 'thread-1',
-          expectedWorkspaceId: 'workspace-1',
+          ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
           expectedRevision: 3,
           body: { markdown: 'proposal', blocknote: null },
         },
@@ -1029,8 +1842,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
     await act(async () => result.current.flush(threadKey));
 
     expect(saveDraft).toHaveBeenLastCalledWith({
-      threadId: 'thread-1',
-      expectedWorkspaceId: 'workspace-1',
+      ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
       expectedRevision: 3,
       body: { markdown: 'new edit', blocknote: null },
     });
@@ -1071,7 +1883,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
   it('starts every dirty workspace draft without waiting for another key', async () => {
     const firstSave = createDeferred<DraftSaveResult>();
     const secondSave = createDeferred<DraftSaveResult>();
-    const secondKey = { threadId: 'thread-2', workspaceId: 'workspace-1' };
+    const secondKey = draftKeyFixture('workspace-1', 'thread-2');
     const saveDraft = jest
       .fn()
       .mockReturnValueOnce(firstSave.promise)
@@ -1106,14 +1918,12 @@ describe('useMyahInboxDraftAutosaveController', () => {
 
     await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(2));
     expect(saveDraft).toHaveBeenNthCalledWith(1, {
-      threadId: 'thread-1',
-      expectedWorkspaceId: 'workspace-1',
+      ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-1')),
       expectedRevision: 2,
       body: { markdown: 'first', blocknote: null },
     });
     expect(saveDraft).toHaveBeenNthCalledWith(2, {
-      threadId: 'thread-2',
-      expectedWorkspaceId: 'workspace-1',
+      ...draftInputFixture(draftKeyFixture('workspace-1', 'thread-2')),
       expectedRevision: 5,
       body: { markdown: 'second', blocknote: null },
     });
@@ -1143,7 +1953,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
     ).resolves.toBe(false);
     await expect(
       result.current.flushWorkspaceForNavigation(threadKey.workspaceId, [
-        threadKey.threadId,
+        threadKey.deliveryTargetId,
       ]),
     ).resolves.toBe(false);
     const owner = Symbol('reopened editor');
@@ -1215,17 +2025,15 @@ describe('useMyahInboxDraftAutosaveController', () => {
     expect(saveDraft.mock.calls).toEqual([
       [
         {
-          expectedWorkspaceId: threadKey.workspaceId,
+          ...draftInputFixture(threadKey),
           expectedRevision: 2,
-          threadId: threadKey.threadId,
           body: firstFormattedBody,
         },
       ],
       [
         {
-          expectedWorkspaceId: threadKey.workspaceId,
+          ...draftInputFixture(threadKey),
           expectedRevision: 3,
-          threadId: threadKey.threadId,
           body: finalFormattedBody,
         },
       ],
@@ -1265,7 +2073,11 @@ describe('useMyahInboxDraftAutosaveController', () => {
     const oldOwner = Symbol('old editor');
     const currentOwner = Symbol('current editor');
 
-    act(() => authorize(result.current));
+    act(() =>
+      authorize(result.current, reconcileThread(), (revision) =>
+        Promise.resolve({ ...reconcileThread(), revision, body: remoteBody }),
+      ),
+    );
     expect(result.current.claimEditor(threadKey, oldOwner)).toBe(true);
     expect(result.current.releaseEditor(threadKey, oldOwner)).toBe(true);
     expect(result.current.claimEditor(threadKey, currentOwner)).toBe(true);
@@ -1286,9 +2098,8 @@ describe('useMyahInboxDraftAutosaveController', () => {
     await act(async () => result.current.flush(threadKey));
 
     expect(saveDraft).toHaveBeenCalledWith({
-      expectedWorkspaceId: threadKey.workspaceId,
+      ...draftInputFixture(threadKey),
       expectedRevision: 2,
-      threadId: threadKey.threadId,
       body: localBody,
     });
     expect(readEntry(store, threadKey)).toMatchObject({
@@ -1297,7 +2108,9 @@ describe('useMyahInboxDraftAutosaveController', () => {
       conflict: { revision: 4, body: remoteBody },
     });
 
-    act(() => result.current.reloadConflict(threadKey));
+    await act(async () => {
+      await result.current.reloadConflict(threadKey);
+    });
 
     expect(readEntry(store, threadKey)).toMatchObject({
       confirmedRevision: 4,
@@ -1305,7 +2118,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
       localBody: remoteBody,
       confirmedBody: remoteBody,
       conflict: null,
-      status: 'saved',
+      status: 'idle',
     });
   });
 

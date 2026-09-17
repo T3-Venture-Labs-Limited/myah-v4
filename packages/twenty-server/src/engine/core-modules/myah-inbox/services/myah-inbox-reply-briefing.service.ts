@@ -1,3 +1,4 @@
+import { type ResolvedReplyContext } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
 import {
   BadRequestException,
   ForbiddenException,
@@ -279,7 +280,10 @@ export class MyahInboxReplyBriefingService {
   ) {}
 
   async loadReplyBriefing(
-    input: Omit<MyahInboxListThreadsInput, 'threadId'> & { threadId: string },
+    input: Omit<MyahInboxListThreadsInput, 'threadId'> & {
+      threadId: string;
+      selectedContext?: ResolvedReplyContext;
+    },
   ): Promise<MyahInboxReplyGenerationContext> {
     const thread = await this.myahInboxQueryService.getThreadSummary(input);
     const context = await this.loadThreadProposalHistory(input, thread);
@@ -289,6 +293,14 @@ export class MyahInboxReplyBriefingService {
     return {
       thread: {
         ...thread,
+        campaign: input.selectedContext
+          ? input.selectedContext.selected.kind === 'CAMPAIGN'
+            ? {
+                id: input.selectedContext.selected.campaignId,
+                name: input.selectedContext.campaignName ?? '',
+              }
+            : null
+          : thread.campaign,
         lastMessageSender:
           latestHistoryEntry?.receivedAt === thread.lastActivityAt
             ? latestHistoryEntry.sender
@@ -299,7 +311,10 @@ export class MyahInboxReplyBriefingService {
   }
 
   private async loadThreadProposalHistory(
-    input: Omit<MyahInboxListThreadsInput, 'threadId'> & { threadId: string },
+    input: Omit<MyahInboxListThreadsInput, 'threadId'> & {
+      threadId: string;
+      selectedContext?: ResolvedReplyContext;
+    },
     thread: MyahInboxThreadSummary,
   ): Promise<MyahInboxReplyBriefingContext> {
     this.assertUserRequest(input);
@@ -497,7 +512,11 @@ export class MyahInboxReplyBriefingService {
             );
           }
         }
-        const campaignId = thread.campaign?.id;
+        const campaignId = input.selectedContext
+          ? input.selectedContext.selected.kind === 'CAMPAIGN'
+            ? input.selectedContext.selected.campaignId
+            : undefined
+          : thread.campaign?.id;
         const creatorId = thread.creator?.id;
         const [campaignRecord, creatorRecord] = await Promise.all([
           campaignId
@@ -568,7 +587,9 @@ export class MyahInboxReplyBriefingService {
         return {
           history,
           replyRecipient,
-          hasCampaignLink: persistedThread.myahCampaignId !== null,
+          hasCampaignLink: input.selectedContext
+            ? input.selectedContext.selected.kind === 'CAMPAIGN'
+            : persistedThread.myahCampaignId !== null,
           campaignEmailSignatureMarkdown:
             typeof campaignRecord?.emailSignature?.markdown === 'string' &&
             campaignRecord.emailSignature.markdown.trim().length > 0
