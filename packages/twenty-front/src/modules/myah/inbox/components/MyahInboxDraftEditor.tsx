@@ -1,4 +1,5 @@
 import { MyahInboxRichDraftEditor } from '@/myah/inbox/components/MyahInboxRichDraftEditor';
+import { Select } from '@/ui/input/components/Select';
 import { TextArea } from '@/ui/input/components/TextArea';
 import { styled } from '@linaria/react';
 import {
@@ -10,7 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useIcons } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
+import { Button, type SelectOption } from 'twenty-ui/input';
 import { AppTooltip, TooltipDelay, TooltipPosition } from 'twenty-ui/surfaces';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { parseMyahReplyRichText } from 'twenty-shared/utils';
@@ -115,14 +116,20 @@ const StyledDraftPreview = styled.div`
   white-space: pre-wrap;
 `;
 
-const StyledReplySubject = styled.span`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.sm};
+const StyledReplySubject = styled.div`
+  justify-self: center;
+  max-width: 100%;
   min-width: 0;
-  overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+  > span {
+    color: ${themeCssVariables.font.color.secondary};
+    display: block;
+    font-size: ${themeCssVariables.font.size.sm};
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 `;
 
 const StyledAccessibleDescription = styled.span`
@@ -167,6 +174,9 @@ type MyahInboxDraftEditorProps = {
   guidanceUnavailableReason?: string;
   initialIsEditing?: boolean;
   onEditingChange?: (isEditing: boolean) => void;
+  subjectOptions?: SelectOption<string>[];
+  subjectValue?: string;
+  onSubjectChange?: (value: string) => void;
 };
 
 export const MyahInboxDraftEditor = ({
@@ -183,6 +193,9 @@ export const MyahInboxDraftEditor = ({
   guidanceUnavailableReason,
   initialIsEditing = false,
   onEditingChange,
+  subjectOptions,
+  subjectValue,
+  onSubjectChange,
 }: MyahInboxDraftEditorProps) => {
   const conflictPanelRef = useRef<HTMLDivElement>(null);
   const editorId = useId();
@@ -305,12 +318,25 @@ export const MyahInboxDraftEditor = ({
               />
             </StyledActionGroup>
             {subject && (
-              <StyledReplySubject
-                aria-label="Reply subject"
-                data-reply-subject
-                title={subject}
-              >
-                {subject}
+              <StyledReplySubject data-reply-subject>
+                {subjectOptions?.length && subjectValue && onSubjectChange ? (
+                  <Select
+                    ariaLabel="Reply subject"
+                    dropdownId={`${editorId}-reply-subject-select`}
+                    value={subjectValue}
+                    onChange={onSubjectChange}
+                    options={subjectOptions}
+                    selectSizeVariant="small"
+                    showContextualTextInControl={false}
+                    withSearchInput
+                    dropdownWidth={340}
+                    dropdownOffset={{ x: 0, y: 8 }}
+                  />
+                ) : (
+                  <span aria-label="Reply subject" title={subject}>
+                    {subject}
+                  </span>
+                )}
               </StyledReplySubject>
             )}
             <StyledActionGroup $alignEnd role="group" aria-label="AI actions">

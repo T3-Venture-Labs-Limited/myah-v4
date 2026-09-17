@@ -308,6 +308,8 @@ const createService = ({
     { withPreparedSourceMutationInTransaction } as never,
     { isDraftExecutionLocked } as never,
     dataSource as never,
+    {} as never,
+    {} as never,
   );
 
   return {
@@ -329,6 +331,26 @@ const createService = ({
 };
 
 describe('MyahInboxMutationService', () => {
+  it('rejects legacy Email draft saves before opening transactions or repository writes', async () => {
+    const setup = createService();
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'legacy draft', blocknote: null },
+      }),
+    ).rejects.toEqual(
+      new ConflictException(
+        'Email reply drafts require a refreshed contextual reply flow',
+      ),
+    );
+    expect(setup.coreTransaction).not.toHaveBeenCalled();
+    expect(setup.transaction).not.toHaveBeenCalled();
+    expect(setup.bypassedMessageThreadRepository.update).not.toHaveBeenCalled();
+  });
+
   it('requires matching authenticated user, workspace, and member context', async () => {
     const { service, transaction } = createService();
     const mismatchedAuthContext = {
@@ -410,7 +432,7 @@ describe('MyahInboxMutationService', () => {
     setup.repositories.messageThread.update.mockClear();
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -426,7 +448,7 @@ describe('MyahInboxMutationService', () => {
     );
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(otherMemberId),
         threadId,
         expectedRevision: 3,
@@ -440,7 +462,7 @@ describe('MyahInboxMutationService', () => {
       creatorId: null,
     });
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(thirdMemberId),
         threadId,
         expectedRevision: 4,
@@ -453,7 +475,7 @@ describe('MyahInboxMutationService', () => {
     const setup = createService({ canUpdateMessageThread: false });
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(otherMemberId),
         threadId,
         expectedRevision: 2,
@@ -569,12 +591,13 @@ describe('MyahInboxMutationService', () => {
       },
     });
 
-    const staleSave = await setup.service.saveMyahInboxDraft({
-      ...request(),
-      threadId,
-      expectedRevision: 2,
-      body: { markdown: 'stale copy', blocknote: null },
-    });
+    const staleSave =
+      await setup.service.saveMyahInboxDraftAfterProviderFailure({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'stale copy', blocknote: null },
+      });
 
     expect(staleSave).toEqual({
       status: 'CONFLICT',
@@ -596,7 +619,7 @@ describe('MyahInboxMutationService', () => {
     });
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -608,7 +631,7 @@ describe('MyahInboxMutationService', () => {
       body: { markdown: 'saved copy', blocknote: null },
     });
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 3,
@@ -616,7 +639,7 @@ describe('MyahInboxMutationService', () => {
       }),
     ).resolves.toEqual({ status: 'SAVED', revision: 4, body: null });
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 4,
@@ -638,7 +661,7 @@ describe('MyahInboxMutationService', () => {
     });
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -651,7 +674,7 @@ describe('MyahInboxMutationService', () => {
     const setup = createService({ hasReadableMessage: false });
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -673,7 +696,7 @@ describe('MyahInboxMutationService', () => {
               threadId,
               creatorId,
             })
-          : setup.service.saveMyahInboxDraft({
+          : setup.service.saveMyahInboxDraftAfterProviderFailure({
               ...request(),
               threadId,
               expectedRevision: 2,
@@ -693,7 +716,7 @@ describe('MyahInboxMutationService', () => {
       );
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -719,7 +742,7 @@ describe('MyahInboxMutationService', () => {
       setup.service.updateMyahInboxThread({ ...request(), threadId }),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: -1,
@@ -727,7 +750,7 @@ describe('MyahInboxMutationService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -738,7 +761,7 @@ describe('MyahInboxMutationService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -755,7 +778,7 @@ describe('MyahInboxMutationService', () => {
     const setup = createService();
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -772,7 +795,7 @@ describe('MyahInboxMutationService', () => {
   it('uses only workspace-scoped thread/context repositories and never creates a Message or calls a provider path', async () => {
     const setup = createService();
 
-    await setup.service.saveMyahInboxDraft({
+    await setup.service.saveMyahInboxDraftAfterProviderFailure({
       ...request(),
       threadId,
       expectedRevision: 2,
@@ -796,55 +819,25 @@ describe('MyahInboxMutationService', () => {
     expect(setup.repositories.message).not.toHaveProperty('save');
     expect(setup.repositories.message).not.toHaveProperty('insert');
   });
-  it.each([
-    ['approved Inbox binding without a receipt'],
-    ['processing receipt'],
-    ['provider-accepted receipt'],
-    ['unknown receipt'],
-  ])('locks autosave for a %s', async () => {
+  it('keeps immutable receipt recovery available without reopening the public legacy draft-write path', async () => {
     const setup = createService({ draftExecutionLocked: true });
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
-        body: { markdown: 'locked copy', blocknote: null },
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(setup.isDraftExecutionLocked).toHaveBeenCalledWith({
-      workspaceId,
-      actionName: 'send_inbox_reply',
-      draftId: threadId,
-    });
-    expect(setup.bypassedMessageThreadRepository.update).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['failed receipt'],
-    ['sent receipt'],
-    ['foreign-thread receipt'],
-    ['ordinary autosave'],
-  ])('keeps autosave writable after a %s', async () => {
-    const setup = createService({ draftExecutionLocked: false });
-
-    await expect(
-      setup.service.saveMyahInboxDraft({
-        ...request(),
-        threadId,
-        expectedRevision: 2,
-        body: { markdown: 'writable copy', blocknote: null },
+        body: { markdown: 'recovered copy', blocknote: null },
       }),
     ).resolves.toEqual({
       status: 'SAVED',
       revision: 3,
-      body: { markdown: 'writable copy', blocknote: null },
+      body: { markdown: 'recovered copy', blocknote: null },
     });
-    expect(setup.isDraftExecutionLocked).toHaveBeenCalledWith({
-      workspaceId,
-      actionName: 'send_inbox_reply',
-      draftId: threadId,
-    });
+    expect(setup.isDraftExecutionLocked).not.toHaveBeenCalled();
+    expect(setup.bypassedMessageThreadRepository.update).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('keeps workspace raw SQL forbidden while acquiring the advisory lock through the core transaction before CAS', async () => {
@@ -854,7 +847,7 @@ describe('MyahInboxMutationService', () => {
     );
 
     await expect(
-      setup.service.saveMyahInboxDraft({
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
         ...request(),
         threadId,
         expectedRevision: 2,
@@ -867,6 +860,10 @@ describe('MyahInboxMutationService', () => {
     });
 
     expect(setup.coreTransaction).toHaveBeenCalledTimes(1);
+    expect(setup.coreTransactionManager.query.mock.calls[0]).toEqual([
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`myah-inbox-reply-target:${workspaceId}:EMAIL:${threadId}`],
+    ]);
     expect(setup.coreTransactionManager.query).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
       [`myah-inbox-reply:${workspaceId}:${threadId}`],
@@ -879,10 +876,10 @@ describe('MyahInboxMutationService', () => {
     expect(setup.transactionManager.query).not.toHaveBeenCalled();
   });
 
-  it('takes the shared advisory lock before checking the execution lock and draft CAS', async () => {
+  it('takes the shared advisory lock before receipt recovery draft CAS', async () => {
     const setup = createService();
 
-    await setup.service.saveMyahInboxDraft({
+    await setup.service.saveMyahInboxDraftAfterProviderFailure({
       ...request(),
       threadId,
       expectedRevision: 2,
@@ -895,9 +892,6 @@ describe('MyahInboxMutationService', () => {
     );
     expect(
       setup.coreTransactionManager.query.mock.invocationCallOrder[0],
-    ).toBeLessThan(setup.isDraftExecutionLocked.mock.invocationCallOrder[0]);
-    expect(
-      setup.isDraftExecutionLocked.mock.invocationCallOrder[0],
     ).toBeLessThan(
       setup.bypassedMessageThreadRepository.update.mock.invocationCallOrder[0],
     );

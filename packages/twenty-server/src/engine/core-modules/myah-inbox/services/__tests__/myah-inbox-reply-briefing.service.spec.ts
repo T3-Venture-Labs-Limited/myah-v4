@@ -1015,3 +1015,21 @@ describe('MyahInboxReplyBriefingService', () => {
     expect(second.creator?.categories).toEqual(first.creator?.categories);
   });
 });
+
+it('does not leak the thread Campaign into explicitly General generation', async () => {
+  const { service } = createService();
+  const briefing = await service.loadReplyBriefing({
+    ...listInput(),
+    threadId,
+    selectedContext: {
+      state: 'READY',
+      selected: { kind: 'GENERAL' },
+      target: { channel: 'EMAIL', deliveryTargetId: threadId },
+      contextFingerprint: 'a'.repeat(64),
+    } as never,
+  });
+  expect(briefing.thread.campaign).toBeNull();
+  expect(briefing.campaign).toBeNull();
+  expect(briefing.campaignEmailSignatureMarkdown).toBeNull();
+  expect(briefing.hasCampaignLink).toBe(false);
+});

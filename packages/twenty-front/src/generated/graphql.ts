@@ -159,9 +159,11 @@ export enum FilterIs {
 }
 
 export type GenerateMyahInboxReplyProposalInput = {
-  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
+  expectedContextFingerprint: Scalars['String']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
   operatorInstructions: Scalars['String']['input'];
-  threadId: Scalars['UUID']['input'];
+  replyContext: ReplyContextInput;
+  target: ReplyTargetInput;
 };
 
 export type GetInstagramMessageDraftInput = {
@@ -303,6 +305,7 @@ export type Mutation = {
   replaceLegacyCampaignSequence: CampaignSequenceSnapshot;
   resolveInstagramUnknownSend: InstagramSendOutcomeResolutionDto;
   retryWorkflowRun: WorkflowRun;
+  reviewMyahInboxReplyContext: MyahInboxReplyContextDraft;
   runWorkflowVersion: RunWorkflowVersion;
   saveCampaignSequence: CampaignSequenceSnapshot;
   saveInstagramMessageDraft: InstagramMessageDraftResultDto;
@@ -409,6 +412,11 @@ export type MutationResolveInstagramUnknownSendArgs = {
 
 export type MutationRetryWorkflowRunArgs = {
   workflowRunId: Scalars['UUID']['input'];
+};
+
+
+export type MutationReviewMyahInboxReplyContextArgs = {
+  input: ReviewMyahInboxReplyContextInput;
 };
 
 
@@ -723,9 +731,67 @@ export type MyahInboxInstagramMessagePageInfo = {
   hasNextPage: Scalars['Boolean']['output'];
 };
 
+export type MyahInboxReplyCampaignOption = {
+  __typename?: 'MyahInboxReplyCampaignOption';
+  id: Scalars['UUID']['output'];
+  name: Scalars['String']['output'];
+};
+
+export type MyahInboxReplyContextDraft = {
+  __typename?: 'MyahInboxReplyContextDraft';
+  body?: Maybe<MyahInboxRichText>;
+  draftId?: Maybe<Scalars['UUID']['output']>;
+  executionState: MyahInboxReplyDraftExecutionState;
+  resolvedContext?: Maybe<MyahInboxResolvedReplyContext>;
+  revision: Scalars['Int']['output'];
+};
+
+export type MyahInboxReplyContextOptionEdge = {
+  __typename?: 'MyahInboxReplyContextOptionEdge';
+  cursor: Scalars['String']['output'];
+  node: MyahInboxReplyCampaignOption;
+};
+
+export type MyahInboxReplyContextOptions = {
+  __typename?: 'MyahInboxReplyContextOptions';
+  defaultContext?: Maybe<MyahInboxReplyDefaultContext>;
+  edges: Array<MyahInboxReplyContextOptionEdge>;
+  generalAvailable: Scalars['Boolean']['output'];
+  pageInfo: MyahInboxThreadPageInfo;
+};
+
+export type MyahInboxReplyContextOptionsInput = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  first?: InputMaybe<Scalars['Int']['input']>;
+  target: ReplyTargetInput;
+};
+
+export type MyahInboxReplyDefaultContext = {
+  __typename?: 'MyahInboxReplyDefaultContext';
+  campaignId?: Maybe<Scalars['UUID']['output']>;
+  campaignName?: Maybe<Scalars['String']['output']>;
+  kind: ReplyContextKind;
+};
+
+export enum MyahInboxReplyDraftExecutionState {
+  CONTEXT_UNAVAILABLE = 'CONTEXT_UNAVAILABLE',
+  NEEDS_REVIEW = 'NEEDS_REVIEW',
+  OUTCOME_PENDING = 'OUTCOME_PENDING',
+  OUTCOME_UNKNOWN = 'OUTCOME_UNKNOWN',
+  READY = 'READY'
+}
+
+export type MyahInboxReplyDraftInput = {
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  replyContext: ReplyContextInput;
+  target: ReplyTargetInput;
+};
+
 export type MyahInboxReplyProposal = {
   __typename?: 'MyahInboxReplyProposal';
   body: MyahInboxReplyProposalBody;
+  contextFingerprint?: Maybe<Scalars['String']['output']>;
 };
 
 export type MyahInboxReplyProposalBody = {
@@ -752,6 +818,7 @@ export type MyahInboxReplySendReadiness = {
 
 export enum MyahInboxReplySendReadinessStatus {
   MAILBOX_INELIGIBLE = 'MAILBOX_INELIGIBLE',
+  NEEDS_REVIEW = 'NEEDS_REVIEW',
   OUTCOME_PENDING = 'OUTCOME_PENDING',
   OUTCOME_UNKNOWN = 'OUTCOME_UNKNOWN',
   READY = 'READY',
@@ -778,9 +845,27 @@ export type MyahInboxReplySendStatus = {
 };
 
 export type MyahInboxReplySendStatusInput = {
-  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
+  expectedWorkspaceId: Scalars['UUID']['input'];
   receiptId: Scalars['UUID']['input'];
-  threadId: Scalars['UUID']['input'];
+  replyContext: ReplyContextInput;
+  target: ReplyTargetInput;
+};
+
+export type MyahInboxResolvedReplyContext = {
+  __typename?: 'MyahInboxResolvedReplyContext';
+  campaignId?: Maybe<Scalars['UUID']['output']>;
+  contextFingerprint?: Maybe<Scalars['String']['output']>;
+  kind: ReplyContextKind;
+  target: MyahInboxResolvedReplyTarget;
+};
+
+export type MyahInboxResolvedReplyTarget = {
+  __typename?: 'MyahInboxResolvedReplyTarget';
+  channel: ReplyChannel;
+  contactAnchorId: Scalars['UUID']['output'];
+  contactAnchorKind: Scalars['String']['output'];
+  creatorId?: Maybe<Scalars['UUID']['output']>;
+  deliveryTargetId: Scalars['UUID']['output'];
 };
 
 export type MyahInboxRichText = {
@@ -894,6 +979,8 @@ export type Query = {
   myahInboxContacts: MyahInboxContactConnection;
   myahInboxEmailDraft: MyahInboxEmailDraft;
   myahInboxInstagramMessages: MyahInboxInstagramMessageConnection;
+  myahInboxReplyContextOptions: MyahInboxReplyContextOptions;
+  myahInboxReplyDraft: MyahInboxReplyContextDraft;
   myahInboxReplySendReadiness: MyahInboxReplySendReadiness;
   myahInboxReplySendStatus: MyahInboxReplySendStatus;
   myahInboxThreads: MyahInboxThreadConnection;
@@ -1055,9 +1142,18 @@ export type QueryMyahInboxInstagramMessagesArgs = {
 };
 
 
+export type QueryMyahInboxReplyContextOptionsArgs = {
+  input: MyahInboxReplyContextOptionsInput;
+};
+
+
+export type QueryMyahInboxReplyDraftArgs = {
+  input: MyahInboxReplyDraftInput;
+};
+
+
 export type QueryMyahInboxReplySendReadinessArgs = {
-  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
-  threadId: Scalars['UUID']['input'];
+  input: MyahInboxReplyDraftInput;
 };
 
 
@@ -1100,12 +1196,42 @@ export type ReplaceLegacyCampaignSequenceInput = {
   expectedWorkflowId: Scalars['UUID']['input'];
 };
 
+export enum ReplyChannel {
+  EMAIL = 'EMAIL',
+  INSTAGRAM = 'INSTAGRAM'
+}
+
+export type ReplyContextInput = {
+  campaignId?: InputMaybe<Scalars['UUID']['input']>;
+  kind: ReplyContextKind;
+};
+
+export enum ReplyContextKind {
+  CAMPAIGN = 'CAMPAIGN',
+  GENERAL = 'GENERAL'
+}
+
+export type ReplyTargetInput = {
+  channel: ReplyChannel;
+  contactId: Scalars['String']['input'];
+  conversationId?: InputMaybe<Scalars['UUID']['input']>;
+  threadId?: InputMaybe<Scalars['UUID']['input']>;
+};
+
 export type ResolveInstagramSendOutcomeInput = {
   notes?: InputMaybe<Scalars['String']['input']>;
   outcome: Scalars['String']['input'];
   receiptId: Scalars['UUID']['input'];
   recipientUiReviewed?: InputMaybe<Scalars['Boolean']['input']>;
   senderUiReviewed?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+export type ReviewMyahInboxReplyContextInput = {
+  expectedContextFingerprint: Scalars['String']['input'];
+  expectedDraftRevision: Scalars['Int']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  replyContext: ReplyContextInput;
+  target: ReplyTargetInput;
 };
 
 export type RunWorkflowVersion = {
@@ -1140,8 +1266,10 @@ export type SaveInstagramMessageDraftInput = {
 export type SaveMyahInboxDraftInput = {
   body?: InputMaybe<MyahInboxRichTextInput>;
   expectedRevision: Scalars['Int']['input'];
-  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
-  threadId: Scalars['UUID']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  proposalContextFingerprint?: InputMaybe<Scalars['String']['input']>;
+  replyContext: ReplyContextInput;
+  target: ReplyTargetInput;
 };
 
 export type SearchRecord = {
@@ -1189,8 +1317,9 @@ export type SendInstagramMessageInput = {
 
 export type SendMyahInboxReplyInput = {
   expectedDraftRevision: Scalars['Int']['input'];
-  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
-  threadId: Scalars['UUID']['input'];
+  expectedWorkspaceId: Scalars['UUID']['input'];
+  replyContext: ReplyContextInput;
+  target: ReplyTargetInput;
 };
 
 export type SubmitFormStepInput = {
@@ -1564,11 +1693,10 @@ export type GenerateMyahInboxReplyProposalMutationVariables = Exact<{
 }>;
 
 
-export type GenerateMyahInboxReplyProposalMutation = { __typename?: 'Mutation', generateMyahInboxReplyProposal: { __typename?: 'MyahInboxReplyProposal', body: { __typename?: 'MyahInboxReplyProposalBody', markdown: string, blocknote?: string | null } } };
+export type GenerateMyahInboxReplyProposalMutation = { __typename?: 'Mutation', generateMyahInboxReplyProposal: { __typename?: 'MyahInboxReplyProposal', contextFingerprint?: string | null, body: { __typename?: 'MyahInboxReplyProposalBody', markdown: string, blocknote?: string | null } } };
 
 export type MyahInboxReplySendReadinessQueryVariables = Exact<{
-  threadId: Scalars['UUID']['input'];
-  expectedWorkspaceId?: InputMaybe<Scalars['UUID']['input']>;
+  input: MyahInboxReplyDraftInput;
 }>;
 
 
@@ -1751,6 +1879,29 @@ export type InstagramMessageComposerAttemptQueryVariables = Exact<{
 
 export type InstagramMessageComposerAttemptQuery = { __typename?: 'Query', instagramMessageComposerAttempt?: { __typename?: 'InstagramMessageComposerAttemptDto', draftId: any, approvalBindingId?: any | null, receiptId?: any | null, state?: string | null } | null };
 
+export type MyahInboxReplyContextDraftFieldsFragment = { __typename?: 'MyahInboxReplyContextDraft', draftId?: any | null, revision: number, executionState: MyahInboxReplyDraftExecutionState, body?: { __typename?: 'MyahInboxRichText', markdown: string, blocknote?: string | null } | null, resolvedContext?: { __typename?: 'MyahInboxResolvedReplyContext', kind: ReplyContextKind, campaignId?: any | null, contextFingerprint?: string | null, target: { __typename?: 'MyahInboxResolvedReplyTarget', channel: ReplyChannel, deliveryTargetId: any, contactAnchorKind: string, contactAnchorId: any, creatorId?: any | null } } | null };
+
+export type MyahInboxReplyDraftQueryVariables = Exact<{
+  input: MyahInboxReplyDraftInput;
+}>;
+
+
+export type MyahInboxReplyDraftQuery = { __typename?: 'Query', myahInboxReplyDraft: { __typename?: 'MyahInboxReplyContextDraft', draftId?: any | null, revision: number, executionState: MyahInboxReplyDraftExecutionState, body?: { __typename?: 'MyahInboxRichText', markdown: string, blocknote?: string | null } | null, resolvedContext?: { __typename?: 'MyahInboxResolvedReplyContext', kind: ReplyContextKind, campaignId?: any | null, contextFingerprint?: string | null, target: { __typename?: 'MyahInboxResolvedReplyTarget', channel: ReplyChannel, deliveryTargetId: any, contactAnchorKind: string, contactAnchorId: any, creatorId?: any | null } } | null } };
+
+export type ReviewMyahInboxReplyContextMutationVariables = Exact<{
+  input: ReviewMyahInboxReplyContextInput;
+}>;
+
+
+export type ReviewMyahInboxReplyContextMutation = { __typename?: 'Mutation', reviewMyahInboxReplyContext: { __typename?: 'MyahInboxReplyContextDraft', draftId?: any | null, revision: number, executionState: MyahInboxReplyDraftExecutionState, body?: { __typename?: 'MyahInboxRichText', markdown: string, blocknote?: string | null } | null, resolvedContext?: { __typename?: 'MyahInboxResolvedReplyContext', kind: ReplyContextKind, campaignId?: any | null, contextFingerprint?: string | null, target: { __typename?: 'MyahInboxResolvedReplyTarget', channel: ReplyChannel, deliveryTargetId: any, contactAnchorKind: string, contactAnchorId: any, creatorId?: any | null } } | null } };
+
+export type MyahInboxReplyContextOptionsQueryVariables = Exact<{
+  input: MyahInboxReplyContextOptionsInput;
+}>;
+
+
+export type MyahInboxReplyContextOptionsQuery = { __typename?: 'Query', myahInboxReplyContextOptions: { __typename?: 'MyahInboxReplyContextOptions', generalAvailable: boolean, edges: Array<{ __typename?: 'MyahInboxReplyContextOptionEdge', cursor: string, node: { __typename?: 'MyahInboxReplyCampaignOption', id: any, name: string } }>, pageInfo: { __typename?: 'MyahInboxThreadPageInfo', hasNextPage: boolean, endCursor?: string | null }, defaultContext?: { __typename?: 'MyahInboxReplyDefaultContext', kind: ReplyContextKind, campaignId?: any | null, campaignName?: string | null } | null } };
+
 export type WorkflowDiffFragmentFragment = { __typename?: 'WorkflowVersionStepChanges', triggerDiff?: any | null, stepsDiff?: any | null };
 
 export type ActivateWorkflowVersionMutationVariables = Exact<{
@@ -1897,6 +2048,7 @@ export const MyahInboxContactFieldsFragmentDoc = {"kind":"Document","definitions
 export const MyahInboxEmailCardFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"MyahInboxEmailCardFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxEmailCard"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"threadId"}},{"kind":"Field","name":{"kind":"Name","value":"rootMessageId"}},{"kind":"Field","name":{"kind":"Name","value":"startTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"campaignLabel"}},{"kind":"Field","name":{"kind":"Name","value":"historyBasis"}}]}}]} as unknown as DocumentNode<MyahInboxEmailCardFieldsFragment, unknown>;
 export const MyahInboxEmailStoredMessageFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"MyahInboxEmailStoredMessageFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxContactEmailMessage"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"messageThreadId"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"receivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"direction"}},{"kind":"Field","name":{"kind":"Name","value":"visibility"}},{"kind":"Field","name":{"kind":"Name","value":"participants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"handle"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}}]}},{"kind":"Field","name":{"kind":"Name","value":"attachmentFileIds"}}]}}]} as unknown as DocumentNode<MyahInboxEmailStoredMessageFieldsFragment, unknown>;
 export const MyahInboxEmailMessagePageFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"MyahInboxEmailMessagePageFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxEmailMessagePage"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"threadId"}},{"kind":"Field","name":{"kind":"Name","value":"olderCursor"}},{"kind":"Field","name":{"kind":"Name","value":"newerCursor"}},{"kind":"Field","name":{"kind":"Name","value":"root"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"MyahInboxEmailStoredMessageFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"messages"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"MyahInboxEmailStoredMessageFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"MyahInboxEmailStoredMessageFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxContactEmailMessage"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"messageThreadId"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"receivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"direction"}},{"kind":"Field","name":{"kind":"Name","value":"visibility"}},{"kind":"Field","name":{"kind":"Name","value":"participants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"handle"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}}]}},{"kind":"Field","name":{"kind":"Name","value":"attachmentFileIds"}}]}}]} as unknown as DocumentNode<MyahInboxEmailMessagePageFieldsFragment, unknown>;
+export const MyahInboxReplyContextDraftFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"MyahInboxReplyContextDraftFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxReplyContextDraft"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"draftId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"executionState"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}},{"kind":"Field","name":{"kind":"Name","value":"resolvedContext"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"campaignId"}},{"kind":"Field","name":{"kind":"Name","value":"contextFingerprint"}},{"kind":"Field","name":{"kind":"Name","value":"target"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"channel"}},{"kind":"Field","name":{"kind":"Name","value":"deliveryTargetId"}},{"kind":"Field","name":{"kind":"Name","value":"contactAnchorKind"}},{"kind":"Field","name":{"kind":"Name","value":"contactAnchorId"}},{"kind":"Field","name":{"kind":"Name","value":"creatorId"}}]}}]}}]}}]} as unknown as DocumentNode<MyahInboxReplyContextDraftFieldsFragment, unknown>;
 export const WorkflowDiffFragmentFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"WorkflowDiffFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"WorkflowVersionStepChanges"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"triggerDiff"}},{"kind":"Field","name":{"kind":"Name","value":"stepsDiff"}}]}}]} as unknown as DocumentNode<WorkflowDiffFragmentFragment, unknown>;
 export const GetTimelineCalendarEventsFromObjectRecordDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetTimelineCalendarEventsFromObjectRecord"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectNameSingular"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"recordId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"page"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"pageSize"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getTimelineCalendarEventsFromObjectRecord"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"objectNameSingular"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectNameSingular"}}},{"kind":"Argument","name":{"kind":"Name","value":"recordId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"recordId"}}},{"kind":"Argument","name":{"kind":"Name","value":"page"},"value":{"kind":"Variable","name":{"kind":"Name","value":"page"}}},{"kind":"Argument","name":{"kind":"Name","value":"pageSize"},"value":{"kind":"Variable","name":{"kind":"Name","value":"pageSize"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"TimelineCalendarEventsWithTotalFragment"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"TimelineCalendarEventParticipantFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"TimelineCalendarEventParticipant"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"personId"}},{"kind":"Field","name":{"kind":"Name","value":"workspaceMemberId"}},{"kind":"Field","name":{"kind":"Name","value":"firstName"}},{"kind":"Field","name":{"kind":"Name","value":"lastName"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}},{"kind":"Field","name":{"kind":"Name","value":"handle"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"TimelineCalendarEventFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"TimelineCalendarEvent"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"location"}},{"kind":"Field","name":{"kind":"Name","value":"startsAt"}},{"kind":"Field","name":{"kind":"Name","value":"endsAt"}},{"kind":"Field","name":{"kind":"Name","value":"isFullDay"}},{"kind":"Field","name":{"kind":"Name","value":"visibility"}},{"kind":"Field","name":{"kind":"Name","value":"participants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"TimelineCalendarEventParticipantFragment"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"TimelineCalendarEventsWithTotalFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"TimelineCalendarEventsWithTotal"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalNumberOfCalendarEvents"}},{"kind":"Field","name":{"kind":"Name","value":"relatedPersonIds"}},{"kind":"Field","name":{"kind":"Name","value":"timelineCalendarEvents"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"TimelineCalendarEventFragment"}}]}}]}}]} as unknown as DocumentNode<GetTimelineCalendarEventsFromObjectRecordQuery, GetTimelineCalendarEventsFromObjectRecordQueryVariables>;
 export const GetTimelineThreadsFromObjectRecordDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetTimelineThreadsFromObjectRecord"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectNameSingular"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"recordId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"page"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"pageSize"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getTimelineThreadsFromObjectRecord"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"objectNameSingular"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectNameSingular"}}},{"kind":"Argument","name":{"kind":"Name","value":"recordId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"recordId"}}},{"kind":"Argument","name":{"kind":"Name","value":"page"},"value":{"kind":"Variable","name":{"kind":"Name","value":"page"}}},{"kind":"Argument","name":{"kind":"Name","value":"pageSize"},"value":{"kind":"Variable","name":{"kind":"Name","value":"pageSize"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"TimelineThreadsWithTotalFragment"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"ParticipantFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"TimelineThreadParticipant"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"personId"}},{"kind":"Field","name":{"kind":"Name","value":"workspaceMemberId"}},{"kind":"Field","name":{"kind":"Name","value":"firstName"}},{"kind":"Field","name":{"kind":"Name","value":"lastName"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}},{"kind":"Field","name":{"kind":"Name","value":"handle"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"TimelineThreadFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"TimelineThread"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"read"}},{"kind":"Field","name":{"kind":"Name","value":"visibility"}},{"kind":"Field","name":{"kind":"Name","value":"firstParticipant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"ParticipantFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"lastTwoParticipants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"ParticipantFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"lastMessageReceivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"lastMessageBody"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"numberOfMessagesInThread"}},{"kind":"Field","name":{"kind":"Name","value":"participantCount"}},{"kind":"Field","name":{"kind":"Name","value":"lastMessageIsDraft"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"TimelineThreadsWithTotalFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"TimelineThreadsWithTotal"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalNumberOfThreads"}},{"kind":"Field","name":{"kind":"Name","value":"relatedPersonIds"}},{"kind":"Field","name":{"kind":"Name","value":"timelineThreads"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"TimelineThreadFragment"}}]}}]}}]} as unknown as DocumentNode<GetTimelineThreadsFromObjectRecordQuery, GetTimelineThreadsFromObjectRecordQueryVariables>;
@@ -1911,8 +2063,8 @@ export const ReplaceLegacyCampaignSequenceDocument = {"kind":"Document","definit
 export const MyahInboxThreadsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxThreads"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"campaignId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"search"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"threadId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"expectedWorkspaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxThreads"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"campaignId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"campaignId"}}},{"kind":"Argument","name":{"kind":"Name","value":"search"},"value":{"kind":"Variable","name":{"kind":"Name","value":"search"}}},{"kind":"Argument","name":{"kind":"Name","value":"threadId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"threadId"}}},{"kind":"Argument","name":{"kind":"Name","value":"expectedWorkspaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"expectedWorkspaceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"lastActivityAt"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"lastMessagePreview"}},{"kind":"Field","name":{"kind":"Name","value":"lastMessageSender"}},{"kind":"Field","name":{"kind":"Name","value":"creator"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"campaign"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]} as unknown as DocumentNode<MyahInboxThreadsQuery, MyahInboxThreadsQueryVariables>;
 export const UpdateMyahInboxThreadDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateMyahInboxThread"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateMyahInboxThreadInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateMyahInboxThread"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"lastActivityAt"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"lastMessagePreview"}},{"kind":"Field","name":{"kind":"Name","value":"lastMessageSender"}},{"kind":"Field","name":{"kind":"Name","value":"creator"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"campaign"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<UpdateMyahInboxThreadMutation, UpdateMyahInboxThreadMutationVariables>;
 export const SaveMyahInboxDraftDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SaveMyahInboxDraft"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SaveMyahInboxDraftInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"saveMyahInboxDraft"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<SaveMyahInboxDraftMutation, SaveMyahInboxDraftMutationVariables>;
-export const GenerateMyahInboxReplyProposalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"GenerateMyahInboxReplyProposal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GenerateMyahInboxReplyProposalInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"generateMyahInboxReplyProposal"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<GenerateMyahInboxReplyProposalMutation, GenerateMyahInboxReplyProposalMutationVariables>;
-export const MyahInboxReplySendReadinessDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxReplySendReadiness"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"threadId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"expectedWorkspaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxReplySendReadiness"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"threadId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"threadId"}}},{"kind":"Argument","name":{"kind":"Name","value":"expectedWorkspaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"expectedWorkspaceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"reason"}}]}}]}}]} as unknown as DocumentNode<MyahInboxReplySendReadinessQuery, MyahInboxReplySendReadinessQueryVariables>;
+export const GenerateMyahInboxReplyProposalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"GenerateMyahInboxReplyProposal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GenerateMyahInboxReplyProposalInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"generateMyahInboxReplyProposal"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"contextFingerprint"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<GenerateMyahInboxReplyProposalMutation, GenerateMyahInboxReplyProposalMutationVariables>;
+export const MyahInboxReplySendReadinessDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxReplySendReadiness"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxReplyDraftInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxReplySendReadiness"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"reason"}}]}}]}}]} as unknown as DocumentNode<MyahInboxReplySendReadinessQuery, MyahInboxReplySendReadinessQueryVariables>;
 export const SendMyahInboxReplyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendMyahInboxReply"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SendMyahInboxReplyInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendMyahInboxReply"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"outcome"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<SendMyahInboxReplyMutation, SendMyahInboxReplyMutationVariables>;
 export const MyahInboxReplySendStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxReplySendStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxReplySendStatusInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxReplySendStatus"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"outcome"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<MyahInboxReplySendStatusQuery, MyahInboxReplySendStatusQueryVariables>;
 export const MyahInboxContactsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxContacts"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"contactId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"owner"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"campaignId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"states"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxState"}}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"snoozeStatus"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxSnoozeStatus"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"search"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxContacts"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"contactId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"contactId"}}},{"kind":"Argument","name":{"kind":"Name","value":"owner"},"value":{"kind":"Variable","name":{"kind":"Name","value":"owner"}}},{"kind":"Argument","name":{"kind":"Name","value":"campaignId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"campaignId"}}},{"kind":"Argument","name":{"kind":"Name","value":"states"},"value":{"kind":"Variable","name":{"kind":"Name","value":"states"}}},{"kind":"Argument","name":{"kind":"Name","value":"snoozeStatus"},"value":{"kind":"Variable","name":{"kind":"Name","value":"snoozeStatus"}}},{"kind":"Argument","name":{"kind":"Name","value":"search"},"value":{"kind":"Variable","name":{"kind":"Name","value":"search"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"MyahInboxContactFields"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"MyahInboxContactFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxContactSummary"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"identityKind"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"instagramUsername"}},{"kind":"Field","name":{"kind":"Name","value":"lastActivityAt"}},{"kind":"Field","name":{"kind":"Name","value":"latestChannel"}},{"kind":"Field","name":{"kind":"Name","value":"preview"}},{"kind":"Field","name":{"kind":"Name","value":"sender"}},{"kind":"Field","name":{"kind":"Name","value":"needsAttention"}},{"kind":"Field","name":{"kind":"Name","value":"triage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"isAvailable"}},{"kind":"Field","name":{"kind":"Name","value":"inboxOwnerId"}},{"kind":"Field","name":{"kind":"Name","value":"inboxState"}},{"kind":"Field","name":{"kind":"Name","value":"snoozedUntil"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"identityGeneration"}}]}},{"kind":"Field","name":{"kind":"Name","value":"creator"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"email"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"isAvailable"}},{"kind":"Field","name":{"kind":"Name","value":"threadCount"}},{"kind":"Field","name":{"kind":"Name","value":"threadIds"}},{"kind":"Field","name":{"kind":"Name","value":"latestThreadId"}},{"kind":"Field","name":{"kind":"Name","value":"needsAttention"}}]}},{"kind":"Field","name":{"kind":"Name","value":"instagram"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"isAvailable"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"needsAttention"}},{"kind":"Field","name":{"kind":"Name","value":"conversations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"providerConversationId"}},{"kind":"Field","name":{"kind":"Name","value":"provider"}},{"kind":"Field","name":{"kind":"Name","value":"lifecycle"}},{"kind":"Field","name":{"kind":"Name","value":"recipientUsername"}},{"kind":"Field","name":{"kind":"Name","value":"recipientDisplayName"}},{"kind":"Field","name":{"kind":"Name","value":"lastActivityAt"}},{"kind":"Field","name":{"kind":"Name","value":"latestDirection"}}]}}]}}]}}]} as unknown as DocumentNode<MyahInboxContactsQuery, MyahInboxContactsQueryVariables>;
@@ -1934,6 +2086,9 @@ export const InstagramMessageComposerAccountDocument = {"kind":"Document","defin
 export const PrepareInstagramMessageComposerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"PrepareInstagramMessageComposer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"PrepareInstagramMessageComposerInputDto"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"prepareInstagramMessageComposer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"normalizedHandle"}},{"kind":"Field","name":{"kind":"Name","value":"creatorRecordId"}},{"kind":"Field","name":{"kind":"Name","value":"sender"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accountRecordId"}},{"kind":"Field","name":{"kind":"Name","value":"label"}}]}},{"kind":"Field","name":{"kind":"Name","value":"actionKind"}},{"kind":"Field","name":{"kind":"Name","value":"preparationFingerprint"}}]}}]}}]} as unknown as DocumentNode<PrepareInstagramMessageComposerQuery, PrepareInstagramMessageComposerQueryVariables>;
 export const SendInstagramMessageComposerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendInstagramMessageComposer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SendInstagramMessageComposerInputDto"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendInstagramMessageComposer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"nextEligibleAt"}}]}}]}}]} as unknown as DocumentNode<SendInstagramMessageComposerMutation, SendInstagramMessageComposerMutationVariables>;
 export const InstagramMessageComposerAttemptDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InstagramMessageComposerAttempt"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"draftId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"instagramMessageComposerAttempt"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"draftId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"draftId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"draftId"}},{"kind":"Field","name":{"kind":"Name","value":"approvalBindingId"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"state"}}]}}]}}]} as unknown as DocumentNode<InstagramMessageComposerAttemptQuery, InstagramMessageComposerAttemptQueryVariables>;
+export const MyahInboxReplyDraftDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxReplyDraft"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxReplyDraftInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxReplyDraft"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"MyahInboxReplyContextDraftFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"MyahInboxReplyContextDraftFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxReplyContextDraft"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"draftId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"executionState"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}},{"kind":"Field","name":{"kind":"Name","value":"resolvedContext"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"campaignId"}},{"kind":"Field","name":{"kind":"Name","value":"contextFingerprint"}},{"kind":"Field","name":{"kind":"Name","value":"target"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"channel"}},{"kind":"Field","name":{"kind":"Name","value":"deliveryTargetId"}},{"kind":"Field","name":{"kind":"Name","value":"contactAnchorKind"}},{"kind":"Field","name":{"kind":"Name","value":"contactAnchorId"}},{"kind":"Field","name":{"kind":"Name","value":"creatorId"}}]}}]}}]}}]} as unknown as DocumentNode<MyahInboxReplyDraftQuery, MyahInboxReplyDraftQueryVariables>;
+export const ReviewMyahInboxReplyContextDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ReviewMyahInboxReplyContext"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ReviewMyahInboxReplyContextInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reviewMyahInboxReplyContext"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"MyahInboxReplyContextDraftFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"MyahInboxReplyContextDraftFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxReplyContextDraft"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"draftId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"executionState"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}},{"kind":"Field","name":{"kind":"Name","value":"resolvedContext"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"campaignId"}},{"kind":"Field","name":{"kind":"Name","value":"contextFingerprint"}},{"kind":"Field","name":{"kind":"Name","value":"target"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"channel"}},{"kind":"Field","name":{"kind":"Name","value":"deliveryTargetId"}},{"kind":"Field","name":{"kind":"Name","value":"contactAnchorKind"}},{"kind":"Field","name":{"kind":"Name","value":"contactAnchorId"}},{"kind":"Field","name":{"kind":"Name","value":"creatorId"}}]}}]}}]}}]} as unknown as DocumentNode<ReviewMyahInboxReplyContextMutation, ReviewMyahInboxReplyContextMutationVariables>;
+export const MyahInboxReplyContextOptionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxReplyContextOptions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxReplyContextOptionsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxReplyContextOptions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}},{"kind":"Field","name":{"kind":"Name","value":"generalAvailable"}},{"kind":"Field","name":{"kind":"Name","value":"defaultContext"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"campaignId"}},{"kind":"Field","name":{"kind":"Name","value":"campaignName"}}]}}]}}]}}]} as unknown as DocumentNode<MyahInboxReplyContextOptionsQuery, MyahInboxReplyContextOptionsQueryVariables>;
 export const ActivateWorkflowVersionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ActivateWorkflowVersion"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"workflowVersionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"activateWorkflowVersion"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"workflowVersionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"workflowVersionId"}}}]}]}}]} as unknown as DocumentNode<ActivateWorkflowVersionMutation, ActivateWorkflowVersionMutationVariables>;
 export const ComputeStepOutputSchemaDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ComputeStepOutputSchema"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ComputeStepOutputSchemaInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"computeStepOutputSchema"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<ComputeStepOutputSchemaMutation, ComputeStepOutputSchemaMutationVariables>;
 export const CreateDraftFromWorkflowVersionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateDraftFromWorkflowVersion"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateDraftFromWorkflowVersionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createDraftFromWorkflowVersion"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"trigger"}},{"kind":"Field","name":{"kind":"Name","value":"steps"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<CreateDraftFromWorkflowVersionMutation, CreateDraftFromWorkflowVersionMutationVariables>;

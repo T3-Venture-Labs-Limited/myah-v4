@@ -7,6 +7,7 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { useMyahInboxDraftAutosaveControllerContext } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 import {
+  myahInboxDraftKeyId,
   type MyahInboxDraftAutosaveKey,
   type MyahInboxDraftOperationCapture,
 } from '@/myah/inbox/types/MyahInboxDraftAutosave';
@@ -82,6 +83,7 @@ export const MyahInboxProposalPreview = ({
   generateUnavailableReason,
   renderGenerateAction,
 }: MyahInboxProposalPreviewProps) => {
+  const identity = myahInboxDraftKeyId(draftKey);
   const controller = useMyahInboxDraftAutosaveControllerContext();
   const { generateProposal } = useMyahInboxThreadMutations();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -106,7 +108,7 @@ export const MyahInboxProposalPreview = ({
       activeRef.current = null;
       generationAttemptRef.current = null;
     };
-  }, [controller, draftKey.threadId, draftKey.workspaceId]);
+  }, [controller, identity]);
 
   const handleGenerate = async () => {
     if (
@@ -121,8 +123,7 @@ export const MyahInboxProposalPreview = ({
     const key = draftKey;
     const isCurrent = () =>
       mountedRef.current &&
-      scopeRef.current.workspaceId === key.workspaceId &&
-      scopeRef.current.threadId === key.threadId;
+      myahInboxDraftKeyId(scopeRef.current) === myahInboxDraftKeyId(key);
     setIsGenerating(true);
     setError(null);
     let capture: MyahInboxDraftOperationCapture | null = null;
@@ -132,12 +133,18 @@ export const MyahInboxProposalPreview = ({
       capture = controller.acquire(key, 'generating', editorOwner);
       if (!capture) return;
       activeRef.current = capture;
+      const entry = controller.getEntry(key);
+      if (!entry?.input || !capture.contextFingerprint) return;
       const generatedProposal = await generateProposal({
-        threadId: key.threadId,
-        expectedWorkspaceId: key.workspaceId,
+        ...entry.input,
+        expectedContextFingerprint: capture.contextFingerprint,
         operatorInstructions: 'Draft a concise reply to this conversation.',
       });
-      if (!isCurrent()) return;
+      if (
+        !isCurrent() ||
+        generatedProposal.contextFingerprint !== capture.contextFingerprint
+      )
+        return;
       const applied = await controller.applyProposalIfCurrent(capture, {
         markdown: generatedProposal.body.markdown,
         blocknote: generatedProposal.body.blocknote ?? null,

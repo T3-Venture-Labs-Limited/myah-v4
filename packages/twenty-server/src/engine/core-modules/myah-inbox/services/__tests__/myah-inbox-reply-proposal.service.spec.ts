@@ -1,3 +1,8 @@
+import {
+  ReplyChannel,
+  ReplyContextKind,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { type LanguageModel, type ToolSet } from 'ai';
 import { MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
@@ -375,6 +380,18 @@ const createService = (
     billingUsageService as never,
     aiBillingService as never,
     managedOpenRouterModelService as never,
+    {
+      resolveForAction: jest.fn(async () => ({
+        state: 'READY',
+        contextFingerprint: 'a'.repeat(64),
+        selected: { kind: ReplyContextKind.GENERAL },
+        target: { deliveryTargetId: threadId },
+      })),
+    } as never,
+    {
+      executeInboxReplyTargetLocked: jest.fn(async (_input, run) => run()),
+      getInboxReplyTargetExecutionState: jest.fn(async () => null),
+    } as never,
   );
 
   return {
@@ -822,7 +839,17 @@ describe('MyahInboxReplyProposalService', () => {
     );
     const directResult = await resolver.generateMyahInboxReplyProposal(
       {
-        threadId,
+        expectedWorkspaceId: workspaceId,
+        target: {
+          channel: ReplyChannel.EMAIL,
+          threadId,
+          contactId: encodeMyahInboxContactId({
+            workspaceId,
+            identity: { kind: 'email-thread', recordId: threadId },
+          }),
+        },
+        replyContext: { kind: ReplyContextKind.GENERAL },
+        expectedContextFingerprint: 'a'.repeat(64),
         operatorInstructions: request.operatorInstructions,
       },
       workspace as never,
@@ -866,11 +893,19 @@ describe('MyahInboxReplyProposalService', () => {
     );
     const loadReplyBriefingCalls = setup.loadReplyBriefing.mock.calls;
 
-    expect(directResult).toEqual(proposal);
+    expect(directResult).toEqual({
+      ...proposal,
+      contextFingerprint: 'a'.repeat(64),
+    });
     expect(toolResult.result).toEqual(proposal);
     expect(modelRequests).toHaveLength(2);
     expect(loadReplyBriefingCalls).toHaveLength(2);
-    expect(loadReplyBriefingCalls[0]).toEqual(loadReplyBriefingCalls[1]);
+    expect(loadReplyBriefingCalls[0][0]).toEqual({
+      ...loadReplyBriefingCalls[1][0],
+      selectedContext: expect.objectContaining({
+        contextFingerprint: 'a'.repeat(64),
+      }),
+    });
     expect(setup.businessRecordMutation).not.toHaveBeenCalled();
     for (const modelRequest of modelRequests) {
       expect(modelRequest).toContain('Can we launch next Tuesday?');

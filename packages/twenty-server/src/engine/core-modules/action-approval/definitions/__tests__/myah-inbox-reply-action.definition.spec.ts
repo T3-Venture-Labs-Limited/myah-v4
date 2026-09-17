@@ -1,4 +1,17 @@
 import {
+  type ReplyContextRequest,
+  MyahInboxReplyContextQueryEvidenceResolver,
+  MyahInboxReplyContextService,
+} from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
+import { withWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { MyahInboxReplySendService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-send.service';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
+import {
+  ReplyChannel,
+  ReplyContextKind,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
+import { matchesMyahInboxReplyBinding } from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-action-binding.util';
+import {
   MyahInboxReplyActionDefinition,
   MyahInboxReplyActionProposalInputZodSchema,
   MyahInboxReplyUnavailableCode,
@@ -8,7 +21,10 @@ import {
   MessageChannelType,
 } from 'twenty-shared/types';
 
-import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import {
+  computeActionContentDigest,
+  computeLogicalActionKey,
+} from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-authority-context.service';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
@@ -224,13 +240,48 @@ const createDefinition = ({
     workspaceCacheService,
   );
 
+  const contextDraft = {
+    draftId: '00000000-0000-4000-8000-000000000079',
+    revision: 4,
+    body: { markdown: 'Thanks for the update', blocknote: null },
+    proposalContextFingerprint: 'b'.repeat(64),
+    reviewedContextFingerprint: null,
+  };
+  const resolvedContext = {
+    target: {
+      channel: 'EMAIL',
+      deliveryTargetId: messageThreadId,
+      contactAnchor: { kind: 'EMAIL_THREAD', id: messageThreadId },
+      creatorId: null,
+    },
+    selected: { kind: 'GENERAL' },
+    state: 'READY',
+    contextFingerprint: 'b'.repeat(64),
+    eligibilityEvidenceDigest: 'a'.repeat(64),
+    threadCampaign: null,
+  };
+  const contextService = {
+    resolveForAction: jest.fn(
+      async (_request?: ReplyContextRequest) => resolvedContext,
+    ),
+    resolveForRead: jest.fn(
+      async (_request?: ReplyContextRequest) => resolvedContext,
+    ),
+  };
+  const contextDrafts = { read: jest.fn(async () => contextDraft) };
   return {
+    contextDraft,
+    resolvedContext,
+    contextService,
+    contextDrafts,
     definition: new Definition(
       authorityContext,
       connectedAccountRepository,
       messageChannelRepository,
       managedEmailCampaignEligibilityService,
       messagingMessageOutboundService,
+      contextService,
+      contextDrafts,
     ),
     repositories,
     parent,
@@ -723,6 +774,22 @@ describe('MyahInboxReplyActionDefinition', () => {
     ).rejects.toThrow(MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE);
   });
 
+  it('rejects an empty-string draft independently of whitespace-only drafts', async () => {
+    const { definition } = createDefinition({
+      draft: {
+        id: messageThreadId,
+        subject: 'Partnership',
+        myahReplyDraftBodyMarkdown: '',
+        myahReplyDraftBodyBlocknote: null,
+        myahReplyDraftRevision: 4,
+      },
+    });
+
+    await expect(buildAuthority(definition)).rejects.toThrow(
+      MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+    );
+  });
+
   it.each<[string, InboxReplyAuthorityOverride, MyahInboxReplyUnavailableCode]>(
     [
       [
@@ -1050,6 +1117,388 @@ describe('MyahInboxReplyActionDefinition', () => {
     await expect(
       setup.definition.getProposal({ workspaceId, binding: binding as never }),
     ).rejects.toThrow(MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE);
+  });
+
+  it('uses direct v2 interaction context without treating target as a chat thread', async () => {
+    const { definition } = createDefinition();
+    const contextDraftId = '00000000-0000-4000-8000-000000000079';
+    const authority = await definition.buildContextDraftAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId,
+      messageThreadId,
+      contextDraft: {
+        draftId: contextDraftId,
+        revision: 4,
+        body: { markdown: 'Thanks for the update', blocknote: null },
+        snapshot: {
+          schemaVersion: 1,
+          channel: 'EMAIL',
+          deliveryTargetId: messageThreadId,
+          draftId: contextDraftId,
+          replyContext: { kind: 'GENERAL' },
+          contactAnchor: { kind: 'EMAIL_THREAD', id: messageThreadId },
+          creatorId: null,
+          eligibilityEvidenceDigest: 'a'.repeat(64),
+          authoredContextFingerprint: null,
+          reviewedContextFingerprint: null,
+          contextFingerprint: 'b'.repeat(64),
+        },
+      },
+    });
+
+    const binding = authority.expectedActionBinding;
+    if (binding.actionVersion !== 2) throw new Error('Expected v2');
+    for (const changed of [
+      { ...binding, interactionContextId: messageThreadId },
+      {
+        ...binding,
+        myahReplyContextSnapshot: {
+          ...binding.myahReplyContextSnapshot,
+          deliveryTargetId: contextDraftId,
+        },
+      },
+      {
+        ...binding,
+        myahReplyContextSnapshot: {
+          ...binding.myahReplyContextSnapshot,
+          reviewedContextFingerprint: 'c'.repeat(64),
+        },
+      },
+    ]) {
+      expect(matchesMyahInboxReplyBinding(changed, binding)).toBe(false);
+    }
+    const reloaded = {
+      ...binding,
+      myahReplyContextSnapshot: Object.fromEntries(
+        Object.entries(binding.myahReplyContextSnapshot).reverse(),
+      ),
+    } as typeof binding;
+    expect(matchesMyahInboxReplyBinding(reloaded, binding)).toBe(true);
+    expect(computeLogicalActionKey(reloaded)).toBe(
+      computeLogicalActionKey(binding),
+    );
+
+    expect(authority.expectedActionBinding).toMatchObject({
+      actionVersion: 2,
+      draftId: contextDraftId,
+      threadId: null,
+      interactionContextType: 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT',
+      interactionContextId: contextDraftId,
+      myahReplyContextSnapshot: {
+        deliveryTargetId: messageThreadId,
+      },
+    });
+  });
+
+  it.each([undefined, '00000000-0000-4000-8000-000000000077'])(
+    'reconstructs v2 from the core row and snapshot, not the Agent thread (%s)',
+    async (agentChatThreadId) => {
+      const setup = createDefinition();
+      const original = await setup.definition.buildContextDraftAuthority({
+        workspaceId,
+        initiatorUserWorkspaceId,
+        messageThreadId,
+        agentChatThreadId,
+        contextDraft: {
+          ...setup.contextDraft,
+          snapshot: {
+            schemaVersion: 1,
+            channel: 'EMAIL',
+            deliveryTargetId: messageThreadId,
+            draftId: setup.contextDraft.draftId,
+            replyContext: { kind: 'GENERAL' },
+            contactAnchor: { kind: 'EMAIL_THREAD', id: messageThreadId },
+            creatorId: null,
+            eligibilityEvidenceDigest: 'a'.repeat(64),
+            authoredContextFingerprint: 'b'.repeat(64),
+            reviewedContextFingerprint: null,
+            contextFingerprint: 'b'.repeat(64),
+          },
+        },
+      });
+      await expect(
+        setup.definition.rebuildExecutionAuthority({
+          workspaceId,
+          binding: original.expectedActionBinding,
+        }),
+      ).resolves.toEqual(original);
+      setup.resolvedContext.contextFingerprint = 'c'.repeat(64);
+      await expect(
+        setup.definition.rebuildExecutionAuthority({
+          workspaceId,
+          binding: original.expectedActionBinding,
+        }),
+      ).rejects.toThrow();
+      setup.contextService.resolveForAction.mockRejectedValue(
+        new Error('Campaign changed') as never,
+      );
+      await expect(
+        setup.definition.rebuildProjectionAuthority({
+          workspaceId,
+          binding: original.expectedActionBinding,
+        }),
+      ).resolves.toEqual(original);
+      expect(setup.contextDrafts.read).toHaveBeenCalledWith(
+        expect.objectContaining({ deliveryTargetId: messageThreadId }),
+      );
+      setup.contextService.resolveForRead.mockRejectedValue(
+        new Error('Context permission lost') as never,
+      );
+      await expect(
+        setup.definition.getProposal({
+          workspaceId,
+          binding: {
+            ...original.expectedActionBinding,
+            state: 'APPROVED',
+            createdAt: new Date(),
+            expiresAt: new Date(),
+            decidedAt: null,
+          } as never,
+        }),
+      ).rejects.toThrow('Context permission lost');
+    },
+  );
+
+  it.each(['replyRules', 'emailSignature'] as const)(
+    'invalidates direct and Agent execution after production-shaped %s F1→F2 while accepted F1 remains projectable',
+    async (field) => {
+      const setup = createDefinition();
+      const creatorId = '00000000-0000-4000-8000-000000000070';
+      const campaignId = '00000000-0000-4000-8000-000000000071';
+      const campaign = {
+        id: campaignId,
+        name: 'Campaign',
+        replyRules: { markdown: 'F1' },
+        emailSignature: { markdown: 'Signature F1' },
+      };
+      const qb: Record<string, jest.Mock> = {};
+      for (const method of [
+        'select',
+        'where',
+        'andWhere',
+        'setParameters',
+        'orderBy',
+      ])
+        qb[method] = jest.fn(() => qb);
+      qb.getRawMany = jest.fn(async () => [{ id: 'delivered' }]);
+      const repositories = {
+        messageThread: {
+          findOne: jest.fn(async () => ({
+            id: messageThreadId,
+            creatorId,
+            myahCampaignId: campaignId,
+          })),
+          find: jest.fn(async () => [{ id: messageThreadId }]),
+        },
+        creator: {
+          findOne: jest.fn(async () => ({ id: creatorId, name: 'Creator' })),
+        },
+        campaign: { findOne: jest.fn(async () => campaign) },
+        campaignCreator: { find: jest.fn(async () => []) },
+        outreachAction: { find: jest.fn(async () => []) },
+        message: { createQueryBuilder: jest.fn(() => qb) },
+      };
+      const context = new MyahInboxReplyContextService(
+        new MyahInboxReplyContextQueryEvidenceResolver(
+          {
+            getThreadSummary: jest.fn(async () => ({ id: messageThreadId })),
+          } as never,
+          {
+            executeInWorkspaceContext: jest.fn(async (run) =>
+              withWorkspaceContext(
+                {
+                  userWorkspaceRoleMap: { [initiatorUserWorkspaceId]: 'role' },
+                  apiKeyRoleMap: {},
+                } as never,
+                run,
+              ),
+            ),
+            getRepository: jest.fn(
+              async (_workspaceId, name) =>
+                repositories[name as keyof typeof repositories],
+            ),
+          } as never,
+          {
+            buildSqlVisibilityProjection: jest.fn(() => ({
+              expression: "'FULL'",
+              parameters: {},
+            })),
+          } as never,
+        ),
+      );
+      setup.contextService.resolveForRead.mockImplementation(
+        (request) => context.resolveForRead(request!) as never,
+      );
+      setup.contextService.resolveForAction.mockImplementation(
+        (request) => context.resolveForAction(request!) as never,
+      );
+      const selection = {
+        target: {
+          channel: ReplyChannel.EMAIL,
+          threadId: messageThreadId,
+          contactId: encodeMyahInboxContactId({
+            workspaceId,
+            identity: { kind: 'creator', recordId: creatorId },
+          }),
+        },
+        replyContext: { kind: ReplyContextKind.CAMPAIGN, campaignId },
+      } as const;
+      const first = await setup.definition.readContextDraft({
+        workspaceId,
+        initiatorUserWorkspaceId,
+        ...selection,
+      });
+      setup.contextDraft.proposalContextFingerprint =
+        first.resolved.contextFingerprint!;
+      const bindings = await Promise.all(
+        [undefined, '00000000-0000-4000-8000-000000000077'].map(
+          (agentChatThreadId) =>
+            setup.definition.buildContextAuthority({
+              workspaceId,
+              initiatorUserWorkspaceId,
+              ...selection,
+              agentChatThreadId,
+            }),
+        ),
+      );
+      campaign[field].markdown = 'F2';
+      setup.messagingMessageOutboundService.assertConnectedAccountSendable.mockClear();
+      const sendService = new MyahInboxReplySendService(
+        {
+          getInboxReplyTargetExecutionState: jest.fn(async () => null),
+        } as never,
+        setup.definition,
+        {} as never,
+      );
+      await expect(
+        sendService.getReadiness({
+          ...selection,
+          workspace: { id: workspaceId },
+          userWorkspaceId: initiatorUserWorkspaceId,
+          authContext: {
+            type: 'user',
+            workspace: { id: workspaceId },
+            userWorkspaceId: initiatorUserWorkspaceId,
+            user: { id: 'user' },
+            workspaceMemberId: 'member',
+          },
+          user: { id: 'user' },
+          workspaceMemberId: 'member',
+        } as never),
+      ).resolves.toMatchObject({
+        status: 'NEEDS_REVIEW',
+        body: setup.contextDraft.body,
+      });
+      for (const authority of bindings) {
+        await expect(
+          setup.definition.rebuildExecutionAuthority({
+            workspaceId,
+            binding: authority.expectedActionBinding,
+          }),
+        ).rejects.toThrow();
+      }
+      expect(
+        setup.messagingMessageOutboundService.assertConnectedAccountSendable,
+      ).not.toHaveBeenCalled();
+      setup.contextService.resolveForAction.mockRejectedValue(
+        new Error('Campaign unavailable') as never,
+      );
+      repositories.creator.findOne.mockRejectedValue(
+        new Error('Creator A permission lost') as never,
+      );
+      for (const authority of bindings) {
+        await expect(
+          setup.definition.rebuildProjectionAuthority({
+            workspaceId,
+            binding: authority.expectedActionBinding,
+          }),
+        ).resolves.toEqual(authority);
+      }
+    },
+  );
+
+  it('proposes an Agent v2 approval for an explicit target and context', async () => {
+    const setup = createDefinition();
+    const { encodeMyahInboxContactId } =
+      await import('src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util');
+    const input = {
+      target: {
+        channel: 'EMAIL',
+        threadId: messageThreadId,
+        contactId: encodeMyahInboxContactId({
+          workspaceId,
+          identity: { kind: 'email-thread', recordId: messageThreadId },
+        }),
+      },
+      replyContext: { kind: 'GENERAL' },
+      expectedDraftRevision: 4,
+    };
+    expect(
+      MyahInboxReplyActionProposalInputZodSchema.safeParse(input).success,
+    ).toBe(true);
+    await expect(
+      setup.definition.propose({
+        workspaceId,
+        initiatorUserWorkspaceId,
+        agentChatThreadId: '00000000-0000-4000-8000-000000000077',
+        input: input as never,
+      }),
+    ).resolves.toMatchObject({
+      expectedActionBinding: {
+        actionVersion: 2,
+        threadId: '00000000-0000-4000-8000-000000000077',
+        draftId: setup.contextDraft.draftId,
+      },
+    });
+  });
+
+  it('preserves an Agent chat thread only for the Agent v2 interaction form', async () => {
+    const { definition } = createDefinition();
+    const contextDraftId = '00000000-0000-4000-8000-000000000079';
+    const agentChatThreadId = '00000000-0000-4000-8000-000000000077';
+    const authority = await definition.buildContextDraftAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId,
+      messageThreadId,
+      agentChatThreadId,
+      contextDraft: {
+        draftId: contextDraftId,
+        revision: 4,
+        body: { markdown: 'Thanks for the update', blocknote: null },
+        snapshot: {
+          schemaVersion: 1,
+          channel: 'EMAIL',
+          deliveryTargetId: messageThreadId,
+          draftId: contextDraftId,
+          replyContext: { kind: 'GENERAL' },
+          contactAnchor: { kind: 'EMAIL_THREAD', id: messageThreadId },
+          creatorId: null,
+          eligibilityEvidenceDigest: 'a'.repeat(64),
+          authoredContextFingerprint: null,
+          reviewedContextFingerprint: null,
+          contextFingerprint: 'b'.repeat(64),
+        },
+      },
+    });
+    expect(authority.expectedActionBinding).toMatchObject({
+      threadId: agentChatThreadId,
+      interactionContextType: null,
+      interactionContextId: null,
+    });
+  });
+
+  it('keeps the lock-held authority rebuild provider-free after preflight', async () => {
+    const setup = createDefinition();
+    const authority = await buildAuthority(setup.definition);
+    setup.messagingMessageOutboundService.assertConnectedAccountSendable.mockClear();
+    await setup.definition.rebuildExecutionAuthority({
+      workspaceId,
+      binding: authority.expectedActionBinding,
+      skipProviderPreflight: true,
+    });
+    expect(
+      setup.messagingMessageOutboundService.assertConnectedAccountSendable,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects an Inbox approval binding without its agent-chat thread', async () => {

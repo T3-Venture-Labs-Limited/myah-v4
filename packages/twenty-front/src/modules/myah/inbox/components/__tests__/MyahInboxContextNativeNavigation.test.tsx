@@ -1,3 +1,7 @@
+import {
+  draftInputFixture,
+  draftKeyFixture,
+} from '@/myah/inbox/hooks/__tests__/fixtures/myahInboxDraftAutosaveTestFixture';
 import { ThemeProvider } from 'twenty-ui/theme-constants';
 import {
   act,
@@ -154,9 +158,9 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
   useMyahInboxThreadMutations: () => ({ saveDraft: mockSaveDraft }),
 }));
 
-const key = { workspaceId: 'workspace-1', threadId: 'thread-1' };
+const key = draftKeyFixture('workspace-1', 'thread-1');
 const first: MyahInboxThread = {
-  id: key.threadId,
+  id: key.deliveryTargetId,
   lastActivityAt: '2026-09-08T00:00:00Z',
   subject: 'First',
   lastMessagePreview: null,
@@ -252,6 +256,7 @@ const Harness = ({ thread }: { thread: MyahInboxThread }) => {
 
     authorizeTarget(capture, {
       key,
+      input: draftInputFixture(key),
       revision: 2,
       body: { markdown: '', blocknote: null },
     });
@@ -492,8 +497,7 @@ it('does not remount or prematurely save the real draft on close/reopen and resi
   });
   expect(mockSaveDraft).toHaveBeenCalledTimes(1);
   expect(mockSaveDraft).toHaveBeenCalledWith({
-    expectedWorkspaceId: key.workspaceId,
-    threadId: key.threadId,
+    ...draftInputFixture(key),
     expectedRevision: 2,
     body: { markdown: 'Keep this draft', blocknote: null },
   });

@@ -60,7 +60,13 @@ describe('MessagingMessageService Campaign evidence', () => {
     const participantRepository = {
       find: jest.fn().mockResolvedValue(input.participants ?? []),
     };
-    const threadRepository = { insert: jest.fn(), upsert: jest.fn() };
+    const threadRepository = {
+      findOne: jest
+        .fn()
+        .mockImplementation(async ({ where }) => ({ id: where.id })),
+      insert: jest.fn(),
+      upsert: jest.fn(),
+    };
     const repositories = {
       message: messageRepository,
       messageChannelMessageAssociation: associationRepository,
@@ -82,6 +88,87 @@ describe('MessagingMessageService Campaign evidence', () => {
       threadRepository,
     };
   };
+
+  it.each(['missing target', 'wrong existing message', 'invalid target'])(
+    'rejects a pinned %s before any write',
+    async (mode) => {
+      const targetId = '00000000-0000-4000-8000-000000000020';
+      const harness = saveHarness({
+        messagesByExpectedId: [],
+        messagesByHeader:
+          mode === 'wrong existing message'
+            ? [
+                {
+                  id: otherId,
+                  headerMessageId: message.headerMessageId,
+                  messageThreadId: 'alternate',
+                },
+              ]
+            : [],
+      });
+      if (mode === 'missing target')
+        harness.threadRepository.findOne.mockResolvedValue(null);
+      await expect(
+        harness.service.saveMessagesWithinTransaction(
+          [
+            {
+              ...message,
+              expectedMessageId: undefined,
+              deliveryTargetId: mode === 'invalid target' ? '' : targetId,
+            },
+          ] as never,
+          channelId,
+          {} as WorkspaceEntityManager,
+          workspaceId,
+        ),
+      ).rejects.toThrow();
+      expect(harness.messageRepository.insert).not.toHaveBeenCalled();
+      expect(harness.associationRepository.insert).not.toHaveBeenCalled();
+      expect(harness.threadRepository.insert).not.toHaveBeenCalled();
+      expect(harness.threadRepository.upsert).not.toHaveBeenCalled();
+    },
+  );
+
+  it('pins messages independently of provider thread grouping in a batch', async () => {
+    const targetId = '00000000-0000-4000-8000-000000000020';
+    const secondTargetId = '00000000-0000-4000-8000-000000000021';
+    const harness = saveHarness({
+      messagesByHeader: [],
+      messagesByExpectedId: [],
+      threadAssociations: [
+        {
+          messageThreadExternalId: message.messageThreadExternalId,
+          message: { messageThreadId: 'alternate' },
+        },
+      ],
+    });
+    const result = await harness.service.saveMessagesWithinTransaction(
+      [
+        {
+          ...message,
+          expectedMessageId: undefined,
+          deliveryTargetId: targetId,
+        },
+        {
+          ...message,
+          expectedMessageId: undefined,
+          externalId: 'second',
+          headerMessageId: '<second@example.com>',
+          deliveryTargetId: secondTargetId,
+        },
+      ] as never,
+      channelId,
+      {} as WorkspaceEntityManager,
+      workspaceId,
+    );
+    expect(result.messageExternalIdToMessageThreadIdMap).toEqual(
+      new Map([
+        [message.externalId, targetId],
+        ['second', secondTargetId],
+      ]),
+    );
+    expect(harness.threadRepository.insert).not.toHaveBeenCalled();
+  });
 
   it('adopts an import-first Message only with exact channel, thread, content, and participant evidence', async () => {
     const persisted = {

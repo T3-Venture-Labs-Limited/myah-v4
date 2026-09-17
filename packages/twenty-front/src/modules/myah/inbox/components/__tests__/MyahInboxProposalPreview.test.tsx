@@ -1,3 +1,7 @@
+import {
+  draftInputFixture,
+  draftKeyFixture,
+} from '@/myah/inbox/hooks/__tests__/fixtures/myahInboxDraftAutosaveTestFixture';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { type ComponentType } from 'react';
 
@@ -26,13 +30,17 @@ jest.mock('twenty-ui/theme-constants', () => ({
 
 const mockGenerateProposal = jest.fn();
 const mockApplyProposal = jest.fn().mockResolvedValue(true);
+const mockDraftKey = draftKeyFixture('workspace-1', 'thread-1');
+const mockContextFingerprint = 'fingerprint-1';
 const mockCapture = {
-  key: { workspaceId: 'workspace-1', threadId: 'thread-1' },
+  key: mockDraftKey,
   token: Symbol('generate'),
+  contextFingerprint: mockContextFingerprint,
 };
 const mockController = {
   flush: jest.fn().mockResolvedValue({}),
   acquire: () => mockCapture,
+  getEntry: () => ({ input: draftInputFixture(mockDraftKey) }),
   applyProposalIfCurrent: mockApplyProposal,
   release: jest.fn(),
 };
@@ -89,12 +97,13 @@ describe('MyahInboxProposalPreview', () => {
   it('writes a generated reply directly into the shared draft', async () => {
     const proposal = {
       body: { markdown: 'Thanks for the update.', blocknote: null },
+      contextFingerprint: mockContextFingerprint,
     };
     mockGenerateProposal.mockResolvedValue(proposal);
 
     render(
       <MyahInboxProposalPreview
-        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        draftKey={draftKeyFixture('workspace-1', 'thread-1')}
         disabled={false}
       />,
     );
@@ -107,8 +116,8 @@ describe('MyahInboxProposalPreview', () => {
     });
 
     expect(mockGenerateProposal).toHaveBeenCalledWith({
-      threadId: 'thread-1',
-      expectedWorkspaceId: 'workspace-1',
+      ...draftInputFixture(mockDraftKey),
+      expectedContextFingerprint: mockContextFingerprint,
       operatorInstructions: 'Draft a concise reply to this conversation.',
     });
     expect(mockApplyProposal).toHaveBeenCalledWith(mockCapture, proposal.body);
@@ -125,7 +134,7 @@ describe('MyahInboxProposalPreview', () => {
   it('renders Generate Reply as the only normal draft action', () => {
     render(
       <MyahInboxProposalPreview
-        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        draftKey={draftKeyFixture('workspace-1', 'thread-1')}
         disabled={false}
         renderGenerateAction={(generateAction) => (
           <div aria-label="Draft actions">{generateAction}</div>
@@ -146,7 +155,7 @@ describe('MyahInboxProposalPreview', () => {
 
     render(
       <MyahInboxProposalPreview
-        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        draftKey={draftKeyFixture('workspace-1', 'thread-1')}
         disabled={false}
       />,
     );
@@ -166,7 +175,7 @@ describe('MyahInboxProposalPreview', () => {
 
     render(
       <MyahInboxProposalPreview
-        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        draftKey={draftKeyFixture('workspace-1', 'thread-1')}
         disabled={false}
       />,
     );
@@ -183,7 +192,7 @@ describe('MyahInboxProposalPreview', () => {
   it('does not call Task 5 while the draft is read-only', () => {
     render(
       <MyahInboxProposalPreview
-        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        draftKey={draftKeyFixture('workspace-1', 'thread-1')}
         disabled
       />,
     );
@@ -199,7 +208,7 @@ describe('MyahInboxProposalPreview', () => {
       'Link an exact readable Campaign to generate a reply or open AI guidance.';
     render(
       <MyahInboxProposalPreview
-        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        draftKey={draftKeyFixture('workspace-1', 'thread-1')}
         disabled={false}
         generateUnavailableReason={generateUnavailableReason}
       />,
@@ -219,7 +228,7 @@ describe('MyahInboxProposalPreview', () => {
     mockGenerateProposal.mockReturnValue(Promise.race([]));
     render(
       <MyahInboxProposalPreview
-        draftKey={{ workspaceId: 'workspace-1', threadId: 'thread-1' }}
+        draftKey={draftKeyFixture('workspace-1', 'thread-1')}
         disabled={false}
       />,
     );

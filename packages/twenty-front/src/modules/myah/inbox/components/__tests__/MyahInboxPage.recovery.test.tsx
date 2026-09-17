@@ -2,6 +2,7 @@ import { useInstagramMessageComposer } from '@/side-panel/pages/instagram-messag
 import { instagramMessageComposerState } from '@/side-panel/pages/instagram-message/states/instagramMessageComposerState';
 import { SidePanelPageComponentInstanceContext } from '@/side-panel/states/contexts/SidePanelPageComponentInstanceContext';
 import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
+import { draftKeyFixture } from '@/myah/inbox/hooks/__tests__/fixtures/myahInboxDraftAutosaveTestFixture';
 import {
   ApolloClient,
   ApolloLink,
@@ -18,22 +19,14 @@ import {
 } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { type ReactNode } from 'react';
-import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
-import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
-import {
-  EMPTY_MYAH_INBOX_CONTACT_SELECTION,
-  type MyahInboxContactSelection,
-  myahInboxContactSelectionState,
-  myahInboxPreserveSelectionOnUnmountState,
-} from '@/myah/inbox/states/myahInboxSelectionState';
+import { myahInboxContactSelectionState } from '@/myah/inbox/states/myahInboxSelectionState';
 import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import { type MyahInboxDraftAutosaveEntry } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
-import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignAgentTabUniversalIdentifier';
-import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 
 const mockInstagramNavigate = jest.fn();
 jest.mock('react-router-dom', () => {
@@ -103,25 +96,14 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     onDraftChange,
     actions,
     onRetry,
-    initialIsEditing,
-    onEditingChange,
-    onOpenAiGuidance,
-    guidanceUnavailableReason,
   }: {
     entry: MyahInboxDraftAutosaveEntry;
     disabled: boolean;
     onDraftChange: (body: { markdown: string; blocknote: null }) => void;
     actions: ReactNode;
     onRetry: () => void;
-    initialIsEditing?: boolean;
-    onEditingChange?: (isEditing: boolean) => void;
-    onOpenAiGuidance?: () => void;
-    guidanceUnavailableReason?: string;
   }) => (
-    <div
-      data-initial-is-editing={initialIsEditing}
-      data-testid="page-draft-editor"
-    >
+    <div>
       <input
         aria-label="Real shared draft"
         value={entry.localBody.markdown}
@@ -133,17 +115,6 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
       {entry.status === 'error' && (
         <button onClick={onRetry}>Retry draft save</button>
       )}
-      <button onClick={() => onEditingChange?.(true)}>
-        Mock start editing
-      </button>
-      <button
-        aria-label="Open AI guidance"
-        disabled={!onOpenAiGuidance}
-        onClick={onOpenAiGuidance}
-        title={guidanceUnavailableReason}
-      >
-        Open AI guidance
-      </button>
       {actions}
     </div>
   ),
@@ -356,15 +327,9 @@ let mockContacts: MyahInboxContact[] = contacts;
 let mockRealHistory = false;
 let mockContactRefreshStatus = 'idle';
 const threads = Object.fromEntries(
-  ['thread-1', 'thread-2', 'thread-3', 'thread-4'].map((id) => [
+  ['thread-1', 'thread-2', 'thread-3'].map((id) => [
     id,
-    {
-      id,
-      subject: id,
-      state: 'NEEDS_REPLY',
-      campaign:
-        id === 'thread-3' ? { id: 'campaign-1', name: 'Campaign One' } : null,
-    },
+    { id, subject: id, state: 'NEEDS_REPLY' },
   ]),
 );
 const refresh = jest.fn();
@@ -438,44 +403,43 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxSelectedEmailThread', () => ({
       : { thread: threads[threadId] ?? null, loading: false, refresh },
 }));
 
-const key = { workspaceId: 'workspace-1', threadId: 'thread-1' };
+const key = draftKeyFixture('workspace-1', 'thread-1');
 const body = { markdown: 'server draft', blocknote: null };
-const setCampaignAgentMetadata = (store: ReturnType<typeof createStore>) => {
-  store.set(metadataStoreState.atomFamily('pageLayouts'), {
-    current: [
+const contextOptionsPayload = {
+  myahInboxReplyContextOptions: {
+    edges: [
       {
-        id: 'campaign-layout-1',
-        deletedAt: null,
-        universalIdentifier:
-          MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
+        cursor: 'cursor-1',
+        node: { id: 'campaign-1', name: 'Spring Campaign' },
       },
     ],
-    draft: [],
-    status: 'up-to-date',
-  });
-  store.set(metadataStoreState.atomFamily('pageLayoutTabs'), {
-    current: [
-      {
-        id: 'runtime-agent-tab-1',
-        isActive: true,
-        pageLayoutId: 'campaign-layout-1',
-        universalIdentifier: MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER,
-      },
-    ],
-    draft: [],
-    status: 'up-to-date',
-  });
-  store.set(metadataStoreState.atomFamily('pageLayoutWidgets'), {
-    current: [],
-    draft: [],
-    status: 'up-to-date',
-  });
+    pageInfo: { hasNextPage: false, endCursor: 'cursor-1' },
+    generalAvailable: false,
+    defaultContext: {
+      kind: 'CAMPAIGN',
+      campaignId: 'campaign-1',
+      campaignName: 'Spring Campaign',
+    },
+  },
 };
-const CampaignRoute = () => {
-  const navigate = useNavigate();
-
-  // oxlint-disable-next-line twenty/no-navigate-prefer-link
-  return <button onClick={() => navigate(-1)}>Back to Inbox</button>;
+const resolvedContextFor = (threadId: string) => ({
+  kind: 'CAMPAIGN',
+  campaignId: 'campaign-1',
+  contextFingerprint: 'fingerprint-1',
+  target: {
+    channel: 'EMAIL',
+    deliveryTargetId: threadId,
+    contactAnchorKind: 'CREATOR',
+    contactAnchorId: 'creator-1',
+  },
+});
+const resolveContextOptions = async () => {
+  const options = requests.find(
+    (request) => request.name === 'MyahInboxReplyContextOptions',
+  );
+  if (!options) return;
+  requests.splice(requests.indexOf(options), 1);
+  await act(async () => options.resolve(contextOptionsPayload));
 };
 type Request = {
   name: string;
@@ -491,29 +455,83 @@ const take = (name: string) => {
   return requests.splice(index, 1)[0];
 };
 const completeRead = async (
-  threadId = key.threadId,
+  threadId = key.deliveryTargetId,
   readinessStatus = 'READY',
   draftBody = body,
+  revision = 2,
 ) => {
-  const read = take('MyahInboxEmailDraft');
-  expect(read.variables).toEqual({
-    expectedWorkspaceId: key.workspaceId,
-    threadId,
-  });
-  await act(async () =>
-    read.resolve({
-      myahInboxEmailDraft: { ...key, threadId, revision: 2, body: draftBody },
-    }),
-  );
-  const readiness = requests.find(
-    ({ name }) => name === 'MyahInboxReplySendReadiness',
-  );
-  if (readiness)
-    await act(async () =>
-      take('MyahInboxReplySendReadiness').resolve({
-        myahInboxReplySendReadiness: { status: readinessStatus, reason: null },
-      }),
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const pendingSummary = requests.find(
+      (request) =>
+        request.name === 'MyahInboxThreads' &&
+        request.variables.threadId === threadId,
     );
+    if (pendingSummary) {
+      requests.splice(requests.indexOf(pendingSummary), 1);
+      await act(async () =>
+        pendingSummary.resolve({
+          myahInboxThreads: { edges: [{ node: threads[threadId] }] },
+        }),
+      );
+      continue;
+    }
+
+    await resolveContextOptions();
+
+    const pendingRead = requests.find(
+      (request) =>
+        request.name === 'MyahInboxReplyDraft' &&
+        (request.variables.input as { target?: { threadId?: string } })?.target
+          ?.threadId === threadId,
+    );
+    const resolvedDraft = Boolean(pendingRead);
+    if (pendingRead) {
+      requests.splice(requests.indexOf(pendingRead), 1);
+      expect(pendingRead.variables).toMatchObject({
+        input: {
+          expectedWorkspaceId: key.workspaceId,
+          target: { channel: 'EMAIL', threadId },
+          replyContext: { kind: 'CAMPAIGN', campaignId: 'campaign-1' },
+        },
+      });
+      await act(async () =>
+        pendingRead.resolve({
+          myahInboxReplyDraft: {
+            revision,
+            executionState: 'READY',
+            body: draftBody,
+            resolvedContext: resolvedContextFor(threadId),
+          },
+        }),
+      );
+    }
+
+    const readiness = requests.find(
+      (request) => request.name === 'MyahInboxReplySendReadiness',
+    );
+    if (readiness) {
+      requests.splice(requests.indexOf(readiness), 1);
+      await act(async () =>
+        readiness.resolve({
+          myahInboxReplySendReadiness: {
+            status: readinessStatus,
+            reason: null,
+          },
+        }),
+      );
+      return;
+    }
+
+    // An empty main draft renders the Generate action instead of Send, so no
+    // readiness query follows; resolving the draft read is the completion signal.
+    if (resolvedDraft) return;
+
+    await act(async () => jest.runAllTicks());
+  }
+
+  throw new Error(
+    `Draft ${threadId} did not become ready; got ${requests.map(({ name }) => name)}`,
+  );
 };
 const advance = async () => act(async () => jest.advanceTimersByTimeAsync(750));
 const select = async (id: string) =>
@@ -523,11 +541,8 @@ const select = async (id: string) =>
 const draftInput = () => screen.getAllByLabelText('Real shared draft')[0];
 const selectThread = async (threadId: string) =>
   act(async () => {
-    const close = screen.queryByRole('button', { name: 'Close inline reply' });
     fireEvent.click(
-      threadId === 'thread-2' && close
-        ? close
-        : screen.getByRole('button', { name: `Reply to ${threadId}` }),
+      screen.getByRole('button', { name: `Reply to ${threadId}` }),
     );
   });
 const selectChannel = async (channel: 'Email' | 'Instagram') =>
@@ -587,10 +602,12 @@ const setup = (options?: {
     store.set(myahInboxContactSelectionState.atom, initialSelection);
     if (initialSelection.emailThreadId && initialDraftBody)
       store.set(
-        myahInboxDraftAutosaveFamilyState.atomFamily({
-          workspaceId: key.workspaceId,
-          threadId: initialSelection.emailThreadId,
-        }),
+        myahInboxDraftAutosaveFamilyState.atomFamily(
+          draftKeyFixture(
+            key.workspaceId,
+            initialSelection.emailThreadId,
+          ),
+        ),
         {
           operation: null,
           editorOwner: null,
@@ -698,10 +715,9 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       const { store } = setup({ includeComposer: true });
       await completeRead('thread-2');
       const selection = store.get(myahInboxContactSelectionState.atom);
-      const mainDraftAtom = myahInboxDraftAutosaveFamilyState.atomFamily({
-        workspaceId: key.workspaceId,
-        threadId: 'thread-2',
-      });
+      const mainDraftAtom = myahInboxDraftAutosaveFamilyState.atomFamily(
+        draftKeyFixture(key.workspaceId, 'thread-2'),
+      );
       const mainDraft = store.get(mainDraftAtom);
       await act(async () =>
         take('InstagramMessageComposerAccount').resolve({
@@ -917,14 +933,14 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       }),
     );
     await completeRead('thread-2');
-    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(2);
-    expect(screen.getByText('Email actions thread-1')).toBeVisible();
+    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
+    expect(screen.getByText('Email actions thread-2')).toBeVisible();
   });
 
-  it('revalidates both exact summary authorities on thread activity but not ordinary message pagination', async () => {
+  it('revalidates the selected exact summary on thread activity but not ordinary message pagination', async () => {
     mockRealHistory = true;
     mockContacts = [contact('contact-1', 'EMAIL')];
-    setup();
+    const { store } = setup();
     const historyNames = new Set([
       'MyahInboxContactEmailCards',
       'MyahInboxContactEmailCard',
@@ -1026,7 +1042,7 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
             {
               node: {
                 ...threads['thread-1'],
-                subject: 'Confidential inline subject',
+                subject: 'Confidential selected subject',
               },
             },
           ],
@@ -1048,14 +1064,11 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     expect(
       requests.some((request) => request.name === 'MyahInboxThreads'),
     ).toBe(false);
-    expect(
-      within(screen.getByRole('region', { name: 'Main reply' })).queryByText(
-        'Main reply · Confidential main subject',
-      ),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Replying to Confidential inline subject'),
-    ).toBeVisible();
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-1',
+    );
+    expect(screen.getByText('Email actions thread-1')).toBeVisible();
+    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
     await act(async () =>
       fireEvent.click(
         screen.getByRole('button', { name: 'Simulate thread update' }),
@@ -1063,15 +1076,16 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     );
     await drainHistory(true);
     expect(screen.queryAllByText(/Confidential main subject/)).toHaveLength(0);
-    expect(screen.queryAllByText(/Confidential inline subject/)).toHaveLength(
+    expect(screen.queryAllByText(/Confidential selected subject/)).toHaveLength(
       0,
     );
     const summaries = requests.filter(
       (request) => request.name === 'MyahInboxThreads',
     );
-    expect(
-      summaries.map((request) => request.variables.threadId).sort(),
-    ).toEqual(['thread-1', 'thread-2', 'thread-2']);
+    expect(summaries.map((request) => request.variables.threadId)).toEqual([
+      'thread-1',
+      'thread-1',
+    ]);
     for (const request of summaries) {
       take('MyahInboxThreads');
       await act(async () =>
@@ -1089,15 +1103,11 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         }),
       );
     }
-    expect(screen.getByText('Email actions thread-2')).toBeVisible();
+    expect(screen.getByText('Email actions thread-1')).toBeVisible();
+    await completeRead('thread-1');
+    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
     expect(
-      within(screen.getByRole('region', { name: 'Main reply' })).queryByText(
-        'Main reply · No subject',
-      ),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('Replying to No subject')).toBeVisible();
-    expect(
-      screen.queryAllByText(/Confidential (main|inline) subject/),
+      screen.queryAllByText(/Confidential (main|selected) subject/),
     ).toHaveLength(0);
   });
 
@@ -1107,12 +1117,12 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     'history failure',
     'contact refresh failure',
   ])(
-    'keeps exact draft readiness independent under %s without retargeting the pinned main',
+    'masks the selected main draft under %s without retargeting it',
     async (loss) => {
       mockRealHistory = true;
       mockContacts = [contact('contact-1', 'EMAIL')];
-      const { store, entry } = setup();
-      const mainKey = { ...key, threadId: 'thread-2' };
+      const { store } = setup();
+      const mainKey = { ...key, deliveryTargetId: 'thread-2' };
       const mainEntry = () =>
         store.get(myahInboxDraftAutosaveFamilyState.atomFamily(mainKey));
       const historyNames = new Set([
@@ -1195,17 +1205,16 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         );
       };
       const answerDraft = async (threadId: string) => {
-        const request = take('MyahInboxEmailDraft');
-        expect(request.variables).toEqual({
-          threadId,
-          expectedWorkspaceId: key.workspaceId,
+        await resolveContextOptions();
+        const request = take('MyahInboxReplyDraft');
+        expect(request.variables).toMatchObject({
+          input: { target: { threadId } },
         });
         await act(async () =>
           request.resolve({
-            myahInboxEmailDraft: {
-              ...key,
-              threadId,
+            myahInboxReplyDraft: {
               revision: 2,
+              executionState: 'READY',
               body: {
                 markdown:
                   cleanMainCardLoss && threadId === 'thread-2'
@@ -1213,26 +1222,26 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
                     : `Saved ${threadId} bytes`,
                 blocknote: null,
               },
+              resolvedContext: resolvedContextFor(threadId),
             },
           }),
         );
-        const readiness = requests.find(
-          ({ name }) => name === 'MyahInboxReplySendReadiness',
-        );
-        if (readiness)
+        // An empty main draft renders the Generate action instead of Send, so
+        // the readiness query is only issued when a send action is present.
+        if (
+          requests.some(({ name }) => name === 'MyahInboxReplySendReadiness')
+        ) {
           await act(async () =>
             take('MyahInboxReplySendReadiness').resolve({
               myahInboxReplySendReadiness: { status: 'READY', reason: null },
             }),
           );
+        }
       };
       await drainHistory();
       await answerSummary('thread-2');
       await answerDraft('thread-2');
-      await selectThread('thread-1');
-      await answerSummary('thread-1');
-      await answerDraft('thread-1');
-      expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(2);
+      expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
       expect(mainEntry()).toMatchObject({ dirty: false, confirmedRevision: 2 });
       expect(screen.getByText('Email actions thread-2')).toBeVisible();
       mainRemoved =
@@ -1254,9 +1263,10 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         const summaries = requests.filter(
           ({ name }) => name === 'MyahInboxThreads',
         );
-        expect(
-          summaries.map(({ variables }) => variables.threadId).sort(),
-        ).toEqual(['thread-1', 'thread-2', 'thread-2']);
+        expect(summaries.map(({ variables }) => variables.threadId)).toEqual([
+          'thread-2',
+          'thread-2',
+        ]);
         for (const request of summaries)
           await answerSummary(String(request.variables.threadId));
       }
@@ -1266,74 +1276,52 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       expect(mainEntry()?.localBody.markdown).toBe(
         cleanMainCardLoss ? '' : 'Saved thread-2 bytes',
       );
-      expect(entry()?.localBody.markdown).toBe('Saved thread-1 bytes');
       expect(screen.queryByText('Email actions thread-2')).toBeNull();
       expect(screen.queryByText('Email actions thread-1')).toBeNull();
-      expect(
-        within(
-          screen.getByRole('region', { name: 'Main reply' }),
-        ).queryByLabelText('Real shared draft'),
-      ).toBeNull();
-      if (loss === 'clean main-card loss') {
+      // The main composer keeps its surface without a draft, so when it renders
+      // it must be disabled and never carry the masked bytes. A failed history
+      // load replaces the whole surface instead.
+      const mainReplyRegion = within(
+        screen.getByRole('region', { name: 'Main reply' }),
+      );
+      const maskedMainDraft =
+        mainReplyRegion.queryByLabelText('Real shared draft');
+
+      if (maskedMainDraft) {
+        expect(maskedMainDraft).toBeDisabled();
+        expect(maskedMainDraft).toHaveValue('');
+      } else {
         expect(
-          store.get(myahInboxContactSelectionState.atom).emailThreadId,
-        ).toBe('thread-2');
-        expect(
-          requests.filter(({ name }) => name === 'MyahInboxEmailDraft'),
-        ).toEqual([
-          expect.objectContaining({
-            variables: expect.objectContaining({ threadId: 'thread-1' }),
-          }),
-        ]);
-      } else if (loss === 'main-card loss') {
-        // The fresh exact C read is the original P1 regression: E must not suppress it.
-        await answerDraft('thread-1');
-        const inline = within(
-          screen.getByRole('region', { name: 'Inline reply' }),
-        );
-        expect(inline.getByLabelText('Real shared draft')).toBeEnabled();
-        expect(inline.getByLabelText('Real shared draft')).toHaveValue(
-          'Saved thread-1 bytes',
-        );
-        expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
-        expect(requests).toHaveLength(0);
-        fireEvent.change(inline.getByLabelText('Real shared draft'), {
-          target: { value: 'Edited C only' },
-        });
-        await advance();
-        expect(take('SaveMyahInboxDraft').variables).toEqual({
-          input: {
-            expectedWorkspaceId: key.workspaceId,
-            threadId: 'thread-1',
-            expectedRevision: 2,
-            body: { markdown: 'Edited C only', blocknote: null },
-          },
-        });
-        expect(mainEntry()?.localBody.markdown).toBe('Saved thread-2 bytes');
-        expect(mainEntry()?.dirty).toBe(false);
-        expect(requests).toHaveLength(0);
-      } else if (!cleanMainCardLoss) {
-        expect(screen.queryAllByLabelText('Real shared draft')).toHaveLength(0);
-        expect(
-          requests.some(({ name }) => name === 'MyahInboxEmailDraft'),
-        ).toBe(false);
-        expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
-          false,
-        );
+          mainReplyRegion.getByText(
+            'Latest Email conversation is unavailable.',
+          ),
+        ).toBeVisible();
       }
+      expect(requests.some(({ name }) => name === 'MyahInboxReplyDraft')).toBe(
+        false,
+      );
+      expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
+        false,
+      );
     },
   );
 
-  it('awaits latest-editor save before moving it inline and retains shared bytes through return to bottom', async () => {
+  it('awaits the selected draft save before switching the main composer to another card', async () => {
     mockContacts = [contact('contact-1', 'EMAIL')];
-    setup();
+    const { store } = setup();
     await completeRead('thread-2');
     fireEvent.change(draftInput(), { target: { value: 'same shared bytes' } });
-    await selectThread('thread-2');
-    expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
+
+    await selectThread('thread-1');
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-2',
+    );
     const save = take('SaveMyahInboxDraft');
     expect(save.variables).toMatchObject({
-      input: { threadId: 'thread-2', body: { markdown: 'same shared bytes' } },
+      input: {
+        target: { threadId: 'thread-2' },
+        body: { markdown: 'same shared bytes' },
+      },
     });
     await act(async () =>
       save.resolve({
@@ -1344,29 +1332,37 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         },
       }),
     );
-    const read = take('MyahInboxEmailDraft');
-    await act(async () =>
-      read.resolve({
-        myahInboxEmailDraft: {
-          ...key,
-          threadId: 'thread-2',
-          revision: 3,
-          body: { markdown: 'same shared bytes', blocknote: null },
-        },
-      }),
+
+    // The committed save refreshes its own execution metadata before the flush resolves.
+    await completeRead(
+      'thread-2',
+      'READY',
+      {
+        markdown: 'same shared bytes',
+        blocknote: null,
+      },
+      3,
     );
-    await act(async () =>
-      take('MyahInboxReplySendReadiness').resolve({
-        myahInboxReplySendReadiness: { status: 'READY', reason: null },
-      }),
+
+    await completeRead('thread-1', 'READY', {
+      markdown: 'Saved thread-1 bytes',
+      blocknote: null,
+    });
+
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-1',
     );
     expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
-    expect(draftInput()).toHaveValue('same shared bytes');
-    await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Return to bottom' })),
-    );
+    expect(draftInput()).toHaveValue('Saved thread-1 bytes');
+    expect(
+      store.get(
+        myahInboxDraftAutosaveFamilyState.atomFamily({
+          ...key,
+          deliveryTargetId: 'thread-2',
+        }),
+      )?.localBody.markdown,
+    ).toBe('same shared bytes');
     expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
-    expect(take('MyahInboxEmailDraft').variables.threadId).toBe('thread-2');
   });
 
   it('follows a verified later card when the current main draft is pristine', async () => {
@@ -1423,7 +1419,7 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       screen.getByRole('button', { name: 'Switch to latest conversation' }),
     ).toBeVisible();
     expect(
-      requests.some((request) => request.name === 'MyahInboxEmailDraft'),
+      requests.some((request) => request.name === 'MyahInboxReplyDraft'),
     ).toBe(false);
     const beforeSwitch = store.get(myahInboxContactSelectionState.atom);
     act(() =>
@@ -1447,8 +1443,8 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     expect(screen.getByText('Email actions thread-3')).toBeVisible();
     await selectThread('thread-2');
     await completeRead('thread-2');
-    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(2);
-    expect(screen.getByText('Email actions thread-3')).toBeVisible();
+    expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
+    expect(screen.getByText('Email actions thread-2')).toBeVisible();
   });
 
   it.each([
@@ -1516,10 +1512,9 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         emailThreadId: 'thread-3',
       });
       if (!retainedBody.markdown) {
-        const draftAtom = myahInboxDraftAutosaveFamilyState.atomFamily({
-          workspaceId: key.workspaceId,
-          threadId: 'thread-3',
-        });
+        const draftAtom = myahInboxDraftAutosaveFamilyState.atomFamily(
+          draftKeyFixture(key.workspaceId, 'thread-3'),
+        );
         const draftEntry = store.get(draftAtom);
         if (!draftEntry) throw new Error('Expected retained thread-3 draft');
         store.set(draftAtom, {
@@ -1561,7 +1556,6 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       );
     },
   );
-
   it('reopens a non-latest same-contact recovery after remount and awaits the actual outgoing target save', async () => {
     mockContacts = [contact('contact-1', 'EMAIL')];
     const { store, view, mount, entry } = setup();
@@ -1586,10 +1580,10 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       'thread-2',
     );
     const outgoingSave = take('SaveMyahInboxDraft');
-    expect(outgoingSave.variables).toEqual({
+    expect(outgoingSave.variables).toMatchObject({
       input: {
         expectedWorkspaceId: key.workspaceId,
-        threadId: 'thread-2',
+        target: { threadId: 'thread-2' },
         expectedRevision: 2,
         body: { markdown: 'actual outgoing edit', blocknote: null },
       },
@@ -1603,8 +1597,15 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         },
       }),
     );
-    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+    // The flush only resolves once the committed save refreshes its metadata.
+    await completeRead(
       'thread-2',
+      'READY',
+      { markdown: 'actual outgoing edit', blocknote: null },
+      3,
+    );
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-1',
     );
     await advance();
     expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
@@ -1615,10 +1616,10 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     expect(draftInput()).toHaveValue('non-latest recovery');
     await advance();
     const recoverySave = take('SaveMyahInboxDraft');
-    expect(recoverySave.variables).toEqual({
+    expect(recoverySave.variables).toMatchObject({
       input: {
         expectedWorkspaceId: key.workspaceId,
-        threadId: 'thread-1',
+        target: { threadId: 'thread-1' },
         expectedRevision: 2,
         body: { markdown: 'non-latest recovery', blocknote: null },
       },
@@ -1678,7 +1679,7 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       await completeRead('thread-2');
       await selectThread('thread-1');
       expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
-        'thread-2',
+        'thread-1',
       );
       await advance();
       expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
@@ -1693,14 +1694,14 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
           false,
         );
         expect(entry()?.status).toBe('error');
-        // Once mounted again, the same buffer is protected outgoing work.
+        // Once mounted again, the same buffer blocks every outgoing transition.
         await selectThread('thread-2');
         await selectChannel('Instagram');
         await select('contact-2');
         expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
           contactId: 'contact-1',
           channel: 'EMAIL',
-          emailThreadId: 'thread-2',
+          emailThreadId: 'thread-1',
         });
         await act(async () => {
           fireEvent.click(
@@ -1709,10 +1710,10 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         });
       }
       const save = take('SaveMyahInboxDraft');
-      expect(save.variables).toEqual({
+      expect(save.variables).toMatchObject({
         input: {
           expectedWorkspaceId: key.workspaceId,
-          threadId: 'thread-1',
+          target: { threadId: 'thread-1' },
           expectedRevision: 2,
           body: { markdown: 'non-latest retained bytes', blocknote: null },
         },
@@ -1754,10 +1755,9 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       await completeRead('thread-2', readiness);
       expect(
         store.get(
-          myahInboxDraftAutosaveFamilyState.atomFamily({
-            workspaceId: key.workspaceId,
-            threadId: 'thread-2',
-          }),
+          myahInboxDraftAutosaveFamilyState.atomFamily(
+            draftKeyFixture(key.workspaceId, 'thread-2'),
+          ),
         )?.operation?.kind,
       ).toBe(operationKind);
       await selectThread('thread-1');
@@ -1807,10 +1807,10 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     expect(draftInput()).toHaveValue('retained edit');
     await advance();
     const save = take('SaveMyahInboxDraft');
-    expect(save.variables).toEqual({
+    expect(save.variables).toMatchObject({
       input: {
         expectedWorkspaceId: key.workspaceId,
-        threadId: key.threadId,
+        target: { threadId: key.deliveryTargetId },
         expectedRevision: 2,
         body: { markdown: 'retained edit', blocknote: null },
       },
@@ -1862,10 +1862,10 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       fireEvent.click(screen.getByRole('button', { name: 'Retry draft save' }));
     });
     const save = take('SaveMyahInboxDraft');
-    expect(save.variables).toEqual({
+    expect(save.variables).toMatchObject({
       input: {
         expectedWorkspaceId: key.workspaceId,
-        threadId: key.threadId,
+        target: { threadId: key.deliveryTargetId },
         expectedRevision: 2,
         body: { markdown: 'failed edit', blocknote: null },
       },
@@ -1909,10 +1909,10 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       'contact-1',
     );
     const save = take('SaveMyahInboxDraft');
-    expect(save.variables).toEqual({
+    expect(save.variables).toMatchObject({
       input: {
         expectedWorkspaceId: key.workspaceId,
-        threadId: key.threadId,
+        target: { threadId: key.deliveryTargetId },
         expectedRevision: 2,
         body: { markdown: 'outgoing edit', blocknote: null },
       },
@@ -1926,6 +1926,13 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         },
       }),
     );
+    // The flush only resolves once the committed save refreshes its metadata.
+    await completeRead(
+      key.deliveryTargetId,
+      'READY',
+      { markdown: 'outgoing edit', blocknote: null },
+      3,
+    );
     expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
       'contact-2',
     );
@@ -1937,10 +1944,10 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     expect(draftInput()).toHaveValue('second contact recovery');
     await advance();
     const recoverySave = take('SaveMyahInboxDraft');
-    expect(recoverySave.variables).toEqual({
+    expect(recoverySave.variables).toMatchObject({
       input: {
         expectedWorkspaceId: key.workspaceId,
-        threadId: 'thread-2',
+        target: { threadId: 'thread-2' },
         expectedRevision: 2,
         body: { markdown: 'second contact recovery', blocknote: null },
       },

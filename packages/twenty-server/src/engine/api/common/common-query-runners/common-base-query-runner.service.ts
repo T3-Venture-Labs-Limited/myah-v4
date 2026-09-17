@@ -62,6 +62,14 @@ import { runWithWorkspaceDatabaseEventBuffer } from 'src/engine/workspace-event-
 
 const INSTAGRAM_MESSAGE_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER =
   '85762d24-541b-407f-9d6a-cdf89552c665';
+const MESSAGE_THREAD_OBJECT_UNIVERSAL_IDENTIFIER =
+  '20202020-849a-4c3e-84f5-a25a7d802271';
+const PROTECTED_MYAH_INBOX_REPLY_DRAFT_FIELDS = new Set([
+  'myahReplyDraftBody',
+  'myahReplyDraftBodyMarkdown',
+  'myahReplyDraftBodyBlocknote',
+  'myahReplyDraftRevision',
+]);
 const PROTECTED_DRAFT_MUTATION_NAMES: Partial<Record<CommonQueryNames, true>> =
   {
     [CommonQueryNames.CREATE_ONE]: true,
@@ -84,6 +92,31 @@ export const isProtectedInstagramDraftMutation = (
   PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
   objectUniversalIdentifier ===
     INSTAGRAM_MESSAGE_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER;
+
+const containsProtectedMyahInboxReplyDraftField = (value: unknown): boolean => {
+  if (Array.isArray(value)) {
+    return value.some(containsProtectedMyahInboxReplyDraftField);
+  }
+  if (!value || typeof value !== 'object') return false;
+
+  return Object.entries(value).some(
+    ([key, nestedValue]) =>
+      PROTECTED_MYAH_INBOX_REPLY_DRAFT_FIELDS.has(key) ||
+      containsProtectedMyahInboxReplyDraftField(nestedValue),
+  );
+};
+
+export const isProtectedMyahInboxReplyDraftMutation = (
+  operationName: CommonQueryNames,
+  objectUniversalIdentifier: string,
+  args: unknown,
+) =>
+  PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
+  objectUniversalIdentifier === MESSAGE_THREAD_OBJECT_UNIVERSAL_IDENTIFIER &&
+  typeof args === 'object' &&
+  args !== null &&
+  'data' in args &&
+  containsProtectedMyahInboxReplyDraftField((args as { data: unknown }).data);
 
 @Injectable()
 export abstract class CommonBaseQueryRunnerService<
@@ -142,6 +175,11 @@ export abstract class CommonBaseQueryRunnerService<
 
     await this.throttleQueryExecution(authContext);
 
+    this.throwIfProtectedMyahInboxDraftMutation(
+      args,
+      flatObjectMetadata.universalIdentifier,
+    );
+
     if (
       this.workspaceQueryHookService.shouldRunPreQueryHooksInTransaction?.(
         flatObjectMetadata.nameSingular,
@@ -152,17 +190,6 @@ export abstract class CommonBaseQueryRunnerService<
     }
 
     await this.validate(args, queryRunnerContext);
-    if (
-      isProtectedInstagramDraftMutation(
-        this.operationName,
-        flatObjectMetadata.universalIdentifier,
-      )
-    ) {
-      throw new PermissionsException(
-        'Instagram message drafts are writable only through the revision-protected service',
-        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
-      );
-    }
 
     if (flatObjectMetadata.isSystem === true) {
       await this.validateSettingsPermissionsOnObjectOrThrow(
@@ -190,6 +217,10 @@ export abstract class CommonBaseQueryRunnerService<
       selectedFieldsResult,
       processedArgs,
       queryRunnerContext,
+    );
+    this.throwIfProtectedMyahInboxDraftMutation(
+      processedArgs,
+      flatObjectMetadata.universalIdentifier,
     );
 
     const results =
@@ -261,6 +292,10 @@ export abstract class CommonBaseQueryRunnerService<
                   processedArgs,
                   queryRunnerContext,
                 );
+                this.throwIfProtectedMyahInboxDraftMutation(
+                  processedArgs,
+                  flatObjectMetadata.universalIdentifier,
+                );
 
                 const extendedQueryRunnerContext =
                   await this.prepareExtendedQueryRunnerContextWithGlobalDatasource(
@@ -304,6 +339,35 @@ export abstract class CommonBaseQueryRunnerService<
       },
       authContext,
     );
+  }
+
+  private throwIfProtectedMyahInboxDraftMutation(
+    args: unknown,
+    objectUniversalIdentifier: string,
+  ): void {
+    if (
+      isProtectedInstagramDraftMutation(
+        this.operationName,
+        objectUniversalIdentifier,
+      )
+    ) {
+      throw new PermissionsException(
+        'Instagram message drafts are writable only through the revision-protected service',
+        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
+      );
+    }
+    if (
+      isProtectedMyahInboxReplyDraftMutation(
+        this.operationName,
+        objectUniversalIdentifier,
+        args,
+      )
+    ) {
+      throw new PermissionsException(
+        'Myah Inbox reply drafts are writable only through the revision-protected service',
+        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
+      );
+    }
   }
 
   protected abstract run(

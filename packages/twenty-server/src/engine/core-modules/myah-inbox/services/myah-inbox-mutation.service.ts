@@ -1,3 +1,18 @@
+import { type MyahReplyContextSnapshot } from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import { MyahInboxReplyContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
+import { MyahInboxReplyContextDraftService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-draft.service';
+import {
+  ReplyChannel,
+  ReplyContextKind,
+  validateReplyTargetInput,
+  validateReplyContextInput,
+  type MyahInboxReplyDraftInput,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
+import {
+  decodeMyahInboxContactId,
+  encodeMyahInboxContactId,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
+import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 import {
   BadRequestException,
   ConflictException,
@@ -28,7 +43,11 @@ import {
   type MyahInboxDraftSaveResult,
   type MyahRichText,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-draft-save-result.dto';
-import { type SaveMyahInboxDraftInput } from 'src/engine/core-modules/myah-inbox/dtos/save-myah-inbox-draft.input';
+import { MyahInboxState } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
+import {
+  type SaveMyahInboxDraftInput,
+  type ReviewMyahInboxReplyContextInput,
+} from 'src/engine/core-modules/myah-inbox/dtos/save-myah-inbox-draft.input';
 import { type MyahInboxThreadSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
 import { type UpdateMyahInboxThreadInput } from 'src/engine/core-modules/myah-inbox/dtos/update-myah-inbox-thread.input';
 import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
@@ -49,7 +68,13 @@ export type MyahInboxMutationRequest = {
 
 export type UpdateMyahInboxThreadMutationInput = UpdateMyahInboxThreadInput &
   MyahInboxMutationRequest;
-export type SaveMyahInboxDraftMutationInput = SaveMyahInboxDraftInput &
+export type SaveMyahInboxDraftMutationInput = {
+  threadId: string;
+  expectedRevision: number;
+  body: MyahRichText | null;
+  expectedWorkspaceId?: string | null;
+} & MyahInboxMutationRequest;
+type ContextDraftMutationInput = SaveMyahInboxDraftInput &
   MyahInboxMutationRequest;
 
 type InboxThreadRecord = ObjectLiteral & {
@@ -83,6 +108,8 @@ export class MyahInboxMutationService {
     private readonly actionApprovalService: ActionApprovalService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly replyContexts: MyahInboxReplyContextService,
+    private readonly contextDrafts: MyahInboxReplyContextDraftService,
   ) {}
 
   async updateMyahInboxThread(
@@ -177,9 +204,217 @@ export class MyahInboxMutationService {
   }
 
   async saveMyahInboxDraft(
-    input: SaveMyahInboxDraftMutationInput,
+    input: ContextDraftMutationInput | SaveMyahInboxDraftMutationInput,
   ): Promise<MyahInboxDraftSaveResult> {
-    return this.saveMyahInboxDraftInternal(input, true);
+    if (!('target' in input)) {
+      // Release A compatibility guard: only the immutable receipt-recovery
+      // method below may retain a v1 draft after a terminal provider failure.
+      throw new ConflictException(
+        'Email reply drafts require a refreshed contextual reply flow',
+      );
+    }
+    this.assertUserRequest(input);
+    const { resolved, identity } = await this.resolveContextMutation(input);
+    return this.actionApprovalService.executeInboxReplyTargetLocked(
+      {
+        workspaceId: input.workspace.id,
+        deliveryTargetId: identity.deliveryTargetId,
+        draftId: identity.deliveryTargetId,
+      },
+      async () => {
+        await this.assertContextTargetUnlocked(
+          input.workspace.id,
+          identity.deliveryTargetId,
+        );
+        // Re-authorize after acquiring the target lock; the caller fingerprint is not authority.
+        const fresh = await this.resolveContextMutation(input);
+        if (
+          input.proposalContextFingerprint != null &&
+          (input.proposalContextFingerprint !==
+            fresh.resolved.contextFingerprint ||
+            resolved.contextFingerprint !== fresh.resolved.contextFingerprint)
+        ) {
+          throw new ConflictException(
+            'Reply context changed before applying the proposal',
+          );
+        }
+        return this.contextDrafts.save({
+          ...fresh.identity,
+          expectedRevision: input.expectedRevision,
+          body: input.body,
+          proposalContextFingerprint: input.proposalContextFingerprint,
+        });
+      },
+    );
+  }
+
+  async reviewMyahInboxReplyContext(
+    input: ReviewMyahInboxReplyContextInput & MyahInboxMutationRequest,
+  ) {
+    this.assertUserRequest(input);
+    const { identity } = await this.resolveContextMutation(input);
+    return this.actionApprovalService.executeInboxReplyTargetLocked(
+      {
+        workspaceId: input.workspace.id,
+        deliveryTargetId: identity.deliveryTargetId,
+        draftId: identity.deliveryTargetId,
+      },
+      async () => {
+        await this.assertContextTargetUnlocked(
+          input.workspace.id,
+          identity.deliveryTargetId,
+        );
+        const fresh = await this.resolveContextMutation(input);
+        const draft = await this.contextDrafts.read(fresh.identity);
+        if (
+          draft.revision !== input.expectedDraftRevision ||
+          !draft.body ||
+          !fresh.resolved.contextFingerprint ||
+          fresh.resolved.contextFingerprint !== input.expectedContextFingerprint
+        ) {
+          throw new ConflictException(
+            'Reply context or draft changed before review',
+          );
+        }
+        return this.contextDrafts.review({
+          ...fresh.identity,
+          reviewedContextFingerprint: fresh.resolved.contextFingerprint,
+        });
+      },
+    );
+  }
+
+  private async resolveContextMutation(
+    input: MyahInboxReplyDraftInput & MyahInboxMutationRequest,
+  ) {
+    this.assertUserRequest(input);
+    assertMyahInboxExpectedWorkspace(
+      input.workspace.id,
+      input.expectedWorkspaceId,
+    );
+    const target = validateReplyTargetInput(input.target);
+    const replyContext = validateReplyContextInput(input.replyContext);
+    if (target.channel !== 'EMAIL')
+      throw new BadRequestException(
+        'Contextual Instagram writes are not enabled',
+      );
+    const resolved = await this.replyContexts.resolveForAction({
+      ...input,
+      target,
+      replyContext,
+      contactIdentity: decodeMyahInboxContactId(
+        target.contactId,
+        input.workspace.id,
+      ),
+    });
+    return {
+      resolved,
+      identity: {
+        workspaceId: input.workspace.id,
+        contactAnchorKind: resolved.target.contactAnchor.kind,
+        contactAnchorId: resolved.target.contactAnchor.id,
+        channel: resolved.target.channel,
+        deliveryTargetId: resolved.target.deliveryTargetId,
+        context: resolved.selected,
+      },
+    };
+  }
+
+  private async assertContextTargetUnlocked(
+    workspaceId: string,
+    deliveryTargetId: string,
+  ) {
+    if (
+      await this.actionApprovalService.getInboxReplyTargetExecutionState({
+        workspaceId,
+        deliveryTargetId,
+      })
+    ) {
+      throw new ConflictException(
+        'Inbox reply target is locked while delivery is being confirmed',
+      );
+    }
+  }
+
+  async saveMyahInboxContextDraftAfterProviderFailure(
+    input: MyahInboxMutationRequest & {
+      snapshot: MyahReplyContextSnapshot;
+      expectedRevision: number;
+      body: MyahRichText;
+    },
+  ): Promise<MyahInboxDraftSaveResult> {
+    this.assertUserRequest(input);
+    const snapshot = input.snapshot;
+    if (snapshot.channel !== 'EMAIL')
+      throw new BadRequestException('Invalid Email snapshot');
+    const contactIdentity = {
+      kind:
+        snapshot.contactAnchor.kind === 'CREATOR'
+          ? ('creator' as const)
+          : ('email-thread' as const),
+      recordId: snapshot.contactAnchor.id,
+    };
+    const assertReadable = async () => {
+      const resolved = await this.replyContexts.resolveForRead({
+        ...input,
+        user: input.user!,
+        target: {
+          channel: ReplyChannel.EMAIL,
+          threadId: snapshot.deliveryTargetId,
+          contactId: encodeMyahInboxContactId({
+            workspaceId: input.workspace.id,
+            identity: contactIdentity,
+          }),
+        },
+        replyContext:
+          snapshot.replyContext.kind === 'CAMPAIGN'
+            ? {
+                kind: ReplyContextKind.CAMPAIGN,
+                campaignId: snapshot.replyContext.campaignId,
+              }
+            : { kind: ReplyContextKind.GENERAL },
+        contactIdentity,
+      });
+      if (
+        resolved.state === 'CONTEXT_UNAVAILABLE' ||
+        resolved.target.contactAnchor.kind !== snapshot.contactAnchor.kind ||
+        resolved.target.contactAnchor.id !== snapshot.contactAnchor.id
+      )
+        throw new ForbiddenException('Reply context is not readable');
+    };
+    await assertReadable();
+    return this.actionApprovalService.executeInboxReplyTargetLocked(
+      {
+        workspaceId: input.workspace.id,
+        deliveryTargetId: snapshot.deliveryTargetId,
+        draftId: snapshot.draftId,
+      },
+      async () => {
+        const identity = {
+          workspaceId: input.workspace.id,
+          channel: ReplyChannel.EMAIL,
+          deliveryTargetId: snapshot.deliveryTargetId,
+          contactAnchorKind: snapshot.contactAnchor.kind,
+          contactAnchorId: snapshot.contactAnchor.id,
+          context:
+            snapshot.replyContext.kind === 'CAMPAIGN'
+              ? {
+                  kind: ReplyContextKind.CAMPAIGN as const,
+                  campaignId: snapshot.replyContext.campaignId,
+                }
+              : { kind: ReplyContextKind.GENERAL as const },
+        };
+        const current = await this.contextDrafts.read(identity);
+        if (current.draftId !== snapshot.draftId)
+          throw new ConflictException('Reply draft identity changed');
+        await assertReadable();
+        return this.contextDrafts.save({
+          ...identity,
+          body: input.body,
+          expectedRevision: input.expectedRevision,
+        });
+      },
+    );
   }
 
   async saveMyahInboxDraftAfterProviderFailure(
@@ -197,6 +432,9 @@ export class MyahInboxMutationService {
     await this.assertPolicyVisibleThread(input);
 
     return this.dataSource.transaction(async (coreManager) => {
+      await coreManager.query(MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY, [
+        `myah-inbox-reply-target:${input.workspace.id}:EMAIL:${input.threadId}`,
+      ]);
       await coreManager.query(MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY, [
         getMyahInboxReplyAdvisoryLockKey(input.workspace.id, input.threadId),
       ]);
@@ -350,7 +588,7 @@ export class MyahInboxMutationService {
     }
   }
 
-  private assertValidDraftInput(input: SaveMyahInboxDraftInput): void {
+  private assertValidDraftInput(input: SaveMyahInboxDraftMutationInput): void {
     if (
       !isValidUuid(input.threadId) ||
       !Number.isSafeInteger(input.expectedRevision) ||

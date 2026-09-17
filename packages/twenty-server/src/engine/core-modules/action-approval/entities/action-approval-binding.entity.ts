@@ -11,7 +11,10 @@ import {
 
 import { ActionApprovalBindingEvidenceLinkEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding-evidence-link.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
-import { type InstagramMessageIdentitySnapshot } from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import {
+  type InstagramMessageIdentitySnapshot,
+  type MyahReplyContextSnapshot,
+} from 'src/engine/core-modules/action-approval/types/action-approval.type';
 
 export enum ActionApprovalBindingState {
   PENDING = 'PENDING',
@@ -25,6 +28,7 @@ export enum ActionApprovalBindingState {
 export const ActionApprovalInteractionContextType = {
   MYAH_INBOX_INSTAGRAM_DRAFT: 'MYAH_INBOX_INSTAGRAM_DRAFT',
   MYAH_INSTAGRAM_MESSAGE_DRAFT: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+  MYAH_INBOX_EMAIL_CONTEXT_DRAFT: 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT',
 } as const;
 
 export type ActionApprovalInteractionContextType =
@@ -131,6 +135,7 @@ export type ActionApprovalInteractionContextType =
     (
       "actionName" = 'send_instagram_message'
       AND "actionKind" IN ('START_CHAT', 'REPLY')
+      AND "myahReplyContextSnapshot" IS NULL
       AND (
         (
           "actionVersion" = 2
@@ -169,11 +174,55 @@ export type ActionApprovalInteractionContextType =
     )
     OR
     (
-      "actionName" <> 'send_instagram_message'
+      "actionName" = 'send_inbox_reply'
+      AND "actionVersion" = 1
       AND "actionKind" IS NULL
       AND "threadId" IS NOT NULL
       AND "interactionContextType" IS NULL
       AND "interactionContextId" IS NULL
+      AND "myahReplyContextSnapshot" IS NULL
+    )
+    OR
+    (
+      "actionName" = 'send_inbox_reply'
+      AND "actionVersion" = 2
+      AND "actionKind" IS NULL
+      AND "myahReplyContextSnapshot" IS NOT NULL
+          AND jsonb_typeof("myahReplyContextSnapshot") = 'object'
+          AND "myahReplyContextSnapshot" ->> 'schemaVersion' = '1'
+          AND "myahReplyContextSnapshot" ->> 'channel' = 'EMAIL'
+          AND "myahReplyContextSnapshot" ->> 'draftId' = "draftId"::text
+          AND "myahReplyContextSnapshot" ->> 'deliveryTargetId' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          AND "myahReplyContextSnapshot" ->> 'contextFingerprint' ~ '^[0-9a-f]{64}$'
+          AND "myahReplyContextSnapshot" ->> 'eligibilityEvidenceDigest' ~ '^[0-9a-f]{64}$'
+          AND "myahReplyContextSnapshot" #>> '{contactAnchor,kind}' IN ('CREATOR', 'EMAIL_THREAD')
+          AND "myahReplyContextSnapshot" #>> '{contactAnchor,id}' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          AND (("myahReplyContextSnapshot" #>> '{replyContext,kind}' = 'GENERAL'
+                AND "myahReplyContextSnapshot" #>> '{replyContext,campaignId}' IS NULL)
+            OR ("myahReplyContextSnapshot" #>> '{replyContext,kind}' = 'CAMPAIGN'
+                AND "myahReplyContextSnapshot" #>> '{replyContext,campaignId}' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'))
+      AND (
+        (
+          "threadId" IS NOT NULL
+          AND "interactionContextType" IS NULL
+          AND "interactionContextId" IS NULL
+        )
+        OR
+        (
+          "threadId" IS NULL
+          AND "interactionContextType" = 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT'
+          AND "interactionContextId" = "draftId"
+        )
+      )
+    )
+    OR
+    (
+      "actionName" NOT IN ('send_instagram_message', 'send_inbox_reply')
+      AND "actionKind" IS NULL
+      AND "threadId" IS NOT NULL
+      AND "interactionContextType" IS NULL
+      AND "interactionContextId" IS NULL
+      AND "myahReplyContextSnapshot" IS NULL
     )
   ) IS TRUE`,
 )
@@ -237,6 +286,9 @@ export class ActionApprovalBindingEntity {
 
   @Column({ type: 'uuid', nullable: true })
   interactionContextId: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  myahReplyContextSnapshot: MyahReplyContextSnapshot | null;
 
   @Column({
     type: 'enum',

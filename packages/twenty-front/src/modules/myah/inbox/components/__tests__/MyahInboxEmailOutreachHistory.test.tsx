@@ -5,7 +5,6 @@ import {
   InMemoryCache,
   Observable,
 } from '@apollo/client';
-import { type ReactNode } from 'react';
 import {
   act,
   fireEvent,
@@ -57,15 +56,11 @@ type HarnessProps = {
   contactId?: string;
   workspaceId?: string;
   authorizationKey?: string;
-  inlineThreadId?: string | null;
-  inlineEditor?: ReactNode;
 };
 const Harness = ({
   contactId = 'contact',
   workspaceId = 'workspace',
   authorizationKey = 'member',
-  inlineThreadId = null,
-  inlineEditor = null,
 }: HarnessProps) => {
   const history = useMyahInboxEmailHistory(
     workspaceId,
@@ -73,14 +68,7 @@ const Harness = ({
     authorizationKey,
   );
   internalHistory = history;
-  return (
-    <MyahInboxEmailOutreachHistory
-      history={history}
-      onReply={reply}
-      inlineThreadId={inlineThreadId}
-      inlineEditor={inlineEditor}
-    />
-  );
+  return <MyahInboxEmailOutreachHistory history={history} onReply={reply} />;
 };
 const cardPage = (
   ids: string[],
@@ -746,26 +734,19 @@ it('defaults latest-only, keeps roots/Reply controls, and never claims a loaded 
   expect(screen.queryByText(/\d+ replies/i)).toBeNull();
 });
 
-it('preserves an inline draft and makes independent toggles without requests', async () => {
-  const { container } = render(
-    <Harness
-      inlineThreadId="t3"
-      inlineEditor={<input aria-label="Inline t3 draft" defaultValue="draft" />}
-    />,
-  );
+it('routes a card reply independently from reply expansion', async () => {
+  render(<Harness />);
   await resolveCards();
-  const draft = screen.getByRole('textbox', { name: 'Inline t3 draft' });
-  fireEvent.change(draft, { target: { value: 'edited draft' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Reply to Subject t3' }));
   fireEvent.click(
     screen.getByRole('button', { name: 'Show replies for Subject t3' }),
   );
   fireEvent.click(
     screen.getByRole('button', { name: 'Hide replies for Subject t3' }),
   );
-  expect(draft).toHaveValue('edited draft');
-  expect(container.querySelector('[data-thread-id="t3"]')).toContainElement(
-    draft,
-  );
+
+  expect(reply).toHaveBeenCalledWith('t3');
   expect(requests).toEqual([]);
 });
 

@@ -94,6 +94,37 @@ export class ActionReceiptProjectorService {
       evidenceLinks: binding.evidenceLinks,
     };
 
+    if (
+      binding.actionName === 'send_inbox_reply' &&
+      binding.actionVersion === 2 &&
+      binding.myahReplyContextSnapshot?.channel === 'EMAIL' &&
+      binding.myahReplyContextSnapshot.draftId === binding.draftId &&
+      binding.recipientFingerprint !== null &&
+      binding.sendingAccountFingerprint !== null &&
+      binding.actionContextFingerprint !== null &&
+      ((binding.threadId !== null &&
+        binding.interactionContextType === null &&
+        binding.interactionContextId === null) ||
+        (binding.threadId === null &&
+          binding.interactionContextType === 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT' &&
+          binding.interactionContextId === binding.draftId))
+    ) {
+      return {
+        ...base,
+        actionName: 'send_inbox_reply',
+        actionVersion: 2,
+        threadId: binding.threadId,
+        interactionContextType: binding.interactionContextType as
+          | 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT'
+          | null,
+        interactionContextId: binding.interactionContextId,
+        myahReplyContextSnapshot: binding.myahReplyContextSnapshot,
+        recipientFingerprint: binding.recipientFingerprint,
+        sendingAccountFingerprint: binding.sendingAccountFingerprint,
+        actionContextFingerprint: binding.actionContextFingerprint,
+      };
+    }
+
     switch (binding.actionName) {
       case 'send_instagram_message':
         if (

@@ -1,3 +1,4 @@
+import { draftKeyFixture } from '@/myah/inbox/hooks/__tests__/fixtures/myahInboxDraftAutosaveTestFixture';
 import {
   act,
   fireEvent,
@@ -12,6 +13,8 @@ import {
   type MyahInboxDraftAutosaveThread,
 } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 
+const mockReconcileOperation = jest.fn();
+const mockSetOutcomeLock = jest.fn();
 const mockFlush = jest.fn();
 const mockSend = jest.fn();
 const mockUseMyahInboxReplySend = jest.fn();
@@ -61,8 +64,8 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxDraftAutosaveController', () => ({
     isTargetAuthorized: () => true,
     acquire: (key: unknown) => ({ key, token: Symbol('send') }),
     isOperationCurrent: () => true,
-    reconcileOperation: jest.fn(),
-    setOutcomeLock: jest.fn(),
+    reconcileOperation: mockReconcileOperation,
+    setOutcomeLock: mockSetOutcomeLock,
     setReadinessLock: jest.fn(),
     release: jest.fn(),
   }),
@@ -94,11 +97,12 @@ jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
   }),
 }));
 
-const draftKey = { workspaceId: 'workspace-1', threadId: 'thread-1' };
+const draftKey = draftKeyFixture('workspace-1', 'thread-1');
 
 const confirmedEntry = (
   overrides: Partial<MyahInboxDraftAutosaveEntry> = {},
 ): MyahInboxDraftAutosaveEntry => ({
+  executionState: 'READY',
   operation: null,
   editorOwner: null,
   localBody: { markdown: 'Confirmed draft', blocknote: null },
@@ -209,6 +213,46 @@ describe('MyahInboxReplySendAction', () => {
     mockRefetchQueries.mockResolvedValue(undefined);
   });
 
+  it('does not send when the flushed manual save requires review', async () => {
+    mockFlush.mockResolvedValue(
+      confirmedEntry({ executionState: 'NEEDS_REVIEW' }),
+    );
+    renderAction({ entry: dirtyEntry });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(mockFlush).toHaveBeenCalledTimes(1));
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['SENDING', 'OUTCOME_PENDING', 'pending'],
+    ['UNKNOWN', 'OUTCOME_UNKNOWN', 'unknown'],
+  ])(
+    'never exposes %s send-result bytes to reconciliation callbacks',
+    async (outcome, executionState, kind) => {
+      mockSend.mockResolvedValue({
+        outcome,
+        revision: 4,
+        body: { markdown: 'private result', blocknote: null },
+      });
+      const { onDraftReconciled } = renderAction();
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await waitFor(() =>
+        expect(mockSetOutcomeLock).toHaveBeenCalledWith(
+          expect.anything(),
+          kind,
+        ),
+      );
+      expect(mockReconcileOperation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ executionState, body: null }),
+      );
+      expect(onDraftReconciled).toHaveBeenCalledWith(
+        expect.objectContaining({ executionState, body: null }),
+      );
+      expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    },
+  );
+
   it.each([
     ['empty', emptyEntry],
     ['error', errorEntry],
@@ -240,23 +284,30 @@ describe('MyahInboxReplySendAction', () => {
     },
   );
 
-  it('keeps unsupported-content readiness silent without changing editor permissions', () => {
+  it('hides the generic unavailable-thread status', () => {
+    renderAction({
+      entry: emptyEntry,
+      readiness: 'THREAD_UNAVAILABLE',
+      readinessReason: 'This Inbox thread is unavailable for a reply.',
+    });
+
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('shows the safe unsupported-content reason without changing editor permissions', () => {
     renderAction({
       readiness: 'THREAD_UNAVAILABLE',
       readinessReason:
         'This draft contains unsupported formatted content. Edit the draft and try again.',
     });
 
+    // MYAH-338: the lock is kept, but no readiness copy renders inline.
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        'This draft contains unsupported formatted content. Edit the draft and try again.',
-      ),
-    ).not.toBeInTheDocument();
   });
 
-  it('keeps first-save readiness silent while Send remains available', () => {
+  it('keeps the first-save guidance ahead of an unavailable-thread reason', () => {
     renderAction({
       entry: firstSaveDirtyEntry,
       readiness: 'THREAD_UNAVAILABLE',
@@ -266,9 +317,6 @@ describe('MyahInboxReplySendAction', () => {
 
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('Saving the first shared draft…'),
-    ).not.toBeInTheDocument();
   });
 
   it.each([
@@ -316,8 +364,8 @@ describe('MyahInboxReplySendAction', () => {
     renderAction({ entry: confirmedEntry({ confirmedRevision: 7 }) });
 
     expect(mockUseMyahInboxReplySend).toHaveBeenCalledWith(
-      'workspace-1',
-      'thread-1',
+      draftKey,
+      undefined,
       7,
     );
   });
@@ -327,18 +375,16 @@ describe('MyahInboxReplySendAction', () => {
     'MAILBOX_INELIGIBLE',
     'OUTCOME_PENDING',
     'OUTCOME_UNKNOWN',
-  ])('keeps disabled %s readiness silent', (readiness) => {
+  ])('locks Send without inline copy for %s', (readiness) => {
     renderAction({ readiness });
 
-    const sendButton = screen.getByRole('button', { name: 'Send' });
-
-    expect(sendButton).toBeDisabled();
-    expect(sendButton).not.toHaveAttribute('aria-describedby');
+    // MYAH-338: every lock still holds, and none of them prints copy inline.
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('disables Send silently while readiness loads or the send hook is executing', () => {
+  it('disables Send while readiness loads or the send hook is executing', () => {
     const loading = renderAction({ readinessLoading: true });
 
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
@@ -365,8 +411,6 @@ describe('MyahInboxReplySendAction', () => {
 
     await waitFor(() =>
       expect(mockSend).toHaveBeenCalledWith({
-        threadId: 'thread-1',
-        expectedWorkspaceId: 'workspace-1',
         expectedDraftRevision: 7,
       }),
     );
@@ -413,8 +457,6 @@ describe('MyahInboxReplySendAction', () => {
 
       await waitFor(() =>
         expect(mockSend).toHaveBeenCalledWith({
-          threadId: 'thread-1',
-          expectedWorkspaceId: 'workspace-1',
           expectedDraftRevision: 7,
         }),
       );
@@ -555,7 +597,7 @@ describe('MyahInboxReplySendAction', () => {
     expect(onSendingChange).toHaveBeenCalledWith(true);
   });
 
-  it('reports an unknown outcome through the snackbar only and locks Send', async () => {
+  it('keeps an unknown outcome inline and locks Send against another click', async () => {
     const onSendingChange = jest.fn();
     mockSend.mockResolvedValue({
       outcome: 'UNKNOWN',
@@ -568,17 +610,18 @@ describe('MyahInboxReplySendAction', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
+    // MYAH-338: an unknown outcome is reported by snackbar, never as inline copy.
     await waitFor(() =>
-      expect(mockEnqueueWarningSnackBar).toHaveBeenCalledWith({
-        message:
-          'Delivery outcome is unknown. This draft is locked to prevent a duplicate send.',
-      }),
+      expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled(),
     );
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-    expect(onSendingChange).toHaveBeenCalledTimes(1);
-    expect(onSendingChange).toHaveBeenCalledWith(true);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(onSendingChange).toHaveBeenCalledTimes(1);
+    expect(onSendingChange).toHaveBeenCalledWith(true);
+    expect(mockEnqueueWarningSnackBar).toHaveBeenCalledWith({
+      message:
+        'Delivery outcome is unknown. This draft is locked to prevent a duplicate send.',
+    });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText('Approve & send')).not.toBeInTheDocument();
   });

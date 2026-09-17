@@ -46,47 +46,87 @@ export class MyahInboxReplyApprovedExecutionService {
     input: ExecuteApprovedInboxReplyInput,
   ): Promise<MyahInboxReplyExecutionResult> {
     const binding = this.getExpectedBinding(input);
-    const reservation =
-      await this.actionApprovalService.executeInboxReplyLocked(
-        { workspaceId: input.workspaceId, draftId: binding.draftId },
-        async () => {
-          const existingReceipt =
-            await this.actionApprovalService.findExecutionReceiptForBinding({
-              workspaceId: input.workspaceId,
-              approvalBindingId: input.approvalBindingId,
-            });
-
-          if (existingReceipt) {
-            return {
-              authority: null,
-              created: false,
-              receipt: existingReceipt,
-              renderedBody: null,
-            };
-          }
-
-          const authority =
-            await this.actionDefinition.rebuildExecutionAuthority({
-              workspaceId: input.workspaceId,
-              binding,
-            });
-          const renderedBody = await renderMyahInboxReplyBody(
-            authority.canonicalGraph.draftBody,
+    // Sendability probes may refresh OAuth credentials or call provider profile APIs.
+    // Never perform them while holding a database advisory lock.
+    const priorReceipt =
+      await this.actionApprovalService.findExecutionReceiptForBinding({
+        workspaceId: input.workspaceId,
+        approvalBindingId: input.approvalBindingId,
+      });
+    if (!priorReceipt) {
+      await this.actionDefinition.rebuildExecutionAuthority({
+        workspaceId: input.workspaceId,
+        binding,
+      });
+    }
+    const deliveryTargetId =
+      binding.actionVersion === 2
+        ? binding.myahReplyContextSnapshot.deliveryTargetId
+        : binding.draftId;
+    const locked =
+      binding.actionVersion === 2
+        ? this.actionApprovalService.executeInboxReplyTargetLocked.bind(
+            this.actionApprovalService,
+          )
+        : this.actionApprovalService.executeInboxReplyLocked.bind(
+            this.actionApprovalService,
           );
-          const receiptReservation =
-            await this.actionApprovalService.reserveExecutionForBinding({
-              approvalBindingId: input.approvalBindingId,
-              expectedActionBinding: authority.expectedActionBinding,
-            });
+    const reservation = await locked(
+      {
+        workspaceId: input.workspaceId,
+        draftId: binding.draftId,
+        ...(binding.actionVersion === 2 ? { deliveryTargetId } : {}),
+      },
+      async () => {
+        const existingReceipt =
+          await this.actionApprovalService.findExecutionReceiptForBinding({
+            workspaceId: input.workspaceId,
+            approvalBindingId: input.approvalBindingId,
+          });
 
+        if (existingReceipt) {
           return {
-            authority,
-            created: receiptReservation.created,
-            receipt: receiptReservation.receipt,
-            renderedBody,
+            authority: null,
+            created: false,
+            receipt: existingReceipt,
+            renderedBody: null,
           };
-        },
-      );
+        }
+
+        if (
+          await this.actionApprovalService.getInboxReplyTargetExecutionState({
+            workspaceId: input.workspaceId,
+            deliveryTargetId,
+            excludeBindingId: input.approvalBindingId,
+          })
+        ) {
+          throw new Error('Inbox reply target delivery is pending or unknown');
+        }
+
+        const authority = await this.actionDefinition.rebuildExecutionAuthority(
+          {
+            workspaceId: input.workspaceId,
+            binding,
+            skipProviderPreflight: true,
+          },
+        );
+        const renderedBody = await renderMyahInboxReplyBody(
+          authority.canonicalGraph.draftBody,
+        );
+        const receiptReservation =
+          await this.actionApprovalService.reserveExecutionForBinding({
+            approvalBindingId: input.approvalBindingId,
+            expectedActionBinding: authority.expectedActionBinding,
+          });
+
+        return {
+          authority,
+          created: receiptReservation.created,
+          receipt: receiptReservation.receipt,
+          renderedBody,
+        };
+      },
+    );
 
     if (reservation.authority === null) {
       if (
@@ -204,17 +244,29 @@ export class MyahInboxReplyApprovedExecutionService {
       }
 
       const draft =
-        await this.myahInboxMutationService.saveMyahInboxDraftAfterProviderFailure(
-          {
-            authContext: actor.authContext,
-            user: actor.authContext.user,
-            workspace: actor.authContext.workspace,
-            workspaceMemberId: actor.authContext.workspaceMemberId,
-            threadId: authority.canonicalGraph.messageThreadId,
-            expectedRevision: authority.canonicalGraph.draftRevision,
-            body: authority.canonicalGraph.draftBody,
-          },
-        );
+        binding.actionVersion === 2
+          ? await this.myahInboxMutationService.saveMyahInboxContextDraftAfterProviderFailure(
+              {
+                authContext: actor.authContext,
+                user: actor.authContext.user,
+                workspace: actor.authContext.workspace,
+                workspaceMemberId: actor.authContext.workspaceMemberId,
+                snapshot: binding.myahReplyContextSnapshot,
+                expectedRevision: authority.canonicalGraph.draftRevision,
+                body: authority.canonicalGraph.draftBody,
+              },
+            )
+          : await this.myahInboxMutationService.saveMyahInboxDraftAfterProviderFailure(
+              {
+                authContext: actor.authContext,
+                user: actor.authContext.user,
+                workspace: actor.authContext.workspace,
+                workspaceMemberId: actor.authContext.workspaceMemberId,
+                threadId: authority.canonicalGraph.messageThreadId,
+                expectedRevision: authority.canonicalGraph.draftRevision,
+                body: authority.canonicalGraph.draftBody,
+              },
+            );
       if (draft.status !== MyahInboxDraftSaveStatus.SAVED) {
         return this.toUnknownOutcome({ receipt, authority });
       }
@@ -272,7 +324,7 @@ export class MyahInboxReplyApprovedExecutionService {
     if (
       binding.workspaceId !== workspaceId ||
       binding.actionName !== 'send_inbox_reply' ||
-      binding.actionVersion !== 1
+      ![1, 2].includes(binding.actionVersion)
     ) {
       throw new Error('An approved Inbox reply binding is required');
     }
