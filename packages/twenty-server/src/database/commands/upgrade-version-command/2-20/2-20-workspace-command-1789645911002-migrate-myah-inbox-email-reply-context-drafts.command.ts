@@ -21,6 +21,16 @@ export class MigrateMyahInboxEmailReplyContextDraftsCommand extends ActiveOrSusp
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    // Workspaces without a provisioned schema have no legacy drafts to
+    // preserve; skip them instead of failing the cutover run.
+    if (!(await this.activation.isWorkspaceSchemaProvisioned(args.workspaceId))) {
+      this.logger.log(
+        `Skipping Email reply-context cutover for workspace ${args.workspaceId}: no provisioned schema`,
+      );
+
+      return;
+    }
+
     const result = await this.activation.preflightEmailWorkspace(
       args.workspaceId,
       { dryRun: args.options.dryRun },

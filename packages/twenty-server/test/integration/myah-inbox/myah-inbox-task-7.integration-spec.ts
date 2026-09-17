@@ -2,6 +2,8 @@ import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/
 import gql from 'graphql-tag';
 
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 
 import { findManyOperationFactory } from 'test/integration/graphql/utils/find-many-operation-factory.util';
 import { findOneOperationFactory } from 'test/integration/graphql/utils/find-one-operation-factory.util';
@@ -13,8 +15,7 @@ import {
   type MyahInboxTask7Fixture,
 } from 'test/integration/myah-inbox/utils/seed-myah-inbox-task-7-fixture.util';
 
-const inboxThreadsQuery = gql`
-  query Task7InboxThreads(
+const inboxThreadsQuery = gql`  query Task7InboxThreads(
     $first: Int
     $after: String
     $owner: String
@@ -77,6 +78,18 @@ const updateThreadMutation = gql`
       }
       inboxOwner {
         id
+      }
+    }
+  }
+`;
+
+const readDraftQuery = gql`
+  query Task7ReadDraft($input: MyahInboxReplyDraftInput!) {
+    myahInboxReplyDraft(input: $input) {
+      revision
+      body {
+        markdown
+        blocknote
       }
     }
   }
@@ -685,12 +698,25 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       fixture.campaignId,
     );
 
+    const draftInput = {
+      expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
+      target: {
+        channel: 'EMAIL',
+        contactId: encodeMyahInboxContactId({
+          workspaceId: SEED_APPLE_WORKSPACE_ID,
+          identity: { kind: 'creator', recordId: fixture.creatorId },
+        }),
+        threadId: fixture.threadIds.draft,
+      },
+      replyContext: { kind: 'CAMPAIGN', campaignId: fixture.campaignId },
+    };
+
     const saved = await makeGraphqlAPIRequest(
       {
         query: saveDraftMutation,
         variables: {
           input: {
-            threadId: fixture.threadIds.draft,
+            ...draftInput,
             expectedRevision: fixture.draftRevision,
             body: { markdown: 'Task 7 current writer', blocknote: null },
           },
@@ -703,7 +729,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
         query: saveDraftMutation,
         variables: {
           input: {
-            threadId: fixture.threadIds.draft,
+            ...draftInput,
             expectedRevision: fixture.draftRevision,
             body: { markdown: 'Task 7 stale writer', blocknote: null },
           },
@@ -723,22 +749,33 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       body: { markdown: 'Task 7 current writer', blocknote: null },
     });
 
+    // The draft lives in the context-scoped store, not the legacy thread columns.
     const persistedDraft = await makeGraphqlAPIRequest(
+      {
+        query: readDraftQuery,
+        variables: { input: draftInput },
+      },
+      operatorAccessToken,
+    );
+    expect(persistedDraft.body.errors).toBeUndefined();
+    expect(persistedDraft.body.data.myahInboxReplyDraft).toMatchObject({
+      revision: fixture.draftRevision + 1,
+      body: {
+        markdown: 'Task 7 current writer',
+        blocknote: null,
+      },
+    });
+
+    const persistedThread = await makeGraphqlAPIRequest(
       findOneOperationFactory({
         objectMetadataSingularName: 'messageThread',
-        gqlFields:
-          'id myahReplyDraftRevision myahReplyDraftBody { markdown blocknote } creator { id } myahCampaign { id } inboxOwner { id }',
+        gqlFields: 'id creator { id } myahCampaign { id } inboxOwner { id }',
         filter: { id: { eq: fixture.threadIds.draft } },
       }),
       operatorAccessToken,
     );
-    expect(persistedDraft.body.errors).toBeUndefined();
-    expect(persistedDraft.body.data.messageThread).toMatchObject({
-      myahReplyDraftRevision: fixture.draftRevision + 1,
-      myahReplyDraftBody: {
-        markdown: 'Task 7 current writer',
-        blocknote: null,
-      },
+    expect(persistedThread.body.errors).toBeUndefined();
+    expect(persistedThread.body.data.messageThread).toMatchObject({
       creator: { id: fixture.creatorId },
       myahCampaign: { id: fixture.campaignId },
       inboxOwner: { id: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE },

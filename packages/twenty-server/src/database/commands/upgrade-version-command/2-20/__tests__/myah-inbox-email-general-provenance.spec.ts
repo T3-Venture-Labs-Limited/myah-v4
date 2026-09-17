@@ -3,6 +3,18 @@ import { InstallMyahInboxEmailGeneralProvenanceCommand } from '../2-20-workspace
 
 const workspaceId = '40000000-0000-4000-8000-000000000001';
 
+const schemaAwareDataSource = (
+  query: jest.Mock,
+  schemaExists = true,
+) => ({
+  transaction: jest.fn(async (run) => run({ query })),
+  createQueryRunner: jest.fn(() => ({
+    connect: jest.fn(async () => undefined),
+    hasSchema: jest.fn(async () => schemaExists),
+    release: jest.fn(async () => undefined),
+  })),
+});
+
 describe('Email General provenance Release A SQL contract', () => {
   it('attests only anchored unassociated inserts and retains revoked tombstones', async () => {
     const query = jest.fn().mockResolvedValue([]);
@@ -25,7 +37,7 @@ describe('Email General provenance Release A SQL contract', () => {
 
   it('installs transactionally in Release A without backfill, draft copy or activation', async () => {
     const query = jest.fn().mockResolvedValue([]);
-    const dataSource = { transaction: jest.fn(async (run) => run({ query })) };
+    const dataSource = schemaAwareDataSource(query);
     const command = new InstallMyahInboxEmailGeneralProvenanceCommand({} as never, dataSource as never);
     await command.runOnWorkspace({ workspaceId, options: {} } as never);
     const sql = query.mock.calls.flat().join('\n');
@@ -40,6 +52,20 @@ describe('Email General provenance Release A SQL contract', () => {
     await command.runOnWorkspace({ workspaceId, options: { dryRun: true } } as never);
     expect(query).not.toHaveBeenCalled();
   });
+  it('skips workspaces without a provisioned schema instead of failing the upgrade run', async () => {
+    const query = jest.fn().mockResolvedValue([]);
+    const dataSource = schemaAwareDataSource(query, false);
+    const command = new InstallMyahInboxEmailGeneralProvenanceCommand({} as never, dataSource as never);
+
+    await expect(
+      command.runOnWorkspace({ workspaceId, options: {} } as never),
+    ).resolves.toBeUndefined();
+
+    // No trigger DDL is attempted against a schema that does not exist.
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('rejects non-UUID trigger arguments before constructing or executing DDL', async () => {
     const transaction = jest.fn();
     const command = new InstallMyahInboxEmailGeneralProvenanceCommand({} as never, { transaction } as never);

@@ -26,6 +26,15 @@ export class InstallMyahInboxEmailGeneralProvenanceCommand extends ActiveOrSuspe
     if (args.options.dryRun) return;
     if (!isValidUuid(args.workspaceId)) throw new Error('Invalid workspace ID');
     const schema = getWorkspaceSchemaName(args.workspaceId);
+    // Workspaces without a provisioned schema have no messageThread to attach
+    // the trigger to; skip them instead of failing the whole upgrade run.
+    if (!(await this.workspaceSchemaExists(schema))) {
+      this.logger.log(
+        `Skipping Email General provenance install for workspace ${args.workspaceId}: schema ${schema} does not exist`,
+      );
+
+      return;
+    }
     // PostgreSQL DDL cannot parameterize identifiers or trigger arguments;
     // both interpolated values are derived from the validated workspace UUID.
     await this.dataSource.transaction(async (manager) => {
@@ -36,5 +45,17 @@ export class InstallMyahInboxEmailGeneralProvenanceCommand extends ActiveOrSuspe
         AFTER INSERT OR UPDATE OR DELETE ON "${schema}"."messageThread"
         FOR EACH ROW EXECUTE FUNCTION core."recordMyahInboxEmailGeneralProvenance"('${args.workspaceId}')`);
     });
+  }
+
+  private async workspaceSchemaExists(schema: string): Promise<boolean> {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+
+      return await queryRunner.hasSchema(schema);
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
