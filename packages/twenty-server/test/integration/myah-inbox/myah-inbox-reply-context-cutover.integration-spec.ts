@@ -1,8 +1,8 @@
-import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971537-create-myah-inbox-email-general-provenance';
-import { InstallMyahInboxEmailGeneralProvenanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971538-install-myah-inbox-email-general-provenance.command';
+import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
+import { InstallMyahInboxEmailGeneralProvenanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
 import { DataSource } from 'typeorm';
 
-import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971535-create-myah-inbox-reply-context-drafts';
+import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts';
 import { EmailReplyContextActivationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-preflight.service';
 
 const isolatedDatabaseUrl = process.env.MYAH_353_ISOLATED_PG_DATABASE_URL;

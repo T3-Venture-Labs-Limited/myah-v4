@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { DataSource } from 'typeorm';
 
-import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971535-create-myah-inbox-reply-context-drafts';
+import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts';
 import {
   MyahInboxReplyContextDraftService,
   type AnchoredReplyIdentity,

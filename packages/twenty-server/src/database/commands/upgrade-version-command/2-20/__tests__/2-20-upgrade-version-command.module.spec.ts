@@ -340,7 +340,7 @@ describe('Instagram production upgrade provider compatibility', () => {
     // Composer metadata is the final append-only 2.20.0 workspace step,
     // after Campaign activity control's catch-up command.
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     );
     expect(sequence[sequence.length - 2]?.name).toBe(
       '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',

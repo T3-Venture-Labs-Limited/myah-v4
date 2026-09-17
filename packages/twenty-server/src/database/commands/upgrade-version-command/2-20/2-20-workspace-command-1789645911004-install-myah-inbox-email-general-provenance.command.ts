@@ -9,7 +9,7 @@ import { WorkspaceIteratorService } from 'src/database/commands/command-runners/
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
-@RegisteredWorkspaceCommand('2.20.0', 1789313971538)
+@RegisteredWorkspaceCommand('2.20.0', 1789645911004)
 @Command({
   name: 'upgrade:2-20:install-myah-inbox-email-general-provenance',
   description: 'Install insert-only Email General provenance in compatibility Release A without backfilling history',
@@ -29,7 +29,9 @@ export class InstallMyahInboxEmailGeneralProvenanceCommand extends ActiveOrSuspe
     // PostgreSQL DDL cannot parameterize identifiers or trigger arguments;
     // both interpolated values are derived from the validated workspace UUID.
     await this.dataSource.transaction(async (manager) => {
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(`DROP TRIGGER IF EXISTS "TRG_MYAH_EMAIL_GENERAL_PROVENANCE" ON "${schema}"."messageThread"`);
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(`CREATE TRIGGER "TRG_MYAH_EMAIL_GENERAL_PROVENANCE"
         AFTER INSERT OR UPDATE OR DELETE ON "${schema}"."messageThread"
         FOR EACH ROW EXECUTE FUNCTION core."recordMyahInboxEmailGeneralProvenance"('${args.workspaceId}')`);
