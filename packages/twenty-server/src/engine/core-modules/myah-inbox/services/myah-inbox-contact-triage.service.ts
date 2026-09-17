@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { MyahInboxTriageConflictError } from 'src/engine/core-modules/myah-inbox/errors/myah-inbox-triage-conflict.error';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
@@ -559,16 +559,16 @@ export class MyahInboxContactTriageService {
     // SNOOZED deadline while SQL retains the old state through COALESCE.
     const state = patch.inboxState ?? undefined;
     if (state === 'SNOOZED' && !patch.snoozedUntil) {
-      throw new Error('SNOOZED requires snoozedUntil');
+      throw new BadRequestException('SNOOZED requires snoozedUntil');
     }
     if (
       state === 'SNOOZED' &&
       !(Date.parse(patch.snoozedUntil!) > Date.now())
     ) {
-      throw new Error('SNOOZED requires a future snoozedUntil');
+      throw new BadRequestException('SNOOZED requires a future snoozedUntil');
     }
     if (state === undefined && patch.snoozedUntil != null) {
-      throw new Error('snoozedUntil requires inboxState SNOOZED');
+      throw new BadRequestException('snoozedUntil requires inboxState SNOOZED');
     }
 
     const changesState = state !== undefined;

@@ -342,14 +342,10 @@ const updateThreadMutation = gql`
   mutation SeedTask7UpdateThread($input: UpdateMyahInboxThreadInput!) {
     updateMyahInboxThread(input: $input) {
       id
-      state
       creator {
         id
       }
       campaign {
-        id
-      }
-      inboxOwner {
         id
       }
     }
@@ -956,64 +952,46 @@ export const seedMyahInboxTask7Fixture = async ({
       threadId: threadIds.tiedLinked,
       creatorId,
       campaignId,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.tiedUnlinked,
       creatorId: null,
       campaignId,
-      inboxOwnerId: null,
-      inboxState: 'WAITING_ON_CREATOR',
     },
     {
       threadId: threadIds.owner,
       creatorId,
       campaignId: null,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.sharedFallback,
       creatorId,
       campaignId,
-      inboxOwnerId: null,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.subject,
       creatorId,
       campaignId: null,
-      inboxOwnerId: null,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.metadata,
       creatorId,
       campaignId,
-      inboxOwnerId: null,
-      inboxState: 'CLOSED',
     },
     {
       threadId: threadIds.draft,
       creatorId,
       campaignId,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.hiddenVisibleAfter,
       creatorId,
       campaignId: null,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.hiddenVisibleBefore,
       creatorId,
       campaignId: null,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      inboxState: 'NEEDS_REPLY',
     },
   ];
 

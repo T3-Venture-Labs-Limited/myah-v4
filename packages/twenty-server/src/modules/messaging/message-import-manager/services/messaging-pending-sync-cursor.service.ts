@@ -101,6 +101,25 @@ export class MessagingPendingSyncCursorService {
     );
   }
 
+  /**
+   * Read-only: the generation of the import currently in flight for this
+   * channel, if any. Contact triage uses it only as receipt provenance; import
+   * progress itself stays owned by the pending-cursor cache.
+   */
+  async getPendingGenerationId({
+    messageChannelId,
+    workspaceId,
+  }: MessageChannelScope): Promise<string | null> {
+    return (
+      (await this.cacheStorage.get<string>(
+        getPendingMessageSyncGenerationCacheKey({
+          messageChannelId,
+          workspaceId,
+        }),
+      )) ?? null
+    );
+  }
+
   async restorePendingMessageExternalIds({
     messageChannelId,
     workspaceId,

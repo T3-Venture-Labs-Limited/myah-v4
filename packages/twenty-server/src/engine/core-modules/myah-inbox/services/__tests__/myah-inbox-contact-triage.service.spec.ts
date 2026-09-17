@@ -1,3 +1,5 @@
+import { BadRequestException } from '@nestjs/common';
+
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
@@ -534,7 +536,7 @@ describe('MyahInboxContactTriageService tuple mutation', () => {
         patch: { inboxState: 'SNOOZED' },
         manager,
       }),
-    ).rejects.toThrow('SNOOZED requires snoozedUntil');
+    ).rejects.toThrow(BadRequestException);
 
     await expect(
       service.updateTupleInTransaction({
@@ -547,7 +549,7 @@ describe('MyahInboxContactTriageService tuple mutation', () => {
         },
         manager,
       }),
-    ).rejects.toThrow('SNOOZED requires a future snoozedUntil');
+    ).rejects.toThrow(BadRequestException);
 
     const query = jest.fn(async (sql: string, parameters: unknown[]) => {
       if (sql.includes('UPDATE "myahInboxContactTriage"')) {

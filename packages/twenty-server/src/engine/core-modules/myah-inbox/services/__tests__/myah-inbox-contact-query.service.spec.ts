@@ -177,6 +177,14 @@ const buildHarness = (
     ? resolvedRolePermissionConfig
     : undefined;
   const query = jest.fn().mockResolvedValue(rows);
+  // The service probes the private triage schema before its page query; routing
+  // that probe to its own mock keeps main-query assertions about the page query.
+  const preflightQuery = jest.fn().mockResolvedValue([{ exists: true }]);
+  const dataSourceQuery = jest.fn(async (sql: string, ...rest: unknown[]) =>
+    sql.startsWith('SELECT to_regclass')
+      ? preflightQuery(sql, ...rest)
+      : query(sql, ...rest),
+  );
   let productionPermissionDenialPending = useProductionPermissionDenial;
   const createQueryBuilder = (objectName: string) => {
     const builder = {
@@ -227,7 +235,9 @@ const buildHarness = (
   const currentMemberRepository = getRepository('workspaceMember');
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(async (callback) => callback()),
-    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
+    getGlobalWorkspaceDataSource: jest
+      .fn()
+      .mockResolvedValue({ query: dataSourceQuery }),
     getRepository: jest.fn(async (_workspaceId, objectName) =>
       getRepository(objectName),
     ),
@@ -253,6 +263,7 @@ const buildHarness = (
   return {
     currentMemberRepository,
     globalWorkspaceOrmManager,
+    preflightQuery,
     query,
     service: new Service!(
       globalWorkspaceOrmManager as never,
@@ -263,6 +274,18 @@ const buildHarness = (
     visibilityPolicy,
   };
 };
+
+describe('MyahInboxContactQueryService private schema preflight', () => {
+  it('fails closed with the generic response when the private schema is absent', async () => {
+    const harness = buildHarness();
+    harness.preflightQuery.mockResolvedValueOnce([{ exists: false }]);
+
+    await expect(
+      harness.service.listContacts(request()),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(harness.query).not.toHaveBeenCalled();
+  });
+});
 
 const request = (overrides: Record<string, unknown> = {}) => ({
   first: 10,

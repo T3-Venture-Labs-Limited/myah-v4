@@ -421,6 +421,7 @@ export class MyahInboxContactQueryService {
           return `$${parameters.length}`;
         };
         const workspaceSchemaName = getWorkspaceSchemaName(input.workspace.id);
+
         const canonicalTriageScope = `migration.status = 'READY' AND ${canUseContactTriage ? 'triage_capability."isAvailable"' : 'FALSE'}`;
         const canonicalTriageAvailable = `${canonicalTriageScope} AND triage.revision IS NOT NULL`;
         const emailChannelWorkspace = addParameter(input.workspace.id);
@@ -832,6 +833,26 @@ LEFT JOIN paged_contacts ON TRUE
 ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderingKey" DESC NULLS LAST`;
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+
+        // The private triage relations are provisioned by the 2.20 command,
+        // whose marker row is written last. Without them the triage CTEs above
+        // cannot be referenced at all, so fail closed with the same generic
+        // response instead of surfacing a raw SQL error during a partial
+        // upgrade. The identifier is derived from the internal workspace UUID
+        // and bound as a parameter here.
+        const [triageRelations] = (await dataSource.query(
+          'SELECT to_regclass($1) IS NOT NULL AS "exists"',
+          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        )) as Array<{ exists: boolean }>;
+
+        if (!triageRelations?.exists) {
+          throw new ForbiddenException(
+            'Triage is unavailable with your current Inbox access',
+          );
+        }
+
         const rows = await dataSource.query<ContactRaw[]>(
           sql,
           parameters,

@@ -69,6 +69,20 @@ describe('UpdateMyahInboxContactTriageInput', () => {
     expect(() => assertValidMyahInboxContactTriageUpdate(input)).not.toThrow();
   });
 
+  it('accepts a deadline supplied for a non-Snoozed state, which the server clears', async () => {
+    const input = Object.assign(new UpdateMyahInboxContactTriageInput(), {
+      expectedWorkspaceId: '00000000-0000-4000-8000-000000000001',
+      contactId: 'contact-id',
+      expectedRevision: 1,
+      expectedIdentityGeneration: '1',
+      inboxState: 'CLOSED',
+      snoozedUntil: '2099-01-01T00:00:00.000Z',
+    });
+
+    await expect(validate(input)).resolves.toEqual([]);
+    expect(() => assertValidMyahInboxContactTriageUpdate(input)).not.toThrow();
+  });
+
   it.each([
     {},
     { inboxState: 'SNOOZED' },

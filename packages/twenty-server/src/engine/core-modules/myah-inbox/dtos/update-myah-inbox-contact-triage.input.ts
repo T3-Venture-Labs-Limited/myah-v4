@@ -47,7 +47,14 @@ const isValidTriagePatch = (input: MyahInboxContactTriagePatch): boolean => {
   }
 
   if (input.inboxState !== MyahInboxState.SNOOZED) {
-    return input.snoozedUntil === undefined || input.snoozedUntil === null;
+    // A deadline supplied for a non-Snoozed state is cleared server-side, so it
+    // must be accepted rather than rejected; only its shape is validated.
+    return (
+      input.snoozedUntil === undefined ||
+      input.snoozedUntil === null ||
+      (typeof input.snoozedUntil === 'string' &&
+        isISO8601(input.snoozedUntil, { strict: true }))
+    );
   }
 
   return (

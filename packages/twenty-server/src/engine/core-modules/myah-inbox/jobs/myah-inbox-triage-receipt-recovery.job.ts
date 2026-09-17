@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, type Repository } from 'typeorm';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
@@ -74,6 +74,10 @@ export class MyahInboxTriageReceiptRecoveryJob {
 @Injectable()
 @Processor(MessageQueue.cronQueue)
 export class MyahInboxTriageReceiptRecoveryCronJob {
+  private readonly logger = new Logger(
+    MyahInboxTriageReceiptRecoveryCronJob.name,
+  );
+
   constructor(
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
@@ -92,8 +96,19 @@ export class MyahInboxTriageReceiptRecoveryCronJob {
     });
 
     for (const workspace of workspaces) {
-      if (await this.hasPendingReceipts(workspace.id)) {
-        await this.receiptService.enqueueRecovery(workspace.id);
+      try {
+        if (await this.hasPendingReceipts(workspace.id)) {
+          await this.receiptService.enqueueRecovery(workspace.id);
+        }
+      } catch (error) {
+        // A workspace whose private triage schema is not provisioned yet (for
+        // example mid rolling upgrade) must not abort recovery for every other
+        // workspace in the sweep.
+        this.logger.warn(
+          `Skipping contact triage receipt recovery for workspace ${workspace.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
       }
     }
   }
