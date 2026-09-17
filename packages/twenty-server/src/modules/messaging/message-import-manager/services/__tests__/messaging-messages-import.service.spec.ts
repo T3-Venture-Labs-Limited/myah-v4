@@ -243,6 +243,24 @@ describe('MessagingMessagesImportService', () => {
     ).resolves.toBeFalsy();
   });
 
+  it('resumes a redelivered ongoing message import', async () => {
+    mockMessageChannel.syncStage =
+      MessageChannelSyncStage.MESSAGES_IMPORT_ONGOING;
+
+    await service.processMessageBatchImport(
+      mockMessageChannel as MessageChannelEntity,
+      mockConnectedAccount,
+      workspaceId,
+    );
+
+    expect(messagingGetMessagesService.getMessages).toHaveBeenCalledWith(
+      ['message-id-1', 'message-id-2'],
+      mockConnectedAccount,
+      mockMessageChannel,
+    );
+    expect(pendingSyncCursorService.acknowledge).toHaveBeenCalled();
+  });
+
   it('should process message batch import successfully', async () => {
     await service.processMessageBatchImport(
       mockMessageChannel as MessageChannelEntity,
