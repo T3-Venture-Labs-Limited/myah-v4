@@ -43,6 +43,7 @@ type SenderPoolRow = {
   minimumSendIntervalMs: number | null;
   isSyncEnabled: boolean | null;
   syncStatus: MessageChannelSyncStatus | null;
+  syncedAt?: Date | null;
   isManaged: boolean;
 };
 
@@ -61,6 +62,7 @@ type ResolvedSenderEligibilityRow = Pick<
   | 'scopes'
   | 'isSyncEnabled'
   | 'syncStatus'
+  | 'syncedAt'
   | 'isManaged'
 >;
 
@@ -164,6 +166,7 @@ export class CampaignSenderReadinessService {
           account."minimumSendIntervalMs",
           channel."isSyncEnabled",
           channel."syncStatus",
+          channel."syncedAt",
           EXISTS (
             SELECT 1 FROM core."managedEmailMailbox" managed
              WHERE managed."workspaceId" = $2
@@ -363,7 +366,11 @@ export class CampaignSenderReadinessService {
     )
       return 'MISSING_PERMISSION';
     if (row.isSyncEnabled !== true) return 'SYNC_DISABLED';
-    if (row.syncStatus !== MessageChannelSyncStatus.ACTIVE)
+    if (
+      row.syncStatus !== MessageChannelSyncStatus.ACTIVE &&
+      (row.syncStatus !== MessageChannelSyncStatus.ONGOING ||
+        row.syncedAt == null)
+    )
       return 'ACCOUNT_UNAVAILABLE';
     if (row.isManaged) return 'UNAUTHORIZED';
     return null;
