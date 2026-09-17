@@ -89,6 +89,20 @@ export class EmailReplyContextActivationService {
     }
   }
 
+  // Workspaces without a provisioned schema hold no legacy drafts to preserve.
+  // Callers skip them so a cutover run never fails on an uninitialised tenant.
+  async isWorkspaceSchemaProvisioned(workspaceId: string): Promise<boolean> {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+
+      return await queryRunner.hasSchema(getWorkspaceSchemaName(workspaceId));
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async preflightEmailWorkspace(
     workspaceId: string,
     options: EmailReplyContextPreflightOptions = {},
