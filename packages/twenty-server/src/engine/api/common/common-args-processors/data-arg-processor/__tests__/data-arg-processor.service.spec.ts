@@ -115,6 +115,51 @@ describe('DataArgProcessorService', () => {
     expect(dataArgProcessorService).toBeDefined();
   });
 
+  it('rejects protected composer fields before generic mutation side effects', async () => {
+    const flatFieldMetadataMaps = {
+      byUniversalIdentifier: {
+        '5d78a1f7-79ea-4b67-9a8d-3b0a6109a5d4': {
+          id: 'digest-id',
+          name: 'composerInputDigest',
+          type: FieldMetadataType.TEXT,
+          isNullable: true,
+          objectMetadataId: 'object-id',
+          universalIdentifier: '5d78a1f7-79ea-4b67-9a8d-3b0a6109a5d4',
+        },
+      },
+      universalIdentifierById: {
+        'digest-id': '5d78a1f7-79ea-4b67-9a8d-3b0a6109a5d4',
+      },
+      universalIdentifiersByApplicationId: {},
+    } as unknown as FlatEntityMaps<FlatFieldMetadata>;
+    const flatObjectMetadata = {
+      id: 'object-id',
+      nameSingular: 'myahInstagramReplyDraft',
+      namePlural: 'myahInstagramReplyDrafts',
+      fieldIds: ['digest-id'],
+      universalIdentifier: '85762d24-541b-407f-9d6a-cdf89552c665',
+      labelIdentifierFieldMetadataUniversalIdentifier: null,
+      imageIdentifierFieldMetadataUniversalIdentifier: null,
+    } as FlatObjectMetadata;
+
+    await expect(
+      dataArgProcessorService.process({
+        partialRecordInputs: [{ composerInputDigest: undefined }],
+        authContext: createMockAuthContext(),
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+        flatObjectMetadataMaps: {
+          byUniversalIdentifier: {},
+          universalIdentifierById: {},
+          universalIdentifiersByApplicationId: {},
+        },
+      }),
+    ).rejects.toThrow('Instagram composer fields are server-managed');
+    expect(
+      recordPositionService.overridePositionOnRecords,
+    ).not.toHaveBeenCalled();
+  });
+
   it('should normalize relation connect where composite values', async () => {
     const flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata> = {
       byUniversalIdentifier: {

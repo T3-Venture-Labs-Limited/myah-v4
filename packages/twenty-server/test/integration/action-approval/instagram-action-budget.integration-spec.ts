@@ -5,7 +5,7 @@ import {
   ActionExecutionReceiptEntity,
   ActionExecutionReceiptState,
 } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
-import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { InstagramActionLimitBlockEntity } from 'src/engine/core-modules/instagram-action-budget/entities/instagram-action-limit-block.entity';
 import { InstagramActionReservationEntity } from 'src/engine/core-modules/instagram-action-budget/entities/instagram-action-reservation.entity';
 import { InstagramActionBudgetService } from 'src/engine/core-modules/instagram-action-budget/services/instagram-action-budget.service';
@@ -654,7 +654,7 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
     const secondReceiptId = await insertProcessingReceipt(501);
     const approvalIds = [fixtureId(10_500), fixtureId(10_501)];
     const authorities = approvalIds.map((_, index) =>
-      buildInstagramMessageActionAuthority({
+      buildLegacyInstagramMessageActionAuthority({
         workspaceId,
         initiatorUserWorkspaceId: fixtureId(20_500),
         threadId: null,

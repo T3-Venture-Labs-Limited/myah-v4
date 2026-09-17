@@ -709,6 +709,21 @@ export const STANDARD_COMMAND_MENU_ITEMS = {
     engineComponentKey: EngineComponentKey.COMPOSE_EMAIL,
     hotKeys: null,
   },
+  messageOnInstagram: {
+    universalIdentifier: 'f7f44e21-56bd-4db3-9df5-74002762c070',
+    label: 'Message on Instagram',
+    icon: 'IconBrandInstagram',
+    isPinned: false,
+    position: 68,
+    shortLabel: 'Instagram',
+    availabilityType: CommandMenuItemAvailabilityType.GLOBAL,
+    conditionalAvailabilityExpression:
+      'permissionFlags.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL or permissionFlags.SEND_INSTAGRAM_REPLY_TOOL',
+    availabilityObjectMetadataUniversalIdentifier: null,
+    frontComponentUniversalIdentifier: null,
+    engineComponentKey: EngineComponentKey.MESSAGE_ON_INSTAGRAM,
+    hotKeys: null,
+  },
   composeCampaign: {
     universalIdentifier: '30473656-e7cb-42e0-b198-6c4e8b906106',
     label: 'Compose Campaign',

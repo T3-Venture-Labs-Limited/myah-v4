@@ -44,6 +44,8 @@ type UnipileInstagramProjectionService = {
     workspace: Workspace;
     binding: Binding;
     chat: Chat;
+    creatorRecordId?: string;
+    restoreDeletedConversation?: boolean;
   }) => Promise<{ conversationRecordId: string }>;
   upsertVerifiedMessage: (input: {
     workspace: Workspace;
@@ -277,7 +279,8 @@ describe('UnipileInstagramProjectionService', () => {
     expect(insertSql).toContain('"name"');
     expect(insertSql).toContain('"label"');
     expect(insertSql).toContain('"lifecycle"');
-    expect(insertSql).not.toContain('"creatorId"');
+    expect(insertSql).toContain('"creatorId"');
+    expect(insertValues[17]).toBeNull();
     expect(insertValues).toEqual(
       expect.arrayContaining([
         conversationRecordId,
@@ -369,7 +372,8 @@ describe('UnipileInstagramProjectionService', () => {
     expect(updateSql).toContain('"name"');
     expect(updateSql).toContain('"label"');
     expect(updateSql).toContain('"lifecycle"');
-    expect(updateSql).not.toContain('"creatorId"');
+    expect(updateSql).toContain('"creatorId" = COALESCE("creatorId", $11)');
+    expect(updateValues[10]).toBeNull();
     expect(updateSql).toContain('WHERE "id"');
     expect(updateValues).toEqual(
       expect.arrayContaining([
@@ -381,6 +385,45 @@ describe('UnipileInstagramProjectionService', () => {
       ]),
     );
     expect(updateOptions).toEqual(queryOptions);
+    expect(
+      query.mock.calls.filter(
+        ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO'),
+      ),
+    ).toHaveLength(0);
+    expect(providerFetch).not.toHaveBeenCalled();
+  });
+
+  it('does not restore a soft-deleted chat when the caller forbids restoration', async () => {
+    const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: conversationRecordId, creatorId: null }])
+      .mockResolvedValue([]);
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    // A manual composer path passes no Creator for a raw handle, so the explicit
+    // flag is what keeps an operator-deleted conversation deleted.
+    await expect(
+      subject.service.upsertVerifiedChat({
+        workspace,
+        binding,
+        chat,
+        restoreDeletedConversation: false,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(
+      query.mock.calls.filter(
+        ([sql]) =>
+          typeof sql === 'string' && sql.includes('"deletedAt" = NULL'),
+      ),
+    ).toHaveLength(0);
     expect(
       query.mock.calls.filter(
         ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO'),
@@ -926,4 +969,66 @@ describe('UnipileInstagramProjectionService', () => {
     ).toBe(false);
     expect(providerFetch).not.toHaveBeenCalled();
   });
+});
+
+describe('UnipileInstagramProjectionService verified Creator ownership', () => {
+  it.each([false, true])(
+    'rejects a different existing owner before any write (deleted=%s)',
+    async (deleted) => {
+      const query = jest.fn(async (sql: string) => {
+        if (
+          sql.includes('SELECT "id"') &&
+          sql.includes('"_myahSocialConversation"')
+        ) {
+          return sql.includes('"deletedAt" IS NOT NULL') === deleted
+            ? [{ id: 'existing-conversation', creatorId: 'other-creator' }]
+            : [];
+        }
+        return [];
+      });
+      const h = createProjectionService(query)!;
+      await expect(
+        h.service.upsertVerifiedChat({
+          workspace,
+          binding,
+          chat,
+          creatorRecordId: 'approved-creator',
+        }),
+      ).rejects.toThrow(
+        deleted
+          ? 'Instagram conversation is deleted'
+          : 'Instagram conversation Creator does not match',
+      );
+      expect(
+        query.mock.calls.some(([sql]) => /INSERT INTO|UPDATE /.test(sql)),
+      ).toBe(false);
+      expect(h.withLock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([null, 'approved-creator'])(
+    'links only null/same owner under the chat lock (%s)',
+    async (creatorId) => {
+      const query = jest.fn(async (sql: string) =>
+        sql.includes('SELECT "id"')
+          ? [{ id: 'existing-conversation', creatorId }]
+          : [],
+      );
+      const h = createProjectionService(query)!;
+      await expect(
+        h.service.upsertVerifiedChat({
+          workspace,
+          binding,
+          chat,
+          creatorRecordId: 'approved-creator',
+        }),
+      ).resolves.toEqual({ conversationRecordId: 'existing-conversation' });
+      const write = query.mock.calls.find(([sql]) =>
+        sql.trimStart().startsWith('UPDATE'),
+      )!;
+      expect(write[0]).toContain('"creatorId"');
+      expect((write as unknown[])[1]).toContain('approved-creator');
+      expect(query.mock.calls[0][0]).toContain('pg_advisory_xact_lock');
+    },
+  );
 });

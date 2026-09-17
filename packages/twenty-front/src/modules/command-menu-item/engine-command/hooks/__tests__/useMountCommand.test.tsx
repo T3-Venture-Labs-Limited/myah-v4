@@ -27,6 +27,7 @@ const baseContextApi: HeadlessEngineCommandContextApi = {
   contextStoreInstanceId: 'ctx-1',
   objectMetadataItem: null,
   currentViewId: null,
+  pageType: null,
   recordIndexId: null,
   targetedRecordsRule: { mode: 'selection', selectedRecordIds: [] },
   selectedRecords: [],

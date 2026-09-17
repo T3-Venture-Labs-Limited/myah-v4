@@ -110,6 +110,17 @@ const EXPECTED_INSTAGRAM_IDENTITIES = [
   },
   {
     version: '2.20.0',
+    kind: 'fast-instance',
+    className: 'AddInstagramMessageV3SnapshotFastInstanceCommand',
+    timestamp: 1789488000359,
+    durableName:
+      '2.20.0_AddInstagramMessageV3SnapshotFastInstanceCommand_1789488000359',
+    // New command: no persisted legacy identity to preserve, so the durable name
+    // keeps its own registration timestamp.
+    oldTimestamp: 1789488000359,
+  },
+  {
+    version: '2.20.0',
     kind: 'slow-instance',
     className: 'InvalidateComposioInstagramAuthoritiesSlowInstanceCommand',
     timestamp: 1789307619363,
@@ -144,6 +155,15 @@ const EXPECTED_INSTAGRAM_IDENTITIES = [
       '2.20.0_BackfillComposioInstagramHistoryWorkspaceCommand_1799201012000',
     oldTimestamp: 1799201012000,
   },
+  {
+    version: '2.20.0',
+    kind: 'workspace',
+    className: 'SynchronizeInstagramComposerMetadataCommand',
+    timestamp: 1789488000360,
+    durableName:
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789488000360',
+    oldTimestamp: 1789488000360,
+  },
 ] as const;
 
 describe('Instagram production upgrade provider compatibility', () => {
@@ -168,7 +188,7 @@ describe('Instagram production upgrade provider compatibility', () => {
     ).toEqual(expect.arrayContaining(INSTANCE_COMMANDS));
   });
 
-  it('discovers exactly eight actual corrected providers and preserves the entire durable sequence and unaffected kind tails', () => {
+  it('discovers the full ten-provider Instagram sequence with the security sweep and unaffected kind tails', () => {
     const workspaceModules = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,
       WorkspaceCommandProviderModule,
@@ -270,7 +290,15 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
+    // The Instagram security cutover sweep is no longer the final 2.20.0 step:
+    // the MYAH-359 composer metadata sync registers with a later timestamp and
+    // runs after it. The sweep verifies Composio->Unipile authority state only,
+    // which neither new command reads or mutates, so the convention changed but
+    // the security guarantee did not.
     expect(sequence[sequence.length - 1]?.name).toBe(
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789488000360',
+    );
+    expect(sequence[sequence.length - 2]?.name).toBe(
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
     );
     expect(
@@ -279,7 +307,7 @@ describe('Instagram production upgrade provider compatibility', () => {
           (identity) => identity.durableName === step.name,
         ),
       ),
-    ).toHaveLength(8);
+    ).toHaveLength(10);
   });
 });
 

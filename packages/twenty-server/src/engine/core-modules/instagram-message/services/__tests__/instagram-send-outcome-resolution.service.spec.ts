@@ -1,3 +1,7 @@
+import { createV3RecoveryFixture } from './instagram-message-v3-recovery.fixture';
+import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import { InstagramMessageReconciliationService } from '../instagram-message-reconciliation.service';
 import {
   ActionExecutionReceiptEntity,
   ActionExecutionReceiptState,
@@ -149,6 +153,26 @@ describe('InstagramSendOutcomeResolutionService', () => {
     expect(harness.receipt.state).toBe(ActionExecutionReceiptState.SENT);
   });
 
+  it('clears a provably never-dispatched receipt without an exhaustive provider search', async () => {
+    const harness = buildHarness();
+    harness.reconciliationService.inspectUnknown.mockResolvedValue({
+      kind: 'NOT_DISPATCHED',
+    });
+
+    await expect(
+      harness.service.resolve({
+        ...baseInput,
+        outcome: 'CLEARED_NOT_SENT',
+        senderUiReviewed: true,
+        recipientUiReviewed: true,
+      }),
+    ).resolves.toMatchObject({ outcome: 'CLEARED_NOT_SENT' });
+    expect(harness.receipt).toMatchObject({
+      state: ActionExecutionReceiptState.FAILED,
+      providerCode: 'failed',
+    });
+  });
+
   it('derives safe evidence server-side when a sufficiently old complete read proves not sent', async () => {
     const harness = buildHarness();
     harness.reconciliationService.inspectUnknown.mockResolvedValue({
@@ -194,4 +218,142 @@ describe('InstagramSendOutcomeResolutionService', () => {
       'Confirmed sent resolution requires one verified provider message',
     );
   });
+});
+
+it('retains a confirmed resolution and target when accepted projection has not durably completed', async () => {
+  const h = buildHarness();
+  h.reconciliationService.reconcile.mockImplementation(async () => {
+    h.receipt.state = ActionExecutionReceiptState.PROVIDER_ACCEPTED;
+    return { kind: 'MATCH' };
+  });
+  await expect(h.service.resolve(baseInput)).rejects.toThrow(
+    'Verified Instagram send projection is incomplete',
+  );
+  expect(h.budgetService.releaseStartTargetForReceipt).not.toHaveBeenCalled();
+  expect(h.receipt.state).toBe(ActionExecutionReceiptState.PROVIDER_ACCEPTED);
+});
+
+describe('InstagramSendOutcomeResolutionService actual v3 reconciliation', () => {
+  const setup = () => {
+    const h = createV3RecoveryFixture();
+    h.receipt.state = ActionExecutionReceiptState.UNKNOWN;
+    const reservation = {
+      providerAttemptedAt: new Date('2026-09-03T12:00:00Z'),
+    };
+    let resolution: Record<string, unknown> | null = null;
+    const manager = {
+      findOne: async (entity: unknown) =>
+        entity === ActionExecutionReceiptEntity
+          ? h.receipt
+          : entity === ActionApprovalBindingEntity
+            ? { ...h.binding, state: 'CONSUMED' }
+            : resolution,
+      find: async () => [],
+      create: (_entity: unknown, value: unknown) => value,
+      save: async (entity: unknown, value: Record<string, unknown>) => {
+        if (entity === InstagramSendOutcomeResolutionEntity)
+          resolution = { ...value, id: 'resolution-v3' };
+        return entity === InstagramSendOutcomeResolutionEntity
+          ? resolution
+          : value;
+      },
+    };
+    const dataSource = {
+      transaction: async (callback: (manager: unknown) => unknown) =>
+        callback(manager),
+      getRepository: (entity: unknown) =>
+        entity === ActionExecutionReceiptEntity
+          ? h.receiptRepository
+          : { findOne: async () => resolution },
+      createQueryRunner: () => ({
+        connect: async () => undefined,
+        query: async () => [],
+        release: async () => undefined,
+      }),
+    };
+    const approval = new ActionApprovalService(
+      dataSource as never,
+      h.projector,
+    );
+    const budget = { releaseStartTargetForReceipt: jest.fn() };
+    const reconciliation = new InstagramMessageReconciliationService(
+      h.receiptRepository as never,
+      { findOne: async () => reservation } as never,
+      approval,
+      h.reader,
+      h.client,
+      h.projector,
+      h.writer,
+      budget as never,
+    );
+    const service = new InstagramSendOutcomeResolutionService(
+      dataSource as never,
+      reconciliation,
+      budget as never,
+    );
+    const input = {
+      workspaceId: h.workspaceId,
+      receiptId: h.receipt.id,
+      resolvedByUserWorkspaceId: h.binding.initiatorUserWorkspaceId,
+      outcome: 'CONFIRMED_SENT' as const,
+    };
+    return { ...h, budget, reservation, service, input };
+  };
+  it('retries an interrupted confirmed resolution from accepted identity, with no repeated send or duplicate projection', async () => {
+    const h = setup();
+    const draft = h.rows.myahInstagramReplyDraft;
+    h.rows.myahInstagramReplyDraft = [];
+    await expect(h.service.resolve(h.input)).rejects.toThrow(
+      'Instagram message draft content changed',
+    );
+    expect(h.receipt.state).toBe('PROVIDER_ACCEPTED');
+    expect(h.budget.releaseStartTargetForReceipt).not.toHaveBeenCalled();
+    h.rows.myahInstagramReplyDraft = draft;
+    await expect(h.service.resolve(h.input)).resolves.toMatchObject({
+      outcome: 'CONFIRMED_SENT',
+    });
+    expect(h.receipt.state).toBe('SENT');
+    expect(h.rows.myahSocialMessage).toHaveLength(1);
+    expect(h.rows.myahSocialConversation).toHaveLength(1);
+    expect(
+      h.fetch.mock.calls.every(
+        ([url, init]) => init.method === 'GET' && !url.includes('/users'),
+      ),
+    ).toBe(true);
+  });
+  it.each([
+    { age: 1, reviewed: true },
+    { age: 25, reviewed: false },
+    { age: 25, reviewed: true },
+  ])(
+    'requires minimum age and explicit human review for no-match clear: %j',
+    async ({ age, reviewed }) => {
+      const h = setup();
+      h.message.text = 'unrelated';
+      h.reservation.providerAttemptedAt = new Date(
+        Date.now() - age * 60 * 60 * 1000,
+      );
+      const result = h.service.resolve({
+        ...h.input,
+        outcome: 'CLEARED_NOT_SENT',
+        senderUiReviewed: reviewed,
+        recipientUiReviewed: reviewed,
+      });
+      if (age < 24 || !reviewed) {
+        await expect(result).rejects.toThrow();
+        expect(h.receipt.state).toBe('UNKNOWN');
+        expect(h.budget.releaseStartTargetForReceipt).not.toHaveBeenCalled();
+      } else {
+        await expect(result).resolves.toMatchObject({
+          outcome: 'CLEARED_NOT_SENT',
+        });
+        expect(h.receipt.state).toBe('FAILED');
+        expect(h.budget.releaseStartTargetForReceipt).toHaveBeenCalled();
+      }
+      expect(h.rows.myahSocialMessage).toHaveLength(0);
+      expect(
+        h.fetch.mock.calls.every(([, init]) => init.method === 'GET'),
+      ).toBe(true);
+    },
+  );
 });

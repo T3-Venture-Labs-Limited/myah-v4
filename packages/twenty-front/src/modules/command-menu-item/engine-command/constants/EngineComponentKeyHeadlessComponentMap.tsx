@@ -3,6 +3,7 @@ import { HeadlessNavigateEngineCommand } from '@/command-menu-item/engine-comman
 import { HeadlessOpenSidePanelPageEngineCommand } from '@/command-menu-item/engine-command/components/HeadlessOpenSidePanelPageEngineCommand';
 import { NavigationEngineCommand } from '@/command-menu-item/engine-command/components/NavigationEngineCommand';
 import { ComposeCampaignCommand } from '@/command-menu-item/engine-command/global/components/ComposeCampaignCommand';
+import { MessageOnInstagramCommand } from '@/command-menu-item/engine-command/global/components/MessageOnInstagramCommand';
 import { ComposeEmailCommand } from '@/command-menu-item/engine-command/global/components/ComposeEmailCommand';
 import { DeleteRecordsCommand } from '@/command-menu-item/engine-command/record/components/DeleteRecordsCommand';
 import { DestroyRecordsCommand } from '@/command-menu-item/engine-command/record/components/DestroyRecordsCommand';
@@ -55,6 +56,7 @@ export const ENGINE_COMPONENT_KEY_COMPONENT_MAP: Record<
   EngineComponentKey,
   React.ReactNode
 > = {
+  [EngineComponentKey.MESSAGE_ON_INSTAGRAM]: <MessageOnInstagramCommand />,
   [EngineComponentKey.CREATE_NEW_RECORD]: (
     <CreateNewIndexRecordNoSelectionRecordCommand />
   ),

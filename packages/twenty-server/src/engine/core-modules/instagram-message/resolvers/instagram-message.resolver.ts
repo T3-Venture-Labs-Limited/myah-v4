@@ -3,8 +3,16 @@ import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
+import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
+import {
+  InstagramMessageComposerAccountDto,
+  InstagramMessageComposerAttemptDto,
+  InstagramMessageComposerPreparedDto,
+  PrepareInstagramMessageComposerInputDto,
+  SendInstagramMessageComposerInputDto,
+} from 'src/engine/core-modules/instagram-message/dtos/instagram-message-composer.dto';
 import {
   GetInstagramMessageDraftInput,
   InstagramMessageDraftResultDto,
@@ -15,8 +23,10 @@ import {
   SendInstagramMessageInput,
 } from 'src/engine/core-modules/instagram-message/dtos/instagram-message.dto';
 import { InstagramMessageDraftService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft.service';
+import { InstagramMessageComposerService } from 'src/engine/core-modules/instagram-message/services/instagram-message-composer.service';
 import { InstagramMessagePermissionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
 import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
+import { InstagramMessageRecipientService } from 'src/engine/core-modules/instagram-message/services/instagram-message-recipient.service';
 import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
 import { InstagramMessageSendService } from 'src/engine/core-modules/instagram-message/services/instagram-message-send.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -42,7 +52,174 @@ export class InstagramMessageResolver {
     private readonly myahTeamAuthorizationService: MyahTeamAuthorizationService,
     private readonly permissionService: InstagramMessagePermissionService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly recipientService?: InstagramMessageRecipientService,
+    private readonly composerService?: InstagramMessageComposerService,
   ) {}
+
+  @Query(() => InstagramMessageComposerAccountDto)
+  async instagramMessageComposerAccount(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<InstagramMessageComposerAccountDto> {
+    return this.executeInAuthenticatedWorkspaceContext(
+      workspace,
+      userWorkspaceId,
+      workspaceMemberId,
+      async (rolePermissionConfig) => {
+        if (
+          !(await this.permissionService.canQueryComposerAccount({
+            workspaceId: workspace.id,
+            rolePermissionConfig,
+          }))
+        ) {
+          return {
+            status: 'BLOCKED',
+            code: 'MISSING_ROUTE_PERMISSION',
+            sender: null,
+          };
+        }
+        const account = await this.recordAccessService.getComposerAccount({
+          workspaceId: workspace.id,
+          rolePermissionConfig,
+        });
+        return account
+          ? {
+              status: 'READY',
+              code: null,
+              sender: {
+                accountRecordId: account.instagramAccountRecordId,
+                label: account.label,
+              },
+            }
+          : { status: 'BLOCKED', code: 'ACCOUNT_UNAVAILABLE', sender: null };
+      },
+    );
+  }
+
+  @Query(() => InstagramMessageComposerPreparedDto)
+  async prepareInstagramMessageComposer(
+    @Args('input') input: PrepareInstagramMessageComposerInputDto,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<InstagramMessageComposerPreparedDto> {
+    return this.executeInAuthenticatedWorkspaceContext(
+      workspace,
+      userWorkspaceId,
+      workspaceMemberId,
+      async (rolePermissionConfig) => {
+        const hasCreator = typeof input.creatorRecordId === 'string';
+        const hasRaw = typeof input.rawHandle === 'string';
+        if (hasCreator === hasRaw) {
+          return {
+            status: 'BLOCKED',
+            code: 'RECIPIENT_UNAVAILABLE',
+            normalizedHandle: null,
+            creatorRecordId: null,
+            sender: null,
+            actionKind: null,
+            preparationFingerprint: null,
+          };
+        }
+        if (!this.recipientService) {
+          throw new Error(
+            'Instagram message recipient preparation is unavailable',
+          );
+        }
+        const result = await this.recipientService.prepare(
+          hasCreator
+            ? { recipient: { creatorRecordId: input.creatorRecordId! } }
+            : { recipient: { rawHandle: input.rawHandle! } },
+          {
+            workspaceId: workspace.id,
+            initiatorUserWorkspaceId: userWorkspaceId,
+            workspaceMemberId,
+            rolePermissionConfig,
+          },
+        );
+        if (result.status === 'BLOCKED') {
+          return {
+            status: result.status,
+            code: result.code,
+            normalizedHandle: null,
+            creatorRecordId: null,
+            sender: null,
+            actionKind: null,
+            preparationFingerprint: null,
+          };
+        }
+        return { ...result, code: null };
+      },
+    );
+  }
+
+  @Mutation(() => InstagramMessageSendResultDto)
+  async sendInstagramMessageComposer(
+    @Args('input') input: SendInstagramMessageComposerInputDto,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<InstagramMessageSendResultDto> {
+    return this.executeInAuthenticatedWorkspaceContext(
+      workspace,
+      userWorkspaceId,
+      workspaceMemberId,
+      async (rolePermissionConfig) => {
+        if (!this.composerService) {
+          throw new Error('Instagram composer orchestration is unavailable');
+        }
+        const hasCreator = typeof input.creatorRecordId === 'string';
+        const hasRaw = typeof input.rawHandle === 'string';
+        if (hasCreator === hasRaw) {
+          throw new Error('Instagram composer recipient is unavailable');
+        }
+        return this.composerService.send(
+          {
+            recipient: hasCreator
+              ? { creatorRecordId: input.creatorRecordId! }
+              : { rawHandle: input.rawHandle! },
+            draftId: input.draftId,
+            expectedAccountRecordId: input.expectedAccountRecordId,
+            expectedPreparationFingerprint:
+              input.expectedPreparationFingerprint,
+            body: input.body,
+          },
+          {
+            workspaceId: workspace.id,
+            initiatorUserWorkspaceId: userWorkspaceId,
+            workspaceMemberId,
+            rolePermissionConfig,
+          },
+        );
+      },
+    );
+  }
+
+  @Query(() => InstagramMessageComposerAttemptDto, { nullable: true })
+  async instagramMessageComposerAttempt(
+    @Args('draftId', { type: () => UUIDScalarType }) draftId: string,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<InstagramMessageComposerAttemptDto | null> {
+    return this.executeInAuthenticatedWorkspaceContext(
+      workspace,
+      userWorkspaceId,
+      workspaceMemberId,
+      async (rolePermissionConfig) => {
+        if (!this.composerService) {
+          throw new Error('Instagram composer orchestration is unavailable');
+        }
+        return this.composerService.getAttempt(draftId, {
+          workspaceId: workspace.id,
+          initiatorUserWorkspaceId: userWorkspaceId,
+          workspaceMemberId,
+          rolePermissionConfig,
+        });
+      },
+    );
+  }
 
   @Mutation(() => InstagramMessageDraftResultDto)
   async saveInstagramMessageDraft(
@@ -185,8 +362,17 @@ export class InstagramMessageResolver {
           workspaceId: workspace.id,
         });
 
+        const destination = result.confirmedDestinationSource
+          ? await this.recordAccessService.getConfirmedDestination({
+              workspaceId: workspace.id,
+              rolePermissionConfig,
+              source: result.confirmedDestinationSource,
+            })
+          : null;
         return {
           receiptId: result.receipt.id,
+          creatorRecordId: destination?.creatorRecordId ?? null,
+          conversationRecordId: destination?.conversationRecordId ?? null,
           state: result.receipt.state,
           providerCode: result.receipt.providerCode,
           outcome: result.receipt.outcome,

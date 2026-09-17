@@ -14,9 +14,11 @@ import { InstagramSendOutcomeResolutionResolver } from 'src/engine/core-modules/
 import { InstagramMessageAuthorityReaderService } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.service';
 import { INSTAGRAM_MESSAGE_AUTHORITY_READER } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.type';
 import { InstagramMessageDraftService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft.service';
+import { InstagramMessageComposerService } from 'src/engine/core-modules/instagram-message/services/instagram-message-composer.service';
 import { InstagramMessageDraftLockService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft-lock.service';
 import { InstagramMessagePermissionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
 import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
+import { InstagramMessageRecipientService } from 'src/engine/core-modules/instagram-message/services/instagram-message-recipient.service';
 import { InstagramMessageReconciliationService } from 'src/engine/core-modules/instagram-message/services/instagram-message-reconciliation.service';
 import { InstagramMessageReceiptProjectionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-receipt-projection.service';
 import { InstagramMessageSendService } from 'src/engine/core-modules/instagram-message/services/instagram-message-send.service';
@@ -56,8 +58,10 @@ import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/e
     ResolveInstagramOutcomePermissionGuard,
     InstagramMessageDraftLockService,
     InstagramMessageDraftService,
+    InstagramMessageComposerService,
     InstagramMessagePermissionService,
     InstagramMessageRecordAccessService,
+    InstagramMessageRecipientService,
     InstagramMessageReceiptProjectionService,
     InstagramMessageReconciliationService,
     InstagramMessageSendService,
@@ -75,9 +79,11 @@ import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/e
   exports: [
     InstagramMessageAuthorityReaderService,
     InstagramMessageDraftService,
+    InstagramMessageComposerService,
     InstagramMessageDraftLockService,
     InstagramMessagePermissionService,
     InstagramMessageRecordAccessService,
+    InstagramMessageRecipientService,
     InstagramMessageReceiptProjectionService,
     InstagramMessageReconciliationService,
     InstagramMessageSendService,

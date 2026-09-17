@@ -29,6 +29,12 @@ const RESERVED_PROFILE_PATHS: Record<string, true> = {
 };
 const USERNAME_PATTERN = /^(?!.*\.\.)[a-z0-9._]{1,30}$/;
 
+export const isCanonicalInstagramUsername = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  USERNAME_PATTERN.test(value) &&
+  !value.startsWith('.') &&
+  !value.endsWith('.');
+
 const normalizeUsername = (value: string): string | null => {
   const trimmedValue = value.trim();
   const withoutAtSign = trimmedValue.startsWith('@')
@@ -36,11 +42,7 @@ const normalizeUsername = (value: string): string | null => {
     : trimmedValue;
   const normalizedUsername = withoutAtSign.toLowerCase();
 
-  if (
-    !USERNAME_PATTERN.test(normalizedUsername) ||
-    normalizedUsername.startsWith('.') ||
-    normalizedUsername.endsWith('.')
-  ) {
+  if (!isCanonicalInstagramUsername(normalizedUsername)) {
     return null;
   }
 

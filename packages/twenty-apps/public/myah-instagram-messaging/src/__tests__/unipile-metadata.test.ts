@@ -60,6 +60,10 @@ const INSTAGRAM_REPLY_DRAFT_RECIPIENT_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER =
   '4a79a104-ac37-4920-9ef7-181e52756574';
 const INSTAGRAM_REPLY_DRAFT_REVISION_FIELD_UNIVERSAL_IDENTIFIER =
   '0d53dfe9-0252-45c4-a3aa-78d640798d38';
+const INSTAGRAM_REPLY_DRAFT_COMPOSER_INPUT_DIGEST_FIELD_UNIVERSAL_IDENTIFIER =
+  '5d78a1f7-79ea-4b67-9a8d-3b0a6109a5d4';
+const INSTAGRAM_REPLY_DRAFT_INSTAGRAM_MESSAGE_SNAPSHOT_FIELD_UNIVERSAL_IDENTIFIER =
+  '3a80e3bb-cc44-4c97-9e89-a849776a9580';
 
 const SOCIAL_CONVERSATION_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER =
   'd3252d54-709f-4ae6-89bb-2ed4b21fa9a8';
@@ -422,6 +426,24 @@ describe('Unipile Instagram metadata', () => {
       type: FieldType.NUMBER,
       name: 'revision',
       defaultValue: 1,
+    });
+    expect(field(instagramReplyDraft, 'composerInputDigest')).toMatchObject({
+      universalIdentifier:
+        INSTAGRAM_REPLY_DRAFT_COMPOSER_INPUT_DIGEST_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      name: 'composerInputDigest',
+      isNullable: true,
+      isUIEditable: false,
+      defaultValue: null,
+    });
+    expect(field(instagramReplyDraft, 'instagramMessageSnapshot')).toMatchObject({
+      universalIdentifier:
+        INSTAGRAM_REPLY_DRAFT_INSTAGRAM_MESSAGE_SNAPSHOT_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RAW_JSON,
+      name: 'instagramMessageSnapshot',
+      isNullable: true,
+      isUIEditable: false,
+      defaultValue: null,
     });
     expect(field(instagramReplyDraft, 'conversation')).toMatchObject({
       universalIdentifier:

@@ -1,3 +1,5 @@
+import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { computeInstagramActionTargetFingerprints } from 'src/engine/core-modules/instagram-action-budget/utils/instagram-action-target-fingerprint.util';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { ActionExecutionReceiptState } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
@@ -79,6 +81,11 @@ export class InstagramMessageSendService {
     if (actionKind === 'START_CHAT') {
       throw new Error('Instagram first-contact sending is unavailable');
     }
+    await this.recordAccessService.assertCanExecuteDraft({
+      workspaceId: input.workspaceId,
+      draftId: input.draftId,
+      rolePermissionConfig: input.rolePermissionConfig,
+    });
     const authority = await this.authorityReader.createDirectAuthority({
       workspaceId: input.workspaceId,
       initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
@@ -95,7 +102,7 @@ export class InstagramMessageSendService {
       initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
       approvalBindingId: binding.id,
       threadId: null,
-      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+      interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
       interactionContextId: input.draftId,
       rolePermissionConfig: input.rolePermissionConfig,
     });
@@ -123,17 +130,32 @@ export class InstagramMessageSendService {
 
     return this.draftLockService.withLock(
       { workspaceId: input.workspaceId, draftId: binding.draftId },
-      () => this.executeApprovedWithLockHeld(input, binding),
+      () => this.executeApprovedWithDraftLockHeld(input, binding),
     );
   }
 
-  private async executeApprovedWithLockHeld(
+  /**
+   * Executes on an already-held draft advisory-lock session. Composer orchestration
+   * uses this seam after taking its handle lock followed by the draft lock; callers
+   * must never wrap it in a second `withLock` connection.
+   */
+  async executeApprovedWithDraftLockHeld(
     input: ExecuteApprovedInstagramMessageInput,
     binding: Extract<
       ExpectedActionBindingWithWorkspace,
       { actionName: 'send_instagram_message' }
     >,
   ): Promise<InstagramMessageSendResult> {
+    if (
+      input.workspaceId !== binding.workspaceId ||
+      input.initiatorUserWorkspaceId !== binding.initiatorUserWorkspaceId ||
+      input.threadId !== binding.threadId ||
+      (input.interactionContextType ?? null) !==
+        binding.interactionContextType ||
+      (input.interactionContextId ?? null) !== binding.interactionContextId
+    ) {
+      throw new Error('Instagram approval context changed');
+    }
     const existingReceipt =
       await this.actionApprovalService.findExecutionReceiptForBinding({
         workspaceId: input.workspaceId,
@@ -145,14 +167,19 @@ export class InstagramMessageSendService {
         existingReceipt.state,
         input.workspaceId,
         binding.actionKind,
+        binding.actionVersion,
       );
     }
-    // START bindings lack verified immutable messaging identity. Receipt recovery
-    // must stay ahead of this fresh-execution boundary.
-    if (binding.actionKind === 'START_CHAT') {
+    // Legacy START bindings have no verified immutable messaging identity.
+    if (binding.actionVersion === 2 && binding.actionKind === 'START_CHAT') {
       throw new Error('Instagram first-contact sending is unavailable');
     }
 
+    await this.permissionService.assertCanSend({
+      actionKind: binding.actionKind,
+      workspaceId: input.workspaceId,
+      rolePermissionConfig: input.rolePermissionConfig,
+    });
     const accessibleDraft =
       await this.recordAccessService.assertCanExecuteDraft({
         workspaceId: input.workspaceId,
@@ -181,6 +208,7 @@ export class InstagramMessageSendService {
         executionReservation.receipt.state,
         input.workspaceId,
         binding.actionKind,
+        binding.actionVersion,
       );
     }
 
@@ -195,7 +223,24 @@ export class InstagramMessageSendService {
           authority.canonicalGraph.account.workspaceInstagramAccountRecordId,
         actionExecutionReceiptId: receiptId,
         actionKind: authority.canonicalGraph.draft.kind,
-        targetFingerprint: authority.expectedActionBinding.recipientFingerprint,
+        ...(binding.actionVersion === 3
+          ? {
+              ...computeInstagramActionTargetFingerprints({
+                instagramAccountRecordId:
+                  binding.instagramMessageSnapshot.instagramAccountRecordId,
+                normalizedHandle:
+                  binding.instagramMessageSnapshot.publicIdentifier,
+                providerId: binding.instagramMessageSnapshot.providerId,
+                providerMessagingId:
+                  binding.instagramMessageSnapshot.providerMessagingId,
+              }),
+              providerMessagingId:
+                binding.instagramMessageSnapshot.providerMessagingId,
+            }
+          : {
+              targetFingerprint:
+                authority.expectedActionBinding.recipientFingerprint,
+            }),
       });
     } catch {
       await this.actionApprovalService.recordProviderTerminalState({
@@ -211,6 +256,44 @@ export class InstagramMessageSendService {
     }
 
     try {
+      await this.permissionService.assertCanSend({
+        actionKind: binding.actionKind,
+        workspaceId: input.workspaceId,
+        rolePermissionConfig: input.rolePermissionConfig,
+      });
+      if (binding.actionVersion === 3) {
+        const currentDraft =
+          await this.recordAccessService.assertCanExecuteDraft({
+            workspaceId: input.workspaceId,
+            draftId: binding.draftId,
+            rolePermissionConfig: input.rolePermissionConfig,
+          });
+        if (
+          currentDraft.instagramAccountRecordId !==
+          binding.instagramMessageSnapshot.instagramAccountRecordId
+        )
+          throw new Error('Instagram account changed');
+      }
+      if (binding.actionVersion === 3) {
+        const currentBinding =
+          await this.actionApprovalService.getApprovedBinding(input);
+        const evidenceKey = (links: typeof binding.evidenceLinks) =>
+          JSON.stringify(
+            links
+              .map(({ objectMetadataId, recordId, role }) =>
+                JSON.stringify([objectMetadataId, recordId, role]),
+              )
+              .sort(),
+          );
+        if (
+          computeLogicalActionKey(currentBinding) !==
+            computeLogicalActionKey(binding) ||
+          evidenceKey(currentBinding.evidenceLinks) !==
+            evidenceKey(binding.evidenceLinks)
+        )
+          throw new Error('Instagram approval changed');
+      }
+      // Provider verification and the final local fingerprint comparison run last.
       await this.authorityReader.assertReadyAfterReservation(authority);
     } catch {
       await this.budgetService.releasePreDispatch({
@@ -243,7 +326,10 @@ export class InstagramMessageSendService {
           ? await this.unipileClient.startChat(
               {
                 accountId: account.unipileAccountId,
-                attendeeId: draft.recipientProviderId,
+                attendeeId:
+                  binding.actionVersion === 3
+                    ? binding.instagramMessageSnapshot.providerMessagingId
+                    : draft.recipientProviderId,
                 text: draft.body.trim(),
               },
               { beforeDispatch },
@@ -288,8 +374,16 @@ export class InstagramMessageSendService {
         typeof providerOutcome.value.chatId === 'string'
           ? providerOutcome.value.chatId
           : null;
-      if (draft.kind === 'START_CHAT' && !acceptedChatId) {
-        throw new Error('Unipile Start Chat response is incomplete');
+      if (
+        !providerOutcome.value.messageId ||
+        (draft.kind === 'START_CHAT' && !acceptedChatId) ||
+        (draft.kind === 'REPLY' &&
+          acceptedChatId !== null &&
+          acceptedChatId !== draft.providerConversationId)
+      ) {
+        throw new Error(
+          'Unipile message response is incomplete or contradictory',
+        );
       }
       const providerThreadExternalId =
         draft.kind === 'START_CHAT'
@@ -303,10 +397,12 @@ export class InstagramMessageSendService {
       });
 
       try {
-        await this.projector.projectReceiptWithWriter(
+        const projection = await this.projector.projectReceiptWithWriter(
           receiptId,
           this.messageProjectionWriter,
         );
+        if (!projection.projected)
+          return { status: 'PROVIDER_ACCEPTED', receiptId };
         if (draft.kind === 'START_CHAT') {
           await this.budgetService.releaseStartTarget({
             workspaceId: input.workspaceId,
@@ -350,8 +446,15 @@ export class InstagramMessageSendService {
     state: string,
     workspaceId: string,
     actionKind: 'START_CHAT' | 'REPLY',
+    actionVersion: 2 | 3,
   ): Promise<InstagramMessageSendResult> {
-    if (actionKind === 'START_CHAT') {
+    if (
+      actionVersion === 3 &&
+      state === ActionExecutionReceiptState.PROCESSING
+    ) {
+      throw new Error('Instagram message execution is pending');
+    }
+    if (actionVersion === 2 && actionKind === 'START_CHAT') {
       if (state === ActionExecutionReceiptState.PROVIDER_ACCEPTED) {
         return { status: 'PROVIDER_ACCEPTED', receiptId };
       }
@@ -361,10 +464,12 @@ export class InstagramMessageSendService {
     }
     if (state === ActionExecutionReceiptState.PROVIDER_ACCEPTED) {
       try {
-        await this.projector.projectReceiptWithWriter(
+        const projection = await this.projector.projectReceiptWithWriter(
           receiptId,
           this.messageProjectionWriter,
         );
+        if (!projection.projected)
+          return { status: 'PROVIDER_ACCEPTED', receiptId };
         await this.budgetService.releaseStartTargetForReceipt({
           workspaceId,
           actionExecutionReceiptId: receiptId,

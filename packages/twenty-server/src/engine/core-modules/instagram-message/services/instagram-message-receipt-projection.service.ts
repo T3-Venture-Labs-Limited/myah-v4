@@ -46,21 +46,54 @@ export class InstagramMessageReceiptProjectionService {
     }
 
     // Current authority/provider matches cannot verify historical START identity.
-    if (input.actionKind === 'START_CHAT') {
+    if (input.actionVersion === 2 && input.actionKind === 'START_CHAT') {
       throw new Error('Instagram first-contact projection is unavailable');
     }
 
-    const authority = await this.authorityReader.rebuildForReconciliation({
-      workspaceId: input.workspaceId,
-      binding: input,
-    });
-    const account = authority.canonicalGraph.account;
-    const draft = authority.canonicalGraph.draft;
+    const recovery =
+      input.actionVersion === 3
+        ? await this.authorityReader.readV3RecoveryContext({
+            workspaceId: input.workspaceId,
+            binding: input,
+          })
+        : null;
+    const authority = recovery
+      ? null
+      : await this.authorityReader.rebuildForReconciliation({
+          workspaceId: input.workspaceId,
+          binding: input,
+        });
+    const snapshot = recovery?.snapshot;
+    const account = snapshot
+      ? {
+          bindingId: snapshot.accountBindingId,
+          unipileAccountId: snapshot.unipileAccountId,
+          instagramUserId: snapshot.instagramUserId,
+        }
+      : authority!.canonicalGraph.account;
+    const attendeeId =
+      snapshot?.providerMessagingId ??
+      authority!.canonicalGraph.draft.recipientProviderId;
+    if (
+      snapshot?.actionKind === 'REPLY' &&
+      input.providerThreadExternalId !== snapshot.providerChatId
+    )
+      throw new Error(
+        'Accepted Instagram conversation does not match approval',
+      );
     const accountBinding = await this.accountBindingRepository.findOne(
       input.workspaceId,
       {
         where: {
           id: account.bindingId,
+          ...(snapshot
+            ? {
+                workspaceInstagramAccountRecordId:
+                  snapshot.instagramAccountRecordId,
+                unipileAccountId: snapshot.unipileAccountId,
+                instagramUserId: snapshot.instagramUserId,
+              }
+            : {}),
           status: UnipileInstagramAccountBindingStatus.ACTIVE,
           deactivatedAt: IsNull(),
         },
@@ -73,14 +106,31 @@ export class InstagramMessageReceiptProjectionService {
     const chat = await this.unipileClient.getChat({
       accountId: account.unipileAccountId,
       chatId: input.providerThreadExternalId,
-      expectedAttendeeId: draft.recipientProviderId,
+      expectedAttendeeId: attendeeId,
     });
+    if (
+      snapshot &&
+      (chat.accountId !== snapshot.unipileAccountId ||
+        chat.chatId !== input.providerThreadExternalId ||
+        chat.accountType !== 'INSTAGRAM' ||
+        chat.type !== 'ONE_TO_ONE' ||
+        chat.attendeeProviderId !== snapshot.providerMessagingId)
+    )
+      throw new Error(
+        'Accepted Instagram conversation does not match approval',
+      );
     const message = await this.unipileClient.getMessage({
       accountId: account.unipileAccountId,
       chatId: input.providerThreadExternalId,
       messageId: input.providerExternalMessageId,
     });
     if (
+      (snapshot &&
+        (message.accountId !== snapshot.unipileAccountId ||
+          message.chatId !== input.providerThreadExternalId ||
+          message.messageId !== input.providerExternalMessageId ||
+          message.timestamp === null ||
+          !Number.isFinite(Date.parse(message.timestamp)))) ||
       hasContradictoryUnipileInstagramSenderEvidence(
         message,
         account.instagramUserId,
@@ -108,6 +158,13 @@ export class InstagramMessageReceiptProjectionService {
         workspace,
         binding: accountBinding,
         chat,
+        ...(snapshot
+          ? {
+              creatorRecordId: snapshot.creatorRecordId,
+              expectedConversationRecordId:
+                snapshot.conversationRecordId ?? undefined,
+            }
+          : {}),
       });
     await this.projectionService.upsertVerifiedMessage({
       workspace,
@@ -115,6 +172,7 @@ export class InstagramMessageReceiptProjectionService {
       chat,
       conversationRecordId,
       message,
+      ...(snapshot ? { creatorRecordId: snapshot.creatorRecordId } : {}),
     });
     await this.draftService.markSent({
       workspaceId: input.workspaceId,

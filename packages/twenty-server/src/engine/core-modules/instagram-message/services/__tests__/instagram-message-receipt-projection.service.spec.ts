@@ -1,4 +1,5 @@
-import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { createV3RecoveryFixture } from './instagram-message-v3-recovery.fixture';
+import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 
 type ProjectionWriter = {
   project: (input: Record<string, unknown>) => Promise<void>;
@@ -14,7 +15,7 @@ type ProjectionWriterModule = {
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const draftId = '00000000-0000-4000-8000-000000000002';
-const authority = buildInstagramMessageActionAuthority({
+const authority = buildLegacyInstagramMessageActionAuthority({
   workspaceId,
   initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000003',
   threadId: null,
@@ -211,7 +212,7 @@ describe('InstagramMessageReceiptProjectionService first-contact safety', () => 
     'rejects apparently matching historical START identity %s before reconstruction or provider reads',
     async (identity) => {
       const harness = buildHarness();
-      const legacyAuthority = buildInstagramMessageActionAuthority({
+      const legacyAuthority = buildLegacyInstagramMessageActionAuthority({
         ...authority.expectedActionBinding,
         ...authority.canonicalGraph,
         evidenceLinks: [...authority.expectedActionBinding.evidenceLinks],
@@ -287,3 +288,201 @@ describe('InstagramMessageReceiptProjectionService first-contact safety', () => 
     },
   );
 });
+
+describe('InstagramMessageReceiptProjectionService immutable v3 recovery', () => {
+  it('uses the explicit scope argument rather than duplicating workspaceId in the account-binding query', async () => {
+    const h = createV3RecoveryFixture();
+    (h.accountRepository.findOne as jest.Mock).mockImplementation(
+      async (
+        scopedWorkspaceId?: string,
+        options?: { where: Record<string, unknown> },
+      ) => {
+        if (!options) return h.account;
+        if (scopedWorkspaceId !== h.workspaceId)
+          throw new Error('Fixture workspace scope is unavailable');
+        if ('workspaceId' in options.where)
+          throw new Error('WorkspaceScopedRepository duplicate scope');
+
+        return h.account;
+      },
+    );
+
+    await expect(h.projector.projectReceipt(h.receipt.id)).resolves.toEqual({
+      projected: true,
+    });
+  });
+
+  it.each(['START_CHAT', 'REPLY'] as const)(
+    'projects %s from stored identity after a changed handle, then replays without duplicate rows or writes',
+    async (kind) => {
+      const h = createV3RecoveryFixture(kind);
+      const before = structuredClone(h.binding);
+      await h.projector.projectReceipt(h.receipt.id);
+      expect(h.receipt.state).toBe('SENT');
+      expect(h.rows.myahSocialConversation).toHaveLength(1);
+      expect(h.rows.myahSocialConversation[0].creatorId).toBe(h.creatorId);
+      expect(h.rows.myahSocialMessage).toHaveLength(1);
+      h.receipt.state = 'PROVIDER_ACCEPTED' as typeof h.receipt.state;
+      await h.projector.projectReceipt(h.receipt.id);
+      expect(h.rows.myahSocialConversation).toHaveLength(1);
+      expect(h.rows.myahSocialMessage).toHaveLength(1);
+      expect(h.binding).toEqual(before);
+      expect(
+        h.fetch.mock.calls.every(
+          ([url, init]) => init.method === 'GET' && !url.includes('/users'),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('retains durable acceptance on missing draft marking failure and replays projection without resend', async () => {
+    const h = createV3RecoveryFixture();
+    h.rows.myahInstagramReplyDraft = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(h.projector.projectReceipt(h.receipt.id)).rejects.toThrow(
+        'Instagram message draft content changed',
+      );
+      expect(h.receipt.state).toBe('PROVIDER_ACCEPTED');
+      expect(h.rows.myahSocialMessage).toHaveLength(1);
+    }
+    expect(h.fetch.mock.calls.every(([, init]) => init.method === 'GET')).toBe(
+      true,
+    );
+  });
+
+  it.each(['creator', 'account', 'binding'])(
+    'retains accepted state for missing/deactivated %s',
+    async (missing) => {
+      const h = createV3RecoveryFixture();
+      if (missing === 'creator') h.rows.creator = [];
+      if (missing === 'account') h.rows.myahInstagramAccount = [];
+      if (missing === 'binding') h.account.status = 'INACTIVE';
+      await expect(h.projector.projectReceipt(h.receipt.id)).rejects.toThrow();
+      expect(h.receipt.state).toBe('PROVIDER_ACCEPTED');
+      expect(h.fetch).not.toHaveBeenCalled();
+      expect(h.rows.myahSocialMessage).toHaveLength(0);
+    },
+  );
+
+  it.each([
+    ['account', { account_id: 'other-account' }],
+    ['chat', { chat_id: 'other-chat' }],
+    ['message', { id: 'other-message' }],
+    ['body', { text: 'mutated body' }],
+    ['direction', { sender_id: 'messaging-v3' }],
+    ['timestamp', { timestamp: null }],
+    ['hidden', { hidden: true }],
+    ['deleted', { deleted: true }],
+    ['event', { is_event: true }],
+  ])(
+    'fails closed before any projection for wrong %s',
+    async (_name, change) => {
+      const h = createV3RecoveryFixture();
+      Object.assign(h.message, change);
+      await expect(h.projector.projectReceipt(h.receipt.id)).rejects.toThrow();
+      expect(h.receipt.state).toBe('PROVIDER_ACCEPTED');
+      expect(h.rows.myahSocialConversation).toHaveLength(0);
+    },
+  );
+
+  it.each(['profile-v3', 'other-messaging-id'])(
+    'rejects attendee %s rather than confusing namespaces',
+    async (attendee) => {
+      const h = createV3RecoveryFixture();
+      h.chat.attendee_provider_id = attendee;
+      await expect(h.projector.projectReceipt(h.receipt.id)).rejects.toThrow();
+      expect(h.rows.myahSocialMessage).toHaveLength(0);
+    },
+  );
+});
+
+it.each(['START_CHAT', 'REPLY'] as const)(
+  'does not restore a deleted local %s destination or mark SENT',
+  async (kind) => {
+    const h = createV3RecoveryFixture(kind);
+    h.rows.myahSocialConversation = [
+      {
+        id:
+          h.binding.instagramMessageSnapshot.conversationRecordId ??
+          'deleted-start-chat',
+        creatorId: h.creatorId,
+        instagramAccountId: h.account.workspaceInstagramAccountRecordId,
+        providerConversationId: h.chat.id,
+        deletedAt: new Date(),
+      },
+    ];
+    const before = structuredClone(h.rows);
+    await expect(h.projector.projectReceipt(h.receipt.id)).rejects.toThrow(
+      'Instagram conversation is deleted',
+    );
+    expect(h.rows).toEqual(before);
+    expect(h.receipt.state).toBe('PROVIDER_ACCEPTED');
+    expect(
+      h.query.mock.calls.some(([sql]) => /^\s*(UPDATE|INSERT)/.test(sql)),
+    ).toBe(false);
+  },
+);
+
+it('does not create a replacement for a missing bound REPLY conversation', async () => {
+  const h = createV3RecoveryFixture('REPLY');
+  h.rows.myahSocialConversation = [];
+  await expect(h.projector.projectReceipt(h.receipt.id)).rejects.toThrow(
+    'Instagram conversation does not match approval',
+  );
+  expect(h.rows.myahSocialConversation).toHaveLength(0);
+  expect(h.receipt.state).toBe('PROVIDER_ACCEPTED');
+});
+
+it.each([null, 'approved', 'wrong'])(
+  'handles an existing active START conversation owner %s without reassignment',
+  async (owner) => {
+    const h = createV3RecoveryFixture();
+    h.rows.myahSocialConversation = [
+      {
+        id: 'existing-start',
+        creatorId: owner === 'approved' ? h.creatorId : owner,
+        instagramAccountId: h.account.workspaceInstagramAccountRecordId,
+        providerConversationId: h.chat.id,
+        deletedAt: null,
+      },
+    ];
+    if (owner === 'wrong') {
+      await expect(h.projector.projectReceipt(h.receipt.id)).rejects.toThrow(
+        'Instagram conversation Creator does not match',
+      );
+      expect(h.rows.myahSocialMessage).toHaveLength(0);
+      expect(h.rows.myahSocialConversation[0].creatorId).toBe('wrong');
+      expect(
+        h.query.mock.calls.some(([sql]) => /^\s*(UPDATE|INSERT)/.test(sql)),
+      ).toBe(false);
+    } else {
+      await h.projector.projectReceipt(h.receipt.id);
+      expect(h.rows.myahSocialConversation).toHaveLength(1);
+      expect(h.rows.myahSocialConversation[0].creatorId).toBe(h.creatorId);
+      expect(h.rows.myahSocialMessage).toHaveLength(1);
+    }
+  },
+);
+
+it('does not report confirmed projection when the v3 receipt SENT transition did not persist', async () => {
+  const h = createV3RecoveryFixture();
+  h.receiptRepository.update.mockImplementation(async () => ({ affected: 0 }));
+  await expect(h.projector.projectReceipt(h.receipt.id)).resolves.toEqual({
+    projected: false,
+  });
+  expect(h.receipt.state).toBe('PROVIDER_ACCEPTED');
+});
+
+it.each(['workspace', 'binding'])(
+  'rejects a mismatched immutable receipt %s association before reads',
+  async (mismatch) => {
+    const h = createV3RecoveryFixture();
+    if (mismatch === 'workspace') h.binding.workspaceId = 'other-workspace';
+    else h.receipt.actionApprovalBindingId = 'other-binding';
+    await expect(h.projector.projectReceipt(h.receipt.id)).rejects.toThrow(
+      'Instagram receipt binding is unavailable',
+    );
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.query).not.toHaveBeenCalled();
+  },
+);

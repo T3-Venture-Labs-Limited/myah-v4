@@ -1,3 +1,7 @@
+import { buildInstagramMessageV3ActionAuthority } from '../instagram-message-action.definition';
+import { type BuildInstagramMessageV3ActionAuthorityInput } from '../instagram-message-action.types';
+import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+
 type AuthorityInput = {
   workspaceId: string;
   initiatorUserWorkspaceId: string;
@@ -36,7 +40,7 @@ type BuildAuthority = (input: AuthorityInput) => {
 const loadBuilder = (): BuildAuthority | undefined => {
   try {
     return require('../instagram-message-action.definition')
-      .buildInstagramMessageActionAuthority as BuildAuthority;
+      .buildLegacyInstagramMessageActionAuthority as BuildAuthority;
   } catch {
     return undefined;
   }
@@ -86,7 +90,7 @@ const build = (input = baseInput()) => {
   return builder!(input);
 };
 
-describe('buildInstagramMessageActionAuthority', () => {
+describe('buildLegacyInstagramMessageActionAuthority', () => {
   it('binds exact direct START_CHAT identity, content, revision, source evidence, account, and recipient', () => {
     expect(build().expectedActionBinding).toMatchObject({
       actionName: 'send_instagram_message',
@@ -200,5 +204,216 @@ describe('buildInstagramMessageActionAuthority', () => {
       const changed = build(mutate(baseInput())).expectedActionBinding;
       expect(changed).not.toEqual(original);
     }
+  });
+});
+
+const composerInputDigest = 'e'.repeat(64);
+
+const buildV3StartInput = (): BuildInstagramMessageV3ActionAuthorityInput => {
+  const input = baseInput();
+
+  return {
+    ...input,
+    interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+    instagramMessageSnapshot: {
+      publicIdentifier: input.draft.recipientUsername,
+      providerId: input.draft.recipientProviderId,
+      providerMessagingId: 'messaging-009',
+      creatorRecordId: input.draft.creatorRecordId!,
+      accountBindingId: input.account.bindingId,
+      instagramAccountRecordId: input.account.workspaceInstagramAccountRecordId,
+      unipileAccountId: input.account.unipileAccountId,
+      instagramUserId: input.account.instagramUserId,
+      recipientSourceValues: input.draft.recipientSourceValues,
+      actionKind: 'START_CHAT',
+      conversationRecordId: null,
+      providerChatId: null,
+      attendeeProviderId: null,
+    },
+    composerInputDigest,
+  };
+};
+
+describe('buildInstagramMessageV3ActionAuthority', () => {
+  it('round-trips complete direct START_CHAT, direct REPLY, and thread REPLY snapshots', () => {
+    const startInput = buildV3StartInput();
+    const start = buildInstagramMessageV3ActionAuthority(startInput);
+    const replyInput: BuildInstagramMessageV3ActionAuthorityInput = {
+      ...startInput,
+      threadId: '00000000-0000-4000-8000-000000000008',
+      interactionContextType: null,
+      interactionContextId: null,
+      draft: {
+        ...startInput.draft,
+        kind: 'REPLY',
+        conversationRecordId: '00000000-0000-4000-8000-000000000009',
+        providerConversationId: 'chat-009',
+      },
+      instagramMessageSnapshot: {
+        ...startInput.instagramMessageSnapshot,
+        actionKind: 'REPLY',
+        conversationRecordId: '00000000-0000-4000-8000-000000000009',
+        providerChatId: 'chat-009',
+        attendeeProviderId: 'messaging-009',
+      },
+      composerInputDigest: null,
+    };
+    const reply = buildInstagramMessageV3ActionAuthority(replyInput);
+    const directReply = buildInstagramMessageV3ActionAuthority({
+      ...replyInput,
+      threadId: null,
+      interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+      interactionContextId: replyInput.draft.id,
+    });
+
+    expect(start.expectedActionBinding).toMatchObject({
+      actionVersion: 3,
+      actionKind: 'START_CHAT',
+      composerInputDigest,
+      instagramMessageSnapshot: startInput.instagramMessageSnapshot,
+    });
+    expect(reply.expectedActionBinding).toMatchObject({
+      actionVersion: 3,
+      actionKind: 'REPLY',
+      composerInputDigest: null,
+      instagramMessageSnapshot: replyInput.instagramMessageSnapshot,
+    });
+    expect(directReply.expectedActionBinding).toMatchObject({
+      actionVersion: 3,
+      actionKind: 'REPLY',
+      interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+      composerInputDigest: null,
+      instagramMessageSnapshot: replyInput.instagramMessageSnapshot,
+    });
+  });
+
+  it.each([
+    ['publicIdentifier', 'another.creator'],
+    ['providerId', 'another-provider-id'],
+    ['providerMessagingId', 'messaging-010'],
+    ['creatorRecordId', '00000000-0000-4000-8000-000000000010'],
+    ['accountBindingId', '00000000-0000-4000-8000-000000000011'],
+    ['instagramAccountRecordId', '00000000-0000-4000-8000-000000000012'],
+    ['unipileAccountId', 'another-unipile-account'],
+    ['instagramUserId', 'another-instagram-user'],
+  ])('binds %s into the v3 logical key', (field, value) => {
+    const original =
+      buildInstagramMessageV3ActionAuthority(
+        buildV3StartInput(),
+      ).expectedActionBinding;
+
+    expect(
+      computeLogicalActionKey({
+        ...original,
+        instagramMessageSnapshot: {
+          ...original.instagramMessageSnapshot,
+          [field]: value,
+        },
+      }),
+    ).not.toBe(computeLogicalActionKey(original));
+  });
+
+  it('binds source values, route targets, and composer input into the v3 logical key', () => {
+    const start =
+      buildInstagramMessageV3ActionAuthority(
+        buildV3StartInput(),
+      ).expectedActionBinding;
+    const reply = buildInstagramMessageV3ActionAuthority({
+      ...buildV3StartInput(),
+      threadId: '00000000-0000-4000-8000-000000000008',
+      interactionContextType: null,
+      interactionContextId: null,
+      draft: {
+        ...buildV3StartInput().draft,
+        kind: 'REPLY',
+        conversationRecordId: '00000000-0000-4000-8000-000000000009',
+        providerConversationId: 'chat-009',
+      },
+      instagramMessageSnapshot: {
+        ...buildV3StartInput().instagramMessageSnapshot,
+        actionKind: 'REPLY',
+        conversationRecordId: '00000000-0000-4000-8000-000000000009',
+        providerChatId: 'chat-009',
+        attendeeProviderId: 'messaging-009',
+      },
+      composerInputDigest: null,
+    }).expectedActionBinding;
+
+    expect(
+      computeLogicalActionKey({
+        ...start,
+        composerInputDigest: 'f'.repeat(64),
+      }),
+    ).not.toBe(computeLogicalActionKey(start));
+    expect(
+      computeLogicalActionKey({
+        ...start,
+        instagramMessageSnapshot: {
+          ...start.instagramMessageSnapshot,
+          recipientSourceValues: [
+            { field: 'instagramUsername', value: 'creator.name' },
+          ],
+        },
+      }),
+    ).not.toBe(computeLogicalActionKey(start));
+    expect(computeLogicalActionKey(reply)).not.toBe(
+      computeLogicalActionKey(start),
+    );
+  });
+
+  it.each([
+    '@creator',
+    'creator name',
+    '.creator',
+    'creator.',
+    'creator..name',
+    'a'.repeat(31),
+  ])('rejects a non-canonical snapshot handle: %s', (publicIdentifier) => {
+    const input = buildV3StartInput();
+
+    expect(() =>
+      buildInstagramMessageV3ActionAuthority({
+        ...input,
+        draft: { ...input.draft, recipientUsername: publicIdentifier },
+        instagramMessageSnapshot: {
+          ...input.instagramMessageSnapshot,
+          publicIdentifier,
+        },
+      }),
+    ).toThrow('Instagram message identity snapshot is unavailable');
+  });
+
+  it('rejects missing snapshot fields, historical v2 context, mixed contexts, and thread START_CHAT', () => {
+    const input = buildV3StartInput();
+    expect(() =>
+      buildInstagramMessageV3ActionAuthority({
+        ...input,
+        instagramMessageSnapshot: {
+          ...input.instagramMessageSnapshot,
+          providerMessagingId: '',
+        },
+      }),
+    ).toThrow('Instagram message identity snapshot is unavailable');
+    expect(() =>
+      buildInstagramMessageV3ActionAuthority({
+        ...input,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+      }),
+    ).toThrow('Direct Instagram approval context does not match the draft');
+    expect(() =>
+      buildInstagramMessageV3ActionAuthority({
+        ...input,
+        threadId: '00000000-0000-4000-8000-000000000008',
+      }),
+    ).toThrow('Instagram approval cannot mix thread and direct context');
+    expect(() =>
+      buildInstagramMessageV3ActionAuthority({
+        ...input,
+        threadId: '00000000-0000-4000-8000-000000000008',
+        interactionContextType: null,
+        interactionContextId: null,
+        composerInputDigest: null,
+      }),
+    ).toThrow('START_CHAT is not available to agent threads');
   });
 });

@@ -4,6 +4,7 @@ import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMembe
 import { type HeadlessEngineCommandContextApi } from '@/command-menu-item/engine-command/types/HeadlessCommandContextApi';
 import { contextStoreAnyFieldFilterValueComponentState } from '@/context-store/states/contextStoreAnyFieldFilterValueComponentState';
 import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context-store/states/contextStoreCurrentObjectMetadataItemIdComponentState';
+import { contextStoreCurrentPageTypeComponentState } from '@/context-store/states/contextStoreCurrentPageTypeComponentState';
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
 import { contextStoreFilterGroupsComponentState } from '@/context-store/states/contextStoreFilterGroupsComponentState';
 import { contextStoreFiltersComponentState } from '@/context-store/states/contextStoreFiltersComponentState';
@@ -47,6 +48,12 @@ export const buildHeadlessCommandContextApi = ({
 
   const currentViewId = store.get(
     contextStoreCurrentViewIdComponentState.atomFamily({
+      instanceId: contextStoreInstanceId,
+    }),
+  );
+
+  const pageType = store.get(
+    contextStoreCurrentPageTypeComponentState.atomFamily({
       instanceId: contextStoreInstanceId,
     }),
   );
@@ -125,6 +132,7 @@ export const buildHeadlessCommandContextApi = ({
     contextStoreInstanceId,
     objectMetadataItem: objectMetadataItem ?? null,
     currentViewId,
+    pageType,
     recordIndexId,
     targetedRecordsRule,
     selectedRecords,

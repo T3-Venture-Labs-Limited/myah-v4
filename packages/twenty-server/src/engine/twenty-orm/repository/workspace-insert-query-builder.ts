@@ -199,6 +199,8 @@ export class WorkspaceInsertQueryBuilder<
 
       if (isDefined(this.relationNestedConfig)) {
         const nestedRelationQueryBuilder = new WorkspaceSelectQueryBuilder(
+          // SAFETY: the constructor clones the shared TypeORM QueryBuilder state;
+          // it does not invoke select-only methods on this insert builder.
           this as unknown as WorkspaceSelectQueryBuilder<T>,
           this.objectRecordsPermissions,
           this.internalContext,
@@ -231,7 +233,7 @@ export class WorkspaceInsertQueryBuilder<
       ).createQueryBuilder(
         mainAliasTarget,
         this.expressionMap.mainAlias?.metadata.name ?? '',
-        undefined,
+        this.queryRunner,
         {
           shouldBypassPermissionChecks: true,
         },

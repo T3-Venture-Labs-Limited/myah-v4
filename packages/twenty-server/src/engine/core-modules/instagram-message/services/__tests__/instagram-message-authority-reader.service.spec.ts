@@ -1,3 +1,5 @@
+import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { resolveInstagramRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-instagram-recipient.util';
 import { InstagramMessageLocalAuthorityReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-local-authority-reader.service';
 import { PermissionsException } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { InstagramMessageAuthorityReaderService } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.service';
@@ -75,14 +77,98 @@ const buildHarness = (
     client as never,
   );
 
-  return { client, dataSource, service };
+  return { client, dataSource, service, draft, accountBinding };
 };
 
-describe('InstagramMessageAuthorityReaderService', () => {
-  it('builds direct START_CHAT authority from current Creator fields and read-only local/provider state', async () => {
+const readLegacyAuthority = async (
+  h: ReturnType<typeof buildHarness>,
+  input: {
+    workspaceId: string;
+    initiatorUserWorkspaceId: string;
+    draftId: string;
+    expectedRevision?: number;
+    threadId?: string;
+  },
+) => {
+  const draft = h.draft as typeof firstDraft;
+  const recipient = resolveInstagramRecipient({
+    instagramUsername: draft.creatorInstagramUsername,
+    instagramUrl: draft.creatorInstagramUrl,
+    instagramLink: { primaryLinkUrl: draft.creatorInstagramLinkPrimaryLinkUrl },
+  });
+  const sourceValues = recipient.sourceFields.map((field) => ({
+    field,
+    value:
+      field === 'instagramUsername'
+        ? draft.creatorInstagramUsername
+        : field === 'instagramUrl'
+          ? draft.creatorInstagramUrl
+          : draft.creatorInstagramLinkPrimaryLinkUrl!,
+  }));
+  const original = buildLegacyInstagramMessageActionAuthority({
+    workspaceId,
+    initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
+    threadId: input.threadId ?? null,
+    interactionContextType: input.threadId
+      ? null
+      : 'MYAH_INBOX_INSTAGRAM_DRAFT',
+    interactionContextId: input.threadId ? null : draftId,
+    draft: {
+      id: draft.id,
+      body: draft.body,
+      revision: draft.revision,
+      kind: draft.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
+      creatorRecordId: draft.creatorId,
+      recipientUsername: recipient.normalizedUsername,
+      recipientProviderId: draft.recipientProviderId,
+      recipientSourceValues: sourceValues,
+      conversationRecordId: draft.conversationId,
+      providerConversationId: draft.providerConversationId,
+    },
+    account: {
+      bindingId: h.accountBinding.id,
+      workspaceInstagramAccountRecordId: accountRecordId,
+      unipileAccountId: h.accountBinding.unipileAccountId,
+      instagramUserId: h.accountBinding.instagramUserId,
+    },
+    evidenceLinks: [
+      {
+        objectMetadataId: 'account-metadata',
+        recordId: accountRecordId,
+        role: 'INSTAGRAM_ACCOUNT',
+      },
+      {
+        objectMetadataId: 'draft-metadata',
+        recordId: draftId,
+        role: 'INSTAGRAM_MESSAGE_DRAFT',
+      },
+      ...(draft.conversationId
+        ? [
+            {
+              objectMetadataId: 'conversation-metadata',
+              recordId: draft.conversationId,
+              role: 'SOCIAL_CONVERSATION',
+            },
+          ]
+        : []),
+      {
+        objectMetadataId: 'creator-metadata',
+        recordId: creatorId,
+        role: 'CREATOR',
+      },
+    ],
+  });
+  return h.service.rebuildExecutionAuthority({
+    workspaceId,
+    binding: original.expectedActionBinding,
+  });
+};
+
+describe('InstagramMessageAuthorityReaderService historical v2 reconstruction', () => {
+  it('reconstructs historical START_CHAT authority without minting a fresh approval', async () => {
     const harness = buildHarness();
 
-    const authority = await harness.service.createDirectAuthority({
+    const authority = await readLegacyAuthority(harness, {
       workspaceId,
       initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
       draftId,
@@ -137,7 +223,7 @@ describe('InstagramMessageAuthorityReaderService', () => {
       expect(error).toBeInstanceOf(PermissionsException);
     }
 
-    await harness.service.createDirectAuthority({
+    await readLegacyAuthority(harness, {
       workspaceId,
       initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
       draftId,
@@ -164,7 +250,7 @@ describe('InstagramMessageAuthorityReaderService', () => {
       nextCursor: null,
     });
 
-    const authority = await harness.service.createDirectAuthority({
+    const authority = await readLegacyAuthority(harness, {
       workspaceId,
       initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
       draftId,
@@ -192,7 +278,7 @@ describe('InstagramMessageAuthorityReaderService', () => {
       conversationCreatorId: creatorId,
     });
 
-    const authority = await harness.service.createThreadReplyAuthority({
+    const authority = await readLegacyAuthority(harness, {
       workspaceId,
       initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
       threadId: '00000000-0000-4000-8000-000000000006',
@@ -232,7 +318,7 @@ describe('InstagramMessageAuthorityReaderService shared local extraction', () =>
         conversationInstagramAccountId: accountRecordId,
         conversationCreatorId: creatorId,
       });
-      const original = await harness.service.createThreadReplyAuthority({
+      const original = await readLegacyAuthority(harness, {
         workspaceId,
         initiatorUserWorkspaceId: 'viewer-id',
         threadId: 'thread-id',
@@ -264,7 +350,7 @@ describe('InstagramMessageAuthorityReaderService shared local extraction', () =>
     'preserves %s fingerprint mismatch rejection',
     async (method) => {
       const harness = buildHarness();
-      const authority = await harness.service.createDirectAuthority({
+      const authority = await readLegacyAuthority(harness, {
         workspaceId,
         initiatorUserWorkspaceId: 'viewer-id',
         draftId,
@@ -308,14 +394,14 @@ describe('InstagramMessageAuthorityReaderService current conversation Creator li
         draftId,
         expectedRevision: 2,
       };
-      const original = await harness.service.createDirectAuthority(input);
+      const original = await readLegacyAuthority(harness, input);
       draft.conversationCreatorId = conversationCreatorId;
 
+      await expect(readLegacyAuthority(harness, input)).rejects.toThrow(
+        'REPLY draft target is stale',
+      );
       await expect(
-        harness.service.createDirectAuthority(input),
-      ).rejects.toThrow('REPLY draft target is stale');
-      await expect(
-        harness.service.createThreadReplyAuthority({
+        readLegacyAuthority(harness, {
           ...input,
           threadId: 'thread-id',
         }),

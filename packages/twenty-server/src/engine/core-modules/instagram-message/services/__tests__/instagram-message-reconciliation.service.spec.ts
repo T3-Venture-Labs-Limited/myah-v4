@@ -1,12 +1,13 @@
+import { createV3RecoveryFixture } from './instagram-message-v3-recovery.fixture';
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 import { InstagramMessageReceiptProjectionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-receipt-projection.service';
-import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { InstagramMessageReconciliationService } from 'src/engine/core-modules/instagram-message/services/instagram-message-reconciliation.service';
 import { type UnipileInstagramMessage } from 'src/modules/myah-unipile/types/unipile-v1.type';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const receiptId = '00000000-0000-4000-8000-000000000002';
-const authority = buildInstagramMessageActionAuthority({
+const authority = buildLegacyInstagramMessageActionAuthority({
   workspaceId,
   initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000003',
   threadId: null,
@@ -34,7 +35,7 @@ const authority = buildInstagramMessageActionAuthority({
 });
 
 const buildHarness = (
-  providerAttemptedAt = new Date('2026-09-03T12:00:00.000Z'),
+  providerAttemptedAt: Date | null = new Date('2026-09-03T12:00:00.000Z'),
   messageAuthority = authority,
 ) => {
   const storedBinding = {
@@ -51,7 +52,10 @@ const buildHarness = (
   const receiptRepository = {
     findOne: jest.fn().mockResolvedValue(receipt),
   };
-  const reservation = { providerAttemptedAt };
+  const reservation = {
+    id: '00000000-0000-4000-8000-000000000009',
+    providerAttemptedAt,
+  };
   const reservationRepository = {
     findOne: jest.fn().mockResolvedValue(reservation),
   };
@@ -60,6 +64,7 @@ const buildHarness = (
       .fn()
       .mockResolvedValue(messageAuthority.expectedActionBinding),
     recordProviderAccepted: jest.fn().mockResolvedValue(undefined),
+    recordProviderTerminalState: jest.fn().mockResolvedValue(undefined),
   };
   const authorityReader = {
     rebuildForReconciliation: jest.fn().mockResolvedValue(messageAuthority),
@@ -92,6 +97,7 @@ const buildHarness = (
   const messageProjectionWriter = { project: jest.fn() };
   const budgetService = {
     releaseStartTargetForReceipt: jest.fn().mockResolvedValue(undefined),
+    releasePreDispatch: jest.fn().mockResolvedValue(undefined),
   };
   const service = new InstagramMessageReconciliationService(
     receiptRepository as never,
@@ -151,7 +157,7 @@ describe('InstagramMessageReconciliationService', () => {
     it.each([1, 25])(
       'stays indeterminate at age %s hours before any reservation, authority or provider access',
       async (ageHours) => {
-        const legacyAuthority = buildInstagramMessageActionAuthority({
+        const legacyAuthority = buildLegacyInstagramMessageActionAuthority({
           ...authority.expectedActionBinding,
           ...authority.canonicalGraph,
           evidenceLinks: [...authority.expectedActionBinding.evidenceLinks],
@@ -200,7 +206,7 @@ describe('InstagramMessageReconciliationService', () => {
         expect(harness.receiptRepository.findOne).toHaveBeenCalledWith(
           workspaceId,
           {
-            where: { id: receiptId, workspaceId, state: 'UNKNOWN' },
+            where: { id: receiptId, state: 'UNKNOWN' },
             relations: { actionApprovalBinding: { evidenceLinks: true } },
           },
         );
@@ -261,7 +267,6 @@ describe('InstagramMessageReconciliationService', () => {
         {
           where: {
             id: receiptId,
-            workspaceId: lookupWorkspaceId,
             state: 'UNKNOWN',
           },
           relations: { actionApprovalBinding: { evidenceLinks: true } },
@@ -641,7 +646,7 @@ describe('InstagramMessageReconciliationService', () => {
 
 describe('InstagramMessageReconciliationService Accepted START hold safety', () => {
   it('retains receipt, accepted IDs, unsent draft and target/capacity holds when the real shared writer rejects background finalization', async () => {
-    const legacyAuthority = buildInstagramMessageActionAuthority({
+    const legacyAuthority = buildLegacyInstagramMessageActionAuthority({
       ...authority.expectedActionBinding,
       ...authority.canonicalGraph,
       evidenceLinks: [...authority.expectedActionBinding.evidenceLinks],
@@ -755,5 +760,234 @@ describe('InstagramMessageReconciliationService Accepted START hold safety', () 
       harness.actionApprovalService.recordProviderAccepted,
     ).not.toHaveBeenCalled();
     expect({ receipt, reservation, draft }).toEqual(before);
+  });
+});
+
+describe('InstagramMessageReconciliationService immutable v3 START', () => {
+  const setup = () => {
+    const h = createV3RecoveryFixture();
+    h.receipt.state = 'UNKNOWN' as typeof h.receipt.state;
+    const reservation = {
+      providerAttemptedAt: new Date('2026-09-03T12:00:00.000Z'),
+    };
+    const approval = {
+      getApprovedBinding: jest.fn(async () => h.binding),
+      recordProviderAccepted: jest.fn(async (_id, value) => {
+        Object.assign(h.receipt, value, { state: 'PROVIDER_ACCEPTED' });
+      }),
+    };
+    const budget = { releaseStartTargetForReceipt: jest.fn() };
+    const service = new InstagramMessageReconciliationService(
+      h.receiptRepository as never,
+      { findOne: async () => reservation } as never,
+      approval as never,
+      h.reader,
+      h.client,
+      h.projector,
+      h.writer,
+      budget as never,
+    );
+    return { ...h, reservation, approval, budget, service };
+  };
+  it('matches immutable messaging identity and projects the exact chat without a profile lookup or send', async () => {
+    const h = setup();
+    await expect(
+      h.service.reconcile({
+        workspaceId: h.workspaceId,
+        receiptId: h.receipt.id,
+      }),
+    ).resolves.toEqual({
+      kind: 'MATCH',
+      chatId: 'chat-v3',
+      messageId: 'message-v3',
+    });
+    expect(h.receipt.state).toBe('SENT');
+    expect(h.rows.myahSocialConversation[0].creatorId).toBe(h.creatorId);
+    expect(h.rows.myahSocialMessage).toHaveLength(1);
+    expect(h.approval.getApprovedBinding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+      }),
+    );
+    expect(
+      h.fetch.mock.calls.every(
+        ([url, init]) => init.method === 'GET' && !url.includes('/users'),
+      ),
+    ).toBe(true);
+  });
+  it.each([1, 25])(
+    'requires complete traversal and 24h before human clear eligibility (age %s)',
+    async (age) => {
+      const h = setup();
+      h.reservation.providerAttemptedAt = new Date(
+        Date.now() - age * 60 * 60 * 1000,
+      );
+      h.chat.attendee_provider_id = 'profile-v3';
+      await expect(
+        h.service.reconcile({
+          workspaceId: h.workspaceId,
+          receiptId: h.receipt.id,
+        }),
+      ).resolves.toEqual({
+        kind: age === 1 ? 'INDETERMINATE' : 'NO_MATCH_COMPLETE',
+      });
+      expect(h.receipt.state).toBe('UNKNOWN');
+      expect(h.budget.releaseStartTargetForReceipt).not.toHaveBeenCalled();
+      expect(h.approval.recordProviderAccepted).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
+    'cursor',
+    'wrong-account',
+    'timestamp',
+    'inbound',
+    'multiple',
+    'missing-target',
+  ])('fails closed for %s evidence', async (failure) => {
+    const h = setup();
+    if (failure === 'cursor')
+      h.fetch.mockImplementation(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          object: 'ChatList',
+          items: [h.chat],
+          cursor: 'repeat',
+        }),
+      }));
+    if (failure === 'wrong-account') h.chat.account_id = 'wrong';
+    if (failure === 'timestamp')
+      h.message.timestamp = '2026-09-03T11:59:59.000Z';
+    if (failure === 'inbound') {
+      h.message.sender_id = 'messaging-v3';
+      h.reservation.providerAttemptedAt = new Date();
+    }
+    if (failure === 'missing-target') h.rows.creator = [];
+    if (failure === 'multiple')
+      h.fetch.mockImplementation(async (url) => ({
+        ok: true,
+        status: 200,
+        json: async () =>
+          url.includes('/messages')
+            ? {
+                object: 'MessageList',
+                items: [h.message, { ...h.message, id: 'second-message' }],
+                cursor: null,
+              }
+            : url.includes('?')
+              ? { object: 'ChatList', items: [h.chat], cursor: null }
+              : h.chat,
+      }));
+    await expect(
+      h.service.reconcile({
+        workspaceId: h.workspaceId,
+        receiptId: h.receipt.id,
+      }),
+    ).resolves.toEqual({ kind: 'INDETERMINATE' });
+    expect(h.budget.releaseStartTargetForReceipt).not.toHaveBeenCalled();
+    expect(h.approval.recordProviderAccepted).not.toHaveBeenCalled();
+  });
+});
+
+describe('InstagramMessageReconciliationService workspace scoping', () => {
+  const scopeViolations = (harness: {
+    receipt: unknown;
+    reservation: unknown;
+    receiptRepository: { findOne: jest.Mock };
+    reservationRepository: { findOne: jest.Mock };
+  }) => {
+    const violations: string[] = [];
+    harness.receiptRepository.findOne.mockImplementation(
+      async (
+        _workspaceId?: string,
+        options?: { where?: Record<string, unknown> },
+      ) =>
+        'workspaceId' in (options?.where ?? {})
+          ? violations.push('receipt') && null
+          : harness.receipt,
+    );
+    harness.reservationRepository.findOne.mockImplementation(
+      async (
+        _workspaceId?: string,
+        options?: { where?: Record<string, unknown> },
+      ) =>
+        'workspaceId' in (options?.where ?? {})
+          ? violations.push('reservation') && null
+          : harness.reservation,
+    );
+
+    return violations;
+  };
+
+  it('scopes unknown-receipt and reservation reads without duplicating workspaceId', async () => {
+    const h = buildHarness();
+    const violations = scopeViolations(h);
+    await h.service
+      .inspectUnknown({ workspaceId, receiptId })
+      .catch(() => undefined);
+    expect(violations).toEqual([]);
+  });
+
+  it('scopes the provider-accepted SENT readback without duplicating workspaceId', async () => {
+    const h = buildHarness();
+    const violations = scopeViolations(h);
+    h.projector.projectReceiptWithWriter.mockResolvedValue({
+      projected: false,
+    });
+    h.receipt.state = 'SENT';
+    await expect(
+      h.service.finalizeProviderAccepted({ workspaceId, receiptId }),
+    ).resolves.toBeUndefined();
+    expect(violations).toEqual([]);
+  });
+});
+
+describe('InstagramMessageReconciliationService never-dispatched receipts', () => {
+  it('classifies a receipt with no provider attempt as provably not dispatched', async () => {
+    const noAttempt = buildHarness(null);
+    await expect(
+      noAttempt.service.inspectUnknown({ workspaceId, receiptId }),
+    ).resolves.toEqual({ kind: 'NOT_DISPATCHED' });
+
+    const noReservation = buildHarness();
+    noReservation.reservationRepository.findOne.mockResolvedValue(null);
+    await expect(
+      noReservation.service.inspectUnknown({ workspaceId, receiptId }),
+    ).resolves.toEqual({ kind: 'NOT_DISPATCHED' });
+  });
+
+  it('settles a not-dispatched receipt to failed and frees the target without contacting the provider', async () => {
+    const harness = buildHarness(null);
+
+    await expect(
+      harness.service.reconcile({ workspaceId, receiptId }),
+    ).resolves.toEqual({ kind: 'NOT_DISPATCHED' });
+
+    expect(harness.budgetService.releasePreDispatch).toHaveBeenCalledWith({
+      workspaceId,
+      reservationId: harness.reservation.id,
+      reason: 'NOT_DISPATCHED',
+    });
+    expect(
+      harness.actionApprovalService.recordProviderTerminalState,
+    ).toHaveBeenCalledWith({
+      receiptId,
+      state: 'FAILED',
+      code: 'failed',
+    });
+    expect(
+      harness.actionApprovalService.recordProviderAccepted,
+    ).not.toHaveBeenCalled();
+    expect(harness.client.listChats).not.toHaveBeenCalled();
+    expect(harness.client.listMessages).not.toHaveBeenCalled();
+  });
+
+  it('does not settle a receipt whose provider attempt exists but is unreadable', async () => {
+    const harness = buildHarness(new Date(Number.NaN));
+
+    await expect(
+      harness.service.reconcile({ workspaceId, receiptId }),
+    ).resolves.toEqual({ kind: 'NOT_DISPATCHED' });
+    expect(harness.budgetService.releasePreDispatch).toHaveBeenCalledTimes(1);
   });
 });

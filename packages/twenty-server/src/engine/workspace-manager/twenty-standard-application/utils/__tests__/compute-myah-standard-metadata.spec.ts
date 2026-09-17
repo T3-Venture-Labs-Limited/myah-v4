@@ -1428,9 +1428,14 @@ describe('Myah standard metadata contract', () => {
         MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
     );
 
-    expect(creatorSearchFieldMetadata).toHaveLength(2);
+    expect(creatorSearchFieldMetadata).toHaveLength(3);
     expect(creatorSearchFieldMetadata).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
+              .universalIdentifier,
+        }),
         expect.objectContaining({
           fieldMetadataUniversalIdentifier:
             MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,

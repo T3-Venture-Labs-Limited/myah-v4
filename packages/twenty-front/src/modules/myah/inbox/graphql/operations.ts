@@ -503,6 +503,8 @@ export const GET_INSTAGRAM_MESSAGE_SEND_STATUS = gql`
       state
       providerCode
       outcome
+      creatorRecordId
+      conversationRecordId
     }
   }
 `;

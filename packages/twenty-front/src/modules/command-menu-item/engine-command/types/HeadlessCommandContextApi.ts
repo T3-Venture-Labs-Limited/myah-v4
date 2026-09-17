@@ -3,6 +3,7 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { type WorkflowTrigger } from '@/workflow/types/Workflow';
 import {
+  type ContextStorePageType,
   type Nullable,
   type RecordGqlOperationFilter,
 } from 'twenty-shared/types';
@@ -17,6 +18,7 @@ export type HeadlessEngineCommandContextApi = {
   contextStoreInstanceId: string;
   objectMetadataItem: Nullable<EnrichedObjectMetadataItem>;
   currentViewId: Nullable<string>;
+  pageType: Nullable<ContextStorePageType>;
   recordIndexId: Nullable<string>;
   targetedRecordsRule: ContextStoreTargetedRecordsRule;
   selectedRecords: ObjectRecord[];

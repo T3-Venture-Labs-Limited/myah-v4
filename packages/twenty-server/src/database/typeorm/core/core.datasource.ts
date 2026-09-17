@@ -1,3 +1,4 @@
+import { finitePgConnectTimeout } from './finite-pg-connect-timeout.util';
 import { type TypeOrmModuleOptions } from '@nestjs/typeorm';
 
 import { config } from 'dotenv';
@@ -80,6 +81,9 @@ export const typeORMCoreModuleOptions: TypeOrmModuleOptions = {
           rejectUnauthorized: false,
         }
       : undefined,
+  connectTimeoutMS: finitePgConnectTimeout(
+    process.env.PG_DATABASE_PRIMARY_TIMEOUT_MS,
+  ),
   extra: {
     query_timeout: Number(process.env.PG_DATABASE_PRIMARY_TIMEOUT_MS ?? 10000),
     idleTimeoutMillis: Number(process.env.PG_POOL_IDLE_TIMEOUT_MS ?? 600000),
