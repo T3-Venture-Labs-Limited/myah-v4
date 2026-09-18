@@ -1448,10 +1448,37 @@ export class CampaignExecutionService {
           throw new Error('Campaign pause revocation was inconsistent');
         }
 
+        const settledCount =
+          await this.persistence.settlePausedOccurrencesInTransaction(
+            context,
+            revokedAuthority.authorizationId,
+          );
+
+        if (!Number.isSafeInteger(settledCount) || settledCount < 0) {
+          throw new Error(
+            'Campaign paused occurrence settlement was inconsistent',
+          );
+        }
+
         await this.persistence.transitionLifecycleInTransaction(
           context,
           Object.freeze({ from: 'ACTIVE', to: 'PAUSED' }),
         );
+      } else {
+        if (consistency.structure.kind !== 'CURRENT_REVOKED') {
+          throw new Error('Campaign pause authority was inconsistent');
+        }
+        const settledCount =
+          await this.persistence.settlePausedOccurrencesInTransaction(
+            context,
+            consistency.structure.authorization.authorizationId,
+          );
+
+        if (!Number.isSafeInteger(settledCount) || settledCount < 0) {
+          throw new Error(
+            'Campaign paused occurrence settlement was inconsistent',
+          );
+        }
       }
 
       const inFlightCount =
@@ -1841,6 +1868,25 @@ export class CampaignExecutionService {
       return Object.freeze({
         status: 'BLOCKED',
         reason: 'SEQUENCE_UNAVAILABLE',
+      });
+    }
+
+    const historyPreflight = readExactRecord(
+      await this.history.preflightSameWorkflowVersionHistoryInTransaction(
+        Object.freeze({
+          workspaceId: context.workspaceId,
+          campaignId: context.campaignId,
+          workflowVersionId: plan.workflowVersionId,
+        }),
+        context.manager,
+      ),
+      ['status'],
+    );
+
+    if (historyPreflight?.status !== 'COMPLETE') {
+      return Object.freeze({
+        status: 'BLOCKED',
+        reason: 'PROGRESSION_HISTORY_UNAVAILABLE',
       });
     }
 
