@@ -290,7 +290,7 @@ const messageFixtures: MessageFixture[] = [
     threadExternalId: 'task7-draft-thread',
     subject: `${markers.draftSubject} outbound evidence`,
     text: 'Task 7 confirmed outbound campaign reply',
-    receivedAt: '2026-07-24T09:30:00.000Z',
+    receivedAt: '2026-07-24T05:00:00.000Z',
     direction: MessageDirection.OUTGOING,
   },
   {

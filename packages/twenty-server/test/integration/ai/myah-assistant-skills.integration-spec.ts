@@ -1346,6 +1346,17 @@ describe('Myah assistant skills scripted model integration', () => {
       inboxFixture,
       inboxChatThreadId,
     );
+    // This tool still saves through the legacy per-thread draft columns,
+    // which the shared fixture no longer seeds (it saves through the new
+    // per-Campaign-context draft API instead), so their revision is
+    // independent of inboxFixture.draftRevision.
+    const [{ myahReplyDraftRevision: legacyDraftRevision }] =
+      await global.testDataSource.query<{ myahReplyDraftRevision: number }[]>(
+        `SELECT "myahReplyDraftRevision"
+         FROM "${inboxChatFixture.schemaName}"."messageThread"
+         WHERE id = $1`,
+        [inboxFixture.threadIds.draft],
+      );
     const draftBody = {
       markdown: 'MYAH-156 scripted exact draft',
       blocknote: null,
@@ -1380,7 +1391,7 @@ describe('Myah assistant skills scripted model integration', () => {
             toolName: 'save_myah_inbox_reply_draft',
             arguments: {
               messageThreadId: inboxFixture.threadIds.draft,
-              expectedRevision: inboxFixture.draftRevision,
+              expectedRevision: legacyDraftRevision,
               body: draftBody,
             },
           },
@@ -1408,7 +1419,7 @@ describe('Myah assistant skills scripted model integration', () => {
             toolName: 'save_myah_inbox_reply_draft',
             arguments: {
               messageThreadId: inboxFixture.threadIds.draft,
-              expectedRevision: inboxFixture.draftRevision,
+              expectedRevision: legacyDraftRevision,
               body: {
                 markdown: 'MYAH-156 stale overwrite',
                 blocknote: null,
@@ -1427,7 +1438,7 @@ describe('Myah assistant skills scripted model integration', () => {
     ]);
     expect(savedDraft).toEqual({
       myahReplyDraftBodyMarkdown: draftBody.markdown,
-      myahReplyDraftRevision: inboxFixture.draftRevision + 1,
+      myahReplyDraftRevision: legacyDraftRevision + 1,
     });
     expect(staleExecution.modelToolCalls).toEqual(['execute_tool']);
     expect(JSON.stringify(staleExecution.chunks)).toContain('CONFLICT');
