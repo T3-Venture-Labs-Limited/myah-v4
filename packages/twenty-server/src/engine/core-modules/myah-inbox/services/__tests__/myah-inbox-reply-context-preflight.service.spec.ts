@@ -99,7 +99,10 @@ const createQuery = (input?: {
   });
 };
 
-const createService = (query: jest.Mock, options?: { schemaProvisioned?: boolean }) =>
+const createService = (
+  query: jest.Mock,
+  options?: { schemaProvisioned?: boolean },
+) =>
   new EmailReplyContextActivationService({
     query,
     transaction: async (
