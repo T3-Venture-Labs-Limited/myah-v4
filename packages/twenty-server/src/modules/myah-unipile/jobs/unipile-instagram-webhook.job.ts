@@ -156,6 +156,8 @@ export class UnipileInstagramWebhookJob {
           conversationRecordId,
           message,
           workspace: { id: claimed.binding.workspaceId },
+          triageMode: 'LIVE',
+          sourceGenerationId: `webhook:${claimed.event.id}`,
           ...(claimed.event.deliveryState
             ? {
                 deliveryState: claimed.event.deliveryState as

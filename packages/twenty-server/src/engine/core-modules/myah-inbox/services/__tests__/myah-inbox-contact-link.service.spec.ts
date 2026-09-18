@@ -72,9 +72,19 @@ const loadService = (): LinkServiceConstructor | undefined => {
 
 const buildHarness = () => {
   const repositories = new Map<string, Record<string, jest.Mock>>();
+  const sourceLockQuery = jest.fn().mockResolvedValue([]);
   const getRepository = (name: string) => {
     if (!repositories.has(name)) {
       repositories.set(name, {
+        target: name as never,
+        manager: {
+          transaction: jest.fn(async (callback) =>
+            callback({
+              query: sourceLockQuery,
+              getRepository: (target: string) => getRepository(target),
+            }),
+          ),
+        } as never,
         findOne: jest.fn().mockResolvedValue({ id: creatorId }),
         update: jest.fn().mockResolvedValue({ affected: 1 }),
       });
@@ -87,6 +97,15 @@ const buildHarness = () => {
     getRepository: jest.fn(async (_workspaceId, name) => getRepository(name)),
   };
   const updateMyahInboxThread = jest.fn().mockResolvedValue({});
+  const withPreparedSourceMutationInTransaction = jest.fn(
+    async ({ sourceType, sourceRecordIds, manager, mutate }) => {
+      await manager.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('myah-inbox-source:' || $1, 0))",
+        [`${sourceType}:${sourceRecordIds[0]}`],
+      );
+      return mutate();
+    },
+  );
   const Service = loadService();
 
   expect(Service).toBeDefined();
@@ -95,10 +114,13 @@ const buildHarness = () => {
     globalWorkspaceOrmManager,
     getRepository,
     repositories,
+    sourceLockQuery,
     updateMyahInboxThread,
+    withPreparedSourceMutationInTransaction,
     service: new Service!(
       globalWorkspaceOrmManager as never,
       { updateMyahInboxThread } as never,
+      { withPreparedSourceMutationInTransaction } as never,
     ),
   };
 };
@@ -133,13 +155,17 @@ describe('MyahInboxContactLinkService', () => {
     });
   });
 
-  it('links an exact Instagram conversation through its permission-scoped repository', async () => {
+  it('takes the shared Instagram source lock before reading and linking its relation', async () => {
     const harness = buildHarness();
 
     const resultingContactId = await harness.service.linkContact(
       request({ contactId: instagramContactId }),
     );
 
+    expect(harness.sourceLockQuery).toHaveBeenCalledWith(
+      "SELECT pg_advisory_xact_lock(hashtextextended('myah-inbox-source:' || $1, 0))",
+      [`INSTAGRAM_CONVERSATION:${instagramConversationId}`],
+    );
     expect(
       harness.repositories.get('myahSocialConversation')?.update,
     ).toHaveBeenCalledWith(
@@ -152,6 +178,35 @@ describe('MyahInboxContactLinkService', () => {
     });
   });
 
+  it('aborts an Instagram relink when the locked source re-read no longer exists', async () => {
+    const harness = buildHarness();
+    harness
+      .getRepository('myahSocialConversation')
+      .findOne.mockResolvedValue(null);
+
+    await expect(
+      harness.service.linkContact(request({ contactId: instagramContactId })),
+    ).rejects.toThrow('Inbox contact source is not readable');
+    expect(
+      harness.repositories.get('myahSocialConversation')?.update,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('aborts an Instagram relink when the transaction re-read finds its Creator deleted', async () => {
+    const harness = buildHarness();
+    harness
+      .getRepository('creator')
+      .findOne.mockResolvedValueOnce({ id: creatorId })
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      harness.service.linkContact(request({ contactId: instagramContactId })),
+    ).rejects.toThrow('Inbox Creator is not readable');
+    expect(
+      harness.repositories.get('myahSocialConversation')?.update,
+    ).not.toHaveBeenCalled();
+  });
+
   it('unlinks one exact source and returns its separate contact identity immediately', async () => {
     const harness = buildHarness();
 
@@ -159,6 +214,10 @@ describe('MyahInboxContactLinkService', () => {
       request({ contactId: instagramContactId, creatorId: null }),
     );
 
+    expect(harness.sourceLockQuery).toHaveBeenCalledWith(
+      "SELECT pg_advisory_xact_lock(hashtextextended('myah-inbox-source:' || $1, 0))",
+      [`INSTAGRAM_CONVERSATION:${instagramConversationId}`],
+    );
     expect(
       harness.repositories.get('myahSocialConversation')?.update,
     ).toHaveBeenCalledWith(

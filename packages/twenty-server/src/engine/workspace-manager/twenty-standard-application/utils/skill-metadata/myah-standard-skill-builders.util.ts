@@ -89,12 +89,12 @@ export const MYAH_STANDARD_FLAT_SKILL_METADATA_BUILDERS_BY_SKILL_NAME = {
           'Operate Myah Inbox threads safely, from context through approved delivery.',
         content: `# Myah Inbox
 
-Inbox owns thread state, drafts, send readiness, and send receipts. Identify the thread from returned IDs, participants, channel, and recent context; never infer it from a display name.
+Inbox owns contact-wide triage state, drafts, send readiness, and send receipts. Identify the thread from returned IDs, participants, channel, and recent context; never infer it from a display name.
 
 ## Procedure
 
 1. For the current Inbox selection, call ${getMyahInboxThreadContext} directly without search and omit messageThreadId. Otherwise, find the thread with ${searchMyahInboxThreads}, resolve it from returned IDs, participants, channel, and recent context, then load ${getMyahInboxThreadContext}; use ${generateMyahInboxReplyProposal} only after the record is unambiguous.
-2. ${internalWriteApproval} For a state change, call ${updateMyahInboxThread}, then read ${getMyahInboxThreadContext}.
+2. Owner, State, and Snooze are contact-wide and these tools cannot change them: never claim or attempt a triage change. ${internalWriteApproval} Changing a thread's Creator or Campaign link is a write — call ${updateMyahInboxThread}, then read ${getMyahInboxThreadContext}.
 3. Before saving, call ${getMyahInboxReplySendReadiness} and use its exact numeric revision. Preview the exact save input in the approval card: messageThreadId, expectedRevision, and body: { markdown: string, blocknote: null }. Then ${internalWriteApproval} Call ${saveMyahInboxReplyDraft}. If save returns CONFLICT, stop without retrying, present the returned current draft and revision, and ask whether to replace or reconcile it. If save returns SAVED, retain its returned draft revision and read ${getMyahInboxReplySendReadiness} again.
 4. Delivery is registered: call ${REQUEST_APPROVAL_TOOL_NAME} in its own step with only toolName: "send_myah_inbox_reply" and actionInput: { messageThreadId, expectedDraftRevision }. Wait for approval, then call ${sendMyahInboxReply} with the actionApprovalBindingId. Never use a generic Inbox send.
 5. Read ${getMyahInboxReplySendStatus} and report only its returned receipt/status.

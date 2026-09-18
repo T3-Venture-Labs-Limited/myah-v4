@@ -54,6 +54,7 @@ type Run = {
   id: string;
   bindingId: string;
   status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+  triageMode?: 'LIVE' | 'BACKFILL';
   overlapAfter: Date | null;
   chatCursor: string | null;
   currentChatId: string | null;
@@ -163,6 +164,7 @@ const requireSyncServiceModule = (): SyncServiceModule => {
 const createHarness = (input: {
   realClient?: UnipileV1ClientService;
   runningRun?: Run | null;
+  failedRun?: Run | null;
   completedRuns?: Run[];
   checkpoints?: Checkpoint[];
   lockAcquired?: boolean;
@@ -181,6 +183,7 @@ const createHarness = (input: {
   const state = {
     runs: [
       ...(input.runningRun ? [input.runningRun] : []),
+      ...(input.failedRun ? [input.failedRun] : []),
       ...(input.completedRuns ?? []),
     ] as Run[],
     checkpoints: new Map(
@@ -202,13 +205,19 @@ const createHarness = (input: {
   };
   const runRepository = {
     findOne: jest.fn(
-      async (options: { where?: { status?: Run['status'] } }) => {
+      async (options: {
+        where?: { status?: Run['status']; triageMode?: Run['triageMode'] };
+      }) => {
         const status = options.where?.status;
+        const triageMode = options.where?.triageMode;
 
         return (
           state.runs
             .filter(
-              (run) => run.bindingId === bindingId && run.status === status,
+              (run) =>
+                run.bindingId === bindingId &&
+                run.status === status &&
+                (triageMode === undefined || run.triageMode === triageMode),
             )
             .sort(
               (left, right) =>
@@ -221,6 +230,7 @@ const createHarness = (input: {
       id: `run-${state.runs.length + 1}`,
       bindingId,
       status: 'RUNNING' as const,
+      triageMode: 'BACKFILL' as const,
       overlapAfter: null,
       chatCursor: null,
       currentChatId: null,
@@ -556,12 +566,104 @@ describe('UnipileInstagramSyncService', () => {
       failureReason: null,
     });
     expect(harness.state.runs[0].completedAt).toEqual(expect.any(Date));
+    expect(harness.state.runs[0].triageMode).toBe('BACKFILL');
     expect(harness.queryRunner.query).toHaveBeenNthCalledWith(
       2,
       'SELECT pg_advisory_unlock(hashtext($1))',
       [`unipile-instagram-sync:${bindingId}`],
     );
     expect(harness.queryRunner.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates incremental runs LIVE and retains the persisted mode on resume', async () => {
+    const completedRun: Run = {
+      id: 'completed-run',
+      bindingId,
+      status: 'COMPLETED',
+      triageMode: 'BACKFILL',
+      overlapAfter: null,
+      chatCursor: null,
+      currentChatId: null,
+      currentChatAttendeeId: null,
+      messageCursor: null,
+      completedChatHighWaterAt: null,
+      completedAt: new Date('2026-09-04T12:00:00.000Z'),
+      failureCode: null,
+      failureReason: null,
+      createdAt: new Date('2026-09-04T11:00:00.000Z'),
+      updatedAt: new Date('2026-09-04T12:00:00.000Z'),
+    };
+    const liveRunningRun: Run = {
+      ...completedRun,
+      id: 'running-run',
+      status: 'RUNNING',
+      triageMode: 'LIVE',
+      completedAt: null,
+    };
+    const incrementalHarness = createHarness({
+      completedRuns: [completedRun],
+      listChats: jest.fn().mockResolvedValue({ chats: [], nextCursor: null }),
+    });
+    const incrementalService = await incrementalHarness.createService();
+
+    await expect(
+      incrementalService.synchronizeBinding(bindingId),
+    ).resolves.toBe('COMPLETED');
+    expect(incrementalHarness.state.runs[1].triageMode).toBe('LIVE');
+
+    const resumeHarness = createHarness({
+      runningRun: liveRunningRun,
+      listChats: jest.fn().mockResolvedValue({ chats: [], nextCursor: null }),
+    });
+    const resumeService = await resumeHarness.createService();
+
+    await expect(resumeService.synchronizeBinding(bindingId)).resolves.toBe(
+      'COMPLETED',
+    );
+    expect(resumeHarness.state.runs[0].triageMode).toBe('LIVE');
+  });
+
+  it('resumes a failed incremental run in its persisted LIVE mode', async () => {
+    const failedIncrementalRun: Run = {
+      id: 'failed-incremental-run',
+      bindingId,
+      status: 'FAILED',
+      triageMode: 'LIVE',
+      overlapAfter: new Date('2026-09-04T11:00:00.000Z'),
+      chatCursor: 'next-chat-page',
+      currentChatId: null,
+      currentChatAttendeeId: null,
+      messageCursor: null,
+      completedChatHighWaterAt: null,
+      completedAt: new Date('2026-09-04T12:00:00.000Z'),
+      failureCode: 'UNIPILE_BAD_RESPONSE',
+      failureReason: 'Previous synchronization failed',
+      createdAt: new Date('2026-09-04T11:00:00.000Z'),
+      updatedAt: new Date('2026-09-04T12:00:00.000Z'),
+    };
+    const harness = createHarness({
+      failedRun: failedIncrementalRun,
+      listChats: jest.fn().mockResolvedValue({ chats: [], nextCursor: null }),
+    });
+    const service = await harness.createService();
+
+    await expect(service.synchronizeBinding(bindingId)).resolves.toBe(
+      'COMPLETED',
+    );
+
+    expect(harness.state.runs).toHaveLength(1);
+    expect(harness.state.runs[0]).toMatchObject({
+      id: failedIncrementalRun.id,
+      triageMode: 'LIVE',
+    });
+    expect(harness.state.savedRuns[0]).toMatchObject({
+      id: failedIncrementalRun.id,
+      status: 'RUNNING',
+      completedAt: null,
+      failureCode: null,
+      failureReason: null,
+      chatCursor: 'next-chat-page',
+    });
   });
 
   it('resumes the saved chat, then replays its chat page idempotently before advancing remaining chat pages', async () => {

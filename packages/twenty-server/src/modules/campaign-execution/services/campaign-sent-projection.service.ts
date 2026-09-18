@@ -5,13 +5,18 @@ import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manage
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { campaignMailboxAdvisoryKeys } from 'src/engine/core-modules/campaign-execution/services/campaign-mailbox-deletion-fence.service';
+import { type PersistSentMessageInput } from 'src/modules/messaging/message-outbound-manager/types/persist-sent-message-input.type';
 import { SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
+import { MessagingSaveMessagesAndEnqueueContactCreationService } from 'src/modules/messaging/message-import-manager/services/messaging-save-messages-and-enqueue-contact-creation.service';
 import { computeCampaignProjectedMessageId } from 'src/modules/campaign-execution/utils/campaign-execution-identity.util';
 
 const CANONICAL_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const isCanonicalUuid = (value: unknown): value is string =>
   typeof value === 'string' && CANONICAL_UUID.test(value);
+type ContactsToCreate = Parameters<
+  NonNullable<PersistSentMessageInput['captureContactsToCreate']>
+>[0];
 
 export type CampaignSentProjectionCoordinate = Readonly<{
   workspaceId: string;
@@ -26,6 +31,7 @@ export class CampaignSentProjectionService {
   constructor(
     private readonly orm: GlobalWorkspaceOrmManager,
     private readonly sentPersistence: SentMessagePersistenceService,
+    private readonly saveMessagesAndEnqueueContactCreation: MessagingSaveMessagesAndEnqueueContactCreationService,
   ) {}
 
   async reconcile(
@@ -43,7 +49,9 @@ export class CampaignSentProjectionService {
       return 'DEFERRED';
     const dataSource = await this.orm.getGlobalWorkspaceDataSource();
 
-    return dataSource.transaction(async (manager) => {
+    let contactsToCreate: ContactsToCreate | undefined;
+    let connectedAccountForContactCreation: ConnectedAccountEntity | undefined;
+    const result = await dataSource.transaction(async (manager) => {
       const runner = manager.queryRunner;
       if (!runner?.isTransactionActive || runner.manager !== manager)
         throw new Error('Campaign projection requires active manager');
@@ -57,6 +65,8 @@ export class CampaignSentProjectionService {
         `SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
         [input.workspaceId, input.campaignId],
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       const campaign = await runner.query(
         `SELECT id FROM "${getWorkspaceSchemaName(input.workspaceId)}".campaign WHERE id=$1 FOR UPDATE`,
         [input.campaignId],
@@ -161,6 +171,10 @@ export class CampaignSentProjectionService {
         expectedMessageId,
         providerAcceptedAt: attempt.providerAcceptedAt,
         transactionManager: manager as WorkspaceEntityManager,
+        captureContactsToCreate: (capturedContactsToCreate) => {
+          contactsToCreate = capturedContactsToCreate;
+          connectedAccountForContactCreation = connectedAccount;
+        },
       });
       if (!persisted || persisted.messageId !== expectedMessageId)
         throw new Error('Campaign sent projection identity conflict');
@@ -197,5 +211,15 @@ export class CampaignSentProjectionService {
       }
       return 'PROJECTED';
     });
+
+    if (contactsToCreate && connectedAccountForContactCreation) {
+      await this.saveMessagesAndEnqueueContactCreation.enqueueContactCreation({
+        workspaceId: input.workspaceId,
+        connectedAccount: connectedAccountForContactCreation,
+        contactsToCreate,
+      });
+    }
+
+    return result;
   }
 }

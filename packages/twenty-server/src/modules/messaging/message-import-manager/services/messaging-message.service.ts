@@ -8,6 +8,10 @@ import { v4 } from 'uuid';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import {
+  buildMyahInboxSourceKey,
+  MYAH_INBOX_SOURCE_ADVISORY_LOCK_SQL,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-source-lock.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
 import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
@@ -53,6 +57,7 @@ export class MessagingMessageService {
     messageChannelId: string,
     transactionManager: WorkspaceEntityManager,
     workspaceId: string,
+    lockInboxSources = false,
   ): Promise<{
     createdMessages: Partial<MessageWorkspaceEntity>[];
     messageExternalIdsAndIdsMap: Map<string, string>;
@@ -61,6 +66,15 @@ export class MessagingMessageService {
       string
     >;
     messageExternalIdToMessageThreadIdMap: Map<string, string>;
+    messageExternalIdToPersistenceInfoMap: Map<
+      string,
+      {
+        createdAt: string;
+        direction: string;
+        wasInserted: boolean;
+        messageThreadId: string;
+      }
+    >;
   }> {
     const authContext = buildSystemAuthContext(workspaceId);
 
@@ -233,6 +247,43 @@ export class MessagingMessageService {
           messageAccumulatorMap,
         );
 
+        if (lockInboxSources) {
+          const query = transactionManager.queryRunner?.query.bind(
+            transactionManager.queryRunner,
+          );
+          if (!query) {
+            throw new Error(
+              'Email source locking requires an active transaction manager',
+            );
+          }
+          await query("SELECT set_config('search_path', $1, true)", [
+            getWorkspaceSchemaName(workspaceId),
+          ]);
+          const threadIds = [
+            ...new Set(
+              Array.from(messageAccumulatorMap.values())
+                .map(
+                  (accumulator) =>
+                    accumulator.threadToCreate?.id ??
+                    accumulator.existingThreadInDB?.id,
+                )
+                .filter(isDefined),
+            ),
+          ].sort((left, right) => left.localeCompare(right));
+          for (const threadId of threadIds) {
+            await this.acquireEmailThreadSourceLockInTransaction(
+              threadId,
+              transactionManager,
+            );
+          }
+          if (threadIds.length > 0) {
+            await query(
+              'SELECT id FROM "messageThread" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE',
+              [threadIds],
+            );
+          }
+        }
+
         for (const message of messages) {
           const messageAccumulator = messageAccumulatorMap.get(
             message.externalId,
@@ -371,6 +422,31 @@ export class MessagingMessageService {
         const messageExternalIdToMessageChannelMessageAssociationIdMap =
           new Map<string, string>();
         const messageExternalIdToMessageThreadIdMap = new Map<string, string>();
+        const persistedMessages = await messageRepository.find(
+          {
+            where: {
+              id: In(
+                Array.from(messageAccumulatorMap.values())
+                  .map(
+                    (accumulator) =>
+                      accumulator.messageToCreate?.id ??
+                      accumulator.existingMessageInDB?.id,
+                  )
+                  .filter(isDefined),
+              ),
+            },
+          },
+          transactionManager,
+        );
+        const messageExternalIdToPersistenceInfoMap = new Map<
+          string,
+          {
+            createdAt: string;
+            direction: string;
+            wasInserted: boolean;
+            messageThreadId: string;
+          }
+        >();
 
         for (const [
           externalId,
@@ -399,6 +475,26 @@ export class MessagingMessageService {
               externalId,
               messageThreadId,
             );
+            const persisted = persistedMessages.find(
+              (message) =>
+                message.id ===
+                (accumulator.messageToCreate?.id ??
+                  accumulator.existingMessageInDB?.id),
+            );
+            const association =
+              accumulator.messageChannelMessageAssociationToCreate;
+            if (persisted) {
+              messageExternalIdToPersistenceInfoMap.set(externalId, {
+                createdAt: persisted.createdAt,
+                direction:
+                  association?.direction ??
+                  accumulator.existingMessageChannelMessageAssociationInDB
+                    ?.direction ??
+                  'UNKNOWN',
+                wasInserted: isDefined(accumulator.messageToCreate),
+                messageThreadId,
+              });
+            }
           }
 
           const createdAssociationId =
@@ -420,11 +516,30 @@ export class MessagingMessageService {
           messageExternalIdsAndIdsMap,
           messageExternalIdToMessageChannelMessageAssociationIdMap,
           messageExternalIdToMessageThreadIdMap,
+          messageExternalIdToPersistenceInfoMap,
         };
       },
       authContext,
       { lite: true },
     );
+  }
+
+  private async acquireEmailThreadSourceLockInTransaction(
+    threadId: string,
+    transactionManager: WorkspaceEntityManager,
+  ): Promise<void> {
+    const query = transactionManager.queryRunner?.query.bind(
+      transactionManager.queryRunner,
+    );
+    if (!query) {
+      throw new Error(
+        'Source contact initialization requires an active transaction manager',
+      );
+    }
+
+    await query(MYAH_INBOX_SOURCE_ADVISORY_LOCK_SQL, [
+      buildMyahInboxSourceKey('EMAIL_THREAD', threadId),
+    ]);
   }
 
   public async reconcileMicrosoftCampaignHeaderInTransaction(
@@ -470,7 +585,8 @@ export class MessagingMessageService {
     if (typeof attempt.projectedMessageId !== 'string') return 'DEFERRED';
 
     const workspaceSchema = getWorkspaceSchemaName(input.workspaceId);
-    // pi-lens-ignore: sql-injection, no-sql-in-code
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    // pi-lens-ignore: sql-injection
     const associations = await runner.query(
       `SELECT id,"messageId","messageChannelId","messageExternalId"
          FROM "${workspaceSchema}"."messageChannelMessageAssociation"
@@ -486,7 +602,8 @@ export class MessagingMessageService {
       associations[0].messageExternalId !== providerExternalId
     )
       return 'DEFERRED';
-    // pi-lens-ignore: sql-injection, no-sql-in-code
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    // pi-lens-ignore: sql-injection
     const projectedRows = await runner.query(
       `SELECT id,"headerMessageId" FROM "${workspaceSchema}".message
         WHERE id=$1 FOR UPDATE`,
@@ -494,7 +611,8 @@ export class MessagingMessageService {
     );
     if (!Array.isArray(projectedRows) || projectedRows.length !== 1)
       return 'DEFERRED';
-    // pi-lens-ignore: sql-injection, no-sql-in-code
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    // pi-lens-ignore: sql-injection
     const collisions = await runner.query(
       `SELECT id FROM "${workspaceSchema}".message
         WHERE "headerMessageId"=$1 ORDER BY id FOR UPDATE`,
@@ -519,7 +637,8 @@ export class MessagingMessageService {
         'Trusted Microsoft header conflicts with stored evidence',
       );
     }
-    // pi-lens-ignore: sql-injection, no-sql-in-code
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    // pi-lens-ignore: sql-injection
     const messageUpdateResult = await runner.query(
       `UPDATE "${workspaceSchema}".message SET "headerMessageId"=$2
         WHERE id=$1 AND ("headerMessageId" IS NULL OR btrim("headerMessageId")='')

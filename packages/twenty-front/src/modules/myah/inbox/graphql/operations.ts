@@ -4,10 +4,7 @@ export const GET_MYAH_INBOX_THREADS = gql`
   query MyahInboxThreads(
     $first: Int
     $after: String
-    $owner: String
     $campaignId: String
-    $states: [MyahInboxState!]
-    $snoozeStatus: MyahInboxSnoozeStatus
     $search: String
     $threadId: String
     $expectedWorkspaceId: UUID
@@ -15,10 +12,7 @@ export const GET_MYAH_INBOX_THREADS = gql`
     myahInboxThreads(
       first: $first
       after: $after
-      owner: $owner
       campaignId: $campaignId
-      states: $states
-      snoozeStatus: $snoozeStatus
       search: $search
       threadId: $threadId
       expectedWorkspaceId: $expectedWorkspaceId
@@ -31,17 +25,11 @@ export const GET_MYAH_INBOX_THREADS = gql`
           subject
           lastMessagePreview
           lastMessageSender
-          state
-          snoozedUntil
           creator {
             id
             name
           }
           campaign {
-            id
-            name
-          }
-          inboxOwner {
             id
             name
           }
@@ -63,17 +51,11 @@ export const UPDATE_MYAH_INBOX_THREAD = gql`
       subject
       lastMessagePreview
       lastMessageSender
-      state
-      snoozedUntil
       creator {
         id
         name
       }
       campaign {
-        id
-        name
-      }
-      inboxOwner {
         id
         name
       }
@@ -156,6 +138,14 @@ const MYAH_INBOX_CONTACT_FIELDS = gql`
     preview
     sender
     needsAttention
+    triage {
+      isAvailable
+      inboxOwnerId
+      inboxState
+      snoozedUntil
+      revision
+      identityGeneration
+    }
     creator {
       id
       name
@@ -226,6 +216,20 @@ export const GET_MYAH_INBOX_CONTACT = gql`
   query MyahInboxContact($contactId: String!) {
     myahInboxContact(contactId: $contactId) {
       ...MyahInboxContactFields
+    }
+  }
+`;
+
+export const UPDATE_MYAH_INBOX_CONTACT_TRIAGE = gql`
+  mutation UpdateMyahInboxContactTriage(
+    $input: UpdateMyahInboxContactTriageInput!
+  ) {
+    updateMyahInboxContactTriage(input: $input) {
+      inboxOwnerId
+      inboxState
+      snoozedUntil
+      revision
+      identityGeneration
     }
   }
 `;

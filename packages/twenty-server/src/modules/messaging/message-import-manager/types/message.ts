@@ -29,6 +29,7 @@ export type Message = Omit<
   // Internal accepted-receipt routing, not populated by provider import drivers.
   deliveryTargetId?: string;
   expectedMessageId?: string;
+  providerOccurredAt?: string | null;
 };
 
 export type MessageAttachment = {

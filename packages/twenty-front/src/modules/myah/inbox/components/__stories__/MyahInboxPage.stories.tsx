@@ -98,6 +98,14 @@ const dualContact: MyahInboxContact = {
   preview: 'The revised rate works for me.',
   sender: '@ada.creates',
   needsAttention: true,
+  triage: {
+    isAvailable: true,
+    inboxOwnerId: null,
+    inboxState: 'NEEDS_REPLY',
+    snoozedUntil: null,
+    revision: 1,
+    identityGeneration: '1',
+  },
   email: {
     isAvailable: true,
     threadCount: 2,

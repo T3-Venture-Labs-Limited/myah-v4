@@ -162,6 +162,7 @@ export const MyahInboxContactConversation = ({
       <MyahInboxContactHeader
         contact={contact}
         channel={selectionChannel}
+        onTriageUpdated={onActivity}
         actions={
           <>
             {!contact.creator ? (

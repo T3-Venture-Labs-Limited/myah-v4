@@ -13,6 +13,7 @@ const workspaceMemberId = '20202020-0b5c-4178-bed7-d371f6411eaa';
 const threadId = '20202020-0b5c-4178-bed7-d371f6411ea1';
 const explicitThreadId = '20202020-0b5c-4178-bed7-d371f6411ea2';
 const receiptId = '20202020-0b5c-4178-bed7-d371f6411ea3';
+const creatorId = '20202020-0b5c-4178-bed7-d371f6411ea4';
 const workspace = { id: workspaceId };
 const userAuthContext = {
   type: 'user',
@@ -168,13 +169,13 @@ describe('MyahInboxToolWorkspaceService', () => {
 
     await executeTool(toolSet, 'update_myah_inbox_thread', {
       messageThreadId: explicitThreadId,
-      inboxState: MyahInboxState.CLOSED,
+      creatorId,
     });
 
     expect(mutationService.updateMyahInboxThread).toHaveBeenCalledWith({
       ...requestContext,
       threadId: explicitThreadId,
-      inboxState: MyahInboxState.CLOSED,
+      creatorId,
     });
   });
 
@@ -205,7 +206,7 @@ describe('MyahInboxToolWorkspaceService', () => {
     const { service } = createService();
     const toolSet = service.generateMyahInboxTools(context as never);
     const invalidCalls = [
-      ['update_myah_inbox_thread', { inboxState: MyahInboxState.CLOSED }],
+      ['update_myah_inbox_thread', { creatorId }],
       [
         'save_myah_inbox_reply_draft',
         {
@@ -252,14 +253,14 @@ describe('MyahInboxToolWorkspaceService', () => {
     await executeTool(toolSet, 'search_myah_inbox_threads', {
       first: 10,
       search: 'Ada',
-      states: [MyahInboxState.NEEDS_REPLY],
+      campaignId: creatorId,
     });
 
     expect(queryService.listThreads).toHaveBeenCalledWith({
       ...requestContext,
       first: 10,
       search: 'Ada',
-      states: [MyahInboxState.NEEDS_REPLY],
+      campaignId: creatorId,
     });
     expect(
       (toolSet.search_myah_inbox_threads as { description: string })
@@ -316,8 +317,14 @@ describe('MyahInboxToolWorkspaceService', () => {
     expect(
       z.safeParse(updateThreadTool.inputSchema as z.ZodType, {
         messageThreadId: threadId,
-        inboxState: MyahInboxState.CLOSED,
+        creatorId,
         unexpected: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      z.safeParse(updateThreadTool.inputSchema as z.ZodType, {
+        messageThreadId: threadId,
+        inboxState: MyahInboxState.CLOSED,
       }).success,
     ).toBe(false);
     expect(

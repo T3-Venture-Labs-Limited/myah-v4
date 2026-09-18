@@ -98,8 +98,27 @@ export class SentMessagePersistenceService {
         messageChannel,
         connectedAccount,
         input.workspaceId,
+        {
+          mode: 'LIVE',
+          generationId: `sent-email:${messageToSave.externalId}`,
+        },
         input.transactionManager,
       );
+
+    if (
+      input.transactionManager !== undefined &&
+      messageChannel.isContactAutoCreationEnabled &&
+      savedMessagesResult
+    ) {
+      if (!input.captureContactsToCreate) {
+        throw new Error(
+          'Transactional sent Message persistence requires post-commit contact creation capture',
+        );
+      }
+      input.captureContactsToCreate(
+        savedMessagesResult?.contactsToCreate ?? [],
+      );
+    }
 
     const messageId = savedMessagesResult?.messageExternalIdsAndIdsMap.get(
       messageToSave.externalId,

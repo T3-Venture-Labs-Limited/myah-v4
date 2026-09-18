@@ -4,6 +4,8 @@ import { Module } from '@nestjs/common';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
 import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
 import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts';
+import { InitializeMyahInboxContactTriageWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748001-initialize-myah-inbox-contact-triage.command';
+import { CatchUpMyahInboxContactTriageWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748002-catch-up-myah-inbox-contact-triage.command';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
@@ -30,6 +32,7 @@ import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/data
 import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619373-backfill-composio-instagram-history.command';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
+import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/workspace-metadata-version/workspace-metadata-version.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
@@ -39,6 +42,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
   imports: [
     TypeOrmModule.forFeature([FieldMetadataEntity]),
     ApplicationModule,
+    MyahInboxContactTriageModule,
     WorkspaceCacheModule,
     WorkspaceIteratorModule,
     WorkspaceMetadataVersionModule,
@@ -71,6 +75,8 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     CreateMyahInboxReplyContextDraftsFastInstanceCommand,
     CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
+    InitializeMyahInboxContactTriageWorkspaceCommand,
+    CatchUpMyahInboxContactTriageWorkspaceCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,

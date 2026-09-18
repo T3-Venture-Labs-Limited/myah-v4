@@ -182,6 +182,8 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
          FROM core.workspace ORDER BY "createdAt" LIMIT 1`,
         [id.workspace, `phase2a-final-${id.workspace.slice(0, 8)}`, schema],
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(`CREATE SCHEMA "${schema}"`);
       await manager.query(`ALTER TABLE core."outboundEmailAttempt"
         ADD COLUMN IF NOT EXISTS "providerHeaderMessageId" text,
@@ -197,9 +199,13 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
         "renderDigest" text NOT NULL,"signatureDigest" text,"rendererRevision" text NOT NULL,subject text NOT NULL,html text NOT NULL,
         text text NOT NULL,"bodyWithSignature" text NOT NULL,"toRecipient" text NOT NULL,"inReplyTo" text,"threadExternalId" text,
         "references" jsonb NOT NULL DEFAULT '[]'::jsonb,"createdAt" timestamptz NOT NULL DEFAULT now(),"updatedAt" timestamptz NOT NULL DEFAULT now())`);
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `CREATE TABLE "${schema}".campaign (id uuid PRIMARY KEY,"lifecycleStatus" text NOT NULL,"sequenceAuthorization" jsonb)`,
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `INSERT INTO "${schema}".campaign VALUES ($1,'ACTIVE',$2::jsonb)`,
         [
@@ -212,15 +218,23 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
           }),
         ],
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `CREATE TABLE "${schema}"."messageThread" (id uuid PRIMARY KEY,"externalId" text NOT NULL)`,
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `CREATE TABLE "${schema}".message (id uuid PRIMARY KEY,"messageThreadId" uuid NOT NULL,"headerMessageId" text,"externalId" text NOT NULL,"sentAt" timestamptz NOT NULL,subject text NOT NULL,body text NOT NULL)`,
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `CREATE TABLE "${schema}"."messageChannelMessageAssociation" (id bigserial PRIMARY KEY,"messageId" uuid NOT NULL,"messageChannelId" uuid NOT NULL,"messageExternalId" text NOT NULL,"messageThreadExternalId" text NOT NULL)`,
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `CREATE TABLE "${schema}"."messageParticipant" (id bigserial PRIMARY KEY,"messageId" uuid NOT NULL,role text NOT NULL,handle text NOT NULL)`,
       );
@@ -344,11 +358,15 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
         `INSERT INTO core."mailboxCapacityDay" ("workspaceId","connectedAccountId","localDate","reservedCount") VALUES ($1,$2,'2026-09-11',1)`,
         [id.workspace, id.account],
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `INSERT INTO "${schema}"."messageThread" VALUES ($1,'ms-thread')`,
         [id.microsoftThread],
       );
 
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `INSERT INTO "${schema}".message VALUES ($1,$3,NULL,'collision-external',$4,'Collision','Body'),($2,$3,'<taken@example.com>','taken-external',$4,'Owner','Body')`,
         [
@@ -358,6 +376,8 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
           acceptedAt,
         ],
       );
+      // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+      // pi-lens-ignore: sql-injection
       await manager.query(
         `INSERT INTO "${schema}"."messageChannelMessageAssociation" ("messageId","messageChannelId","messageExternalId","messageThreadExternalId") VALUES ($1,$2,'collision-external','ms-thread')`,
         [id.collisionMessage, id.channel],
@@ -370,6 +390,7 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
         channel: any,
         _account: any,
         _workspaceId: string,
+        _source: unknown,
         manager: EntityManager,
       ) => {
         const existing = await manager.query(
@@ -476,6 +497,7 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
         getGlobalWorkspaceDataSource: async () => projectionDataSource,
       } as never,
       sentPersistence,
+      { enqueueContactCreation: async () => undefined } as never,
     );
 
     reconciliation = new CampaignMicrosoftHeaderReconciliationService(

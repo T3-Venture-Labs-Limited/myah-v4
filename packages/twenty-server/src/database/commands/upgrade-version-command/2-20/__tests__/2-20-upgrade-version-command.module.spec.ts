@@ -279,6 +279,8 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
+    // Contact-wide triage registers newer 2.20 workspace commands, so the
+    // campaign lifecycle synchronizer is no longer the last workspace step.
     expect(sequence[sequence.length - 1]?.name).toBe(
       '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     );

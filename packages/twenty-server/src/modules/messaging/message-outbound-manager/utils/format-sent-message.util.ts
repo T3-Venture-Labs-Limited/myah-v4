@@ -59,6 +59,7 @@ export const formatSentMessage = (
     subject: input.subject,
     text: input.body,
     receivedAt: input.providerAcceptedAt ?? new Date(),
+    providerOccurredAt: input.providerAcceptedAt?.toISOString(),
     direction: MessageDirection.OUTGOING,
     attachments: [],
     participants,

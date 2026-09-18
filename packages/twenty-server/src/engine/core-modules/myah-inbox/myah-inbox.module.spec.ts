@@ -10,6 +10,7 @@ import { ActionApprovalService } from 'src/engine/core-modules/action-approval/s
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
+import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
 import { MyahInboxReplyContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
 import { MyahInboxReplyContextDraftService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-draft.service';
@@ -44,6 +45,7 @@ describe('MyahInboxModule', () => {
       providers: [
         MyahInboxReplyApprovedExecutionService,
         MyahInboxMutationService,
+        { provide: MyahInboxContactTriageLifecycleService, useValue: {} },
         MyahInboxReplyActionDefinition,
         executionTokenProvider as never,
         { provide: ActionApprovalService, useValue: {} },

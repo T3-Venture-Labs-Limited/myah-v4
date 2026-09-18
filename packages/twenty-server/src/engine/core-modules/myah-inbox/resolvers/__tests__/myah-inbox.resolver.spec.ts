@@ -73,14 +73,13 @@ describe('MyahInboxResolver', () => {
     });
   });
 
-  it('passes a validated thread, search, state, and Campaign filter to the authenticated query', async () => {
+  it('passes a validated thread, search, and Campaign filter to the authenticated query', async () => {
     const threadId = '20202020-0b5c-4178-bed7-d371f6411eaa';
     const campaignId = '20202020-f7c5-4e2f-a44a-240b2d3a9d02';
     const input = Object.assign(new MyahInboxThreadsInput(), {
       first: 25,
       threadId,
       search: 'sender name',
-      states: ['NEEDS_REPLY'],
       campaignId,
     });
     const listThreads = jest.fn().mockResolvedValue({
@@ -106,7 +105,6 @@ describe('MyahInboxResolver', () => {
       first: 25,
       threadId,
       search: 'sender name',
-      states: ['NEEDS_REPLY'],
       campaignId,
       authContext: userAuthContext,
       user: userAuthContext.user,

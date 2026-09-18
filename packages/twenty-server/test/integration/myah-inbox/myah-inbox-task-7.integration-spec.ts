@@ -18,18 +18,14 @@ import {
 const inboxThreadsQuery = gql`  query Task7InboxThreads(
     $first: Int
     $after: String
-    $owner: String
     $campaignId: String
-    $states: [MyahInboxState!]
     $search: String
     $threadId: String
   ) {
     myahInboxThreads(
       first: $first
       after: $after
-      owner: $owner
       campaignId: $campaignId
-      states: $states
       search: $search
       threadId: $threadId
     ) {
@@ -41,17 +37,11 @@ const inboxThreadsQuery = gql`  query Task7InboxThreads(
           subject
           lastMessagePreview
           lastMessageSender
-          state
-          snoozedUntil
           creator {
             id
             name
           }
           campaign {
-            id
-            name
-          }
-          inboxOwner {
             id
             name
           }
@@ -69,14 +59,10 @@ const updateThreadMutation = gql`
   mutation Task7UpdateThread($input: UpdateMyahInboxThreadInput!) {
     updateMyahInboxThread(input: $input) {
       id
-      state
       creator {
         id
       }
       campaign {
-        id
-      }
-      inboxOwner {
         id
       }
     }
@@ -114,10 +100,8 @@ type InboxNode = {
   subject: string | null;
   lastMessagePreview: string | null;
   lastMessageSender: string | null;
-  state: string;
   creator: { id: string; name: string | null } | null;
   campaign: { id: string; name: string | null } | null;
-  inboxOwner: { id: string; name: string | null } | null;
 };
 
 type InboxResponse = {
@@ -210,7 +194,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     expectFixtureAbsent(await cleanupFixture());
   });
 
-  it('keeps one readable collection cursor-stable while owner, campaign, state, and search constrain it', async () => {
+  it('keeps one readable collection cursor-stable while Campaign and search constrain it', async () => {
     const defaultCollection = await fetchInbox(operatorAccessToken, {
       first: 20,
     });
@@ -255,45 +239,17 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       secondPage.edges[0].node.lastActivityAt,
     );
 
-    const mine = await fetchInbox(operatorAccessToken, {
-      first: 20,
-      owner: 'ME',
-      search: fixture.markers.prefix,
-    });
-    const unassigned = await fetchInbox(operatorAccessToken, {
-      first: 20,
-      owner: 'UNASSIGNED',
-      campaignId: fixture.campaignId,
-    });
     const campaign = await fetchInbox(operatorAccessToken, {
       first: 20,
       campaignId: fixture.campaignId,
       search: fixture.markers.prefix,
     });
-    const waiting = await fetchInbox(operatorAccessToken, {
-      first: 20,
-      states: ['WAITING_ON_CREATOR'],
-      search: fixture.markers.prefix,
-    });
-
-    expect(mine.edges.map(({ node }) => node.id)).toEqual([
-      fixture.threadIds.owner,
-      fixture.threadIds.draft,
-    ]);
-    expect(unassigned.edges.map(({ node }) => node.id)).toEqual([
-      fixture.threadIds.tiedUnlinked,
-      fixture.threadIds.sharedFallback,
-      fixture.threadIds.metadata,
-    ]);
     expect(campaign.edges.map(({ node }) => node.id)).toEqual([
       fixture.threadIds.tiedUnlinked,
       fixture.threadIds.tiedLinked,
       fixture.threadIds.sharedFallback,
       fixture.threadIds.draft,
     ]);
-    expect(waiting.edges.map(({ node }) => node.id)).toContain(
-      fixture.threadIds.tiedUnlinked,
-    );
   });
 
   it('searches readable senders by email and participant display name', async () => {
@@ -380,7 +336,6 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     const filtered = await fetchInbox(operatorAccessToken, {
       first: 20,
       campaignId: fixture.campaignId,
-      states: ['NEEDS_REPLY'],
       search: 'nadine',
     });
 
@@ -445,10 +400,10 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       campaignId: fixture.campaignId,
       search: fixture.markers.senderEmail,
     });
-    const selectedClosed = await fetchInbox(operatorAccessToken, {
+    const selectedWithoutMatch = await fetchInbox(operatorAccessToken, {
       first: 1,
       threadId: fixture.threadIds.tiedUnlinked,
-      states: ['CLOSED'],
+      search: 'no readable thread matches this phrase',
     });
 
     expect(selected.edges.map(({ node }) => node.id)).toEqual([
@@ -458,7 +413,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       hasNextPage: false,
       endCursor: selected.edges[0].cursor,
     });
-    expect(selectedClosed).toEqual({
+    expect(selectedWithoutMatch).toEqual({
       edges: [],
       pageInfo: { hasNextPage: false, endCursor: null },
     });
@@ -479,7 +434,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     });
     const metadataThread = await fetchInbox(operatorAccessToken, {
       first: 20,
-      states: ['CLOSED'],
+      campaignId: fixture.campaignId,
     });
 
     expect(ownerThread.edges[0].node).toMatchObject({
@@ -638,7 +593,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     });
   });
 
-  it('keeps relations workspace-scoped, reassigns owner, preserves a newer draft on stale save, and creates no Message', async () => {
+  it('keeps relations workspace-scoped, relinks Creator, preserves a newer draft on stale save, and creates no Message', async () => {
     const beforeMessages = await fetchNativeMessages(
       operatorAccessToken,
       fixture.threadIds.draft,
@@ -659,43 +614,43 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     expect(invalidRelation.status).toBe(200);
     expect(invalidRelation.body.errors).toBeDefined();
 
-    const reassigned = await makeGraphqlAPIRequest(
+    const relinked = await makeGraphqlAPIRequest(
       {
         query: updateThreadMutation,
         variables: {
           input: {
             threadId: fixture.threadIds.draft,
-            inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
+            creatorId: fixture.creatorId,
           },
         },
       },
       operatorAccessToken,
     );
 
-    expect(reassigned.body.errors).toBeUndefined();
-    expect(reassigned.body.data.updateMyahInboxThread.inboxOwner.id).toBe(
-      WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
+    expect(relinked.body.errors).toBeUndefined();
+    expect(relinked.body.data.updateMyahInboxThread.creator.id).toBe(
+      fixture.creatorId,
     );
-    expect(reassigned.body.data.updateMyahInboxThread.campaign.id).toBe(
+    expect(relinked.body.data.updateMyahInboxThread.campaign.id).toBe(
       fixture.campaignId,
     );
 
-    const returnedToOperator = await makeGraphqlAPIRequest(
+    const campaignKept = await makeGraphqlAPIRequest(
       {
         query: updateThreadMutation,
         variables: {
           input: {
             threadId: fixture.threadIds.draft,
-            inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
+            campaignId: fixture.campaignId,
           },
         },
       },
       operatorAccessToken,
     );
 
-    expect(returnedToOperator.body.errors).toBeUndefined();
-    expect(returnedToOperator.body.data.updateMyahInboxThread.campaign.id).toBe(
-      fixture.campaignId,
+    expect(campaignKept.body.errors).toBeUndefined();
+    expect(campaignKept.body.data.updateMyahInboxThread.creator.id).toBe(
+      fixture.creatorId,
     );
 
     const draftInput = {
@@ -778,7 +733,6 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     expect(persistedThread.body.data.messageThread).toMatchObject({
       creator: { id: fixture.creatorId },
       myahCampaign: { id: fixture.campaignId },
-      inboxOwner: { id: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE },
     });
 
     const taskTargets = await makeGraphqlAPIRequest(
