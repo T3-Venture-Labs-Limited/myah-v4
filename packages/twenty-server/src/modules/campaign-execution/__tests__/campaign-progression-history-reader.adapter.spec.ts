@@ -33,6 +33,12 @@ const baseRow = {
   authoredMessageIndex: 0,
   occurrenceHoldReason: null,
   dueAt: new Date('2026-01-01T09:00:00Z'),
+  attemptWorkspaceId: ids.workspaceId,
+  attemptCampaignId: ids.campaignId,
+  attemptEnrollmentId: ids.enrollmentId,
+  attemptAuthorizationId: ids.authorizationId,
+  attemptWorkflowVersionId: ids.workflowVersionId,
+  attemptMessageId: ids.messageId,
   source: 'CAMPAIGN_SEQUENCE',
   selectionConstraintKind: 'ROTATE',
   priorAcceptedEvidenceId: null,
@@ -62,9 +68,43 @@ const managerWithRows = (rows: unknown[]) => {
   return manager;
 };
 
+const validTerminalAttemptRow = (overrides: Record<string, unknown> = {}) => ({
+  ...baseRow,
+  attemptWorkspaceId: ids.workspaceId,
+  attemptCampaignId: ids.campaignId,
+  attemptEnrollmentId: ids.enrollmentId,
+  attemptAuthorizationId: ids.authorizationId,
+  attemptWorkflowVersionId: ids.workflowVersionId,
+  attemptMessageId: ids.messageId,
+  occurrenceState: 'CANCELLED',
+  terminalReason: 'CAMPAIGN_PAUSED',
+  terminalAt: new Date('2026-01-01T10:00:00Z'),
+  attemptState: 'DEFINITELY_UNACCEPTED',
+  capacityState: 'RELEASED',
+  provider: 'google',
+  normalizedSenderHandle: 'sender@example.com',
+  normalizedRecipient: 'creator@example.com',
+  providerMessageId: null,
+  providerAcceptedAt: null,
+  finalEvidenceDigest: 'd'.repeat(64),
+  safeOutcomeReason: 'DEFINITELY_UNACCEPTED_NON_RETRYABLE',
+  retryable: false,
+  ...overrides,
+});
+
 const read = (rows: unknown[]) =>
   new CampaignProgressionHistoryReaderAdapter().readSameWorkflowVersionHistoryInTransaction(
     ids,
+    managerWithRows(rows),
+  );
+
+const preflight = (rows: unknown[]) =>
+  new CampaignProgressionHistoryReaderAdapter().preflightSameWorkflowVersionHistoryInTransaction(
+    {
+      workspaceId: ids.workspaceId,
+      campaignId: ids.campaignId,
+      workflowVersionId: ids.workflowVersionId,
+    },
     managerWithRows(rows),
   );
 
@@ -336,6 +376,209 @@ describe('CampaignProgressionHistoryReaderAdapter', () => {
       ).resolves.toEqual({ status: 'BLOCKED', reason: 'UNKNOWN_OUTCOME' });
     },
   );
+
+  it.each([
+    ['null workflow version', { attemptWorkflowVersionId: null }],
+    [
+      'mismatched workflow version',
+      { attemptWorkflowVersionId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' },
+    ],
+    ['null workspace', { attemptWorkspaceId: null }],
+    [
+      'mismatched campaign',
+      { attemptCampaignId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' },
+    ],
+    ['null enrollment', { attemptEnrollmentId: null }],
+    [
+      'mismatched authorization',
+      { attemptAuthorizationId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' },
+    ],
+    ['null message', { attemptMessageId: null }],
+  ])(
+    'rejects an attached attempt with a %s binding',
+    async (_label, binding) => {
+      await expect(
+        preflight([validTerminalAttemptRow(binding)]),
+      ).resolves.toEqual({ status: 'BLOCKED', reason: 'MALFORMED_HISTORY' });
+    },
+  );
+
+  it('discovers attached attempts by occurrence before trusting duplicated bindings', async () => {
+    const manager = managerWithRows([]);
+
+    await new CampaignProgressionHistoryReaderAdapter().preflightSameWorkflowVersionHistoryInTransaction(
+      {
+        workspaceId: ids.workspaceId,
+        campaignId: ids.campaignId,
+        workflowVersionId: ids.workflowVersionId,
+      },
+      manager,
+    );
+
+    const orphanQuery = manager.queryRunner.query.mock.calls[0][0];
+    const attachedQuery = manager.queryRunner.query.mock.calls[1][0];
+    expect(orphanQuery).toContain('a."workflowVersionId" = $3');
+    expect(attachedQuery).toContain('a."occurrenceId" = o.id');
+    expect(attachedQuery).not.toContain(
+      'a."workflowVersionId" = o."workflowVersionId"',
+    );
+    expect(attachedQuery).not.toContain('a."workspaceId" = e."workspaceId"');
+  });
+
+  it('keeps target-version attempts without valid companions malformed', async () => {
+    const manager = {} as any;
+    manager.queryRunner = {
+      manager,
+      isTransactionActive: true,
+      isReleased: false,
+      query: jest.fn().mockResolvedValueOnce([{ attemptId: ids.attemptId }]),
+    };
+
+    await expect(
+      new CampaignProgressionHistoryReaderAdapter().preflightSameWorkflowVersionHistoryInTransaction(
+        {
+          workspaceId: ids.workspaceId,
+          campaignId: ids.campaignId,
+          workflowVersionId: ids.workflowVersionId,
+        },
+        manager,
+      ),
+    ).resolves.toEqual({ status: 'BLOCKED', reason: 'MALFORMED_HISTORY' });
+  });
+
+  it('deduplicates a valid attempt by exact identity', async () => {
+    const row = validTerminalAttemptRow({
+      occurrenceState: 'SUCCEEDED',
+      terminalReason: 'PROVIDER_ACCEPTED',
+      attemptState: 'ACCEPTED',
+      capacityState: 'CONSUMED',
+      providerMessageId: 'provider-id',
+      providerAcceptedAt: new Date('2026-01-01T10:00:00Z'),
+      safeOutcomeReason: null,
+    });
+
+    await expect(read([row, row])).resolves.toMatchObject({
+      status: 'COMPLETE',
+      entries: [{ kind: 'ACCEPTED', attemptId: ids.attemptId }],
+    });
+  });
+
+  it('preflights historical creators omitted from current eligibility', async () => {
+    await expect(
+      preflight([
+        {
+          ...baseRow,
+          attemptId: null,
+          occurrenceState: 'CANCELLED',
+          terminalReason: 'CAMPAIGN_PAUSED',
+          terminalAt: new Date('2026-01-01T10:00:00Z'),
+        },
+        {
+          ...baseRow,
+          creatorId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+          campaignCreatorId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+          enrollmentId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+          attemptEnrollmentId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+          occurrenceId: '12121212-1212-4212-8212-121212121212',
+          attemptId: '13131313-1313-4313-8313-131313131313',
+          occurrenceState: 'IN_FLIGHT',
+          terminalReason: null,
+          terminalAt: null,
+          attemptState: 'RESERVED',
+          capacityState: 'RESERVED',
+          provider: 'google',
+          normalizedSenderHandle: 'sender@example.com',
+          normalizedRecipient: 'omitted@example.com',
+          providerMessageId: null,
+          providerAcceptedAt: null,
+          finalEvidenceDigest: null,
+          safeOutcomeReason: null,
+          retryable: null,
+        },
+      ]),
+    ).resolves.toEqual({ status: 'BLOCKED', reason: 'UNRESOLVED_HISTORY' });
+  });
+
+  it('partitions normal message/index reuse by immutable creator identity', async () => {
+    const terminal = {
+      ...baseRow,
+      attemptId: null,
+      occurrenceState: 'CANCELLED',
+      terminalReason: 'CAMPAIGN_PAUSED',
+      terminalAt: new Date('2026-01-01T10:00:00Z'),
+    };
+
+    await expect(
+      preflight([
+        terminal,
+        {
+          ...terminal,
+          creatorId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+          campaignCreatorId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+          enrollmentId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+          authorizationId: '12121212-1212-4212-8212-121212121212',
+          occurrenceId: '13131313-1313-4313-8313-131313131313',
+        },
+      ]),
+    ).resolves.toEqual({ status: 'COMPLETE' });
+  });
+
+  it.each([
+    [
+      'MALFORMED_HISTORY',
+      { attemptId: null, occurrenceId: 'invalid', occurrenceState: 'PENDING' },
+    ],
+    ['UNKNOWN_OUTCOME', { attemptId: null, occurrenceState: 'UNKNOWN' }],
+    [
+      'UNRECONCILED_HISTORY',
+      {
+        attemptId: null,
+        occurrenceState: 'SUCCEEDED',
+        terminalReason: 'PROVIDER_ACCEPTED',
+        terminalAt: new Date('2026-01-01T10:00:00Z'),
+      },
+    ],
+    ['UNRESOLVED_HISTORY', { attemptId: null, occurrenceState: 'PENDING' }],
+  ] as const)(
+    'preflight returns %s without entries for blocked version history',
+    async (reason, overrides) => {
+      await expect(
+        preflight([
+          {
+            ...baseRow,
+            terminalReason: null,
+            terminalAt: null,
+            ...overrides,
+          },
+        ]),
+      ).resolves.toEqual({ status: 'BLOCKED', reason });
+    },
+  );
+
+  it('preflight preserves blocker precedence across creators', async () => {
+    await expect(
+      preflight([
+        {
+          ...baseRow,
+          attemptId: null,
+          occurrenceState: 'PENDING',
+          terminalReason: null,
+          terminalAt: null,
+        },
+        {
+          ...baseRow,
+          creatorId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+          campaignCreatorId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+          enrollmentId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+          occurrenceId: 'invalid',
+          attemptId: null,
+          occurrenceState: 'PENDING',
+          terminalReason: null,
+          terminalAt: null,
+        },
+      ]),
+    ).resolves.toEqual({ status: 'BLOCKED', reason: 'MALFORMED_HISTORY' });
+  });
 
   it('rejects malformed accepted and definitely-unaccepted terminal combinations', async () => {
     await expect(
