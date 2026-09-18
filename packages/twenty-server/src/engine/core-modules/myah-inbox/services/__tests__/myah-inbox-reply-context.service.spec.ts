@@ -771,6 +771,7 @@ describe('Email reply context persisted evidence and fingerprint', () => {
     const mutations = new MyahInboxMutationService(
       {} as never,
       {} as never,
+      {} as never,
       approvals as never,
       {} as never,
       contexts,

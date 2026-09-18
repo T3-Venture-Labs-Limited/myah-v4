@@ -76,7 +76,7 @@ const setup = () => {
   const Service = MyahInboxMutationService as unknown as new (
     ...args: unknown[]
   ) => MyahInboxMutationService;
-  const service = new Service({}, {}, approvals, {}, contexts, drafts);
+  const service = new Service({}, {}, {}, approvals, {}, contexts, drafts);
   return { service, approvals, contexts, drafts };
 };
 
