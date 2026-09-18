@@ -4,8 +4,10 @@ import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/ca
 import { CampaignSequenceAuthorityModule } from 'src/engine/core-modules/campaign-sequence-authority/campaign-sequence-authority.module';
 import { WorkspaceCampaignCapacityTimeZoneModule } from 'src/engine/core-modules/myah/workspace-campaign-capacity-time-zone.module';
 import { WorkspaceCampaignCapacityTimeZoneService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone.service';
+import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { MessagingQueryHookModule } from 'src/modules/messaging/common/query-hooks/messaging-query-hook.module';
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbound-manager/messaging-send-manager.module';
 import { CampaignExecutionModule } from 'src/modules/campaign-execution/campaign-execution.module';
@@ -31,6 +33,8 @@ import {
   SUSPEND_AWARE_MONOTONIC_CLOCK_PORT,
 } from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
 import { CampaignExecutionResolver } from 'src/modules/campaign-execution/resolvers/campaign-execution.resolver';
+import { CampaignActivityReaderService } from 'src/modules/campaign-execution/services/campaign-activity-reader.service';
+import { CampaignCreatorExclusionService } from 'src/modules/campaign-execution/services/campaign-creator-exclusion.service';
 import { CampaignExecutionApplicationService } from 'src/modules/campaign-execution/services/campaign-execution-application.service';
 import { CampaignExecutionService } from 'src/modules/campaign-execution/services/campaign-execution.service';
 import { CampaignOutreachAudienceReviewService } from 'src/modules/campaign-execution/services/campaign-outreach-audience-review.service';
@@ -71,6 +75,8 @@ import { CampaignReplyService } from 'src/modules/campaign-execution/services/ca
     WorkspaceCampaignCapacityTimeZoneModule,
     MessagingSendManagerModule,
     MessagingImportManagerModule,
+    MessagingQueryHookModule,
+    WorkspaceManyOrAllFlatEntityMapsCacheModule,
   ],
   providers: [
     CampaignLifecycleActorPermissionResolverAdapter,
@@ -221,6 +227,8 @@ import { CampaignReplyService } from 'src/modules/campaign-execution/services/ca
     CampaignLifecycleTransactionService,
     CampaignExecutionService,
     CampaignExecutionApplicationService,
+    CampaignCreatorExclusionService,
+    CampaignActivityReaderService,
     CampaignExecutionResolver,
   ],
   exports: [

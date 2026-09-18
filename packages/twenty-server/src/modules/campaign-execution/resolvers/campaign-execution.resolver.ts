@@ -1,4 +1,4 @@
-import { UseGuards, UsePipes } from '@nestjs/common';
+import { Optional, UseGuards, UsePipes } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
@@ -14,12 +14,20 @@ import {
   CampaignOutreachAudienceReviewStateDTO,
 } from 'src/modules/campaign-execution/dtos/campaign-outreach-audience-review.dto';
 import {
+  CampaignActivityConnectionDTO,
+  CampaignActivityInput,
+} from 'src/modules/campaign-execution/dtos/campaign-activity.dto';
+import {
   CampaignExecutionMutationResultDTO,
   CampaignSendingWindowMutationResultDTO,
+  ExcludeCampaignCreatorInput,
+  ExcludeCampaignCreatorResultDTO,
   StartCampaignExecutionInput,
   StopCampaignExecutionInput,
   UpdateCampaignSendingWindowInput,
 } from 'src/modules/campaign-execution/dtos/campaign-execution.dto';
+import { CampaignActivityReaderService } from 'src/modules/campaign-execution/services/campaign-activity-reader.service';
+import { CampaignCreatorExclusionService } from 'src/modules/campaign-execution/services/campaign-creator-exclusion.service';
 import { CampaignExecutionApplicationService } from 'src/modules/campaign-execution/services/campaign-execution-application.service';
 import {
   CampaignOutreachAudienceAccessError,
@@ -33,7 +41,23 @@ export class CampaignExecutionResolver {
   constructor(
     private readonly service: CampaignExecutionApplicationService,
     private readonly audienceReview: CampaignOutreachAudienceReviewService,
+    @Optional()
+    private readonly creatorExclusion?: CampaignCreatorExclusionService,
+    @Optional()
+    private readonly activityReader?: CampaignActivityReaderService,
   ) {}
+
+  @Query(() => CampaignActivityConnectionDTO)
+  campaignActivity(
+    @Args('input') input: CampaignActivityInput,
+  ): Promise<CampaignActivityConnectionDTO> {
+    if (!this.activityReader)
+      throw new Error('Campaign activity is unavailable');
+    return this.activityReader.read({
+      ...input,
+      authContext: getWorkspaceAuthContext(),
+    });
+  }
 
   @Query(() => CampaignOutreachAudienceReviewDTO)
   async campaignOutreachAudienceReview(
@@ -78,6 +102,23 @@ export class CampaignExecutionResolver {
         ),
       })),
     };
+  }
+
+  @Mutation(() => ExcludeCampaignCreatorResultDTO)
+  excludeCampaignCreator(
+    @Args('input') input: ExcludeCampaignCreatorInput,
+  ): Promise<ExcludeCampaignCreatorResultDTO> {
+    const authContext = getWorkspaceAuthContext();
+    if (!this.creatorExclusion)
+      throw new Error('Campaign Creator exclusion is unavailable');
+
+    return this.creatorExclusion.exclude({
+      workspaceId: authContext.workspace.id,
+      campaignId: input.campaignId,
+      campaignCreatorId: input.campaignCreatorId,
+      reason: input.reason,
+      authContext,
+    });
   }
 
   @Mutation(() => CampaignExecutionMutationResultDTO)

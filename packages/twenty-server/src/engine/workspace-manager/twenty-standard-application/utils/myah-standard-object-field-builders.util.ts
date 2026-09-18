@@ -5,6 +5,7 @@ import {
 } from 'twenty-shared/types';
 import {
   MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE,
+  MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS,
   MYAH_STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
@@ -2690,12 +2691,67 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           workspaceId: args.workspaceId,
           context: {
             fieldName: 'stage',
-            type: FieldMetadataType.TEXT,
+            type: FieldMetadataType.SELECT,
             label: 'Stage',
             description: 'Campaign outreach stage',
             icon: 'IconProgress',
             isNullable: true,
             defaultValue: `'${MYAH_CAMPAIGN_CREATOR_DEFAULT_STAGE}'`,
+            options: [...MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS],
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        excludedAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'excludedAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'Excluded at',
+            description: 'When this Creator was excluded from Campaign sends',
+            icon: 'IconUserOff',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        excludedByWorkspaceMemberId: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'excludedByWorkspaceMemberId',
+            type: FieldMetadataType.TEXT,
+            label: 'Excluded by',
+            description: 'Workspace member who excluded this Creator',
+            icon: 'IconUserOff',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        exclusionReason: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'exclusionReason',
+            type: FieldMetadataType.TEXT,
+            label: 'Exclusion reason',
+            description: 'Why this Creator was excluded from Campaign sends',
+            icon: 'IconUserOff',
+            isNullable: true,
+            isUIEditable: false,
           },
           standardObjectMetadataRelatedEntityIds:
             args.standardObjectMetadataRelatedEntityIds,
@@ -3345,6 +3401,28 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             isUIEditable: false,
             targetObjectName: 'messageThread',
             targetFieldName: 'myahCampaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        timelineActivities: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'timelineActivities',
+            label: 'Timeline Activities',
+            description: 'Timeline activities tied to the Campaign',
+            icon: 'IconTimelineEvent',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'timelineActivity',
+            targetFieldName: 'targetCampaign',
             morphId: null,
             settings: { relationType: RelationType.ONE_TO_MANY },
           },

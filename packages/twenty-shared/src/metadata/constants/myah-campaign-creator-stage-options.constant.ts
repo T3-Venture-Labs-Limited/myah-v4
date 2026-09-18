@@ -23,7 +23,7 @@ export const MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS = [
   {
     id: '13209f5b-f520-423f-add0-e70ae33f164f',
     value: 'ONBOARDED',
-    label: 'Onboarded',
+    label: 'Deal accepted',
     color: 'yellow',
     position: 3,
   },
@@ -35,24 +35,31 @@ export const MYAH_CAMPAIGN_CREATOR_STAGE_OPTIONS = [
     position: 4,
   },
   {
+    id: '0c5928c3-0f10-5ac8-8b42-f377c165fd13',
+    value: 'PRODUCT_RECEIVED',
+    label: 'Product received',
+    color: 'purple',
+    position: 5,
+  },
+  {
     id: 'dd1d8f50-53b4-460f-b68d-a24670f8f9fc',
     value: 'WAITING_FOR_POST',
     label: 'Waiting on post',
     color: 'purple',
-    position: 5,
+    position: 6,
   },
   {
     id: '4f8fdc53-77ae-499c-a022-e7be4e279b18',
     value: 'POSTED',
     label: 'Posted',
     color: 'green',
-    position: 6,
+    position: 7,
   },
   {
     id: 'b03a494e-e909-50a1-8c41-1c7e1644a334',
     value: 'DROPPED',
     label: 'Dropped',
     color: 'red',
-    position: 7,
+    position: 8,
   },
 ] as const;

@@ -1,11 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { type EntityManager, type QueryRunner } from 'typeorm';
 
 import {
   OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
   OUTBOUND_EMAIL_UNKNOWN_AFTER_MS,
 } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
+import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
 import {
   type AcceptedOutcomeEvidence,
@@ -1058,6 +1060,8 @@ const isValidProcessingReceipt = (
 export class OutboundEmailAttemptService {
   constructor(
     private readonly mailboxCapacityService: MailboxCapacityService = new MailboxCapacityService(),
+    @Optional()
+    private readonly timelineEventWriter?: CampaignTimelineEventWriterService,
   ) {}
 
   async reserveWithMailboxCapacity(
@@ -1313,6 +1317,12 @@ export class OutboundEmailAttemptService {
       );
     }
 
+    await this.writeCampaignAttemptEvent(
+      result.records[0],
+      manager,
+      'PROVIDER_SUBMITTED',
+      new Date(observedAt),
+    );
     return { receipt: result.records[0], status: 'PROCESSING_ACQUIRED' };
   }
 
@@ -1506,6 +1516,12 @@ export class OutboundEmailAttemptService {
       'Outbound email unknown CAS did not affect one valid row',
     );
 
+    await this.writeCampaignAttemptEvent(
+      updated,
+      manager,
+      'UNKNOWN',
+      new Date(String(updated.updatedAt)),
+    );
     return { receipt: updated, status: 'RECORDED' };
   }
 
@@ -1667,6 +1683,19 @@ export class OutboundEmailAttemptService {
     );
 
     await this.mailboxCapacityService.consumeReserved(lockedDay, manager);
+    await this.writeCampaignAttemptEvent(
+      updated,
+      manager,
+      'MESSAGE_ACCEPTED',
+      new Date(String(updated.providerAcceptedAt)),
+    );
+    if (expectedAttemptState === 'UNKNOWN')
+      await this.writeCampaignAttemptEvent(
+        updated,
+        manager,
+        'UNKNOWN_RECOVERED_ACCEPTED',
+        new Date(String(updated.providerAcceptedAt)),
+      );
 
     return { receipt: updated, status: 'RECORDED' };
   }
@@ -1745,8 +1774,73 @@ export class OutboundEmailAttemptService {
     );
 
     await this.mailboxCapacityService.releaseReserved(lockedDay, manager);
+    await this.writeCampaignAttemptEvent(
+      updated,
+      manager,
+      'DEFINITELY_UNACCEPTED',
+      new Date(String(updated.updatedAt)),
+    );
+    if (expectedAttemptState === 'UNKNOWN')
+      await this.writeCampaignAttemptEvent(
+        updated,
+        manager,
+        'UNKNOWN_RECOVERED_UNACCEPTED',
+        new Date(String(updated.updatedAt)),
+      );
 
     return { receipt: updated, status: 'RECORDED' };
+  }
+
+  private async writeCampaignAttemptEvent(
+    receipt: OutboundEmailAttemptReceipt,
+    manager: EntityManager,
+    eventKind:
+      | 'PROVIDER_SUBMITTED'
+      | 'MESSAGE_ACCEPTED'
+      | 'UNKNOWN'
+      | 'UNKNOWN_RECOVERED_ACCEPTED'
+      | 'UNKNOWN_RECOVERED_UNACCEPTED'
+      | 'DEFINITELY_UNACCEPTED',
+    happenedAt: Date,
+  ): Promise<void> {
+    if (
+      this.timelineEventWriter === undefined ||
+      receipt.source !== 'CAMPAIGN_SEQUENCE' ||
+      receipt.campaignId === null ||
+      receipt.enrollmentId === null
+    )
+      return;
+    const creator = (await requireRunner(manager).query(
+      `SELECT "creatorId" FROM core."campaignEnrollment"
+        WHERE id=$1 AND "workspaceId"=$2 AND "campaignId"=$3`,
+      [receipt.enrollmentId, receipt.workspaceId, receipt.campaignId],
+    )) as Array<{ creatorId: string }>;
+    if (creator.length !== 1)
+      throw new Error('Campaign attempt Creator evidence is unavailable');
+    await this.timelineEventWriter.writeInTransaction(
+      {
+        manager: manager as WorkspaceEntityManager,
+        workspaceId: receipt.workspaceId,
+        campaignId: receipt.campaignId,
+      },
+      {
+        businessEventKey: `attempt:${receipt.attemptId}:${eventKind}`,
+        eventKind,
+        happenedAt: happenedAt.toISOString(),
+        sourceId: receipt.attemptId,
+        sourceType: 'ATTEMPT',
+        creatorId: creator[0].creatorId,
+        ...(receipt.safeOutcomeReason
+          ? { reason: receipt.safeOutcomeReason }
+          : {}),
+        ...(receipt.projectedMessageId
+          ? { messageId: receipt.projectedMessageId }
+          : {}),
+        ...(receipt.projectedMessageThreadId
+          ? { messageThreadId: receipt.projectedMessageThreadId }
+          : {}),
+      },
+    );
   }
 
   private requirePositiveReservationCount(reservedCount: number): void {

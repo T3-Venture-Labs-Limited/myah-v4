@@ -45,6 +45,10 @@ export class TimelineActivityWorkspaceEntity extends BaseWorkspaceEntity {
   targetMessageListId: string | null;
   targetMessageCampaign: EntityRelation<MessageCampaignWorkspaceEntity> | null;
   targetMessageCampaignId: string | null;
+  targetCreator: EntityRelation<CustomWorkspaceEntity> | null;
+  targetCreatorId: string | null;
+  targetCampaign: EntityRelation<CustomWorkspaceEntity> | null;
+  targetCampaignId: string | null;
   custom: EntityRelation<CustomWorkspaceEntity>;
   targetCustom: EntityRelation<CustomWorkspaceEntity>;
 }

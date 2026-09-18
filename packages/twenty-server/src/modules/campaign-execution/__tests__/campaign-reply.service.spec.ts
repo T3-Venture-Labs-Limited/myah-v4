@@ -96,7 +96,7 @@ describe('CampaignReplyService', () => {
     expect(progression.terminalizeReplyInTransaction).not.toHaveBeenCalled();
   });
 
-  it('terminalizes one exact match and uses an unquoted QueryBuilder target for stage CAS', async () => {
+  it('terminalizes one exact Campaign match and scopes the Campaign Creator stage CAS to that Campaign', async () => {
     const progression = {
       terminalizeReplyInTransaction: jest.fn(async () => ({
         status: 'REPLIED',
@@ -135,6 +135,10 @@ describe('CampaignReplyService', () => {
     );
     expect(builder.update).toHaveBeenCalledWith(
       expect.stringMatching(/^workspace_[^.]+\.campaignCreator$/),
+    );
+    expect(builder.andWhere).toHaveBeenCalledWith(
+      '"campaignId" = :campaignId',
+      { campaignId: '00000000-0000-4000-8000-000000000004' },
     );
     expect(execute).toHaveBeenCalled();
   });

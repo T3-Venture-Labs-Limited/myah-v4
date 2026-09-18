@@ -1,5 +1,6 @@
 import { EventRowActivity } from '@/activities/timeline-activities/rows/activity/components/EventRowActivity';
 import { EventRowCalendarEvent } from '@/activities/timeline-activities/rows/calendar/components/EventRowCalendarEvent';
+import { EventRowCampaign } from '@/activities/timeline-activities/rows/campaign/components/EventRowCampaign';
 import { type EventRowDynamicComponentProps } from '@/activities/timeline-activities/rows/components/EventRowDynamicComponent.types';
 import { EventRowGenericLinked } from '@/activities/timeline-activities/rows/generic/components/EventRowGenericLinked';
 import { EventRowMainObject } from '@/activities/timeline-activities/rows/main-object/components/EventRowMainObject';
@@ -11,6 +12,10 @@ export const EventRowDynamicComponent = (
   props: EventRowDynamicComponentProps,
 ) => {
   const { linkedObjectMetadataItem } = props;
+
+  if (props.event.name.startsWith('campaign.')) {
+    return <EventRowCampaign event={props.event} createdAt={props.createdAt} />;
+  }
 
   if (!isDefined(linkedObjectMetadataItem)) {
     return (
