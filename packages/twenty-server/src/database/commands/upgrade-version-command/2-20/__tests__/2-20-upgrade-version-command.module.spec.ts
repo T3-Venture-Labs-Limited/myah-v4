@@ -5,6 +5,7 @@ import { WorkspaceIteratorService } from 'src/database/commands/command-runners/
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
 import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
 import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
+import { CatchUpCampaignActivityControlMetadataWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748003-catch-up-campaign-activity-control-metadata.command';
 import { RepairInstagramSecurityCutoverCommand } from 'src/database/commands/upgrade-version-command/2-20/repair-instagram-security-cutover.command';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -222,9 +223,8 @@ describe('Instagram production upgrade provider compatibility', () => {
       getProviders: () => wrappers,
     } as unknown as DiscoveryService);
     registry.onModuleInit();
-    const sequence = new UpgradeSequenceReaderService(
-      registry,
-    ).getUpgradeSequence();
+    const reader = new UpgradeSequenceReaderService(registry);
+    const sequence = reader.getUpgradeSequence();
     const kindOrder = ['fast-instance', 'slow-instance', 'workspace'];
     const expected = decorated
       .filter((entry) =>
@@ -280,11 +280,25 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // Contact-wide triage registers newer 2.20 workspace commands, so the
-    // campaign lifecycle synchronizer is no longer the last workspace step.
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
     );
+    const workspaceCommands = sequence
+      .filter((step) => step.kind === 'workspace')
+      .filter((step) => step.version === '2.20.0');
+    expect(
+      reader
+        .getPendingWorkspaceCommands({
+          workspaceCommands,
+          workspaceCursor: {
+            name: '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+            status: 'completed',
+          },
+        })
+        .map(({ name }) => name),
+    ).toEqual([
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+    ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(
         SynchronizeCampaignLifecycleStatusMetadataCommand,
@@ -295,6 +309,11 @@ describe('Instagram production upgrade provider compatibility', () => {
         SynchronizeCampaignActivityControlMetadataCommand,
       ),
     ).toEqual({ version: '2.20.0', timestamp: 1789313971536 });
+    expect(
+      getRegisteredWorkspaceCommandMetadata(
+        CatchUpCampaignActivityControlMetadataWorkspaceCommand,
+      ),
+    ).toEqual({ version: '2.20.0', timestamp: 1789633748003 });
     expect(
       sequence.filter((step) =>
         EXPECTED_INSTAGRAM_IDENTITIES.some(

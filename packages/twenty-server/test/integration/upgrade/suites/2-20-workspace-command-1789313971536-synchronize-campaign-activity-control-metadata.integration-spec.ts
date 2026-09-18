@@ -155,10 +155,22 @@ describe('2.20 workspace command 1789313971536 retained facts (postgres)', () =>
           },
         }),
       } as never,
+      { incrementMetadataVersion: jest.fn() } as never,
     );
+    const conversionQueryRunner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      query: jest
+        .fn()
+        .mockResolvedValue([{ id: 'stage-field-id', type: 'SELECT' }]),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+    };
     const dataSource = {
       query: (sql: string, parameters?: unknown[]) =>
         runner.query(sql, parameters),
+      createQueryRunner: () => conversionQueryRunner,
     };
     const args = {
       workspaceId,

@@ -4,6 +4,7 @@ import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/
 import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
 import { InitializeMyahInboxContactTriageWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748001-initialize-myah-inbox-contact-triage.command';
 import { CatchUpMyahInboxContactTriageWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748002-catch-up-myah-inbox-contact-triage.command';
+import { CatchUpCampaignActivityControlMetadataWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748003-catch-up-campaign-activity-control-metadata.command';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
@@ -73,6 +74,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     SynchronizeCampaignActivityControlMetadataCommand,
     InitializeMyahInboxContactTriageWorkspaceCommand,
     CatchUpMyahInboxContactTriageWorkspaceCommand,
+    CatchUpCampaignActivityControlMetadataWorkspaceCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,
