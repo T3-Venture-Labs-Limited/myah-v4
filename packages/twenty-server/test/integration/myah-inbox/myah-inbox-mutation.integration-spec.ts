@@ -6,9 +6,9 @@ import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graph
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 
 const schemaName = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
-const baselineDraft = { markdown: 'Task 4 baseline', blocknote: null };
 
 const inboxThreadQuery = gql`
   query Task4InboxThread {
@@ -61,13 +61,25 @@ type ThreadSnapshot = {
   inboxOwnerId: string | null;
   inboxState: string;
   snoozedUntil: Date | null;
-  myahReplyDraftBodyMarkdown: string | null;
-  myahReplyDraftBodyBlocknote: string | null;
-  myahReplyDraftRevision: number;
 };
 
 const creatorId = '21200000-0000-4000-8000-000000000001';
 const campaignId = '21200000-0000-4000-8000-000000000002';
+
+// A reply drafted on this thread before it is linked to any Creator: the
+// contact anchor is the thread itself, in the General (no-Campaign) context.
+const draftTarget = (threadId: string) => ({
+  expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
+  target: {
+    channel: 'EMAIL',
+    contactId: encodeMyahInboxContactId({
+      workspaceId: SEED_APPLE_WORKSPACE_ID,
+      identity: { kind: 'email-thread', recordId: threadId },
+    }),
+    threadId,
+  },
+  replyContext: { kind: 'GENERAL' },
+});
 
 describe('Myah Inbox mutations (PostgreSQL)', () => {
   let threadId: string;
@@ -85,8 +97,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
 
     const [thread] = (await global.testDataSource.query(
       `SELECT "id", "creatorId", "myahCampaignId", "inboxOwnerId",
-              "inboxState", "snoozedUntil", "myahReplyDraftBodyMarkdown",
-              "myahReplyDraftBodyBlocknote", "myahReplyDraftRevision"
+              "inboxState", "snoozedUntil"
          FROM "${schemaName}"."messageThread"
         WHERE "id" = $1`,
       [threadId],
@@ -115,17 +126,16 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
               "myahCampaignId" = NULL,
               "inboxOwnerId" = $2,
               "inboxState" = 'NEEDS_REPLY',
-              "snoozedUntil" = NULL,
-              "myahReplyDraftBodyMarkdown" = $3,
-              "myahReplyDraftBodyBlocknote" = $4,
-              "myahReplyDraftRevision" = 2
+              "snoozedUntil" = NULL
         WHERE "id" = $1`,
-      [
-        threadId,
-        WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
-        baselineDraft.markdown,
-        baselineDraft.blocknote,
-      ],
+      [threadId, WORKSPACE_MEMBER_DATA_SEED_IDS.JANE],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM core."myahInboxReplyContextDraft"
+        WHERE "workspaceId" = $1 AND "contactAnchorKind" = 'EMAIL_THREAD'
+          AND "contactAnchorId" = $2 AND "channel" = 'EMAIL'
+          AND "deliveryTargetId" = $2 AND "contextKind" = 'GENERAL'`,
+      [SEED_APPLE_WORKSPACE_ID, threadId],
     );
   });
 
@@ -136,10 +146,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
               "myahCampaignId" = $3,
               "inboxOwnerId" = $4,
               "inboxState" = $5,
-              "snoozedUntil" = $6,
-              "myahReplyDraftBodyMarkdown" = $7,
-              "myahReplyDraftBodyBlocknote" = $8,
-              "myahReplyDraftRevision" = $9
+              "snoozedUntil" = $6
         WHERE "id" = $1`,
       [
         threadId,
@@ -148,10 +155,14 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
         originalThread.inboxOwnerId,
         originalThread.inboxState,
         originalThread.snoozedUntil,
-        originalThread.myahReplyDraftBodyMarkdown,
-        originalThread.myahReplyDraftBodyBlocknote,
-        originalThread.myahReplyDraftRevision,
       ],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM core."myahInboxReplyContextDraft"
+        WHERE "workspaceId" = $1 AND "contactAnchorKind" = 'EMAIL_THREAD'
+          AND "contactAnchorId" = $2 AND "channel" = 'EMAIL'
+          AND "deliveryTargetId" = $2 AND "contextKind" = 'GENERAL'`,
+      [SEED_APPLE_WORKSPACE_ID, threadId],
     );
     await global.testDataSource.query(
       `DELETE FROM "${schemaName}"."creator" WHERE "id" = $1`,
@@ -168,8 +179,8 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
       query: saveDraftMutation,
       variables: {
         input: {
-          threadId,
-          expectedRevision: 2,
+          ...draftTarget(threadId),
+          expectedRevision: 0,
           body: { markdown: 'Jane current copy', blocknote: null },
         },
       },
@@ -178,7 +189,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
     expect(saved.body.errors).toBeUndefined();
     expect(saved.body.data.saveMyahInboxDraft).toEqual({
       status: 'SAVED',
-      revision: 3,
+      revision: 1,
       body: { markdown: 'Jane current copy', blocknote: null },
     });
 
@@ -186,8 +197,8 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
       query: saveDraftMutation,
       variables: {
         input: {
-          threadId,
-          expectedRevision: 2,
+          ...draftTarget(threadId),
+          expectedRevision: 0,
           body: { markdown: 'Jane stale copy', blocknote: null },
         },
       },
@@ -196,7 +207,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
     expect(stale.body.errors).toBeUndefined();
     expect(stale.body.data.saveMyahInboxDraft).toEqual({
       status: 'CONFLICT',
-      revision: 3,
+      revision: 1,
       body: { markdown: 'Jane current copy', blocknote: null },
     });
 
@@ -219,8 +230,8 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
       query: saveDraftMutation,
       variables: {
         input: {
-          threadId,
-          expectedRevision: 3,
+          ...draftTarget(threadId),
+          expectedRevision: 1,
           body: {
             markdown: 'Jane can still edit after reassignment',
             blocknote: null,
@@ -232,7 +243,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
     expect(reassignedMemberWrite.body.errors).toBeUndefined();
     expect(reassignedMemberWrite.body.data.saveMyahInboxDraft).toEqual({
       status: 'SAVED',
-      revision: 4,
+      revision: 2,
       body: {
         markdown: 'Jane can still edit after reassignment',
         blocknote: null,
@@ -244,8 +255,8 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
         query: saveDraftMutation,
         variables: {
           input: {
-            threadId,
-            expectedRevision: 4,
+            ...draftTarget(threadId),
+            expectedRevision: 2,
             body: { markdown: 'Jony current copy', blocknote: null },
           },
         },
@@ -256,7 +267,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
     expect(newOwnerWrite.body.errors).toBeUndefined();
     expect(newOwnerWrite.body.data.saveMyahInboxDraft).toEqual({
       status: 'SAVED',
-      revision: 5,
+      revision: 3,
       body: { markdown: 'Jony current copy', blocknote: null },
     });
 
@@ -272,22 +283,22 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
     expect(clearedOwner.body.data.updateMyahInboxThread.inboxOwner).toBeNull();
 
     const [persisted] = (await global.testDataSource.query(
-      `SELECT "inboxOwnerId", "myahReplyDraftBodyMarkdown",
-              "myahReplyDraftBodyBlocknote", "myahReplyDraftRevision"
-         FROM "${schemaName}"."messageThread" WHERE "id" = $1`,
-      [threadId],
+      `SELECT "bodyMarkdown", "bodyBlocknote", "revision"
+         FROM core."myahInboxReplyContextDraft"
+        WHERE "workspaceId" = $1 AND "contactAnchorKind" = 'EMAIL_THREAD'
+          AND "contactAnchorId" = $2 AND "channel" = 'EMAIL'
+          AND "deliveryTargetId" = $2 AND "contextKind" = 'GENERAL'`,
+      [SEED_APPLE_WORKSPACE_ID, threadId],
     )) as Array<{
-      inboxOwnerId: string | null;
-      myahReplyDraftBodyMarkdown: string;
-      myahReplyDraftBodyBlocknote: string | null;
-      myahReplyDraftRevision: number;
+      bodyMarkdown: string;
+      bodyBlocknote: string | null;
+      revision: number;
     }>;
 
     expect(persisted).toEqual({
-      inboxOwnerId: null,
-      myahReplyDraftBodyMarkdown: 'Jony current copy',
-      myahReplyDraftBodyBlocknote: null,
-      myahReplyDraftRevision: 5,
+      bodyMarkdown: 'Jony current copy',
+      bodyBlocknote: null,
+      revision: 3,
     });
   });
   it('returns the first saved draft to a stale second authenticated workspace member', async () => {
@@ -295,8 +306,8 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
       query: saveDraftMutation,
       variables: {
         input: {
-          threadId,
-          expectedRevision: 2,
+          ...draftTarget(threadId),
+          expectedRevision: 0,
           body: { markdown: 'Jane background save', blocknote: null },
         },
       },
@@ -307,8 +318,8 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
         query: saveDraftMutation,
         variables: {
           input: {
-            threadId,
-            expectedRevision: 2,
+            ...draftTarget(threadId),
+            expectedRevision: 0,
             body: { markdown: 'Jony stale save', blocknote: null },
           },
         },
@@ -319,31 +330,33 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
     expect(janeSave.body.errors).toBeUndefined();
     expect(janeSave.body.data.saveMyahInboxDraft).toEqual({
       status: 'SAVED',
-      revision: 3,
+      revision: 1,
       body: { markdown: 'Jane background save', blocknote: null },
     });
     expect(jonyStaleSave.body.errors).toBeUndefined();
     expect(jonyStaleSave.body.data.saveMyahInboxDraft).toEqual({
       status: 'CONFLICT',
-      revision: 3,
+      revision: 1,
       body: { markdown: 'Jane background save', blocknote: null },
     });
 
     const [persisted] = (await global.testDataSource.query(
-      `SELECT "myahReplyDraftBodyMarkdown", "myahReplyDraftBodyBlocknote",
-              "myahReplyDraftRevision"
-         FROM "${schemaName}"."messageThread" WHERE "id" = $1`,
-      [threadId],
+      `SELECT "bodyMarkdown", "bodyBlocknote", "revision"
+         FROM core."myahInboxReplyContextDraft"
+        WHERE "workspaceId" = $1 AND "contactAnchorKind" = 'EMAIL_THREAD'
+          AND "contactAnchorId" = $2 AND "channel" = 'EMAIL'
+          AND "deliveryTargetId" = $2 AND "contextKind" = 'GENERAL'`,
+      [SEED_APPLE_WORKSPACE_ID, threadId],
     )) as Array<{
-      myahReplyDraftBodyMarkdown: string;
-      myahReplyDraftBodyBlocknote: string | null;
-      myahReplyDraftRevision: number;
+      bodyMarkdown: string;
+      bodyBlocknote: string | null;
+      revision: number;
     }>;
 
     expect(persisted).toEqual({
-      myahReplyDraftBodyMarkdown: 'Jane background save',
-      myahReplyDraftBodyBlocknote: null,
-      myahReplyDraftRevision: 3,
+      bodyMarkdown: 'Jane background save',
+      bodyBlocknote: null,
+      revision: 1,
     });
   });
 
