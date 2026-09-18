@@ -123,7 +123,13 @@ it('installs strict version-specific snapshot checks and a v2 immutable authorit
     query,
   } as never);
   const sql = query.mock.calls.map(([statement]) => statement).join('\n');
-  expect(sql).toContain('IS TRUE');
+  // Deliberately a bare CHECK: a row matching no branch evaluates to NULL and
+  // must stay valid, exactly as the pre-existing constraint behaved. Wrapping
+  // this in `IS TRUE` rejects NULL and breaks unrelated action rows (for
+  // example Instagram bindings that leave actionKind unset).
+  expect(sql).not.toContain('IS TRUE');
+  expect(sql).toContain('"myahReplyContextSnapshot"');
+  expect(sql).toContain("'MYAH_INBOX_EMAIL_CONTEXT_DRAFT'");
   expect(sql).toContain(
     'NEW."myahReplyContextSnapshot" IS DISTINCT FROM OLD."myahReplyContextSnapshot"',
   );
