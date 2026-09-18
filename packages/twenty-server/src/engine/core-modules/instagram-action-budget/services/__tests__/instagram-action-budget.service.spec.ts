@@ -44,6 +44,14 @@ type Receipt = {
   redactedOutcome: string | null;
   state: ActionExecutionReceiptState;
   workspaceId: string;
+  actionApprovalBinding?: {
+    actionName: string;
+    actionVersion: number;
+    instagramMessageSnapshot: {
+      instagramAccountRecordId: string;
+      providerMessagingId: string;
+    } | null;
+  };
 };
 type LimitBlock = Omit<BlockedResult, 'code' | 'status'> & {
   actionExecutionReceiptId: string;
@@ -57,9 +65,18 @@ type InstagramActionBudgetApi = {
     instagramAccountRecordId: string;
     workspaceId: string;
   }): Promise<Usage>;
+  isTargetAvailable(input: {
+    instagramAccountRecordId: string;
+    legacyTargetFingerprints?: string[];
+    providerMessagingId: string;
+    targetFingerprint: string;
+    workspaceId: string;
+  }): Promise<boolean>;
   reserve(input: {
     actionExecutionReceiptId: string;
     actionKind: ActionKind;
+    providerMessagingId?: string;
+    legacyTargetFingerprints?: string[];
     instagramAccountRecordId: string;
     targetFingerprint: string;
     workspaceId: string;
@@ -167,12 +184,15 @@ class BudgetTransactionHarness {
   public readonly manager = {
     create: jest.fn((_entity: unknown, value: object) => value),
     find: jest.fn(async (entity: unknown, options: { where?: object }) => {
-      if (entity !== InstagramActionReservationEntity) {
-        return [];
-      }
+      const collection =
+        entity === InstagramActionReservationEntity
+          ? this.reservations
+          : entity === ActionExecutionReceiptEntity
+            ? this.receipts
+            : [];
 
-      return this.reservations.filter((reservation) =>
-        this.matches(reservation, options.where ?? {}),
+      return collection.filter((value) =>
+        this.matches(value, options.where ?? {}),
       );
     }),
     findOne: jest.fn(async (entity: unknown, options: { where?: object }) => {
@@ -299,9 +319,13 @@ class BudgetTransactionHarness {
     return Object.entries(where).every(([key, expected]) => {
       const actual = (value as Record<string, unknown>)[key];
 
-      return expected instanceof FindOperator && expected.type === 'isNull'
-        ? actual === null
-        : actual === expected;
+      if (!(expected instanceof FindOperator)) return actual === expected;
+      if (expected.type === 'isNull') return actual === null;
+      if (expected.type === 'in') {
+        return (expected.value as unknown[]).includes(actual);
+      }
+
+      return false;
     });
   }
 }
@@ -339,6 +363,125 @@ const expectUsage = (usage: Usage, expected: Partial<Usage>) => {
 };
 
 describe('InstagramActionBudgetService', () => {
+  it('read-only inspection blocks an active START claim including a legacy target key', async () => {
+    const { harness, service } = createService();
+    harness.addReservation({
+      actionKind: 'START_CHAT',
+      targetFingerprint: otherTargetFingerprint,
+      targetLockReleasedAt: null,
+    });
+
+    await expect(
+      service.isTargetAvailable({
+        workspaceId,
+        instagramAccountRecordId,
+        targetFingerprint,
+        providerMessagingId: 'provider-messaging-id',
+        legacyTargetFingerprints: [otherTargetFingerprint],
+      }),
+    ).resolves.toBe(false);
+    expect(harness.manager.save).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ActionExecutionReceiptState.PROCESSING,
+    ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+    ActionExecutionReceiptState.UNKNOWN,
+  ])(
+    'blocks a reservation-less unresolved %s receipt for the exact v3 messaging target',
+    async (state) => {
+      const { harness, service } = createService();
+      harness.receipts = [
+        {
+          id: receiptId,
+          providerCode: null,
+          redactedOutcome: null,
+          state,
+          workspaceId,
+          actionApprovalBinding: {
+            actionName: 'send_instagram_message',
+            actionVersion: 3,
+            instagramMessageSnapshot: {
+              instagramAccountRecordId,
+              providerMessagingId: 'provider-messaging-id',
+            },
+          },
+        },
+      ];
+
+      await expect(
+        service.isTargetAvailable({
+          workspaceId,
+          instagramAccountRecordId,
+          providerMessagingId: 'provider-messaging-id',
+          targetFingerprint,
+        }),
+      ).resolves.toBe(false);
+      expect(harness.reservations).toHaveLength(0);
+      expect(harness.manager.save).not.toHaveBeenCalled();
+    },
+  );
+
+  it('ignores terminal and unrelated v3 receipts while preserving conservative legacy coverage', async () => {
+    const { harness, service } = createService();
+    harness.receipts = [
+      {
+        id: receiptId,
+        providerCode: null,
+        redactedOutcome: null,
+        state: ActionExecutionReceiptState.SENT,
+        workspaceId,
+        actionApprovalBinding: {
+          actionName: 'send_instagram_message',
+          actionVersion: 3,
+          instagramMessageSnapshot: {
+            instagramAccountRecordId,
+            providerMessagingId: 'provider-messaging-id',
+          },
+        },
+      },
+      {
+        id: otherReceiptId,
+        providerCode: null,
+        redactedOutcome: null,
+        state: ActionExecutionReceiptState.PROCESSING,
+        workspaceId,
+        actionApprovalBinding: {
+          actionName: 'send_instagram_message',
+          actionVersion: 3,
+          instagramMessageSnapshot: {
+            instagramAccountRecordId: otherInstagramAccountRecordId,
+            providerMessagingId: 'other-provider-messaging-id',
+          },
+        },
+      },
+    ];
+
+    await expect(
+      service.isTargetAvailable({
+        workspaceId,
+        instagramAccountRecordId,
+        providerMessagingId: 'provider-messaging-id',
+        targetFingerprint,
+      }),
+    ).resolves.toBe(true);
+
+    harness.receipts[1].actionApprovalBinding = {
+      actionName: 'send_instagram_message',
+      actionVersion: 2,
+      instagramMessageSnapshot: null,
+    };
+    await expect(
+      service.isTargetAvailable({
+        workspaceId,
+        instagramAccountRecordId,
+        providerMessagingId: 'provider-messaging-id',
+        targetFingerprint,
+      }),
+    ).resolves.toBe(false);
+    expect(harness.manager.save).not.toHaveBeenCalled();
+  });
+
   it('uses the PostgreSQL clock and counts only unreleased account reservations inside strict rolling windows', async () => {
     const { harness, service } = createService();
     harness.addReservation({
@@ -962,5 +1105,86 @@ describe('InstagramActionBudgetService', () => {
       releasedAt: null,
       targetLockReleasedAt: null,
     });
+  });
+});
+
+describe('InstagramActionBudgetService v3 reservation target authority', () => {
+  it.each(['START_CHAT', 'REPLY'] as const)(
+    'blocks %s for a reservationless unresolved v3 receipt under the account lock',
+    async (actionKind) => {
+      const { harness, service } = createService();
+      harness.receipts[1].actionApprovalBinding = {
+        actionName: 'send_instagram_message',
+        actionVersion: 3,
+        instagramMessageSnapshot: {
+          instagramAccountRecordId,
+          providerMessagingId: 'messaging-009',
+        },
+      };
+      harness.receipts[1].state = ActionExecutionReceiptState.UNKNOWN;
+      await expect(
+        service.reserve({
+          ...reserveInput(),
+          actionKind,
+          providerMessagingId: 'messaging-009',
+        }),
+      ).rejects.toThrow('unresolved Instagram execution');
+      expect(harness.reservations).toHaveLength(0);
+      expect(harness.calls[0].sql).toContain('pg_advisory_xact_lock');
+    },
+  );
+
+  it.each(['START_CHAT', 'REPLY'] as const)(
+    'retains active START claims across route %s and changed legacy keys',
+    async (actionKind) => {
+      const { harness, service } = createService();
+      harness.addReservation({ actionKind: 'START_CHAT', targetFingerprint });
+      await expect(
+        service.reserve({
+          ...reserveInput(),
+          actionKind,
+          providerMessagingId: 'messaging-009',
+        }),
+      ).rejects.toThrow('unresolved Instagram execution');
+      expect(harness.reservations).toHaveLength(1);
+    },
+  );
+
+  it('excludes only its own processing receipt and retains account-scoped capacity limits', async () => {
+    const { harness, service } = createService();
+    harness.receipts[0].actionApprovalBinding = {
+      actionName: 'send_instagram_message',
+      actionVersion: 3,
+      instagramMessageSnapshot: {
+        instagramAccountRecordId,
+        providerMessagingId: 'messaging-009',
+      },
+    };
+    await expect(
+      service.reserve({
+        ...reserveInput(),
+        providerMessagingId: 'messaging-009',
+      }),
+    ).resolves.toMatchObject({ status: 'RESERVED' });
+    expect(harness.reservations).toHaveLength(1);
+    expect(
+      await service.inspectUsage({ workspaceId, instagramAccountRecordId }),
+    ).toMatchObject({ hourlyLimit: 10, dailyLimit: 100, hourlyUsed: 1 });
+  });
+
+  it('conservatively blocks a new v3 route while any historical v2 unresolved receipt lacks verifiable messaging identity', async () => {
+    const { harness, service } = createService();
+    harness.receipts[1].actionApprovalBinding = {
+      actionName: 'send_instagram_message',
+      actionVersion: 2,
+      instagramMessageSnapshot: null,
+    };
+    await expect(
+      service.reserve({
+        ...reserveInput(),
+        actionKind: 'REPLY',
+        providerMessagingId: 'messaging-009',
+      }),
+    ).rejects.toThrow('unresolved Instagram execution');
   });
 });

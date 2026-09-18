@@ -126,4 +126,27 @@ describe('action binding digest', () => {
       }),
     );
   });
+
+  it('preserves the byte-identical v2 Instagram REPLY logical key', () => {
+    const legacyReply = {
+      workspaceId: base.workspaceId,
+      actionName: 'send_instagram_message' as const,
+      actionVersion: 2 as const,
+      actionKind: 'REPLY' as const,
+      draftId: '00000000-0000-4000-8000-000000000002',
+      contentDigest: 'a'.repeat(64),
+      recipientFingerprint: 'b'.repeat(64),
+      sendingAccountFingerprint: 'c'.repeat(64),
+      actionContextFingerprint: 'd'.repeat(64),
+      threadId: null,
+      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT' as const,
+      interactionContextId: '00000000-0000-4000-8000-000000000002',
+      initiatorUserWorkspaceId: base.initiatorUserWorkspaceId,
+      evidenceLinks: [],
+    };
+
+    expect(computeLogicalActionKey(legacyReply)).toBe(
+      'fb85c37662778a857de9010187c9120445293a8f7a30d1a7e9c1a2a6d0570296',
+    );
+  });
 });

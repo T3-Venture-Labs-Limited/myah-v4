@@ -1,3 +1,4 @@
+import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
@@ -41,7 +42,7 @@ import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { IconInbox } from 'twenty-ui/icon';
-import { SegmentedControl } from 'twenty-ui/input';
+import { Button, SegmentedControl } from 'twenty-ui/input';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledWorkspace = styled.div`
@@ -157,6 +158,25 @@ const MyahInboxPageContent = ({
 }) => {
   const isMobile = useIsMobile();
   const store = useStore();
+  const [
+    myahInboxPendingInstagramSelection,
+    setMyahInboxPendingInstagramSelection,
+  ] = useAtomState(myahInboxPendingInstagramSelectionState);
+  const pendingDestination =
+    myahInboxPendingInstagramSelection?.workspaceId === workspaceId
+      ? myahInboxPendingInstagramSelection
+      : null;
+  useEffect(() => {
+    if (
+      myahInboxPendingInstagramSelection &&
+      myahInboxPendingInstagramSelection.workspaceId !== workspaceId
+    )
+      setMyahInboxPendingInstagramSelection(null);
+  }, [
+    myahInboxPendingInstagramSelection,
+    workspaceId,
+    setMyahInboxPendingInstagramSelection,
+  ]);
   const { theme } = useContext(ThemeContext);
   const { flushWorkspaceForNavigation, invalidateWorkspace } =
     useMyahInboxDraftAutosaveControllerContext();
@@ -388,7 +408,12 @@ const MyahInboxPageContent = ({
   }, [commitContactSelection, store]);
 
   useEffect(() => {
-    if (contacts.loading || contacts.error || !workspaceId) {
+    if (
+      pendingDestination ||
+      contacts.loading ||
+      contacts.error ||
+      !workspaceId
+    ) {
       return;
     }
 
@@ -428,6 +453,7 @@ const MyahInboxPageContent = ({
       }
     }
   }, [
+    pendingDestination,
     contacts.contacts,
     contacts.error,
     contacts.loading,
@@ -476,10 +502,95 @@ const MyahInboxPageContent = ({
     return saved;
   };
 
+  useEffect(() => {
+    if (
+      !pendingDestination ||
+      !workspaceId ||
+      contacts.loading ||
+      contacts.error
+    )
+      return;
+    const matches = contacts.contacts.filter(
+      (contact) =>
+        contact.creator?.id === pendingDestination.creatorRecordId &&
+        contact.instagram.state === 'READY' &&
+        contact.instagram.conversations.length === 1 &&
+        contact.instagram.conversations[0].id ===
+          pendingDestination.conversationRecordId,
+    );
+    if (matches.length !== 1) return;
+    const contact = matches[0];
+    const generation = selectionGenerationRef.current;
+    let active = true;
+    void flushWorkspaceForNavigation(
+      workspaceId,
+      currentSelection.channel === 'EMAIL' && currentSelection.emailThreadId
+        ? [
+            ...new Set([
+              currentSelection.emailThreadId,
+              ...(inlineThreadId ? [inlineThreadId] : []),
+            ]),
+          ]
+        : [],
+    ).then((saved) => {
+      if (
+        !active ||
+        !saved ||
+        workspaceRef.current !== workspaceId ||
+        selectionGenerationRef.current !== generation ||
+        store.get(myahInboxPendingInstagramSelectionState.atom) !==
+          pendingDestination
+      )
+        return;
+      const nextSelection = getMyahInboxSelectionForChannel({
+        workspaceId,
+        contact,
+        channel: 'INSTAGRAM',
+        previousSelection: null,
+      });
+      if (
+        nextSelection.instagramConversationId !==
+        pendingDestination.conversationRecordId
+      )
+        return;
+      setMyahInboxPendingInstagramSelection(null);
+      setRetainedContact(contact);
+      commitContactSelection(nextSelection);
+      if (isMobile) setMobilePanel('conversation');
+    });
+    return () => {
+      active = false;
+    };
+  }, [
+    pendingDestination,
+    workspaceId,
+    contacts.contacts,
+    contacts.loading,
+    contacts.error,
+    flushWorkspaceForNavigation,
+    store,
+    setMyahInboxPendingInstagramSelection,
+    commitContactSelection,
+    isMobile,
+    currentSelection.channel,
+    currentSelection.emailThreadId,
+    inlineThreadId,
+  ]);
+
+  const cancelPendingDestination = () => {
+    // Even choosing the current target is newer intent than an in-flight composer send.
+    // Preserve every selection value; only the existing navigation identity guard changes.
+    setMyahInboxContactSelection({ ...myahInboxContactSelection });
+    selectionGenerationRef.current += 1;
+    if (workspaceId) initializedWorkspaceIdsRef.current.add(workspaceId);
+    setMyahInboxPendingInstagramSelection(null);
+  };
+
   const handleSelectContact = async (
     contactId: string,
     options?: { openConversation?: boolean },
   ) => {
+    cancelPendingDestination();
     if (!workspaceId) {
       return;
     }
@@ -513,6 +624,7 @@ const MyahInboxPageContent = ({
   };
 
   const handleSelectChannel = async (channel: MyahInboxChannel) => {
+    cancelPendingDestination();
     if (!workspaceId || !selectedContact) {
       return;
     }
@@ -530,6 +642,7 @@ const MyahInboxPageContent = ({
   };
 
   const handleReplyToCard = async (threadId: string) => {
+    cancelPendingDestination();
     if (
       !workspaceId ||
       !selectedContact ||
@@ -549,6 +662,7 @@ const MyahInboxPageContent = ({
     });
   };
   const handleCloseInline = async () => {
+    cancelPendingDestination();
     if (!(await flushAffectedDrafts())) return;
     setInlineTarget(null);
     const generation = selectionGenerationRef.current;
@@ -569,6 +683,7 @@ const MyahInboxPageContent = ({
     });
   };
   const handleSwitchToLatest = async () => {
+    cancelPendingDestination();
     if (!latestThreadId || !(await flushAffectedDrafts())) return;
     setInlineTarget(null);
     commitContactSelection({
@@ -633,6 +748,7 @@ const MyahInboxPageContent = ({
   };
 
   const handleFiltersChange = async (nextFilters: MyahInboxFilters) => {
+    cancelPendingDestination();
     if (!(await flushAffectedDrafts())) return;
     const campaignChanged =
       nextFilters.campaignId !== myahInboxFilters.campaignId;
@@ -771,6 +887,18 @@ const MyahInboxPageContent = ({
         workspaceId={workspaceId}
         thread={selectedThread.thread}
       />
+      {pendingDestination ? (
+        <StyledSelectionStatus role="status" aria-live="polite">
+          Message sent. Waiting for its exact Instagram conversation. Refresh or
+          load more contacts, or adjust Inbox filters if it is not visible.
+          <Button
+            title="Refresh Inbox"
+            variant="secondary"
+            size="small"
+            onClick={() => void contacts.refresh(null, { force: true })}
+          />
+        </StyledSelectionStatus>
+      ) : null}
       {status?.workspaceId === workspaceId ? (
         <StyledSelectionStatus role="status" aria-live="polite">
           {status.message}

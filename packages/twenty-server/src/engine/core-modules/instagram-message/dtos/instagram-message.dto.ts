@@ -96,6 +96,12 @@ export class InstagramMessageSendStatusInput {
 
 @ObjectType()
 export class InstagramMessageSendStatusDto {
+  @Field(() => UUIDScalarType, { nullable: true })
+  creatorRecordId: string | null;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  conversationRecordId: string | null;
+
   @Field(() => UUIDScalarType)
   receiptId: string;
 

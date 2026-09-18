@@ -792,41 +792,26 @@ describe('MyahInboxInstagramConversationPanel', () => {
     ).toBeVisible();
   });
 
-  it('keeps a first message without a Creator username blocked', () => {
-    render(
-      <MyahInboxInstagramConversationPanel
-        workspaceId="workspace-1"
-        contact={contact({ instagramUsername: null })}
-        onActivity={jest.fn()}
-      />,
-    );
-
-    expect(screen.getByText('Composer Ada disabled')).toBeVisible();
-    expect(
-      screen.getByText(
-        'Add an Instagram username to this Creator before starting a message.',
-      ),
-    ).toBeVisible();
-  });
-
-  it('targets a linked Creator for a no-chat first message', () => {
-    render(
-      <MyahInboxInstagramConversationPanel
-        workspaceId="workspace-1"
-        contact={contact()}
-        onActivity={jest.fn()}
-      />,
-    );
-
-    expect(mockUseDraft).toHaveBeenCalledWith({
-      workspaceId: 'workspace-1',
-      contactId: 'contact-1',
-      kind: 'FIRST_MESSAGE',
-      creatorRecordId: 'creator-1',
-      conversationRecordId: null,
-    });
-    expect(screen.getByText('Composer ada ready')).toBeVisible();
-  });
+  it.each(['ada', null])(
+    'shows neutral global-command guidance without creating a draft for no conversation (%s)',
+    (instagramUsername) => {
+      render(
+        <MyahInboxInstagramConversationPanel
+          workspaceId="workspace-1"
+          contact={contact({ instagramUsername })}
+          onActivity={jest.fn()}
+        />,
+      );
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Message on Instagram',
+      );
+      expect(
+        screen.queryByRole('button', { name: 'Review and send' }),
+      ).not.toBeInTheDocument();
+      expect(mockUseDraft).not.toHaveBeenCalled();
+      expect(mockUseSend).not.toHaveBeenCalled();
+    },
+  );
 
   it('explains a server-persisted unconfirmed delivery lock after reload', () => {
     mockUseSend.mockReturnValue({
@@ -840,7 +825,14 @@ describe('MyahInboxInstagramConversationPanel', () => {
     render(
       <MyahInboxInstagramConversationPanel
         workspaceId="workspace-1"
-        contact={contact()}
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
         onActivity={jest.fn()}
       />,
     );

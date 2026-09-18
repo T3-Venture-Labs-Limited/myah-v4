@@ -16,7 +16,7 @@ import { FieldMetadataType } from 'twenty-shared/types';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { validateOperationIsPermittedOrThrow } from 'src/engine/twenty-orm/repository/permissions.utils';
-import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 
@@ -424,7 +424,7 @@ const createPreviewHarness = (
     creator: { ...creatorRecord, ...input.creator },
     myahInstagramAccount: { ...accountRecord },
   };
-  const expected = buildInstagramMessageActionAuthority({
+  const expected = buildLegacyInstagramMessageActionAuthority({
     workspaceId,
     initiatorUserWorkspaceId: userWorkspaceId,
     threadId: binding.threadId,

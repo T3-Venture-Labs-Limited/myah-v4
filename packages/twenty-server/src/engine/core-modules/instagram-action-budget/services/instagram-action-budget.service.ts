@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, type EntityManager, IsNull } from 'typeorm';
+import { DataSource, type EntityManager, In, IsNull } from 'typeorm';
 
 import {
   ActionExecutionReceiptEntity,
@@ -24,6 +24,7 @@ import {
   type InstagramActionBudgetReservedResult,
   type InstagramActionBudgetUsage,
   type InspectInstagramActionBudgetInput,
+  type InspectInstagramActionTargetInput,
   type ReleasePreDispatchInput,
   type ReleaseStartTargetInput,
   type ReleaseStartTargetForReceiptInput,
@@ -60,6 +61,103 @@ export class InstagramActionBudgetService {
       const dbNow = await this.dbNow(manager);
 
       return (await this.readUsage(manager, input, dbNow)).usage;
+    });
+  }
+
+  async isTargetAvailable(
+    input: InspectInstagramActionTargetInput,
+  ): Promise<boolean> {
+    return this.dataSource.transaction((manager) =>
+      this.isTargetAvailableWithManager(manager, input),
+    );
+  }
+
+  private async isTargetAvailableWithManager(
+    manager: EntityManager,
+    input: InspectInstagramActionTargetInput,
+    ownReceiptId?: string,
+  ): Promise<boolean> {
+    this.assertAccountScope(input);
+    this.assertTargetFingerprint(input.targetFingerprint);
+    if (!input.providerMessagingId) {
+      throw new Error('Instagram provider messaging identity is required');
+    }
+    const targetFingerprints = [
+      input.targetFingerprint,
+      ...(input.legacyTargetFingerprints ?? []),
+    ];
+    if (
+      targetFingerprints.some(
+        (fingerprint) => !/^[a-f0-9]{64}$/i.test(fingerprint),
+      )
+    ) {
+      throw new Error('Invalid Instagram action target fingerprint');
+    }
+
+    const unresolvedStates = [
+      ActionExecutionReceiptState.PROCESSING,
+      ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      ActionExecutionReceiptState.UNKNOWN,
+    ];
+    const [reservations, receipts] = await Promise.all([
+      manager.find(InstagramActionReservationEntity, {
+        relations: {
+          actionExecutionReceipt: { actionApprovalBinding: true },
+        },
+        where: {
+          workspaceId: input.workspaceId,
+          instagramAccountRecordId: input.instagramAccountRecordId,
+        },
+      }),
+      // Receipts are created before reservations. Inspect them directly so an
+      // interrupted reservation step cannot make a target appear available.
+      manager.find(ActionExecutionReceiptEntity, {
+        relations: { actionApprovalBinding: true },
+        where: {
+          workspaceId: input.workspaceId,
+          state: In(unresolvedStates),
+        },
+      }),
+    ]);
+    const hasUnresolvedReceipt = receipts.some((receipt) => {
+      if (receipt.id === ownReceiptId) return false;
+      const binding = receipt.actionApprovalBinding;
+      if (binding?.actionName !== 'send_instagram_message') return false;
+      // A v2 receipt does not retain a verified messaging identity. It cannot
+      // be proven unrelated, so keep availability fail-closed while v2 drains.
+      if (binding.actionVersion === 2) return true;
+
+      const snapshot = binding.instagramMessageSnapshot;
+
+      return (
+        snapshot?.instagramAccountRecordId === input.instagramAccountRecordId &&
+        snapshot.providerMessagingId === input.providerMessagingId
+      );
+    });
+    if (hasUnresolvedReceipt) return false;
+
+    return !reservations.some((reservation) => {
+      if (reservation.actionExecutionReceiptId === ownReceiptId) return false;
+      const targetsCurrentRecipient = targetFingerprints.includes(
+        reservation.targetFingerprint,
+      );
+      const unresolvedReceipt =
+        targetsCurrentRecipient &&
+        unresolvedStates.includes(reservation.actionExecutionReceipt?.state);
+      const activeStartClaim =
+        targetsCurrentRecipient &&
+        reservation.actionKind === InstagramActionKindEntity.START_CHAT &&
+        reservation.targetLockReleasedAt === null;
+      // Historical v2 START claims lack the verified messaging identity needed
+      // to compare a new composer target. Keep them fail-closed during the
+      // transition rather than treating an unmatched key as available.
+      const activeLegacyStartClaim =
+        reservation.actionKind === InstagramActionKindEntity.START_CHAT &&
+        reservation.targetLockReleasedAt === null &&
+        reservation.actionExecutionReceipt?.actionApprovalBinding
+          ?.actionVersion === 2;
+
+      return unresolvedReceipt || activeStartClaim || activeLegacyStartClaim;
     });
   }
 
@@ -112,6 +210,17 @@ export class InstagramActionBudgetService {
       if (!receipt) throw new Error('Action execution receipt not found');
       if (receipt.state !== ActionExecutionReceiptState.PROCESSING) {
         throw new Error('Action execution receipt is not processing');
+      }
+
+      if (
+        input.providerMessagingId &&
+        !(await this.isTargetAvailableWithManager(
+          manager,
+          { ...input, providerMessagingId: input.providerMessagingId },
+          input.actionExecutionReceiptId,
+        ))
+      ) {
+        throw new Error('An unresolved Instagram execution holds this target');
       }
 
       if (input.actionKind === 'START_CHAT') {
@@ -436,7 +545,11 @@ export class InstagramActionBudgetService {
     if (!['START_CHAT', 'REPLY'].includes(input.actionKind)) {
       throw new Error('Invalid Instagram action kind');
     }
-    if (!/^[a-f0-9]{64}$/i.test(input.targetFingerprint)) {
+    this.assertTargetFingerprint(input.targetFingerprint);
+  }
+
+  private assertTargetFingerprint(targetFingerprint: string): void {
+    if (!/^[a-f0-9]{64}$/i.test(targetFingerprint)) {
       throw new Error('Invalid Instagram action target fingerprint');
     }
   }

@@ -6,11 +6,14 @@ describe('ActionReceiptProjectorService', () => {
   const receipt = {
     id: '00000000-0000-4000-8000-000000000001',
     workspaceId: '00000000-0000-4000-8000-000000000002',
+    actionApprovalBindingId: '00000000-0000-4000-8000-000000000007',
     state: 'PROVIDER_ACCEPTED',
     providerMessageId: '<sent@example.com>',
     providerExternalMessageId: 'provider-message-id',
     providerThreadExternalId: 'provider-thread-id',
     actionApprovalBinding: {
+      id: '00000000-0000-4000-8000-000000000007',
+      workspaceId: '00000000-0000-4000-8000-000000000002',
       actionName: 'send_inbox_reply',
       actionVersion: 1,
       draftId: '00000000-0000-4000-8000-000000000003',
@@ -180,6 +183,99 @@ describe('ActionReceiptProjectorService', () => {
       { state: 'SENT' },
     );
   });
+  it.each([
+    { instagramMessageSnapshot: {} },
+    { composerInputDigest: 'e'.repeat(64) },
+  ])(
+    'rejects a malformed v2 receipt with v3-only fields before projection',
+    async (v3Fields) => {
+      const writer = { project: jest.fn() };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          ...receipt,
+          actionApprovalBinding: {
+            ...receipt.actionApprovalBinding,
+            actionName: 'send_instagram_message',
+            actionVersion: 2,
+            actionKind: 'REPLY',
+            threadId: null,
+            interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+            interactionContextId: receipt.actionApprovalBinding.draftId,
+            ...v3Fields,
+          },
+        }),
+        update: jest.fn(),
+      };
+      const service = new ActionReceiptProjectorService(
+        repository as never,
+        writer,
+      );
+
+      await expect(service.projectReceipt(receipt.id)).rejects.toThrow(
+        'Unsupported action receipt projection',
+      );
+      expect(writer.project).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('projects a complete v3 direct REPLY snapshot and composer digest', async () => {
+    const directWriter = { project: jest.fn().mockResolvedValue(undefined) };
+    const repository = {
+      findOne: jest.fn(async () => ({
+        ...receipt,
+        actionApprovalBinding: {
+          ...receipt.actionApprovalBinding,
+          actionName: 'send_instagram_message',
+          actionVersion: 3,
+          actionKind: 'REPLY',
+          threadId: null,
+          interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+          interactionContextId: receipt.actionApprovalBinding.draftId,
+          composerInputDigest: 'e'.repeat(64),
+          instagramMessageSnapshot: {
+            publicIdentifier: 'creator.name',
+            providerId: 'profile-001',
+            providerMessagingId: 'messaging-009',
+            creatorRecordId: '00000000-0000-4000-8000-000000000004',
+            accountBindingId: '00000000-0000-4000-8000-000000000005',
+            instagramAccountRecordId: '00000000-0000-4000-8000-000000000006',
+            unipileAccountId: 'unipile-account',
+            instagramUserId: 'brand-instagram-id',
+            recipientSourceValues: [
+              { field: 'instagramUsername', value: '@Creator.Name' },
+            ],
+            actionKind: 'REPLY',
+            conversationRecordId: '00000000-0000-4000-8000-000000000009',
+            providerChatId: 'chat-009',
+            attendeeProviderId: 'messaging-009',
+          },
+        },
+      })),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const service = new ActionReceiptProjectorService(repository as never, {
+      project: jest.fn(),
+    });
+
+    await expect(
+      service.projectReceiptWithWriter(receipt.id, directWriter),
+    ).resolves.toEqual({ projected: true });
+    expect(directWriter.project).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionName: 'send_instagram_message',
+        actionVersion: 3,
+        actionKind: 'REPLY',
+        interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+        composerInputDigest: 'e'.repeat(64),
+        instagramMessageSnapshot: expect.objectContaining({
+          providerMessagingId: 'messaging-009',
+          providerChatId: 'chat-009',
+        }),
+      }),
+    );
+  });
+
   it('retains Accepted IDs through the real projector and real START writer despite matching historical evidence', async () => {
     const stored = {
       ...receipt,

@@ -121,20 +121,64 @@ export const MyahInboxInstagramConversationPanel = ({
   contact,
   onActivity,
 }: MyahInboxInstagramConversationPanelProps) => {
+  if (contact.instagram.state === 'AMBIGUOUS') {
+    return (
+      <StyledPanel $scrollable aria-label="Instagram conversations">
+        <StyledStatus role="alert">
+          Multiple Instagram conversations found. Choose the correct chat in
+          Instagram before sending; these copies are read-only here.
+        </StyledStatus>
+        {contact.instagram.conversations.map((conversation) => (
+          <MyahInboxInstagramConversationReadOnly
+            key={conversation.id}
+            conversation={conversation}
+            channelState="AMBIGUOUS"
+          />
+        ))}
+      </StyledPanel>
+    );
+  }
+
   const activeConversation =
     contact.instagram.state === 'READY' &&
     contact.instagram.conversations.length === 1
       ? contact.instagram.conversations[0]
       : null;
-  const isFirstMessage = activeConversation === null;
+  if (!activeConversation)
+    return (
+      <StyledPanel aria-label="Instagram conversation">
+        <StyledStatus role="status">
+          No Instagram conversation is available here. Use Message on Instagram
+          from the global command menu to compose a message.
+        </StyledStatus>
+      </StyledPanel>
+    );
+  return (
+    <MyahInboxInstagramReplyPanel
+      workspaceId={workspaceId}
+      contact={contact}
+      onActivity={onActivity}
+      activeConversation={activeConversation}
+    />
+  );
+};
+
+const MyahInboxInstagramReplyPanel = ({
+  workspaceId,
+  contact,
+  onActivity,
+  activeConversation,
+}: MyahInboxInstagramConversationPanelProps & {
+  activeConversation: MyahInboxContactInstagramConversation;
+}) => {
   const instagram = useMyahInstagramConversation(
     activeConversation?.id ?? null,
   );
   const draft = useMyahInboxInstagramDraft({
     workspaceId,
     contactId: contact.id,
-    kind: isFirstMessage ? 'FIRST_MESSAGE' : 'REPLY',
-    creatorRecordId: isFirstMessage ? (contact.creator?.id ?? null) : null,
+    kind: 'REPLY',
+    creatorRecordId: null,
     conversationRecordId: activeConversation?.id ?? null,
   });
   const send = useMyahInboxInstagramSend({ draft });
@@ -317,32 +361,13 @@ export const MyahInboxInstagramConversationPanel = ({
     setHasNewerMessages(false);
   };
 
-  if (contact.instagram.state === 'AMBIGUOUS') {
-    return (
-      <StyledPanel $scrollable aria-label="Instagram conversations">
-        <StyledStatus role="alert">
-          Multiple Instagram conversations found. Choose the correct chat in
-          Instagram before sending; these copies are read-only here.
-        </StyledStatus>
-        {contact.instagram.conversations.map((conversation) => (
-          <MyahInboxInstagramConversationReadOnly
-            key={conversation.id}
-            conversation={conversation}
-            channelState="AMBIGUOUS"
-          />
-        ))}
-      </StyledPanel>
-    );
-  }
-
   const username =
     activeConversation?.recipientUsername ?? contact.instagramUsername;
   const provider = activeConversation?.provider;
   const isHistorical =
     provider === 'COMPOSIO_HISTORY' ||
     activeConversation?.lifecycle === 'HISTORICAL';
-  const isUnlinkedReply = Boolean(activeConversation && !contact.creator);
-  const targetUnavailable = isFirstMessage && (!username || !contact.creator);
+  const isUnlinkedReply = !contact.creator;
   const draftError =
     draft.status === 'conflict'
       ? 'This Instagram draft changed elsewhere. Reload it before sending.'
@@ -355,13 +380,7 @@ export const MyahInboxInstagramConversationPanel = ({
     draftError ??
     (isUnlinkedReply
       ? 'Link this Instagram conversation to a Creator before replying.'
-      : targetUnavailable
-        ? 'Add an Instagram username to this Creator before starting a message.'
-        : null);
-  const effectiveChannelState =
-    activeConversation || (contact.creator && username)
-      ? 'READY'
-      : 'UNAVAILABLE';
+      : null);
 
   const handleSend = async () => {
     setSendFeedback(null);
@@ -385,10 +404,7 @@ export const MyahInboxInstagramConversationPanel = ({
 
     if (result.status === 'SENT') {
       draft.resetAfterSend();
-      await Promise.allSettled([
-        onActivity(),
-        ...(activeConversation ? [instagram.refetch()] : []),
-      ]);
+      await Promise.allSettled([onActivity(), instagram.refetch()]);
       setSendFeedback(null);
       return;
     }
@@ -404,34 +420,30 @@ export const MyahInboxInstagramConversationPanel = ({
         tabIndex={0}
         onScroll={handleMessagesScroll}
       >
-        {activeConversation ? (
-          <StyledConversation>
-            <StyledConversationLabel>
-              {username ? `@${username}` : 'Instagram conversation'}
-            </StyledConversationLabel>
-            {instagram.loading ? (
-              <StyledStatus role="status">
-                Loading Instagram messages
-              </StyledStatus>
-            ) : (
-              <MyahInboxInstagramTimeline
-                channelState="READY"
-                messages={instagram.messages}
-                inboundSenderName={
-                  activeConversation.recipientDisplayName ?? contact.displayName
-                }
-                error={instagram.error}
-                provider={activeConversation.provider}
-                lifecycle={activeConversation.lifecycle}
-                hasNextPage={instagram.hasNextPage}
-                loadingMore={instagram.loadingMore}
-                onLoadMore={handleLoadMore}
-              />
-            )}
-          </StyledConversation>
-        ) : (
-          <StyledStatus>No Instagram messages yet.</StyledStatus>
-        )}
+        <StyledConversation>
+          <StyledConversationLabel>
+            {username ? `@${username}` : 'Instagram conversation'}
+          </StyledConversationLabel>
+          {instagram.loading ? (
+            <StyledStatus role="status">
+              Loading Instagram messages
+            </StyledStatus>
+          ) : (
+            <MyahInboxInstagramTimeline
+              channelState="READY"
+              messages={instagram.messages}
+              inboundSenderName={
+                activeConversation.recipientDisplayName ?? contact.displayName
+              }
+              error={instagram.error}
+              provider={activeConversation.provider}
+              lifecycle={activeConversation.lifecycle}
+              hasNextPage={instagram.hasNextPage}
+              loadingMore={instagram.loadingMore}
+              onLoadMore={handleLoadMore}
+            />
+          )}
+        </StyledConversation>
       </StyledMessages>
       {hasNewerMessages ? (
         <StyledLatestMessagesAction>
@@ -453,12 +465,11 @@ export const MyahInboxInstagramConversationPanel = ({
           <MyahInboxInstagramComposer
             username={username ?? contact.displayName}
             body={draft.body}
-            channelState={effectiveChannelState}
+            channelState="READY"
             provider={provider}
             error={composerError}
             disabled={
               isUnlinkedReply ||
-              targetUnavailable ||
               send.isBlocked ||
               send.lockedUnknown ||
               draft.status === 'conflict' ||

@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { type QueryRunner, type Repository } from 'typeorm';
 
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import { isInstagramMessageIdentitySnapshot } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { resolveInstagramRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-instagram-recipient.util';
 import { buildSystemAuthContext } from 'src/engine/core-modules/auth/utils/build-system-auth-context.util';
@@ -157,6 +158,16 @@ export class InstagramMessageDraftService {
         const schemaName = getWorkspaceSchemaName(workspace.id);
 
         return dataSource.transaction(async (manager) => {
+          if (
+            await this.isVerifiedComposerDraft(
+              dataSource,
+              schemaName,
+              input.draftId,
+              manager.queryRunner,
+            )
+          ) {
+            throw new Error('Instagram message draft is locked for execution');
+          }
           const target = await this.resolveTarget(
             dataSource,
             manager.queryRunner,
@@ -267,6 +278,43 @@ export class InstagramMessageDraftService {
         });
       },
       buildSystemAuthContext({ workspace }),
+    );
+  }
+
+  private async isVerifiedComposerDraft(
+    dataSource: GlobalWorkspaceDataSource,
+    schemaName: string,
+    draftId: string,
+    queryRunner: QueryRunner | undefined,
+  ): Promise<boolean> {
+    const columns = await dataSource.query<Array<{ column_name: string }>>(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = $1
+         AND table_name = '_myahInstagramReplyDraft'
+         AND column_name = ANY($2)`,
+      [schemaName, ['composerInputDigest', 'instagramMessageSnapshot']],
+      queryRunner,
+      { shouldBypassPermissionChecks: true },
+    );
+    if (columns.length !== 2) return false;
+    const [draft] = await dataSource.query<
+      Array<{
+        composerInputDigest: string | null;
+        instagramMessageSnapshot: unknown;
+      }>
+    >(
+      `SELECT "composerInputDigest", "instagramMessageSnapshot"
+       FROM "${schemaName}"."_myahInstagramReplyDraft"
+       WHERE "id" = $1 AND "deletedAt" IS NULL`,
+      [draftId],
+      queryRunner,
+      { shouldBypassPermissionChecks: true },
+    );
+    return (
+      typeof draft?.composerInputDigest === 'string' &&
+      /^[0-9a-f]{64}$/i.test(draft.composerInputDigest) &&
+      isInstagramMessageIdentitySnapshot(draft.instagramMessageSnapshot)
     );
   }
 

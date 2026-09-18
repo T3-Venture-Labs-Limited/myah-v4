@@ -35,9 +35,26 @@ export const computeLogicalActionKey = (
         ]),
       );
     case 'send_instagram_message':
+      if (input.actionVersion === 2) {
+        // Historical v2 receipt idempotency must remain byte-for-byte stable.
+        return sha256(
+          JSON.stringify([
+            'v2',
+            input.workspaceId,
+            input.actionName,
+            input.actionVersion,
+            input.actionKind,
+            input.draftId,
+            input.contentDigest,
+            input.recipientFingerprint,
+            input.sendingAccountFingerprint,
+            input.actionContextFingerprint,
+          ]),
+        );
+      }
       return sha256(
         JSON.stringify([
-          'v2',
+          'v3',
           input.workspaceId,
           input.actionName,
           input.actionVersion,
@@ -47,6 +64,22 @@ export const computeLogicalActionKey = (
           input.recipientFingerprint,
           input.sendingAccountFingerprint,
           input.actionContextFingerprint,
+          input.composerInputDigest,
+          input.instagramMessageSnapshot.actionKind,
+          input.instagramMessageSnapshot.publicIdentifier,
+          input.instagramMessageSnapshot.providerId,
+          input.instagramMessageSnapshot.providerMessagingId,
+          input.instagramMessageSnapshot.creatorRecordId,
+          input.instagramMessageSnapshot.accountBindingId,
+          input.instagramMessageSnapshot.instagramAccountRecordId,
+          input.instagramMessageSnapshot.unipileAccountId,
+          input.instagramMessageSnapshot.instagramUserId,
+          input.instagramMessageSnapshot.recipientSourceValues.map(
+            ({ field, value }) => [field, value],
+          ),
+          input.instagramMessageSnapshot.conversationRecordId,
+          input.instagramMessageSnapshot.providerChatId,
+          input.instagramMessageSnapshot.attendeeProviderId,
         ]),
       );
     case 'send_outreach_email':

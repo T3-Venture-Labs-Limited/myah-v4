@@ -184,7 +184,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         .allFlatEntityOperationByMetadataName.searchFieldMetadata
         .flatEntityToCreate;
 
-    expect(flatEntityToCreate).toHaveLength(4);
+    expect(flatEntityToCreate).toHaveLength(5);
     expect(flatEntityToCreate).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -235,7 +235,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
             ],
         },
       },
-    )
+    );
 
     await command.runOnWorkspace(args);
 
@@ -343,6 +343,8 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
       workspaceMigrationRunnerService,
     } = createCommand(
       buildExistingSearchFieldMetadataMaps([
+        MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
+          .universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier,
@@ -372,7 +374,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         .allFlatEntityOperationByMetadataName.searchFieldMetadata
         .flatEntityToCreate;
 
-    expect(flatEntityToCreate).toHaveLength(2);
+    expect(flatEntityToCreate).toHaveLength(3);
     expect(
       flatEntityToCreate
         .map(
@@ -385,6 +387,8 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         .sort(),
     ).toEqual(
       [
+        MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
+          .universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
         MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
       ].sort(),

@@ -181,6 +181,38 @@ export type InstagramActionUsage = {
   nextEligibleAt?: Maybe<Scalars['DateTime']['output']>;
 };
 
+export type InstagramMessageComposerAccountDto = {
+  __typename?: 'InstagramMessageComposerAccountDto';
+  code?: Maybe<Scalars['String']['output']>;
+  sender?: Maybe<InstagramMessageComposerSenderDto>;
+  status: Scalars['String']['output'];
+};
+
+export type InstagramMessageComposerAttemptDto = {
+  __typename?: 'InstagramMessageComposerAttemptDto';
+  approvalBindingId?: Maybe<Scalars['UUID']['output']>;
+  draftId: Scalars['UUID']['output'];
+  receiptId?: Maybe<Scalars['UUID']['output']>;
+  state?: Maybe<Scalars['String']['output']>;
+};
+
+export type InstagramMessageComposerPreparedDto = {
+  __typename?: 'InstagramMessageComposerPreparedDto';
+  actionKind?: Maybe<Scalars['String']['output']>;
+  code?: Maybe<Scalars['String']['output']>;
+  creatorRecordId?: Maybe<Scalars['UUID']['output']>;
+  normalizedHandle?: Maybe<Scalars['String']['output']>;
+  preparationFingerprint?: Maybe<Scalars['String']['output']>;
+  sender?: Maybe<InstagramMessageComposerSenderDto>;
+  status: Scalars['String']['output'];
+};
+
+export type InstagramMessageComposerSenderDto = {
+  __typename?: 'InstagramMessageComposerSenderDto';
+  accountRecordId: Scalars['UUID']['output'];
+  label: Scalars['String']['output'];
+};
+
 export type InstagramMessageDraftResultDto = {
   __typename?: 'InstagramMessageDraftResultDto';
   body: Scalars['String']['output'];
@@ -207,6 +239,8 @@ export type InstagramMessageSendResultDto = {
 
 export type InstagramMessageSendStatusDto = {
   __typename?: 'InstagramMessageSendStatusDto';
+  conversationRecordId?: Maybe<Scalars['UUID']['output']>;
+  creatorRecordId?: Maybe<Scalars['UUID']['output']>;
   outcome?: Maybe<Scalars['String']['output']>;
   providerCode?: Maybe<Scalars['String']['output']>;
   receiptId: Scalars['UUID']['output'];
@@ -274,6 +308,7 @@ export type Mutation = {
   saveInstagramMessageDraft: InstagramMessageDraftResultDto;
   saveMyahInboxDraft: MyahInboxDraftSaveResult;
   sendInstagramMessage: InstagramMessageSendResultDto;
+  sendInstagramMessageComposer: InstagramMessageSendResultDto;
   sendMyahInboxReply: MyahInboxReplySendResult;
   stopWorkflowRun: WorkflowRun;
   submitFormStep: Scalars['Boolean']['output'];
@@ -399,6 +434,11 @@ export type MutationSaveMyahInboxDraftArgs = {
 
 export type MutationSendInstagramMessageArgs = {
   input: SendInstagramMessageInput;
+};
+
+
+export type MutationSendInstagramMessageComposerArgs = {
+  input: SendInstagramMessageComposerInputDto;
 };
 
 
@@ -811,6 +851,11 @@ export type ObjectRecordFilterInput = {
   updatedAt?: InputMaybe<DateTimeFilter>;
 };
 
+export type PrepareInstagramMessageComposerInputDto = {
+  creatorRecordId?: InputMaybe<Scalars['UUID']['input']>;
+  rawHandle?: InputMaybe<Scalars['String']['input']>;
+};
+
 export type PublishCampaignSequenceInput = {
   campaignId: Scalars['UUID']['input'];
   expectedVersionId: Scalars['UUID']['input'];
@@ -835,6 +880,8 @@ export type Query = {
   /** @deprecated Use getTimelineThreadsFromObjectRecord instead */
   getTimelineThreadsFromPersonId: TimelineThreadsWithTotal;
   instagramActionUsage: InstagramActionUsage;
+  instagramMessageComposerAccount: InstagramMessageComposerAccountDto;
+  instagramMessageComposerAttempt?: Maybe<InstagramMessageComposerAttemptDto>;
   instagramMessageDraft?: Maybe<InstagramMessageDraftResultDto>;
   instagramMessageSendStatus: InstagramMessageSendStatusDto;
   isMaintenanceModeBannerDismissed: Scalars['Boolean']['output'];
@@ -850,6 +897,7 @@ export type Query = {
   myahInboxReplySendReadiness: MyahInboxReplySendReadiness;
   myahInboxReplySendStatus: MyahInboxReplySendStatus;
   myahInboxThreads: MyahInboxThreadConnection;
+  prepareInstagramMessageComposer: InstagramMessageComposerPreparedDto;
   search: SearchResultConnection;
   workflowStepConnectedAccountHandle?: Maybe<ConnectedAccountHandleDto>;
 };
@@ -920,6 +968,11 @@ export type QueryGetTimelineThreadsFromPersonIdArgs = {
   page: Scalars['Int']['input'];
   pageSize: Scalars['Int']['input'];
   personId: Scalars['UUID']['input'];
+};
+
+
+export type QueryInstagramMessageComposerAttemptArgs = {
+  draftId: Scalars['UUID']['input'];
 };
 
 
@@ -1023,6 +1076,11 @@ export type QueryMyahInboxThreadsArgs = {
 };
 
 
+export type QueryPrepareInstagramMessageComposerArgs = {
+  input: PrepareInstagramMessageComposerInputDto;
+};
+
+
 export type QuerySearchArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   excludedObjectNameSingulars?: InputMaybe<Array<Scalars['String']['input']>>;
@@ -1113,6 +1171,15 @@ export type SearchResultPageInfo = {
   __typename?: 'SearchResultPageInfo';
   endCursor?: Maybe<Scalars['String']['output']>;
   hasNextPage: Scalars['Boolean']['output'];
+};
+
+export type SendInstagramMessageComposerInputDto = {
+  body: Scalars['String']['input'];
+  creatorRecordId?: InputMaybe<Scalars['UUID']['input']>;
+  draftId: Scalars['UUID']['input'];
+  expectedAccountRecordId: Scalars['UUID']['input'];
+  expectedPreparationFingerprint: Scalars['String']['input'];
+  rawHandle?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type SendInstagramMessageInput = {
@@ -1656,7 +1723,33 @@ export type InstagramMessageSendStatusQueryVariables = Exact<{
 }>;
 
 
-export type InstagramMessageSendStatusQuery = { __typename?: 'Query', instagramMessageSendStatus: { __typename?: 'InstagramMessageSendStatusDto', receiptId: any, state: string, providerCode?: string | null, outcome?: string | null } };
+export type InstagramMessageSendStatusQuery = { __typename?: 'Query', instagramMessageSendStatus: { __typename?: 'InstagramMessageSendStatusDto', receiptId: any, state: string, providerCode?: string | null, outcome?: string | null, creatorRecordId?: any | null, conversationRecordId?: any | null } };
+
+export type InstagramMessageComposerAccountQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type InstagramMessageComposerAccountQuery = { __typename?: 'Query', instagramMessageComposerAccount: { __typename?: 'InstagramMessageComposerAccountDto', status: string, code?: string | null, sender?: { __typename?: 'InstagramMessageComposerSenderDto', accountRecordId: any, label: string } | null } };
+
+export type PrepareInstagramMessageComposerQueryVariables = Exact<{
+  input: PrepareInstagramMessageComposerInputDto;
+}>;
+
+
+export type PrepareInstagramMessageComposerQuery = { __typename?: 'Query', prepareInstagramMessageComposer: { __typename?: 'InstagramMessageComposerPreparedDto', status: string, code?: string | null, normalizedHandle?: string | null, creatorRecordId?: any | null, actionKind?: string | null, preparationFingerprint?: string | null, sender?: { __typename?: 'InstagramMessageComposerSenderDto', accountRecordId: any, label: string } | null } };
+
+export type SendInstagramMessageComposerMutationVariables = Exact<{
+  input: SendInstagramMessageComposerInputDto;
+}>;
+
+
+export type SendInstagramMessageComposerMutation = { __typename?: 'Mutation', sendInstagramMessageComposer: { __typename?: 'InstagramMessageSendResultDto', status: string, receiptId: any, code?: string | null, nextEligibleAt?: string | null } };
+
+export type InstagramMessageComposerAttemptQueryVariables = Exact<{
+  draftId: Scalars['UUID']['input'];
+}>;
+
+
+export type InstagramMessageComposerAttemptQuery = { __typename?: 'Query', instagramMessageComposerAttempt?: { __typename?: 'InstagramMessageComposerAttemptDto', draftId: any, approvalBindingId?: any | null, receiptId?: any | null, state?: string | null } | null };
 
 export type WorkflowDiffFragmentFragment = { __typename?: 'WorkflowVersionStepChanges', triggerDiff?: any | null, stepsDiff?: any | null };
 
@@ -1836,7 +1929,11 @@ export const LinkMyahInboxContactCreatorDocument = {"kind":"Document","definitio
 export const InstagramMessageDraftDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InstagramMessageDraft"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetInstagramMessageDraftInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"instagramMessageDraft"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"draftId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"body"}},{"kind":"Field","name":{"kind":"Name","value":"executionLocked"}}]}}]}}]} as unknown as DocumentNode<InstagramMessageDraftQuery, InstagramMessageDraftQueryVariables>;
 export const SaveInstagramMessageDraftDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SaveInstagramMessageDraft"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SaveInstagramMessageDraftInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"saveInstagramMessageDraft"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"draftId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"body"}}]}}]}}]} as unknown as DocumentNode<SaveInstagramMessageDraftMutation, SaveInstagramMessageDraftMutationVariables>;
 export const SendInstagramMessageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendInstagramMessage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SendInstagramMessageInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendInstagramMessage"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"nextEligibleAt"}}]}}]}}]} as unknown as DocumentNode<SendInstagramMessageMutation, SendInstagramMessageMutationVariables>;
-export const InstagramMessageSendStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InstagramMessageSendStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"InstagramMessageSendStatusInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"instagramMessageSendStatus"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"providerCode"}},{"kind":"Field","name":{"kind":"Name","value":"outcome"}}]}}]}}]} as unknown as DocumentNode<InstagramMessageSendStatusQuery, InstagramMessageSendStatusQueryVariables>;
+export const InstagramMessageSendStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InstagramMessageSendStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"InstagramMessageSendStatusInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"instagramMessageSendStatus"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"providerCode"}},{"kind":"Field","name":{"kind":"Name","value":"outcome"}},{"kind":"Field","name":{"kind":"Name","value":"creatorRecordId"}},{"kind":"Field","name":{"kind":"Name","value":"conversationRecordId"}}]}}]}}]} as unknown as DocumentNode<InstagramMessageSendStatusQuery, InstagramMessageSendStatusQueryVariables>;
+export const InstagramMessageComposerAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InstagramMessageComposerAccount"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"instagramMessageComposerAccount"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"sender"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accountRecordId"}},{"kind":"Field","name":{"kind":"Name","value":"label"}}]}}]}}]}}]} as unknown as DocumentNode<InstagramMessageComposerAccountQuery, InstagramMessageComposerAccountQueryVariables>;
+export const PrepareInstagramMessageComposerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"PrepareInstagramMessageComposer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"PrepareInstagramMessageComposerInputDto"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"prepareInstagramMessageComposer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"normalizedHandle"}},{"kind":"Field","name":{"kind":"Name","value":"creatorRecordId"}},{"kind":"Field","name":{"kind":"Name","value":"sender"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accountRecordId"}},{"kind":"Field","name":{"kind":"Name","value":"label"}}]}},{"kind":"Field","name":{"kind":"Name","value":"actionKind"}},{"kind":"Field","name":{"kind":"Name","value":"preparationFingerprint"}}]}}]}}]} as unknown as DocumentNode<PrepareInstagramMessageComposerQuery, PrepareInstagramMessageComposerQueryVariables>;
+export const SendInstagramMessageComposerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendInstagramMessageComposer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SendInstagramMessageComposerInputDto"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendInstagramMessageComposer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"nextEligibleAt"}}]}}]}}]} as unknown as DocumentNode<SendInstagramMessageComposerMutation, SendInstagramMessageComposerMutationVariables>;
+export const InstagramMessageComposerAttemptDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InstagramMessageComposerAttempt"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"draftId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"instagramMessageComposerAttempt"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"draftId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"draftId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"draftId"}},{"kind":"Field","name":{"kind":"Name","value":"approvalBindingId"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"state"}}]}}]}}]} as unknown as DocumentNode<InstagramMessageComposerAttemptQuery, InstagramMessageComposerAttemptQueryVariables>;
 export const ActivateWorkflowVersionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ActivateWorkflowVersion"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"workflowVersionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"activateWorkflowVersion"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"workflowVersionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"workflowVersionId"}}}]}]}}]} as unknown as DocumentNode<ActivateWorkflowVersionMutation, ActivateWorkflowVersionMutationVariables>;
 export const ComputeStepOutputSchemaDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ComputeStepOutputSchema"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ComputeStepOutputSchemaInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"computeStepOutputSchema"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<ComputeStepOutputSchemaMutation, ComputeStepOutputSchemaMutationVariables>;
 export const CreateDraftFromWorkflowVersionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateDraftFromWorkflowVersion"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateDraftFromWorkflowVersionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createDraftFromWorkflowVersion"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"trigger"}},{"kind":"Field","name":{"kind":"Name","value":"steps"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<CreateDraftFromWorkflowVersionMutation, CreateDraftFromWorkflowVersionMutationVariables>;
