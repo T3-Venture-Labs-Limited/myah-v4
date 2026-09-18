@@ -199,11 +199,8 @@ const threads = [
     subject: 'First conversation',
     lastMessagePreview: 'First preview',
     lastMessageSender: 'Ada',
-    state: 'NEEDS_REPLY' as const,
-    snoozedUntil: null,
     creator: { id: 'creator-1', name: 'Ada Creator' },
     campaign: null,
-    inboxOwner: { id: 'member-1', name: 'Zachary' },
   },
   {
     id: 'thread-2',
@@ -211,11 +208,8 @@ const threads = [
     subject: 'Second conversation',
     lastMessagePreview: 'Second preview',
     lastMessageSender: 'Grace',
-    state: 'WAITING_ON_CREATOR' as const,
-    snoozedUntil: null,
     creator: null,
     campaign: { id: 'campaign-1', name: 'Spring campaign' },
-    inboxOwner: null,
   },
 ];
 
@@ -421,69 +415,6 @@ describe('MyahInboxThreadList', () => {
 
     expect(screen.getByLabelText('Campaign: Spring campaign')).toBeVisible();
     expect(screen.getAllByLabelText(/Campaign:/)).toHaveLength(1);
-  });
-
-  it('surfaces an expired snooze as due while leaving future snoozes snoozed', () => {
-    render(
-      <MyahInboxThreadList
-        {...defaultProps}
-        threads={[
-          {
-            ...threads[0],
-            state: 'SNOOZED',
-            snoozedUntil: '2000-01-01T00:00:00.000Z',
-          },
-          {
-            ...threads[1],
-            state: 'SNOOZED',
-            snoozedUntil: '2999-01-01T00:00:00.000Z',
-          },
-        ]}
-      />,
-    );
-
-    const expiredRow = screen.getByRole('option', {
-      name: /First conversation/,
-    });
-    const futureRow = screen.getByRole('option', {
-      name: /Second conversation/,
-    });
-
-    expect(expiredRow).toHaveTextContent('Snooze due');
-    expect(expiredRow).toHaveTextContent('Attention needed');
-    expect(futureRow).toHaveTextContent('snoozed');
-    expect(futureRow).not.toHaveTextContent('due');
-  });
-  it('changes a visible snooze to due when its deadline passes', () => {
-    jest.useFakeTimers({
-      now: new Date('2026-07-24T12:00:00.000Z'),
-    });
-    render(
-      <MyahInboxThreadList
-        {...defaultProps}
-        threads={[
-          {
-            ...threads[0],
-            state: 'SNOOZED',
-            snoozedUntil: '2026-07-24T12:00:01.000Z',
-          },
-        ]}
-      />,
-    );
-
-    const row = screen.getByRole('option', {
-      name: /First conversation/,
-    });
-
-    expect(row).toHaveTextContent('snoozed');
-    expect(row).not.toHaveTextContent('due');
-
-    act(() => {
-      jest.advanceTimersByTime(1000);
-    });
-
-    expect(row).toHaveTextContent('Snooze due');
-    expect(row).toHaveTextContent('Attention needed');
   });
 
   it('keeps the load-more control focused while deferred pagination is loading', async () => {

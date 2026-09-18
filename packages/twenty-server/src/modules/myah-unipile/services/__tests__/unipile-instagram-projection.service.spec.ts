@@ -53,8 +53,13 @@ type UnipileInstagramProjectionService = {
     message: Message;
     deliveryState?: DeliveryState;
     deliveryStateUpdatedAt?: string | null;
+    sourceGenerationId?: string;
+    triageMode?: 'LIVE' | 'BACKFILL';
   }) => Promise<{
     messageRecordId: string;
+    conversationRecordId: string;
+    wasInserted: boolean;
+    originalCreatedAt: string;
     direction: 'INBOUND' | 'OUTBOUND' | 'UNKNOWN';
     deliveryState: DeliveryState;
   }>;
@@ -80,6 +85,12 @@ type UnipileInstagramProjectionServiceModule = {
     },
     accountFinalizationLock: {
       withLock: jest.Mock;
+    },
+    myahInboxContactTriageService: {
+      ensureSourceContactInTransaction: jest.Mock;
+    },
+    myahInboxContactTriageReceiptService: {
+      recordInTransaction: jest.Mock;
     },
   ) => UnipileInstagramProjectionService;
 };
@@ -129,7 +140,10 @@ const createProjectionService = (
   query: jest.Mock,
   lockedBinding: Binding | null = binding,
 ) => {
-  const getGlobalWorkspaceDataSource = jest.fn().mockResolvedValue({ query });
+  const manager = { internalContext: { workspaceId: workspace.id } };
+  const getGlobalWorkspaceDataSource = jest
+    .fn()
+    .mockResolvedValue({ query, manager });
   const executeInWorkspaceContext = jest
     .fn()
     .mockImplementation(async (callback: () => Promise<unknown>) => callback());
@@ -147,6 +161,16 @@ const createProjectionService = (
         callback: (manager: typeof lockedManager) => Promise<unknown>,
       ) => callback(lockedManager),
     );
+  const myahInboxContactTriageService = {
+    ensureSourceContactInTransaction: jest.fn().mockResolvedValue(undefined),
+  };
+  const myahInboxContactTriageReceiptService = {
+    isTriageSchemaProvisioned: jest.fn().mockResolvedValue(true),
+    lockMigrationMarkerForSourcePersistenceInTransaction: jest
+      .fn()
+      .mockResolvedValue(true),
+    recordInTransaction: jest.fn().mockResolvedValue(undefined),
+  };
   const projectionServiceModule = loadProjectionServiceModule();
 
   expect(projectionServiceModule).toBeDefined();
@@ -162,8 +186,13 @@ const createProjectionService = (
         getGlobalWorkspaceDataSource,
       },
       { withLock },
+      myahInboxContactTriageService,
+      myahInboxContactTriageReceiptService,
     ),
     bindingRepository,
+    manager,
+    myahInboxContactTriageService,
+    myahInboxContactTriageReceiptService,
     executeInWorkspaceContext,
     getGlobalWorkspaceDataSource,
     withLock,
@@ -291,8 +320,315 @@ describe('UnipileInstagramProjectionService', () => {
       ]),
     );
     expect(insertOptions).toEqual(queryOptions);
+    expect(
+      subject.myahInboxContactTriageService.ensureSourceContactInTransaction,
+    ).toHaveBeenCalledWith({
+      sourceType: 'INSTAGRAM_CONVERSATION',
+      sourceRecordId: conversationRecordId,
+      initialDirection: null,
+      manager: subject.manager,
+    });
     expect(providerFetch).not.toHaveBeenCalled();
   });
+
+  it('records known first-persisted directions with the transaction manager and skips unknown directions', async () => {
+    const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('_myahSocialConversation')) {
+        return Promise.resolve([{ id: conversationRecordId }]);
+      }
+      if (sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage')) {
+        return Promise.resolve([
+          {
+            id: 'b7037d71-3486-4767-80a1-d0f1e3209985',
+            createdAt: '2026-09-04T12:31:00.000Z',
+          },
+        ]);
+      }
+
+      return Promise.resolve([]);
+    });
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    await subject.service.upsertVerifiedMessage({
+      workspace,
+      binding,
+      chat,
+      conversationRecordId,
+      message: inboundMessage,
+      sourceGenerationId: 'sync-run-id',
+      triageMode: 'BACKFILL',
+    });
+    await subject.service.upsertVerifiedMessage({
+      workspace,
+      binding,
+      chat,
+      conversationRecordId,
+      message: {
+        ...inboundMessage,
+        messageId: 'outbound-message-id',
+        senderId: binding.instagramUserId,
+      },
+      sourceGenerationId: 'sync-run-id',
+      triageMode: 'LIVE',
+    });
+    await subject.service.upsertVerifiedMessage({
+      workspace,
+      binding,
+      chat,
+      conversationRecordId,
+      message: {
+        ...inboundMessage,
+        messageId: 'unknown-message-id',
+        senderId: 'unknown-sender-id',
+        isSender: 0,
+      },
+      sourceGenerationId: 'sync-run-id',
+    });
+
+    expect(
+      subject.myahInboxContactTriageReceiptService.recordInTransaction,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      subject.myahInboxContactTriageReceiptService.recordInTransaction,
+    ).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        channel: 'INSTAGRAM',
+        sourceRecordId: conversationRecordId,
+        sourceGenerationId: 'sync-run-id',
+        mode: 'BACKFILL',
+        direction: 'INBOUND',
+        firstPersistence: true,
+      }),
+      subject.manager,
+    );
+    expect(
+      subject.myahInboxContactTriageReceiptService.recordInTransaction,
+    ).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        mode: 'LIVE',
+        direction: 'OUTBOUND',
+      }),
+      subject.manager,
+    );
+    expect(
+      subject.myahInboxContactTriageService.ensureSourceContactInTransaction,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      subject.myahInboxContactTriageReceiptService.recordInTransaction.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      subject.myahInboxContactTriageService.ensureSourceContactInTransaction
+        .mock.invocationCallOrder[0],
+    );
+  });
+
+  it('persists Instagram rows without triage when the private schema is absent', async () => {
+    const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+    const insertedMessageIds: string[] = [];
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('_myahSocialConversation')) {
+        return Promise.resolve([{ id: conversationRecordId }]);
+      }
+      if (sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage')) {
+        insertedMessageIds.push('inserted');
+
+        return Promise.resolve([
+          {
+            id: 'b7037d71-3486-4767-80a1-d0f1e3209985',
+            createdAt: '2026-09-04T12:31:00.000Z',
+          },
+        ]);
+      }
+
+      return Promise.resolve([]);
+    });
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+
+    subject.myahInboxContactTriageReceiptService.isTriageSchemaProvisioned.mockResolvedValue(
+      false,
+    );
+
+    await subject.service.upsertVerifiedMessage({
+      workspace,
+      binding,
+      chat,
+      conversationRecordId,
+      message: inboundMessage,
+      sourceGenerationId: 'sync-run-id',
+      triageMode: 'LIVE',
+    });
+
+    // Message rows must still be written: without the private relations a triage
+    // write would abort the projection transaction.
+    expect(insertedMessageIds).toHaveLength(1);
+    expect(
+      subject.myahInboxContactTriageReceiptService.recordInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(
+      subject.myahInboxContactTriageService.ensureSourceContactInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('locks marker, source, and conversation before inserting a receipt-eligible Instagram message', async () => {
+    const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('_myahSocialConversation')) {
+        return Promise.resolve([{ id: conversationRecordId }]);
+      }
+      if (sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage')) {
+        return Promise.resolve([
+          {
+            id: 'b7037d71-3486-4767-80a1-d0f1e3209985',
+            createdAt: '2026-09-04T12:31:00.000Z',
+          },
+        ]);
+      }
+
+      return Promise.resolve([]);
+    });
+    const subject = createProjectionService(query);
+
+    if (!subject) return;
+
+    await subject.service.upsertVerifiedMessage({
+      workspace,
+      binding,
+      chat,
+      conversationRecordId,
+      message: inboundMessage,
+      sourceGenerationId: 'sync-run-id',
+      triageMode: 'LIVE',
+    });
+
+    const markerLockIndex =
+      subject.myahInboxContactTriageReceiptService
+        .lockMigrationMarkerForSourcePersistenceInTransaction.mock
+        .invocationCallOrder[0];
+    const sourceLockIndex = query.mock.calls.findIndex(
+      ([, values]) =>
+        values?.[0] === `INSTAGRAM_CONVERSATION:${conversationRecordId}`,
+    );
+    const conversationRowLockIndex = query.mock.calls.findIndex(
+      ([sql]) =>
+        String(sql).includes('_myahSocialConversation') &&
+        String(sql).includes('FOR UPDATE'),
+    );
+    const messageInsertIndex = query.mock.calls.findIndex(
+      ([sql]) =>
+        String(sql).includes('INSERT INTO') &&
+        String(sql).includes('_myahSocialMessage'),
+    );
+
+    expect(markerLockIndex).toBeDefined();
+    expect(query.mock.invocationCallOrder[sourceLockIndex]).toBeGreaterThan(
+      markerLockIndex,
+    );
+    expect(conversationRowLockIndex).toBeGreaterThan(sourceLockIndex);
+    expect(messageInsertIndex).toBeGreaterThan(conversationRowLockIndex);
+  });
+
+  it.each([
+    [
+      'action projection first',
+      'action-receipt:receipt-id',
+      'webhook:event-id',
+    ],
+    ['webhook or sync first', 'webhook:event-id', 'action-receipt:receipt-id'],
+  ])(
+    'captures one outbound receipt and reaches WAITING_ON_CREATOR when %s',
+    async (_name, firstGenerationId, replayGenerationId) => {
+      const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+      const messageRecordId = 'b7037d71-3486-4767-80a1-d0f1e3209985';
+      let wasPersisted = false;
+      let inboxState = 'CLOSED';
+      const query = jest.fn().mockImplementation((sql: string) => {
+        if (sql.includes('_myahSocialConversation')) {
+          return Promise.resolve([{ id: conversationRecordId }]);
+        }
+        if (sql.includes('_myahSocialMessage') && sql.includes('SELECT')) {
+          return Promise.resolve(
+            wasPersisted
+              ? [
+                  {
+                    id: messageRecordId,
+                    createdAt: '2026-09-04T12:31:00.000Z',
+                    deliveryState: 'SENT',
+                    deliveryStateUpdatedAt: '2026-09-04T12:31:00.000Z',
+                  },
+                ]
+              : [],
+          );
+        }
+        if (sql.includes('_myahSocialMessage') && sql.includes('INSERT')) {
+          wasPersisted = true;
+          return Promise.resolve([
+            { id: messageRecordId, createdAt: '2026-09-04T12:31:00.000Z' },
+          ]);
+        }
+
+        return Promise.resolve([]);
+      });
+      const subject = createProjectionService(query);
+
+      if (!subject) return;
+      subject.myahInboxContactTriageReceiptService.recordInTransaction.mockImplementation(
+        async (evidence: { direction: string }) => {
+          if (evidence.direction === 'OUTBOUND') {
+            inboxState = 'WAITING_ON_CREATOR';
+          }
+        },
+      );
+      const outbound = {
+        ...inboundMessage,
+        senderId: binding.instagramUserId,
+      };
+
+      await subject.service.upsertVerifiedMessage({
+        workspace,
+        binding,
+        chat,
+        conversationRecordId,
+        message: outbound,
+        triageMode: 'LIVE',
+        sourceGenerationId: firstGenerationId,
+      });
+      await subject.service.upsertVerifiedMessage({
+        workspace,
+        binding,
+        chat,
+        conversationRecordId,
+        message: outbound,
+        triageMode: 'LIVE',
+        sourceGenerationId: replayGenerationId,
+      });
+
+      expect(
+        subject.myahInboxContactTriageReceiptService.recordInTransaction,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        subject.myahInboxContactTriageReceiptService.recordInTransaction,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceGenerationId: firstGenerationId,
+          direction: 'OUTBOUND',
+          firstPersistence: true,
+        }),
+        subject.manager,
+      );
+      expect(inboxState).toBe('WAITING_ON_CREATOR');
+    },
+  );
 
   it('blocks every projection write when the finalization lock cannot reread its exact active binding', async () => {
     const query = jest.fn().mockResolvedValue([]);
@@ -486,8 +822,10 @@ describe('UnipileInstagramProjectionService', () => {
     });
     const { messageRecordId } = result;
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       messageRecordId,
+      conversationRecordId,
+      wasInserted: true,
       direction: 'INBOUND',
       deliveryState: 'RECEIVED',
     });
@@ -661,8 +999,10 @@ describe('UnipileInstagramProjectionService', () => {
           isSender: 1,
         },
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       messageRecordId,
+      conversationRecordId,
+      wasInserted: false,
       direction: 'OUTBOUND',
       deliveryState: 'SENT',
     });
@@ -752,8 +1092,10 @@ describe('UnipileInstagramProjectionService', () => {
         deliveryState: 'SENT',
         deliveryStateUpdatedAt: '2026-09-04T12:34:00.000Z',
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       messageRecordId,
+      conversationRecordId,
+      wasInserted: false,
       direction: 'INBOUND',
       deliveryState: 'DELIVERED',
     });
@@ -808,8 +1150,10 @@ describe('UnipileInstagramProjectionService', () => {
         deliveryState: 'READ',
         deliveryStateUpdatedAt: readAt,
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       messageRecordId,
+      conversationRecordId,
+      wasInserted: false,
       direction: 'INBOUND',
       deliveryState: 'READ',
     });

@@ -21,6 +21,20 @@ export type MyahInboxContactInstagramConversation = {
   latestDirection: 'INBOUND' | 'OUTBOUND' | 'UNKNOWN' | null;
 };
 
+export type MyahInboxContactTriage = {
+  isAvailable: boolean;
+  inboxOwnerId: string | null;
+  inboxState:
+    | 'NEEDS_REPLY'
+    | 'WAITING_ON_CREATOR'
+    | 'SNOOZED'
+    | 'CLOSED'
+    | null;
+  snoozedUntil: string | null;
+  revision: number | null;
+  identityGeneration: string | null;
+};
+
 export type MyahInboxContact = {
   id: string;
   identityKind: MyahInboxContactIdentityKind;
@@ -32,6 +46,7 @@ export type MyahInboxContact = {
   preview: string | null;
   sender: string | null;
   needsAttention: boolean;
+  triage: MyahInboxContactTriage;
   email: {
     isAvailable: boolean;
     threadCount: number;

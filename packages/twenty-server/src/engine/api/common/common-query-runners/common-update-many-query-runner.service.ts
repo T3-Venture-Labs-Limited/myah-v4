@@ -23,6 +23,8 @@ import {
 import { buildColumnsToReturn } from 'src/engine/api/graphql/graphql-query-runner/utils/build-columns-to-return';
 import { assertIsValidUuid } from 'src/engine/api/graphql/workspace-query-runner/utils/assert-is-valid-uuid.util';
 import { WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
@@ -34,6 +36,12 @@ export class CommonUpdateManyQueryRunnerService extends CommonBaseQueryRunnerSer
   ObjectRecord[]
 > {
   protected readonly operationName = CommonQueryNames.UPDATE_MANY;
+
+  constructor(
+    private readonly myahInboxContactTriageLifecycleService: MyahInboxContactTriageLifecycleService,
+  ) {
+    super();
+  }
 
   async run(
     args: CommonExtendedInput<UpdateManyQueryArgs>,
@@ -65,13 +73,31 @@ export class CommonUpdateManyQueryRunnerService extends CommonBaseQueryRunnerSer
       flatFieldMetadataMaps,
     });
 
-    const updatedObjectRecords = await queryBuilder
-      .update()
-      .set(args.data)
-      .returning(columnsToReturn)
-      .execute();
-
-    const updatedRecords = updatedObjectRecords.generatedMaps as ObjectRecord[];
+    const updatedRecords =
+      flatObjectMetadata.nameSingular === 'creator'
+        ? await this.runCreatorUpdateInTransaction({
+            args,
+            queryRunnerContext,
+            queryBuilder,
+            columnsToReturn,
+          })
+        : this.isInboxSourceCreatorRelationshipUpdate(
+              flatObjectMetadata.nameSingular,
+              args.data,
+            )
+          ? await this.runSourceCreatorRelationshipUpdateInTransaction({
+              args,
+              queryRunnerContext,
+              queryBuilder,
+              columnsToReturn,
+            })
+          : ((
+              await queryBuilder
+                .update()
+                .set(args.data)
+                .returning(columnsToReturn)
+                .execute()
+            ).generatedMaps as ObjectRecord[]);
 
     if (isDefined(args.selectedFieldsResult.relations)) {
       await this.processNestedRelationsHelper.processNestedRelations({
@@ -92,6 +118,206 @@ export class CommonUpdateManyQueryRunnerService extends CommonBaseQueryRunnerSer
     }
 
     return updatedRecords;
+  }
+
+  private async runCreatorUpdateInTransaction({
+    args,
+    queryRunnerContext,
+    queryBuilder,
+    columnsToReturn,
+  }: {
+    args: CommonExtendedInput<UpdateManyQueryArgs>;
+    queryRunnerContext: CommonExtendedQueryRunnerContext;
+    queryBuilder: ReturnType<typeof buildMutationQueryBuilder>;
+    columnsToReturn: string[];
+  }): Promise<ObjectRecord[]> {
+    // This permission-aware read is intentionally limited to authorized IDs.
+    // Current Creator identity is only resolved after transaction locks.
+    const authorizedIds = await this.readSortedTargetIds(
+      queryBuilder,
+      queryRunnerContext.flatObjectMetadata.nameSingular,
+    );
+    if (authorizedIds.length === 0) return [];
+
+    return queryRunnerContext.workspaceDataSource.transaction(
+      async (manager: WorkspaceEntityManager) =>
+        this.myahInboxContactTriageLifecycleService.withPreparedCreatorMutationInTransaction(
+          {
+            workspaceId: queryRunnerContext.authContext.workspace.id,
+            creatorIds: authorizedIds,
+            manager,
+            mutate: async () => {
+              const repository = manager.getRepository(
+                queryRunnerContext.flatObjectMetadata.nameSingular,
+                queryRunnerContext.rolePermissionConfig,
+                queryRunnerContext.authContext,
+              );
+              const transactionQueryBuilder = buildMutationQueryBuilder({
+                repository,
+                alias: queryRunnerContext.flatObjectMetadata.nameSingular,
+                filter: args.filter,
+                commonQueryParser: queryRunnerContext.commonQueryParser,
+              });
+              this.assertTargetIdsUnchanged(
+                authorizedIds,
+                await this.readSortedTargetIds(
+                  transactionQueryBuilder,
+                  queryRunnerContext.flatObjectMetadata.nameSingular,
+                ),
+                'Creator records changed before transaction reconciliation',
+              );
+              const result = await transactionQueryBuilder
+                .update()
+                .set(args.data)
+                .returning(columnsToReturn)
+                .execute();
+
+              return result.generatedMaps as ObjectRecord[];
+            },
+          },
+        ),
+    );
+  }
+
+  private isInboxSourceCreatorRelationshipUpdate(
+    objectName: string,
+    data: Record<string, unknown>,
+  ): boolean {
+    return (
+      (objectName === 'messageThread' ||
+        objectName === 'myahSocialConversation' ||
+        objectName === 'socialConversation' ||
+        objectName === '_myahSocialConversation') &&
+      (Object.prototype.hasOwnProperty.call(data, 'creatorId') ||
+        Object.prototype.hasOwnProperty.call(data, 'creator'))
+    );
+  }
+
+  private async runSourceCreatorRelationshipUpdateInTransaction({
+    args,
+    queryRunnerContext,
+    queryBuilder,
+    columnsToReturn,
+  }: {
+    args: CommonExtendedInput<UpdateManyQueryArgs>;
+    queryRunnerContext: CommonExtendedQueryRunnerContext;
+    queryBuilder: ReturnType<typeof buildMutationQueryBuilder>;
+    columnsToReturn: string[];
+  }): Promise<ObjectRecord[]> {
+    const objectName = queryRunnerContext.flatObjectMetadata.nameSingular;
+    const sourceType =
+      objectName === 'messageThread'
+        ? 'EMAIL_THREAD'
+        : 'INSTAGRAM_CONVERSATION';
+    const authorizedIds = await this.readSortedTargetIds(
+      queryBuilder,
+      objectName,
+    );
+    if (authorizedIds.length === 0) return [];
+
+    return queryRunnerContext.workspaceDataSource.transaction(
+      (manager: WorkspaceEntityManager) =>
+        this.myahInboxContactTriageLifecycleService.withPreparedSourceMutationInTransaction(
+          {
+            workspaceId: queryRunnerContext.authContext.workspace.id,
+            sourceType,
+            sourceRecordIds: authorizedIds,
+            nextCreatorIds: this.creatorIdsFromUpdateData(args.data),
+            manager,
+            verify: async () => {
+              const repository = manager.getRepository(
+                objectName,
+                queryRunnerContext.rolePermissionConfig,
+                queryRunnerContext.authContext,
+              );
+              const transactionQueryBuilder = buildMutationQueryBuilder({
+                repository,
+                alias: objectName,
+                filter: args.filter,
+                commonQueryParser: queryRunnerContext.commonQueryParser,
+              });
+              this.assertTargetIdsUnchanged(
+                authorizedIds,
+                await this.readSortedTargetIds(
+                  transactionQueryBuilder,
+                  objectName,
+                ),
+                'Inbox source records changed before transaction reconciliation',
+              );
+            },
+            mutate: async () => {
+              const repository = manager.getRepository(
+                objectName,
+                queryRunnerContext.rolePermissionConfig,
+                queryRunnerContext.authContext,
+              );
+              const transactionQueryBuilder = buildMutationQueryBuilder({
+                repository,
+                alias: objectName,
+                filter: args.filter,
+                commonQueryParser: queryRunnerContext.commonQueryParser,
+              });
+              const result = await transactionQueryBuilder
+                .update()
+                .set(args.data)
+                .returning(columnsToReturn)
+                .execute();
+
+              return result.generatedMaps as ObjectRecord[];
+            },
+          },
+        ),
+    );
+  }
+
+  private creatorIdsFromUpdateData(data: Record<string, unknown>): string[] {
+    const creatorId = data.creatorId;
+    if (typeof creatorId === 'string') return [creatorId];
+
+    const creator = data.creator;
+    if (typeof creator === 'string') return [creator];
+    if (
+      creator !== null &&
+      typeof creator === 'object' &&
+      'id' in creator &&
+      typeof creator.id === 'string'
+    ) {
+      return [creator.id];
+    }
+
+    return [];
+  }
+
+  private async readSortedTargetIds(
+    queryBuilder: ReturnType<typeof buildMutationQueryBuilder>,
+    alias: string,
+  ): Promise<string[]> {
+    const rows = (await queryBuilder
+      .clone()
+      .select(`${alias}.id`, 'id')
+      .getRawMany()) as Array<{ id?: string; [key: string]: unknown }>;
+
+    return rows
+      .map((row) => row.id ?? row[`${alias}_id`])
+      .filter((id): id is string => typeof id === 'string')
+      .sort();
+  }
+
+  private assertTargetIdsUnchanged(
+    authorizedIds: string[],
+    currentIds: string[],
+    message: string,
+  ): void {
+    if (
+      currentIds.length !== authorizedIds.length ||
+      currentIds.some((id, index) => id !== authorizedIds[index])
+    ) {
+      throw new CommonQueryRunnerException(
+        message,
+        CommonQueryRunnerExceptionCode.RECORD_NOT_FOUND,
+        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+      );
+    }
   }
 
   async computeArgs(

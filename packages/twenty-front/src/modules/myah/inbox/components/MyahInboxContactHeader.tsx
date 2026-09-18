@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { MyahInboxContactTriageActions } from '@/myah/inbox/components/MyahInboxContactTriageActions';
 import {
   type MyahInboxChannel,
   type MyahInboxContact,
@@ -50,12 +51,14 @@ export type MyahInboxContactHeaderProps = {
   contact: MyahInboxContact;
   channel: MyahInboxChannel;
   actions?: ReactNode;
+  onTriageUpdated?: () => void | Promise<void>;
 };
 
 export const MyahInboxContactHeader = ({
   contact,
   channel,
   actions,
+  onTriageUpdated = () => undefined,
 }: MyahInboxContactHeaderProps) => {
   return (
     <StyledHeader aria-label="Contact conversation header">
@@ -65,7 +68,15 @@ export const MyahInboxContactHeader = ({
           {channel === 'EMAIL' ? 'Email' : 'Instagram'}
         </StyledChannel>
       </StyledIdentity>
-      <StyledActions>{actions}</StyledActions>
+      <StyledActions>
+        <MyahInboxContactTriageActions
+          key={contact.id}
+          contact={contact}
+          channel={channel}
+          onUpdated={onTriageUpdated}
+        />
+        {actions}
+      </StyledActions>
     </StyledHeader>
   );
 };

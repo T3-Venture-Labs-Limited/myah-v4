@@ -158,6 +158,7 @@ describe('Unipile Instagram sync state entities', () => {
       'messageCursor',
       'overlapAfter',
       'status',
+      'triageMode',
       'updatedAt',
     ]);
     expectRequiredColumns(UnipileInstagramSyncRunEntity, [
