@@ -5,6 +5,8 @@ import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { MYAH_INBOX_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-tool-service.token';
 import { MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-reply-execution-service.token';
 import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-provider.module';
+import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
+import { MyahInboxTriageCapabilityService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
 import { MyahInboxContactResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-contact.resolver';
 import { MyahInboxInstagramMessageResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-instagram-message.resolver';
 import { MyahInboxResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox.resolver';
@@ -34,6 +36,7 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
     AiBillingModule,
     AiModelsModule,
     BillingModule,
+    MyahInboxContactTriageModule,
     PermissionsModule,
     forwardRef(() => AiAgentExecutionModule),
     MessagingQueryHookModule,
@@ -44,6 +47,7 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
     MyahInboxContactEmailQueryService,
     MyahInboxContactLinkService,
     MyahInboxContactQueryService,
+    MyahInboxTriageCapabilityService,
     MyahInboxInstagramMessageQueryService,
     MyahInboxMutationService,
     MyahInboxQueryService,

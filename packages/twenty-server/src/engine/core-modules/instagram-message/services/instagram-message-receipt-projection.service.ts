@@ -115,6 +115,8 @@ export class InstagramMessageReceiptProjectionService {
       chat,
       conversationRecordId,
       message,
+      triageMode: 'LIVE',
+      sourceGenerationId: `action-receipt:${input.receiptId}`,
     });
     await this.draftService.markSent({
       workspaceId: input.workspaceId,

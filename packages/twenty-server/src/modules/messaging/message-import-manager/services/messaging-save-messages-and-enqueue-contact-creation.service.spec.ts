@@ -12,6 +12,8 @@ import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queu
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
+import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
+import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { CreateCompanyAndContactJob } from 'src/modules/contact-creation-manager/jobs/create-company-and-contact.job';
@@ -31,13 +33,15 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
   let campaignReplyEvidencePort: {
     reconcileInboundMessageInTransaction: jest.Mock;
   };
+  let triageService: MyahInboxContactTriageService;
+  let receiptService: MyahInboxContactTriageReceiptService;
 
   let datasourceInstance: { transaction: jest.Mock };
   let transactionManager: Record<string, never>;
   let commitTransaction: jest.Mock;
   let rollbackTransaction: jest.Mock;
 
-  const workspaceId = 'workspace-id';
+  const workspaceId = '00000000-0000-4000-8000-000000000001';
 
   const mockConnectedAccount: ConnectedAccountEntity = {
     id: 'connected-account-id',
@@ -167,6 +171,26 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
                 ['message-1', 'db-thread-id-1'],
                 ['message-2', 'db-thread-id-1'],
               ]),
+              messageExternalIdToPersistenceInfoMap: new Map([
+                [
+                  'message-1',
+                  {
+                    createdAt: '2026-09-15T10:00:00.000Z',
+                    direction: MessageDirection.OUTGOING,
+                    wasInserted: true,
+                    messageThreadId: 'db-thread-id-1',
+                  },
+                ],
+                [
+                  'message-2',
+                  {
+                    createdAt: '2026-09-15T10:00:01.000Z',
+                    direction: MessageDirection.INCOMING,
+                    wasInserted: true,
+                    messageThreadId: 'db-thread-id-1',
+                  },
+                ],
+              ]),
               createdMessages: [
                 { id: 'db-message-id-1' },
                 { id: 'db-message-id-2' },
@@ -190,6 +214,27 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
             saveMessageFolderAssociations: jest
               .fn()
               .mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: MyahInboxContactTriageService,
+          useValue: {
+            lockIdentityKeysInTransaction: jest
+              .fn()
+              .mockResolvedValue(undefined),
+            ensureSourceContactInTransaction: jest
+              .fn()
+              .mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: MyahInboxContactTriageReceiptService,
+          useValue: {
+            isTriageSchemaProvisioned: jest.fn().mockResolvedValue(true),
+            lockMigrationMarkerForSourcePersistenceInTransaction: jest
+              .fn()
+              .mockResolvedValue(true),
+            recordInTransaction: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -218,6 +263,8 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     messageParticipantService = module.get<MessagingMessageParticipantService>(
       MessagingMessageParticipantService,
     );
+    triageService = module.get(MyahInboxContactTriageService);
+    receiptService = module.get(MyahInboxContactTriageReceiptService);
   });
 
   it('should save messages and enqueue contact creation', async () => {
@@ -271,6 +318,10 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     ).resolves.toEqual({
       messageExternalIdsAndIdsMap: expect.any(Map),
       messageExternalIdToMessageThreadIdMap: expect.any(Map),
+      // Contact-wide triage adds durable persistence info and the contact
+      // creation candidates to this result contract.
+      messageExternalIdToPersistenceInfoMap: expect.any(Map),
+      contactsToCreate: expect.any(Array),
     });
     expect(reconciliationAwaited).toBe(true);
     expect(
@@ -307,6 +358,298 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     expect(rollbackTransaction).toHaveBeenCalledTimes(1);
     expect(commitTransaction).not.toHaveBeenCalled();
     expect(messageQueueService.add).not.toHaveBeenCalled();
+  });
+
+  it('takes the migration marker before source persistence', async () => {
+    const transactionManager = {
+      internalContext: { workspaceId },
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[0]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'sent-email:message-1' },
+      transactionManager,
+    );
+
+    expect(
+      receiptService.lockMigrationMarkerForSourcePersistenceInTransaction,
+    ).toHaveBeenCalledWith(transactionManager);
+    expect(
+      (
+        receiptService.lockMigrationMarkerForSourcePersistenceInTransaction as jest.Mock
+      ).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      (messageService.saveMessagesWithinTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
+  });
+
+  it('requests source locking inside message persistence before receipt recording', async () => {
+    const transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[0]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'sent-email:message-1' },
+      transactionManager,
+    );
+
+    expect(messageService.saveMessagesWithinTransaction).toHaveBeenCalledWith(
+      [mockMessages[0]],
+      mockMessageChannel.id,
+      transactionManager,
+      workspaceId,
+      true,
+    );
+    expect(
+      (messageService.saveMessagesWithinTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      (receiptService.recordInTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
+  });
+
+  it('persists messages without triage when the private triage schema is absent', async () => {
+    (
+      receiptService.lockMigrationMarkerForSourcePersistenceInTransaction as jest.Mock
+    ).mockResolvedValueOnce(false);
+    const transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[0]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'generation' },
+      transactionManager,
+    );
+
+    // The batch still persists: without the private relations a triage write
+    // would abort the whole import transaction.
+    expect(messageService.saveMessagesWithinTransaction).toHaveBeenCalledWith(
+      [mockMessages[0]],
+      mockMessageChannel.id,
+      transactionManager,
+      workspaceId,
+    );
+    expect(receiptService.recordInTransaction).not.toHaveBeenCalled();
+    expect(
+      triageService.ensureSourceContactInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('records first-persistence receipts after the source-locked save returns', async () => {
+    (
+      messageService.saveMessagesWithinTransaction as jest.Mock
+    ).mockResolvedValueOnce({
+      messageExternalIdsAndIdsMap: new Map([
+        ['message-1', 'db-message-id-1'],
+        ['message-2', 'db-message-id-2'],
+      ]),
+      messageExternalIdToMessageChannelMessageAssociationIdMap: new Map(),
+      messageExternalIdToMessageThreadIdMap: new Map([
+        ['message-1', 'db-thread-id-1'],
+        ['message-2', 'db-thread-id-1'],
+      ]),
+      messageExternalIdToPersistenceInfoMap: new Map([
+        [
+          'message-1',
+          {
+            createdAt: '2026-09-15T10:00:00.000Z',
+            direction: 'UNKNOWN',
+            wasInserted: false,
+            messageThreadId: 'db-thread-id-1',
+          },
+        ],
+        [
+          'message-2',
+          {
+            createdAt: '2026-09-15T10:00:01.000Z',
+            direction: MessageDirection.INCOMING,
+            wasInserted: true,
+            messageThreadId: 'db-thread-id-1',
+          },
+        ],
+      ]),
+      createdMessages: [],
+    });
+    const transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      mockMessages,
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'generation' },
+      transactionManager,
+    );
+
+    expect(receiptService.recordInTransaction).toHaveBeenCalledTimes(1);
+    expect(
+      (messageService.saveMessagesWithinTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      (receiptService.recordInTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
+  });
+
+  it('initializes a tuple and records a first outbound receipt in the sent source transaction', async () => {
+    const transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[0]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'sent-email:message-1' },
+      transactionManager,
+    );
+
+    expect(triageService.lockIdentityKeysInTransaction).toHaveBeenCalledWith({
+      identityKeys: ['email-thread:db-thread-id-1'],
+      manager: transactionManager,
+    });
+    expect(triageService.ensureSourceContactInTransaction).toHaveBeenCalledWith(
+      {
+        workspaceId,
+        sourceType: 'EMAIL_THREAD',
+        sourceRecordId: 'db-thread-id-1',
+        initialDirection: 'OUTBOUND',
+        manager: transactionManager,
+      },
+    );
+    expect(receiptService.recordInTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: 'EMAIL',
+        direction: 'OUTBOUND',
+        firstPersistence: true,
+        mode: 'LIVE',
+        persistedMessageId: 'db-message-id-1',
+        sourceGenerationId: 'sent-email:message-1',
+        sourceRecordId: 'db-thread-id-1',
+      }),
+      transactionManager,
+    );
+    expect(
+      (receiptService.recordInTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      (triageService.lockIdentityKeysInTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      (triageService.lockIdentityKeysInTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      (triageService.ensureSourceContactInTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
+  });
+
+  it('records replayed Email evidence for provenance without marking it as first persistence', async () => {
+    (
+      messageService.saveMessagesWithinTransaction as jest.Mock
+    ).mockResolvedValueOnce({
+      messageExternalIdsAndIdsMap: new Map([['message-1', 'db-message-id-1']]),
+      messageExternalIdToMessageChannelMessageAssociationIdMap: new Map(),
+      messageExternalIdToMessageThreadIdMap: new Map([
+        ['message-1', 'db-thread-id-1'],
+      ]),
+      messageExternalIdToPersistenceInfoMap: new Map([
+        [
+          'message-1',
+          {
+            createdAt: '2026-09-15T10:00:00.000Z',
+            direction: MessageDirection.OUTGOING,
+            wasInserted: false,
+            messageThreadId: 'db-thread-id-1',
+          },
+        ],
+      ]),
+      createdMessages: [],
+    });
+    const transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[0]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'sent-email:message-1' },
+      transactionManager,
+    );
+
+    expect(receiptService.recordInTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persistedMessageId: 'db-message-id-1',
+        firstPersistence: false,
+      }),
+      transactionManager,
+    );
+    expect(
+      (messageService.saveMessagesWithinTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      (receiptService.recordInTransaction as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
+  });
+
+  it('initializes a source contact without recording unknown-direction evidence', async () => {
+    (
+      messageService.saveMessagesWithinTransaction as jest.Mock
+    ).mockResolvedValueOnce({
+      messageExternalIdsAndIdsMap: new Map([['message-1', 'db-message-id-1']]),
+      messageExternalIdToMessageChannelMessageAssociationIdMap: new Map(),
+      messageExternalIdToMessageThreadIdMap: new Map([
+        ['message-1', 'db-thread-id-1'],
+      ]),
+      messageExternalIdToPersistenceInfoMap: new Map([
+        [
+          'message-1',
+          {
+            createdAt: '2026-09-15T10:00:00.000Z',
+            direction: 'UNKNOWN',
+            wasInserted: false,
+            messageThreadId: 'db-thread-id-1',
+          },
+        ],
+      ]),
+      createdMessages: [],
+    });
+    const transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[0]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'sent-email:message-1' },
+      transactionManager,
+    );
+
+    expect(triageService.ensureSourceContactInTransaction).toHaveBeenCalled();
+    expect(receiptService.recordInTransaction).not.toHaveBeenCalled();
   });
 
   it('should not enqueue contact creation when it is disabled', async () => {

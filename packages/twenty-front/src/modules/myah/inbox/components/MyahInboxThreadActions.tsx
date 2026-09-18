@@ -1,34 +1,21 @@
 import { useStore } from 'jotai';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useOpenMyahInboxContextInSidePanel } from '@/myah/inbox/hooks/useOpenMyahInboxContextInSidePanel';
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 
-import { FormDateTimeFieldInput } from '@/object-record/record-field/ui/form-types/components/FormDateTimeFieldInput';
 import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
 import { FormSingleRecordPicker } from '@/object-record/record-field/ui/form-types/components/FormSingleRecordPicker';
-import { Select } from '@/ui/input/components/Select';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { styled } from '@linaria/react';
-import {
-  IconClock,
-  IconInfoCircle,
-  IconStatusChange,
-  IconTarget,
-  IconUser,
-  IconUserCircle,
-} from 'twenty-ui/icon';
+import { IconTarget, IconUser } from 'twenty-ui/icon';
 import { IconButton } from 'twenty-ui/input';
 import { AppTooltip, TooltipDelay, TooltipPosition } from 'twenty-ui/surfaces';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
-import {
-  MyahInboxState,
-  type UpdateMyahInboxThreadInput,
-} from '~/generated/graphql';
+import { type UpdateMyahInboxThreadInput } from '~/generated/graphql';
 import { useRef } from 'react';
 import { v4 } from 'uuid';
 
@@ -46,12 +33,6 @@ const StyledStatus = styled.div`
 const StyledDropdownForm = styled.div`
   padding: ${themeCssVariables.spacing[3]};
 `;
-
-const INBOX_STATE_OPTIONS = [
-  { label: 'Needs reply', value: 'NEEDS_REPLY' },
-  { label: 'Waiting on creator', value: 'WAITING_ON_CREATOR' },
-  { label: 'Closed', value: 'CLOSED' },
-];
 
 export type MyahInboxThreadActionsProps = {
   thread: MyahInboxThread;
@@ -71,18 +52,12 @@ export const MyahInboxThreadActions = ({
   targetRef.current = { workspaceId, threadId: thread.id };
   const { objectMetadataItems } = useObjectMetadataItems();
   const { updateThread } = useMyahInboxThreadMutations();
-  const { openMyahInboxContextInSidePanel } =
-    useOpenMyahInboxContextInSidePanel();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
 
   const creatorPickerTriggerRef = useRef<HTMLDivElement>(null);
   const campaignPickerTriggerRef = useRef<HTMLDivElement>(null);
 
-  const areRecordPickersReady = [
-    'creator',
-    'campaign',
-    'workspaceMember',
-  ].every((nameSingular) =>
+  const areRecordPickersReady = ['creator', 'campaign'].every((nameSingular) =>
     objectMetadataItems.some((item) => item.nameSingular === nameSingular),
   );
 
@@ -103,30 +78,6 @@ export const MyahInboxThreadActions = ({
       if (isCurrent())
         onUpdateFailed?.('Could not update the conversation. Try again.');
     }
-  };
-
-  const handleSnoozeChange = (snoozedUntil: string | null) => {
-    const snoozedAt = snoozedUntil ? Date.parse(snoozedUntil) : null;
-
-    if (
-      snoozedAt !== null &&
-      (!Number.isFinite(snoozedAt) || snoozedAt <= Date.now())
-    ) {
-      onUpdateFailed?.('Choose a future snooze time.');
-
-      return;
-    }
-
-    void update(
-      {
-        threadId: thread.id,
-        inboxState: snoozedUntil
-          ? MyahInboxState.SNOOZED
-          : MyahInboxState.NEEDS_REPLY,
-        snoozedUntil,
-      },
-      'Snooze updated',
-    );
   };
 
   if (!areRecordPickersReady) {
@@ -233,110 +184,6 @@ export const MyahInboxThreadActions = ({
         }
         dropdownPlacement="bottom-end"
       />
-      <IconButton
-        Icon={IconInfoCircle}
-        ariaLabel="Conversation details"
-        dataTestId="myah-inbox-thread-details-action"
-        size="small"
-        variant="tertiary"
-        onClick={() => openMyahInboxContextInSidePanel()}
-      />
-      <AppTooltip
-        anchorSelect="[data-testid='myah-inbox-thread-details-action']"
-        content="Open Inbox context"
-        delay={TooltipDelay.shortDelay}
-        place={TooltipPosition.Top}
-      />
-      <Dropdown
-        dropdownId={`myah-inbox-owner-${thread.id}`}
-        clickableComponent={
-          <IconButton
-            Icon={IconUserCircle}
-            ariaLabel="Owner"
-            dataTestId="myah-inbox-thread-owner-action"
-            size="small"
-            variant="tertiary"
-          />
-        }
-        dropdownComponents={
-          <DropdownContent>
-            <StyledDropdownForm>
-              <FormSingleRecordPicker
-                label="Owner"
-                objectNameSingulars={['workspaceMember']}
-                defaultValue={thread.inboxOwner?.id ?? null}
-                onChange={(inboxOwnerId) =>
-                  void update(
-                    { threadId: thread.id, inboxOwnerId },
-                    'Owner updated',
-                  )
-                }
-              />
-            </StyledDropdownForm>
-          </DropdownContent>
-        }
-        dropdownPlacement="bottom-end"
-      />
-      <Dropdown
-        dropdownId={`myah-inbox-state-${thread.id}`}
-        clickableComponent={
-          <IconButton
-            Icon={IconStatusChange}
-            ariaLabel="State"
-            dataTestId="myah-inbox-thread-state-action"
-            size="small"
-            variant="tertiary"
-          />
-        }
-        dropdownComponents={
-          <DropdownContent>
-            <StyledDropdownForm>
-              <Select
-                dropdownId={`myah-inbox-state-select-${thread.id}`}
-                label="State"
-                fullWidth
-                value={thread.state}
-                options={INBOX_STATE_OPTIONS}
-                onChange={(inboxState) =>
-                  void update(
-                    {
-                      threadId: thread.id,
-                      inboxState:
-                        inboxState as UpdateMyahInboxThreadInput['inboxState'],
-                    },
-                    'State updated',
-                  )
-                }
-              />
-            </StyledDropdownForm>
-          </DropdownContent>
-        }
-        dropdownPlacement="bottom-end"
-      />
-      <Dropdown
-        dropdownId={`myah-inbox-snooze-${thread.id}`}
-        clickableComponent={
-          <IconButton
-            Icon={IconClock}
-            ariaLabel="Snooze"
-            dataTestId="myah-inbox-thread-snooze-action"
-            size="small"
-            variant="tertiary"
-          />
-        }
-        dropdownComponents={
-          <DropdownContent>
-            <StyledDropdownForm>
-              <FormDateTimeFieldInput
-                label="Snooze"
-                defaultValue={thread.snoozedUntil ?? undefined}
-                onChange={handleSnoozeChange}
-              />
-            </StyledDropdownForm>
-          </DropdownContent>
-        }
-        dropdownPlacement="bottom-end"
-      />
       <AppTooltip
         anchorSelect="[data-testid='myah-inbox-thread-creator-action']"
         content="Change creator"
@@ -346,24 +193,6 @@ export const MyahInboxThreadActions = ({
       <AppTooltip
         anchorSelect="[data-testid='myah-inbox-thread-campaign-action']"
         content="Change campaign"
-        delay={TooltipDelay.shortDelay}
-        place={TooltipPosition.Top}
-      />
-      <AppTooltip
-        anchorSelect="[data-testid='myah-inbox-thread-owner-action']"
-        content="Change owner"
-        delay={TooltipDelay.shortDelay}
-        place={TooltipPosition.Top}
-      />
-      <AppTooltip
-        anchorSelect="[data-testid='myah-inbox-thread-state-action']"
-        content="Change state"
-        delay={TooltipDelay.shortDelay}
-        place={TooltipPosition.Top}
-      />
-      <AppTooltip
-        anchorSelect="[data-testid='myah-inbox-thread-snooze-action']"
-        content="Set snooze"
         delay={TooltipDelay.shortDelay}
         place={TooltipPosition.Top}
       />

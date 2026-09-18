@@ -22,11 +22,7 @@ import {
   MYAH_INBOX_MAX_PAGE_SIZE,
 } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 import { type MyahInboxThreadConnection } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-connection.dto';
-import {
-  MyahInboxSnoozeStatus,
-  MyahInboxState,
-  type MyahInboxThreadsInput,
-} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
+import { type MyahInboxThreadsInput } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 import { type MyahInboxThreadSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
 import {
   PermissionsException,
@@ -172,21 +168,6 @@ export class MyahInboxQueryService {
           }
         }
 
-        if (
-          input.owner &&
-          input.owner !== 'ME' &&
-          input.owner !== 'UNASSIGNED'
-        ) {
-          const owner = await workspaceMemberRepository.findOne({
-            where: { id: input.owner },
-            select: { id: true },
-          });
-
-          if (!owner) {
-            throw new ForbiddenException('Inbox owner is not readable');
-          }
-        }
-
         const workspaceSchemaName = getWorkspaceSchemaName(input.workspace.id);
         const candidateVisibility =
           this.messageVisibilityPolicyService.buildSqlVisibilityProjection({
@@ -250,11 +231,8 @@ export class MyahInboxQueryService {
             LIMIT 1)`,
             'lastMessageSender',
           )
-          .addSelect('message_thread."inboxState"', 'state')
-          .addSelect('message_thread."snoozedUntil"', 'snoozedUntil')
           .addSelect('message_thread."creatorId"', 'creatorId')
           .addSelect('message_thread."myahCampaignId"', 'campaignId')
-          .addSelect('message_thread."inboxOwnerId"', 'inboxOwnerId')
           .innerJoin(
             'message_thread.messages',
             'latest_message',
@@ -278,45 +256,11 @@ export class MyahInboxQueryService {
           });
         }
 
-        if (input.owner === 'ME') {
-          queryBuilder.andWhere(
-            'message_thread."inboxOwnerId" = :inboxOwnerId',
-            { inboxOwnerId: input.workspaceMemberId },
-          );
-        } else if (input.owner === 'UNASSIGNED') {
-          queryBuilder.andWhere('message_thread."inboxOwnerId" IS NULL');
-        } else if (input.owner) {
-          queryBuilder.andWhere(
-            'message_thread."inboxOwnerId" = :inboxOwnerId',
-            { inboxOwnerId: input.owner },
-          );
-        }
-
         if (input.campaignId) {
           queryBuilder.andWhere(
             'message_thread."myahCampaignId" = :campaignId',
             { campaignId: input.campaignId },
           );
-        }
-
-        if (input.states?.length) {
-          queryBuilder.andWhere('message_thread."inboxState" IN (:...states)', {
-            states: input.states,
-          });
-        }
-
-        if (input.snoozeStatus === MyahInboxSnoozeStatus.ACTIVE) {
-          queryBuilder
-            .andWhere('message_thread."inboxState" = :snoozedState', {
-              snoozedState: MyahInboxState.SNOOZED,
-            })
-            .andWhere('message_thread."snoozedUntil" > CURRENT_TIMESTAMP');
-        } else if (input.snoozeStatus === MyahInboxSnoozeStatus.DUE) {
-          queryBuilder
-            .andWhere('message_thread."inboxState" = :snoozedState', {
-              snoozedState: MyahInboxState.SNOOZED,
-            })
-            .andWhere('message_thread."snoozedUntil" <= CURRENT_TIMESTAMP');
         }
 
         const search = input.search?.trim();
@@ -398,7 +342,6 @@ export class MyahInboxQueryService {
           rows: pageRows,
           creatorRepository,
           campaignRepository,
-          workspaceMemberRepository,
         });
         const edges = pageRows.map((thread) =>
           toMyahInboxThreadEdge(thread, contextRecords),
@@ -518,13 +461,7 @@ export class MyahInboxQueryService {
       isDefined(input.threadId) && !isValidUuid(input.threadId);
     const hasInvalidCampaignId =
       isDefined(input.campaignId) && !isValidUuid(input.campaignId);
-    const hasInvalidOwnerId =
-      isDefined(input.owner) &&
-      input.owner !== 'ME' &&
-      input.owner !== 'UNASSIGNED' &&
-      !isValidUuid(input.owner);
-
-    if (hasInvalidThreadId || hasInvalidCampaignId || hasInvalidOwnerId) {
+    if (hasInvalidThreadId || hasInvalidCampaignId) {
       throw new BadRequestException('Invalid Myah inbox relation filter');
     }
   }

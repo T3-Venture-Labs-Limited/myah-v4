@@ -1,14 +1,6 @@
 import { ArgsType, Field, Int, registerEnumType } from '@nestjs/graphql';
 
-import {
-  IsArray,
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Min,
-} from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 
 export enum MyahInboxState {
@@ -52,23 +44,7 @@ export class MyahInboxThreadsInput {
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
-  owner?: string;
-
-  @Field(() => String, { nullable: true })
-  @IsOptional()
-  @IsString()
   campaignId?: string;
-
-  @Field(() => [MyahInboxState], { nullable: true })
-  @IsOptional()
-  @IsArray()
-  @IsEnum(MyahInboxState, { each: true })
-  states?: MyahInboxState[];
-
-  @Field(() => MyahInboxSnoozeStatus, { nullable: true })
-  @IsOptional()
-  @IsEnum(MyahInboxSnoozeStatus)
-  snoozeStatus?: MyahInboxSnoozeStatus;
 
   @Field(() => String, { nullable: true })
   @IsOptional()

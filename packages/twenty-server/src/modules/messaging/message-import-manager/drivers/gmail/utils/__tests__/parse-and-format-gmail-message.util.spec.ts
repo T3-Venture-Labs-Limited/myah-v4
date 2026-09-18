@@ -25,6 +25,38 @@ const buildMessage = (
 });
 
 describe('parseAndFormatGmailMessage', () => {
+  it('normalizes Gmail internalDate epoch evidence to strict UTC ISO text', () => {
+    const result = parseAndFormatGmailMessage(
+      buildMessage(
+        [
+          { name: 'From', value: 'sender@example.com' },
+          { name: 'To', value: 'me@example.com' },
+          { name: 'Message-ID', value: '<abc@example.com>' },
+        ],
+        { internalDate: '1700000000000' },
+      ),
+      connectedAccount,
+    );
+
+    expect(result?.providerOccurredAt).toBe('2023-11-14T22:13:20.000Z');
+  });
+
+  it('fails closed when Gmail internalDate is not a valid epoch millisecond value', () => {
+    const result = parseAndFormatGmailMessage(
+      buildMessage(
+        [
+          { name: 'From', value: 'sender@example.com' },
+          { name: 'To', value: 'me@example.com' },
+          { name: 'Message-ID', value: '<abc@example.com>' },
+        ],
+        { internalDate: '8640000000000001' },
+      ),
+      connectedAccount,
+    );
+
+    expect(result?.providerOccurredAt).toBeNull();
+  });
+
   it('should emit one participant per recipient in a multi-address `To` header', () => {
     // Regression: prior implementation kept only the first parsed address.
     const result = parseAndFormatGmailMessage(
