@@ -134,6 +134,7 @@ type MessageFixture = {
   deletedAssociation?: boolean;
   senderHandle?: string;
   senderDisplayName?: string;
+  direction?: MessageDirection;
 };
 
 const messageFixtures: MessageFixture[] = [
@@ -275,6 +276,22 @@ const messageFixtures: MessageFixture[] = [
     text: markers.draftHiddenBody,
     receivedAt: '2026-07-24T08:00:00.000Z',
     deletedAssociation: true,
+  },
+  {
+    // The only outgoing message on the draft thread: gives the Creator +
+    // Campaign combination real delivered-correspondence evidence, so a
+    // Campaign-context draft save on this thread is eligible.
+    id: '21270000-2015-4000-8000-000000000015',
+    participantId: '21270000-3015-4000-8000-000000000015',
+    associationId: '21270000-4015-4000-8000-000000000015',
+    threadId: threadIds.draft,
+    channelId: channelIds.shared,
+    externalId: 'task7-draft-outbound-evidence',
+    threadExternalId: 'task7-draft-thread',
+    subject: `${markers.draftSubject} outbound evidence`,
+    text: 'Task 7 confirmed outbound campaign reply',
+    receivedAt: '2026-07-24T09:30:00.000Z',
+    direction: MessageDirection.OUTGOING,
   },
   {
     id: '21270000-2009-4000-8000-000000000009',
@@ -580,7 +597,7 @@ const seedNativeRecords = async (operatorAccessToken: string) => {
           messageId: message.id,
           messageExternalId: message.externalId,
           messageThreadExternalId: message.threadExternalId,
-          direction: MessageDirection.INCOMING,
+          direction: message.direction ?? MessageDirection.INCOMING,
         },
         token: operatorAccessToken,
       });
