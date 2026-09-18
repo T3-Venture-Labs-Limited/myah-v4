@@ -428,30 +428,35 @@ describe('OutboundEmailDispatchService', () => {
   });
 
   it.each([
-    ['kind mismatch', (input: any) => (input.kind = 'DIRECT_FINAL')],
+    ['kind mismatch', (input: any) => (input.kind = 'DIRECT_FINAL'), true],
     [
       'noncanonical attempt',
       (input: any) => (input.submission.attemptId = 'BAD'),
+      false,
     ],
     [
       'account mismatch',
       (input: any) => (input.material.connectedAccount.id = ids.channel),
+      true,
     ],
     [
       'provider mismatch',
       (input: any) =>
         (input.material.connectedAccount.provider =
           ConnectedAccountProvider.MICROSOFT),
+      true,
     ],
     [
       'sender mismatch',
       (input: any) =>
         (input.material.connectedAccount.handle = 'other@example.com'),
+      true,
     ],
     [
       'recipient mismatch',
       (input: any) =>
         (input.material.sendMessageInput.to = 'other@example.com'),
+      true,
     ],
     [
       'multiple recipients',
@@ -460,28 +465,33 @@ describe('OutboundEmailDispatchService', () => {
           'recipient@example.com',
           'other@example.com',
         ]),
+      true,
     ],
     [
       'additional cc recipient',
       (input: any) =>
         (input.material.sendMessageInput.cc = 'other@example.com'),
+      true,
     ],
     [
       'additional bcc recipient',
       (input: any) =>
         (input.material.sendMessageInput.bcc = 'other@example.com'),
+      true,
     ],
     [
       'bad digest',
       (input: any) => (input.submission.finalEvidenceDigest = 'bad'),
+      false,
     ],
     [
       'bad projected id',
       (input: any) => (input.material.projectedMessageId = '<rfc@example.com>'),
+      true,
     ],
   ])(
-    'rejects malformed trusted input before SQL/provider: %s',
-    async (_case, mutate) => {
+    'rejects malformed trusted input before provider: %s',
+    async (_case, mutate, durablyBlocked) => {
       const harness = createHarness();
       const input = dispatchInput() as any;
       mutate(input);
@@ -489,7 +499,52 @@ describe('OutboundEmailDispatchService', () => {
       await expect(harness.service.dispatch(input)).resolves.toEqual({
         status: 'CONTRACT_CONFLICT',
       });
-      expect(harness.transactionPort.runInTransaction).not.toHaveBeenCalled();
+      expect(harness.transactionPort.runInTransaction).toHaveBeenCalledTimes(
+        durablyBlocked ? 1 : 0,
+      );
+      expect(
+        harness.attemptService.blockReservedAttemptBeforeProvider,
+      ).toHaveBeenCalledTimes(durablyBlocked ? 1 : 0);
+      expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      'invalid value',
+      (input: any) => (input.material.sendMessageInput.subject = ''),
+    ],
+    [
+      'missing field',
+      (input: any) => delete input.material.sendMessageInput.subject,
+    ],
+    ['extra material', (input: any) => (input.material.rawBody = 'secret')],
+    [
+      'extra send field',
+      (input: any) => (input.material.sendMessageInput.accessToken = 'secret'),
+    ],
+  ])(
+    'durably blocks a valid reservation when pre-processing validation finds an %s',
+    async (_case, mutate) => {
+      const harness = createHarness();
+      const input = dispatchInput() as any;
+
+      mutate(input);
+
+      await expect(harness.service.dispatch(input)).resolves.toEqual({
+        status: 'CONTRACT_CONFLICT',
+      });
+      expect(
+        harness.attemptService.blockReservedAttemptBeforeProvider,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'DISPATCH_CONTRACT_CONFLICT' }),
+        expect.anything(),
+      );
+      expect(harness.events).toEqual([
+        'transaction:0:start',
+        'transaction:0:commit',
+      ]);
+      expect(harness.attemptService.beginSubmission).not.toHaveBeenCalled();
       expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
     },
   );
@@ -1135,11 +1190,6 @@ describe('OutboundEmailDispatchService', () => {
       (input: any) =>
         (input.submission.submissionCapability.reservationBinding.credential =
           'secret'),
-    ],
-    ['material raw body', (input: any) => (input.material.rawBody = 'secret')],
-    [
-      'send envelope secret',
-      (input: any) => (input.material.sendMessageInput.accessToken = 'secret'),
     ],
     [
       'submission symbol',

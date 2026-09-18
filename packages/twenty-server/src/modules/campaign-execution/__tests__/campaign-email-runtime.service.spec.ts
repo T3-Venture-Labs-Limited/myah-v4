@@ -211,7 +211,7 @@ describe('CampaignEmailRuntimeService', () => {
       expect(call).toHaveLength(2);
   });
 
-  it('loads the core mailbox through the active runner without a class repository', async () => {
+  it('reconstructs the persisted mailbox and crosses the processing fence before provider dispatch', async () => {
     const account = {
       id: ids.accountId,
       workspaceId: ids.workspaceId,
@@ -271,10 +271,14 @@ describe('CampaignEmailRuntimeService', () => {
       unknownAfter: new Date('2026-09-16T12:01:00.000Z'),
       updatedAt: new Date('2026-09-16T12:00:00.000Z'),
     };
-    const sendMessage = jest.fn(async () => ({
-      headerMessageId: '<header@example.com>',
-      messageExternalId: 'provider-123',
-    }));
+    const events: string[] = [];
+    const sendMessage = jest.fn(async () => {
+      events.push('sendMessage');
+      return {
+        headerMessageId: '<header@example.com>',
+        messageExternalId: 'provider-123',
+      };
+    });
     const dispatch = new OutboundEmailDispatchService(
       {
         runInTransaction: async (work) => work({} as never),
@@ -289,10 +293,13 @@ describe('CampaignEmailRuntimeService', () => {
       },
       { now: jest.fn(() => 10_000) },
       {
-        beginSubmission: jest.fn(async () => ({
-          receipt,
-          status: 'PROCESSING_ACQUIRED' as const,
-        })),
+        beginSubmission: jest.fn(async () => {
+          events.push('beginSubmission');
+          return {
+            receipt,
+            status: 'PROCESSING_ACQUIRED' as const,
+          };
+        }),
         blockReservedAttemptBeforeProvider: jest.fn(async () => ({
           receipt,
           status: 'RECORDED' as const,
@@ -333,6 +340,7 @@ describe('CampaignEmailRuntimeService', () => {
       [ids.accountId, ids.workspaceId],
     );
     expect(getRepository).not.toHaveBeenCalled();
+    expect(events).toEqual(['beginSubmission', 'sendMessage']);
     expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'recipient@example.com' }),
       expect.objectContaining({
