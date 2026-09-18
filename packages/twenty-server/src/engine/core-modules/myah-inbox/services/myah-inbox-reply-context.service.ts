@@ -206,6 +206,43 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
           }
 
           const identity = input.contactIdentity;
+
+          // A thread with no linked Creator can still hold a General
+          // (no-Campaign) draft, anchored to the thread itself rather than
+          // a Creator. Campaign eligibility cannot be evaluated without a
+          // Creator, so Campaign context stays unavailable for this anchor.
+          if (identity.kind === 'email-thread') {
+            if (
+              identity.recordId !== targetInput.threadId ||
+              input.replyContext.kind !== 'GENERAL'
+            ) {
+              return this.unavailable(input);
+            }
+
+            const target: ResolvedReplyTarget = {
+              channel: input.target.channel,
+              deliveryTargetId: targetInput.threadId,
+              contactAnchor: { kind: 'EMAIL_THREAD', id: targetInput.threadId },
+              creatorId: null,
+            };
+
+            return {
+              readable: true,
+              eligible: true,
+              target,
+              contextFingerprint: computeActionContentDigest(
+                JSON.stringify([
+                  target.channel,
+                  target.deliveryTargetId,
+                  target.contactAnchor.kind,
+                  target.contactAnchor.id,
+                  input.replyContext.kind,
+                ]),
+              ),
+              campaignName: null,
+              threadCampaign: { state: 'UNASSOCIATED' },
+            };
+          }
           const creator = thread.creatorId
             ? await creatorRepository.findOne({
                 where: { id: thread.creatorId, deletedAt: IsNull() },

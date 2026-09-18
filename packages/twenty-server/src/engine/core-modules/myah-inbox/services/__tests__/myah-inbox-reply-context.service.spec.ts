@@ -745,7 +745,7 @@ describe('Email reply context persisted evidence and fingerprint', () => {
     );
   });
 
-  it('rejects thread anchors before public read/save storage access and isolates Creator A from a relink to B without A permission', async () => {
+  it('isolates Creator A from a relink to B without A permission', async () => {
     const { resolver: evidence, repositories } = setup();
     const contexts = new MyahInboxReplyContextService(evidence);
     jest
@@ -820,11 +820,10 @@ describe('Email reply context persisted evidence and fingerprint', () => {
       ),
     ).resolves.toMatchObject({
       body: null,
-      executionState: 'CONTEXT_UNAVAILABLE',
+      executionState: 'READY',
     });
-    await expect(mutations.saveMyahInboxDraft(threadRequest)).rejects.toThrow();
-    expect(reader.read).not.toHaveBeenCalled();
-    expect(drafts.save).not.toHaveBeenCalled();
+    await mutations.saveMyahInboxDraft(threadRequest);
+    expect(rows.get(threadId)?.body.markdown).toBe('A private draft');
     const requestA = requestFor('creator', creatorId);
     await mutations.saveMyahInboxDraft(requestA);
     const creatorB = '20202020-f7c5-4e2f-a44a-240b2d3a9d09';
@@ -836,7 +835,7 @@ describe('Email reply context persisted evidence and fingerprint', () => {
     repositories.creator.findOne.mockImplementation(async ({ where }) =>
       where.id === creatorB ? { id: creatorB, name: 'B' } : null,
     );
-    for (const oldRequest of [threadRequest, requestA]) {
+    for (const oldRequest of [requestA]) {
       await expect(
         publicResolver.myahInboxReplyDraft(
           oldRequest,
@@ -849,6 +848,18 @@ describe('Email reply context persisted evidence and fingerprint', () => {
       });
       await expect(mutations.saveMyahInboxDraft(oldRequest)).rejects.toThrow();
     }
+    // The thread-anchored draft doesn't depend on the thread's linked
+    // Creator, so relinking the thread away from Creator A never touches it.
+    await expect(
+      publicResolver.myahInboxReplyDraft(
+        threadRequest,
+        readRequest.workspace as never,
+        readRequest.workspaceMemberId,
+      ),
+    ).resolves.toMatchObject({
+      body: { markdown: 'A private draft', blocknote: null },
+      executionState: 'READY',
+    });
     const requestB = requestFor('creator', creatorB);
     await expect(
       publicResolver.myahInboxReplyDraft(
