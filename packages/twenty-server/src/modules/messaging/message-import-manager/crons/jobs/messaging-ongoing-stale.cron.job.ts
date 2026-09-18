@@ -16,7 +16,7 @@ import {
   type MessagingOngoingStaleJobData,
 } from 'src/modules/messaging/message-import-manager/jobs/messaging-ongoing-stale.job';
 
-export const MESSAGING_ONGOING_STALE_CRON_PATTERN = '0 * * * *';
+export const MESSAGING_ONGOING_STALE_CRON_PATTERN = '*/5 * * * *';
 
 @Processor(MessageQueue.cronQueue)
 export class MessagingOngoingStaleCronJob {

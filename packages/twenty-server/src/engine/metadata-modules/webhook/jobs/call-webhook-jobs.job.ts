@@ -31,9 +31,7 @@ export class CallWebhookJobsJob {
   async handle(
     workspaceEventBatch: WorkspaceEventBatch<ObjectRecordEvent>,
   ): Promise<void> {
-    // If you change that function, double check it does not break Zapier
-    // trigger in packages/twenty-zapier/src/triggers/trigger_record.ts
-    // Also change the openApi schema for webhooks
+    // If you change this function, also change the openApi schema for webhooks
     // packages/twenty-server/src/engine/core-modules/open-api/utils/computeWebhooks.utils.ts
 
     const [nameSingular, operation] = workspaceEventBatch.name.split('.');

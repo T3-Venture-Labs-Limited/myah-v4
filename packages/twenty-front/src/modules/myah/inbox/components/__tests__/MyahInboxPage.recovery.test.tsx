@@ -18,14 +18,22 @@ import {
 } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { type ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
+import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
-import { myahInboxContactSelectionState } from '@/myah/inbox/states/myahInboxSelectionState';
+import {
+  EMPTY_MYAH_INBOX_CONTACT_SELECTION,
+  type MyahInboxContactSelection,
+  myahInboxContactSelectionState,
+  myahInboxPreserveSelectionOnUnmountState,
+} from '@/myah/inbox/states/myahInboxSelectionState';
 import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import { type MyahInboxDraftAutosaveEntry } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
+import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignAgentTabUniversalIdentifier';
+import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 
 const mockInstagramNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
@@ -78,14 +86,25 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     onDraftChange,
     actions,
     onRetry,
+    initialIsEditing,
+    onEditingChange,
+    onOpenAiGuidance,
+    guidanceUnavailableReason,
   }: {
     entry: MyahInboxDraftAutosaveEntry;
     disabled: boolean;
     onDraftChange: (body: { markdown: string; blocknote: null }) => void;
     actions: ReactNode;
     onRetry: () => void;
+    initialIsEditing?: boolean;
+    onEditingChange?: (isEditing: boolean) => void;
+    onOpenAiGuidance?: () => void;
+    guidanceUnavailableReason?: string;
   }) => (
-    <div>
+    <div
+      data-initial-is-editing={initialIsEditing}
+      data-testid="page-draft-editor"
+    >
       <input
         aria-label="Real shared draft"
         value={entry.localBody.markdown}
@@ -97,6 +116,17 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
       {entry.status === 'error' && (
         <button onClick={onRetry}>Retry draft save</button>
       )}
+      <button onClick={() => onEditingChange?.(true)}>
+        Mock start editing
+      </button>
+      <button
+        aria-label="Open AI guidance"
+        disabled={!onOpenAiGuidance}
+        onClick={onOpenAiGuidance}
+        title={guidanceUnavailableReason}
+      >
+        Open AI guidance
+      </button>
       {actions}
     </div>
   ),
@@ -298,9 +328,15 @@ let mockContacts: MyahInboxContact[] = contacts;
 let mockRealHistory = false;
 let mockContactRefreshStatus = 'idle';
 const threads = Object.fromEntries(
-  ['thread-1', 'thread-2', 'thread-3'].map((id) => [
+  ['thread-1', 'thread-2', 'thread-3', 'thread-4'].map((id) => [
     id,
-    { id, subject: id, state: 'NEEDS_REPLY' },
+    {
+      id,
+      subject: id,
+      state: 'NEEDS_REPLY',
+      campaign:
+        id === 'thread-3' ? { id: 'campaign-1', name: 'Campaign One' } : null,
+    },
   ]),
 );
 const refresh = jest.fn();
@@ -376,6 +412,43 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxSelectedEmailThread', () => ({
 
 const key = { workspaceId: 'workspace-1', threadId: 'thread-1' };
 const body = { markdown: 'server draft', blocknote: null };
+const setCampaignAgentMetadata = (store: ReturnType<typeof createStore>) => {
+  store.set(metadataStoreState.atomFamily('pageLayouts'), {
+    current: [
+      {
+        id: 'campaign-layout-1',
+        deletedAt: null,
+        universalIdentifier:
+          MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
+      },
+    ],
+    draft: [],
+    status: 'up-to-date',
+  });
+  store.set(metadataStoreState.atomFamily('pageLayoutTabs'), {
+    current: [
+      {
+        id: 'runtime-agent-tab-1',
+        isActive: true,
+        pageLayoutId: 'campaign-layout-1',
+        universalIdentifier: MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER,
+      },
+    ],
+    draft: [],
+    status: 'up-to-date',
+  });
+  store.set(metadataStoreState.atomFamily('pageLayoutWidgets'), {
+    current: [],
+    draft: [],
+    status: 'up-to-date',
+  });
+};
+const CampaignRoute = () => {
+  const navigate = useNavigate();
+
+  // oxlint-disable-next-line twenty/no-navigate-prefer-link
+  return <button onClick={() => navigate(-1)}>Back to Inbox</button>;
+};
 type Request = {
   name: string;
   variables: Record<string, unknown>;
@@ -404,11 +477,15 @@ const completeRead = async (
       myahInboxEmailDraft: { ...key, threadId, revision: 2, body: draftBody },
     }),
   );
-  await act(async () =>
-    take('MyahInboxReplySendReadiness').resolve({
-      myahInboxReplySendReadiness: { status: readinessStatus, reason: null },
-    }),
+  const readiness = requests.find(
+    ({ name }) => name === 'MyahInboxReplySendReadiness',
   );
+  if (readiness)
+    await act(async () =>
+      take('MyahInboxReplySendReadiness').resolve({
+        myahInboxReplySendReadiness: { status: readinessStatus, reason: null },
+      }),
+    );
 };
 const advance = async () => act(async () => jest.advanceTimersByTimeAsync(750));
 const select = async (id: string) =>
@@ -454,7 +531,18 @@ const InstagramComposerProbe = () => {
     </button>
   );
 };
-const setup = (includeComposer = false) => {
+const setup = (options?: {
+  includeComposer?: boolean;
+  withCampaignRoute?: boolean;
+  initialSelection?: MyahInboxContactSelection;
+  initialDraftBody?: { markdown: string; blocknote: null };
+}) => {
+  const {
+    includeComposer = false,
+    withCampaignRoute = false,
+    initialSelection,
+    initialDraftBody,
+  } = options ?? {};
   const store = createStore();
   store.set(currentWorkspaceState.atom, { id: key.workspaceId } as never);
   store.set(currentWorkspaceMemberState.atom, { id: 'member-1' } as never);
@@ -467,18 +555,66 @@ const setup = (includeComposer = false) => {
         draftId: 'composer-attempt',
       },
     );
+  if (initialSelection) {
+    store.set(myahInboxContactSelectionState.atom, initialSelection);
+    if (initialSelection.emailThreadId && initialDraftBody)
+      store.set(
+        myahInboxDraftAutosaveFamilyState.atomFamily({
+          workspaceId: key.workspaceId,
+          threadId: initialSelection.emailThreadId,
+        }),
+        {
+          operation: null,
+          editorOwner: null,
+          localBody: initialDraftBody,
+          confirmedBody: initialDraftBody,
+          confirmedRevision: 2,
+          dirty: false,
+          status: 'saved',
+          error: null,
+          conflict: null,
+          editorVersion: 0,
+          debounceVersion: 0,
+          pendingDebounceVersion: null,
+        },
+      );
+  }
+  if (withCampaignRoute) setCampaignAgentMetadata(store);
   const mount = () =>
     render(
       <MemoryRouter initialEntries={['/myah/inbox']}>
         <Provider store={store}>
-          <MyahInboxPage />
-          {includeComposer ? (
-            <SidePanelPageComponentInstanceContext.Provider
-              value={{ instanceId: 'composer' }}
-            >
-              <InstagramComposerProbe />
-            </SidePanelPageComponentInstanceContext.Provider>
-          ) : null}
+          {withCampaignRoute ? (
+            <Routes>
+              <Route
+                path="/myah/inbox"
+                element={
+                  <>
+                    <MyahInboxPage />
+                    {includeComposer ? (
+                      <SidePanelPageComponentInstanceContext.Provider
+                        value={{ instanceId: 'composer' }}
+                      >
+                        <InstagramComposerProbe />
+                      </SidePanelPageComponentInstanceContext.Provider>
+                    ) : null}
+                  </>
+                }
+              />
+              <Route path="*" element={<CampaignRoute />} />
+            </Routes>
+          ) : (
+            <>
+              <MyahInboxPage />
+              {includeComposer ? (
+                <SidePanelPageComponentInstanceContext.Provider
+                  value={{ instanceId: 'composer' }}
+                >
+                  <InstagramComposerProbe />
+                </SidePanelPageComponentInstanceContext.Provider>
+              ) : null}
+            </>
+          )}
         </Provider>
       </MemoryRouter>,
     );
@@ -531,7 +667,7 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     'a newer %s intent cancels in-flight composer navigation without rebinding the real Email draft',
     async (intent) => {
       mockContacts = [contact('contact-1', 'EMAIL')];
-      const { store } = setup(true);
+      const { store } = setup({ includeComposer: true });
       await completeRead('thread-2');
       const selection = store.get(myahInboxContactSelectionState.atom);
       const mainDraftAtom = myahInboxDraftAutosaveFamilyState.atomFamily({
@@ -1052,11 +1188,15 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
             },
           }),
         );
-        await act(async () =>
-          take('MyahInboxReplySendReadiness').resolve({
-            myahInboxReplySendReadiness: { status: 'READY', reason: null },
-          }),
+        const readiness = requests.find(
+          ({ name }) => name === 'MyahInboxReplySendReadiness',
         );
+        if (readiness)
+          await act(async () =>
+            take('MyahInboxReplySendReadiness').resolve({
+              myahInboxReplySendReadiness: { status: 'READY', reason: null },
+            }),
+          );
       };
       await drainHistory();
       await answerSummary('thread-2');
@@ -1282,6 +1422,117 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(2);
     expect(screen.getByText('Email actions thread-3')).toBeVisible();
   });
+
+  it.each([
+    ['non-empty', { markdown: 'saved non-latest draft', blocknote: null }],
+    ['empty', { markdown: '', blocknote: null }],
+  ] as const)(
+    'restores the exact Inbox selection and editor mode after Campaign guidance and browser Back with a %s draft',
+    async (_label, retainedBody) => {
+      mockContacts = [
+        contacts[0],
+        {
+          ...contact('contact-2', 'EMAIL'),
+          email: {
+            ...contact('contact-2', 'EMAIL').email,
+            threadIds: ['thread-3', 'thread-4'],
+            latestThreadId: 'thread-4',
+            threadCount: 2,
+          },
+        },
+      ];
+      const initialBody = retainedBody.markdown
+        ? retainedBody
+        : { markdown: 'draft before Campaign navigation', blocknote: null };
+      const { store, view } = setup({
+        withCampaignRoute: true,
+        initialSelection: {
+          workspaceId: key.workspaceId,
+          contactId: 'contact-2',
+          channel: 'EMAIL',
+          emailThreadId: 'thread-3',
+          instagramConversationId: null,
+        },
+        initialDraftBody: initialBody,
+      });
+      await completeRead('thread-3', 'READY', initialBody);
+      const targetDraftEditor = screen
+        .getAllByTestId('page-draft-editor')
+        .find((editor) =>
+          editor.closest('#myah-inbox-reply-workspace-thread-3'),
+        );
+      expect(targetDraftEditor).toBeDefined();
+      fireEvent.click(
+        within(targetDraftEditor as HTMLElement).getByText(
+          'Mock start editing',
+        ),
+      );
+      expect(targetDraftEditor).toHaveAttribute(
+        'data-initial-is-editing',
+        'true',
+      );
+
+      await act(async () =>
+        fireEvent.click(
+          within(targetDraftEditor as HTMLElement).getByRole('button', {
+            name: 'Open AI guidance',
+          }),
+        ),
+      );
+      expect(
+        screen.getByRole('button', { name: 'Back to Inbox' }),
+      ).toBeVisible();
+      expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+        contactId: 'contact-2',
+        channel: 'EMAIL',
+        emailThreadId: 'thread-3',
+      });
+      if (!retainedBody.markdown) {
+        const draftAtom = myahInboxDraftAutosaveFamilyState.atomFamily({
+          workspaceId: key.workspaceId,
+          threadId: 'thread-3',
+        });
+        const draftEntry = store.get(draftAtom);
+        if (!draftEntry) throw new Error('Expected retained thread-3 draft');
+        store.set(draftAtom, {
+          ...draftEntry,
+          localBody: retainedBody,
+          confirmedBody: retainedBody,
+        });
+      }
+
+      await act(async () =>
+        fireEvent.click(screen.getByRole('button', { name: 'Back to Inbox' })),
+      );
+      await completeRead('thread-3', 'READY', retainedBody);
+
+      expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+        contactId: 'contact-2',
+        channel: 'EMAIL',
+        emailThreadId: 'thread-3',
+      });
+      expect(store.get(myahInboxPreserveSelectionOnUnmountState.atom)).toBe(
+        false,
+      );
+      expect(
+        screen.getByRole('option', { name: 'Select contact-2' }),
+      ).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByText('Email actions thread-3')).toBeVisible();
+      const restoredDraft = screen
+        .getAllByTestId('page-draft-editor')
+        .find((editor) =>
+          editor.closest('#myah-inbox-reply-workspace-thread-3'),
+        );
+      expect(restoredDraft).toBeDefined();
+      expect(restoredDraft).toHaveAttribute('data-initial-is-editing', 'true');
+
+      view.unmount();
+      await act(async () => jest.runAllTicks());
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(
+        EMPTY_MYAH_INBOX_CONTACT_SELECTION,
+      );
+    },
+  );
 
   it('reopens a non-latest same-contact recovery after remount and awaits the actual outgoing target save', async () => {
     mockContacts = [contact('contact-1', 'EMAIL')];

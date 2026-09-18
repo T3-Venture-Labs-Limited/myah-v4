@@ -13,11 +13,69 @@ import {
 
 type CampaignRow = {
   id: string;
-  emailSignature: string | null;
+  emailSignature: unknown;
   deletedAt: Date | null;
 };
 
 type CampaignSignatureMaterial = Readonly<{ html: string | null }> | null;
+
+type CampaignRichTextSignature = Readonly<{
+  markdown: string;
+  blocknote: string;
+}>;
+
+type CampaignSignatureStorageRow = Readonly<{
+  emailSignatureMarkdown: unknown;
+  emailSignatureBlocknote: unknown;
+}>;
+
+const getSignatureMaterial = (
+  emailSignature: unknown,
+): CampaignSignatureMaterial | undefined => {
+  if (emailSignature === null || typeof emailSignature === 'string') {
+    return { html: emailSignature };
+  }
+
+  if (
+    typeof emailSignature === 'object' &&
+    emailSignature !== null &&
+    !Array.isArray(emailSignature) &&
+    typeof (emailSignature as CampaignRichTextSignature).markdown ===
+      'string' &&
+    typeof (emailSignature as CampaignRichTextSignature).blocknote === 'string'
+  ) {
+    return { html: (emailSignature as CampaignRichTextSignature).markdown };
+  }
+
+  return undefined;
+};
+
+const getSignatureMaterialFromStorageRow = (
+  row: unknown,
+): CampaignSignatureMaterial | undefined => {
+  if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+    return undefined;
+  }
+
+  const { emailSignatureMarkdown, emailSignatureBlocknote } =
+    row as CampaignSignatureStorageRow;
+
+  if (emailSignatureMarkdown === null && emailSignatureBlocknote === null) {
+    return getSignatureMaterial(null);
+  }
+
+  if (
+    typeof emailSignatureMarkdown === 'string' &&
+    typeof emailSignatureBlocknote === 'string'
+  ) {
+    return getSignatureMaterial({
+      markdown: emailSignatureMarkdown,
+      blocknote: emailSignatureBlocknote,
+    });
+  }
+
+  return undefined;
+};
 
 const signatureUnavailable =
   (): CampaignMaterialPortResult<CampaignSignatureMaterial> => ({
@@ -55,16 +113,15 @@ export class CampaignSignatureMaterialAdapter implements CampaignSignatureMateri
         )
           return signatureUnavailable();
         const rows = await runner.query(
-          `SELECT "emailSignature" FROM "${getWorkspaceSchemaName(workspaceId)}".campaign
+          `SELECT "emailSignatureMarkdown", "emailSignatureBlocknote" FROM "${getWorkspaceSchemaName(workspaceId)}".campaign
             WHERE id=$1 AND "deletedAt" IS NULL FOR KEY SHARE`,
           [campaignId],
         );
         if (!Array.isArray(rows) || rows.length !== 1)
           return signatureUnavailable();
-        const html = rows[0].emailSignature;
-        if (html !== null && typeof html !== 'string')
-          return signatureUnavailable();
-        return { kind: 'READY', value: { html } };
+        const signatureMaterial = getSignatureMaterialFromStorageRow(rows[0]);
+        if (signatureMaterial === undefined) return signatureUnavailable();
+        return { kind: 'READY', value: signatureMaterial };
       }
       if (authContext.type !== 'user') return signatureUnavailable();
       return await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -102,17 +159,13 @@ export class CampaignSignatureMaterialAdapter implements CampaignSignatureMateri
       where: { id: campaignId, deletedAt: IsNull() },
     });
 
-    if (
-      campaign === null ||
-      (campaign.emailSignature !== null &&
-        typeof campaign.emailSignature !== 'string')
-    ) {
-      return signatureUnavailable();
-    }
+    const signatureMaterial =
+      campaign === null
+        ? undefined
+        : getSignatureMaterial(campaign.emailSignature);
 
-    return {
-      kind: 'READY',
-      value: { html: campaign.emailSignature },
-    };
+    if (signatureMaterial === undefined) return signatureUnavailable();
+
+    return { kind: 'READY', value: signatureMaterial };
   }
 }

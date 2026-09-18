@@ -56,6 +56,17 @@ const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const MAX_SAFE_DELAY_SECONDS = Math.floor(Number.MAX_SAFE_INTEGER / 1000);
 
 type DataRecord = Readonly<Record<string, unknown>>;
+interface JsonSnapshotObject {
+  readonly [key: string]: JsonSnapshot;
+}
+
+type JsonSnapshot =
+  | null
+  | boolean
+  | string
+  | number
+  | readonly JsonSnapshot[]
+  | JsonSnapshotObject;
 
 type PreparedEnrollment = Readonly<{
   campaignCreatorId: string;
@@ -143,13 +154,20 @@ const readExactRecord = (
 };
 
 const readDenseArray = (value: unknown): readonly unknown[] | null => {
-  if (nodeUtilTypes.isProxy(value) || !Array.isArray(value)) {
+  if (
+    nodeUtilTypes.isProxy(value) ||
+    !Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Array.prototype
+  ) {
     return null;
   }
 
   let descriptors: PropertyDescriptorMap;
 
   try {
+    // SAFETY: Object.getOwnPropertyDescriptors always returns descriptors keyed
+    // by the array's own string indexes and `length`; the checks below reject
+    // every other shape before its values are used.
     descriptors = Object.getOwnPropertyDescriptors(
       value,
     ) as unknown as PropertyDescriptorMap;
@@ -189,7 +207,7 @@ const snapshotJson = (
   value: unknown,
   errorMessage: string,
   seen = new WeakSet<object>(),
-): unknown => {
+): JsonSnapshot => {
   if (
     value === null ||
     typeof value === 'boolean' ||
@@ -234,7 +252,9 @@ const snapshotJson = (
     throw new Error(errorMessage);
   }
 
-  const clone = Object.create(null) as Record<string, unknown>;
+  // Authorization parsers accept ordinary data records; readDataRecord has
+  // already rejected unsafe keys and property shapes before this boundary.
+  const clone: Record<string, JsonSnapshot> = {};
 
   for (const [key, item] of Object.entries(record)) {
     Object.defineProperty(clone, key, {
@@ -1755,35 +1775,49 @@ export class CampaignExecutionService {
         ? consistency.structure.authorization.workflowVersionId
         : null;
 
-    const execution = parseExecution(
+    let execution = parseExecution(
       await this.persistence.loadExecutionInTransaction(context),
       context,
     );
 
+    const createsDefaultExecution = execution === null;
+    const requiresDefaultExecution =
+      execution === null
+        ? true
+        : execution.campaignCapacityTimeZone !==
+            input.request.campaignCapacityTimeZone ||
+          !jsonEqual(execution.window, input.request.reviewedWindow);
+
+    if (requiresDefaultExecution) {
+      const created = readExactRecord(
+        await this.persistence.writeSendingWindowInTransaction(
+          context,
+          Object.freeze({
+            window: input.request.reviewedWindow,
+            campaignCapacityTimeZone: input.request.campaignCapacityTimeZone,
+          }),
+        ),
+        ['status', 'createdExecution', 'execution'],
+      );
+      execution = parseExecution(created?.execution, context);
+
+      if (
+        created?.status !== 'UPDATED' ||
+        created.createdExecution !== createsDefaultExecution ||
+        execution === null
+      ) {
+        throw new Error('Campaign default execution write was inconsistent');
+      }
+    }
+
     if (execution === null) {
-      return Object.freeze({
-        status: 'BLOCKED',
-        reason: 'MISSING_SENDING_WINDOW',
-      });
+      throw new Error('Campaign default execution was not available');
     }
 
-    const capacity = parseCapacityTimeZone(
-      await this.capacityTimeZone.readCampaignCapacityTimeZoneInTransaction(
-        Object.freeze({ workspaceId: context.workspaceId }),
-        context.manager,
-      ),
-      context,
-    );
-
-    if (capacity === null) {
-      return Object.freeze({
-        status: 'BLOCKED',
-        reason: 'WORKSPACE_CAPACITY_TIMEZONE_UNAVAILABLE',
-      });
-    }
+    const capacity = execution.campaignCapacityTimeZone;
 
     if (
-      execution.campaignCapacityTimeZone !== capacity ||
+      capacity === null ||
       input.request.campaignCapacityTimeZone !== capacity ||
       !jsonEqual(execution.window, input.request.reviewedWindow)
     ) {

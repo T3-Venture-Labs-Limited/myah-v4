@@ -50,6 +50,7 @@ const readyRow = (overrides: Record<string, unknown> = {}) => ({
   minimumSendIntervalMs: 300_000,
   isSyncEnabled: true,
   syncStatus: MessageChannelSyncStatus.ACTIVE,
+  syncedAt: new Date('2026-09-16T00:00:00.000Z'),
   isManaged: false,
   ...overrides,
 });
@@ -190,6 +191,40 @@ describe('CampaignSenderReadinessService', () => {
         left.mailboxes[1],
       ]),
     ).not.toBe(left.senderPoolFingerprint);
+  });
+
+  it('keeps routine sync ready only after a prior successful sync', async () => {
+    const routineSync = createHarness([
+      readyRow({ syncStatus: MessageChannelSyncStatus.ONGOING }),
+    ]);
+    const initialSync = createHarness([
+      readyRow({
+        syncStatus: MessageChannelSyncStatus.ONGOING,
+        syncedAt: null,
+      }),
+    ]);
+
+    await expect(
+      routineSync.service.getCampaignEmailSenderPoolInTransaction(
+        { workspaceId, campaignId },
+        routineSync.manager as never,
+      ),
+    ).resolves.toMatchObject({
+      mailboxes: [{ status: 'READY', reason: null }],
+    });
+    await expect(
+      initialSync.service.getCampaignEmailSenderPoolInTransaction(
+        { workspaceId, campaignId },
+        initialSync.manager as never,
+      ),
+    ).resolves.toMatchObject({
+      mailboxes: [
+        {
+          status: 'BLOCKED',
+          reason: 'ACCOUNT_UNAVAILABLE',
+        },
+      ],
+    });
   });
 
   it.each([

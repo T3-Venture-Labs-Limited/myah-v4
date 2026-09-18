@@ -23,6 +23,7 @@ import {
   type MyahInboxFilters,
   myahInboxContactSelectionState,
   myahInboxFiltersState,
+  myahInboxPreserveSelectionOnUnmountState,
 } from '@/myah/inbox/states/myahInboxSelectionState';
 import {
   type MyahInboxChannel,
@@ -184,6 +185,13 @@ const MyahInboxPageContent = ({
   );
   const [myahInboxContactSelection, setMyahInboxContactSelection] =
     useAtomState(myahInboxContactSelectionState);
+  // Pins the exact selection restored from Campaign guidance for this mount.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const preservedReturnSelectionRef = useRef(
+    store.get(myahInboxPreserveSelectionOnUnmountState.atom)
+      ? myahInboxContactSelection
+      : null,
+  );
   const [draftAuthorizationGeneration, setDraftAuthorizationGeneration] =
     useState(0);
   const [inlineTarget, setInlineTarget] = useState<{
@@ -274,6 +282,9 @@ const MyahInboxPageContent = ({
   );
   useEffect(() => {
     if (
+      (preservedReturnSelectionRef.current &&
+        JSON.stringify(preservedReturnSelectionRef.current) ===
+          JSON.stringify(currentSelection)) ||
       !latestThreadId ||
       currentSelection.channel !== 'EMAIL' ||
       latestThreadId === currentSelection.emailThreadId
@@ -380,17 +391,21 @@ const MyahInboxPageContent = ({
   ]);
 
   useEffect(() => {
+    if (preservedReturnSelectionRef.current) {
+      store.set(myahInboxPreserveSelectionOnUnmountState.atom, false);
+    }
     const cleanupGeneration = ++cleanupGenerationRef.current;
 
     return () => {
       queueMicrotask(() => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         if (cleanupGenerationRef.current === cleanupGeneration) {
+          if (store.get(myahInboxPreserveSelectionOnUnmountState.atom)) return;
           commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
         }
       });
     };
-  }, [commitContactSelection]);
+  }, [commitContactSelection, store]);
 
   useEffect(() => {
     if (

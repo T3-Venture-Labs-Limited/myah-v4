@@ -1,7 +1,8 @@
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { Button } from 'twenty-ui/input';
-import { isDefined } from 'twenty-shared/utils';
+import { AppPath } from 'twenty-shared/types';
+import { getAppPath, isDefined } from 'twenty-shared/utils';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
 import { getMyahInboxSafeEmailSubject } from '@/myah/inbox/components/MyahInboxEmailSubjectSeparator';
@@ -10,15 +11,22 @@ import { MyahInboxProposalPreview } from '@/myah/inbox/components/MyahInboxPropo
 import { useMyahInboxDraftAutosaveControllerContext } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
+import { myahInboxDraftEditorModeFamilyState } from '@/myah/inbox/states/myahInboxDraftEditorModeFamilyState';
+import { myahInboxPreserveSelectionOnUnmountState } from '@/myah/inbox/states/myahInboxSelectionState';
 import { type MyahInboxDraftAutosaveKey } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignAgentTabUniversalIdentifier';
+import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
+import { pageLayoutsWithRelationsSelector } from '@/page-layout/states/pageLayoutsWithRelationsSelector';
+import { type PageLayout } from '@/page-layout/types/PageLayout';
 import { MyahInboxEmailDraftDocument } from '~/generated/graphql';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useStore } from 'jotai';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledReplyWorkspace = styled.section`
@@ -94,6 +102,21 @@ const getMainReplyDisplaySubject = (subject: string | null) => {
   return subjectWithoutReplyPrefixes || 'No subject';
 };
 
+const getActiveCampaignAgentTabId = (pageLayouts: PageLayout[]) => {
+  const campaignLayout = pageLayouts.find(
+    ({ deletedAt, universalIdentifier }) =>
+      !isDefined(deletedAt) &&
+      universalIdentifier ===
+        MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
+  );
+
+  return campaignLayout?.tabs.find(
+    ({ isActive, universalIdentifier }) =>
+      isActive &&
+      universalIdentifier === MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER,
+  )?.id;
+};
+
 export type MyahInboxReplyWorkspaceProps = {
   thread: MyahInboxThread;
   targetAvailable?: boolean;
@@ -115,6 +138,11 @@ const MyahInboxReplyWorkspaceContent = ({
   presentation = 'default',
 }: MyahInboxReplyWorkspaceContentProps) => {
   const client = useApolloCoreClient();
+  const navigate = useNavigate();
+  const store = useStore();
+  const pageLayoutsWithRelations = useAtomStateValue(
+    pageLayoutsWithRelationsSelector,
+  );
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
   const currentUserWorkspace = useAtomStateValue(currentUserWorkspaceState);
   const authorizationKey = JSON.stringify([
@@ -129,8 +157,15 @@ const MyahInboxReplyWorkspaceContent = ({
   const draftEntry = useAtomValue(
     myahInboxDraftAutosaveFamilyState.atomFamily(draftKey),
   );
+  const [isEditing, setIsEditing] = useAtom(
+    myahInboxDraftEditorModeFamilyState.atomFamily(draftKey),
+  );
   const [editorOwner] = useState(() => Symbol('Inbox draft editor'));
   const [readEpoch, setReadEpoch] = useState(0);
+  const [isOpeningGuidance, setIsOpeningGuidance] = useState(false);
+  // Guards repeated activations before React commits the disabled state.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const isOpeningGuidanceRef = useRef(false);
   const readContext = useMemo(
     () => ({
       thread,
@@ -233,6 +268,58 @@ const MyahInboxReplyWorkspaceContent = ({
     workspaceId,
   ]);
 
+  const campaignId = thread.campaign?.id;
+  const runtimeAgentTabId = getActiveCampaignAgentTabId(
+    pageLayoutsWithRelations,
+  );
+  const openAiGuidance = async () => {
+    if (
+      isOpeningGuidanceRef.current ||
+      !campaignId ||
+      !runtimeAgentTabId ||
+      contextRef.current !== readContext ||
+      !draftAutosaveController.isTargetAuthorized(draftKey)
+    )
+      return;
+
+    isOpeningGuidanceRef.current = true;
+    setIsOpeningGuidance(true);
+    let markedForPreservation = false;
+    try {
+      const flushedEntry = await draftAutosaveController.flush(draftKey);
+      const currentRuntimeAgentTabId = getActiveCampaignAgentTabId(
+        store.get(pageLayoutsWithRelationsSelector.atom),
+      );
+      if (
+        contextRef.current !== readContext ||
+        !draftAutosaveController.isTargetAuthorized(draftKey) ||
+        flushedEntry.dirty ||
+        flushedEntry.operation ||
+        !['idle', 'saved'].includes(flushedEntry.status) ||
+        currentRuntimeAgentTabId !== runtimeAgentTabId
+      )
+        return;
+
+      store.set(myahInboxPreserveSelectionOnUnmountState.atom, true);
+      markedForPreservation = true;
+      navigate(
+        `${getAppPath(AppPath.RecordShowPage, {
+          objectNameSingular: 'campaign',
+          objectRecordId: campaignId,
+        })}#${runtimeAgentTabId}`,
+        {
+          state: { myahCampaignAgentGuidanceFocusCampaignId: campaignId },
+        },
+      );
+    } catch {
+      if (markedForPreservation)
+        store.set(myahInboxPreserveSelectionOnUnmountState.atom, false);
+    } finally {
+      isOpeningGuidanceRef.current = false;
+      setIsOpeningGuidance(false);
+    }
+  };
+
   if (
     !targetAvailable ||
     readState?.context !== readContext ||
@@ -265,6 +352,15 @@ const MyahInboxReplyWorkspaceContent = ({
     presentation === 'main'
       ? getMainReplyDisplaySubject(thread.subject)
       : undefined;
+  const hasDraftContent = draftEntry.localBody.markdown.trim().length > 0;
+  const campaignRequiredReason = thread.campaign
+    ? undefined
+    : 'Link an exact readable Campaign to generate a reply or open AI guidance.';
+  const guidanceUnavailableReason =
+    campaignRequiredReason ??
+    (runtimeAgentTabId
+      ? undefined
+      : 'Campaign AI guidance is unavailable because the active Agent tab could not be found.');
 
   return (
     <MyahInboxProposalPreview
@@ -274,43 +370,69 @@ const MyahInboxReplyWorkspaceContent = ({
         Boolean(draftEntry.operation) ||
         draftEntry.status === 'saving' ||
         draftEntry.status === 'error' ||
-        draftEntry.status === 'conflict'
+        draftEntry.status === 'conflict' ||
+        isOpeningGuidance
       }
-      renderGenerateAction={(generateAction, isGenerating) => (
-        <MyahInboxDraftEditor
-          entry={draftEntry}
-          presentation={presentation}
-          previewScope={`${draftKey.workspaceId}:${draftKey.threadId}`}
-          subject={subject}
-          onDraftChange={(body) =>
-            draftAutosaveController.updateDraft({
-              key: draftKey,
-              body,
-              editorOwner,
-            })
-          }
-          onRetry={() => {
-            void draftAutosaveController.retry(draftKey);
-          }}
-          onReloadConflict={() =>
-            draftAutosaveController.reloadConflict(draftKey)
-          }
-          disabled={Boolean(draftEntry.operation) || isGenerating}
-          actions={
-            <>
-              {presentation === 'main' ? null : generateAction}
-              <MyahInboxReplySendAction
-                draftKey={draftKey}
-                editorOwner={editorOwner}
-                entry={draftEntry}
-                disabled={isGenerating}
-                label={presentation === 'main' ? t`Send reply` : undefined}
-                onSent={onSent}
-              />
-            </>
-          }
-        />
-      )}
+      generateUnavailableReason={campaignRequiredReason}
+      renderGenerateAction={(generateAction, isGenerating) => {
+        const sendAction = (
+          <MyahInboxReplySendAction
+            draftKey={draftKey}
+            editorOwner={editorOwner}
+            entry={draftEntry}
+            disabled={isGenerating || isOpeningGuidance}
+            label={presentation === 'main' ? t`Send reply` : undefined}
+            onSent={onSent}
+          />
+        );
+
+        return (
+          <MyahInboxDraftEditor
+            entry={draftEntry}
+            presentation={presentation}
+            previewScope={`${draftKey.workspaceId}:${draftKey.threadId}`}
+            subject={subject}
+            guidanceUnavailableReason={guidanceUnavailableReason}
+            onOpenAiGuidance={
+              campaignId && runtimeAgentTabId
+                ? () => void openAiGuidance()
+                : undefined
+            }
+            initialIsEditing={isEditing}
+            onEditingChange={setIsEditing}
+            onDraftChange={(body) =>
+              draftAutosaveController.updateDraft({
+                key: draftKey,
+                body,
+                editorOwner,
+              })
+            }
+            onRetry={() => {
+              void draftAutosaveController.retry(draftKey);
+            }}
+            onReloadConflict={() =>
+              draftAutosaveController.reloadConflict(draftKey)
+            }
+            disabled={
+              Boolean(draftEntry.operation) || isGenerating || isOpeningGuidance
+            }
+            actions={
+              presentation === 'main' ? (
+                hasDraftContent ? (
+                  sendAction
+                ) : (
+                  generateAction
+                )
+              ) : (
+                <>
+                  {generateAction}
+                  {sendAction}
+                </>
+              )
+            }
+          />
+        );
+      }}
     />
   );
 };

@@ -28,12 +28,6 @@ jest.mock('@/page-layout/components/MyahCampaignEmailAccounts', () => ({
   ),
 }));
 
-jest.mock('@/page-layout/components/MyahCampaignExecutionControls', () => ({
-  MyahCampaignExecutionControls: ({ campaignId }: { campaignId: string }) => (
-    <div data-testid="execution-controls" data-campaign-id={campaignId} />
-  ),
-}));
-
 jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
   MyahCampaignRichTextSettings: ({
     campaignId,
@@ -66,28 +60,12 @@ jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
   ),
 }));
 
-jest.mock('@/page-layout/widgets/fields/components/FieldsWidget', () => ({
-  FieldsWidget: ({
-    widget,
-    includeFieldNames,
-  }: {
-    widget: PageLayoutWidget;
-    includeFieldNames?: readonly string[];
-  }) => (
-    <div
-      data-include-field-names={includeFieldNames?.join(',')}
-      data-testid="native-status"
-      data-widget-id={widget.id}
-    />
-  ),
-}));
-
 const operationsFieldsWidget = {
   id: 'campaign-operations-fields-widget',
 } as PageLayoutWidget;
 
 describe('MyahCampaignOperations', () => {
-  it('delegates one email signature editor and native lifecycle status to shared modules', () => {
+  it('delegates one email signature editor without generic lifecycle editing', () => {
     render(
       <MyahCampaignOperations
         campaignId="campaign-1"
@@ -136,37 +114,14 @@ describe('MyahCampaignOperations', () => {
       'data-keep-editing',
       'Keep editing',
     );
-    expect(screen.getByTestId('native-status')).toHaveAttribute(
-      'data-include-field-names',
-      'lifecycleStatus',
-    );
-    expect(screen.getByTestId('native-status')).toHaveAttribute(
-      'data-widget-id',
-      operationsFieldsWidget.id,
-    );
     expect(screen.getByTestId('email-accounts')).toHaveAttribute(
       'data-campaign-id',
       'campaign-1',
     );
-    expect(
-      screen
-        .getByTestId('native-status')
-        .compareDocumentPosition(screen.getByTestId('email-accounts')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(screen.getByTestId('execution-controls')).toHaveAttribute(
-      'data-campaign-id',
-      'campaign-1',
-    );
+    expect(screen.queryByTestId('native-status')).not.toBeInTheDocument();
     expect(
       screen
         .getByTestId('email-accounts')
-        .compareDocumentPosition(screen.getByTestId('execution-controls')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      screen
-        .getByTestId('execution-controls')
         .compareDocumentPosition(screen.getByTestId('settings-adapter')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

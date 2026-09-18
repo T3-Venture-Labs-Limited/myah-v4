@@ -611,6 +611,25 @@ describe('isRecordMatchingFilter', () => {
       ).toBe(false);
     });
 
+    it.each([
+      ['matching relation target id', accountOwnerId, true],
+      ['non-matching relation target id', 'unknown-id', false],
+    ])(
+      'matches a nested to-one relation filter with a %s',
+      (_label, id, expected) => {
+        expect(
+          isRecordMatchingFilter({
+            record: companyWithAccountOwner,
+            filter: {
+              accountOwner: { id: { eq: id } },
+            } as unknown as RecordGqlOperationFilter,
+            objectMetadataItem: companyMockObjectMetadataItem,
+            objectMetadataItems,
+          }),
+        ).toBe(expected);
+      },
+    );
+
     it('matches an "in" filter on a relation field by its related record id', () => {
       expect(
         isRecordMatchingFilter({

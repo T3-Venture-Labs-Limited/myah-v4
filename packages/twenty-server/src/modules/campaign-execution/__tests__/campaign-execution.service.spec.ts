@@ -1,4 +1,5 @@
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { CampaignExecutionService } from 'src/modules/campaign-execution/services/campaign-execution.service';
 import { type CampaignLifecycleTransactionService } from 'src/modules/campaign-execution/services/campaign-lifecycle-transaction.service';
@@ -467,6 +468,123 @@ const createHarness = (overrides?: {
 };
 
 describe('CampaignExecutionService', () => {
+  it('passes detached frozen request snapshots to the strict authorization parser', async () => {
+    const sourceRequest: CampaignSequenceAuthorizationRequest = {
+      ...request,
+      preparedProof: {
+        ...request.preparedProof,
+        orderedMessageIds: [firstMessageId, secondMessageId],
+        usedChannels: ['EMAIL'],
+        fixedMaterialProofs: [
+          {
+            messageId: firstMessageId,
+            orderedAttachmentProofs: [],
+          },
+          {
+            messageId: secondMessageId,
+            orderedAttachmentProofs: [],
+          },
+        ],
+      },
+      reviewedWindow: { ...request.reviewedWindow },
+    };
+    const matchingAuthority = authorityRecord({
+      binding: {
+        ...authorityRecord().binding,
+        request: sourceRequest,
+      },
+    });
+    const harness = createHarness({
+      createdAuthority: {
+        kind: 'CREATED',
+        authorization: matchingAuthority,
+      },
+    });
+    const strictAuthority = new CampaignSequenceAuthorizationService({
+      generateAuthorizationId: () => authorizationId,
+      now: () => new Date(authorizedAt),
+    });
+    const query = jest.fn().mockResolvedValue([]);
+
+    Object.assign(harness.manager.queryRunner!, { query });
+    jest
+      .mocked(harness.authority.lookupStartRequestInTransaction)
+      .mockImplementation((context, input) =>
+        strictAuthority.lookupStartRequestInTransaction(
+          context as never,
+          input,
+        ),
+      );
+
+    await expect(
+      harness.service.startCampaign({
+        ...startInput(),
+        request: sourceRequest,
+      }),
+    ).resolves.toMatchObject({ status: 'ACTIVATED' });
+
+    const snapshottedRequest = jest.mocked(
+      harness.authority.lookupStartRequestInTransaction,
+    ).mock.calls[0][1].request;
+
+    expect(snapshottedRequest).not.toBe(sourceRequest);
+    expect(snapshottedRequest.preparedProof).not.toBe(
+      sourceRequest.preparedProof,
+    );
+    expect(Object.getPrototypeOf(snapshottedRequest)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(snapshottedRequest.preparedProof)).toBe(
+      Object.prototype,
+    );
+    expect(
+      Object.getPrototypeOf(
+        snapshottedRequest.preparedProof.fixedMaterialProofs[0],
+      ),
+    ).toBe(Object.prototype);
+    expect(Object.isFrozen(snapshottedRequest)).toBe(true);
+    expect(Object.isFrozen(snapshottedRequest.preparedProof)).toBe(true);
+    expect(
+      Object.isFrozen(
+        snapshottedRequest.preparedProof.fixedMaterialProofs[0]
+          .orderedAttachmentProofs,
+      ),
+    ).toBe(true);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      'null-prototype',
+      () => Object.setPrototypeOf([firstMessageId, secondMessageId], null),
+    ],
+    [
+      'subclass',
+      () => {
+        class NonstandardMessageIds extends Array<string> {}
+
+        return new NonstandardMessageIds(firstMessageId, secondMessageId);
+      },
+    ],
+  ] as const)(
+    'rejects a nested %s request array before opening a transaction',
+    async (_label, createOrderedMessageIds) => {
+      const harness = createHarness();
+
+      await expect(
+        harness.service.startCampaign({
+          ...startInput(),
+          request: {
+            ...request,
+            preparedProof: {
+              ...request.preparedProof,
+              orderedMessageIds: createOrderedMessageIds(),
+            },
+          },
+        }),
+      ).rejects.toThrow('Campaign Start input was invalid');
+      expect(harness.transaction.run).not.toHaveBeenCalled();
+    },
+  );
+
   it('creates a reviewed immutable activation graph in canonical order', async () => {
     const harness = createHarness();
 
@@ -491,7 +609,6 @@ describe('CampaignExecutionService', () => {
       'inspect-authority',
       'lookup-start',
       'load-execution',
-      'capacity',
       'load-plan',
       'revalidate',
       'history',
@@ -918,12 +1035,6 @@ describe('CampaignExecutionService', () => {
   });
 
   it.each([
-    ['missing execution', { execution: null }, 'MISSING_SENDING_WINDOW'],
-    [
-      'missing capacity timezone',
-      { capacityResult: { status: 'BLOCKED', reason: 'NOT_CONFIGURED' } },
-      'WORKSPACE_CAPACITY_TIMEZONE_UNAVAILABLE',
-    ],
     [
       'blocked plan',
       {
@@ -955,6 +1066,71 @@ describe('CampaignExecutionService', () => {
       ).not.toHaveBeenCalled();
     },
   );
+
+  it('normalizes an existing configurable execution to UTC all day before Start review', async () => {
+    const defaultWindow: CampaignSendingWindow = {
+      timeZone: 'UTC',
+      startLocalTime: '00:00:00',
+      endLocalTime: '23:59:00',
+    };
+    const defaultRequest = {
+      ...request,
+      reviewedWindow: defaultWindow,
+      campaignCapacityTimeZone: 'UTC',
+    };
+    const harness = createHarness({
+      execution: {
+        campaignExecutionId,
+        workspaceId,
+        campaignId,
+        window,
+        campaignCapacityTimeZone: 'America/New_York',
+      },
+      createdAuthority: {
+        kind: 'CREATED',
+        authorization: authorityRecord({
+          binding: {
+            ...authorityRecord().binding,
+            request: defaultRequest,
+          },
+        }),
+      },
+      writeWindow: {
+        status: 'UPDATED',
+        createdExecution: false,
+        execution: {
+          campaignExecutionId,
+          workspaceId,
+          campaignId,
+          window: defaultWindow,
+          campaignCapacityTimeZone: 'UTC',
+        },
+      },
+    });
+
+    await expect(
+      harness.service.startCampaign({
+        ...startInput(),
+        request: defaultRequest,
+      }),
+    ).resolves.toMatchObject({ status: 'ACTIVATED' });
+    expect(
+      harness.persistence.writeSendingWindowInTransaction,
+    ).toHaveBeenCalledWith(harness.context, {
+      window: defaultWindow,
+      campaignCapacityTimeZone: 'UTC',
+    });
+    expect(
+      harness.review.revalidateNewActivationInTransaction,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        execution: expect.objectContaining({
+          window: defaultWindow,
+          campaignCapacityTimeZone: 'UTC',
+        }),
+      }),
+    );
+  });
 
   it('reconsiders authorization-local skips but suppresses accepted history in a new generation', async () => {
     const harness = createHarness({
@@ -1109,6 +1285,28 @@ describe('CampaignExecutionService', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('creates execution without a configured workspace timezone', async () => {
+    const harness = createHarness({
+      execution: null,
+      capacityResult: { status: 'BLOCKED', reason: 'NOT_CONFIGURED' },
+    });
+
+    await expect(
+      harness.service.startCampaign(startInput()),
+    ).resolves.toMatchObject({
+      status: 'ACTIVATED',
+    });
+    expect(
+      harness.persistence.writeSendingWindowInTransaction,
+    ).toHaveBeenCalledWith(harness.context, {
+      window,
+      campaignCapacityTimeZone: 'America/New_York',
+    });
+    expect(
+      harness.capacity.readCampaignCapacityTimeZoneInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed server-authored authority and graph acknowledgements', async () => {
     const badAuthority = createHarness({
       createdAuthority: {
@@ -1214,33 +1412,6 @@ describe('CampaignExecutionService', () => {
       expect(harness.transaction.run).not.toHaveBeenCalled();
     },
   );
-
-  it('fails capacity-result proxies closed without invoking traps', async () => {
-    let trapCalls = 0;
-    const harness = createHarness({
-      capacityResult: new Proxy(
-        {
-          status: 'CONFIGURED',
-          campaignCapacityTimeZone: 'America/New_York',
-        },
-        {
-          ownKeys: () => {
-            trapCalls += 1;
-            return ['status', 'campaignCapacityTimeZone'];
-          },
-        },
-      ),
-    });
-
-    await expect(harness.service.startCampaign(startInput())).resolves.toEqual({
-      status: 'BLOCKED',
-      reason: 'WORKSPACE_CAPACITY_TIMEZONE_UNAVAILABLE',
-    });
-    expect(trapCalls).toBe(0);
-    expect(
-      harness.authority.createNewAuthorizationInTransaction,
-    ).not.toHaveBeenCalled();
-  });
 
   it('blocks window mutation while ACTIVE and does not read capacity or write', async () => {
     const harness = createHarness({ lifecycleStatus: 'ACTIVE' });

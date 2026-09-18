@@ -3,6 +3,7 @@ import { getDataSourceToken } from '@nestjs/typeorm';
 import { CommandMeta } from 'nest-commander/src/constants';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
+import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
 import { RepairInstagramSecurityCutoverCommand } from 'src/database/commands/upgrade-version-command/2-20/repair-instagram-security-cutover.command';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -277,15 +278,34 @@ describe('Instagram production upgrade provider compatibility', () => {
           step.version === '2.20.0' &&
           step.kind === kind &&
           step.name !==
-            '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
+            '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534' &&
+          // MYAH-338's Campaign lifecycle status sync (PR #143) is not an
+          // Instagram identity and carries no durable-name rename, so its own
+          // real registration timestamp (1789313971535) is what participates
+          // in ordering. That timestamp happens to land inside the numeric
+          // range historically used for the Instagram security-cutover work,
+          // which would otherwise falsely count it as part of the Instagram
+          // cutover accounting below and displace a real Instagram identity
+          // out of the expected tail. Exclude it explicitly, the same way the
+          // cutover verifier itself is excluded above.
+          step.name !==
+            '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
       );
       const identities = EXPECTED_INSTAGRAM_IDENTITIES.filter(
         (identity) => identity.kind === kind,
       );
+      const commandsThroughInstagramCutover = actualTail.filter(
+        (step) => step.timestamp <= identities[identities.length - 1].timestamp,
+      );
       expect(
-        actualTail.slice(-identities.length).map(({ name }) => name),
+        commandsThroughInstagramCutover
+          .slice(-identities.length)
+          .map(({ name }) => name),
       ).toEqual(identities.map(({ durableName }) => durableName));
-      const unaffected = actualTail.slice(0, -identities.length);
+      const unaffected = commandsThroughInstagramCutover.slice(
+        0,
+        -identities.length,
+      );
       expect(
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
@@ -294,13 +314,23 @@ describe('Instagram production upgrade provider compatibility', () => {
     // the MYAH-359 composer metadata sync registers with a later timestamp and
     // runs after it. The sweep verifies Composio->Unipile authority state only,
     // which neither new command reads or mutates, so the convention changed but
-    // the security guarantee did not.
+    // the security guarantee did not. MYAH-338's Campaign lifecycle status sync
+    // (PR #143) registered between the sweep and the composer sync, so it now
+    // sits second-to-last, ahead of the composer sync but behind the sweep.
     expect(sequence[sequence.length - 1]?.name).toBe(
       '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789488000360',
     );
     expect(sequence[sequence.length - 2]?.name).toBe(
+      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+    );
+    expect(sequence[sequence.length - 3]?.name).toBe(
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
     );
+    expect(
+      getRegisteredWorkspaceCommandMetadata(
+        SynchronizeCampaignLifecycleStatusMetadataCommand,
+      ),
+    ).toEqual({ version: '2.20.0', timestamp: 1789313971535 });
     expect(
       sequence.filter((step) =>
         EXPECTED_INSTAGRAM_IDENTITIES.some(

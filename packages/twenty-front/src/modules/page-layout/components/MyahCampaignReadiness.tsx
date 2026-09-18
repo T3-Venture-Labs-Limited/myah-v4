@@ -177,7 +177,9 @@ const ReadinessData = ({
           </div>
         );
       })}
-      <span style={quiet}>Use Start and Stop in Campaign Operations.</span>
+      <span style={quiet}>
+        Use Start and Stop in the Campaign record header.
+      </span>
     </div>
   );
 };

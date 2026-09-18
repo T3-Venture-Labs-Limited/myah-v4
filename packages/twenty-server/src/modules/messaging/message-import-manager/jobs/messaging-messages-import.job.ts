@@ -10,7 +10,9 @@ import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queu
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { MessageChannelSyncLockService } from 'src/modules/messaging/common/services/message-channel-sync-lock.service';
+import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/services/message-channel-sync-status.service';
 import { MessagingMessagesImportService } from 'src/modules/messaging/message-import-manager/services/messaging-messages-import.service';
+import { MessagingPendingSyncCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-pending-sync-cursor.service';
 import { MessagingMonitoringService } from 'src/modules/messaging/monitoring/services/messaging-monitoring.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 
@@ -27,7 +29,9 @@ export class MessagingMessagesImportJob {
   constructor(
     private readonly messagingMessagesImportService: MessagingMessagesImportService,
     private readonly messageChannelSyncLockService: MessageChannelSyncLockService,
+    private readonly messageChannelSyncStatusService: MessageChannelSyncStatusService,
     private readonly messagingMonitoringService: MessagingMonitoringService,
+    private readonly messagingPendingSyncCursorService: MessagingPendingSyncCursorService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
@@ -74,8 +78,23 @@ export class MessagingMessagesImportJob {
 
             if (
               messageChannel.syncStage !==
-              MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED
+                MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED &&
+              messageChannel.syncStage !==
+                MessageChannelSyncStage.MESSAGES_IMPORT_ONGOING
             ) {
+              return;
+            }
+
+            const pendingStateExists =
+              await this.messagingPendingSyncCursorService.restorePendingMessageExternalIds(
+                { messageChannelId, workspaceId },
+              );
+
+            if (!pendingStateExists) {
+              await this.messageChannelSyncStatusService.markAsMessagesListFetchPending(
+                [messageChannelId],
+                workspaceId,
+              );
               return;
             }
 

@@ -240,7 +240,7 @@ describe('MyahInboxReplySendAction', () => {
     },
   );
 
-  it('shows the safe unsupported-content reason without changing editor permissions', () => {
+  it('keeps unsupported-content readiness silent without changing editor permissions', () => {
     renderAction({
       readiness: 'THREAD_UNAVAILABLE',
       readinessReason:
@@ -248,12 +248,15 @@ describe('MyahInboxReplySendAction', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'This draft contains unsupported formatted content. Edit the draft and try again.',
-    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'This draft contains unsupported formatted content. Edit the draft and try again.',
+      ),
+    ).not.toBeInTheDocument();
   });
 
-  it('keeps the first-save guidance ahead of an unavailable-thread reason', () => {
+  it('keeps first-save readiness silent while Send remains available', () => {
     renderAction({
       entry: firstSaveDirtyEntry,
       readiness: 'THREAD_UNAVAILABLE',
@@ -262,9 +265,10 @@ describe('MyahInboxReplySendAction', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Saving the first shared draft…',
-    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Saving the first shared draft…'),
+    ).not.toBeInTheDocument();
   });
 
   it.each([
@@ -319,33 +323,26 @@ describe('MyahInboxReplySendAction', () => {
   });
 
   it.each([
-    ['RECONNECT_REQUIRED', 'Reconnect the sending mailbox before sending.'],
-    ['MAILBOX_INELIGIBLE', 'This mailbox cannot send this reply.'],
-    [
-      'OUTCOME_PENDING',
-      'A previous send is still being confirmed. Sending is locked.',
-    ],
-    [
-      'OUTCOME_UNKNOWN',
-      'A previous delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here.',
-    ],
-  ])('explains why Send is disabled for %s', (readiness, message) => {
+    'RECONNECT_REQUIRED',
+    'MAILBOX_INELIGIBLE',
+    'OUTCOME_PENDING',
+    'OUTCOME_UNKNOWN',
+  ])('keeps disabled %s readiness silent', (readiness) => {
     renderAction({ readiness });
 
     const sendButton = screen.getByRole('button', { name: 'Send' });
-    const explanation = screen.getByText(message);
 
     expect(sendButton).toBeDisabled();
-    expect(sendButton).toHaveAttribute('aria-describedby', explanation.id);
+    expect(sendButton).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('disables Send while readiness loads or the send hook is executing', () => {
+  it('disables Send silently while readiness loads or the send hook is executing', () => {
     const loading = renderAction({ readinessLoading: true });
 
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Checking Email send readiness',
-    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
 
     loading.unmount();
     renderAction({ sending: true });
@@ -558,7 +555,7 @@ describe('MyahInboxReplySendAction', () => {
     expect(onSendingChange).toHaveBeenCalledWith(true);
   });
 
-  it('keeps an unknown outcome inline and locks Send against another click', async () => {
+  it('reports an unknown outcome through the snackbar only and locks Send', async () => {
     const onSendingChange = jest.fn();
     mockSend.mockResolvedValue({
       outcome: 'UNKNOWN',
@@ -572,17 +569,16 @@ describe('MyahInboxReplySendAction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here.',
-      ),
+      expect(mockEnqueueWarningSnackBar).toHaveBeenCalledWith({
+        message:
+          'Delivery outcome is unknown. This draft is locked to prevent a duplicate send.',
+      }),
     );
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     expect(onSendingChange).toHaveBeenCalledTimes(1);
     expect(onSendingChange).toHaveBeenCalledWith(true);
-    expect(mockEnqueueWarningSnackBar).toHaveBeenCalledWith({
-      message:
-        'Delivery outcome is unknown. This draft is locked to prevent a duplicate send.',
-    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText('Approve & send')).not.toBeInTheDocument();
   });

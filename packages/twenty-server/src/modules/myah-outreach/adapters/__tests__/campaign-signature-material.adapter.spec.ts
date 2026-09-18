@@ -82,22 +82,175 @@ describe('CampaignSignatureMaterialAdapter', () => {
   });
 
   it.each([
-    ['null', null],
-    ['blank', ''],
-  ])('preserves an accepted %s signature', async (_label, emailSignature) => {
-    campaignRepository.findOne.mockResolvedValue({
-      id: campaignId,
-      emailSignature,
-      deletedAt: null,
-    });
+    ['null', null, null],
+    ['blank', '', ''],
+    ['legacy string', '<p>Legacy signature</p>', '<p>Legacy signature</p>'],
+    [
+      'rich text',
+      {
+        markdown: 'Kind regards,\nDaryll',
+        blocknote: '[{"type":"paragraph","content":"Kind regards"}]',
+      },
+      'Kind regards,\nDaryll',
+    ],
+  ])(
+    'loads an accepted %s signature as deterministic markdown material',
+    async (_label, emailSignature, expectedHtml) => {
+      campaignRepository.findOne.mockResolvedValue({
+        id: campaignId,
+        emailSignature,
+        deletedAt: null,
+      });
 
-    await expect(
-      adapter.load({ authContext, campaignId, workspaceId }),
-    ).resolves.toEqual({
-      kind: 'READY',
-      value: { html: emailSignature },
-    });
-  });
+      await expect(
+        adapter.load({ authContext, campaignId, workspaceId }),
+      ).resolves.toEqual({
+        kind: 'READY',
+        value: { html: expectedHtml },
+      });
+    },
+  );
+
+  it.each([
+    [
+      'rich text',
+      {
+        emailSignatureMarkdown: 'Kind regards,\nDaryll',
+        emailSignatureBlocknote:
+          '[{"type":"paragraph","content":"Kind regards"}]',
+      },
+      'Kind regards,\nDaryll',
+    ],
+    [
+      'null',
+      {
+        emailSignatureMarkdown: null,
+        emailSignatureBlocknote: null,
+      },
+      null,
+    ],
+  ])(
+    'loads %s signature material through the locked transaction path',
+    async (_label, signatureRow, expectedHtml) => {
+      const query = jest.fn().mockResolvedValue([signatureRow]);
+      const transactionManager = { queryRunner: undefined as unknown };
+
+      transactionManager.queryRunner = {
+        isTransactionActive: true,
+        isReleased: false,
+        manager: transactionManager,
+        query,
+      };
+
+      await expect(
+        adapter.load({
+          authContext,
+          campaignId,
+          workspaceId,
+          transactionManager: transactionManager as never,
+        }),
+      ).resolves.toEqual({
+        kind: 'READY',
+        value: { html: expectedHtml },
+      });
+
+      const sql = query.mock.calls[0][0] as string;
+
+      expect(sql).toContain(
+        'SELECT "emailSignatureMarkdown", "emailSignatureBlocknote"',
+      );
+      expect(sql).not.toMatch(/SELECT "emailSignature"(?:\s|,)/);
+      expect(sql).toContain('FOR KEY SHARE');
+      expect(query).toHaveBeenCalledWith(expect.any(String), [campaignId]);
+    },
+  );
+
+  it.each([
+    [
+      'null markdown with string blocknote',
+      {
+        emailSignatureMarkdown: null,
+        emailSignatureBlocknote: '[]',
+      },
+    ],
+    [
+      'string markdown with null blocknote',
+      {
+        emailSignatureMarkdown: 'Kind regards',
+        emailSignatureBlocknote: null,
+      },
+    ],
+    [
+      'non-string markdown',
+      {
+        emailSignatureMarkdown: 42,
+        emailSignatureBlocknote: '[]',
+      },
+    ],
+    [
+      'non-string blocknote',
+      {
+        emailSignatureMarkdown: 'Kind regards',
+        emailSignatureBlocknote: {},
+      },
+    ],
+    ['missing physical columns', {}],
+  ])(
+    'blocks %s in the locked transaction path',
+    async (_label, signatureRow) => {
+      const query = jest.fn().mockResolvedValue([signatureRow]);
+      const transactionManager = { queryRunner: undefined as unknown };
+
+      transactionManager.queryRunner = {
+        isTransactionActive: true,
+        isReleased: false,
+        manager: transactionManager,
+        query,
+      };
+
+      const result = await adapter.load({
+        authContext,
+        campaignId,
+        workspaceId,
+        transactionManager: transactionManager as never,
+      });
+
+      expect(blockers(result).map(({ code }) => code)).toEqual([
+        'MATERIAL_STALE',
+      ]);
+    },
+  );
+
+  it.each([
+    ['inactive', false, false, true],
+    ['released', true, true, true],
+    ['different-manager', true, false, false],
+  ])(
+    'blocks an %s transaction manager before querying',
+    async (_label, isTransactionActive, isReleased, usesSuppliedManager) => {
+      const query = jest.fn();
+      const transactionManager = { queryRunner: undefined as unknown };
+
+      transactionManager.queryRunner = {
+        isTransactionActive,
+        isReleased,
+        manager: usesSuppliedManager ? transactionManager : {},
+        query,
+      };
+
+      const result = await adapter.load({
+        authContext,
+        campaignId,
+        workspaceId,
+        transactionManager: transactionManager as never,
+      });
+
+      expect(blockers(result).map(({ code }) => code)).toEqual([
+        'MATERIAL_STALE',
+      ]);
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
 
   it('blocks a workspace mismatch before repository access', async () => {
     const result = await adapter.load({
@@ -115,7 +268,21 @@ describe('CampaignSignatureMaterialAdapter', () => {
 
   it.each([
     ['missing Campaign', null],
-    ['malformed signature', { id: campaignId, emailSignature: 42 }],
+    ['unsupported number signature', { id: campaignId, emailSignature: 42 }],
+    [
+      'rich-text signature without markdown',
+      {
+        id: campaignId,
+        emailSignature: { blocknote: '[]' },
+      },
+    ],
+    [
+      'rich-text signature with non-string blocknote',
+      {
+        id: campaignId,
+        emailSignature: { markdown: 'Kind regards', blocknote: null },
+      },
+    ],
   ])('blocks a %s', async (_label, campaign) => {
     campaignRepository.findOne.mockResolvedValue(campaign);
 

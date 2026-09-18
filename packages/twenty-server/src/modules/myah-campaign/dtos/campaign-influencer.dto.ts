@@ -54,10 +54,11 @@ export class CampaignCreatorListRemovalImpactInput extends CampaignCreatorListIn
 
 @InputType()
 export class DetachCampaignCreatorListInput extends CampaignCreatorListRemovalImpactInput {
-  @Field(() => [UUIDScalarType])
+  @Field(() => [UUIDScalarType], { nullable: true })
+  @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
-  confirmedCreatorIds!: string[];
+  confirmedCreatorIds?: string[];
 
   @Field({ nullable: true })
   confirmationToken?: string;

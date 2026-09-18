@@ -33,10 +33,6 @@
       "path": "../packages/twenty-utils"
     },
     {
-      "name": "packages/twenty-zapier",
-      "path": "../packages/twenty-zapier"
-    },
-    {
       "name": "packages/twenty-oxlint-rules",
       "path": "../packages/twenty-oxlint-rules"
     },
@@ -69,20 +65,12 @@
       "path": "../packages/twenty-client-sdk"
     },
     {
-      "name": "packages/twenty-companion",
-      "path": "../packages/twenty-companion"
-    },
-    {
       "name": "packages/twenty-front-component-renderer",
       "path": "../packages/twenty-front-component-renderer"
     },
     {
       "name": "packages/twenty-sdk",
       "path": "../packages/twenty-sdk"
-    },
-    {
-      "name": "packages/twenty-website",
-      "path": "../packages/twenty-website"
     }
   ],
   "settings": {
@@ -145,7 +133,6 @@
     "jest.runMode": "on-demand",
     "jest.disabledWorkspaceFolders": [
       "ROOT",
-      "packages/twenty-zapier",
       "packages/twenty-docker",
       "packages/twenty-utils",
       "packages/twenty-postgres"

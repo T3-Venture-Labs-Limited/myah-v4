@@ -12,8 +12,11 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { type ReactNode } from 'react';
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
+import { AppPath } from 'twenty-shared/types';
+import { getAppPath } from 'twenty-shared/utils';
 
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { MyahInboxReplyWorkspace } from '@/myah/inbox/components/MyahInboxReplyWorkspace';
 import {
   MyahInboxDraftAutosaveProvider,
@@ -21,7 +24,17 @@ import {
 } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
+import { myahInboxPreserveSelectionOnUnmountState } from '@/myah/inbox/states/myahInboxSelectionState';
+import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignAgentTabUniversalIdentifier';
+import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 import { type MyahInboxDraftAutosaveEntry } from '@/myah/inbox/types/MyahInboxDraftAutosave';
+
+const mockNavigate = jest.fn();
+
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
 
 let mockClient: ApolloClient;
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
@@ -41,13 +54,23 @@ jest.mock('twenty-ui/input', () => ({
     ariaLabel,
     disabled,
     onClick,
+    'aria-disabled': ariaDisabled,
+    'aria-describedby': ariaDescribedBy,
   }: {
     title: string;
     ariaLabel?: string;
     disabled?: boolean;
-    onClick: () => void;
+    onClick?: () => void;
+    'aria-disabled'?: boolean;
+    'aria-describedby'?: string;
   }) => (
-    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
+    <button
+      aria-disabled={ariaDisabled}
+      aria-describedby={ariaDescribedBy}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={onClick}
+    >
       {title}
     </button>
   ),
@@ -65,6 +88,10 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     actions,
     presentation,
     subject,
+    initialIsEditing,
+    onEditingChange,
+    onOpenAiGuidance,
+    guidanceUnavailableReason,
   }: {
     entry: MyahInboxDraftAutosaveEntry;
     disabled: boolean;
@@ -72,8 +99,16 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     actions: ReactNode;
     presentation?: 'default' | 'main';
     subject?: string;
+    initialIsEditing?: boolean;
+    onEditingChange?: (isEditing: boolean) => void;
+    onOpenAiGuidance?: () => void;
+    guidanceUnavailableReason?: string;
   }) => (
-    <div data-presentation={presentation}>
+    <div
+      data-presentation={presentation}
+      data-initial-is-editing={initialIsEditing}
+      data-testid="draft-editor"
+    >
       <input
         aria-label="Real shared draft"
         value={entry.localBody.markdown}
@@ -83,6 +118,20 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
         }
       />
       {subject && <output data-testid="draft-subject">{subject}</output>}
+      <button onClick={() => onEditingChange?.(true)}>
+        Mock start editing
+      </button>
+      <button onClick={() => onEditingChange?.(false)}>
+        Mock stop editing
+      </button>
+      <button
+        aria-label="Open AI guidance"
+        disabled={!onOpenAiGuidance}
+        onClick={onOpenAiGuidance}
+        title={guidanceUnavailableReason}
+      >
+        Open AI guidance
+      </button>
       {actions}
     </div>
   ),
@@ -91,6 +140,58 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
 const key = { workspaceId: 'workspace-1', threadId: 'thread-1' };
 const thread = { id: key.threadId } as MyahInboxThread;
 const body = { markdown: 'server draft', blocknote: null };
+const linkedCampaign = { id: 'campaign-1', name: 'Campaign One' };
+const runtimeAgentTabId = 'runtime-agent-tab-1';
+const setCampaignAgentMetadata = (
+  store: ReturnType<typeof createStore>,
+  {
+    includeLayout = true,
+    layoutActive = true,
+    includeTab = true,
+    tabActive = true,
+    tabId = runtimeAgentTabId,
+  }: {
+    includeLayout?: boolean;
+    layoutActive?: boolean;
+    includeTab?: boolean;
+    tabActive?: boolean;
+    tabId?: string;
+  } = {},
+) => {
+  store.set(metadataStoreState.atomFamily('pageLayouts'), {
+    current: includeLayout
+      ? [
+          {
+            id: 'campaign-layout-1',
+            deletedAt: layoutActive ? null : '2026-09-15T00:00:00.000Z',
+            universalIdentifier:
+              MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
+          },
+        ]
+      : [],
+    draft: [],
+    status: 'up-to-date',
+  });
+  store.set(metadataStoreState.atomFamily('pageLayoutTabs'), {
+    current: includeTab
+      ? [
+          {
+            id: tabId,
+            isActive: tabActive,
+            pageLayoutId: 'campaign-layout-1',
+            universalIdentifier: MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER,
+          },
+        ]
+      : [],
+    draft: [],
+    status: 'up-to-date',
+  });
+  store.set(metadataStoreState.atomFamily('pageLayoutWidgets'), {
+    current: [],
+    draft: [],
+    status: 'up-to-date',
+  });
+};
 type Request = {
   name: string;
   variables: Record<string, unknown>;
@@ -110,17 +211,22 @@ const take = (name: string) => {
   requests.splice(requests.indexOf(request), 1);
   return request;
 };
-const completeRead = async () => {
+const completeRead = async (draftBody = body, draftKey = key) => {
   await act(async () =>
     take('MyahInboxEmailDraft').resolve({
-      myahInboxEmailDraft: { ...key, revision: 2, body },
+      myahInboxEmailDraft: { ...draftKey, revision: 2, body: draftBody },
     }),
   );
-  await act(async () =>
-    take('MyahInboxReplySendReadiness').resolve({
-      myahInboxReplySendReadiness: { status: 'READY', reason: null },
-    }),
+  const readiness = requests.find(
+    ({ name }) => name === 'MyahInboxReplySendReadiness',
   );
+  if (readiness) {
+    await act(async () =>
+      take('MyahInboxReplySendReadiness').resolve({
+        myahInboxReplySendReadiness: { status: 'READY', reason: null },
+      }),
+    );
+  }
 };
 const Harness = ({ children }: { children: ReactNode }) => {
   const controller = useMyahInboxDraftAutosaveController();
@@ -134,22 +240,25 @@ const setup = (
   duplicateEditor = false,
   presentation: 'default' | 'main' = 'default',
   subject: string | null = 'Re: First subject',
+  campaign: MyahInboxThread['campaign'] = null,
+  store = createStore(),
+  threadId = key.threadId,
 ) => {
-  const store = createStore();
+  const draftKey = { workspaceId: key.workspaceId, threadId };
   store.set(currentWorkspaceMemberState.atom, { id: 'member-1' } as never);
   store.set(currentWorkspaceState.atom, { id: key.workspaceId } as never);
   const view = render(
     <Provider store={store}>
       <Harness>
         <MyahInboxReplyWorkspace
-          thread={{ ...thread, subject }}
+          thread={{ ...thread, id: threadId, subject, campaign }}
           scopeGeneration="1"
           targetAvailable
           presentation={presentation}
         />
         {duplicateEditor && (
           <MyahInboxReplyWorkspace
-            thread={{ ...thread, subject }}
+            thread={{ ...thread, id: threadId, subject, campaign }}
             scopeGeneration="1"
             targetAvailable
             presentation={presentation}
@@ -161,13 +270,14 @@ const setup = (
   return {
     ...view,
     store,
-    entry: () => store.get(myahInboxDraftAutosaveFamilyState.atomFamily(key)),
+    entry: () =>
+      store.get(myahInboxDraftAutosaveFamilyState.atomFamily(draftKey)),
     refresh: (generation: string, available = true) =>
       view.rerender(
         <Provider store={store}>
           <Harness>
             <MyahInboxReplyWorkspace
-              thread={{ ...thread, subject }}
+              thread={{ ...thread, id: threadId, subject, campaign }}
               scopeGeneration={generation}
               targetAvailable={available}
               presentation={presentation}
@@ -240,6 +350,7 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     requests = [];
+    mockNavigate.mockClear();
     mockClient = new ApolloClient({
       cache: new InMemoryCache(),
       link: new ApolloLink(
@@ -263,8 +374,8 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
     jest.useRealTimers();
   });
 
-  it('uses the AI-first action order only for the opted-in main composer', async () => {
-    setup(false, 'main');
+  it('uses Send reply as the only main action for a populated Campaign draft', async () => {
+    setup(false, 'main', 'Re: First subject', linkedCampaign);
     await completeRead();
 
     expect(
@@ -272,9 +383,279 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
     ).toHaveAttribute('data-presentation', 'main');
     expect(screen.getByRole('button', { name: 'Send reply' })).toBeVisible();
     expect(
-      screen.queryByRole('button', { name: 'Generate Reply' }),
+      screen.queryByRole('button', { name: 'Generate reply' }),
     ).not.toBeInTheDocument();
   });
+
+  it.each(['', '   \n'])(
+    'uses Generate reply as the only main action for an empty Campaign draft %p',
+    async (markdown) => {
+      setup(false, 'main', 'Re: First subject', linkedCampaign);
+      await completeRead({ markdown, blocknote: null });
+
+      expect(
+        screen.getByRole('button', { name: 'Generate reply' }),
+      ).toBeEnabled();
+      expect(
+        screen.queryByRole('button', { name: 'Send reply' }),
+      ).not.toBeInTheDocument();
+      expect(
+        requests.some(({ name }) => name === 'MyahInboxReplySendReadiness'),
+      ).toBe(false);
+    },
+  );
+
+  it('explains unavailable empty-main generation to keyboard users', async () => {
+    setup(false, 'main');
+    await completeRead({ markdown: '', blocknote: null });
+
+    const generate = screen.getByRole('button', { name: 'Generate reply' });
+    expect(generate).not.toBeDisabled();
+    expect(generate).toHaveAttribute('aria-disabled', 'true');
+    expect(generate).toHaveAccessibleDescription(
+      'Link an exact readable Campaign to generate a reply or open AI guidance.',
+    );
+    generate.focus();
+    expect(generate).toHaveFocus();
+    fireEvent.click(generate);
+    expect(
+      requests.some(({ name }) => name === 'GenerateMyahInboxReplyProposal'),
+    ).toBe(false);
+    expect(
+      screen.queryByRole('button', { name: 'Send reply' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('restores edit mode for the same draft key and isolates another thread', async () => {
+    const first = setup(false, 'main', 'Re: First subject', linkedCampaign);
+    await completeRead();
+    expect(screen.getByTestId('draft-editor')).toHaveAttribute(
+      'data-initial-is-editing',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Mock start editing' }));
+    first.unmount();
+
+    const restored = setup(
+      false,
+      'main',
+      'Re: First subject',
+      linkedCampaign,
+      first.store,
+    );
+    await completeRead();
+    expect(screen.getByTestId('draft-editor')).toHaveAttribute(
+      'data-initial-is-editing',
+      'true',
+    );
+    restored.unmount();
+
+    const otherKey = { ...key, threadId: 'thread-2' };
+    setup(
+      false,
+      'main',
+      'Re: Other subject',
+      linkedCampaign,
+      first.store,
+      otherKey.threadId,
+    );
+    await completeRead(body, otherKey);
+    expect(screen.getByTestId('draft-editor')).toHaveAttribute(
+      'data-initial-is-editing',
+      'false',
+    );
+  });
+
+  it('pushes the exact Campaign route with the runtime Agent tab after a clean flush', async () => {
+    const store = createStore();
+    setCampaignAgentMetadata(store);
+    setup(false, 'main', 'Re: First subject', linkedCampaign, store);
+    await completeRead();
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Open AI guidance' })),
+    );
+
+    const expectedPath = `${getAppPath(AppPath.RecordShowPage, {
+      objectNameSingular: 'campaign',
+      objectRecordId: linkedCampaign.id,
+    })}#${runtimeAgentTabId}`;
+    expect(expectedPath).not.toContain(
+      MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER,
+    );
+    expect(mockNavigate).toHaveBeenCalledWith(expectedPath, {
+      state: {
+        myahCampaignAgentGuidanceFocusCampaignId: linkedCampaign.id,
+      },
+    });
+  });
+
+  it('rolls back selection preservation if Campaign navigation throws', async () => {
+    const store = createStore();
+    setCampaignAgentMetadata(store);
+    setup(false, 'main', 'Re: First subject', linkedCampaign, store);
+    await completeRead();
+    mockNavigate.mockImplementationOnce(() => {
+      throw new Error('Navigation failed');
+    });
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Open AI guidance' })),
+    );
+
+    expect(store.get(myahInboxPreserveSelectionOnUnmountState.atom)).toBe(
+      false,
+    );
+  });
+
+  it.each(['CONFLICT', 'ERROR'] as const)(
+    'does not navigate when a pending guidance flush ends in %s',
+    async (outcome) => {
+      const store = createStore();
+      setCampaignAgentMetadata(store);
+      setup(false, 'main', 'Re: First subject', linkedCampaign, store);
+      await completeRead();
+      fireEvent.change(screen.getByLabelText('Real shared draft'), {
+        target: { value: 'pending guidance edit' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Open AI guidance' }));
+      const save = take('SaveMyahInboxDraft');
+      expect(mockNavigate).not.toHaveBeenCalled();
+
+      if (outcome === 'CONFLICT') {
+        await act(async () =>
+          save.resolve({
+            saveMyahInboxDraft: {
+              status: 'CONFLICT',
+              revision: 3,
+              body,
+            },
+          }),
+        );
+      } else {
+        await act(async () => save.reject());
+      }
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['removed', 'inactive', 'replaced'] as const)(
+    'does not navigate when the Agent tab is %s during a pending flush',
+    async (change) => {
+      const store = createStore();
+      setCampaignAgentMetadata(store);
+      setup(false, 'main', 'Re: First subject', linkedCampaign, store);
+      await completeRead();
+      fireEvent.change(screen.getByLabelText('Real shared draft'), {
+        target: { value: 'pending guidance edit' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Open AI guidance' }));
+      const save = take('SaveMyahInboxDraft');
+
+      act(() => {
+        setCampaignAgentMetadata(
+          store,
+          change === 'removed'
+            ? { includeTab: false }
+            : change === 'inactive'
+              ? { tabActive: false }
+              : { tabId: 'runtime-agent-tab-2' },
+        );
+      });
+      await act(async () =>
+        save.resolve({
+          saveMyahInboxDraft: {
+            status: 'SAVED',
+            revision: 3,
+            body: { markdown: 'pending guidance edit', blocknote: null },
+          },
+        }),
+      );
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not navigate after target loss during a pending flush', async () => {
+    const store = createStore();
+    setCampaignAgentMetadata(store);
+    const view = setup(
+      false,
+      'main',
+      'Re: First subject',
+      linkedCampaign,
+      store,
+    );
+    await completeRead();
+    fireEvent.change(screen.getByLabelText('Real shared draft'), {
+      target: { value: 'pending guidance edit' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Open AI guidance' }));
+    const save = take('SaveMyahInboxDraft');
+    view.refresh('2', false);
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'pending guidance edit', blocknote: null },
+        },
+      }),
+    );
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('blocks duplicate guidance history entries while the flush is pending', async () => {
+    const store = createStore();
+    setCampaignAgentMetadata(store);
+    setup(false, 'main', 'Re: First subject', linkedCampaign, store);
+    await completeRead();
+    fireEvent.change(screen.getByLabelText('Real shared draft'), {
+      target: { value: 'pending guidance edit' },
+    });
+    const guidance = screen.getByRole('button', { name: 'Open AI guidance' });
+    fireEvent.click(guidance);
+    fireEvent.click(guidance);
+
+    expect(
+      requests.filter(({ name }) => name === 'SaveMyahInboxDraft'),
+    ).toHaveLength(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+    const save = take('SaveMyahInboxDraft');
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'pending guidance edit', blocknote: null },
+        },
+      }),
+    );
+
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['missing layout', { includeLayout: false }],
+    ['inactive layout', { layoutActive: false }],
+    ['missing tab', { includeTab: false }],
+    ['inactive tab', { tabActive: false }],
+  ] as const)(
+    'keeps guidance unavailable for %s without a fallback',
+    async (_label, metadata) => {
+      const store = createStore();
+      setCampaignAgentMetadata(store, metadata);
+      setup(false, 'main', 'Re: First subject', linkedCampaign, store);
+      await completeRead();
+
+      expect(
+        screen.getByRole('button', { name: 'Open AI guidance' }),
+      ).toBeDisabled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+    },
+  );
 
   it('renders only one editor and send authority when two surfaces mount the same key', async () => {
     setup(true);
@@ -415,11 +796,11 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
     expect(view.entry()?.confirmedBody).not.toEqual(body);
   });
 
-  it('applies a generated proposal through real controller CAS and the save transport', async () => {
-    const view = setup();
-    await completeRead();
+  it('applies an empty-main proposal through real controller CAS and transitions to Send', async () => {
+    const view = setup(false, 'main', 'Re: First subject', linkedCampaign);
+    await completeRead({ markdown: '', blocknote: null });
     await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' })),
+      fireEvent.click(screen.getByRole('button', { name: 'Generate reply' })),
     );
     const generation = take('GenerateMyahInboxReplyProposal');
     expect(generation.variables).toMatchObject({
@@ -443,18 +824,71 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
         },
       }),
     );
+    await act(async () =>
+      take('MyahInboxReplySendReadiness').resolve({
+        myahInboxReplySendReadiness: { status: 'READY', reason: null },
+      }),
+    );
     expect(view.entry()).toMatchObject({
       operation: null,
       status: 'saved',
       localBody: { markdown: 'generated' },
     });
+    expect(screen.getByRole('button', { name: 'Send reply' })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Generate reply' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps failed empty-main generation available for an explicit retry', async () => {
+    const view = setup(false, 'main', 'Re: First subject', linkedCampaign);
+    await completeRead({ markdown: '', blocknote: null });
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Generate reply' })),
+    );
+    await act(async () => take('GenerateMyahInboxReplyProposal').reject());
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not generate a reply. Try again.',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Generate reply' }),
+    ).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Send reply' })).toBeNull();
+    expect(view.entry()?.localBody.markdown).toBe('');
+  });
+
+  it('returns a cleared main draft to Generate and permits another generation', async () => {
+    setup(false, 'main', 'Re: First subject', linkedCampaign);
+    await completeRead();
+    fireEvent.change(screen.getByLabelText('Real shared draft'), {
+      target: { value: '' },
+    });
+    await act(async () => jest.advanceTimersByTimeAsync(750));
+    await act(async () =>
+      take('SaveMyahInboxDraft').resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: '', blocknote: null },
+        },
+      }),
+    );
+
+    expect(screen.queryByRole('button', { name: 'Send reply' })).toBeNull();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Generate reply' })),
+    );
+    expect(take('GenerateMyahInboxReplyProposal').variables).toMatchObject({
+      input: { expectedWorkspaceId: key.workspaceId, threadId: key.threadId },
+    });
   });
 
   it('never applies a delayed generation after forced target loss', async () => {
-    const view = setup();
+    const view = setup(false, 'default', 'Re: First subject', linkedCampaign);
     await completeRead();
     await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' })),
+      fireEvent.click(screen.getByRole('button', { name: 'Generate reply' })),
     );
     const generation = take('GenerateMyahInboxReplyProposal');
     view.refresh('2', false);
@@ -487,7 +921,7 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
       );
       expect(screen.getByLabelText('Real shared draft')).toBeDisabled();
       expect(
-        screen.getByRole('button', { name: 'Generate Reply' }),
+        screen.getByRole('button', { name: 'Generate reply' }),
       ).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
       expect(view.entry()?.operation?.kind).toBe(

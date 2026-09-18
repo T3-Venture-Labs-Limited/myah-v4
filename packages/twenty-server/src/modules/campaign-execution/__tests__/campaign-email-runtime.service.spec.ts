@@ -1,4 +1,9 @@
+import {
+  getWorkspaceContext,
+  withWorkspaceContext,
+} from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { CampaignEmailRuntimeService } from 'src/modules/campaign-execution/services/campaign-email-runtime.service';
+import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 
 const ids = {
   workspaceId: '00000000-0000-4000-8000-000000000001',
@@ -34,28 +39,48 @@ describe('CampaignEmailRuntimeService', () => {
     const query = jest.fn(async (sql: string) =>
       sql.includes('WITH pending') ? work : [routingRow],
     );
-    const manager = { queryRunner: { isTransactionActive: true } };
+    const getRepository = jest.fn(() => {
+      throw new Error('Campaign runtime must not use a class repository');
+    });
+    const manager = {
+      getRepository,
+      queryRunner: { isTransactionActive: true, query },
+    };
+    Object.assign(manager.queryRunner, { manager });
     const dataSource = {
       query,
       transaction: jest.fn(async (work) => work(manager)),
     };
     const progression = {
+      claimAndReserveDueOccurrenceInTransaction: jest.fn(async () => ({
+        status: 'SKIPPED',
+        attemptId: ids.attemptId,
+      })),
+      holdOccurrenceInTransaction: jest.fn(),
       reconcileAcceptedInTransaction: jest.fn(),
       reconcileDefinitelyUnacceptedInTransaction: jest.fn(),
       reconcileUnknownInTransaction: jest.fn(),
     };
     const projection = { reconcile: jest.fn(async () => projectionResult) };
     const dispatch = { dispatch: jest.fn() };
+    const orm = {
+      getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
+      executeInWorkspaceContext: jest.fn(
+        async (callback: () => Promise<unknown>, authContext: unknown) =>
+          withWorkspaceContext({ authContext } as never, callback),
+      ),
+    };
     return {
+      query,
       service: new CampaignEmailRuntimeService(
-        {
-          getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
-        } as never,
+        orm as never,
         progression as never,
         dispatch as never,
         projection as never,
       ),
       dispatch,
+      getRepository,
+      orm,
       progression,
       projection,
     };
@@ -90,6 +115,17 @@ describe('CampaignEmailRuntimeService', () => {
     expect(progression.reconcileAcceptedInTransaction).not.toHaveBeenCalled();
   });
 
+  it('reads due work through an active transaction runner without datasource queries', async () => {
+    const { service, query } = setup('PROJECTED');
+
+    await service.runDueOccurrences();
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('WITH pending'),
+      [],
+    );
+  });
+
   it('routes persisted definite and unknown outcomes without provider redispatch', async () => {
     const { service, dispatch, progression } = setup('PROJECTED', [
       { ...ids, kind: 'DEFINITELY_UNACCEPTED' },
@@ -103,5 +139,304 @@ describe('CampaignEmailRuntimeService', () => {
     ).toHaveBeenCalledTimes(1);
     expect(progression.reconcileUnknownInTransaction).toHaveBeenCalledTimes(1);
     expect(dispatch.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('keeps discovery outside context and every work route inside its workspace context', async () => {
+    const work = [
+      { ...ids, kind: 'ACCEPTED' },
+      { ...ids, kind: 'RESERVED' },
+      { ...ids, kind: 'PROCESSING' },
+      { ...ids, kind: 'DEFINITELY_UNACCEPTED' },
+      { ...ids, kind: 'UNKNOWN' },
+      { ...ids, kind: 'BLOCKED' },
+      { ...ids, kind: 'PENDING' },
+    ];
+    const { service, query, orm, progression } = setup('PROJECTED', work);
+    const seen: string[] = [];
+    const assertItemContext = (route: string) => {
+      const authContext = getWorkspaceContext().authContext;
+
+      expect(authContext.type).toBe('system');
+      expect(authContext.workspace.id).toBe(ids.workspaceId);
+      seen.push(route);
+    };
+
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('WITH pending')) {
+        expect(() => getWorkspaceContext()).toThrow(
+          'Workspace context not set',
+        );
+        return work;
+      }
+      return [];
+    });
+    jest
+      .spyOn(service as any, 'reconcileAcceptedAttempt')
+      .mockImplementation(async () => assertItemContext('ACCEPTED'));
+    jest
+      .spyOn(service as any, 'dispatchAttempt')
+      .mockImplementation(
+        async (_workspaceId, _campaignId, _attemptId, state) =>
+          assertItemContext(state === 'PROCESSING' ? 'PROCESSING' : 'RESERVED'),
+      );
+    jest
+      .spyOn(service as any, 'reconcilePersistedOutcome')
+      .mockImplementation(
+        async (_workspaceId, _campaignId, _attemptId, state) =>
+          assertItemContext(String(state)),
+      );
+    progression.holdOccurrenceInTransaction.mockImplementation(async () =>
+      assertItemContext('BLOCKED'),
+    );
+    progression.claimAndReserveDueOccurrenceInTransaction.mockImplementation(
+      async () => {
+        assertItemContext('PENDING');
+        return { status: 'SKIPPED', attemptId: ids.attemptId };
+      },
+    );
+
+    await service.runDueOccurrences();
+
+    expect(seen).toEqual([
+      'ACCEPTED',
+      'RESERVED',
+      'PROCESSING',
+      'DEFINITELY_UNACCEPTED',
+      'UNKNOWN',
+      'BLOCKED',
+      'PENDING',
+    ]);
+    expect(orm.executeInWorkspaceContext).toHaveBeenCalledTimes(work.length);
+    for (const call of orm.executeInWorkspaceContext.mock.calls)
+      expect(call).toHaveLength(2);
+  });
+
+  it('loads the core mailbox through the active runner without a class repository', async () => {
+    const account = {
+      id: ids.accountId,
+      workspaceId: ids.workspaceId,
+      handle: 'sender@example.com',
+      provider: 'imap_smtp_caldav',
+      connectionParameters: {
+        IMAP: {
+          host: 'imap.example.com',
+          port: 993,
+          username: 'sender@example.com',
+          password: 'enc:v2:imap-password',
+          connectionSecurity: 'SSL_TLS',
+        },
+        SMTP: {
+          host: 'smtp.example.com',
+          port: 587,
+          username: 'sender@example.com',
+          password: 'enc:v2:smtp-password',
+          connectionSecurity: 'STARTTLS',
+        },
+      },
+    };
+    const row = {
+      attemptNumber: 1,
+      authorizationGeneration: 1,
+      authorizationId: ids.authorizationId,
+      activationId: ids.activationId,
+      campaignExecutionId: ids.executionId,
+      campaignId: ids.campaignId,
+      claimedAt: '2026-09-16T12:00:00.000Z',
+      connectedAccountId: ids.accountId,
+      enrollmentId: ids.enrollmentId,
+      html: '<p>Body</p>',
+      localDate: '2026-09-16',
+      messageChannelId: ids.channelId,
+      messageId: '00000000-0000-4000-8000-000000000012',
+      normalizedRecipient: 'recipient@example.com',
+      normalizedSenderHandle: 'sender@example.com',
+      occurrenceId: ids.occurrenceId,
+      provider: 'imap_smtp_caldav',
+      renderDigest: 'a'.repeat(64),
+      senderPoolFingerprint: 'b'.repeat(64),
+      slotAt: '2026-09-16T12:00:00.000Z',
+      subject: 'Subject',
+      text: 'Body',
+      toRecipient: 'recipient@example.com',
+      unknownAfter: '2026-09-16T12:01:00.000Z',
+      workflowVersionId: ids.versionId,
+      references: [],
+      inReplyTo: null,
+      threadExternalId: null,
+      selectionConstraintKind: 'ROTATE',
+      priorAcceptedEvidenceId: null,
+    };
+    const { service, getRepository, query } = setup();
+    const receipt = {
+      unknownAfter: new Date('2026-09-16T12:01:00.000Z'),
+      updatedAt: new Date('2026-09-16T12:00:00.000Z'),
+    };
+    const sendMessage = jest.fn(async () => ({
+      headerMessageId: '<header@example.com>',
+      messageExternalId: 'provider-123',
+    }));
+    const dispatch = new OutboundEmailDispatchService(
+      {
+        runInTransaction: async (work) => work({} as never),
+        runPreProviderTransaction: async (work) => work({} as never),
+      },
+      {
+        revalidate: jest.fn(async ({ materialEvidence, submission }) => ({
+          projectedMessageId: materialEvidence.projectedMessageId,
+          status: 'AUTHORIZED' as const,
+          submission,
+        })),
+      },
+      { now: jest.fn(() => 10_000) },
+      {
+        beginSubmission: jest.fn(async () => ({
+          receipt,
+          status: 'PROCESSING_ACQUIRED' as const,
+        })),
+        blockReservedAttemptBeforeProvider: jest.fn(async () => ({
+          receipt,
+          status: 'RECORDED' as const,
+        })),
+        recheckProcessingWindowBeforeProvider: jest.fn(async () => ({
+          receipt,
+          status: 'SAFE' as const,
+        })),
+        recordAccepted: jest.fn(async () => ({
+          receipt,
+          status: 'RECORDED' as const,
+        })),
+      } as never,
+      {
+        getProviderRequestTimeoutMs: jest.fn(() => 30_000),
+        sendMessage,
+      } as never,
+    );
+    const dispatchSpy = jest.spyOn(dispatch, 'dispatch');
+    (service as any).dispatch = dispatch;
+    let accountRows: Record<string, unknown>[] = [account];
+
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM core."connectedAccount"')) return accountRows;
+      return [row];
+    });
+
+    await (service as any).dispatchAttempt(
+      ids.workspaceId,
+      ids.campaignId,
+      ids.attemptId,
+    );
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^\s*SELECT id, "workspaceId", handle, provider, "connectionParameters"\s+FROM core\."connectedAccount"\s+WHERE id=\$1 AND "workspaceId"=\$2\s*$/s,
+      ),
+      [ids.accountId, ids.workspaceId],
+    );
+    expect(getRepository).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'recipient@example.com' }),
+      expect.objectContaining({
+        connectionParameters: account.connectionParameters,
+        handle: account.handle,
+        id: account.id,
+        provider: account.provider,
+      }),
+    );
+
+    for (const rows of [
+      [],
+      [{ ...account, handle: '' }],
+      [{ ...account, provider: 'invalid-provider' }],
+      [{ ...account, workspaceId: 'other-workspace' }],
+      [account, account],
+      [{ ...account, connectionParameters: undefined }],
+    ]) {
+      accountRows = rows;
+      dispatchSpy.mockClear();
+      sendMessage.mockClear();
+
+      await expect(
+        (service as any).dispatchAttempt(
+          ids.workspaceId,
+          ids.campaignId,
+          ids.attemptId,
+        ),
+      ).rejects.toThrow('Campaign runtime account was invalid');
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(sendMessage).not.toHaveBeenCalled();
+    }
+
+    for (const connectionParameters of [{}, { IMAP: {} }]) {
+      accountRows = [{ ...account, connectionParameters }];
+      dispatchSpy.mockClear();
+      sendMessage.mockClear();
+
+      await (service as any).dispatchAttempt(
+        ids.workspaceId,
+        ids.campaignId,
+        ids.attemptId,
+      );
+
+      await expect(dispatchSpy.mock.results[0].value).resolves.toMatchObject({
+        status: 'BLOCKED',
+      });
+      expect(sendMessage).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each(['RESERVED', 'DISPATCHABLE_REPLAY'] as const)(
+    'keeps pending claim dispatch inside context for %s',
+    async (status) => {
+      const { service, progression } = setup('PROJECTED', [
+        { ...ids, kind: 'PENDING' },
+      ]);
+      const dispatchAttempt = jest
+        .spyOn(service as any, 'dispatchAttempt')
+        .mockImplementation(async () => {
+          expect(getWorkspaceContext().authContext.workspace.id).toBe(
+            ids.workspaceId,
+          );
+        });
+
+      progression.claimAndReserveDueOccurrenceInTransaction.mockResolvedValue({
+        status,
+        attemptId: ids.attemptId,
+      });
+
+      await service.runDueOccurrences();
+
+      expect(dispatchAttempt).toHaveBeenCalledWith(
+        ids.workspaceId,
+        ids.campaignId,
+        ids.attemptId,
+      );
+    },
+  );
+
+  it('isolates a failed workspace item and enters the next item workspace', async () => {
+    const secondWorkspaceId = '00000000-0000-4000-8000-000000000012';
+    const { service, progression } = setup('PROJECTED', [
+      { ...ids, kind: 'PENDING' },
+      { ...ids, workspaceId: secondWorkspaceId, kind: 'PENDING' },
+    ]);
+    const handledWorkspaceIds: string[] = [];
+    const consoleError = jest.spyOn(console, 'error').mockImplementation();
+
+    progression.claimAndReserveDueOccurrenceInTransaction.mockImplementation(
+      async () => {
+        const workspaceId = getWorkspaceContext().authContext.workspace.id;
+
+        handledWorkspaceIds.push(workspaceId);
+        if (workspaceId === ids.workspaceId)
+          throw new Error('first item failed');
+        return { status: 'SKIPPED', attemptId: ids.attemptId };
+      },
+    );
+
+    await service.runDueOccurrences();
+
+    expect(handledWorkspaceIds).toEqual([ids.workspaceId, secondWorkspaceId]);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
   });
 });

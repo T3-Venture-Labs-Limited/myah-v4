@@ -80,7 +80,9 @@ export class MessagingMessagesImportService {
         try {
           if (
             messageChannel.syncStage !==
-            MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED
+              MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED &&
+            messageChannel.syncStage !==
+              MessageChannelSyncStage.MESSAGES_IMPORT_ONGOING
           ) {
             return;
           }
