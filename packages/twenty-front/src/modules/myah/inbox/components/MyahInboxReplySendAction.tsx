@@ -16,7 +16,7 @@ import {
   MyahInboxReplySendReadinessStatus,
 } from '~/generated/graphql';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from 'twenty-ui/input';
 
 export type MyahInboxReplySendActionProps = {
@@ -28,34 +28,6 @@ export type MyahInboxReplySendActionProps = {
   onDraftReconciled?: (thread: MyahInboxDraftAutosaveThread) => void;
   onSendingChange?: (sending: boolean) => void;
   onSent?: () => void | Promise<void>;
-};
-
-const getReadinessMessage = (
-  status: MyahInboxReplySendReadinessStatus | undefined,
-  reason: string | null | undefined,
-  hasPendingFirstSave: boolean,
-): string | null => {
-  switch (status) {
-    case MyahInboxReplySendReadinessStatus.READY:
-    case undefined:
-      return null;
-    case MyahInboxReplySendReadinessStatus.RECONNECT_REQUIRED:
-      return 'Reconnect the sending mailbox before sending.';
-    case MyahInboxReplySendReadinessStatus.MAILBOX_INELIGIBLE:
-      return 'This mailbox cannot send this reply.';
-    case MyahInboxReplySendReadinessStatus.OUTCOME_PENDING:
-      return 'A previous send is still being confirmed. Sending is locked.';
-    case MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN:
-      return 'A previous delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here.';
-    case MyahInboxReplySendReadinessStatus.RECIPIENT_UNAVAILABLE:
-      return 'This conversation has no readable recipient.';
-    case MyahInboxReplySendReadinessStatus.SENDER_UNAVAILABLE:
-      return 'No eligible sending mailbox is available.';
-    case MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE:
-      return hasPendingFirstSave
-        ? 'Saving the first shared draft…'
-        : reason?.trim() || 'This Email conversation is unavailable.';
-  }
 };
 
 export const MyahInboxReplySendAction = ({
@@ -81,7 +53,6 @@ export const MyahInboxReplySendAction = ({
     draftKey.threadId,
     entry.confirmedRevision,
   );
-  const readinessDescriptionId = useId();
   // oxlint-disable-next-line twenty/no-state-useref
   const mountedRef = useRef(false);
   // oxlint-disable-next-line twenty/no-state-useref
@@ -117,13 +88,6 @@ export const MyahInboxReplySendAction = ({
         MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE);
   const hasPersistedUnknownOutcome =
     readiness?.status === MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN;
-  const readinessMessage = readinessLoading
-    ? 'Checking Email send readiness…'
-    : getReadinessMessage(
-        readiness?.status,
-        readiness?.reason,
-        hasPendingFirstSave,
-      );
   const canAttemptSend =
     !disabled &&
     !entry.operation &&
@@ -262,28 +226,13 @@ export const MyahInboxReplySendAction = ({
   };
 
   return (
-    <>
-      <Button
-        title={label ?? t`Send`}
-        variant="primary"
-        accent="brand"
-        size="small"
-        aria-describedby={
-          readinessMessage || isUnknown ? readinessDescriptionId : undefined
-        }
-        disabled={!canAttemptSend}
-        onClick={handleSend}
-      />
-      {(readinessMessage || isUnknown) && (
-        <span
-          id={readinessDescriptionId}
-          role={isUnknown || hasPersistedUnknownOutcome ? 'alert' : 'status'}
-        >
-          {isUnknown
-            ? t`Delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here.`
-            : readinessMessage}
-        </span>
-      )}
-    </>
+    <Button
+      title={label ?? t`Send`}
+      variant="primary"
+      accent="brand"
+      size="small"
+      disabled={!canAttemptSend}
+      onClick={handleSend}
+    />
   );
 };

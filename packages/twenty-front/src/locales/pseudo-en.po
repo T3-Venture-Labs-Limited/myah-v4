@@ -4180,11 +4180,6 @@ msgstr ""
 msgid "Calendars"
 msgstr ""
 
-#. js-lingui-id: cHma9m
-#: src/modules/onboarding/constants/OnboardingInstallableApps.ts
-msgid "Call recorder"
-msgstr ""
-
 #. js-lingui-id: qIlodj
 #: src/modules/object-record/record-field/ui/form-types/components/FormPhoneFieldInput.tsx
 msgid "Calling Code"
@@ -7557,11 +7552,6 @@ msgstr ""
 msgid "Deleting this method will remove it permanently from your account."
 msgstr ""
 
-#. js-lingui-id: pSPj8a
-#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
-msgid "Delivery outcome is unknown. Check Sent mail before taking any further action; sending is locked here."
-msgstr ""
-
 #. js-lingui-id: kJHy3o
 #: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 msgid "Delivery outcome is unknown. This draft is locked to prevent a duplicate send."
@@ -8836,16 +8826,6 @@ msgstr ""
 #. js-lingui-id: 6iUnle
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
 msgid "Enjoy a 30-day free trial"
-msgstr ""
-
-#. js-lingui-id: 4frL7T
-#: src/modules/onboarding/constants/OnboardingInstallableApps.ts
-msgid "Enrich your leads with People Data Labs"
-msgstr ""
-
-#. js-lingui-id: D7NFK8
-#: src/modules/onboarding/constants/OnboardingInstallableApps.ts
-msgid "Enrichment"
 msgstr ""
 
 #. js-lingui-id: s7Zz7R
@@ -17676,11 +17656,6 @@ msgstr ""
 #. js-lingui-id: kvxD0C
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerDatabaseEventForm.tsx
 msgid "Record Type"
-msgstr ""
-
-#. js-lingui-id: bSHWVY
-#: src/modules/onboarding/constants/OnboardingInstallableApps.ts
-msgid "Record your calls and get transcripts"
 msgstr ""
 
 #. js-lingui-id: uMOyEH

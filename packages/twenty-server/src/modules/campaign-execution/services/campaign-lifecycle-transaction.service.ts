@@ -60,6 +60,8 @@ type DetachedSnapshotOptions = Readonly<{
   allowDate: boolean;
   allowUndefined: boolean;
   errorMessage: string;
+  outputOrdinaryRecords?: boolean;
+  requirePlainDataPrototypes?: boolean;
 }>;
 
 type DataDescriptorMap = Readonly<
@@ -67,6 +69,22 @@ type DataDescriptorMap = Readonly<
     readonly [key: symbol]: PropertyDescriptor;
   }
 >;
+
+interface DetachedSnapshotRecord {
+  readonly [key: string]: DetachedSnapshotValue;
+}
+
+interface DetachedSnapshotArray extends ReadonlyArray<DetachedSnapshotValue> {}
+
+type DetachedSnapshotValue =
+  | undefined
+  | null
+  | boolean
+  | number
+  | string
+  | Readonly<Date>
+  | DetachedSnapshotArray
+  | DetachedSnapshotRecord;
 
 const DANGEROUS_PROPERTY_KEYS = new Set([
   '__proto__',
@@ -110,7 +128,7 @@ const getDataDescriptors = (
 };
 
 const defineImmutableOwnProperty = (
-  target: object,
+  target: Record<string, unknown> | unknown[],
   key: string,
   value: unknown,
 ): void => {
@@ -126,7 +144,7 @@ const snapshotDetachedValue = (
   value: unknown,
   options: DetachedSnapshotOptions,
   seen = new WeakSet<object>(),
-): unknown => {
+): DetachedSnapshotValue => {
   if (value === undefined) {
     return options.allowUndefined
       ? undefined
@@ -165,6 +183,24 @@ const snapshotDetachedValue = (
     return Object.freeze(new Date(timestamp));
   }
 
+  let prototype: object | null;
+
+  try {
+    prototype = Object.getPrototypeOf(value);
+  } catch {
+    return failSnapshot(options.errorMessage);
+  }
+
+  if (
+    options.requirePlainDataPrototypes &&
+    ((Array.isArray(value) && prototype !== Array.prototype) ||
+      (!Array.isArray(value) &&
+        prototype !== Object.prototype &&
+        prototype !== null))
+  ) {
+    return failSnapshot(options.errorMessage);
+  }
+
   const descriptors = getDataDescriptors(value, options.errorMessage);
 
   if (Array.isArray(value)) {
@@ -182,7 +218,7 @@ const snapshotDetachedValue = (
       return failSnapshot(options.errorMessage);
     }
 
-    const clone: unknown[] = [];
+    const clone: DetachedSnapshotValue[] = [];
 
     for (let index = 0; index < length; index += 1) {
       const descriptor = descriptors[String(index)];
@@ -201,7 +237,10 @@ const snapshotDetachedValue = (
     return Object.freeze(clone);
   }
 
-  const clone = Object.create(null) as Record<string, unknown>;
+  const clone: Record<string, DetachedSnapshotValue> =
+    options.outputOrdinaryRecords
+      ? {}
+      : (Object.create(null) as Record<string, DetachedSnapshotValue>);
 
   for (const key of Reflect.ownKeys(descriptors)) {
     if (typeof key !== 'string') {
@@ -370,6 +409,8 @@ const snapshotWorkspaceAuthContext = (value: unknown): WorkspaceAuthContext => {
       break;
   }
 
+  // SAFETY: exhaustive auth-type and required-field checks above establish the
+  // runtime WorkspaceAuthContext union after recursive detachment.
   return snapshot as unknown as WorkspaceAuthContext;
 };
 
@@ -512,6 +553,8 @@ const snapshotWorkspaceProjection = (
   );
   defineImmutableOwnProperty(snapshot, 'id', values.id);
 
+  // SAFETY: exact-key and primitive checks above establish the selected
+  // workspace capacity projection after recursive detachment.
   return Object.freeze(
     snapshot,
   ) as unknown as RawWorkspaceCampaignCapacityProjection;
@@ -551,9 +594,13 @@ const snapshotCampaignProjection = (
       allowDate: false,
       allowUndefined: false,
       errorMessage,
+      outputOrdinaryRecords: true,
+      requirePlainDataPrototypes: true,
     }),
   );
 
+  // SAFETY: exact-key and primitive checks above establish the selected
+  // Campaign projection; sequenceAuthorization remains validated JSON data.
   return Object.freeze(snapshot) as unknown as RawCampaignLifecycleProjection;
 };
 

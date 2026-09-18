@@ -26,6 +26,31 @@ export type PendingMessageSyncCursorState = {
   generationId: string;
 };
 
+const isPendingMessageSyncCursorState = (
+  value: unknown,
+): value is PendingMessageSyncCursorState => {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const state = value as Record<string, unknown>;
+
+  return (
+    typeof state.generationId === 'string' &&
+    Array.isArray(state.expectedMessageExternalIds) &&
+    state.expectedMessageExternalIds.every(
+      (messageExternalId) => typeof messageExternalId === 'string',
+    ) &&
+    Array.isArray(state.cursors) &&
+    state.cursors.every(
+      (cursor) =>
+        typeof cursor === 'object' &&
+        cursor !== null &&
+        (typeof (cursor as Record<string, unknown>).folderId === 'string' ||
+          (cursor as Record<string, unknown>).folderId === undefined) &&
+        typeof (cursor as Record<string, unknown>).nextSyncCursor === 'string',
+    )
+  );
+};
+
 type MessageChannelScope = {
   messageChannelId: string;
   workspaceId: string;
@@ -74,6 +99,82 @@ export class MessagingPendingSyncCursorService {
       generationId,
       PENDING_SYNC_CURSOR_TTL_MS,
     );
+  }
+
+  /**
+   * Read-only: the generation of the import currently in flight for this
+   * channel, if any. Contact triage uses it only as receipt provenance; import
+   * progress itself stays owned by the pending-cursor cache.
+   */
+  async getPendingGenerationId({
+    messageChannelId,
+    workspaceId,
+  }: MessageChannelScope): Promise<string | null> {
+    return (
+      (await this.cacheStorage.get<string>(
+        getPendingMessageSyncGenerationCacheKey({
+          messageChannelId,
+          workspaceId,
+        }),
+      )) ?? null
+    );
+  }
+
+  async restorePendingMessageExternalIds({
+    messageChannelId,
+    workspaceId,
+  }: MessageChannelScope): Promise<boolean> {
+    const generationId = await this.cacheStorage.get<string>(
+      getPendingMessageSyncGenerationCacheKey({
+        messageChannelId,
+        workspaceId,
+      }),
+    );
+
+    if (!generationId) {
+      return false;
+    }
+
+    const state = await this.cacheStorage.get<unknown>(
+      getPendingMessageSyncCursorsCacheKey({
+        generationId,
+        messageChannelId,
+        workspaceId,
+      }),
+    );
+
+    if (
+      !isPendingMessageSyncCursorState(state) ||
+      state.generationId !== generationId
+    ) {
+      return false;
+    }
+
+    const acknowledgedIds = new Set(
+      await this.cacheStorage.setMembers(
+        getAcknowledgedMessageSyncIdsCacheKey({
+          generationId,
+          messageChannelId,
+          workspaceId,
+        }),
+      ),
+    );
+
+    const messagesToImportKey = getMessagesToImportCacheKey({
+      messageChannelId,
+      workspaceId,
+    });
+
+    await this.cacheStorage.mdel([messagesToImportKey]);
+    await this.cacheStorage.setAdd(
+      messagesToImportKey,
+      state.expectedMessageExternalIds.filter(
+        (messageExternalId) => !acknowledgedIds.has(messageExternalId),
+      ),
+      PENDING_SYNC_CURSOR_TTL_MS,
+    );
+
+    return true;
   }
 
   async acknowledge({

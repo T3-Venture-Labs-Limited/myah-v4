@@ -3,6 +3,7 @@ import { getDataSourceToken } from '@nestjs/typeorm';
 import { CommandMeta } from 'nest-commander/src/constants';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
+import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
 import { RepairInstagramSecurityCutoverCommand } from 'src/database/commands/upgrade-version-command/2-20/repair-instagram-security-cutover.command';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -262,17 +263,32 @@ describe('Instagram production upgrade provider compatibility', () => {
       const identities = EXPECTED_INSTAGRAM_IDENTITIES.filter(
         (identity) => identity.kind === kind,
       );
+      const commandsThroughInstagramCutover = actualTail.filter(
+        (step) => step.timestamp <= identities[identities.length - 1].timestamp,
+      );
       expect(
-        actualTail.slice(-identities.length).map(({ name }) => name),
+        commandsThroughInstagramCutover
+          .slice(-identities.length)
+          .map(({ name }) => name),
       ).toEqual(identities.map(({ durableName }) => durableName));
-      const unaffected = actualTail.slice(0, -identities.length);
+      const unaffected = commandsThroughInstagramCutover.slice(
+        0,
+        -identities.length,
+      );
       expect(
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
+    // Contact-wide triage registers newer 2.20 workspace commands, so the
+    // campaign lifecycle synchronizer is no longer the last workspace step.
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
     );
+    expect(
+      getRegisteredWorkspaceCommandMetadata(
+        SynchronizeCampaignLifecycleStatusMetadataCommand,
+      ),
+    ).toEqual({ version: '2.20.0', timestamp: 1789313971535 });
     expect(
       sequence.filter((step) =>
         EXPECTED_INSTAGRAM_IDENTITIES.some(

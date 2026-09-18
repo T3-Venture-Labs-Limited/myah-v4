@@ -149,6 +149,7 @@ export class MicrosoftGetMessagesService {
         externalId: response.id,
         subject: response.subject || '',
         receivedAt: new Date(response.receivedDateTime),
+        providerOccurredAt: response.receivedDateTime ?? null,
         text,
         headerMessageId: response.internetMessageId,
         messageThreadExternalId: response.conversationId,

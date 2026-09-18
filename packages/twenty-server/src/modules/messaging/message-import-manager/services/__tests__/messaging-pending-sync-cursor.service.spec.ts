@@ -46,6 +46,7 @@ describe('MessagingPendingSyncCursorService', () => {
     mdel: jest.Mock;
     set: jest.Mock;
     setAdd: jest.Mock;
+    setMembers: jest.Mock;
   };
   let updateCursor: jest.Mock;
 
@@ -56,6 +57,7 @@ describe('MessagingPendingSyncCursorService', () => {
       mdel: jest.fn().mockResolvedValue(undefined),
       set: jest.fn().mockResolvedValue(undefined),
       setAdd: jest.fn().mockResolvedValue(undefined),
+      setMembers: jest.fn().mockResolvedValue([]),
     };
     updateCursor = jest.fn().mockResolvedValue(undefined);
 
@@ -158,6 +160,105 @@ describe('MessagingPendingSyncCursorService', () => {
       expect.anything(),
       expect.anything(),
     );
+  });
+
+  it('restores expected-but-unacknowledged IDs after an interrupted pop', async () => {
+    cache.get.mockImplementation(async (key: string) => {
+      if (key === generationKey) return 'generation-1';
+      if (key === pendingKey('generation-1')) {
+        return {
+          cursors: [],
+          expectedMessageExternalIds: ['saved-id', 'lost-id'],
+          generationId: 'generation-1',
+        } satisfies PendingState;
+      }
+      return undefined;
+    });
+    cache.setMembers.mockResolvedValue(['saved-id']);
+
+    await expect(
+      service.restorePendingMessageExternalIds({
+        messageChannelId,
+        workspaceId,
+      }),
+    ).resolves.toBe(true);
+
+    const messagesToImportKey = getMessagesToImportCacheKey({
+      messageChannelId,
+      workspaceId,
+    });
+
+    expect(cache.mdel).toHaveBeenCalledWith([messagesToImportKey]);
+    expect(cache.setAdd).toHaveBeenCalledWith(
+      messagesToImportKey,
+      ['lost-id'],
+      7 * 24 * 60 * 60 * 1000,
+    );
+  });
+
+  it('requires list re-enumeration when generation state is missing', async () => {
+    await expect(
+      service.restorePendingMessageExternalIds({
+        messageChannelId,
+        workspaceId,
+      }),
+    ).resolves.toBe(false);
+
+    cache.get.mockReset().mockResolvedValueOnce('generation-1');
+
+    await expect(
+      service.restorePendingMessageExternalIds({
+        messageChannelId,
+        workspaceId,
+      }),
+    ).resolves.toBe(false);
+
+    expect(cache.setAdd).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'expected message IDs are missing',
+      { cursors: [], generationId: 'generation-1' },
+    ],
+    [
+      'expected message IDs are malformed',
+      {
+        cursors: [],
+        expectedMessageExternalIds: 'not-an-array',
+        generationId: 'generation-1',
+      },
+    ],
+    [
+      'cursors are missing',
+      {
+        expectedMessageExternalIds: [],
+        generationId: 'generation-1',
+      },
+    ],
+    [
+      'a cursor is malformed',
+      {
+        cursors: [{ folderId: 'inbox-folder-id' }],
+        expectedMessageExternalIds: [],
+        generationId: 'generation-1',
+      },
+    ],
+  ])('requires list re-enumeration when %s', async (_label, state) => {
+    cache.get
+      .mockResolvedValueOnce('generation-1')
+      .mockResolvedValueOnce(state);
+
+    await expect(
+      service.restorePendingMessageExternalIds({
+        messageChannelId,
+        workspaceId,
+      }),
+    ).resolves.toBe(false);
+
+    expect(cache.setMembers).not.toHaveBeenCalled();
+    expect(cache.mdel).not.toHaveBeenCalled();
+    expect(cache.setAdd).not.toHaveBeenCalled();
   });
 
   it('refuses to commit while current-generation IDs remain unacknowledged', async () => {

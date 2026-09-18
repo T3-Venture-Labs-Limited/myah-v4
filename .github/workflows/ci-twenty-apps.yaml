@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       application:
-        description: 'App folder name to test (e.g. "twenty-linear"). Leave empty to test all apps.'
+        description: 'App folder name to test (e.g. "myah-shopify"). Leave empty to test all apps.'
         required: false
         default: ''
         type: string
@@ -21,10 +21,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  select-runner:
-    uses: ./.github/workflows/select-runner.yaml
-    secrets: inherit
-
   discover:
     timeout-minutes: 5
     runs-on: ubuntu-latest
@@ -97,7 +93,7 @@ jobs:
                     path: appPath,
                     hasTypecheck: Boolean(scripts.typecheck),
                     hasUnit: Boolean(scripts['test:unit']),
-                    hasIntegration: Boolean(scripts.test),
+                    hasIntegration: Boolean(scripts.test && scripts.test !== scripts['test:unit']),
                   };
                 })
             );
@@ -164,8 +160,8 @@ jobs:
     if: always() && !cancelled()
     timeout-minutes: 5
     runs-on: ubuntu-latest
-    needs: [discover, ci, select-runner]
+    needs: [discover, ci]
     steps:
       - name: Fail job if any needs failed
-        if: contains(needs.*.result, 'failure') || needs.select-runner.result != 'success'
+        if: contains(needs.*.result, 'failure')
         run: exit 1

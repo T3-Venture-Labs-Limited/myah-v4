@@ -50,6 +50,12 @@ export const myahInboxContactSelectionState =
     defaultValue: EMPTY_MYAH_INBOX_CONTACT_SELECTION,
   });
 
+export const myahInboxPreserveSelectionOnUnmountState =
+  createAtomState<boolean>({
+    key: 'myahInboxPreserveSelectionOnUnmountState',
+    defaultValue: false,
+  });
+
 export const myahInboxFiltersState = createAtomState<MyahInboxFilters>({
   key: 'myahInboxFiltersState',
   defaultValue: DEFAULT_MYAH_INBOX_FILTERS,

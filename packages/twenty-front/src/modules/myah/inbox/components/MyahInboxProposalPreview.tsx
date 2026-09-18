@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { IconLoader, type IconComponent } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
 import { AnimatedCircleLoading } from 'twenty-ui/layout';
@@ -16,6 +16,11 @@ const StyledProposal = styled.div`
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[2]};
+
+  button[aria-disabled='true'] {
+    color: ${themeCssVariables.font.color.light};
+    cursor: not-allowed;
+  }
 `;
 
 const StyledActions = styled.div`
@@ -27,6 +32,16 @@ const StyledActions = styled.div`
 const StyledError = styled.div`
   color: ${themeCssVariables.font.color.danger};
   font-size: ${themeCssVariables.font.size.xs};
+`;
+
+const StyledAccessibleDescription = styled.span`
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 `;
 
 const GenerateReplyLoadingIcon: IconComponent = ({
@@ -53,6 +68,7 @@ export type MyahInboxProposalPreviewProps = {
   draftKey: MyahInboxDraftAutosaveKey;
   editorOwner?: symbol;
   disabled: boolean;
+  generateUnavailableReason?: string;
   renderGenerateAction?: (
     generateAction: ReactNode,
     isGenerating: boolean,
@@ -63,16 +79,20 @@ export const MyahInboxProposalPreview = ({
   draftKey,
   editorOwner,
   disabled,
+  generateUnavailableReason,
   renderGenerateAction,
 }: MyahInboxProposalPreviewProps) => {
   const controller = useMyahInboxDraftAutosaveControllerContext();
   const { generateProposal } = useMyahInboxThreadMutations();
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const unavailableDescriptionId = useId();
 
   // Only matching mounted work may apply a proposal; operation identity lives in the shared controller.
   // oxlint-disable-next-line twenty/no-state-useref
   const activeRef = useRef<MyahInboxDraftOperationCapture | null>(null);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const generationAttemptRef = useRef<symbol | null>(null);
   // oxlint-disable-next-line twenty/no-state-useref
   const scopeRef = useRef(draftKey);
   scopeRef.current = draftKey;
@@ -84,11 +104,20 @@ export const MyahInboxProposalPreview = ({
       mountedRef.current = false;
       if (activeRef.current) controller.release(activeRef.current);
       activeRef.current = null;
+      generationAttemptRef.current = null;
     };
   }, [controller, draftKey.threadId, draftKey.workspaceId]);
 
   const handleGenerate = async () => {
-    if (disabled || isGenerating) return;
+    if (
+      disabled ||
+      generateUnavailableReason ||
+      isGenerating ||
+      generationAttemptRef.current
+    )
+      return;
+    const attempt = Symbol('generate reply');
+    generationAttemptRef.current = attempt;
     const key = draftKey;
     const isCurrent = () =>
       mountedRef.current &&
@@ -119,19 +148,26 @@ export const MyahInboxProposalPreview = ({
     } finally {
       if (capture) controller.release(capture);
       if (activeRef.current === capture) activeRef.current = null;
-      if (isCurrent()) setIsGenerating(false);
+      if (generationAttemptRef.current === attempt) {
+        generationAttemptRef.current = null;
+        if (isCurrent()) setIsGenerating(false);
+      }
     }
   };
 
   const generateAction = (
     <Button
-      title="Generate Reply"
-      ariaLabel={isGenerating ? 'Generating reply' : 'Generate Reply'}
+      title="Generate reply"
+      ariaLabel={isGenerating ? 'Generating reply' : 'Generate reply'}
       variant="secondary"
       size="small"
       Icon={isGenerating ? GenerateReplyLoadingIcon : undefined}
       disabled={disabled || isGenerating}
-      onClick={handleGenerate}
+      aria-disabled={Boolean(generateUnavailableReason) || undefined}
+      aria-describedby={
+        generateUnavailableReason ? unavailableDescriptionId : undefined
+      }
+      onClick={generateUnavailableReason ? undefined : handleGenerate}
     />
   );
 
@@ -141,6 +177,11 @@ export const MyahInboxProposalPreview = ({
         renderGenerateAction(generateAction, isGenerating)
       ) : (
         <StyledActions>{generateAction}</StyledActions>
+      )}
+      {generateUnavailableReason && (
+        <StyledAccessibleDescription id={unavailableDescriptionId}>
+          {generateUnavailableReason}
+        </StyledAccessibleDescription>
       )}
       {error && <StyledError role="alert">{error}</StyledError>}
     </StyledProposal>

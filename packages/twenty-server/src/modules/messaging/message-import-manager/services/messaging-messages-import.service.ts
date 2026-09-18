@@ -80,7 +80,9 @@ export class MessagingMessagesImportService {
         try {
           if (
             messageChannel.syncStage !==
-            MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED
+              MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED &&
+            messageChannel.syncStage !==
+              MessageChannelSyncStage.MESSAGES_IMPORT_ONGOING
           ) {
             return;
           }
@@ -216,11 +218,25 @@ export class MessagingMessagesImportService {
           );
 
           if (messagesToSave.length > 0) {
+            // Contact triage needs the source boundary: the first import of a
+            // channel is BACKFILL (history must not reopen contacts) and every
+            // import after a completed sync is LIVE. The in-flight generation is
+            // owned by the pending-cursor cache and used here as provenance only.
+            const pendingGenerationId =
+              await this.messagingPendingSyncCursorService.getPendingGenerationId(
+                { messageChannelId: messageChannel.id, workspaceId },
+              );
+
             await this.saveMessagesAndEnqueueContactCreationService.saveMessagesAndEnqueueContactCreation(
               messagesToSave,
               messageChannel,
               connectedAccount,
               workspaceId,
+              {
+                mode: messageChannel.syncedAt ? 'LIVE' : 'BACKFILL',
+                generationId:
+                  pendingGenerationId ?? `polling:${messageChannel.id}`,
+              },
             );
           }
           await this.messagingPendingSyncCursorService.acknowledge({

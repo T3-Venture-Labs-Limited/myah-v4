@@ -6,7 +6,7 @@ import { MyahInboxThreadRow } from '@/myah/inbox/components/MyahInboxThreadRow';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { type MyahInboxFilters } from '@/myah/inbox/states/myahInboxSelectionState';
 import { styled } from '@linaria/react';
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, type KeyboardEvent } from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -50,8 +50,6 @@ const StyledLoadMore = styled.div`
   padding: ${themeCssVariables.spacing[3]};
 `;
 
-const MAX_TIMEOUT_DELAY = 2_147_483_647;
-
 type MyahInboxThreadListProps = {
   threads: MyahInboxThread[];
   filters: MyahInboxFilters;
@@ -89,42 +87,6 @@ export const MyahInboxThreadList = ({
 }: MyahInboxThreadListProps) => {
   // oxlint-disable-next-line twenty/no-state-useref -- DOM refs coordinate roving keyboard focus.
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const [snoozeClock, setSnoozeClock] = useState(0);
-
-  useEffect(() => {
-    const now = Date.now();
-    let nearestFutureSnooze: number | null = null;
-
-    for (const thread of threads) {
-      if (thread.state !== 'SNOOZED' || thread.snoozedUntil === null) {
-        continue;
-      }
-
-      const snoozeDeadline = Date.parse(thread.snoozedUntil);
-
-      if (
-        Number.isNaN(snoozeDeadline) ||
-        snoozeDeadline <= now ||
-        (nearestFutureSnooze !== null && snoozeDeadline >= nearestFutureSnooze)
-      ) {
-        continue;
-      }
-
-      nearestFutureSnooze = snoozeDeadline;
-    }
-
-    if (nearestFutureSnooze === null) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(
-      () => setSnoozeClock((clock) => clock + 1),
-      Math.min(nearestFutureSnooze - now, MAX_TIMEOUT_DELAY),
-    );
-
-    return () => window.clearTimeout(timeoutId);
-  }, [snoozeClock, threads]);
-
   const handleRowKeyDown = (
     event: KeyboardEvent<HTMLButtonElement>,
     rowIndex: number,

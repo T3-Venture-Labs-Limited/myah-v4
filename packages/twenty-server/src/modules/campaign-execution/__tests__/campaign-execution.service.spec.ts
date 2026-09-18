@@ -1,4 +1,5 @@
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { CampaignExecutionService } from 'src/modules/campaign-execution/services/campaign-execution.service';
 import { type CampaignLifecycleTransactionService } from 'src/modules/campaign-execution/services/campaign-lifecycle-transaction.service';
@@ -169,10 +170,12 @@ const createHarness = (overrides?: {
   createdAuthority?: unknown;
   plan?: unknown;
   review?: unknown;
+  historyPreflight?: unknown;
   history?: unknown;
   persistedGraph?: unknown;
   writeWindow?: unknown;
   revoke?: unknown;
+  settledCount?: unknown;
   inFlightCount?: unknown;
 }) => {
   const order: string[] = [];
@@ -285,6 +288,14 @@ const createHarness = (overrides?: {
     transitionLifecycleInTransaction: jest.fn(async (_context, transition) => {
       order.push(`transition:${transition.from}->${transition.to}`);
     }),
+    settlePausedOccurrencesInTransaction: jest.fn(
+      async (_context, usedAuthorizationId) => {
+        order.push(`settle:${usedAuthorizationId}`);
+        return (
+          overrides && 'settledCount' in overrides ? overrides.settledCount : 0
+        ) as never;
+      },
+    ),
     countInFlightAttemptsInTransaction: jest.fn(async () => {
       order.push('count-in-flight');
       return (
@@ -403,6 +414,17 @@ const createHarness = (overrides?: {
   };
 
   const history: CampaignExecutionHistoryPort = {
+    preflightSameWorkflowVersionHistoryInTransaction: jest.fn(
+      async (_input, usedManager) => {
+        order.push('history-preflight');
+        expect(usedManager).toBe(manager);
+        return (
+          overrides && 'historyPreflight' in overrides
+            ? overrides.historyPreflight
+            : { status: 'COMPLETE' }
+        ) as never;
+      },
+    ),
     preparePriorVersionSupersessionInTransaction: jest.fn(async () => ({
       status: 'READY' as const,
       pendingOccurrenceIds: [],
@@ -467,6 +489,123 @@ const createHarness = (overrides?: {
 };
 
 describe('CampaignExecutionService', () => {
+  it('passes detached frozen request snapshots to the strict authorization parser', async () => {
+    const sourceRequest: CampaignSequenceAuthorizationRequest = {
+      ...request,
+      preparedProof: {
+        ...request.preparedProof,
+        orderedMessageIds: [firstMessageId, secondMessageId],
+        usedChannels: ['EMAIL'],
+        fixedMaterialProofs: [
+          {
+            messageId: firstMessageId,
+            orderedAttachmentProofs: [],
+          },
+          {
+            messageId: secondMessageId,
+            orderedAttachmentProofs: [],
+          },
+        ],
+      },
+      reviewedWindow: { ...request.reviewedWindow },
+    };
+    const matchingAuthority = authorityRecord({
+      binding: {
+        ...authorityRecord().binding,
+        request: sourceRequest,
+      },
+    });
+    const harness = createHarness({
+      createdAuthority: {
+        kind: 'CREATED',
+        authorization: matchingAuthority,
+      },
+    });
+    const strictAuthority = new CampaignSequenceAuthorizationService({
+      generateAuthorizationId: () => authorizationId,
+      now: () => new Date(authorizedAt),
+    });
+    const query = jest.fn().mockResolvedValue([]);
+
+    Object.assign(harness.manager.queryRunner!, { query });
+    jest
+      .mocked(harness.authority.lookupStartRequestInTransaction)
+      .mockImplementation((context, input) =>
+        strictAuthority.lookupStartRequestInTransaction(
+          context as never,
+          input,
+        ),
+      );
+
+    await expect(
+      harness.service.startCampaign({
+        ...startInput(),
+        request: sourceRequest,
+      }),
+    ).resolves.toMatchObject({ status: 'ACTIVATED' });
+
+    const snapshottedRequest = jest.mocked(
+      harness.authority.lookupStartRequestInTransaction,
+    ).mock.calls[0][1].request;
+
+    expect(snapshottedRequest).not.toBe(sourceRequest);
+    expect(snapshottedRequest.preparedProof).not.toBe(
+      sourceRequest.preparedProof,
+    );
+    expect(Object.getPrototypeOf(snapshottedRequest)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(snapshottedRequest.preparedProof)).toBe(
+      Object.prototype,
+    );
+    expect(
+      Object.getPrototypeOf(
+        snapshottedRequest.preparedProof.fixedMaterialProofs[0],
+      ),
+    ).toBe(Object.prototype);
+    expect(Object.isFrozen(snapshottedRequest)).toBe(true);
+    expect(Object.isFrozen(snapshottedRequest.preparedProof)).toBe(true);
+    expect(
+      Object.isFrozen(
+        snapshottedRequest.preparedProof.fixedMaterialProofs[0]
+          .orderedAttachmentProofs,
+      ),
+    ).toBe(true);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      'null-prototype',
+      () => Object.setPrototypeOf([firstMessageId, secondMessageId], null),
+    ],
+    [
+      'subclass',
+      () => {
+        class NonstandardMessageIds extends Array<string> {}
+
+        return new NonstandardMessageIds(firstMessageId, secondMessageId);
+      },
+    ],
+  ] as const)(
+    'rejects a nested %s request array before opening a transaction',
+    async (_label, createOrderedMessageIds) => {
+      const harness = createHarness();
+
+      await expect(
+        harness.service.startCampaign({
+          ...startInput(),
+          request: {
+            ...request,
+            preparedProof: {
+              ...request.preparedProof,
+              orderedMessageIds: createOrderedMessageIds(),
+            },
+          },
+        }),
+      ).rejects.toThrow('Campaign Start input was invalid');
+      expect(harness.transaction.run).not.toHaveBeenCalled();
+    },
+  );
+
   it('creates a reviewed immutable activation graph in canonical order', async () => {
     const harness = createHarness();
 
@@ -492,6 +631,7 @@ describe('CampaignExecutionService', () => {
       'lookup-start',
       'load-execution',
       'load-plan',
+      'history-preflight',
       'revalidate',
       'history',
       'create-authority',
@@ -620,6 +760,36 @@ describe('CampaignExecutionService', () => {
     ).mock.calls[0][1];
     expect(graph.enrollments[0].nextAuthoredMessageIndex).toBe(1);
     expect(graph.enrollments[0].occurrence?.messageId).toBe(secondMessageId);
+  });
+
+  it('blocks malformed attached attempt history after plan load and before eligibility or authority creation', async () => {
+    const harness = createHarness({
+      historyPreflight: {
+        status: 'BLOCKED',
+        reason: 'MALFORMED_HISTORY',
+      },
+    });
+
+    await expect(harness.service.startCampaign(startInput())).resolves.toEqual({
+      status: 'BLOCKED',
+      reason: 'PROGRESSION_HISTORY_UNAVAILABLE',
+    });
+    expect(
+      harness.history.preflightSameWorkflowVersionHistoryInTransaction,
+    ).toHaveBeenCalledWith(
+      { workspaceId, campaignId, workflowVersionId },
+      harness.manager,
+    );
+    expect(
+      harness.review.revalidateNewActivationInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(
+      harness.history.readSameWorkflowVersionHistoryInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(
+      harness.authority.createNewAuthorizationInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(harness.order[harness.order.length - 1]).toBe('history-preflight');
   });
 
   it.each([
@@ -1335,6 +1505,7 @@ describe('CampaignExecutionService', () => {
       'load-execution',
       'load-activation',
       'revoke:CAMPAIGN_PAUSED',
+      `settle:${authorizationId}`,
       'transition:ACTIVE->PAUSED',
       'count-in-flight',
     ]);
@@ -1376,8 +1547,11 @@ describe('CampaignExecutionService', () => {
     },
   );
 
-  it('replays coherent PAUSED as no-op without revocation/CAS', async () => {
-    const harness = createHarness({ lifecycleStatus: 'PAUSED' });
+  it('replays coherent PAUSED by repairing only its current CAMPAIGN_PAUSED authorization without revocation/CAS', async () => {
+    const harness = createHarness({
+      lifecycleStatus: 'PAUSED',
+      settledCount: 1,
+    });
 
     await expect(
       harness.service.pauseCampaign({ workspaceId, campaignId, authContext }),
@@ -1387,10 +1561,32 @@ describe('CampaignExecutionService', () => {
       inFlightCount: 2,
     });
     expect(
+      harness.persistence.settlePausedOccurrencesInTransaction,
+    ).toHaveBeenCalledWith(harness.context, authorizationId);
+    expect(
       harness.authority.revokeCurrentAuthorizationInTransaction,
     ).not.toHaveBeenCalled();
     expect(
       harness.persistence.transitionLifecycleInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('propagates settlement failure before lifecycle transition so the Stop transaction rolls back', async () => {
+    const harness = createHarness({ lifecycleStatus: 'ACTIVE' });
+    const failure = new Error('settlement failed');
+
+    jest
+      .mocked(harness.persistence.settlePausedOccurrencesInTransaction)
+      .mockRejectedValueOnce(failure);
+
+    await expect(
+      harness.service.pauseCampaign({ workspaceId, campaignId, authContext }),
+    ).rejects.toBe(failure);
+    expect(
+      harness.persistence.transitionLifecycleInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(
+      harness.persistence.countInFlightAttemptsInTransaction,
     ).not.toHaveBeenCalled();
   });
 

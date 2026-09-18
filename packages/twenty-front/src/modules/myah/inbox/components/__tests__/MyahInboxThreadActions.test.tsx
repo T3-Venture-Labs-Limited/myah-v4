@@ -284,9 +284,15 @@ describe('MyahInboxThreadActions', () => {
     expect(
       screen.getByRole('button', { name: 'Campaign selector' }),
     ).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Owner' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'State' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Snooze' })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Owner' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'State' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Snooze' }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(
       screen
@@ -298,20 +304,6 @@ describe('MyahInboxThreadActions', () => {
         .getByRole('button', { name: 'Campaign selector' })
         .closest('[role="dialog"]'),
     ).not.toBeNull();
-    expect(
-      screen.getByRole('button', { name: 'Owner' }).closest('[role="dialog"]'),
-    ).toBeNull();
-    expect(
-      screen.getByRole('button', { name: 'State' }).closest('[role="dialog"]'),
-    ).toBeNull();
-    expect(
-      screen.getByRole('button', { name: 'Snooze' }).closest('[role="dialog"]'),
-    ).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'State' }));
-    expect(
-      screen.queryByRole('option', { name: 'Snoozed' }),
-    ).not.toBeInTheDocument();
   });
 
   it('restores focus to the Creator and Campaign triggers when their dialogs close', () => {
@@ -345,7 +337,7 @@ describe('MyahInboxThreadActions', () => {
     expect(campaignTrigger).toHaveFocus();
   });
 
-  it('opens the native Inbox context side panel', () => {
+  it('keeps only Creator and Campaign controls at thread level', () => {
     render(
       <MyahInboxThreadActions
         thread={unlinkedThread}
@@ -353,24 +345,21 @@ describe('MyahInboxThreadActions', () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Conversation details' }),
-    );
-
-    expect(mockOpenMyahInboxContextInSidePanel).toHaveBeenCalledWith();
-    expect(mockAppTooltip).toHaveBeenCalledWith(
-      expect.objectContaining({
-        anchorSelect: "[data-testid='myah-inbox-thread-details-action']",
-        content: 'Open Inbox context',
-      }),
-    );
     expect(
       new Set(
         mockAppTooltip.mock.calls.map(
           ([props]) => (props as { anchorSelect: string }).anchorSelect,
         ),
-      ).size,
-    ).toBe(6);
+      ),
+    ).toEqual(
+      new Set([
+        "[data-testid='myah-inbox-thread-creator-action']",
+        "[data-testid='myah-inbox-thread-campaign-action']",
+      ]),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Conversation details' }),
+    ).not.toBeInTheDocument();
   });
 
   it('uses dialog popups and writes only the selected creator for an unlinked thread', async () => {
@@ -495,86 +484,5 @@ describe('MyahInboxThreadActions', () => {
       resetNavigationStack: true,
     });
     expect(mockUpdateThread).not.toHaveBeenCalled();
-  });
-
-  it('writes partial relation/state mutations and an atomic snooze transition', async () => {
-    const thread = {
-      ...unlinkedThread,
-      creator: { id: 'creator-1', name: 'Ada Creator' },
-      campaign: { id: 'campaign-1', name: 'Spring campaign' },
-      inboxOwner: { id: 'member-1', name: 'Zachary' },
-    };
-    render(
-      <MyahInboxThreadActions thread={thread} onThreadUpdated={jest.fn()} />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Campaign selector' }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Campaign' }), {
-      target: { value: '' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Owner' }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Owner' }), {
-      target: { value: '' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'State' }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'State' }), {
-      target: { value: 'CLOSED' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Snooze' }), {
-      target: { value: '2099-01-01T12:00:00.000Z' },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: 'Snooze' }), {
-      target: { value: '' },
-    });
-
-    await waitFor(() => {
-      expect(mockUpdateThread).toHaveBeenNthCalledWith(1, {
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
-        campaignId: null,
-      });
-      expect(mockUpdateThread).toHaveBeenNthCalledWith(2, {
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
-        inboxOwnerId: null,
-      });
-      expect(mockUpdateThread).toHaveBeenNthCalledWith(3, {
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
-        inboxState: 'CLOSED',
-      });
-      expect(mockUpdateThread).toHaveBeenNthCalledWith(4, {
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
-        inboxState: 'SNOOZED',
-        snoozedUntil: '2099-01-01T12:00:00.000Z',
-      });
-      expect(mockUpdateThread).toHaveBeenNthCalledWith(5, {
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
-        inboxState: 'NEEDS_REPLY',
-        snoozedUntil: null,
-      });
-    });
-  });
-
-  it('rejects a snooze timestamp that is not in the future', () => {
-    const onUpdateFailed = jest.fn();
-    render(
-      <MyahInboxThreadActions
-        thread={unlinkedThread}
-        onThreadUpdated={jest.fn()}
-        onUpdateFailed={onUpdateFailed}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Snooze' }), {
-      target: { value: '2000-01-01T00:00:00.000Z' },
-    });
-
-    expect(mockUpdateThread).not.toHaveBeenCalled();
-    expect(onUpdateFailed).toHaveBeenCalledWith('Choose a future snooze time.');
   });
 });

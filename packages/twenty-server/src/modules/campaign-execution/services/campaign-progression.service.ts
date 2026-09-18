@@ -12,7 +12,10 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { CampaignOutreachAudienceReviewService } from 'src/modules/campaign-execution/services/campaign-outreach-audience-review.service';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
-import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
+import {
+  OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION,
+  OutboundEmailAttemptService,
+} from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
 import {
   computeCampaignAttemptId,
   computeCampaignOccurrenceId,
@@ -185,7 +188,8 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     const occurrence = occurrenceRows[0];
     const attempts = rows(
       await runner.query(
-        `SELECT * FROM core."outboundEmailAttempt" WHERE "workspaceId"=$1 AND "occurrenceId"=$2
+        `SELECT ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
+          FROM core."outboundEmailAttempt" WHERE "workspaceId"=$1 AND "occurrenceId"=$2
           ORDER BY "attemptNumber","attemptId" FOR UPDATE`,
         [input.workspaceId, input.occurrenceId],
       ),
@@ -1118,7 +1122,8 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       return { status: 'EXACT_REPLAY' };
     const attempts = rows(
       await runner.query(
-        `SELECT * FROM core."outboundEmailAttempt" WHERE "workspaceId"=$1 AND "occurrenceId"=$2 ORDER BY "attemptNumber","attemptId" FOR UPDATE`,
+        `SELECT ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
+          FROM core."outboundEmailAttempt" WHERE "workspaceId"=$1 AND "occurrenceId"=$2 ORDER BY "attemptNumber","attemptId" FOR UPDATE`,
         [input.workspaceId, input.occurrenceId],
       ),
     );
@@ -1431,7 +1436,8 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     if (occurrenceRows.length !== 1) return { status: 'NOT_FOUND' };
     const attempts = rows(
       await runner.query(
-        `SELECT * FROM core."outboundEmailAttempt"
+        `SELECT ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
+          FROM core."outboundEmailAttempt"
           WHERE "workspaceId"=$1 AND "occurrenceId"=$2
           ORDER BY "attemptNumber", "attemptId" FOR UPDATE`,
         [input.workspaceId, input.occurrenceId],
@@ -1673,7 +1679,8 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     }
     const attempts = rows(
       await runner.query(
-        `SELECT * FROM core."outboundEmailAttempt"
+        `SELECT ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
+          FROM core."outboundEmailAttempt"
           WHERE "workspaceId"=$1 AND "occurrenceId"=$2
           ORDER BY "attemptNumber","attemptId" FOR UPDATE`,
         [input.workspaceId, input.occurrenceId],

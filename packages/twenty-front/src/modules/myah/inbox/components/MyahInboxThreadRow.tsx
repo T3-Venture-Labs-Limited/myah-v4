@@ -105,16 +105,6 @@ const StyledPreview = styled.span`
   overflow: hidden;
 `;
 
-const StyledState = styled.span<{ isAttentionNeeded: boolean }>`
-  color: ${({ isAttentionNeeded }) =>
-    isAttentionNeeded
-      ? themeCssVariables.font.color.danger
-      : themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${({ isAttentionNeeded }) =>
-    isAttentionNeeded ? themeCssVariables.font.weight.medium : 'inherit'};
-`;
-
 export type MyahInboxThreadRowProps = {
   thread: MyahInboxThread;
   isSelected: boolean;
@@ -134,11 +124,6 @@ export const MyahInboxThreadRow = ({
 }: MyahInboxThreadRowProps) => {
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
   const creator = thread.creator;
-  const isSnoozeDue =
-    thread.state === 'SNOOZED' &&
-    thread.snoozedUntil !== null &&
-    Date.parse(thread.snoozedUntil) <= Date.now();
-
   return (
     <StyledThreadRow isSelected={isSelected}>
       <StyledThreadSelectButton
@@ -163,11 +148,6 @@ export const MyahInboxThreadRow = ({
         <StyledPreview>
           {thread.lastMessagePreview || 'No message preview'}
         </StyledPreview>
-        <StyledState isAttentionNeeded={isSnoozeDue}>
-          {isSnoozeDue
-            ? 'Snooze due · Attention needed'
-            : thread.state.replaceAll('_', ' ').toLowerCase()}
-        </StyledState>
       </StyledThreadSelectButton>
       <StyledMeta>
         {creator ? (

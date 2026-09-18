@@ -34,19 +34,37 @@ const INVALID_CAPACITY_RESERVATION_RESULT = {
   status: 'BLOCKED',
 } as const;
 
+export const OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION = `
+  "attemptId", "workspaceId", "source", "attemptState", "capacityState",
+  "connectedAccountId", "messageChannelId", "provider",
+  "normalizedSenderHandle", "normalizedRecipient", "selectionConstraintKind",
+  "priorAcceptedEvidenceId", "senderPoolFingerprint",
+  "localDate"::text AS "localDate", "claimedAt", "slotAt", "unknownAfter",
+  "campaignId", "enrollmentId", "occurrenceId", "authorizationId",
+  "workflowVersionId", "messageId", "attemptNumber", "renderDigest",
+  "testPreparationProofId", "requesterUserWorkspaceId", "previewDigest",
+  "testTransportDigest", "directReservationCapabilityId",
+  "finalEvidenceDigest", "providerMessageId", "providerAcceptedAt",
+  "providerHeaderMessageId", "providerMessageExternalId",
+  "reconciledProviderHeaderMessageId", "providerThreadExternalId",
+  "resolvedThreadExternalId", "providerDeliveredRecipients",
+  "safeOutcomeReason", "retryable", "projectedMessageId",
+  "projectedMessageThreadId", "createdAt", "updatedAt"
+`;
+
 const ATTEMPT_ADVISORY_LOCK_SQL = `
   SELECT pg_advisory_xact_lock(hashtextextended($1, $2)) AS locked
 `;
 
 const ATTEMPT_LOCK_SQL = `
-  SELECT *
+  SELECT ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
   FROM "core"."outboundEmailAttempt"
   WHERE "attemptId" = $1
   FOR UPDATE
 `;
 
 const RECEIPT_READ_SQL = `
-  SELECT *
+  SELECT ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
   FROM "core"."outboundEmailAttempt"
   WHERE "workspaceId" = $1 AND "attemptId" = $2
 `;
@@ -68,7 +86,7 @@ const INSERT_RESERVED_SQL = `
     $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
     $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36
   )
-  RETURNING *
+  RETURNING ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
 `;
 
 const TIME_SAMPLE_SQL = `
@@ -87,7 +105,7 @@ const BEGIN_PROCESSING_SQL = `
   WHERE "workspaceId" = $1
     AND "attemptId" = $2
     AND "attemptState" = 'RESERVED'
-  RETURNING *
+  RETURNING ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
 `;
 
 const BLOCK_RESERVED_SQL = `
@@ -99,7 +117,7 @@ const BLOCK_RESERVED_SQL = `
       "updatedAt" = $4
   WHERE "workspaceId" = $1 AND "attemptId" = $2
     AND "attemptState" = 'RESERVED' AND "capacityState" = 'RESERVED'
-  RETURNING *
+  RETURNING ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
 `;
 
 const ACCEPT_SQL = `
@@ -120,7 +138,7 @@ const ACCEPT_SQL = `
       "updatedAt" = $4
   WHERE "workspaceId" = $1 AND "attemptId" = $2
     AND "attemptState" = $12 AND "capacityState" = $13
-  RETURNING *
+  RETURNING ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
 `;
 
 const DEFINITELY_UNACCEPTED_SQL = `
@@ -132,7 +150,7 @@ const DEFINITELY_UNACCEPTED_SQL = `
       "updatedAt" = $5
   WHERE "workspaceId" = $1 AND "attemptId" = $2
     AND "attemptState" = $6 AND "capacityState" = $7
-  RETURNING *
+  RETURNING ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
 `;
 
 const MARK_UNKNOWN_SQL = `
@@ -144,7 +162,7 @@ const MARK_UNKNOWN_SQL = `
       "updatedAt" = $3
   WHERE "workspaceId" = $1 AND "attemptId" = $2
     AND "attemptState" = 'PROCESSING' AND "capacityState" = 'RESERVED'
-  RETURNING *
+  RETURNING ${OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION}
 `;
 
 type PersistedRequestIdentity = {

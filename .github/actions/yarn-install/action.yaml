@@ -1,11 +1,18 @@
 name: Yarn Install
+description: Install dependencies with optional hosted-runner disk cleanup
 inputs:
   node-version:
+    description: Node.js version to install
     required: false
     default: '24'
   cache-node-modules:
+    description: Whether to restore and save the node_modules cache
     required: false
     default: 'true'
+  min-free-space-gb:
+    description: Skip hosted-runner cleanup when this much space is already free
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -13,14 +20,9 @@ runs:
     - name: Free disk space for install
       if: runner.os == 'Linux'
       shell: bash
-      run: |
-        # Default GitHub images ship large SDKs this repo does not use; removing
-        # them avoids ENOSPC when restoring or linking a full Yarn node_modules.
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /opt/hostedtoolcache/CodeQL
-        df -h || true
+      env:
+        MIN_FREE_SPACE_GB: ${{ inputs.min-free-space-gb }}
+      run: bash .github/scripts/ensure-ci-disk-space.sh
     - name: Cache primary key builder
       id: globals
       shell: bash

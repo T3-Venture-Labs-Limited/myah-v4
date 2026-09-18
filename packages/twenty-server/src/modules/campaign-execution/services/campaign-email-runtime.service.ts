@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
-import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
 import { CampaignSentProjectionService } from 'src/modules/campaign-execution/services/campaign-sent-projection.service';
 import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
@@ -15,6 +16,42 @@ const records = (value: unknown): Record<string, unknown>[] =>
     : Array.isArray(value)
       ? value
       : [];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const loadConnectedAccount = (
+  rows: Record<string, unknown>[],
+  connectedAccountId: string,
+  workspaceId: string,
+): ConnectedAccountEntity => {
+  if (rows.length !== 1)
+    throw new Error('Campaign runtime account was invalid');
+  const account = rows[0];
+  if (
+    account.id !== connectedAccountId ||
+    account.workspaceId !== workspaceId ||
+    typeof account.handle !== 'string' ||
+    account.handle.length === 0 ||
+    typeof account.provider !== 'string' ||
+    !Object.values(ConnectedAccountProvider).includes(
+      account.provider as ConnectedAccountProvider,
+    ) ||
+    (account.provider === ConnectedAccountProvider.IMAP_SMTP_CALDAV &&
+      !isRecord(account.connectionParameters))
+  )
+    throw new Error('Campaign runtime account was invalid');
+
+  return {
+    id: account.id,
+    workspaceId: account.workspaceId,
+    handle: account.handle,
+    provider: account.provider,
+    ...(account.provider === ConnectedAccountProvider.IMAP_SMTP_CALDAV
+      ? { connectionParameters: account.connectionParameters }
+      : {}),
+  } as ConnectedAccountEntity;
+};
 
 @Injectable()
 export class CampaignEmailRuntimeService {
@@ -67,69 +104,76 @@ export class CampaignEmailRuntimeService {
          ) SELECT * FROM pending UNION ALL SELECT * FROM reserved UNION ALL SELECT * FROM processing UNION ALL SELECT * FROM accepted UNION ALL SELECT * FROM definitelyUnaccepted UNION ALL SELECT * FROM unknown UNION ALL SELECT * FROM blocked`,
     );
     for (const item of work) {
+      const workspaceId = String(item.workspaceId);
+
       try {
-        if (item.kind === 'ACCEPTED') {
-          await this.reconcileAcceptedAttempt(
-            String(item.workspaceId),
-            String(item.campaignId),
-            String(item.attemptId),
-          );
-          continue;
-        }
-        if (item.kind === 'RESERVED') {
-          await this.dispatchAttempt(
-            String(item.workspaceId),
-            String(item.campaignId),
-            String(item.attemptId),
-          );
-          continue;
-        }
-        if (item.kind === 'PROCESSING') {
-          await this.recoverProcessing(
-            String(item.workspaceId),
-            String(item.campaignId),
-            String(item.attemptId),
-          );
-          continue;
-        }
-        if (item.kind === 'DEFINITELY_UNACCEPTED' || item.kind === 'UNKNOWN') {
-          await this.reconcilePersistedOutcome(
-            String(item.workspaceId),
-            String(item.campaignId),
-            String(item.attemptId),
-            item.kind,
-          );
-          continue;
-        }
-        if (item.kind === 'BLOCKED') {
-          await dataSource.transaction((manager) =>
-            this.progression.holdOccurrenceInTransaction(
-              String(item.id),
-              'DISPATCH_CONTRACT_CONFLICT',
-              manager,
+        await this.orm.executeInWorkspaceContext(async () => {
+          if (item.kind === 'ACCEPTED') {
+            await this.reconcileAcceptedAttempt(
+              workspaceId,
+              String(item.campaignId),
+              String(item.attemptId),
+            );
+            return;
+          }
+          if (item.kind === 'RESERVED') {
+            await this.dispatchAttempt(
+              workspaceId,
+              String(item.campaignId),
+              String(item.attemptId),
+            );
+            return;
+          }
+          if (item.kind === 'PROCESSING') {
+            await this.recoverProcessing(
+              workspaceId,
+              String(item.campaignId),
+              String(item.attemptId),
+            );
+            return;
+          }
+          if (
+            item.kind === 'DEFINITELY_UNACCEPTED' ||
+            item.kind === 'UNKNOWN'
+          ) {
+            await this.reconcilePersistedOutcome(
+              workspaceId,
+              String(item.campaignId),
+              String(item.attemptId),
+              item.kind,
+            );
+            return;
+          }
+          if (item.kind === 'BLOCKED') {
+            await dataSource.transaction((manager) =>
+              this.progression.holdOccurrenceInTransaction(
+                String(item.id),
+                'DISPATCH_CONTRACT_CONFLICT',
+                manager,
+              ),
+            );
+            return;
+          }
+          const result = await dataSource.transaction((manager) =>
+            this.progression.claimAndReserveDueOccurrenceInTransaction(
+              {
+                workspaceId,
+                campaignId: String(item.campaignId),
+                occurrenceId: String(item.id),
+              },
+              manager as never,
             ),
           );
-          continue;
-        }
-        const result = await dataSource.transaction((manager) =>
-          this.progression.claimAndReserveDueOccurrenceInTransaction(
-            {
-              workspaceId: String(item.workspaceId),
-              campaignId: String(item.campaignId),
-              occurrenceId: String(item.id),
-            },
-            manager as never,
-          ),
-        );
-        if (
-          result.status === 'RESERVED' ||
-          result.status === 'DISPATCHABLE_REPLAY'
-        )
-          await this.dispatchAttempt(
-            String(item.workspaceId),
-            String(item.campaignId),
-            result.attemptId,
-          );
+          if (
+            result.status === 'RESERVED' ||
+            result.status === 'DISPATCHABLE_REPLAY'
+          )
+            await this.dispatchAttempt(
+              workspaceId,
+              String(item.campaignId),
+              result.attemptId,
+            );
+        }, buildSystemAuthContext(workspaceId));
       } catch (error) {
         // One bad occurrence must not prevent independently safe Campaign work.
         // oxlint-disable-next-line no-console
@@ -183,12 +227,19 @@ export class CampaignEmailRuntimeService {
       );
       if (rows.length !== 1) return null;
       const row = rows[0];
-      const account = await manager
-        .getRepository(ConnectedAccountEntity)
-        .findOneByOrFail({
-          id: String(row.connectedAccountId),
-          workspaceId,
-        });
+      const connectedAccountId = String(row.connectedAccountId);
+      const account = loadConnectedAccount(
+        records(
+          await runner.query(
+            `SELECT id, "workspaceId", handle, provider, "connectionParameters"
+               FROM core."connectedAccount"
+              WHERE id=$1 AND "workspaceId"=$2`,
+            [connectedAccountId, workspaceId],
+          ),
+        ),
+        connectedAccountId,
+        workspaceId,
+      );
       const references = Array.isArray(row.references) ? row.references : [];
       const claimedAt = new Date(String(row.claimedAt));
       const slotAt = new Date(String(row.slotAt));
