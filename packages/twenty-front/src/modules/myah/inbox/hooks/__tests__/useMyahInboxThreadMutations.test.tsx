@@ -3,7 +3,6 @@ import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { act, renderHook } from '@testing-library/react';
 
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
-import { type UpdateMyahInboxThreadInput } from '~/generated/graphql';
 
 const mockUseMutation = jest.fn();
 const mockUpdate = jest.fn();
@@ -101,7 +100,7 @@ describe('useMyahInboxThreadMutations', () => {
       updateResult = await result.current.updateThread({
         expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
-        inboxState: 'CLOSED' as UpdateMyahInboxThreadInput['inboxState'],
+        creatorId: 'creator-1',
       });
     });
     expect(updateResult).toEqual(updatedThread);
@@ -110,7 +109,7 @@ describe('useMyahInboxThreadMutations', () => {
         input: {
           expectedWorkspaceId: 'workspace-1',
           threadId: 'thread-1',
-          inboxState: 'CLOSED',
+          creatorId: 'creator-1',
         },
       },
     });

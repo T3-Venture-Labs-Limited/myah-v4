@@ -81,7 +81,7 @@ const campaignContext = {
 
 const makeRunners = () => {
   const createMany = new CommonCreateManyQueryRunnerService({} as never);
-  const updateMany = new CommonUpdateManyQueryRunnerService();
+  const updateMany = new CommonUpdateManyQueryRunnerService({} as never);
   const runners = {
     [CommonQueryNames.CREATE_ONE]: new CommonCreateOneQueryRunnerService(
       createMany,

@@ -21,6 +21,7 @@ import {
 import { CampaignProgressionHistoryReaderAdapter } from 'src/modules/campaign-execution/adapters/campaign-progression-history-reader.adapter';
 import { CampaignExecutionModule } from 'src/modules/campaign-execution/campaign-execution.module';
 import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
+import { MessagingSaveMessagesAndEnqueueContactCreationService } from 'src/modules/messaging/message-import-manager/services/messaging-save-messages-and-enqueue-contact-creation.service';
 import {
   CAMPAIGN_EXECUTION_HISTORY_PORT,
   CAMPAIGN_EXECUTION_IDENTITY_PORT,
@@ -87,6 +88,10 @@ const twentyConfigService = {
     { provide: SentMessagePersistenceService, useValue: {} },
     { provide: MessagingMessageService, useValue: {} },
     { provide: MessagingMessageOutboundService, useValue: {} },
+    {
+      provide: MessagingSaveMessagesAndEnqueueContactCreationService,
+      useValue: {},
+    },
     { provide: getQueueToken(MessageQueue.cronQueue), useValue: {} },
   ],
   exports: [
@@ -98,6 +103,7 @@ const twentyConfigService = {
     SentMessagePersistenceService,
     MessagingMessageService,
     MessagingMessageOutboundService,
+    MessagingSaveMessagesAndEnqueueContactCreationService,
     getQueueToken(MessageQueue.cronQueue),
   ],
 })

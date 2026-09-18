@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from 'src/engine/core-modules/auth/auth.module';
 import { MessageQueueModule } from 'src/engine/core-modules/message-queue/message-queue.module';
+import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
@@ -44,6 +45,7 @@ import {
 @Module({
   imports: [
     AuthModule,
+    MyahInboxContactTriageModule,
     PermissionsModule,
     GlobalWorkspaceDataSourceModule,
     MessageQueueModule,

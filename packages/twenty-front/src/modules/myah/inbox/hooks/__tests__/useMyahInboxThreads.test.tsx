@@ -3,8 +3,6 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { useMyahInboxThreads } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { type MyahInboxFilters } from '@/myah/inbox/states/myahInboxSelectionState';
 import {
-  MyahInboxSnoozeStatus,
-  MyahInboxState,
   MyahInboxThreadsDocument,
   type MyahInboxThreadsQueryVariables,
 } from '~/generated/graphql';
@@ -106,10 +104,7 @@ const baseVariables = (
 ) =>
   ({
     first: 50,
-    owner: 'ME',
     campaignId: 'campaign-1',
-    states: [MyahInboxState.NEEDS_REPLY],
-    snoozeStatus: MyahInboxSnoozeStatus.DUE,
     search: 'Ada',
     ...overrides,
   }) satisfies MyahInboxThreadsQueryVariables;
@@ -429,15 +424,12 @@ describe('useMyahInboxThreads', () => {
       { ...filters, campaignId: null, campaignWorkspaceId: null },
       'workspace-2',
     ],
-    ['state', filters, { ...filters, states: ['CLOSED'] }, 'workspace-1'],
     [
       'campaign',
       filters,
       { ...filters, campaignId: 'campaign-2' },
       'workspace-1',
     ],
-    ['owner', filters, { ...filters, owner: 'ALL' }, 'workspace-1'],
-    ['snooze', filters, { ...filters, snoozeStatus: 'ACTIVE' }, 'workspace-1'],
     ['search', filters, { ...filters, search: 'Grace' }, 'workspace-1'],
   ])(
     'does not publish a stale refresh after the %s scope changes',

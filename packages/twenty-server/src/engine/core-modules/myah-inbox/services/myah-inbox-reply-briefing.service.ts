@@ -761,13 +761,7 @@ export class MyahInboxReplyBriefingService {
       isDefined(input.threadId) && !isValidUuid(input.threadId);
     const hasInvalidCampaignId =
       isDefined(input.campaignId) && !isValidUuid(input.campaignId);
-    const hasInvalidOwnerId =
-      isDefined(input.owner) &&
-      input.owner !== 'ME' &&
-      input.owner !== 'UNASSIGNED' &&
-      !isValidUuid(input.owner);
-
-    if (hasInvalidThreadId || hasInvalidCampaignId || hasInvalidOwnerId) {
+    if (hasInvalidThreadId || hasInvalidCampaignId) {
       throw new BadRequestException('Invalid Myah inbox relation filter');
     }
   }

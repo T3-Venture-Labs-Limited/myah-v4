@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 
 import { InjectDataSource } from '@nestjs/typeorm';
-import { isISO8601 } from 'class-validator';
 import { IsNull, Not, type DataSource, type ObjectLiteral } from 'typeorm';
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
@@ -29,10 +28,10 @@ import {
   type MyahInboxDraftSaveResult,
   type MyahRichText,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-draft-save-result.dto';
-import { MyahInboxState } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 import { type SaveMyahInboxDraftInput } from 'src/engine/core-modules/myah-inbox/dtos/save-myah-inbox-draft.input';
 import { type MyahInboxThreadSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
 import { type UpdateMyahInboxThreadInput } from 'src/engine/core-modules/myah-inbox/dtos/update-myah-inbox-thread.input';
+import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -57,9 +56,6 @@ type InboxThreadRecord = ObjectLiteral & {
   id: string;
   creatorId: string | null;
   myahCampaignId: string | null;
-  inboxOwnerId: string | null;
-  inboxState: MyahInboxState;
-  snoozedUntil: Date | string | null;
   myahReplyDraftBodyMarkdown: string | null;
   myahReplyDraftBodyBlocknote: string | null;
   myahReplyDraftRevision: number;
@@ -83,6 +79,7 @@ export class MyahInboxMutationService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly myahInboxQueryService: MyahInboxQueryService,
+    private readonly myahInboxContactTriageLifecycleService: MyahInboxContactTriageLifecycleService,
     private readonly actionApprovalService: ActionApprovalService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -92,7 +89,7 @@ export class MyahInboxMutationService {
     input: UpdateMyahInboxThreadMutationInput,
   ): Promise<MyahInboxThreadSummary> {
     this.assertUserRequest(input);
-    this.assertValidTriageInput(input);
+    this.assertValidThreadUpdateInput(input);
     await this.assertPolicyVisibleThread(input);
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
@@ -100,56 +97,72 @@ export class MyahInboxMutationService {
         await this.loadRepositories(input);
 
       await repositories.messageThread.manager.transaction(async (manager) => {
-        const transactionalRepositories = this.getTransactionalRepositories(
-          manager as WorkspaceEntityManager,
-          repositories,
-          rolePermissionConfig,
-          input.authContext,
-        );
-
-        await this.assertReadableCurrentMember(
-          transactionalRepositories.workspaceMember,
-          input.workspaceMemberId,
-        );
-        let thread = await this.loadReadableThread(
-          transactionalRepositories.messageThread,
-          input.threadId,
-        );
-
-        await this.assertReplyEligible(
-          transactionalRepositories.message,
-          input.threadId,
-        );
-        await this.assertReadableRelationTargets(
-          transactionalRepositories,
-          input,
-        );
-
-        for (
-          let attempt = 0;
-          attempt < MYAH_INBOX_TRIAGE_UPDATE_MAX_ATTEMPTS;
-          attempt++
-        ) {
-          const patch = this.buildTriagePatch(input, thread);
-          await this.assertPolicyVisibleThread(input);
-          const result = await transactionalRepositories.messageThread.update(
-            { id: input.threadId, inboxState: thread.inboxState },
-            patch,
-            { returning: ['id'] },
+        const mutate = async () => {
+          const transactionalRepositories = this.getTransactionalRepositories(
+            manager as WorkspaceEntityManager,
+            repositories,
+            rolePermissionConfig,
+            input.authContext,
           );
 
-          if (result.affected || result.raw.length > 0) {
-            return;
-          }
-
-          thread = await this.loadReadableThread(
+          await this.assertReadableCurrentMember(
+            transactionalRepositories.workspaceMember,
+            input.workspaceMemberId,
+          );
+          let thread = await this.loadReadableThread(
             transactionalRepositories.messageThread,
             input.threadId,
           );
+
+          await this.assertReplyEligible(
+            transactionalRepositories.message,
+            input.threadId,
+          );
+          await this.assertReadableRelationTargets(
+            transactionalRepositories,
+            input,
+          );
+
+          for (
+            let attempt = 0;
+            attempt < MYAH_INBOX_TRIAGE_UPDATE_MAX_ATTEMPTS;
+            attempt++
+          ) {
+            const patch = this.buildThreadUpdatePatch(input);
+            await this.assertPolicyVisibleThread(input);
+            const result = await transactionalRepositories.messageThread.update(
+              { id: input.threadId, creatorId: thread.creatorId ?? IsNull() },
+              patch,
+              { returning: ['id'] },
+            );
+
+            if (result.affected || result.raw.length > 0) return;
+
+            thread = await this.loadReadableThread(
+              transactionalRepositories.messageThread,
+              input.threadId,
+            );
+          }
+
+          throw new ConflictException(
+            'Inbox thread changed while applying triage update',
+          );
+        };
+
+        if (input.creatorId === undefined) {
+          await mutate();
+          return;
         }
 
-        throw new ConflictException(
-          'Inbox thread changed while applying triage update',
+        await this.myahInboxContactTriageLifecycleService.withPreparedSourceMutationInTransaction(
+          {
+            workspaceId: input.workspace.id,
+            sourceType: 'EMAIL_THREAD',
+            sourceRecordIds: [input.threadId],
+            nextCreatorIds: input.creatorId ? [input.creatorId] : [],
+            manager: manager as WorkspaceEntityManager,
+            mutate,
+          },
         );
       });
     }, input.authContext);
@@ -234,6 +247,7 @@ export class MyahInboxMutationService {
                 );
               }
 
+              // SAFETY: TypeORM's expression-valued partial cannot represent this typed increment.
               const draftPatch = {
                 myahReplyDraftBody: input.body,
                 myahReplyDraftRevision: () => '"myahReplyDraftRevision" + 1',
@@ -318,34 +332,21 @@ export class MyahInboxMutationService {
     });
   }
 
-  private assertValidTriageInput(input: UpdateMyahInboxThreadInput): void {
+  private assertValidThreadUpdateInput(
+    input: UpdateMyahInboxThreadInput,
+  ): void {
     const mutableFields: Array<keyof UpdateMyahInboxThreadInput> = [
       'creatorId',
       'campaignId',
-      'inboxOwnerId',
-      'inboxState',
-      'snoozedUntil',
     ];
-    const relationIds = [
-      input.creatorId,
-      input.campaignId,
-      input.inboxOwnerId,
-    ].filter(isDefined);
+    const relationIds = [input.creatorId, input.campaignId].filter(isDefined);
 
     if (
       !isValidUuid(input.threadId) ||
       relationIds.some((id) => !isValidUuid(id)) ||
-      !mutableFields.some((field) => input[field] !== undefined) ||
-      (isDefined(input.inboxState) &&
-        !Object.values(MyahInboxState).includes(input.inboxState)) ||
-      (input.snoozedUntil !== undefined &&
-        !isDefined(input.snoozedUntil) &&
-        (!isDefined(input.inboxState) ||
-          input.inboxState === MyahInboxState.SNOOZED)) ||
-      (isDefined(input.snoozedUntil) &&
-        !isISO8601(input.snoozedUntil, { strict: true }))
+      !mutableFields.some((field) => input[field] !== undefined)
     ) {
-      throw new BadRequestException('Invalid Myah inbox triage input');
+      throw new BadRequestException('Invalid Myah inbox thread update input');
     }
   }
 
@@ -492,13 +493,11 @@ export class MyahInboxMutationService {
         id: true,
         creatorId: true,
         myahCampaignId: true,
-        inboxOwnerId: true,
-        inboxState: true,
-        snoozedUntil: true,
         myahReplyDraftBodyMarkdown: true,
         myahReplyDraftBodyBlocknote: true,
         myahReplyDraftRevision: true,
       },
+      lock: { mode: 'pessimistic_write' },
     })) as InboxThreadRecord | null;
 
     if (!thread) {
@@ -546,10 +545,7 @@ export class MyahInboxMutationService {
   }
 
   private async assertReadableRelationTargets(
-    repositories: Pick<
-      MutationRepositories,
-      'creator' | 'campaign' | 'workspaceMember'
-    >,
+    repositories: Pick<MutationRepositories, 'creator' | 'campaign'>,
     input: UpdateMyahInboxThreadInput,
   ): Promise<void> {
     const targets = [
@@ -563,11 +559,6 @@ export class MyahInboxMutationService {
         repository: repositories.campaign,
         message: 'Inbox Campaign is not readable',
       },
-      {
-        id: input.inboxOwnerId,
-        repository: repositories.workspaceMember,
-        message: 'Inbox owner is not readable',
-      },
     ];
 
     for (const target of targets) {
@@ -578,6 +569,7 @@ export class MyahInboxMutationService {
       const record = await target.repository.findOne({
         where: { id: target.id, deletedAt: IsNull() },
         select: { id: true },
+        lock: { mode: 'pessimistic_write' },
       });
 
       if (!record) {
@@ -586,9 +578,8 @@ export class MyahInboxMutationService {
     }
   }
 
-  private buildTriagePatch(
+  private buildThreadUpdatePatch(
     input: UpdateMyahInboxThreadInput,
-    thread: InboxThreadRecord,
   ): Partial<InboxThreadRecord> {
     const patch: Partial<InboxThreadRecord> = {};
 
@@ -598,42 +589,6 @@ export class MyahInboxMutationService {
 
     if (input.campaignId !== undefined) {
       patch.myahCampaignId = input.campaignId ?? null;
-    }
-
-    if (input.inboxOwnerId !== undefined) {
-      patch.inboxOwnerId = input.inboxOwnerId ?? null;
-    }
-
-    if (isDefined(input.inboxState)) {
-      patch.inboxState = input.inboxState;
-    }
-
-    const targetState = input.inboxState ?? thread.inboxState;
-
-    if (targetState === MyahInboxState.SNOOZED) {
-      if (isDefined(input.inboxState) && !isDefined(input.snoozedUntil)) {
-        throw new BadRequestException(
-          'Snoozed Inbox threads require a future timestamp',
-        );
-      }
-
-      if (isDefined(input.snoozedUntil)) {
-        if (new Date(input.snoozedUntil).getTime() <= Date.now()) {
-          throw new BadRequestException(
-            'Snoozed Inbox threads require a future timestamp',
-          );
-        }
-
-        patch.snoozedUntil = input.snoozedUntil;
-      }
-    } else {
-      if (!isDefined(input.inboxState) && input.snoozedUntil !== undefined) {
-        throw new BadRequestException(
-          'A snooze timestamp requires the SNOOZED state',
-        );
-      }
-
-      patch.snoozedUntil = null;
     }
 
     return patch;

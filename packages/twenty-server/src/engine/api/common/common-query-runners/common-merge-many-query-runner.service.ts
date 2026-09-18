@@ -34,6 +34,7 @@ import { buildColumnsToSelect } from 'src/engine/api/graphql/graphql-query-runne
 import { hasRecordFieldValue } from 'src/engine/api/graphql/graphql-query-runner/utils/has-record-field-value.util';
 import { mergeFieldValues } from 'src/engine/api/graphql/graphql-query-runner/utils/merge-field-values.util';
 import { WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
 import { computeMorphOrRelationFieldJoinColumnName } from 'src/engine/metadata-modules/field-metadata/utils/compute-morph-or-relation-field-join-column-name.util';
 import { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
@@ -51,6 +52,12 @@ export class CommonMergeManyQueryRunnerService extends CommonBaseQueryRunnerServ
   ObjectRecord
 > {
   protected readonly operationName = CommonQueryNames.MERGE_MANY;
+
+  constructor(
+    private readonly myahInboxContactTriageLifecycleService: MyahInboxContactTriageLifecycleService,
+  ) {
+    super();
+  }
 
   async run(
     args: CommonExtendedInput<MergeManyQueryArgs>,
@@ -140,27 +147,75 @@ export class CommonMergeManyQueryRunnerService extends CommonBaseQueryRunnerServ
       queryRunnerContext.authContext,
     );
 
-    await this.migrateRelatedRecords(
-      transactionManager,
-      queryRunnerContext,
-      idsToDelete,
-      priorityRecordId,
-    );
+    const merge = async () => {
+      await this.migrateRelatedRecords(
+        transactionManager,
+        queryRunnerContext,
+        idsToDelete,
+        priorityRecordId,
+      );
 
-    await transactionRepository
-      .createQueryBuilder(flatObjectMetadata.nameSingular)
-      .delete()
-      .whereInIds(idsToDelete)
-      .returning(columnsToReturn)
-      .execute();
+      await transactionRepository
+        .createQueryBuilder(flatObjectMetadata.nameSingular)
+        .delete()
+        .whereInIds(idsToDelete)
+        .returning(columnsToReturn)
+        .execute();
 
-    return this.updatePriorityRecord(
-      args,
-      queryRunnerContext,
-      transactionRepository,
-      priorityRecordId,
-      mergedData,
+      return this.updatePriorityRecord(
+        args,
+        queryRunnerContext,
+        transactionRepository,
+        priorityRecordId,
+        mergedData,
+      );
+    };
+
+    if (flatObjectMetadata.nameSingular !== 'creator') {
+      return merge();
+    }
+
+    return this.myahInboxContactTriageLifecycleService.withPreparedCreatorMutationInTransaction(
+      {
+        workspaceId: queryRunnerContext.authContext.workspace.id,
+        creatorIds: [priorityRecordId, ...idsToDelete],
+        manager: transactionManager,
+        verify: () =>
+          this.assertCreatorTargetsUnchanged(transactionRepository, [
+            priorityRecordId,
+            ...idsToDelete,
+          ]),
+        mutate: merge,
+      },
     );
+  }
+
+  private async assertCreatorTargetsUnchanged(
+    repository: WorkspaceRepository<ObjectLiteral>,
+    authorizedIds: string[],
+  ): Promise<void> {
+    const rows = (await repository
+      .createQueryBuilder('creator')
+      .select('creator.id', 'id')
+      .whereInIds(authorizedIds)
+      .setLock('pessimistic_write')
+      .getRawMany()) as Array<{ id?: string; creator_id?: string }>;
+    const currentIds = rows
+      .map((row) => row.id ?? row.creator_id)
+      .filter((id): id is string => id !== undefined)
+      .sort();
+    const expectedIds = [...new Set(authorizedIds)].sort();
+
+    if (
+      currentIds.length !== expectedIds.length ||
+      currentIds.some((id, index) => id !== expectedIds[index])
+    ) {
+      throw new CommonQueryRunnerException(
+        'Creator records changed before transaction reconciliation',
+        CommonQueryRunnerExceptionCode.RECORD_NOT_FOUND,
+        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+      );
+    }
   }
 
   private async fetchRecordsToMerge(

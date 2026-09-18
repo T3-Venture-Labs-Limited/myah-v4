@@ -1,4 +1,8 @@
 import { Injectable, Optional } from '@nestjs/common';
+
+import { type MyahInboxTriageMode } from 'src/engine/core-modules/myah-inbox/types/myah-inbox-contact-triage.types';
+import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
+import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
 import { ModuleRef } from '@nestjs/core';
 
 import {
@@ -44,6 +48,8 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     private readonly messageParticipantService: MessagingMessageParticipantService,
     private readonly messageFolderAssociationService: MessagingMessageFolderAssociationService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly myahInboxContactTriageService: MyahInboxContactTriageService,
+    private readonly myahInboxContactTriageReceiptService: MyahInboxContactTriageReceiptService,
     @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
 
@@ -52,11 +58,24 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     messageChannel: MessageChannelEntity,
     connectedAccount: ConnectedAccountEntity,
     workspaceId: string,
+    source?: { mode: MyahInboxTriageMode; generationId: string },
     suppliedTransactionManager?: WorkspaceEntityManager,
   ): Promise<
     | {
         messageExternalIdsAndIdsMap: Map<string, string>;
         messageExternalIdToMessageThreadIdMap: Map<string, string>;
+        messageExternalIdToPersistenceInfoMap: Map<
+          string,
+          {
+            createdAt: string;
+            direction: string;
+            wasInserted: boolean;
+            messageThreadId: string;
+          }
+        >;
+        contactsToCreate: (ParticipantWithMessageId & {
+          shouldCreateContact: boolean;
+        })[];
       }
     | undefined
   > {
@@ -66,15 +85,27 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     const saveWithinTransaction = async (
       transactionManager: WorkspaceEntityManager,
     ) => {
+      // A source is only actionable when this workspace already has the private
+      // triage schema. Without it every triage write would fail, which would
+      // abort message persistence itself, so the import stays schema-agnostic
+      // until the 2.20 command has provisioned the workspace.
+      const recordTriageSource = source
+        ? await this.myahInboxContactTriageReceiptService.lockMigrationMarkerForSourcePersistenceInTransaction(
+            transactionManager,
+          )
+        : false;
+
       const {
         messageExternalIdsAndIdsMap,
         messageExternalIdToMessageChannelMessageAssociationIdMap,
         messageExternalIdToMessageThreadIdMap,
+        messageExternalIdToPersistenceInfoMap,
       } = await this.messageService.saveMessagesWithinTransaction(
         messagesToSave,
         messageChannel.id,
         transactionManager,
         workspaceId,
+        ...(recordTriageSource ? ([true] as const) : []),
       );
 
       for (const message of messagesToSave) {
@@ -194,10 +225,106 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         transactionManager,
       );
 
+      if (recordTriageSource && source) {
+        const persistedSourceMessages = messagesToSave.flatMap((message) => {
+          const messageId = messageExternalIdsAndIdsMap.get(message.externalId);
+          const persistence = messageExternalIdToPersistenceInfoMap.get(
+            message.externalId,
+          );
+          const threadId = persistence?.messageThreadId;
+          if (!messageId || !threadId || !persistence) return [];
+
+          const direction =
+            persistence.direction === MessageDirection.INCOMING
+              ? ('INBOUND' as const)
+              : persistence.direction === MessageDirection.OUTGOING
+                ? ('OUTBOUND' as const)
+                : ('UNKNOWN' as const);
+
+          return [{ direction, message, messageId, persistence, threadId }];
+        });
+
+        // Message persistence already holds marker, source-advisory, and
+        // source-row locks. Re-imports can attach an existing
+        // header-deduplicated message to another channel, so they must extend
+        // durable visibility provenance even though they do not create a new
+        // transition receipt.
+        for (const sourceMessage of persistedSourceMessages) {
+          if (sourceMessage.direction === 'UNKNOWN') {
+            continue;
+          }
+          await this.myahInboxContactTriageReceiptService.recordInTransaction(
+            {
+              channel: 'EMAIL',
+              persistedMessageId: sourceMessage.messageId,
+              sourceRecordId: sourceMessage.threadId,
+              sourceGenerationId: source.generationId,
+              mode: source.mode,
+              direction: sourceMessage.direction,
+              providerOccurredAt:
+                sourceMessage.message.providerOccurredAt ?? null,
+              originalCreatedAt: sourceMessage.persistence.createdAt,
+              firstPersistence: sourceMessage.persistence.wasInserted,
+            },
+            transactionManager,
+          );
+        }
+
+        const sourceRecordIds = [
+          ...new Set(
+            persistedSourceMessages.map(
+              (sourceMessage) => sourceMessage.threadId,
+            ),
+          ),
+        ].sort();
+        const query = transactionManager.queryRunner?.query.bind(
+          transactionManager.queryRunner,
+        );
+        if (!query) {
+          throw new Error(
+            'Email triage identity preparation requires an active transaction manager',
+          );
+        }
+        const sourceRows = (await query(
+          'SELECT id, "creatorId" FROM "messageThread" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE',
+          [sourceRecordIds],
+        )) as Array<{ id: string; creatorId: string | null }>;
+        const creatorIdBySourceId = new Map(
+          sourceRows.map((sourceRow) => [sourceRow.id, sourceRow.creatorId]),
+        );
+        await this.myahInboxContactTriageService.lockIdentityKeysInTransaction({
+          identityKeys: sourceRecordIds.flatMap((sourceRecordId) => {
+            const creatorId = creatorIdBySourceId.get(sourceRecordId);
+
+            return [
+              `email-thread:${sourceRecordId}`,
+              ...(creatorId ? [`creator:${creatorId}`] : []),
+            ];
+          }),
+          manager: transactionManager,
+        });
+
+        for (const sourceMessage of persistedSourceMessages) {
+          await this.myahInboxContactTriageService.ensureSourceContactInTransaction(
+            {
+              workspaceId,
+              sourceType: 'EMAIL_THREAD',
+              sourceRecordId: sourceMessage.threadId,
+              initialDirection: sourceMessage.direction,
+              manager: transactionManager,
+            },
+          );
+        }
+      }
+
       return {
         participantsWithMessageId,
         messageExternalIdsAndIdsMap,
         messageExternalIdToMessageThreadIdMap,
+        messageExternalIdToPersistenceInfoMap,
+        contactsToCreate: participantsWithMessageId.filter(
+          (participant) => participant.shouldCreateContact,
+        ),
       };
     };
     const savedMessagesResult = suppliedTransactionManager
@@ -217,20 +344,11 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
       messageChannel.isContactAutoCreationEnabled &&
       savedMessagesResult
     ) {
-      const contactsToCreate =
-        savedMessagesResult.participantsWithMessageId.filter(
-          (participant) => participant.shouldCreateContact,
-        );
-
-      await this.messageQueueService.add<CreateCompanyAndContactJobData>(
-        CreateCompanyAndContactJob.name,
-        {
-          workspaceId,
-          connectedAccount,
-          contactsToCreate,
-          source: FieldActorSource.EMAIL,
-        },
-      );
+      await this.enqueueContactCreation({
+        workspaceId,
+        connectedAccount,
+        contactsToCreate: savedMessagesResult.contactsToCreate,
+      });
     }
 
     if (!isDefined(savedMessagesResult)) {
@@ -242,6 +360,31 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         savedMessagesResult.messageExternalIdsAndIdsMap,
       messageExternalIdToMessageThreadIdMap:
         savedMessagesResult.messageExternalIdToMessageThreadIdMap,
+      messageExternalIdToPersistenceInfoMap:
+        savedMessagesResult.messageExternalIdToPersistenceInfoMap,
+      contactsToCreate: savedMessagesResult.contactsToCreate,
     };
+  }
+
+  async enqueueContactCreation({
+    workspaceId,
+    connectedAccount,
+    contactsToCreate,
+  }: {
+    workspaceId: string;
+    connectedAccount: ConnectedAccountEntity;
+    contactsToCreate: (ParticipantWithMessageId & {
+      shouldCreateContact: boolean;
+    })[];
+  }): Promise<void> {
+    await this.messageQueueService.add<CreateCompanyAndContactJobData>(
+      CreateCompanyAndContactJob.name,
+      {
+        workspaceId,
+        connectedAccount,
+        contactsToCreate,
+        source: FieldActorSource.EMAIL,
+      },
+    );
   }
 }

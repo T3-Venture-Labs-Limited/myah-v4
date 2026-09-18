@@ -128,6 +128,7 @@ import { AddCampaignDispatchEvidenceFastInstanceCommand } from 'src/database/com
 import { AddCampaignOperatorExclusionReasonFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971536-add-campaign-operator-exclusion-reason';
 import { CreateUnipileInstagramFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619348-create-unipile-instagram-foundation';
 import { AddUnipileInstagramSyncStateFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619352-add-unipile-instagram-sync-state';
+import { AddUnipileInstagramTriageModeFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789633748003-add-unipile-instagram-triage-mode';
 import { CreateInstagramActionBudgetFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619356-create-instagram-action-budget';
 import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619359-add-instagram-direct-action-context';
 import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
@@ -260,6 +261,7 @@ export const INSTANCE_COMMANDS = [
   AddCampaignOperatorExclusionReasonFastInstanceCommand,
   CreateUnipileInstagramFoundationFastInstanceCommand,
   AddUnipileInstagramSyncStateFastInstanceCommand,
+  AddUnipileInstagramTriageModeFastInstanceCommand,
   CreateInstagramActionBudgetFastInstanceCommand,
   AddInstagramDirectActionContextFastInstanceCommand,
   InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,

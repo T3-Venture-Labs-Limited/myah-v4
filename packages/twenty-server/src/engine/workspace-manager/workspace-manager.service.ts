@@ -6,11 +6,15 @@ import { Repository } from 'typeorm';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { MyahInboxContactTriageSchemaService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-schema.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { RoleService } from 'src/engine/metadata-modules/role/role.service';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { MEMBER_ROLE_LABEL } from 'src/engine/metadata-modules/permissions/constants/member-role-label.constants';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceDataSourceService } from 'src/engine/workspace-datasource/workspace-datasource.service';
@@ -33,6 +37,8 @@ export class WorkspaceManagerService {
     @InjectWorkspaceScopedRepository(RoleEntity)
     private readonly roleRepository: WorkspaceScopedRepository<RoleEntity>,
     private readonly applicationService: ApplicationService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly myahInboxContactTriageSchemaService: MyahInboxContactTriageSchemaService,
   ) {}
 
   public async init({
@@ -72,6 +78,8 @@ export class WorkspaceManagerService {
       },
     );
 
+    await this.initializeMyahInboxContactTriage(workspaceId);
+
     const dataSourceMetadataCreationEnd = performance.now();
 
     this.logger.log(
@@ -90,6 +98,38 @@ export class WorkspaceManagerService {
       userId,
       workspaceCustomFlatApplication,
     });
+  }
+
+  private async initializeMyahInboxContactTriage(
+    workspaceId: string,
+  ): Promise<void> {
+    const authContext = buildSystemAuthContext(workspaceId);
+
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const workspaceDataSource =
+        await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+
+      await workspaceDataSource.transaction(
+        async (manager: WorkspaceEntityManager) => {
+          const { queryRunner } = manager;
+
+          if (!queryRunner) {
+            throw new Error(
+              'Workspace transaction did not provide a raw SQL query runner',
+            );
+          }
+
+          await this.myahInboxContactTriageSchemaService.ensureWorkspaceTables(
+            queryRunner,
+            workspaceId,
+          );
+          await this.myahInboxContactTriageSchemaService.initializeNewWorkspaceInTransaction(
+            queryRunner,
+            workspaceId,
+          );
+        },
+      );
+    }, authContext);
   }
 
   private async setupDefaultRoles({

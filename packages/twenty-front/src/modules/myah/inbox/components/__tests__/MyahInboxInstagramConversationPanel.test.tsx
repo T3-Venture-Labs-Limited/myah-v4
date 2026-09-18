@@ -96,6 +96,14 @@ const contact = (
   preview: null,
   sender: null,
   needsAttention: false,
+  triage: {
+    isAvailable: true,
+    inboxOwnerId: null,
+    inboxState: 'NEEDS_REPLY',
+    snoozedUntil: null,
+    revision: 1,
+    identityGeneration: '1',
+  },
   email: {
     isAvailable: true,
     threadCount: 1,
