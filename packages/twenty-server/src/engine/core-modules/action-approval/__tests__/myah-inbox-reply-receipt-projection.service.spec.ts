@@ -304,6 +304,12 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
           { saveMessageParticipants: jest.fn() } as never,
           { saveMessageFolderAssociations: jest.fn() } as never,
           orm as never,
+          {} as never,
+          {
+            lockMigrationMarkerForSourcePersistenceInTransaction: jest.fn(
+              async () => false,
+            ),
+          } as never,
         ),
       );
       const persistSentMessage = jest.spyOn(persistence, 'persistSentMessage');
