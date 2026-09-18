@@ -1,10 +1,14 @@
 export const BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER =
   '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991';
 
+export const MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER =
+  '4738ebcd-6662-4ecc-a190-374fa0525951';
+
 export const MYAH_STANDARD_APP_UNIVERSAL_IDENTIFIER_LOOKUP: Readonly<
   Record<string, true>
 > = Object.freeze({
   [BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER]: true,
+  [MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER]: true,
 });
 
 export const isMyahStandardAppUniversalIdentifier = (value: string): boolean =>
