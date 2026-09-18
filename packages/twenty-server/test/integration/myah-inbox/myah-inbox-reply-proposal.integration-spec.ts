@@ -6,6 +6,7 @@ import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/wo
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { USER_WORKSPACE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-user-workspaces.util';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 
@@ -223,7 +224,16 @@ describe('Myah Inbox reply proposal Nest integration', () => {
         query: generateProposalMutation,
         variables: {
           input: {
-            threadId: fixture.threadIds.draft,
+            expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
+            target: {
+              channel: 'EMAIL',
+              contactId: encodeMyahInboxContactId({
+                workspaceId: SEED_APPLE_WORKSPACE_ID,
+                identity: { kind: 'creator', recordId: fixture.creatorId },
+              }),
+              threadId: fixture.threadIds.draft,
+            },
+            replyContext: { kind: 'CAMPAIGN', campaignId: fixture.campaignId },
             operatorInstructions: 'Confirm Tuesday.',
           },
         },
