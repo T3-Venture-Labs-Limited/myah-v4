@@ -17,6 +17,7 @@
 
 - **Linear:** problem, priority, user outcome, boundaries, acceptance and work relationships—not a premature technical plan. Use the project `myah-linear` skill for issue creation/refinement and parent/subissue decisions.
 - **Spec:** agreed behavior and design decisions. **Plan:** implementation order, real files/tests and evidence. Use `myah-development-docs` for canonical dated notes in the shared Obsidian vault's `llm-wiki/myahdev/Engineering/specs/` and `plans/`, each with `archive/`; do not write new canonical specs/plans into worktrees.
+- **OpenSpec:** `openspec/config.yaml` points to the private registered `myah-kb` store. Keep private planning artifacts in that store; do not copy them into this public repository.
 - **This file:** shared project policy. **Skills:** reusable procedures. **Pi configuration:** role models, tools and limits. **Memory:** potentially stale background, never the current backlog or authorization.
 - Keep private skill procedures discoverable from the assigned worktree. If unavailable, report the missing skill and locate the canonical project copy; do not silently substitute an unrelated global workflow.
 
