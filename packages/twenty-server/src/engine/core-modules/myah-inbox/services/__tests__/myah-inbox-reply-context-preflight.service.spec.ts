@@ -99,12 +99,17 @@ const createQuery = (input?: {
   });
 };
 
-const createService = (query: jest.Mock) =>
+const createService = (query: jest.Mock, options?: { schemaProvisioned?: boolean }) =>
   new EmailReplyContextActivationService({
     query,
     transaction: async (
       callback: (manager: { query: typeof query }) => unknown,
     ) => callback({ query }),
+    createQueryRunner: () => ({
+      connect: jest.fn(),
+      hasSchema: jest.fn(async () => options?.schemaProvisioned ?? true),
+      release: jest.fn(),
+    }),
   } as never);
 
 describe('EmailReplyContextActivationService', () => {
@@ -329,5 +334,56 @@ describe('EmailReplyContextActivationService', () => {
     await expect(
       createService(createQuery()).isEmailContextActivationEnabled(workspaceId),
     ).resolves.toBe(false);
+  });
+});
+
+describe('EmailReplyContextActivationService.assertEmailContextActivationEnabled', () => {
+  it('does nothing when the workspace is already active', async () => {
+    const query = jest.fn(async (sql: string) =>
+      sql.includes('FROM core."keyValuePair"')
+        ? [{ value: { status: 'ACTIVE' } }]
+        : [],
+    );
+    const service = createService(query);
+
+    await expect(
+      service.assertEmailContextActivationEnabled(workspaceId),
+    ).resolves.toBeUndefined();
+    expect(
+      query.mock.calls.some(([sql]) => String(sql).includes('FOR UPDATE')),
+    ).toBe(false);
+  });
+
+  it('activates a provisioned workspace with no legacy drafts on first use', async () => {
+    const query = createQuery({ sources: [] });
+    const service = createService(query, { schemaProvisioned: true });
+
+    await expect(
+      service.assertEmailContextActivationEnabled(workspaceId),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.isEmailContextActivationEnabled(workspaceId),
+    ).resolves.toBe(true);
+  });
+
+  it('still rejects when legacy drafts remain unmapped after the first-use attempt', async () => {
+    const query = createQuery({ evidence: 0 });
+    const service = createService(query, { schemaProvisioned: true });
+
+    await expect(
+      service.assertEmailContextActivationEnabled(workspaceId),
+    ).rejects.toThrow('Email reply context activation is pending');
+  });
+
+  it('rejects without attempting activation when the workspace has no provisioned schema', async () => {
+    const query = createQuery({ sources: [] });
+    const service = createService(query, { schemaProvisioned: false });
+
+    await expect(
+      service.assertEmailContextActivationEnabled(workspaceId),
+    ).rejects.toThrow('Email reply context activation is pending');
+    expect(
+      query.mock.calls.some(([sql]) => String(sql).includes('FOR UPDATE')),
+    ).toBe(false);
   });
 });

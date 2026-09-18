@@ -84,6 +84,20 @@ export class EmailReplyContextActivationService {
   async assertEmailContextActivationEnabled(
     workspaceId: string,
   ): Promise<void> {
+    if (await this.isEmailContextActivationEnabled(workspaceId)) {
+      return;
+    }
+
+    // Workspaces created directly at the current schema version (every
+    // workspace going forward) never replay the historical 2.20.0 upgrade
+    // command that activates Email reply context, so they'd otherwise stay
+    // permanently blocked. Activate on first use instead: this cutover is a
+    // no-op-safe idempotent transaction that immediately succeeds when there
+    // are no legacy drafts to migrate (the common case for a new workspace).
+    if (await this.isWorkspaceSchemaProvisioned(workspaceId)) {
+      await this.preflightEmailWorkspace(workspaceId);
+    }
+
     if (!(await this.isEmailContextActivationEnabled(workspaceId))) {
       throw new ForbiddenException('Email reply context activation is pending');
     }
