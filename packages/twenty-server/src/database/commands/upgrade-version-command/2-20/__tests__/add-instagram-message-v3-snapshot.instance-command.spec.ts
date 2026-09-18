@@ -1,7 +1,7 @@
 import { type QueryRunner } from 'typeorm';
 
 import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
-import { AddInstagramMessageV3SnapshotFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789488000359-add-instagram-message-v3-snapshot';
+import { AddInstagramMessageV3SnapshotFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789633748004-add-instagram-message-v3-snapshot';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
 describe('AddInstagramMessageV3SnapshotFastInstanceCommand', () => {
@@ -26,7 +26,7 @@ describe('AddInstagramMessageV3SnapshotFastInstanceCommand', () => {
       ),
     ).toEqual({
       version: '2.20.0',
-      timestamp: 1789488000359,
+      timestamp: 1789633748004,
       type: 'fast',
       runAfterWorkspace: false,
     });

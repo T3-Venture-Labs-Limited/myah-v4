@@ -9,7 +9,7 @@ import {
 } from 'twenty-shared/utils';
 
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
-import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789488000360-synchronize-instagram-composer-metadata.command';
+import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { CommandMenuItemAvailabilityType } from 'src/engine/metadata-modules/command-menu-item/enums/command-menu-item-availability-type.enum';
 import { EngineComponentKey } from 'src/engine/metadata-modules/command-menu-item/enums/engine-component-key.enum';
@@ -174,12 +174,12 @@ describe('SynchronizeInstagramComposerMetadataCommand', () => {
       'Failed to synchronize Instagram composer metadata',
     );
   });
-  it('registers version 1789488000360 without changing the Compose Email contract', () => {
+  it('registers version 1789633748005 without changing the Compose Email contract', () => {
     expect(
       getRegisteredWorkspaceCommandMetadata(
         SynchronizeInstagramComposerMetadataCommand,
       ),
-    ).toMatchObject({ version: '2.20.0', timestamp: 1789488000360 });
+    ).toMatchObject({ version: '2.20.0', timestamp: 1789633748005 });
     expect(STANDARD_COMMAND_MENU_ITEMS.composeEmail).toEqual({
       universalIdentifier: '96457c5a-b028-4d48-94e3-27f4c41296b8',
       label: 'Compose Email',

@@ -113,12 +113,12 @@ const EXPECTED_INSTAGRAM_IDENTITIES = [
     version: '2.20.0',
     kind: 'fast-instance',
     className: 'AddInstagramMessageV3SnapshotFastInstanceCommand',
-    timestamp: 1789488000359,
+    timestamp: 1789633748004,
     durableName:
-      '2.20.0_AddInstagramMessageV3SnapshotFastInstanceCommand_1789488000359',
+      '2.20.0_AddInstagramMessageV3SnapshotFastInstanceCommand_1789633748004',
     // New command: no persisted legacy identity to preserve, so the durable name
     // keeps its own registration timestamp.
-    oldTimestamp: 1789488000359,
+    oldTimestamp: 1789633748004,
   },
   {
     version: '2.20.0',
@@ -160,10 +160,10 @@ const EXPECTED_INSTAGRAM_IDENTITIES = [
     version: '2.20.0',
     kind: 'workspace',
     className: 'SynchronizeInstagramComposerMetadataCommand',
-    timestamp: 1789488000360,
+    timestamp: 1789633748005,
     durableName:
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789488000360',
-    oldTimestamp: 1789488000360,
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+    oldTimestamp: 1789633748005,
   },
 ] as const;
 
@@ -289,7 +289,24 @@ describe('Instagram production upgrade provider compatibility', () => {
           // out of the expected tail. Exclude it explicitly, the same way the
           // cutover verifier itself is excluded above.
           step.name !==
-            '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+            '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535' &&
+          // MYAH-359's composer metadata sync was renumbered (see above) to a
+          // real, current timestamp after MYAH-354's two triage workspace
+          // commands (PR #161) landed on main, so its own real timestamp is
+          // now the largest in this version directory and widens this window
+          // enough to also catch those two non-Instagram commands. Exclude
+          // them explicitly for the same reason as the Campaign lifecycle
+          // sync above.
+          step.name !==
+            '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001' &&
+          step.name !==
+            '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002' &&
+          // Same reasoning for MYAH-354's fast-instance triage-mode command,
+          // which also lands inside the widened fast-instance window now that
+          // MYAH-359's v3-snapshot fast-instance command was renumbered above
+          // it.
+          step.name !==
+            '2.20.0_AddUnipileInstagramTriageModeFastInstanceCommand_1789633748003',
       );
       const identities = EXPECTED_INSTAGRAM_IDENTITIES.filter(
         (identity) => identity.kind === kind,
@@ -312,21 +329,23 @@ describe('Instagram production upgrade provider compatibility', () => {
     }
     // The Instagram security cutover sweep is no longer the final 2.20.0 step.
     // MYAH-338's Campaign lifecycle status sync (PR #143) registered right
-    // after it. MYAH-359's composer metadata sync then registered with a
-    // later timestamp than both. MYAH-354's contact-wide triage work (PR #161)
-    // then registered two further workspace commands (initialize, then catch
-    // up) with the latest timestamps of all, so the catch-up command is now
-    // the final 2.20.0 step. Ascending final order: security sweep, campaign
-    // lifecycle sync, composer metadata sync, triage initialize, triage catch
-    // up.
+    // after it. MYAH-354's contact-wide triage work (PR #161) registered two
+    // further workspace commands (initialize, then catch up) with later
+    // timestamps still. MYAH-359's composer metadata sync and its paired
+    // fast-instance v3-snapshot command were renumbered to real, current
+    // registration timestamps after all of the above landed on main first
+    // (append-only sequencing; see the timestamp-guard CI check), so the
+    // composer metadata sync is now the final 2.20.0 step. Ascending final
+    // order: security sweep, campaign lifecycle sync, triage initialize,
+    // triage catch up, composer metadata sync.
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
     );
     expect(sequence[sequence.length - 2]?.name).toBe(
-      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
     );
     expect(sequence[sequence.length - 3]?.name).toBe(
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789488000360',
+      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
     );
     expect(sequence[sequence.length - 4]?.name).toBe(
       '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',

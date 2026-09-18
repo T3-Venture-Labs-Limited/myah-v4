@@ -31,7 +31,7 @@ const V2_CONTEXT_CONSTRAINT = `
     )
   ) IS TRUE)`;
 
-@RegisteredInstanceCommand('2.20.0', 1789488000359)
+@RegisteredInstanceCommand('2.20.0', 1789633748004)
 export class AddInstagramMessageV3SnapshotFastInstanceCommand implements FastInstanceCommand {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`ALTER TABLE ${BINDING}

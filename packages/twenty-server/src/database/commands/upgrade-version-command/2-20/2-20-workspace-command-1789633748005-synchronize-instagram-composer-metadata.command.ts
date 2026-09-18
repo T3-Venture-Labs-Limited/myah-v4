@@ -13,7 +13,7 @@ import { STANDARD_COMMAND_MENU_ITEMS } from 'src/engine/workspace-manager/twenty
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
-@RegisteredWorkspaceCommand('2.20.0', 1789488000360)
+@RegisteredWorkspaceCommand('2.20.0', 1789633748005)
 @Command({
   name: 'upgrade:2-20:synchronize-instagram-composer-metadata',
   description: 'Install the Instagram command and Creator search metadata',
