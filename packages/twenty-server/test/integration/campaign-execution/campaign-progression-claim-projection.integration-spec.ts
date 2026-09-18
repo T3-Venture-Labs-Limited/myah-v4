@@ -264,15 +264,15 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
         `CREATE TABLE IF NOT EXISTS "${schema}".campaign (id uuid PRIMARY KEY,"lifecycleStatus" text NOT NULL,"sequenceAuthorization" jsonb)`,
       );
       await manager.query(
-        `CREATE TABLE IF NOT EXISTS "${schema}"."campaignCreator" (id uuid PRIMARY KEY,stage text,"deletedAt" timestamptz,"updatedAt" timestamptz DEFAULT now())`,
+        `CREATE TABLE IF NOT EXISTS "${schema}"."campaignCreator" (id uuid PRIMARY KEY,"campaignId" uuid NOT NULL,stage text,"deletedAt" timestamptz,"updatedAt" timestamptz DEFAULT now())`,
       );
       await manager.query(
         `INSERT INTO "${schema}".campaign VALUES ($1,'ACTIVE',$2::jsonb) ON CONFLICT DO NOTHING`,
         [id.campaign, JSON.stringify(projection)],
       );
       await manager.query(
-        `INSERT INTO "${schema}"."campaignCreator" (id,stage) VALUES ($1,'READY') ON CONFLICT DO NOTHING`,
-        [id.campaignCreator],
+        `INSERT INTO "${schema}"."campaignCreator" (id,"campaignId",stage) VALUES ($1,$2,'READY') ON CONFLICT DO NOTHING`,
+        [id.campaignCreator, id.campaign],
       );
       await manager.query(
         `INSERT INTO core."campaignExecution" (id,"workspaceId","campaignId","timeZone","startLocalTime","endLocalTime","campaignCapacityTimeZone") VALUES ($1,$2,$3,'UTC','00:00','23:59','UTC') ON CONFLICT DO NOTHING`,
