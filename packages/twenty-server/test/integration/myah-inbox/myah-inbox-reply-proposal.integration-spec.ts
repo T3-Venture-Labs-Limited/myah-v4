@@ -30,6 +30,14 @@ type WorkspaceOrmManager = {
   ) => Promise<{ count: () => Promise<number> }>;
 };
 
+const readContextQuery = gql`
+  query Task7ReadContext($input: MyahInboxReplyDraftInput!) {
+    myahInboxReplyDraft(input: $input) {
+      contextFingerprint
+    }
+  }
+`;
+
 const generateProposalMutation = gql`
   mutation Task7GenerateProposal($input: GenerateMyahInboxReplyProposalInput!) {
     generateMyahInboxReplyProposal(input: $input) {
@@ -219,21 +227,40 @@ describe('Myah Inbox reply proposal Nest integration', () => {
       'persistSentMessage',
     );
     const beforeMessageCount = await countNativeMessages();
+    const replyTarget = {
+      channel: 'EMAIL',
+      contactId: encodeMyahInboxContactId({
+        workspaceId: SEED_APPLE_WORKSPACE_ID,
+        identity: { kind: 'creator', recordId: fixture.creatorId },
+      }),
+      threadId: fixture.threadIds.draft,
+    };
+    const replyContext = { kind: 'CAMPAIGN', campaignId: fixture.campaignId };
+    const contextResponse = await makeGraphqlAPIRequest(
+      {
+        query: readContextQuery,
+        variables: {
+          input: {
+            expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
+            target: replyTarget,
+            replyContext,
+          },
+        },
+      },
+      APPLE_JANE_ADMIN_ACCESS_TOKEN,
+    );
+    expect(contextResponse.body.errors).toBeUndefined();
+    const expectedContextFingerprint =
+      contextResponse.body.data.myahInboxReplyDraft.contextFingerprint;
     const directResponse = await makeGraphqlAPIRequest(
       {
         query: generateProposalMutation,
         variables: {
           input: {
             expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
-            target: {
-              channel: 'EMAIL',
-              contactId: encodeMyahInboxContactId({
-                workspaceId: SEED_APPLE_WORKSPACE_ID,
-                identity: { kind: 'creator', recordId: fixture.creatorId },
-              }),
-              threadId: fixture.threadIds.draft,
-            },
-            replyContext: { kind: 'CAMPAIGN', campaignId: fixture.campaignId },
+            target: replyTarget,
+            replyContext,
+            expectedContextFingerprint,
             operatorInstructions: 'Confirm Tuesday.',
           },
         },
