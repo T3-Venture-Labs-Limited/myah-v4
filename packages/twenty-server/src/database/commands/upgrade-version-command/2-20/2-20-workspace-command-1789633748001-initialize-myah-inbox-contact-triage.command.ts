@@ -50,10 +50,15 @@ export class InitializeMyahInboxContactTriageWorkspaceCommand extends ActiveOrSu
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    // A workspace without a provisioned data source cannot be migrated; every
+    // sibling workspace command skips it, and throwing here would abort the
+    // whole upgrade sequence for the remaining workspaces.
     if (!args.dataSource) {
-      throw new Error(
-        'Contact triage initialization requires a workspace data source',
+      this.logger.log(
+        `contact-triage initialization skipped workspace=${args.workspaceId} reason=no-data-source`,
       );
+
+      return;
     }
     if (args.options.dryRun) return;
 

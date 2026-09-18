@@ -3,6 +3,24 @@ import { CatchUpMyahInboxContactTriageWorkspaceCommand } from 'src/database/comm
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 
 describe('CatchUpMyahInboxContactTriageWorkspaceCommand', () => {
+  it('skips a workspace without a provisioned data source instead of failing the upgrade', async () => {
+    const drain = jest.fn();
+    const command = new CatchUpMyahInboxContactTriageWorkspaceCommand(
+      {} as never,
+      { drain } as never,
+    );
+
+    await expect(
+      command.runOnWorkspace({
+        workspaceId,
+        options: {},
+        index: 0,
+        total: 1,
+      }),
+    ).resolves.toBeUndefined();
+    expect(drain).not.toHaveBeenCalled();
+  });
+
   it('drains through a fence until empty and marks the marker READY only after its pending recheck', async () => {
     const events: string[] = [];
     const queryRunner = () => ({

@@ -28,10 +28,15 @@ export class CatchUpMyahInboxContactTriageWorkspaceCommand extends ActiveOrSuspe
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    // A workspace without a provisioned data source cannot be caught up; every
+    // sibling workspace command skips it, and throwing here would abort the
+    // whole upgrade sequence for the remaining workspaces.
     if (!args.dataSource) {
-      throw new Error(
-        'Contact triage catch-up requires a workspace data source',
+      this.logger.log(
+        `contact-triage catch-up skipped workspace=${args.workspaceId} reason=no-data-source`,
       );
+
+      return;
     }
     if (args.options.dryRun) return;
 

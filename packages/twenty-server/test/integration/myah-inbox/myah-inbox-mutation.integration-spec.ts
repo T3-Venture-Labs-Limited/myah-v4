@@ -3,6 +3,7 @@ import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graph
 
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { ensureMyahInboxContactTriageTables } from 'test/integration/myah-inbox/utils/ensure-myah-inbox-contact-triage-tables.util';
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 
 const schemaName = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
@@ -67,6 +68,8 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
   let originalThread: ThreadSnapshot;
 
   beforeAll(async () => {
+    await ensureMyahInboxContactTriageTables(SEED_APPLE_WORKSPACE_ID);
+
     const inboxResponse = await makeGraphqlAPIRequest({
       query: inboxThreadQuery,
     });

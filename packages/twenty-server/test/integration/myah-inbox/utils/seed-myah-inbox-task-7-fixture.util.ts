@@ -18,6 +18,7 @@ import { CONNECTED_ACCOUNT_DATA_SEED_IDS } from 'src/engine/workspace-manager/de
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 
+import { ensureMyahInboxContactTriageTables } from 'test/integration/myah-inbox/utils/ensure-myah-inbox-contact-triage-tables.util';
 import { createOneOperationFactory } from 'test/integration/graphql/utils/create-one-operation-factory.util';
 import { destroyOneOperationFactory } from 'test/integration/graphql/utils/destroy-one-operation-factory.util';
 import { findOneOperationFactory } from 'test/integration/graphql/utils/find-one-operation-factory.util';
@@ -898,6 +899,9 @@ export const seedMyahInboxTask7Fixture = async ({
   operatorAccessToken,
   afterNativeRecordsSeeded,
 }: SeedMyahInboxTask7FixtureArgs): Promise<MyahInboxTask7Fixture> => {
+  // Triage writes below go through the contact-wide lifecycle, which needs the
+  // private relations; a reset-only integration database has no upgrade run.
+  await ensureMyahInboxContactTriageTables(SEED_APPLE_WORKSPACE_ID);
   await createForeignCreator();
   await seedNativeRecords(operatorAccessToken);
   await afterNativeRecordsSeeded?.();

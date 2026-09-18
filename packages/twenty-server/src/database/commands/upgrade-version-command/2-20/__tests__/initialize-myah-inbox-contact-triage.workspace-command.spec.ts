@@ -3,6 +3,24 @@ import { InitializeMyahInboxContactTriageWorkspaceCommand } from 'src/database/c
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 
 describe('InitializeMyahInboxContactTriageWorkspaceCommand', () => {
+  it('skips a workspace without a provisioned data source instead of failing the upgrade', async () => {
+    const ensureWorkspaceTables = jest.fn();
+    const command = new InitializeMyahInboxContactTriageWorkspaceCommand(
+      {} as never,
+      { ensureWorkspaceTables } as never,
+    );
+
+    await expect(
+      command.runOnWorkspace({
+        workspaceId,
+        options: {},
+        index: 0,
+        total: 1,
+      }),
+    ).resolves.toBeUndefined();
+    expect(ensureWorkspaceTables).not.toHaveBeenCalled();
+  });
+
   it('commits capture installation before it starts the baseline transaction', async () => {
     const events: string[] = [];
     const queryRunner = () => ({
