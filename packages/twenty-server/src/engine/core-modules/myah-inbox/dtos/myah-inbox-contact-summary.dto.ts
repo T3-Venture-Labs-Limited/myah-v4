@@ -1,6 +1,7 @@
 import { Field, Int, ObjectType, registerEnumType } from '@nestjs/graphql';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { MyahInboxState } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 import { MyahInboxThreadContext } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
 
 export enum MyahInboxContactIdentityKind {
@@ -90,6 +91,27 @@ export class MyahInboxContactInstagramChannelSummary {
   conversations: MyahInboxContactInstagramConversation[];
 }
 
+@ObjectType('MyahInboxContactTriageSummary')
+export class MyahInboxContactTriageSummary {
+  @Field(() => Boolean)
+  isAvailable: boolean;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  inboxOwnerId: string | null;
+
+  @Field(() => MyahInboxState, { nullable: true })
+  inboxState: MyahInboxState | null;
+
+  @Field(() => String, { nullable: true })
+  snoozedUntil: string | null;
+
+  @Field(() => Int, { nullable: true })
+  revision: number | null;
+
+  @Field(() => String, { nullable: true })
+  identityGeneration: string | null;
+}
+
 @ObjectType('MyahInboxContactSummary')
 export class MyahInboxContactSummary {
   @Field(() => String)
@@ -121,6 +143,9 @@ export class MyahInboxContactSummary {
 
   @Field(() => Boolean)
   needsAttention: boolean;
+
+  @Field(() => MyahInboxContactTriageSummary)
+  triage: MyahInboxContactTriageSummary;
 
   @Field(() => MyahInboxContactEmailChannelSummary)
   email: MyahInboxContactEmailChannelSummary;

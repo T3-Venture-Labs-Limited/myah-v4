@@ -556,6 +556,8 @@ describe('UnipileInstagramWebhookJob', () => {
         messageId: messageEvent.unipileMessageId,
       }),
       workspace: { id: binding.workspaceId },
+      triageMode: 'LIVE',
+      sourceGenerationId: `webhook:${messageEvent.id}`,
     });
     expect(harness.eventRepository.save).toHaveBeenLastCalledWith(
       expect.objectContaining({

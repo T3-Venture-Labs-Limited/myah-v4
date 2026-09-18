@@ -12,11 +12,12 @@ import {
   MYAH_INBOX_MAX_DRAFT_BLOCKNOTE_LENGTH,
   MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH,
 } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
-import { MyahInboxState } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 import {
   type MyahInboxMutationRequest,
   MyahInboxMutationService,
 } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
+import { FindOperator } from 'typeorm';
+
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 const rolePermissionConfig = { unionOf: ['role-id'] };
@@ -45,6 +46,7 @@ const otherMemberId = '20202020-0b5c-4178-bed7-d371f6411eab';
 const thirdMemberId = '20202020-0b5c-4178-bed7-d371f6411eac';
 const threadId = '20202020-0b5c-4178-bed7-d371f6411ea1';
 const creatorId = '20202020-f7c5-4e2f-a44a-240b2d3a9d02';
+const otherCreatorId = '20202020-f7c5-4e2f-a44a-240b2d3a9d04';
 const campaignId = '20202020-f7c5-4e2f-a44a-240b2d3a9d03';
 const workspace = { id: workspaceId } as WorkspaceEntity;
 const userAuthContext = {
@@ -74,9 +76,6 @@ type ThreadRecord = {
   id: string;
   creatorId: string | null;
   myahCampaignId: string | null;
-  inboxOwnerId: string | null;
-  inboxState: MyahInboxState;
-  snoozedUntil: Date | string | null;
   myahReplyDraftBody: { markdown: string; blocknote: string | null } | null;
   myahReplyDraftRevision: number;
 };
@@ -85,9 +84,6 @@ const initialThread = (): ThreadRecord => ({
   id: threadId,
   creatorId: null,
   myahCampaignId: null,
-  inboxOwnerId: ownerId,
-  inboxState: MyahInboxState.NEEDS_REPLY,
-  snoozedUntil: null,
   myahReplyDraftBody: { markdown: 'existing draft', blocknote: null },
   myahReplyDraftRevision: 2,
 });
@@ -101,6 +97,7 @@ const createService = ({
   projectionReadable = true,
   canUpdateMessageThread = true,
   draftExecutionLocked = false,
+  migrationStatus = 'MIGRATING',
 }: {
   thread?: ThreadRecord | null;
   readableCreatorIds?: string[];
@@ -110,6 +107,7 @@ const createService = ({
   projectionReadable?: boolean;
   canUpdateMessageThread?: boolean;
   draftExecutionLocked?: boolean;
+  migrationStatus?: 'MIGRATING' | 'READY';
 } = {}) => {
   let persistedThread = thread;
   const targets = {
@@ -134,8 +132,10 @@ const createService = ({
     if (
       !persistedThread ||
       criteria.id !== persistedThread.id ||
-      (criteria.inboxOwnerId !== undefined &&
-        criteria.inboxOwnerId !== persistedThread.inboxOwnerId) ||
+      (criteria.creatorId !== undefined &&
+        ((criteria.creatorId as unknown) instanceof FindOperator
+          ? persistedThread.creatorId !== null
+          : criteria.creatorId !== persistedThread.creatorId)) ||
       (criteria.myahReplyDraftRevision !== undefined &&
         criteria.myahReplyDraftRevision !==
           persistedThread.myahReplyDraftRevision)
@@ -237,7 +237,11 @@ const createService = ({
     ]),
   );
   const transactionManager = {
-    query: jest.fn().mockResolvedValue(undefined),
+    query: jest.fn((sql: string) =>
+      sql.includes('FROM "myahInboxTriageMigration"')
+        ? Promise.resolve([{ status: migrationStatus }])
+        : Promise.resolve(undefined),
+    ),
     getRepository: jest.fn(
       (
         target: symbol,
@@ -284,28 +288,24 @@ const createService = ({
       subject: 'Visible subject',
       lastMessagePreview: 'Visible body',
       lastMessageSender: 'creator@example.com',
-      state: persistedThread.inboxState,
-      snoozedUntil:
-        persistedThread.snoozedUntil instanceof Date
-          ? persistedThread.snoozedUntil.toISOString()
-          : persistedThread.snoozedUntil,
       creator: persistedThread.creatorId
         ? { id: persistedThread.creatorId, name: 'Creator' }
         : null,
       campaign: persistedThread.myahCampaignId
         ? { id: persistedThread.myahCampaignId, name: 'Campaign' }
         : null,
-      inboxOwner: persistedThread.inboxOwnerId
-        ? { id: persistedThread.inboxOwnerId, name: 'Owner' }
-        : null,
     });
   });
   const isDraftExecutionLocked = jest
     .fn()
     .mockResolvedValue(draftExecutionLocked);
+  const withPreparedSourceMutationInTransaction = jest.fn(
+    async ({ mutate }: { mutate: () => Promise<unknown> }) => mutate(),
+  );
   const service = new MyahInboxMutationService(
     globalWorkspaceOrmManager as never,
     { getThreadSummary } as never,
+    { withPreparedSourceMutationInTransaction } as never,
     { isDraftExecutionLocked } as never,
     dataSource as never,
   );
@@ -321,6 +321,7 @@ const createService = ({
     coreTransactionManager,
     getThreadSummary,
     isDraftExecutionLocked,
+    withPreparedSourceMutationInTransaction,
     get persistedThread() {
       return persistedThread;
     },
@@ -376,45 +377,6 @@ describe('MyahInboxMutationService', () => {
     expect(setup.getThreadSummary).toHaveBeenCalledTimes(2);
     expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
   });
-  it('assigns, reassigns, and clears owner without changing the shared draft or revision', async () => {
-    const setup = createService();
-    const originalBody = setup.persistedThread?.myahReplyDraftBody;
-    const originalRevision = setup.persistedThread?.myahReplyDraftRevision;
-
-    await setup.service.updateMyahInboxThread({
-      ...request(),
-      threadId,
-      inboxOwnerId: otherMemberId,
-    });
-    expect(setup.persistedThread).toMatchObject({
-      inboxOwnerId: otherMemberId,
-      myahReplyDraftBody: originalBody,
-      myahReplyDraftRevision: originalRevision,
-    });
-
-    await setup.service.updateMyahInboxThread({
-      ...request(otherMemberId),
-      threadId,
-      inboxOwnerId: thirdMemberId,
-    });
-    expect(setup.persistedThread).toMatchObject({
-      inboxOwnerId: thirdMemberId,
-      myahReplyDraftBody: originalBody,
-      myahReplyDraftRevision: originalRevision,
-    });
-
-    await setup.service.updateMyahInboxThread({
-      ...request(thirdMemberId),
-      threadId,
-      inboxOwnerId: null,
-    });
-    expect(setup.persistedThread).toMatchObject({
-      inboxOwnerId: null,
-      myahReplyDraftBody: originalBody,
-      myahReplyDraftRevision: originalRevision,
-    });
-  });
-
   it('preserves relations omitted as own undefined GraphQL input properties', async () => {
     const setup = createService({
       thread: {
@@ -428,24 +390,22 @@ describe('MyahInboxMutationService', () => {
       ...request(),
       threadId,
       creatorId: undefined,
-      campaignId: undefined,
-      inboxOwnerId: otherMemberId,
+      campaignId,
     });
 
     expect(setup.persistedThread).toMatchObject({
       creatorId,
       myahCampaignId: campaignId,
-      inboxOwnerId: otherMemberId,
     });
   });
 
-  it('keeps owner triage independent from policy-authorized draft editing', async () => {
+  it('keeps relink independent from policy-authorized draft editing', async () => {
     const setup = createService();
 
     await setup.service.updateMyahInboxThread({
       ...request(),
       threadId,
-      inboxOwnerId: otherMemberId,
+      creatorId,
     });
     setup.repositories.messageThread.update.mockClear();
 
@@ -477,7 +437,7 @@ describe('MyahInboxMutationService', () => {
     await setup.service.updateMyahInboxThread({
       ...request(otherMemberId),
       threadId,
-      inboxOwnerId: null,
+      creatorId: null,
     });
     await expect(
       setup.service.saveMyahInboxDraft({
@@ -513,142 +473,37 @@ describe('MyahInboxMutationService', () => {
     );
   });
 
-  it('requires a future timestamp when entering SNOOZED', async () => {
-    const { service } = createService();
-
-    await expect(
-      service.updateMyahInboxThread({
-        ...request(),
-        threadId,
-        inboxState: MyahInboxState.SNOOZED,
-        snoozedUntil: '2020-01-01T00:00:00.000Z',
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    await expect(
-      service.updateMyahInboxThread({
-        ...request(),
-        threadId,
-        inboxState: MyahInboxState.SNOOZED,
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('persists a future snooze and clears snoozedUntil for every non-SNOOZED state', async () => {
-    const setup = createService();
-    const future = '2099-01-01T00:00:00.000Z';
-
-    await setup.service.updateMyahInboxThread({
-      ...request(),
-      threadId,
-      inboxState: MyahInboxState.SNOOZED,
-      snoozedUntil: future,
-    });
-    expect(setup.persistedThread).toMatchObject({
-      inboxState: MyahInboxState.SNOOZED,
-      snoozedUntil: future,
-    });
-
-    await setup.service.updateMyahInboxThread({
-      ...request(),
-      threadId,
-      inboxState: MyahInboxState.WAITING_ON_CREATOR,
-    });
-    expect(setup.persistedThread).toMatchObject({
-      inboxState: MyahInboxState.WAITING_ON_CREATOR,
-      snoozedUntil: null,
-    });
-  });
-  it('state-CASes a relation-only patch so a concurrent snooze keeps its timestamp', async () => {
-    const future = '2099-01-01T00:00:00.000Z';
+  it('carries the loaded Creator into the compare-and-set of a relation-only patch', async () => {
     const setup = createService({
-      thread: {
-        ...initialThread(),
-        inboxState: MyahInboxState.SNOOZED,
-        snoozedUntil: future,
-      },
+      thread: { ...initialThread(), creatorId: otherCreatorId },
     });
 
     await setup.service.updateMyahInboxThread({
       ...request(),
       threadId,
-      creatorId,
+      campaignId,
     });
 
     expect(setup.repositories.messageThread.update).toHaveBeenCalledWith(
-      expect.objectContaining({ inboxState: MyahInboxState.SNOOZED }),
-      expect.anything(),
+      expect.objectContaining({ id: threadId, creatorId: otherCreatorId }),
+      { myahCampaignId: campaignId },
       expect.anything(),
     );
-    expect(setup.persistedThread).toMatchObject({
-      creatorId,
-      inboxState: MyahInboxState.SNOOZED,
-      snoozedUntil: future,
-    });
   });
 
-  it('rejects a null-only snooze update before write', async () => {
-    const setup = createService({
-      thread: {
-        ...initialThread(),
-        inboxState: MyahInboxState.SNOOZED,
-        snoozedUntil: '2099-01-01T00:00:00.000Z',
-      },
+  it('compare-and-sets an unlinked thread with an explicit null Creator match', async () => {
+    const setup = createService();
+
+    await setup.service.updateMyahInboxThread({
+      ...request(),
+      threadId,
+      campaignId,
     });
 
-    await expect(
-      setup.service.updateMyahInboxThread({
-        ...request(),
-        threadId,
-        snoozedUntil: null,
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
+    const [criteria] = setup.repositories.messageThread.update.mock.calls[0];
+    expect(criteria).toMatchObject({ id: threadId });
+    expect(criteria.creatorId).toBeInstanceOf(FindOperator);
   });
-  it('accepts explicit null while transitioning to a non-SNOOZED state', async () => {
-    const setup = createService({
-      thread: {
-        ...initialThread(),
-        inboxState: MyahInboxState.SNOOZED,
-        snoozedUntil: '2099-01-01T00:00:00.000Z',
-      },
-    });
-
-    await expect(
-      setup.service.updateMyahInboxThread({
-        ...request(),
-        threadId,
-        inboxState: MyahInboxState.CLOSED,
-        snoozedUntil: null,
-      }),
-    ).resolves.toBeDefined();
-    expect(setup.persistedThread).toMatchObject({
-      inboxState: MyahInboxState.CLOSED,
-      snoozedUntil: null,
-    });
-  });
-
-  it.each([
-    ['Creator', { creatorId }, { readableCreatorIds: [] }],
-    ['Campaign', { campaignId }, { readableCampaignIds: [] }],
-    [
-      'owner',
-      { inboxOwnerId: otherMemberId },
-      { readableMemberIds: [ownerId] },
-    ],
-  ])(
-    'rejects an unreadable or cross-workspace %s target',
-    async (_label, update, options) => {
-      const { service } = createService(options);
-
-      await expect(
-        service.updateMyahInboxThread({
-          ...request(),
-          threadId,
-          ...update,
-        }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    },
-  );
 
   it('links and clears Creator independently, moving into and out of Unmatched', async () => {
     const setup = createService();
@@ -660,6 +515,15 @@ describe('MyahInboxMutationService', () => {
     });
     expect(linked.creator).toEqual({ id: creatorId, name: 'Creator' });
     expect(setup.persistedThread?.creatorId).toBe(creatorId);
+    expect(setup.withPreparedSourceMutationInTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId,
+        sourceType: 'EMAIL_THREAD',
+        sourceRecordIds: [threadId],
+        nextCreatorIds: [creatorId],
+        manager: setup.transactionManager,
+      }),
+    );
 
     const unmatched = await setup.service.updateMyahInboxThread({
       ...request(),
@@ -761,13 +625,13 @@ describe('MyahInboxMutationService', () => {
     ).resolves.toEqual({ status: 'SAVED', revision: 5, body: null });
   });
 
-  it('fails closed after a zero-row update when the thread vanished or ownership changed', async () => {
+  it('fails closed after a zero-row update when the thread vanished or was relinked', async () => {
     const setup = createService();
     setup.bypassedMessageThreadRepository.update.mockImplementationOnce(() => {
       const current = setup.persistedThread;
 
       if (current) {
-        current.inboxOwnerId = otherMemberId;
+        current.creatorId = otherCreatorId;
       }
 
       return Promise.resolve({ affected: 0, raw: [], generatedMaps: [] });
@@ -841,7 +705,7 @@ describe('MyahInboxMutationService', () => {
     expect(setup.bypassedMessageThreadRepository.update).not.toHaveBeenCalled();
   });
 
-  it('rejects malformed IDs, revisions, empty triage updates, and oversized draft payloads before writing', async () => {
+  it('rejects malformed IDs, revisions, empty updates, and oversized draft payloads before writing', async () => {
     const setup = createService();
 
     await expect(

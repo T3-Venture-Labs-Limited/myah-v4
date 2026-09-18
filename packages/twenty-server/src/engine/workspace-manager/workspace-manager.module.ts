@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
+import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AiAgentModule } from 'src/engine/metadata-modules/ai/ai-agent/ai-agent.module';
@@ -30,6 +31,7 @@ import { WorkspaceManagerService } from './workspace-manager.service';
     ObjectMetadataModule,
     DevSeederModule,
     FeatureFlagModule,
+    MyahInboxContactTriageModule,
     PermissionsModule,
     AiAgentModule,
     TwentyStandardApplicationModule,

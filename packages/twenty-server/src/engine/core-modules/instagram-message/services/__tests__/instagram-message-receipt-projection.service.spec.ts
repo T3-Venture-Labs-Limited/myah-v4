@@ -160,6 +160,8 @@ describe('InstagramMessageReceiptProjectionService', () => {
       expect.objectContaining({
         conversationRecordId: 'conversation-record',
         message: harness.message,
+        triageMode: 'LIVE',
+        sourceGenerationId: `action-receipt:${projectionInput.receiptId}`,
       }),
     );
     expect(harness.draftService.markSent).toHaveBeenCalledWith({

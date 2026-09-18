@@ -27,6 +27,7 @@ export type Message = Omit<
   messageFolderExternalIds?: string[];
   labelIds?: string[];
   expectedMessageId?: string;
+  providerOccurredAt?: string | null;
 };
 
 export type MessageAttachment = {

@@ -18,6 +18,7 @@ import { CONNECTED_ACCOUNT_DATA_SEED_IDS } from 'src/engine/workspace-manager/de
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 
+import { ensureMyahInboxContactTriageTables } from 'test/integration/myah-inbox/utils/ensure-myah-inbox-contact-triage-tables.util';
 import { createOneOperationFactory } from 'test/integration/graphql/utils/create-one-operation-factory.util';
 import { destroyOneOperationFactory } from 'test/integration/graphql/utils/destroy-one-operation-factory.util';
 import { findOneOperationFactory } from 'test/integration/graphql/utils/find-one-operation-factory.util';
@@ -342,14 +343,10 @@ const updateThreadMutation = gql`
   mutation SeedTask7UpdateThread($input: UpdateMyahInboxThreadInput!) {
     updateMyahInboxThread(input: $input) {
       id
-      state
       creator {
         id
       }
       campaign {
-        id
-      }
-      inboxOwner {
         id
       }
     }
@@ -902,6 +899,9 @@ export const seedMyahInboxTask7Fixture = async ({
   operatorAccessToken,
   afterNativeRecordsSeeded,
 }: SeedMyahInboxTask7FixtureArgs): Promise<MyahInboxTask7Fixture> => {
+  // Triage writes below go through the contact-wide lifecycle, which needs the
+  // private relations; a reset-only integration database has no upgrade run.
+  await ensureMyahInboxContactTriageTables(SEED_APPLE_WORKSPACE_ID);
   await createForeignCreator();
   await seedNativeRecords(operatorAccessToken);
   await afterNativeRecordsSeeded?.();
@@ -956,64 +956,46 @@ export const seedMyahInboxTask7Fixture = async ({
       threadId: threadIds.tiedLinked,
       creatorId,
       campaignId,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.tiedUnlinked,
       creatorId: null,
       campaignId,
-      inboxOwnerId: null,
-      inboxState: 'WAITING_ON_CREATOR',
     },
     {
       threadId: threadIds.owner,
       creatorId,
       campaignId: null,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.sharedFallback,
       creatorId,
       campaignId,
-      inboxOwnerId: null,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.subject,
       creatorId,
       campaignId: null,
-      inboxOwnerId: null,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.metadata,
       creatorId,
       campaignId,
-      inboxOwnerId: null,
-      inboxState: 'CLOSED',
     },
     {
       threadId: threadIds.draft,
       creatorId,
       campaignId,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.hiddenVisibleAfter,
       creatorId,
       campaignId: null,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      inboxState: 'NEEDS_REPLY',
     },
     {
       threadId: threadIds.hiddenVisibleBefore,
       creatorId,
       campaignId: null,
-      inboxOwnerId: WORKSPACE_MEMBER_DATA_SEED_IDS.TIM,
-      inboxState: 'NEEDS_REPLY',
     },
   ];
 

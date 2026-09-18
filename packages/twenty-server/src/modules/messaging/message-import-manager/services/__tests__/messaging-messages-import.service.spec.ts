@@ -44,6 +44,7 @@ describe('MessagingMessagesImportService', () => {
     | 'handle'
     | 'messageFolders'
     | 'messageFolderImportPolicy'
+    | 'syncedAt'
   >;
   let mockConnectedAccount: ConnectedAccountEntity;
   let providersBase: Provider[];
@@ -66,6 +67,7 @@ describe('MessagingMessagesImportService', () => {
       handle: 'test@gmail.com',
       messageFolders: [],
       messageFolderImportPolicy: MessageFolderImportPolicy.ALL_FOLDERS,
+      syncedAt: null,
     };
 
     providersBase = [
@@ -167,6 +169,9 @@ describe('MessagingMessagesImportService', () => {
         useValue: {
           acknowledge: jest.fn().mockResolvedValue(undefined),
           commit: jest.fn().mockResolvedValue(undefined),
+          getPendingGenerationId: jest
+            .fn()
+            .mockResolvedValue('pending-generation-1'),
         },
       },
       {
@@ -300,6 +305,44 @@ describe('MessagingMessagesImportService', () => {
     ).toBeLessThan(
       (messageChannelSyncStatusService.markAsMessageSyncCompleted as jest.Mock)
         .mock.invocationCallOrder[0],
+    );
+  });
+
+  it('classifies a first polling import as BACKFILL and forwards the pending generation', async () => {
+    await service.processMessageBatchImport(
+      mockMessageChannel as MessageChannelEntity,
+      mockConnectedAccount,
+      workspaceId,
+    );
+
+    expect(
+      saveMessagesService.saveMessagesAndEnqueueContactCreation,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'BACKFILL', generationId: 'pending-generation-1' },
+    );
+  });
+
+  it('classifies a polling import after a completed sync as LIVE', async () => {
+    mockMessageChannel.syncedAt = new Date('2026-09-01T00:00:00.000Z');
+
+    await service.processMessageBatchImport(
+      mockMessageChannel as MessageChannelEntity,
+      mockConnectedAccount,
+      workspaceId,
+    );
+
+    expect(
+      saveMessagesService.saveMessagesAndEnqueueContactCreation,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'pending-generation-1' },
     );
   });
 

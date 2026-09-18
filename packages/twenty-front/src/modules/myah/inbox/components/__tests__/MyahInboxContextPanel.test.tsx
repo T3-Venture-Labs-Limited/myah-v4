@@ -94,11 +94,8 @@ const linkedThread: MyahInboxThread = {
   subject: 'Spring launch partnership',
   lastMessagePreview: 'I would love to hear more.',
   lastMessageSender: 'Ada Creator',
-  state: 'NEEDS_REPLY',
-  snoozedUntil: null,
   creator: { id: 'creator-1', name: 'Ada Creator' },
   campaign: { id: 'campaign-1', name: 'Spring launch' },
-  inboxOwner: null,
 };
 
 describe('MyahInboxContextPanel', () => {

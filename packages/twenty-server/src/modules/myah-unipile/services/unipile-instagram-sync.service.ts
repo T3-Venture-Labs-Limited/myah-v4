@@ -16,6 +16,7 @@ import { UnipileInstagramChatCheckpointEntity } from 'src/modules/myah-unipile/e
 import {
   UnipileInstagramSyncRunEntity,
   UnipileInstagramSyncRunStatus,
+  UnipileInstagramSyncRunTriageMode,
 } from 'src/modules/myah-unipile/entities/unipile-instagram-sync-run.entity';
 import { UnipileInstagramAvailabilityService } from 'src/modules/myah-unipile/services/unipile-instagram-availability.service';
 import { UnipileInstagramAccountService } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
@@ -141,6 +142,25 @@ export class UnipileInstagramSyncService {
     });
 
     if (!run) {
+      run = await runRepository.findOne({
+        where: {
+          bindingId,
+          status: UnipileInstagramSyncRunStatus.FAILED,
+          triageMode: UnipileInstagramSyncRunTriageMode.LIVE,
+        },
+        order: { updatedAt: 'DESC' },
+      });
+
+      if (run) {
+        run.status = UnipileInstagramSyncRunStatus.RUNNING;
+        run.completedAt = null;
+        run.failureCode = null;
+        run.failureReason = null;
+        await runRepository.save(run);
+      }
+    }
+
+    if (!run) {
       const previousRun = await runRepository.findOne({
         where: { bindingId, status: UnipileInstagramSyncRunStatus.COMPLETED },
         order: { completedAt: 'DESC' },
@@ -155,6 +175,9 @@ export class UnipileInstagramSyncService {
       run = runRepository.create({
         bindingId,
         status: UnipileInstagramSyncRunStatus.RUNNING,
+        triageMode: previousRun
+          ? UnipileInstagramSyncRunTriageMode.LIVE
+          : UnipileInstagramSyncRunTriageMode.BACKFILL,
         overlapAfter,
         chatCursor: null,
         currentChatId: null,
@@ -455,6 +478,8 @@ export class UnipileInstagramSyncService {
           ...(deliveryState === 'READ' || deliveryState === 'DELIVERED'
             ? { deliveryStateUpdatedAt: message.timestamp }
             : {}),
+          triageMode: input.run.triageMode,
+          sourceGenerationId: input.run.id,
         });
         highWaterAt = this.latestDate(
           highWaterAt,

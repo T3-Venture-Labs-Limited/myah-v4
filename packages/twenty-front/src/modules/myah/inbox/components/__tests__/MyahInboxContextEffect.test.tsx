@@ -83,9 +83,6 @@ const first: MyahInboxThread = {
   subject: 'First',
   lastMessagePreview: null,
   lastMessageSender: null,
-  state: 'NEEDS_REPLY',
-  snoozedUntil: null,
-  inboxOwner: null,
   creator: { id: 'creator-1', name: 'First Creator' },
   campaign: { id: 'campaign-1', name: 'First Campaign' },
 };
