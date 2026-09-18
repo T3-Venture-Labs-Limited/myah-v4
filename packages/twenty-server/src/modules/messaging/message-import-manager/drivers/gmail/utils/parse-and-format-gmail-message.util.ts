@@ -11,6 +11,25 @@ import { buildReplyToParticipants } from 'src/modules/messaging/message-import-m
 import { extractMessageBodyText } from 'src/modules/messaging/message-import-manager/utils/extract-message-body-text.util';
 import { formatAddressObjectAsParticipants } from 'src/modules/messaging/message-import-manager/utils/format-address-object-as-participants.util';
 
+const MAXIMUM_JAVASCRIPT_DATE_MILLISECONDS = 8_640_000_000_000_000;
+
+const formatGmailInternalDate = (internalDate: string): string | null => {
+  if (!/^\d+$/.test(internalDate)) {
+    return null;
+  }
+
+  const milliseconds = Number(internalDate);
+
+  if (
+    !Number.isSafeInteger(milliseconds) ||
+    milliseconds > MAXIMUM_JAVASCRIPT_DATE_MILLISECONDS
+  ) {
+    return null;
+  }
+
+  return new Date(milliseconds).toISOString();
+};
+
 export const parseAndFormatGmailMessage = (
   message: gmailV1.Schema$Message,
   connectedAccount: Pick<ConnectedAccountEntity, 'handle' | 'handleAliases'>,
@@ -79,6 +98,7 @@ export const parseAndFormatGmailMessage = (
     subject: subject || '',
     messageThreadExternalId: threadId,
     receivedAt: new Date(parseInt(internalDate)),
+    providerOccurredAt: formatGmailInternalDate(internalDate),
     direction: computeMessageDirection(from.address || '', connectedAccount),
     participants,
     text: extractMessageBodyText(isHtml ? { html: body } : { text: body }),

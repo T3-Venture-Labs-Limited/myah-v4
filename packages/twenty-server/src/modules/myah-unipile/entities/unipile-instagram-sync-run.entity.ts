@@ -19,6 +19,11 @@ export enum UnipileInstagramSyncRunStatus {
   FAILED = 'FAILED',
 }
 
+export enum UnipileInstagramSyncRunTriageMode {
+  LIVE = 'LIVE',
+  BACKFILL = 'BACKFILL',
+}
+
 @Entity({ name: 'unipileInstagramSyncRun', schema: 'core' })
 @Check(
   'CHK_UNIPILE_IG_SYNC_RUN_CHAT_IDENTITY',
@@ -42,6 +47,12 @@ export class UnipileInstagramSyncRunEntity {
     default: UnipileInstagramSyncRunStatus.RUNNING,
   })
   status: UnipileInstagramSyncRunStatus;
+
+  @Column({
+    type: 'text',
+    default: UnipileInstagramSyncRunTriageMode.BACKFILL,
+  })
+  triageMode: UnipileInstagramSyncRunTriageMode;
 
   @Column({ type: 'timestamptz', nullable: true })
   overlapAfter: Date | null;

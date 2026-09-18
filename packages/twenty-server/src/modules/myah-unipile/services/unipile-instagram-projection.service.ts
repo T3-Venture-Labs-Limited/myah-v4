@@ -5,7 +5,14 @@ import { IsNull } from 'typeorm';
 import { FieldActorSource } from 'twenty-shared/types';
 
 import { type RawAuthContext } from 'src/engine/core-modules/auth/types/raw-auth-context.type';
+import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
+import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
+import {
+  buildMyahInboxSourceKey,
+  MYAH_INBOX_SOURCE_ADVISORY_LOCK_SQL,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-source-lock.util';
 import { buildSystemAuthContext } from 'src/engine/core-modules/auth/utils/build-system-auth-context.util';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
@@ -32,10 +39,13 @@ type ConversationRecord = {
   id: string;
   creatorId?: string | null;
 };
-type WorkspaceQueryExecutor = Pick<GlobalWorkspaceDataSource, 'query'>;
+type WorkspaceQueryExecutor = Pick<GlobalWorkspaceDataSource, 'query'> & {
+  manager: WorkspaceEntityManager;
+};
 
 type MessageRecord = {
   id: string;
+  createdAt: Date | string;
   deliveryState: DeliveryState | null;
   deliveryStateUpdatedAt: Date | string | null;
 };
@@ -73,6 +83,8 @@ export type UnipileInstagramMessageProjectionInput =
     message: UnipileInstagramMessage;
     deliveryState?: DeliveryState;
     deliveryStateUpdatedAt?: string | null;
+    sourceGenerationId?: string;
+    triageMode?: 'LIVE' | 'BACKFILL';
   };
 
 export type UnipileInstagramCompletedMessageSyncInput = {
@@ -103,6 +115,8 @@ export class UnipileInstagramProjectionService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly accountFinalizationLock: UnipileInstagramAccountFinalizationLockService,
+    private readonly myahInboxContactTriageService: MyahInboxContactTriageService,
+    private readonly myahInboxContactTriageReceiptService: MyahInboxContactTriageReceiptService,
   ) {}
 
   async upsertVerifiedChat(
@@ -125,6 +139,42 @@ export class UnipileInstagramProjectionService {
             undefined,
             queryOptions,
           );
+          const lockSource = async (conversationRecordId: string) =>
+            querySource.query(
+              MYAH_INBOX_SOURCE_ADVISORY_LOCK_SQL,
+              [
+                buildMyahInboxSourceKey(
+                  'INSTAGRAM_CONVERSATION',
+                  conversationRecordId,
+                ),
+              ],
+              undefined,
+              queryOptions,
+            );
+          const initializeSourceContact = async (
+            conversationRecordId: string,
+          ) => {
+            // Without the private triage schema (for example before a rolling
+            // upgrade reaches this workspace) conversation projection must stay
+            // independent of triage.
+            const triageSchemaProvisioned =
+              await this.myahInboxContactTriageReceiptService.isTriageSchemaProvisioned(
+                querySource.manager,
+              );
+
+            if (triageSchemaProvisioned) {
+              await this.myahInboxContactTriageService.ensureSourceContactInTransaction(
+                {
+                  sourceType: 'INSTAGRAM_CONVERSATION',
+                  sourceRecordId: conversationRecordId,
+                  initialDirection: null,
+                  manager: querySource.manager,
+                },
+              );
+            }
+
+            return { conversationRecordId };
+          };
 
           const activeRecords = await querySource.query<ConversationRecord[]>(
             `
@@ -153,6 +203,7 @@ export class UnipileInstagramProjectionService {
             const [record] = activeRecords;
             this.assertConversationOwner(record, input);
 
+            await lockSource(record.id);
             await this.updateConversation(
               querySource,
               schemaName,
@@ -160,7 +211,7 @@ export class UnipileInstagramProjectionService {
               input,
             );
 
-            return { conversationRecordId: record.id };
+            return initializeSourceContact(record.id);
           }
 
           const deletedRecords = await querySource.query<ConversationRecord[]>(
@@ -201,6 +252,7 @@ export class UnipileInstagramProjectionService {
             const [record] = deletedRecords;
             this.assertConversationOwner(record, input);
 
+            await lockSource(record.id);
             await this.restoreConversation(
               querySource,
               schemaName,
@@ -208,7 +260,7 @@ export class UnipileInstagramProjectionService {
               input,
             );
 
-            return { conversationRecordId: record.id };
+            return initializeSourceContact(record.id);
           }
 
           if (input.expectedConversationRecordId)
@@ -218,6 +270,9 @@ export class UnipileInstagramProjectionService {
           const conversationRecordId = randomUUID();
           const displayName = input.chat.name ?? input.chat.attendeeProviderId;
 
+          await lockSource(conversationRecordId);
+          // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+          // pi-lens-ignore: sql-injection
           await querySource.query(
             `
             INSERT INTO "${schemaName}"."_myahSocialConversation" (
@@ -255,7 +310,7 @@ export class UnipileInstagramProjectionService {
             queryOptions,
           );
 
-          return { conversationRecordId };
+          return initializeSourceContact(conversationRecordId);
         });
       }, this.systemContext(input.workspace)),
     );
@@ -265,6 +320,9 @@ export class UnipileInstagramProjectionService {
     input: UnipileInstagramMessageProjectionInput,
   ): Promise<{
     messageRecordId: string;
+    conversationRecordId: string;
+    wasInserted: boolean;
+    originalCreatedAt: string;
     direction: MessageDirection;
     deliveryState: DeliveryState;
   }> {
@@ -288,6 +346,26 @@ export class UnipileInstagramProjectionService {
             queryOptions,
           );
 
+          // Recognized message persistence follows marker -> source advisory ->
+          // source-row/FK locks. Replays take the same locks so a concurrent
+          // first persistence cannot choose the opposite order.
+          if (direction !== 'UNKNOWN' && input.sourceGenerationId) {
+            await this.myahInboxContactTriageReceiptService.lockMigrationMarkerForSourcePersistenceInTransaction(
+              querySource.manager,
+            );
+            await querySource.query(
+              MYAH_INBOX_SOURCE_ADVISORY_LOCK_SQL,
+              [
+                buildMyahInboxSourceKey(
+                  'INSTAGRAM_CONVERSATION',
+                  input.conversationRecordId,
+                ),
+              ],
+              undefined,
+              queryOptions,
+            );
+          }
+
           const conversations = await querySource.query<ConversationRecord[]>(
             `
             SELECT "id", "creatorId"
@@ -298,6 +376,7 @@ export class UnipileInstagramProjectionService {
               AND "providerConversationId" = $4
               AND "deletedAt" IS NULL
             LIMIT 2
+            FOR UPDATE
           `,
             [
               input.conversationRecordId,
@@ -324,7 +403,7 @@ export class UnipileInstagramProjectionService {
             );
           const activeRecords = await querySource.query<MessageRecord[]>(
             `
-            SELECT "id", "deliveryState", "deliveryStateUpdatedAt"
+            SELECT "id", "createdAt", "deliveryState", "deliveryStateUpdatedAt"
             FROM "${schemaName}"."_myahSocialMessage"
             WHERE "conversationId" = $1
               AND "provider" = $2
@@ -365,6 +444,9 @@ export class UnipileInstagramProjectionService {
 
             return {
               messageRecordId: record.id,
+              conversationRecordId: input.conversationRecordId,
+              wasInserted: false,
+              originalCreatedAt: this.toIsoString(record.createdAt),
               direction,
               deliveryState,
             };
@@ -372,7 +454,7 @@ export class UnipileInstagramProjectionService {
 
           const deletedRecords = await querySource.query<MessageRecord[]>(
             `
-            SELECT "id", "deliveryState", "deliveryStateUpdatedAt"
+            SELECT "id", "createdAt", "deliveryState", "deliveryStateUpdatedAt"
             FROM "${schemaName}"."_myahSocialMessage"
             WHERE "conversationId" = $1
               AND "provider" = $2
@@ -415,6 +497,9 @@ export class UnipileInstagramProjectionService {
 
             return {
               messageRecordId: record.id,
+              conversationRecordId: input.conversationRecordId,
+              wasInserted: false,
+              originalCreatedAt: this.toIsoString(record.createdAt),
               direction,
               deliveryState,
             };
@@ -422,7 +507,7 @@ export class UnipileInstagramProjectionService {
 
           const messageRecordId = randomUUID();
 
-          await querySource.query(
+          const [insertedRecord] = await querySource.query<MessageRecord[]>(
             `
             INSERT INTO "${schemaName}"."_myahSocialMessage" (
               "id", "text", "conversationId", "direction", "sentVia", "provider",
@@ -434,7 +519,7 @@ export class UnipileInstagramProjectionService {
             ) VALUES (
               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
               $17, $18, $19, $20
-            )
+            ) RETURNING "id", "createdAt"
           `,
             [
               messageRecordId,
@@ -462,11 +547,20 @@ export class UnipileInstagramProjectionService {
             queryOptions,
           );
 
-          return {
-            messageRecordId,
+          const result = {
+            messageRecordId: insertedRecord?.id ?? messageRecordId,
+            conversationRecordId: input.conversationRecordId,
+            wasInserted: true,
+            originalCreatedAt: this.toIsoString(
+              insertedRecord?.createdAt ?? new Date(),
+            ),
             direction,
             deliveryState: requestedDeliveryState,
           };
+
+          await this.recordReceiptInTransaction(input, result, querySource);
+
+          return result;
         });
       }, this.systemContext(input.workspace)),
     );
@@ -481,6 +575,8 @@ export class UnipileInstagramProjectionService {
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(input.workspace.id);
 
+        // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+        // pi-lens-ignore: sql-injection
         await dataSource.query(
           `
             UPDATE "${schemaName}"."_myahSocialConversation"
@@ -519,6 +615,8 @@ export class UnipileInstagramProjectionService {
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(input.workspace.id);
 
+        // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+        // pi-lens-ignore: sql-injection
         await dataSource.query(
           `
             UPDATE "${schemaName}"."_myahInstagramAccount"
@@ -547,6 +645,63 @@ export class UnipileInstagramProjectionService {
         );
       }, this.systemContext(input.workspace)),
     );
+  }
+
+  private async recordReceiptInTransaction(
+    input: UnipileInstagramMessageProjectionInput,
+    result: {
+      messageRecordId: string;
+      conversationRecordId: string;
+      wasInserted: boolean;
+      originalCreatedAt: string;
+      direction: MessageDirection;
+    },
+    querySource: WorkspaceQueryExecutor,
+  ): Promise<void> {
+    if (
+      !result.wasInserted ||
+      result.direction === 'UNKNOWN' ||
+      !input.sourceGenerationId
+    ) {
+      return;
+    }
+
+    // The caller already holds marker, source-advisory, and conversation-row
+    // locks. Receipt insertion and tuple initialization are therefore reentrant
+    // continuations of the canonical producer lock order.
+    const triageSchemaProvisioned =
+      await this.myahInboxContactTriageReceiptService.isTriageSchemaProvisioned(
+        querySource.manager,
+      );
+
+    if (!triageSchemaProvisioned) {
+      return;
+    }
+
+    await this.myahInboxContactTriageReceiptService.recordInTransaction(
+      {
+        channel: 'INSTAGRAM',
+        persistedMessageId: result.messageRecordId,
+        sourceRecordId: result.conversationRecordId,
+        sourceGenerationId: input.sourceGenerationId,
+        mode: input.triageMode ?? 'BACKFILL',
+        direction: result.direction,
+        providerOccurredAt: input.message.timestamp,
+        originalCreatedAt: result.originalCreatedAt,
+        firstPersistence: true,
+      },
+      querySource.manager,
+    );
+    await this.myahInboxContactTriageService.ensureSourceContactInTransaction({
+      sourceType: 'INSTAGRAM_CONVERSATION',
+      sourceRecordId: result.conversationRecordId,
+      initialDirection: result.direction,
+      manager: querySource.manager,
+    });
+  }
+
+  private toIsoString(value: Date | string): string {
+    return value instanceof Date ? value.toISOString() : value;
   }
 
   private async withActiveBinding<T>(
@@ -602,7 +757,10 @@ export class UnipileInstagramProjectionService {
     callback: (querySource: WorkspaceQueryExecutor) => Promise<T>,
   ): Promise<T> {
     if (typeof dataSource.transaction !== 'function') {
-      return callback(dataSource);
+      return callback({
+        query: dataSource.query.bind(dataSource),
+        manager: dataSource.manager as WorkspaceEntityManager,
+      });
     }
 
     return dataSource.transaction((manager) =>
@@ -614,7 +772,8 @@ export class UnipileInstagramProjectionService {
             manager.queryRunner,
             queryOptions,
           ),
-      } as WorkspaceQueryExecutor),
+        manager: manager as WorkspaceEntityManager,
+      }),
     );
   }
 
@@ -647,6 +806,8 @@ export class UnipileInstagramProjectionService {
   ): Promise<void> {
     const displayName = input.chat.name ?? input.chat.attendeeProviderId;
 
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    // pi-lens-ignore: sql-injection
     await dataSource.query(
       `
         UPDATE "${schemaName}"."_myahSocialConversation"
@@ -690,6 +851,8 @@ export class UnipileInstagramProjectionService {
   ): Promise<void> {
     const displayName = input.chat.name ?? input.chat.attendeeProviderId;
 
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    // pi-lens-ignore: sql-injection
     await dataSource.query(
       `
         UPDATE "${schemaName}"."_myahSocialConversation"
@@ -735,6 +898,8 @@ export class UnipileInstagramProjectionService {
     deliveryState: DeliveryState,
     deliveryStateUpdatedAt: Date | string | null,
   ): Promise<void> {
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    // pi-lens-ignore: sql-injection
     await dataSource.query(
       `
         UPDATE "${schemaName}"."_myahSocialMessage"
@@ -783,6 +948,8 @@ export class UnipileInstagramProjectionService {
     deliveryState: DeliveryState,
     deliveryStateUpdatedAt: Date | string | null,
   ): Promise<void> {
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    // pi-lens-ignore: sql-injection
     await dataSource.query(
       `
         UPDATE "${schemaName}"."_myahSocialMessage"

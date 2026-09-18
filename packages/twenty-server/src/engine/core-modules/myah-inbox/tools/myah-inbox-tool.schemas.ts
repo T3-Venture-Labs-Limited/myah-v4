@@ -1,10 +1,6 @@
 import { z } from 'zod';
 
 import { MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
-import {
-  MyahInboxSnoozeStatus,
-  MyahInboxState,
-} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 import { MYAH_INBOX_MAX_OPERATOR_INSTRUCTIONS_LENGTH } from 'src/engine/core-modules/myah-inbox/dtos/generate-myah-inbox-reply-proposal.input';
 
 export const messageThreadIdInputSchema = z
@@ -23,10 +19,7 @@ export const searchMyahInboxThreadsInputSchema = z
     first: z.number().int().min(1).optional(),
     after: z.string().optional(),
     threadId: z.string().uuid().optional(),
-    owner: z.string().optional(),
     campaignId: z.string().uuid().optional(),
-    states: z.array(z.nativeEnum(MyahInboxState)).optional(),
-    snoozeStatus: z.nativeEnum(MyahInboxSnoozeStatus).optional(),
     search: z.string().optional(),
   })
   .strict();
@@ -52,18 +45,11 @@ export const updateMyahInboxThreadInputSchema = z
     messageThreadId: messageThreadIdInputSchema,
     creatorId: z.string().uuid().nullable().optional(),
     campaignId: z.string().uuid().nullable().optional(),
-    inboxOwnerId: z.string().uuid().nullable().optional(),
-    inboxState: z.nativeEnum(MyahInboxState).optional(),
-    snoozedUntil: z.string().datetime({ offset: true }).nullable().optional(),
   })
   .strict()
   .refine(
-    ({ creatorId, campaignId, inboxOwnerId, inboxState, snoozedUntil }) =>
-      creatorId !== undefined ||
-      campaignId !== undefined ||
-      inboxOwnerId !== undefined ||
-      inboxState !== undefined ||
-      snoozedUntil !== undefined,
+    ({ creatorId, campaignId }) =>
+      creatorId !== undefined || campaignId !== undefined,
     { message: 'At least one thread field is required' },
   );
 

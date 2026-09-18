@@ -280,6 +280,16 @@ export const createV3RecoveryFixture = (
         callback: (manager: unknown) => unknown,
       ) => callback({ getRepository: () => accountRepository }),
     } as never,
+    {
+      ensureSourceContactInTransaction: jest.fn().mockResolvedValue(undefined),
+    } as never,
+    {
+      isTriageSchemaProvisioned: jest.fn().mockResolvedValue(true),
+      lockMigrationMarkerForSourcePersistenceInTransaction: jest
+        .fn()
+        .mockResolvedValue(true),
+      recordInTransaction: jest.fn().mockResolvedValue(undefined),
+    } as never,
   );
   const draft = new InstagramMessageDraftService(
     workspaceRepository as never,

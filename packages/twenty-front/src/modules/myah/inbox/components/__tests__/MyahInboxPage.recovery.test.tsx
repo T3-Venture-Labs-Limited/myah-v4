@@ -245,6 +245,9 @@ jest.mock('@/myah/inbox/components/MyahInboxThreadActions', () => ({
     </div>
   ),
 }));
+jest.mock('@/myah/inbox/components/MyahInboxContactTriageActions', () => ({
+  MyahInboxContactTriageActions: () => null,
+}));
 
 jest.mock('@/myah/inbox/components/MyahInboxContactLinkAction', () => ({
   MyahInboxContactLinkAction: ({
@@ -287,6 +290,14 @@ const contact = (
   preview: `${id} preview`,
   sender: id,
   needsAttention: true,
+  triage: {
+    isAvailable: true,
+    inboxOwnerId: null,
+    inboxState: 'NEEDS_REPLY',
+    snoozedUntil: null,
+    revision: 1,
+    identityGeneration: '1',
+  },
   email: {
     isAvailable: true,
     threadCount: 2,

@@ -6,6 +6,9 @@ import { isDefined } from 'twenty-shared/utils';
 import { FindOptionsRelations, ObjectLiteral } from 'typeorm';
 
 import { WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
 import { CommonBaseQueryRunnerService } from 'src/engine/api/common/common-query-runners/common-base-query-runner.service';
 import {
   CommonQueryRunnerException,
@@ -34,6 +37,12 @@ export class CommonDestroyManyQueryRunnerService extends CommonBaseQueryRunnerSe
   ObjectRecord[]
 > {
   protected readonly operationName = CommonQueryNames.DESTROY_MANY;
+
+  constructor(
+    private readonly myahInboxContactTriageLifecycleService: MyahInboxContactTriageLifecycleService,
+  ) {
+    super();
+  }
 
   async run(
     args: CommonExtendedInput<DestroyManyQueryArgs>,
@@ -65,13 +74,15 @@ export class CommonDestroyManyQueryRunnerService extends CommonBaseQueryRunnerSe
       flatFieldMetadataMaps,
     });
 
-    const destroyedObjectRecords = await queryBuilder
-      .delete()
-      .returning(columnsToReturn)
-      .execute();
-
     const destroyedRecords =
-      destroyedObjectRecords.generatedMaps as ObjectRecord[];
+      flatObjectMetadata.nameSingular === 'creator'
+        ? await this.runCreatorDestroyInTransaction({
+            queryBuilder,
+            queryRunnerContext,
+            columnsToReturn,
+          })
+        : ((await queryBuilder.delete().returning(columnsToReturn).execute())
+            .generatedMaps as ObjectRecord[]);
 
     if (isDefined(args.selectedFieldsResult.relations)) {
       await this.processNestedRelationsHelper.processNestedRelations({
@@ -92,6 +103,94 @@ export class CommonDestroyManyQueryRunnerService extends CommonBaseQueryRunnerSe
     }
 
     return destroyedRecords;
+  }
+
+  private async runCreatorDestroyInTransaction({
+    queryBuilder,
+    queryRunnerContext,
+    columnsToReturn,
+  }: {
+    queryBuilder: ReturnType<typeof buildMutationQueryBuilder>;
+    queryRunnerContext: CommonExtendedQueryRunnerContext;
+    columnsToReturn: string[];
+  }): Promise<ObjectRecord[]> {
+    const rows = (await queryBuilder
+      .clone()
+      .select('creator.id', 'id')
+      .getRawMany()) as Array<{
+      id?: string;
+      creator_id?: string;
+    }>;
+    const creatorIds = rows
+      .map((row) => row.id ?? row.creator_id)
+      .filter((id): id is string => id !== undefined)
+      .sort();
+    if (creatorIds.length === 0) return [];
+
+    return queryRunnerContext.workspaceDataSource.transaction(
+      async (manager: WorkspaceEntityManager) =>
+        this.myahInboxContactTriageLifecycleService.withPreparedCreatorMutationInTransaction(
+          {
+            workspaceId: queryRunnerContext.authContext.workspace.id,
+            creatorIds,
+            manager,
+            verify: async () => {
+              const repository = manager.getRepository(
+                'creator',
+                queryRunnerContext.rolePermissionConfig,
+                queryRunnerContext.authContext,
+              );
+              await this.assertCreatorTargetsUnchanged(repository, creatorIds);
+            },
+            mutate: async (sources) => {
+              const repository = manager.getRepository(
+                'creator',
+                queryRunnerContext.rolePermissionConfig,
+                queryRunnerContext.authContext,
+              );
+              await this.myahInboxContactTriageLifecycleService.rekeyPreparedSourcesToUnmatchedInTransaction(
+                { sources, manager },
+              );
+              return (
+                await repository
+                  .createQueryBuilder('creator')
+                  .delete()
+                  .whereInIds(creatorIds)
+                  .returning(columnsToReturn)
+                  .execute()
+              ).generatedMaps as ObjectRecord[];
+            },
+          },
+        ),
+    );
+  }
+
+  private async assertCreatorTargetsUnchanged(
+    repository: WorkspaceRepository<ObjectLiteral>,
+    authorizedIds: string[],
+  ): Promise<void> {
+    const rows = (await repository
+      .createQueryBuilder('creator')
+      .select('creator.id', 'id')
+      .whereInIds(authorizedIds)
+      .setLock('pessimistic_write')
+      .getRawMany()) as Array<{ id?: string; creator_id?: string }>;
+    const currentIds = rows
+      .map((row) => row.id ?? row.creator_id)
+      .filter((id): id is string => id !== undefined)
+      .sort();
+    const expectedIds = [...new Set(authorizedIds)].sort();
+
+    if (
+      currentIds.length !== expectedIds.length ||
+      currentIds.some((id, index) => id !== expectedIds[index])
+    ) {
+      throw new CommonQueryRunnerException(
+        'Creator records changed before transaction reconciliation',
+        CommonQueryRunnerExceptionCode.RECORD_NOT_FOUND,
+        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+      );
+    }
   }
 
   async computeArgs(

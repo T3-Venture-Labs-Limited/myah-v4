@@ -140,7 +140,14 @@ const fixture = (
   const processor = new DataArgProcessorService(position as never);
   const process = jest.spyOn(processor, 'process');
   const createMany = new CommonCreateManyQueryRunnerService(position as never);
-  const updateMany = new CommonUpdateManyQueryRunnerService();
+  const triageLifecycle = {
+    withPreparedSourceMutationInTransaction: jest.fn(
+      async ({ mutate }: { mutate: () => Promise<unknown> }) => mutate(),
+    ),
+  };
+  const updateMany = new CommonUpdateManyQueryRunnerService(
+    triageLifecycle as never,
+  );
   const runners = {
     createOne: new CommonCreateOneQueryRunnerService(createMany),
     createMany,

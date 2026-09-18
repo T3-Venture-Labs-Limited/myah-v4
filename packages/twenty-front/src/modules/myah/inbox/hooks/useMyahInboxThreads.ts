@@ -4,8 +4,6 @@ import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient
 
 import { type MyahInboxFilters } from '@/myah/inbox/states/myahInboxSelectionState';
 import {
-  MyahInboxSnoozeStatus,
-  type MyahInboxState,
   MyahInboxThreadsDocument,
   type MyahInboxThreadsQuery,
   type MyahInboxThreadsQueryVariables,
@@ -17,11 +15,8 @@ export type MyahInboxThread = {
   subject: string | null;
   lastMessagePreview: string | null;
   lastMessageSender: string | null;
-  state: 'NEEDS_REPLY' | 'WAITING_ON_CREATOR' | 'SNOOZED' | 'CLOSED';
-  snoozedUntil: string | null;
   creator: { id: string; name: string | null } | null;
   campaign: { id: string; name: string | null } | null;
-  inboxOwner: { id: string; name: string | null } | null;
 };
 
 export type MyahInboxRefreshResult = {
@@ -70,36 +65,21 @@ export const useMyahInboxThreads = (
   currentWorkspaceId: string | null,
 ) => {
   const apolloCoreClient = useApolloCoreClient();
-  const snoozeStatus =
-    filters.snoozeStatus === 'ACTIVE'
-      ? MyahInboxSnoozeStatus.ACTIVE
-      : filters.snoozeStatus === 'DUE'
-        ? MyahInboxSnoozeStatus.DUE
-        : undefined;
   const baseVariables = useMemo(
     () =>
       ({
         first: 50,
-        owner: filters.owner || undefined,
         campaignId:
           filters.campaignWorkspaceId === currentWorkspaceId
             ? (filters.campaignId ?? undefined)
             : undefined,
-        states:
-          filters.states.length > 0
-            ? (filters.states as MyahInboxState[])
-            : undefined,
-        snoozeStatus,
         search: filters.search || undefined,
       }) satisfies MyahInboxThreadsQueryVariables,
     [
       currentWorkspaceId,
       filters.campaignId,
       filters.campaignWorkspaceId,
-      filters.owner,
       filters.search,
-      filters.states,
-      snoozeStatus,
     ],
   );
   const scopeKey = JSON.stringify({ currentWorkspaceId, ...baseVariables });

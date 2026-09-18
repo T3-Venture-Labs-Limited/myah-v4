@@ -127,7 +127,7 @@ export class MyahInboxToolWorkspaceService {
     const updateThreadTool = {
       name: 'update_myah_inbox_thread' as const,
       description:
-        'Update policy-visible Myah Inbox thread triage fields without sending a message.',
+        'Update the Creator or Campaign link of a policy-visible Myah Inbox thread without sending a message. Inbox triage is contact-wide and is not changed by this tool.',
       inputSchema: updateMyahInboxThreadInputSchema,
       execute: async ({
         messageThreadId,

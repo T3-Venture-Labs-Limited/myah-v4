@@ -173,6 +173,8 @@ export class InstagramMessageReceiptProjectionService {
       conversationRecordId,
       message,
       ...(snapshot ? { creatorRecordId: snapshot.creatorRecordId } : {}),
+      triageMode: 'LIVE',
+      sourceGenerationId: `action-receipt:${input.receiptId}`,
     });
     await this.draftService.markSent({
       workspaceId: input.workspaceId,

@@ -310,20 +310,28 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // The Instagram security cutover sweep is no longer the final 2.20.0 step:
-    // the MYAH-359 composer metadata sync registers with a later timestamp and
-    // runs after it. The sweep verifies Composio->Unipile authority state only,
-    // which neither new command reads or mutates, so the convention changed but
-    // the security guarantee did not. MYAH-338's Campaign lifecycle status sync
-    // (PR #143) registered between the sweep and the composer sync, so it now
-    // sits second-to-last, ahead of the composer sync but behind the sweep.
+    // The Instagram security cutover sweep is no longer the final 2.20.0 step.
+    // MYAH-338's Campaign lifecycle status sync (PR #143) registered right
+    // after it. MYAH-359's composer metadata sync then registered with a
+    // later timestamp than both. MYAH-354's contact-wide triage work (PR #161)
+    // then registered two further workspace commands (initialize, then catch
+    // up) with the latest timestamps of all, so the catch-up command is now
+    // the final 2.20.0 step. Ascending final order: security sweep, campaign
+    // lifecycle sync, composer metadata sync, triage initialize, triage catch
+    // up.
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789488000360',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
     );
     expect(sequence[sequence.length - 2]?.name).toBe(
-      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
     );
     expect(sequence[sequence.length - 3]?.name).toBe(
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789488000360',
+    );
+    expect(sequence[sequence.length - 4]?.name).toBe(
+      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+    );
+    expect(sequence[sequence.length - 5]?.name).toBe(
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
     );
     expect(
