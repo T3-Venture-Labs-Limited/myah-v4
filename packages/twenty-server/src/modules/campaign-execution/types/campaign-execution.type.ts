@@ -23,6 +23,7 @@ import {
   type CampaignSequenceExecutionPlanNode as CanonicalCampaignSequenceExecutionPlanNode,
 } from 'src/modules/myah-outreach/services/campaign-sequence.service';
 import {
+  type CampaignProgressionHistoryPreflightResult,
   type CampaignProgressionHistoryResult,
   type CampaignProgressionHistoryScope,
 } from 'src/modules/campaign-execution/types/campaign-progression-history-reader.type';
@@ -398,6 +399,11 @@ export interface CampaignExecutionPersistencePort {
     }>,
   ): Promise<void>;
 
+  settlePausedOccurrencesInTransaction(
+    context: LockedCampaignLifecycleContext,
+    authorizationId: string,
+  ): Promise<number>;
+
   countInFlightAttemptsInTransaction(
     context: LockedCampaignLifecycleContext,
   ): Promise<number>;
@@ -408,6 +414,15 @@ export interface CampaignExecutionPersistencePort {
  * supersession; no inference, fallback timing, content mapping, or external I/O.
  */
 export interface CampaignExecutionHistoryPort {
+  preflightSameWorkflowVersionHistoryInTransaction(
+    input: Readonly<{
+      workspaceId: string;
+      campaignId: string;
+      workflowVersionId: string;
+    }>,
+    manager: WorkspaceEntityManager,
+  ): Promise<CampaignProgressionHistoryPreflightResult>;
+
   preparePriorVersionSupersessionInTransaction(
     input: Readonly<{
       workspaceId: string;

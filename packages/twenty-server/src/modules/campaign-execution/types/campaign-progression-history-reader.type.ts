@@ -74,6 +74,13 @@ export type CampaignProgressionHistoryResult =
       reason: CampaignProgressionHistoryBlockedReason;
     }>;
 
+export type CampaignProgressionHistoryPreflightResult =
+  | Readonly<{ status: 'COMPLETE' }>
+  | Readonly<{
+      status: 'BLOCKED';
+      reason: CampaignProgressionHistoryBlockedReason;
+    }>;
+
 /**
  * Supplied-manager, PostgreSQL-only reader for one Creator and one exact
  * workflow version. The implementation must use the caller's active manager;
@@ -203,6 +210,15 @@ export interface CampaignProgressionHistoryReaderPort {
     }>,
     manager: EntityManager,
   ): Promise<void>;
+
+  preflightSameWorkflowVersionHistoryInTransaction(
+    input: Readonly<{
+      workspaceId: string;
+      campaignId: string;
+      workflowVersionId: string;
+    }>,
+    manager: EntityManager,
+  ): Promise<CampaignProgressionHistoryPreflightResult>;
 
   readSameWorkflowVersionHistoryInTransaction(
     input: CampaignProgressionHistoryScope,
