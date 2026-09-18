@@ -109,7 +109,7 @@ export class CreateMyahInboxReplyContextDraftsFastInstanceCommand implements Fas
           AND "interactionContextType" IS NULL AND "interactionContextId" IS NULL
           AND "myahReplyContextSnapshot" IS NULL
         )
-      ) IS TRUE)`);
+      ))`);
     await queryRunner.query(`CREATE OR REPLACE FUNCTION core."protectMyahEmailContextAuthority"()
       RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         IF OLD."actionName" = 'send_inbox_reply' AND OLD."actionVersion" = 2 AND (
