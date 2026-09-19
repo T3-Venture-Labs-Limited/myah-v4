@@ -11,6 +11,7 @@ import {
 import {
   decodeMyahInboxContactId,
   encodeMyahInboxContactId,
+  type MyahInboxContactIdentity,
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 import {
@@ -246,6 +247,40 @@ export class MyahInboxMutationService {
         });
       },
     );
+  }
+
+  // The Myah assistant chat tool only ever knows a threadId (no operator-
+  // chosen Campaign context exists in that surface). This derives the same
+  // Creator/thread anchor the Inbox policy already exposes for the thread
+  // and always saves a General (no-Campaign) draft, matching the tool's
+  // pre-existing single-draft-per-thread contract.
+  async saveMyahInboxDraftForThread(
+    input: SaveMyahInboxDraftMutationInput,
+  ): Promise<MyahInboxDraftSaveResult> {
+    this.assertUserRequest(input);
+
+    const thread = await this.myahInboxQueryService.getThreadSummary({
+      ...input,
+      threadId: input.threadId,
+    });
+    const contactIdentity: MyahInboxContactIdentity = thread.creator
+      ? { kind: 'creator', recordId: thread.creator.id }
+      : { kind: 'email-thread', recordId: input.threadId };
+
+    return this.saveMyahInboxDraft({
+      ...input,
+      expectedWorkspaceId: input.workspace.id,
+      target: {
+        channel: ReplyChannel.EMAIL,
+        contactId: encodeMyahInboxContactId({
+          workspaceId: input.workspace.id,
+          identity: contactIdentity,
+        }),
+        threadId: input.threadId,
+      },
+      replyContext: { kind: ReplyContextKind.GENERAL },
+      proposalContextFingerprint: null,
+    });
   }
 
   async reviewMyahInboxReplyContext(
