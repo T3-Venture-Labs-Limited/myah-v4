@@ -241,7 +241,7 @@ describe('CampaignEmailRuntimeService', () => {
       activationId: ids.activationId,
       campaignExecutionId: ids.executionId,
       campaignId: ids.campaignId,
-      claimedAt: '2026-09-16T12:00:00.000Z',
+      claimedAt: new Date('2026-09-16T12:00:00.573Z'),
       connectedAccountId: ids.accountId,
       enrollmentId: ids.enrollmentId,
       html: '<p>Body</p>',
@@ -254,11 +254,11 @@ describe('CampaignEmailRuntimeService', () => {
       provider: 'imap_smtp_caldav',
       renderDigest: 'a'.repeat(64),
       senderPoolFingerprint: 'b'.repeat(64),
-      slotAt: '2026-09-16T12:00:00.000Z',
+      slotAt: new Date('2026-09-16T12:00:00.573Z'),
       subject: 'Subject',
       text: 'Body',
       toRecipient: 'recipient@example.com',
-      unknownAfter: '2026-09-16T12:01:00.000Z',
+      unknownAfter: new Date('2026-09-16T12:01:00.573Z'),
       workflowVersionId: ids.versionId,
       references: [],
       inReplyTo: null,
@@ -268,8 +268,8 @@ describe('CampaignEmailRuntimeService', () => {
     };
     const { service, getRepository, query } = setup();
     const receipt = {
-      unknownAfter: new Date('2026-09-16T12:01:00.000Z'),
-      updatedAt: new Date('2026-09-16T12:00:00.000Z'),
+      unknownAfter: new Date('2026-09-16T12:01:00.573Z'),
+      updatedAt: new Date('2026-09-16T12:00:00.573Z'),
     };
     const events: string[] = [];
     const sendMessage = jest.fn(async () => {
@@ -293,7 +293,13 @@ describe('CampaignEmailRuntimeService', () => {
       },
       { now: jest.fn(() => 10_000) },
       {
-        beginSubmission: jest.fn(async () => {
+        beginSubmission: jest.fn(async (input) => {
+          expect(input.submissionCapability.reservationBinding).toMatchObject({
+            claimedAt: row.claimedAt,
+            localDate: '2026-09-16',
+            slotAt: row.slotAt,
+            unknownAfter: row.unknownAfter,
+          });
           events.push('beginSubmission');
           return {
             receipt,
@@ -333,6 +339,10 @@ describe('CampaignEmailRuntimeService', () => {
       ids.attemptId,
     );
 
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('a."localDate"::text AS "localDate"'),
+      [ids.attemptId, ids.workspaceId, ids.campaignId, 'RESERVED'],
+    );
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(
         /^\s*SELECT id, "workspaceId", handle, provider, "connectionParameters"\s+FROM core\."connectedAccount"\s+WHERE id=\$1 AND "workspaceId"=\$2\s*$/s,
