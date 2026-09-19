@@ -9,6 +9,8 @@ import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permi
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { WorkspaceCampaignCapacityTimeZoneModule } from 'src/engine/core-modules/myah/workspace-campaign-capacity-time-zone.module';
+import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
+import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
@@ -44,6 +46,7 @@ import { CampaignOutreachWorkflowLifecycleWorkspaceService } from 'src/modules/m
 import { CampaignSenderReadinessService } from 'src/modules/myah-campaign/services/campaign-sender-readiness.service';
 import { MyahCreatorOpsToolWorkspaceService } from 'src/modules/myah-campaign/tools/myah-creator-ops-tool.workspace-service';
 import { ModulesModule } from 'src/modules/modules.module';
+import { MessagingQueryHookModule } from 'src/modules/messaging/common/query-hooks/messaging-query-hook.module';
 import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbound-manager/messaging-send-manager.module';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
@@ -109,6 +112,17 @@ class OrchestrationTestInfrastructureModule {}
 @Module({})
 class EmptyExternalInfrastructureModule {}
 
+@Module({
+  providers: [
+    {
+      provide: WorkspaceManyOrAllFlatEntityMapsCacheService,
+      useValue: {},
+    },
+  ],
+  exports: [WorkspaceManyOrAllFlatEntityMapsCacheService],
+})
+class FlatEntityMapsCacheTestModule {}
+
 describe('CampaignExecutionOrchestrationModule', () => {
   it('registers with the runtime HTTP, GraphQL, and worker composition roots', () => {
     expect(
@@ -137,6 +151,8 @@ describe('CampaignExecutionOrchestrationModule', () => {
       WorkspaceCampaignCapacityTimeZoneModule,
       MessagingSendManagerModule,
       MessagingImportManagerModule,
+      MessagingQueryHookModule,
+      WorkspaceManyOrAllFlatEntityMapsCacheModule,
     ]);
   });
 
@@ -157,6 +173,8 @@ describe('CampaignExecutionOrchestrationModule', () => {
       .useModule(EmptyExternalInfrastructureModule)
       .overrideModule(MessagingImportManagerModule)
       .useModule(EmptyExternalInfrastructureModule)
+      .overrideModule(WorkspaceManyOrAllFlatEntityMapsCacheModule)
+      .useModule(FlatEntityMapsCacheTestModule)
       .overrideModule(PermissionsModule)
       .useModule(EmptyExternalInfrastructureModule)
       .overrideModule(WorkflowTriggerModule)

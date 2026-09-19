@@ -24,6 +24,11 @@ jest.mock('@/page-layout/components/MyahCampaignAudienceControls', () => ({
     <div>{`Campaign audience controls:${campaignId}`}</div>
   ),
 }));
+jest.mock('@/page-layout/components/MyahCampaignHome', () => ({
+  MyahCampaignHome: ({ campaignId }: { campaignId: string }) => (
+    <div>{`Campaign home:${campaignId}`}</div>
+  ),
+}));
 jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
   useObjectMetadataItem: () => {
     const objectMetadataItem = objectMetadataItems.find(
@@ -89,17 +94,21 @@ describe('PageLayoutLeftPanel', () => {
     ];
   });
 
-  it('mounts Creator List controls after Campaign information', () => {
+  it('mounts Campaign Home and Creator List controls after Campaign information', () => {
     render(<PageLayoutLeftPanel pinnedLeftTabId="campaign-information" />);
 
     const campaignInformation = screen.getByText('Campaign information');
+    const campaignHome = screen.getByText('Campaign home:campaign-1');
     const campaignAudienceControls = screen.getByText(
       'Campaign audience controls:campaign-1',
     );
 
-    expect(
-      campaignInformation.compareDocumentPosition(campaignAudienceControls),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(campaignInformation.compareDocumentPosition(campaignHome)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(campaignHome.compareDocumentPosition(campaignAudienceControls)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it('does not mount Creator List controls when Campaign updates are denied', () => {

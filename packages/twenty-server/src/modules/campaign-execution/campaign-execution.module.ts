@@ -9,6 +9,8 @@ import { CampaignOutboundRenderEntity } from 'src/engine/core-modules/campaign-e
 import { MailboxCapacityDayEntity } from 'src/engine/core-modules/campaign-execution/entities/mailbox-capacity-day.entity';
 import { MailboxDispatchClockEntity } from 'src/engine/core-modules/campaign-execution/entities/mailbox-dispatch-clock.entity';
 import { OutboundEmailAttemptEntity } from 'src/engine/core-modules/campaign-execution/entities/outbound-email-attempt.entity';
+import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 import {
   CAMPAIGN_EXECUTION_HISTORY_PORT,
   CAMPAIGN_EXECUTION_IDENTITY_PORT,
@@ -27,6 +29,7 @@ import {
   createProductionSuspendAwareClock,
   OutboundEmailDispatchTransactionAdapter,
 } from 'src/modules/campaign-execution/adapters/outbound-email-dispatch-runtime.adapter';
+import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
 
@@ -44,8 +47,12 @@ import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/serv
     ]),
   ],
   providers: [
+    provideWorkspaceScopedRepository(CampaignEnrollmentEntity),
+    provideWorkspaceScopedRepository(CampaignOccurrenceEntity),
+    provideWorkspaceScopedRepository(OutboundEmailAttemptEntity),
     MailboxCapacityService,
     OutboundEmailAttemptService,
+    CampaignTimelineEventWriterService,
     CampaignExecutionPersistenceAdapter,
     CampaignProgressionHistoryReaderAdapter,
     CampaignInitialDueTimeAdapter,
@@ -78,8 +85,12 @@ import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/serv
   ],
   exports: [
     TypeOrmModule,
+    getWorkspaceScopedRepositoryToken(CampaignEnrollmentEntity),
+    getWorkspaceScopedRepositoryToken(CampaignOccurrenceEntity),
+    getWorkspaceScopedRepositoryToken(OutboundEmailAttemptEntity),
     MailboxCapacityService,
     OutboundEmailAttemptService,
+    CampaignTimelineEventWriterService,
     CAMPAIGN_EXECUTION_PERSISTENCE_PORT,
     CAMPAIGN_EXECUTION_HISTORY_PORT,
     CAMPAIGN_INITIAL_DUE_TIME_PORT,

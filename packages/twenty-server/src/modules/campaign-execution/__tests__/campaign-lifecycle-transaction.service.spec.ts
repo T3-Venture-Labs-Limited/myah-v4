@@ -6,6 +6,7 @@ import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-wor
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { CampaignLifecycleTransactionService } from 'src/modules/campaign-execution/services/campaign-lifecycle-transaction.service';
+import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 import {
   type CampaignLifecycleActorPermissionResolverPort,
   type CampaignLifecycleWriteAuthorizationPort,
@@ -349,6 +350,64 @@ const run = <T>(
 ) => harness.service.run(input, operation);
 
 describe('CampaignLifecycleTransactionService', () => {
+  it('rolls back the source mutation and first projection when the second projection fails on the shared manager', async () => {
+    const harness = createHarness();
+    const committed = { source: [] as string[], projections: [] as string[] };
+    harness.transaction.mockImplementation(
+      async <T>(callback: (manager: WorkspaceEntityManager) => Promise<T>) => {
+        const before = {
+          source: [...committed.source],
+          projections: [...committed.projections],
+        };
+        try {
+          return await callback(harness.transactionManager);
+        } catch (error) {
+          committed.source.splice(0, committed.source.length, ...before.source);
+          committed.projections.splice(
+            0,
+            committed.projections.length,
+            ...before.projections,
+          );
+          throw error;
+        }
+      },
+    );
+    const timelineRepository = {
+      upsert: jest.fn(async (entity, _conflict, manager) => {
+        expect(manager).toBe(harness.transactionManager);
+        if (entity.targetCreatorId)
+          throw new Error('creator projection failed');
+        committed.projections.push(entity.id);
+      }),
+    };
+    harness.globalWorkspaceOrmManager.getRepository = jest.fn(
+      async (_workspaceId, objectName) =>
+        objectName === 'campaign'
+          ? harness.campaignRepository
+          : timelineRepository,
+    ) as never;
+    const writer = new CampaignTimelineEventWriterService(
+      harness.globalWorkspaceOrmManager,
+    );
+
+    await expect(
+      run(harness, async (context) => {
+        committed.source.push('source changed');
+        await writer.writeInTransaction(context, {
+          businessEventKey: 'atomicity:test',
+          eventKind: 'ENROLLED',
+          happenedAt: '2026-09-16T12:00:00.000Z',
+          sourceId: authorizationId,
+          sourceType: 'ENROLLMENT',
+          creatorId: initiatingWorkspaceMemberId,
+        });
+      }),
+    ).rejects.toThrow('creator projection failed');
+
+    expect(timelineRepository.upsert).toHaveBeenCalledTimes(2);
+    expect(committed).toEqual({ source: [], projections: [] });
+  });
+
   it('uses one transaction and exact Workspace → advisory → Campaign → write-auth → callback order', async () => {
     const harness = createHarness();
     const result = { activationId: 'activation-id' } as const;

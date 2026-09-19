@@ -4,8 +4,10 @@ import { Module } from '@nestjs/common';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
 import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
 import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts';
+import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
 import { InitializeMyahInboxContactTriageWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748001-initialize-myah-inbox-contact-triage.command';
 import { CatchUpMyahInboxContactTriageWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748002-catch-up-myah-inbox-contact-triage.command';
+import { CatchUpCampaignActivityControlMetadataWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748003-catch-up-campaign-activity-control-metadata.command';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
@@ -75,8 +77,10 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     CreateMyahInboxReplyContextDraftsFastInstanceCommand,
     CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
+    SynchronizeCampaignActivityControlMetadataCommand,
     InitializeMyahInboxContactTriageWorkspaceCommand,
     CatchUpMyahInboxContactTriageWorkspaceCommand,
+    CatchUpCampaignActivityControlMetadataWorkspaceCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,

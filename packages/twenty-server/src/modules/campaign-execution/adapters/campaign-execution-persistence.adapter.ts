@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { type QueryRunner } from 'typeorm';
+import { validate as uuidValidate } from 'uuid';
 
+import { isValidCampaignSequenceAttemptHistoryRow } from 'src/modules/campaign-execution/adapters/campaign-progression-history-reader.adapter';
 import {
   type CampaignActivationGraph,
   type CampaignActivationRecord,
   type CampaignExecutionPersistencePort,
   type CampaignExecutionRecord,
 } from 'src/modules/campaign-execution/types/campaign-execution.type';
+import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 import { type LockedCampaignLifecycleContext } from 'src/modules/campaign-execution/types/campaign-lifecycle-transaction.type';
 
 type DataRow = Readonly<Record<string, unknown>>;
@@ -79,6 +82,52 @@ const instant = (value: unknown): string => {
   return date.toISOString();
 };
 
+const isInstant = (value: unknown): boolean => {
+  try {
+    instant(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const hasNoSettlementProviderEvidence = (row: DataRow): boolean =>
+  row.providerMessageId === null &&
+  row.providerAcceptedAt === null &&
+  row.providerHeaderMessageId === null &&
+  row.providerMessageExternalId === null &&
+  row.reconciledProviderHeaderMessageId === null &&
+  row.providerThreadExternalId === null &&
+  row.resolvedThreadExternalId === null &&
+  row.providerDeliveredRecipients === null &&
+  row.projectedMessageId === null &&
+  row.projectedMessageThreadId === null;
+
+const isValidSettlementOccurrence = (
+  row: DataRow,
+  context: LockedCampaignLifecycleContext,
+  authorizationId: string,
+): boolean =>
+  uuidValidate(row.id as string) &&
+  row.workspaceId === context.workspaceId &&
+  row.campaignId === context.campaignId &&
+  uuidValidate(row.enrollmentId as string) &&
+  uuidValidate(row.workflowVersionId as string) &&
+  uuidValidate(row.messageId as string) &&
+  row.authorizationId === authorizationId &&
+  Number.isSafeInteger(row.authoredMessageCount) &&
+  (row.authoredMessageCount as number) > 0 &&
+  Number.isSafeInteger(row.authoredMessageIndex) &&
+  (row.authoredMessageIndex as number) >= 0 &&
+  (row.authoredMessageIndex as number) < (row.authoredMessageCount as number) &&
+  isInstant(row.dueAt) &&
+  row.terminalReason === null &&
+  row.terminalAt === null &&
+  ((row.state === 'PENDING' && row.holdReason === null) ||
+    (row.state === 'HELD' &&
+      typeof row.holdReason === 'string' &&
+      row.holdReason.trim().length > 0));
+
 const executionRecord = (row: DataRow): CampaignExecutionRecord =>
   Object.freeze({
     campaignExecutionId: row.id as string,
@@ -111,6 +160,11 @@ const EXECUTION_COLUMNS = `id, "workspaceId", "campaignId", "timeZone",
 
 @Injectable()
 export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPersistencePort {
+  constructor(
+    @Optional()
+    private readonly timelineEventWriter?: CampaignTimelineEventWriterService,
+  ) {}
+
   async loadExecutionInTransaction(context: LockedCampaignLifecycleContext) {
     const result = rows(
       await runnerFor(context).query(
@@ -290,6 +344,14 @@ export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPer
       'Campaign lifecycle activation was inconsistent',
     );
 
+    await this.timelineEventWriter?.writeInTransaction(context, {
+      businessEventKey: `activation:${activation.activationId}:ACTIVATED`,
+      eventKind: 'ACTIVATED',
+      happenedAt: activation.activatedAt,
+      sourceId: activation.activationId,
+      sourceType: 'ACTIVATION',
+    });
+
     for (const enrollment of graph.enrollments) {
       exactStructuredRow(
         await runner.query(
@@ -320,6 +382,14 @@ export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPer
         enrollment.enrollmentId,
         'Campaign enrollment insert was inconsistent',
       );
+      await this.timelineEventWriter?.writeInTransaction(context, {
+        businessEventKey: `enrollment:${enrollment.enrollmentId}:ENROLLED`,
+        eventKind: 'ENROLLED',
+        happenedAt: enrollment.enrolledAt,
+        sourceId: enrollment.enrollmentId,
+        sourceType: 'ENROLLMENT',
+        creatorId: enrollment.creatorId,
+      });
 
       if (enrollment.occurrence) {
         const occurrence = enrollment.occurrence;
@@ -347,6 +417,14 @@ export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPer
           occurrence.occurrenceId,
           'Campaign occurrence insert was inconsistent',
         );
+        await this.timelineEventWriter?.writeInTransaction(context, {
+          businessEventKey: `occurrence:${occurrence.occurrenceId}:SCHEDULED`,
+          eventKind: 'SCHEDULED',
+          happenedAt: enrollment.enrolledAt,
+          sourceId: occurrence.occurrenceId,
+          sourceType: 'OCCURRENCE',
+          creatorId: enrollment.creatorId,
+        });
       }
     }
 
@@ -371,6 +449,142 @@ export class CampaignExecutionPersistenceAdapter implements CampaignExecutionPer
       context.campaignId,
       'Campaign lifecycle transition was inconsistent',
     );
+    const happenedAt = new Date().toISOString();
+    await this.timelineEventWriter?.writeInTransaction(context, {
+      businessEventKey: `campaign:${context.campaignId}:${input.from}:${input.to}:${happenedAt}`,
+      eventKind: input.to,
+      happenedAt,
+      sourceId: context.campaignId,
+      sourceType: 'CAMPAIGN',
+    });
+  }
+
+  async settlePausedOccurrencesInTransaction(
+    context: LockedCampaignLifecycleContext,
+    authorizationId: string,
+  ): Promise<number> {
+    const runner = runnerFor(context);
+    const occurrences = rows(
+      await runner.query(
+        `SELECT o.id, o."workspaceId", o."campaignId", o."enrollmentId",
+                o."workflowVersionId", o."messageId", o."authoredMessageIndex",
+                o."dueAt", o.state, o."holdReason", o."terminalReason", o."terminalAt",
+                e."authorizationId", e."authoredMessageCount"
+           FROM core."campaignOccurrence" o
+           JOIN core."campaignEnrollment" e
+             ON e."workspaceId" = o."workspaceId"
+            AND e."campaignId" = o."campaignId"
+            AND e.id = o."enrollmentId"
+          WHERE o."workspaceId" = $1 AND o."campaignId" = $2
+            AND e."authorizationId" = $3
+            AND o.state IN ('PENDING', 'HELD')
+          ORDER BY o.id
+          FOR UPDATE OF o`,
+        [context.workspaceId, context.campaignId, authorizationId],
+      ),
+      'Campaign paused occurrence settlement read was invalid',
+    );
+
+    if (occurrences.length === 0) return 0;
+
+    const candidateById = new Map(
+      occurrences.map((occurrence) => [occurrence.id as string, occurrence]),
+    );
+    const attempts = rows(
+      await runner.query(
+        `SELECT source, "attemptId", "attemptState", "capacityState",
+                "workspaceId", "campaignId", "enrollmentId", "occurrenceId",
+                "authorizationId", "workflowVersionId", "messageId",
+                "connectedAccountId", "messageChannelId", provider,
+                "normalizedSenderHandle", "normalizedRecipient",
+                "selectionConstraintKind", "priorAcceptedEvidenceId",
+                "senderPoolFingerprint", "localDate", "claimedAt", "slotAt",
+                "unknownAfter", "attemptNumber", "renderDigest",
+                "testPreparationProofId", "requesterUserWorkspaceId",
+                "previewDigest", "testTransportDigest", "directReservationCapabilityId",
+                "providerMessageId", "providerAcceptedAt", "providerHeaderMessageId",
+                "providerMessageExternalId", "reconciledProviderHeaderMessageId",
+                "providerThreadExternalId", "resolvedThreadExternalId",
+                "providerDeliveredRecipients", "projectedMessageId",
+                "projectedMessageThreadId", "finalEvidenceDigest",
+                "safeOutcomeReason", retryable
+           FROM core."outboundEmailAttempt"
+          WHERE "occurrenceId" = ANY($1::uuid[])
+          ORDER BY "occurrenceId", "attemptNumber", "attemptId"
+          FOR UPDATE`,
+        [[...candidateById.keys()]],
+      ),
+      'Campaign paused occurrence attempt read was invalid',
+    );
+    const unsafeOccurrenceIds = new Set<string>();
+
+    for (const attempt of attempts) {
+      const occurrence = candidateById.get(attempt.occurrenceId as string);
+      const exactBinding =
+        occurrence !== undefined &&
+        attempt.workspaceId === context.workspaceId &&
+        attempt.campaignId === context.campaignId &&
+        attempt.enrollmentId === occurrence.enrollmentId &&
+        attempt.authorizationId === authorizationId &&
+        attempt.workflowVersionId === occurrence.workflowVersionId &&
+        attempt.messageId === occurrence.messageId;
+      const safeState =
+        attempt.attemptState === 'BLOCKED' ||
+        attempt.attemptState === 'DEFINITELY_UNACCEPTED';
+
+      if (
+        occurrence === undefined ||
+        !exactBinding ||
+        !safeState ||
+        !hasNoSettlementProviderEvidence(attempt) ||
+        !isValidCampaignSequenceAttemptHistoryRow(attempt)
+      ) {
+        unsafeOccurrenceIds.add(attempt.occurrenceId as string);
+      }
+    }
+
+    const eligibleIds = occurrences
+      .filter(
+        (occurrence) =>
+          isValidSettlementOccurrence(occurrence, context, authorizationId) &&
+          !unsafeOccurrenceIds.has(occurrence.id as string),
+      )
+      .map((occurrence) => occurrence.id as string);
+
+    if (eligibleIds.length === 0) return 0;
+
+    const result = await runner.query(
+      `UPDATE core."campaignOccurrence" AS o
+          SET state = 'CANCELLED', "holdReason" = NULL,
+              "terminalReason" = 'CAMPAIGN_PAUSED',
+              "terminalAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP
+         FROM core."campaignEnrollment" e
+        WHERE o."workspaceId" = $1 AND o."campaignId" = $2
+          AND e."workspaceId" = o."workspaceId"
+          AND e."campaignId" = o."campaignId"
+          AND e.id = o."enrollmentId"
+          AND e."authorizationId" = $3
+          AND o.state IN ('PENDING', 'HELD')
+          AND o.id = ANY($4::uuid[])
+      RETURNING o.id`,
+      [context.workspaceId, context.campaignId, authorizationId, eligibleIds],
+      true,
+    );
+    const records = rows(
+      (result as StructuredResult)?.records,
+      'Campaign paused occurrence settlement was inconsistent',
+    );
+
+    if (
+      (result as StructuredResult)?.affected !== eligibleIds.length ||
+      records.length !== eligibleIds.length ||
+      records.some((record) => !eligibleIds.includes(record.id as string)) ||
+      new Set(records.map((record) => record.id)).size !== eligibleIds.length
+    ) {
+      throw new Error('Campaign paused occurrence settlement was inconsistent');
+    }
+
+    return eligibleIds.length;
   }
 
   async countInFlightAttemptsInTransaction(

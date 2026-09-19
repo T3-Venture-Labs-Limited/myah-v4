@@ -43,7 +43,9 @@ const noProviderEvidence = (row: Record<string, unknown>): boolean =>
   row.providerAcceptedAt === null &&
   row.projectedMessageId === null;
 
-const validAttemptShape = (row: Record<string, unknown>): boolean => {
+export const isValidCampaignSequenceAttemptHistoryRow = (
+  row: Record<string, unknown>,
+): boolean => {
   if (
     row.source !== 'CAMPAIGN_SEQUENCE' ||
     !ATTEMPT_STATES.has(row.attemptState) ||
@@ -291,6 +293,25 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
     }
   }
 
+  async preflightSameWorkflowVersionHistoryInTransaction(
+    input: Parameters<
+      CampaignProgressionHistoryReaderPort['preflightSameWorkflowVersionHistoryInTransaction']
+    >[0],
+    manager: Parameters<
+      CampaignProgressionHistoryReaderPort['preflightSameWorkflowVersionHistoryInTransaction']
+    >[1],
+  ) {
+    const result = await this.readVersionHistoryInTransaction(
+      input,
+      manager,
+      null,
+    );
+
+    return result.status === 'BLOCKED'
+      ? result
+      : Object.freeze({ status: 'COMPLETE' as const });
+  }
+
   async readSameWorkflowVersionHistoryInTransaction(
     input: Parameters<
       CampaignProgressionHistoryReaderPort['readSameWorkflowVersionHistoryInTransaction']
@@ -298,6 +319,24 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
     manager: Parameters<
       CampaignProgressionHistoryReaderPort['readSameWorkflowVersionHistoryInTransaction']
     >[1],
+  ): Promise<CampaignProgressionHistoryResult> {
+    return this.readVersionHistoryInTransaction(
+      input,
+      manager,
+      input.creatorId,
+    );
+  }
+
+  private async readVersionHistoryInTransaction(
+    input: Readonly<{
+      workspaceId: string;
+      campaignId: string;
+      workflowVersionId: string;
+    }>,
+    manager: Parameters<
+      CampaignProgressionHistoryReaderPort['readSameWorkflowVersionHistoryInTransaction']
+    >[1],
+    creatorId: string | null,
   ): Promise<CampaignProgressionHistoryResult> {
     const runner = manager.queryRunner;
 
@@ -350,10 +389,17 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
               o."holdReason" AS "occurrenceHoldReason",
               o."terminalReason", o."terminalAt", o."dueAt",
               a.source, a."attemptId", a."attemptState", a."capacityState",
+              a."workspaceId" AS "attemptWorkspaceId",
+              a."campaignId" AS "attemptCampaignId",
+              a."enrollmentId" AS "attemptEnrollmentId",
+              a."authorizationId" AS "attemptAuthorizationId",
+              a."workflowVersionId" AS "attemptWorkflowVersionId",
+              a."messageId" AS "attemptMessageId",
               a."connectedAccountId", a."messageChannelId", a.provider,
               a."normalizedSenderHandle", a."normalizedRecipient",
               a."selectionConstraintKind", a."priorAcceptedEvidenceId",
-              a."senderPoolFingerprint", a."localDate", a."claimedAt", a."slotAt",
+              a."senderPoolFingerprint", a."localDate"::text AS "localDate",
+              a."claimedAt", a."slotAt",
               a."unknownAfter", a."attemptNumber", a."renderDigest",
               a."testPreparationProofId", a."requesterUserWorkspaceId",
               a."previewDigest", a."testTransportDigest", a."directReservationCapabilityId",
@@ -367,13 +413,7 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
           AND o."workflowVersionId" = $3
          LEFT JOIN core."outboundEmailAttempt" a
            ON a.source = 'CAMPAIGN_SEQUENCE'
-          AND a."workspaceId" = e."workspaceId"
-          AND a."campaignId" = e."campaignId"
-          AND a."enrollmentId" = e.id
           AND a."occurrenceId" = o.id
-          AND a."authorizationId" = e."authorizationId"
-          AND a."workflowVersionId" = o."workflowVersionId"
-          AND a."messageId" = o."messageId"
         WHERE e."workspaceId" = $1 AND e."campaignId" = $2
         ORDER BY e."creatorId", o."authoredMessageIndex", o."messageId", a."attemptId"`,
       [input.workspaceId, input.campaignId, input.workflowVersionId],
@@ -384,10 +424,11 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
 
     const groups = new Map<string, typeof rows>();
     const indexByMessage = new Map<string, number>();
-    const messageByIndex = new Map<number, string>();
+    const messageByIndex = new Map<string, string>();
     const blockerFlags = new Set<
       Extract<CampaignProgressionHistoryResult, { status: 'BLOCKED' }>['reason']
     >();
+    const seenAttemptIds = new Set<string>();
 
     for (const row of rows) {
       const enrollmentMalformed =
@@ -451,19 +492,33 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
               typeof row.terminalReason !== 'string' ||
               row.terminalReason.trim().length === 0 ||
               iso(row.terminalAt) === null) ||
-        (row.attemptId !== null && !validAttemptShape(row));
+        (row.attemptId !== null &&
+          (!isValidCampaignSequenceAttemptHistoryRow(row) ||
+            row.attemptWorkspaceId !== input.workspaceId ||
+            row.attemptCampaignId !== input.campaignId ||
+            row.attemptEnrollmentId !== row.enrollmentId ||
+            row.attemptAuthorizationId !== row.authorizationId ||
+            row.attemptWorkflowVersionId !== row.workflowVersionId ||
+            row.attemptMessageId !== row.messageId));
 
       if (occurrenceMalformed) blockerFlags.add('MALFORMED_HISTORY');
       if (
         enrollmentMalformed ||
         occurrenceMalformed ||
-        row.creatorId !== input.creatorId
+        (creatorId !== null && row.creatorId !== creatorId)
       ) {
         continue;
       }
 
-      const priorIndex = indexByMessage.get(row.messageId);
-      const priorMessage = messageByIndex.get(row.authoredMessageIndex);
+      if (row.attemptId !== null) {
+        if (seenAttemptIds.has(row.attemptId)) continue;
+        seenAttemptIds.add(row.attemptId);
+      }
+
+      const messageKey = `${row.creatorId}:${row.messageId}`;
+      const indexKey = `${row.creatorId}:${row.authoredMessageIndex}`;
+      const priorIndex = indexByMessage.get(messageKey);
+      const priorMessage = messageByIndex.get(indexKey);
 
       if (
         (priorIndex !== undefined && priorIndex !== row.authoredMessageIndex) ||
@@ -471,9 +526,9 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
       ) {
         blockerFlags.add('AMBIGUOUS_HISTORY');
       }
-      indexByMessage.set(row.messageId, row.authoredMessageIndex);
-      messageByIndex.set(row.authoredMessageIndex, row.messageId);
-      const key = `${row.messageId}:${row.authoredMessageIndex}`;
+      indexByMessage.set(messageKey, row.authoredMessageIndex);
+      messageByIndex.set(indexKey, row.messageId);
+      const key = `${row.creatorId}:${row.messageId}:${row.authoredMessageIndex}`;
       const group = groups.get(key) ?? [];
       group.push(row);
       groups.set(key, group);
@@ -567,7 +622,7 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
           `${entry.workflowVersionId}:${entry.messageId}:${entry.authoredMessageIndex}`,
       ),
     );
-    if (unique.size !== entries.length) {
+    if (creatorId !== null && unique.size !== entries.length) {
       blockerFlags.add('AMBIGUOUS_HISTORY');
     }
     for (const reason of CAMPAIGN_PROGRESSION_HISTORY_BLOCKER_PRECEDENCE) {

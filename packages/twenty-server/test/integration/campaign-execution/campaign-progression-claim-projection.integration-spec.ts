@@ -21,9 +21,11 @@ jest.mock(
 
 import { setPgDateTypeParser } from 'src/database/pg/set-pg-date-type-parser';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { CampaignEmailRuntimeService } from 'src/modules/campaign-execution/services/campaign-email-runtime.service';
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
+import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 import { computeCampaignProjectedMessageId } from 'src/modules/campaign-execution/utils/campaign-execution-identity.util';
 
 setPgDateTypeParser();
@@ -137,18 +139,20 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
   let attemptService: OutboundEmailAttemptService;
   let service: CampaignProgressionService;
   let attemptId: string;
+  let reservationLocalDate: string;
 
   beforeAll(async () => {
     dataSource = await new DataSource(
       global.testDataSource.options,
     ).initialize();
     const capacity = new MailboxCapacityService();
-    const localDate = new Date().toISOString().slice(0, 10);
+    reservationLocalDate = new Date().toISOString().slice(0, 10);
     const capacityResult = () => {
       const observedAt = new Date();
+      observedAt.setMilliseconds(573);
       const selected = {
         sender: mailbox,
-        localDate,
+        localDate: reservationLocalDate,
         acceptedCount: 0,
         reservedCount: 0,
         earliestEligibleAt: observedAt,
@@ -243,6 +247,18 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
         [id.workspace, `phase2a-${id.workspace.slice(0, 8)}`, schema],
       );
       await manager.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+      await manager.query(
+        `INSERT INTO core."connectedAccount" (id,"workspaceId",handle,provider,"userWorkspaceId",visibility,"dailySendLimit","minimumSendIntervalMs")
+         SELECT $1,$2,'sender@example.com','google',"userWorkspaceId",visibility,100,0
+           FROM core."connectedAccount" ORDER BY "createdAt" LIMIT 1`,
+        [id.account, id.workspace],
+      );
+      await manager.query(
+        `INSERT INTO core."messageChannel" (id,"workspaceId",visibility,handle,type,"pendingGroupEmailsAction","syncStage","connectedAccountId")
+         SELECT $1,$2,visibility,'sender@example.com','EMAIL','NONE','MESSAGE_LIST_FETCH_PENDING',$3
+           FROM core."messageChannel" ORDER BY "createdAt" LIMIT 1`,
+        [id.channel, id.workspace, id.account],
+      );
       await manager.query(`ALTER TABLE core."outboundEmailAttempt"
         ADD COLUMN IF NOT EXISTS "providerHeaderMessageId" text,
         ADD COLUMN IF NOT EXISTS "reconciledProviderHeaderMessageId" text,
@@ -264,15 +280,15 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
         `CREATE TABLE IF NOT EXISTS "${schema}".campaign (id uuid PRIMARY KEY,"lifecycleStatus" text NOT NULL,"sequenceAuthorization" jsonb)`,
       );
       await manager.query(
-        `CREATE TABLE IF NOT EXISTS "${schema}"."campaignCreator" (id uuid PRIMARY KEY,stage text,"deletedAt" timestamptz,"updatedAt" timestamptz DEFAULT now())`,
+        `CREATE TABLE IF NOT EXISTS "${schema}"."campaignCreator" (id uuid PRIMARY KEY,"campaignId" uuid NOT NULL,stage text,"deletedAt" timestamptz,"updatedAt" timestamptz DEFAULT now())`,
       );
       await manager.query(
         `INSERT INTO "${schema}".campaign VALUES ($1,'ACTIVE',$2::jsonb) ON CONFLICT DO NOTHING`,
         [id.campaign, JSON.stringify(projection)],
       );
       await manager.query(
-        `INSERT INTO "${schema}"."campaignCreator" (id,stage) VALUES ($1,'READY') ON CONFLICT DO NOTHING`,
-        [id.campaignCreator],
+        `INSERT INTO "${schema}"."campaignCreator" (id,"campaignId",stage) VALUES ($1,$2,'READY') ON CONFLICT DO NOTHING`,
+        [id.campaignCreator, id.campaign],
       );
       await manager.query(
         `INSERT INTO core."campaignExecution" (id,"workspaceId","campaignId","timeZone","startLocalTime","endLocalTime","campaignCapacityTimeZone") VALUES ($1,$2,$3,'UTC','00:00','23:59','UTC') ON CONFLICT DO NOTHING`,
@@ -385,6 +401,100 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
       [id.workspace, id.account],
     );
     expect(day.reservedCount).toBe(1);
+  });
+
+  it('preserves PostgreSQL reservation precision through runtime reconstruction and processing acquisition', async () => {
+    const providerCalls: string[] = [];
+    const outbound = {
+      getProviderRequestTimeoutMs: jest.fn(() => 30_000),
+      sendMessage: jest.fn(async () => {
+        const [processing] = await dataSource.query(
+          `SELECT "attemptState","finalEvidenceDigest" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
+          [attemptId],
+        );
+        expect(processing.attemptState).toBe('PROCESSING');
+        expect(processing.finalEvidenceDigest).toHaveLength(64);
+        providerCalls.push('sendMessage');
+        return {
+          headerMessageId: '<header@example.com>',
+          messageExternalId: 'provider-runtime',
+        };
+      }),
+    };
+    const dispatch = new OutboundEmailDispatchService(
+      {
+        runInTransaction: (work) => dataSource.transaction(work),
+        runPreProviderTransaction: (work) => dataSource.transaction(work),
+      },
+      {
+        revalidate: jest.fn(async ({ materialEvidence, submission }) => ({
+          projectedMessageId: materialEvidence.projectedMessageId,
+          status: 'AUTHORIZED' as const,
+          submission,
+        })),
+      },
+      { now: jest.fn(() => performance.now()) },
+      attemptService,
+      outbound as never,
+    );
+    const dispatchSpy = jest.spyOn(dispatch, 'dispatch');
+    const progressionRoutes = {
+      reconcileAcceptedInTransaction: jest.fn(),
+      reconcileDefinitelyUnacceptedInTransaction: jest.fn(),
+      reconcileUnknownInTransaction: jest.fn(),
+    };
+    const runtime = new CampaignEmailRuntimeService(
+      {
+        getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
+      } as never,
+      progressionRoutes as never,
+      dispatch,
+      { reconcile: jest.fn(async () => 'PROJECTED') } as never,
+    );
+    const [before] = await dataSource.query(
+      `SELECT "claimedAt","slotAt","unknownAfter","localDate" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
+      [attemptId],
+    );
+    for (const value of [
+      before.claimedAt,
+      before.slotAt,
+      before.unknownAfter,
+    ]) {
+      expect(value).toBeInstanceOf(Date);
+      expect(value.getUTCMilliseconds()).toBe(573);
+    }
+    expect(before.localDate).toBe(reservationLocalDate);
+    await (runtime as any).dispatchAttempt(
+      id.workspace,
+      id.campaign,
+      attemptId,
+    );
+
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    await expect(dispatchSpy.mock.results[0].value).resolves.toMatchObject({
+      status: 'ACCEPTED_RECORDED',
+    });
+    expect(providerCalls).toEqual(['sendMessage']);
+    expect(outbound.sendMessage).toHaveBeenCalledTimes(1);
+    expect(
+      progressionRoutes.reconcileAcceptedInTransaction,
+    ).toHaveBeenCalledTimes(1);
+
+    await dataSource.query(
+      `UPDATE core."outboundEmailAttempt"
+          SET "attemptState"='RESERVED',"capacityState"='RESERVED',"finalEvidenceDigest"=NULL,
+              "providerMessageId"=NULL,"providerAcceptedAt"=NULL,"providerHeaderMessageId"=NULL,
+              "providerMessageExternalId"=NULL,"providerThreadExternalId"=NULL,
+              "resolvedThreadExternalId"=NULL,"providerDeliveredRecipients"=NULL,
+              "safeOutcomeReason"=NULL,"retryable"=NULL
+        WHERE "attemptId"=$1`,
+      [attemptId],
+    );
+    await dataSource.query(
+      `UPDATE core."mailboxCapacityDay" SET "reservedCount"=1,"acceptedCount"=0
+        WHERE "workspaceId"=$1 AND "connectedAccountId"=$2`,
+      [id.workspace, id.account],
+    );
   });
 
   it('records accepted projected evidence and progresses exactly once with deterministic dueAt and READY-only stage CAS', async () => {

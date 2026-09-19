@@ -526,6 +526,15 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: 'bb5ae5e6-2f0a-4d13-9f7e-4af0f7f95c5a',
       },
       stage: { universalIdentifier: '427aad82-7fe4-516d-99b3-8d00161534f6' },
+      excludedAt: {
+        universalIdentifier: 'cc6a3b80-74b0-55eb-91c6-59c8b92f0048',
+      },
+      excludedByWorkspaceMemberId: {
+        universalIdentifier: 'c57c999e-884e-54ad-9e53-b8897397ce42',
+      },
+      exclusionReason: {
+        universalIdentifier: 'cba56e7c-4499-58a8-91a7-5de33bbfb539',
+      },
       assignedManagedMailboxId: {
         universalIdentifier: 'c1abf590-4797-5bd8-a820-07f55ffce9c0',
       },
@@ -806,6 +815,9 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       inboxThreads: {
         universalIdentifier: '07c0459e-9426-40a6-acdb-3c86824f0d47',
+      },
+      timelineActivities: {
+        universalIdentifier: '87d5a1c5-168c-56ce-b86d-99beeb500dc4',
       },
     },
     indexes: {},
