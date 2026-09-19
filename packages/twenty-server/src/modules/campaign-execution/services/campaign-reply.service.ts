@@ -70,20 +70,22 @@ export class CampaignReplyService {
       manager,
     );
     if (result.status === 'EXACT_REPLAY') return;
-    const stageUpdate = await manager
-      .createQueryBuilder()
-      .update(`${getWorkspaceSchemaName(input.workspaceId)}.campaignCreator`)
-      .set({ stage: 'NEGOTIATING', updatedAt: () => 'clock_timestamp()' })
-      .where('id = :id', { id: match.campaignCreatorId })
-      .andWhere('"campaignId" = :campaignId', {
-        campaignId: match.campaignId,
-      })
-      .andWhere("stage IN ('READY', 'CONTACTED')")
-      .andWhere('"deletedAt" IS NULL')
-      .execute();
-    if (stageUpdate?.affected === 1 && this.timelineEventWriter) {
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    const schemaName = getWorkspaceSchemaName(input.workspaceId);
+    const stageUpdates = rows(
+      // pi-lens-ignore: sql-injection, no-sql-in-code
+      await runner.query(
+        `UPDATE "${schemaName}"."campaignCreator"
+         SET stage='NEGOTIATING', "updatedAt"=clock_timestamp()
+         WHERE id=$1 AND "campaignId"=$2
+           AND stage IN ('READY', 'CONTACTED') AND "deletedAt" IS NULL
+         RETURNING id`,
+        [match.campaignCreatorId, match.campaignId],
+      ),
+    );
+    if (stageUpdates.length === 1 && this.timelineEventWriter) {
       const happenedAtRows = rows(
-        await manager.query('SELECT clock_timestamp() AS "happenedAt"'),
+        await runner.query('SELECT clock_timestamp() AS "happenedAt"'),
       );
       const happenedAt = new Date(
         String(happenedAtRows[0]?.happenedAt),
