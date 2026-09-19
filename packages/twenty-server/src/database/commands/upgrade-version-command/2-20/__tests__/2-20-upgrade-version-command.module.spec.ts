@@ -375,7 +375,7 @@ describe('Instagram production upgrade provider compatibility', () => {
         .map(({ name }) => name),
     ).toEqual([
       '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(
