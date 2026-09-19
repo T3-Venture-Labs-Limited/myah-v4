@@ -67,5 +67,8 @@ export const formatSentMessage = (
     ...(input.expectedMessageId === undefined
       ? {}
       : { expectedMessageId: input.expectedMessageId }),
+    ...(input.allowExpectedMessageIdAdoption
+      ? { allowExpectedMessageIdAdoption: true }
+      : {}),
   };
 };
