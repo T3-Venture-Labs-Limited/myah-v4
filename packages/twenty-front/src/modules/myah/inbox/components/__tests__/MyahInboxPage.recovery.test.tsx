@@ -36,10 +36,27 @@ import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/cons
 import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 
 const mockInstagramNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useNavigate: () => mockInstagramNavigate,
-}));
+jest.mock('react-router-dom', () => {
+  const actual = jest.requireActual('react-router-dom');
+  return {
+    ...actual,
+    // Recording spy that still delegates to the real navigate function.
+    // A pure no-op mock here breaks the Campaign-guidance tests further down
+    // this shared file (MYAH-338/MYAH-354), which depend on real MemoryRouter
+    // navigation to reach the Campaign route and back; those tests predate
+    // the Instagram composer tests added alongside this mock and were never
+    // meant to have real navigation disabled file-wide.
+    useNavigate: () => {
+      const realNavigate = actual.useNavigate();
+
+      return (...args: Parameters<typeof realNavigate>) => {
+        mockInstagramNavigate(...args);
+
+        return realNavigate(...args);
+      };
+    },
+  };
+});
 jest.mock('@/settings/roles/hooks/useHasPermissionFlag', () => ({
   useHasPermissionFlag: () => true,
 }));
