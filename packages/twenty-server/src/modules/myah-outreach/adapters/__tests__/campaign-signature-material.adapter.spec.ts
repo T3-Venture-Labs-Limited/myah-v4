@@ -83,6 +83,7 @@ describe('CampaignSignatureMaterialAdapter', () => {
 
   it.each([
     ['null', null, null],
+    ['untouched ORM default', { markdown: '', blocknote: null }, null],
     ['blank', '', ''],
     ['legacy string', '<p>Legacy signature</p>', '<p>Legacy signature</p>'],
     [
@@ -269,6 +270,16 @@ describe('CampaignSignatureMaterialAdapter', () => {
   it.each([
     ['missing Campaign', null],
     ['unsupported number signature', { id: campaignId, emailSignature: 42 }],
+    ['unavailable signature', { id: campaignId }],
+    ['array signature', { id: campaignId, emailSignature: [] }],
+    [
+      'empty markdown without blocknote',
+      { id: campaignId, emailSignature: { markdown: '' } },
+    ],
+    [
+      'whitespace markdown with null blocknote',
+      { id: campaignId, emailSignature: { markdown: ' ', blocknote: null } },
+    ],
     [
       'rich-text signature without markdown',
       {
