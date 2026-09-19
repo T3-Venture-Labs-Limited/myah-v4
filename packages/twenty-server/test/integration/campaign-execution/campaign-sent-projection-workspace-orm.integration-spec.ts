@@ -69,6 +69,15 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
       'crossAccountOccurrence',
       'crossAccountAttempt',
       'crossAccountMessage',
+      'duplicateOccurrence',
+      'duplicateAttempt',
+      'duplicateMessage',
+      'duplicateOwnerA',
+      'duplicateOwnerB',
+      'duplicateThreadA',
+      'duplicateThreadB',
+      'duplicateAssociationA',
+      'duplicateAssociationB',
       'workflow',
       'workflowVersion',
       'account',
@@ -93,6 +102,12 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
       header: '<myah-400-cross-account@example.com>',
       external: 'myah-400-cross-account',
       thread: 'myah-400-cross-account-thread',
+    },
+    duplicateImport: {
+      header: '<myah-400-duplicate-import@example.com>',
+      external: 'myah-400-duplicate-dispatch',
+      mailboxExternal: 'myah-400-duplicate-mailbox',
+      thread: 'myah-400-duplicate-thread',
     },
   } as const;
 
@@ -248,7 +263,7 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
         `INSERT INTO core."campaignActivation"
          (id,"workspaceId","campaignId","campaignExecutionId","authorizationId","authorizationGeneration",
           "workflowVersionId","activatedAt","createdEnrollmentCount","createdOccurrenceCount")
-         VALUES ($1,$2,$3,$4,$5,1,$6,now(),1,3)`,
+         VALUES ($1,$2,$3,$4,$5,1,$6,now(),1,4)`,
         [
           ids.activation,
           workspaceId,
@@ -262,7 +277,7 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
         `INSERT INTO core."campaignEnrollment"
          (id,"workspaceId","campaignId","campaignExecutionId","authorizationId","authorizationGeneration",
           "campaignCreatorId","creatorId","authoredMessageCount","nextAuthoredMessageIndex",state,"enrolledAt")
-         VALUES ($1,$2,$3,$4,$5,1,$6,$7,3,3,'ACTIVE',now())`,
+         VALUES ($1,$2,$3,$4,$5,1,$6,$7,4,4,'ACTIVE',now())`,
         [
           ids.enrollment,
           workspaceId,
@@ -294,6 +309,13 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
           messageId: ids.crossAccountMessage,
           authoredMessageIndex: 2,
           evidence: evidence.crossAccount,
+        },
+        {
+          attemptId: ids.duplicateAttempt,
+          occurrenceId: ids.duplicateOccurrence,
+          messageId: ids.duplicateMessage,
+          authoredMessageIndex: 3,
+          evidence: evidence.duplicateImport,
         },
       ];
       for (const attempt of attempts) {
@@ -370,11 +392,13 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
         ids.attempt,
         ids.importFirstAttempt,
         ids.crossAccountAttempt,
+        ids.duplicateAttempt,
       ];
       const occurrenceIds = [
         ids.occurrence,
         ids.importFirstOccurrence,
         ids.crossAccountOccurrence,
+        ids.duplicateOccurrence,
       ];
       const persisted = (await manager.query(
         `SELECT DISTINCT m.id,m."messageThreadId"
@@ -697,6 +721,165 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
       original_associations: 1,
       campaign_associations: 0,
       deterministic_messages: 0,
+    });
+  });
+
+  it('fails closed for two same-window import owners matching everything except provider external identity', async () => {
+    const orm = getDomainService<GlobalWorkspaceOrmManager>(
+      'GlobalWorkspaceOrmManager',
+    );
+    const projection = getDomainService<CampaignSentProjectionService>(
+      'CampaignSentProjectionService',
+    );
+    const [attempt] = await global.testDataSource.query(
+      `SELECT "providerAcceptedAt" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
+      [ids.duplicateAttempt],
+    );
+
+    await global.testDataSource.transaction(async (manager) => {
+      await manager.query(
+        `INSERT INTO "${schemaName}"."messageThread" (id,subject)
+         VALUES ($1,'Subject'),($2,'Subject')`,
+        [ids.duplicateThreadA, ids.duplicateThreadB],
+      );
+      await manager.query(
+        `INSERT INTO "${schemaName}".message
+         (id,"headerMessageId",subject,text,"receivedAt","messageThreadId","isDraft")
+         VALUES
+         ($1,$3,'Subject','Body',$4,$5,false),
+         ($2,$3,'Subject','Body',$4,$6,false)`,
+        [
+          ids.duplicateOwnerA,
+          ids.duplicateOwnerB,
+          evidence.duplicateImport.header,
+          attempt.providerAcceptedAt,
+          ids.duplicateThreadA,
+          ids.duplicateThreadB,
+        ],
+      );
+      await manager.query(
+        `INSERT INTO "${schemaName}"."messageChannelMessageAssociation"
+         (id,"messageChannelId","messageId","messageExternalId","messageThreadExternalId",direction)
+         VALUES
+         ($1,$3,$4,$6,$7,'OUTGOING'),
+         ($2,$3,$5,$6,$7,'OUTGOING')`,
+        [
+          ids.duplicateAssociationA,
+          ids.duplicateAssociationB,
+          ids.channel,
+          ids.duplicateOwnerA,
+          ids.duplicateOwnerB,
+          evidence.duplicateImport.mailboxExternal,
+          evidence.duplicateImport.thread,
+        ],
+      );
+      await manager.query(
+        `INSERT INTO "${schemaName}"."messageParticipant"
+         ("messageId",role,handle,"displayName") VALUES
+         ($1,'FROM','myah-400-sender@example.com','Imported Sender'),
+         ($1,'TO','creator@example.com','Imported Creator'),
+         ($2,'FROM','myah-400-sender@example.com','Imported Sender'),
+         ($2,'TO','creator@example.com','Imported Creator')`,
+        [ids.duplicateOwnerA, ids.duplicateOwnerB],
+      );
+    });
+
+    const owners = (await global.testDataSource.query(
+      `SELECT m.id,
+              count(DISTINCT association.id)::int associations,
+              bool_and(association."messageChannelId"=$2) exact_channel,
+              bool_and(association."messageExternalId"=$3) external_exact,
+              bool_and(association."messageThreadExternalId"=$4) thread_exact,
+              bool_and(association.direction='OUTGOING') outgoing,
+              count(participant.id)::int participants,
+              count(participant.id) FILTER (
+                WHERE (participant.role='FROM' AND lower(btrim(participant.handle))='myah-400-sender@example.com')
+                   OR (participant.role='TO' AND lower(btrim(participant.handle))='creator@example.com')
+              )::int expected_participants
+         FROM "${schemaName}".message m
+         JOIN "${schemaName}"."messageChannelMessageAssociation" association ON association."messageId"=m.id
+         JOIN "${schemaName}"."messageParticipant" participant ON participant."messageId"=m.id
+        WHERE m."headerMessageId"=$1
+        GROUP BY m.id ORDER BY m.id`,
+      [
+        evidence.duplicateImport.header,
+        ids.channel,
+        evidence.duplicateImport.external,
+        evidence.duplicateImport.thread,
+      ],
+    )) as Array<{
+      id: string;
+      associations: number;
+      exact_channel: boolean;
+      external_exact: boolean;
+      thread_exact: boolean;
+      outgoing: boolean;
+      participants: number;
+      expected_participants: number;
+    }>;
+    expect(owners).toHaveLength(2);
+    expect(owners.map(({ id: _id, ...owner }) => owner)).toEqual([
+      {
+        associations: 1,
+        exact_channel: true,
+        external_exact: false,
+        thread_exact: true,
+        outgoing: true,
+        participants: 2,
+        expected_participants: 2,
+      },
+      {
+        associations: 1,
+        exact_channel: true,
+        external_exact: false,
+        thread_exact: true,
+        outgoing: true,
+        participants: 2,
+        expected_participants: 2,
+      },
+    ]);
+    const [aggregate] = await global.testDataSource.query(
+      `SELECT count(DISTINCT m.id)::int owners,count(participant.id)::int participants,
+              count(*) FILTER (WHERE m.id=$2)::int deterministic_rows,
+              date_trunc('second',min(m."createdAt"))=date_trunc('second',max(m."createdAt")) same_window
+         FROM "${schemaName}".message m
+         JOIN "${schemaName}"."messageParticipant" participant ON participant."messageId"=m.id
+        WHERE m."headerMessageId"=$1`,
+      [
+        evidence.duplicateImport.header,
+        computeCampaignProjectedMessageId(ids.duplicateAttempt),
+      ],
+    );
+    expect(aggregate).toEqual({
+      owners: 2,
+      participants: 4,
+      deterministic_rows: 0,
+      same_window: true,
+    });
+
+    await expect(
+      orm.executeInWorkspaceContext(
+        () =>
+          projection.reconcile({
+            workspaceId,
+            campaignId: ids.campaign,
+            connectedAccountId: ids.account,
+            messageChannelId: ids.channel,
+            attemptId: ids.duplicateAttempt,
+          }),
+        buildSystemAuthContext(workspaceId),
+      ),
+    ).rejects.toThrow('Expected Message header identity is not unique');
+    const [afterRollback] = await global.testDataSource.query(
+      `SELECT "projectedMessageId","projectedMessageThreadId",
+              (SELECT count(*)::int FROM "${schemaName}".message WHERE "headerMessageId"=$2) owners
+         FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
+      [ids.duplicateAttempt, evidence.duplicateImport.header],
+    );
+    expect(afterRollback).toEqual({
+      projectedMessageId: null,
+      projectedMessageThreadId: null,
+      owners: 2,
     });
   });
 });
