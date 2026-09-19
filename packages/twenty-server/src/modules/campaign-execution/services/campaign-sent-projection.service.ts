@@ -134,14 +134,16 @@ export class CampaignSentProjectionService {
         typeof attempt.resolvedThreadExternalId !== 'string'
       )
         return 'DEFERRED';
-      const connectedAccount = await manager
+      const connectedAccount = await dataSource.coreDataSource
         .getRepository(ConnectedAccountEntity)
-        .findOneOrFail({
-          where: {
-            id: input.connectedAccountId,
-            workspaceId: input.workspaceId,
-          },
-        });
+        .createQueryBuilder('connectedAccount', runner)
+        .where('connectedAccount.id = :connectedAccountId', {
+          connectedAccountId: input.connectedAccountId,
+        })
+        .andWhere('connectedAccount.workspaceId = :workspaceId', {
+          workspaceId: input.workspaceId,
+        })
+        .getOneOrFail();
       const persisted = await this.sentPersistence.persistSentMessage({
         sendResult: {
           headerMessageId:

@@ -36,13 +36,18 @@ const acceptedAttempt = () => ({
 describe('CampaignSentProjectionService', () => {
   const setup = (attemptRows: unknown[] = [acceptedAttempt()]) => {
     const queries: Array<{ sql: string; parameters: unknown[] }> = [];
-    const connectedAccount = { id: IDS.connectedAccountId };
+    const connectedAccount = {
+      id: IDS.connectedAccountId,
+      workspaceId: IDS.workspaceId,
+      handle: 'sender@example.com',
+      provider: 'google',
+    };
     const query = jest.fn(async (sql: string, parameters: unknown[]) => {
       queries.push({ sql, parameters });
       if (sql.includes('FROM core.workspace')) return [{ id: IDS.workspaceId }];
       if (sql.includes('.campaign WHERE')) return [{ id: IDS.campaignId }];
       if (sql.includes('FROM core."connectedAccount"'))
-        return [{ id: IDS.connectedAccountId }];
+        return [connectedAccount];
       if (sql.includes('FROM core."messageChannel"'))
         return [{ id: IDS.messageChannelId }];
       if (sql.includes('JOIN core."campaignOutboundRender"'))
@@ -53,9 +58,9 @@ describe('CampaignSentProjectionService', () => {
     });
     const manager = {
       queryRunner: undefined as unknown,
-      getRepository: jest.fn(() => ({
-        findOneOrFail: jest.fn(async () => connectedAccount),
-      })),
+      getRepository: jest.fn(() => {
+        throw new Error('Entity target must be a string');
+      }),
     };
     const runner = {
       isTransactionActive: true,
@@ -65,7 +70,16 @@ describe('CampaignSentProjectionService', () => {
     };
     manager.queryRunner = runner;
     const events: string[] = [];
+    const accountQueryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOneOrFail: jest.fn(async () => connectedAccount),
+    };
+    const createQueryBuilder = jest.fn(() => accountQueryBuilder);
     const dataSource = {
+      coreDataSource: {
+        getRepository: jest.fn(() => ({ createQueryBuilder })),
+      },
       transaction: jest.fn(async (work: (value: typeof manager) => unknown) => {
         const result = await work(manager);
         events.push('commit');
@@ -96,18 +110,27 @@ describe('CampaignSentProjectionService', () => {
     return {
       service,
       orm,
+      connectedAccount,
       sentPersistence,
       queries,
       manager,
       expectedMessageId,
       contactCreationService,
+      createQueryBuilder,
       events,
     };
   };
 
   it('locks canonical routing coordinates before exact attempt projection and CAS', async () => {
-    const { service, sentPersistence, queries, manager, expectedMessageId } =
-      setup();
+    const {
+      service,
+      sentPersistence,
+      queries,
+      manager,
+      expectedMessageId,
+      connectedAccount,
+      createQueryBuilder,
+    } = setup();
 
     await expect(service.reconcile(IDS)).resolves.toBe('PROJECTED');
 
@@ -134,11 +157,17 @@ describe('CampaignSentProjectionService', () => {
     );
     expect(sentPersistence.persistSentMessage).toHaveBeenCalledWith(
       expect.objectContaining({
+        connectedAccount,
         expectedMessageId,
         transactionManager: manager,
         workspaceId: IDS.workspaceId,
         messageChannelId: IDS.messageChannelId,
       }),
+    );
+    expect(manager.getRepository).not.toHaveBeenCalled();
+    expect(createQueryBuilder).toHaveBeenCalledWith(
+      'connectedAccount',
+      manager.queryRunner,
     );
     expect(indexOf('JOIN core."campaignOutboundRender"')).toBeLessThan(
       indexOf('UPDATE core."outboundEmailAttempt"'),
@@ -169,7 +198,9 @@ describe('CampaignSentProjectionService', () => {
 
     expect(contactCreationService.enqueueContactCreation).toHaveBeenCalledWith({
       workspaceId: IDS.workspaceId,
-      connectedAccount: { id: IDS.connectedAccountId },
+      connectedAccount: expect.objectContaining({
+        id: IDS.connectedAccountId,
+      }),
       contactsToCreate,
     });
     expect(events).toEqual(['commit', 'enqueue']);

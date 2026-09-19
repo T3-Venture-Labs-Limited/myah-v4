@@ -19,6 +19,10 @@ import { type MessageThreadWorkspaceEntity } from 'src/modules/messaging/common/
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
 
+const normalizeNullableHeaderMessageId = (
+  value: string | null | undefined,
+): string | null => (value === undefined || value === '' ? null : value);
+
 type MessageAccumulator = {
   existingMessageInDB?: MessageWorkspaceEntity;
   existingThreadInDB?: Pick<MessageThreadWorkspaceEntity, 'id'>;
@@ -685,7 +689,8 @@ export class MessagingMessageService {
       }
       const expected = expectedRows[0];
       if (
-        expected.headerMessageId !== message.headerMessageId ||
+        normalizeNullableHeaderMessageId(expected.headerMessageId) !==
+          normalizeNullableHeaderMessageId(message.headerMessageId) ||
         expected.subject !== message.subject ||
         expected.text !== message.text ||
         expected.isDraft !== message.isDraft ||
@@ -771,7 +776,8 @@ export class MessagingMessageService {
       const existingMessage = expected ?? byHeader;
       if (
         expected !== undefined &&
-        (expected.headerMessageId !== message.headerMessageId ||
+        (normalizeNullableHeaderMessageId(expected.headerMessageId) !==
+          normalizeNullableHeaderMessageId(message.headerMessageId) ||
           expected.subject !== message.subject ||
           expected.text !== message.text ||
           expected.isDraft !== message.isDraft ||

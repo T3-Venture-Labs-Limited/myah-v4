@@ -97,34 +97,39 @@ describe('CampaignReplyService', () => {
   });
 
   it('terminalizes one exact Campaign match and scopes the Campaign Creator stage CAS to that Campaign', async () => {
+    const campaignId = '00000000-0000-4000-8000-000000000004';
+    const campaignCreatorId = '00000000-0000-4000-8000-000000000006';
     const progression = {
       terminalizeReplyInTransaction: jest.fn(async () => ({
         status: 'REPLIED',
       })),
     };
-    const execute = jest.fn();
-    const builder = {
-      update: jest.fn().mockReturnThis(),
-      set: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      execute,
-    };
+    const query = jest.fn(
+      async (sql: string, _parameters?: readonly unknown[]) => {
+        if (sql.includes('FROM core."outboundEmailAttempt"'))
+          return [
+            {
+              workspaceId: input.workspaceId,
+              campaignId,
+              enrollmentId: '00000000-0000-4000-8000-000000000005',
+              campaignCreatorId,
+            },
+          ];
+        if (sql.includes('UPDATE') && sql.includes('"campaignCreator"'))
+          return [{ id: campaignCreatorId }];
+        return [];
+      },
+    );
     const manager = {
       queryRunner: undefined as any,
-      createQueryBuilder: jest.fn(() => builder),
+      createQueryBuilder: jest.fn(() => {
+        throw new Error('Cannot get entity metadata for alias campaignCreator');
+      }),
     };
     manager.queryRunner = {
       isTransactionActive: true,
       manager,
-      query: jest.fn(async () => [
-        {
-          workspaceId: input.workspaceId,
-          campaignId: '00000000-0000-4000-8000-000000000004',
-          enrollmentId: '00000000-0000-4000-8000-000000000005',
-          campaignCreatorId: '00000000-0000-4000-8000-000000000006',
-        },
-      ]),
+      query,
     };
     await new CampaignReplyService(
       progression as never,
@@ -133,13 +138,11 @@ describe('CampaignReplyService', () => {
       expect.objectContaining({ inboundEvidenceId: input.inboundEvidenceId }),
       manager,
     );
-    expect(builder.update).toHaveBeenCalledWith(
-      expect.stringMatching(/^workspace_[^.]+\.campaignCreator$/),
+    const stageUpdate = query.mock.calls.find(
+      ([sql]) => sql.includes('UPDATE') && sql.includes('"campaignCreator"'),
     );
-    expect(builder.andWhere).toHaveBeenCalledWith(
-      '"campaignId" = :campaignId',
-      { campaignId: '00000000-0000-4000-8000-000000000004' },
-    );
-    expect(execute).toHaveBeenCalled();
+    expect(stageUpdate?.[0]).toContain('id=$1 AND "campaignId"=$2');
+    expect(stageUpdate?.[1]).toEqual([campaignCreatorId, campaignId]);
+    expect(manager.createQueryBuilder).not.toHaveBeenCalled();
   });
 });
