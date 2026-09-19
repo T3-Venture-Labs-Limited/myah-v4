@@ -12,9 +12,8 @@ const draftEditorModeFamily = createAtomFamilyState<
 
 export const myahInboxDraftEditorModeFamilyState = {
   ...draftEditorModeFamily,
+  // Keyed by the full anchored draft identity so the edit mode follows the
+  // exact contact/channel/target/context rather than a bare thread.
   atomFamily: (key: MyahInboxDraftAutosaveKey) =>
-    draftEditorModeFamily.atomFamily({
-      workspaceId: key.workspaceId,
-      threadId: key.threadId,
-    }),
+    draftEditorModeFamily.atomFamily(key),
 };

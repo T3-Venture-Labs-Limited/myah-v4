@@ -171,7 +171,7 @@ describe('Instagram production upgrade provider compatibility', () => {
     ).toEqual(expect.arrayContaining(INSTANCE_COMMANDS));
   });
 
-  it('discovers exactly eight actual corrected providers and preserves the entire durable sequence and unaffected kind tails', () => {
+  it('discovers exactly eight actual corrected providers and preserves the entire durable sequence and unaffected kind prefixes', () => {
     const workspaceModules = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,
       WorkspaceCommandProviderModule,
@@ -281,7 +281,16 @@ describe('Instagram production upgrade provider compatibility', () => {
       ).toBe(true);
     }
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
+    );
+    const lastInstagramCommand = sequence.findIndex(
+      (step) =>
+        step.name ===
+        EXPECTED_INSTAGRAM_IDENTITIES[EXPECTED_INSTAGRAM_IDENTITIES.length - 1]
+          .durableName,
+    );
+    expect(sequence[lastInstagramCommand + 1]?.name).toBe(
+      '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
     );
     const workspaceCommands = sequence
       .filter((step) => step.kind === 'workspace')
@@ -298,6 +307,7 @@ describe('Instagram production upgrade provider compatibility', () => {
         .map(({ name }) => name),
     ).toEqual([
       '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(

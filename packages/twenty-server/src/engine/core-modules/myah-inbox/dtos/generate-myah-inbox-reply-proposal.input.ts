@@ -1,27 +1,15 @@
+import { MyahInboxReplyDraftInput } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import { Field, InputType } from '@nestjs/graphql';
 
-import {
-  IsOptional,
-  IsNotEmpty,
-  IsString,
-  IsUUID,
-  MaxLength,
-} from 'class-validator';
-
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { Matches, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
 export const MYAH_INBOX_MAX_OPERATOR_INSTRUCTIONS_LENGTH = 10_000;
 
 @InputType('GenerateMyahInboxReplyProposalInput')
-export class GenerateMyahInboxReplyProposalInput {
-  @Field(() => UUIDScalarType, { nullable: true })
-  @IsOptional()
-  @IsUUID()
-  expectedWorkspaceId?: string | null;
-
-  @Field(() => UUIDScalarType)
-  @IsUUID()
-  threadId: string;
+export class GenerateMyahInboxReplyProposalInput extends MyahInboxReplyDraftInput {
+  @Field(() => String)
+  @Matches(/^[a-f0-9]{64}$/)
+  expectedContextFingerprint: string;
 
   @Field(() => String)
   @IsString()

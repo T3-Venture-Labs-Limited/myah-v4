@@ -75,6 +75,9 @@ const StyledDescription = styled.span`
   font-size: ${themeCssVariables.font.size.sm};
 `;
 
+const getSelectableItemId = (value: SelectValue) =>
+  `${typeof value}:${String(value)}`;
+
 export const Select = <Value extends SelectValue>({
   ariaLabel,
   className,
@@ -156,7 +159,9 @@ export const Select = <Value extends SelectValue>({
       ? selectContainerRef.current?.clientWidth
       : dropdownWidth;
 
-  const selectableItemIdArray = filteredOptions.map((option) => option.label);
+  const selectableItemIdArray = filteredOptions.map((option) =>
+    getSelectableItemId(option.value),
+  );
 
   const selectedItemId = useAtomComponentStateValue(
     selectedItemIdComponentState,
@@ -180,7 +185,7 @@ export const Select = <Value extends SelectValue>({
       isDefined(controlSelectedOption) &&
       !isNonEmptyString(searchInputValue)
     ) {
-      setSelectedItemId(controlSelectedOption.label);
+      setSelectedItemId(getSelectableItemId(controlSelectedOption.value));
     }
   };
 
@@ -287,7 +292,7 @@ export const Select = <Value extends SelectValue>({
                     {filteredOptions.map((option) => (
                       <SelectableListItem
                         key={`${option.value}-${option.label}`}
-                        itemId={option.label}
+                        itemId={getSelectableItemId(option.value)}
                         onEnter={() => {
                           onChange?.(option.value);
                           onBlur?.();
@@ -302,7 +307,9 @@ export const Select = <Value extends SelectValue>({
                           selected={
                             controlSelectedOption.value === option.value
                           }
-                          focused={selectedItemId === option.label}
+                          focused={
+                            selectedItemId === getSelectableItemId(option.value)
+                          }
                           needIconCheck={needIconCheck}
                           onClick={() => {
                             onChange?.(option.value);

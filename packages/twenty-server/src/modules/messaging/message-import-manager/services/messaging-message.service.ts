@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 import { v4 } from 'uuid';
 
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
@@ -102,6 +102,33 @@ export class MessagingMessageService {
             workspaceId,
             'messageParticipant',
           );
+
+        // Resolve the immutable local target inside the write transaction. A
+        // provider-returned thread ID must never route an accepted v2 receipt.
+        const deliveryTargetIds = new Set(
+          messages
+            .map((message) => message.deliveryTargetId)
+            .filter((id) => id !== undefined),
+        );
+        for (const deliveryTargetId of [...deliveryTargetIds].sort()) {
+          if (
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+              deliveryTargetId,
+            )
+          ) {
+            throw new Error('Pinned Message delivery target is invalid');
+          }
+          const target = await messageThreadRepository.findOne(
+            {
+              where: { id: deliveryTargetId, deletedAt: IsNull() },
+              select: { id: true },
+              lock: { mode: 'pessimistic_write' },
+            },
+            transactionManager,
+          );
+          if (target?.id !== deliveryTargetId)
+            throw new Error('Pinned Message delivery target is unavailable');
+        }
 
         const messageAccumulatorMap = new Map<string, MessageAccumulator>();
         const expectedMessageIds = messages
@@ -811,6 +838,23 @@ export class MessagingMessageService {
         );
       }
 
+      if (message.deliveryTargetId !== undefined) {
+        const existingTargetId =
+          messageAccumulator.existingMessageInDB?.messageThreadId;
+        if (
+          existingTargetId !== undefined &&
+          existingTargetId !== message.deliveryTargetId
+        ) {
+          throw new Error(
+            'Pinned Message delivery target conflicts with existing Message',
+          );
+        }
+        messageAccumulator.existingThreadInDB = {
+          id: message.deliveryTargetId,
+        };
+        continue;
+      }
+
       const messageChannelMessageAssociationReferencingMessageThread =
         messageChannelMessageAssociationsReferencingMessageThread.find(
           (association) =>
@@ -921,6 +965,8 @@ export class MessagingMessageService {
           `Message accumulator should reference the message, this should never happen`,
         );
       }
+
+      if (message.deliveryTargetId !== undefined) continue;
 
       const previousMessageWithSameThreadExternalId = messages.find(
         (otherMessage, otherMessageIndex) =>

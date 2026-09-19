@@ -496,7 +496,15 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
   });
 
   const createLockingService = (bindings: unknown[]) => {
-    const repository = { find: jest.fn().mockResolvedValue(bindings) };
+    const qb: Record<string, jest.Mock> = {};
+    for (const method of ['where', 'andWhere', 'leftJoinAndSelect'])
+      qb[method] = jest.fn(() => qb);
+    qb.getMany = jest.fn(async () => bindings);
+    const repository = {
+      find: jest.fn().mockResolvedValue(bindings),
+      createQueryBuilder: jest.fn(() => qb),
+      qb,
+    };
 
     return {
       repository,
@@ -592,12 +600,16 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
           draftId: inboxReplyBinding.draftId,
         }),
       ).resolves.toBe(state);
-      expect(repository.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.not.objectContaining({
-            initiatorUserWorkspaceId: userWorkspaceId,
-          }),
-        }),
+      expect(repository.qb.where).toHaveBeenCalledWith(
+        'binding."workspaceId" = :workspaceId',
+        { workspaceId },
+      );
+      expect(repository.qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('binding."draftId" = :draftTargetId'),
+        {
+          draftTargetId: inboxReplyBinding.draftId,
+          snapshotTargetId: inboxReplyBinding.draftId,
+        },
       );
     },
   );

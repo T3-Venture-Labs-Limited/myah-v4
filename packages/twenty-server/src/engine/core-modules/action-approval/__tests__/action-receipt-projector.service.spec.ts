@@ -93,6 +93,44 @@ describe('ActionReceiptProjectorService', () => {
     );
   });
 
+  it('dispatches accepted Email v2 with its immutable snapshot and direct interaction form', async () => {
+    const snapshot = {
+      schemaVersion: 1,
+      channel: 'EMAIL',
+      draftId: receipt.actionApprovalBinding.draftId,
+      deliveryTargetId: '00000000-0000-4000-8000-000000000009',
+    };
+    const writer = { project: jest.fn() };
+    const repository = {
+      findOne: jest.fn(async () => ({
+        ...receipt,
+        actionApprovalBinding: {
+          ...receipt.actionApprovalBinding,
+          actionVersion: 2,
+          threadId: null,
+          interactionContextType: 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT',
+          interactionContextId: receipt.actionApprovalBinding.draftId,
+          myahReplyContextSnapshot: snapshot,
+        },
+      })),
+      update: jest.fn(),
+    };
+    const service = new ActionReceiptProjectorService(
+      repository as never,
+      writer,
+    );
+    await expect(service.projectReceipt(receipt.id)).resolves.toEqual({
+      projected: true,
+    });
+    expect(writer.project).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionVersion: 2,
+        threadId: null,
+        myahReplyContextSnapshot: snapshot,
+      }),
+    );
+  });
+
   it('rejects a provider-accepted receipt with an unsupported binding before projecting it', async () => {
     const writer = { project: jest.fn() };
     const repository = {

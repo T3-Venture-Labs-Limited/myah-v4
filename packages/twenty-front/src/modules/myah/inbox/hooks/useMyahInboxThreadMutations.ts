@@ -5,6 +5,8 @@ import { useMutation } from '@apollo/client/react';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 
 import {
+  ReviewMyahInboxReplyContextDocument,
+  type ReviewMyahInboxReplyContextInput,
   GenerateMyahInboxReplyProposalDocument,
   SaveMyahInboxDraftDocument,
   UpdateMyahInboxThreadDocument,
@@ -33,6 +35,18 @@ export const useMyahInboxThreadMutations = () => {
     GenerateMyahInboxReplyProposalDocument,
     { client: apolloCoreClient },
   );
+
+  const [reviewContextMutation] = useMutation(
+    ReviewMyahInboxReplyContextDocument,
+    { client: apolloCoreClient },
+  );
+
+  const reviewContext = async (input: ReviewMyahInboxReplyContextInput) => {
+    assertWorkspace(input.expectedWorkspaceId);
+    const result = await reviewContextMutation({ variables: { input } });
+    if (!result.data) throw new Error('Inbox review mutation returned no data');
+    return result.data.reviewMyahInboxReplyContext;
+  };
 
   const updateThread = async (
     input: UpdateMyahInboxThreadInput & { expectedWorkspaceId: string },
@@ -75,5 +89,5 @@ export const useMyahInboxThreadMutations = () => {
     return result.data.generateMyahInboxReplyProposal;
   };
 
-  return { updateThread, saveDraft, generateProposal };
+  return { updateThread, saveDraft, generateProposal, reviewContext };
 };

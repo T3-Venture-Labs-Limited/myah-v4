@@ -240,12 +240,20 @@ jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
     scopeGeneration,
     targetAvailable,
     presentation,
+    replyTargets,
+    onReplyTargetChange,
   }: {
     scopeGeneration: string;
     targetAvailable: boolean;
     presentation?: 'default' | 'main';
     thread: { id: string };
     onSent?: () => void | Promise<void>;
+    replyTargets?: Array<{
+      threadId: string;
+      subject: string | null;
+      campaignLabel: string | null;
+    }>;
+    onReplyTargetChange?: (threadId: string) => void;
   }) => (
     <div
       data-testid="draft-authority"
@@ -254,6 +262,20 @@ jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
       data-presentation={presentation}
     >
       Email composer {thread.id}
+      {presentation === 'main' && replyTargets ? (
+        <select
+          aria-label="Reply subject"
+          value={thread.id}
+          onChange={(event) => onReplyTargetChange?.(event.target.value)}
+        >
+          {replyTargets.map((target) => (
+            <option key={target.threadId} value={target.threadId}>
+              {target.subject}
+              {target.campaignLabel ? ` · ${target.campaignLabel}` : ''}
+            </option>
+          ))}
+        </select>
+      ) : null}
       <button onClick={() => void onSent?.()}>Simulate Email sent</button>
     </div>
   ),
@@ -410,6 +432,8 @@ const setDefaultHooks = () => {
                     threadId: id,
                     rootMessageId: `${id}-root`,
                     subject: id,
+                    campaignLabel:
+                      index === 0 ? 'Spring Campaign' : 'Holiday Campaign',
                     startTimestamp: `2026-09-0${index + 1}T00:00:00Z`,
                     historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
                   })),
@@ -804,72 +828,46 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(refreshContacts).toHaveBeenCalledTimes(1);
   });
 
-  it('removes the complete selector and keeps header/main exact scope when an older card replies inline', async () => {
-    renderPage();
+  it('selects the exact older card in the main reply composer without an inline editor', async () => {
+    const { store } = renderPage();
     const header = await screen.findByLabelText('Contact conversation header');
-    expect(
-      within(header).getByRole('group', {
-        name: 'Email actions for First subject',
-      }),
-    ).toBeVisible();
-    expect(
-      within(header).queryByText('Email actions for First subject'),
-    ).toBeNull();
     expect(within(header).getByText('Email actions thread-2')).toBeVisible();
-    expect(screen.queryByLabelText('Email thread')).toBeNull();
+
     await act(async () =>
       fireEvent.click(
         screen.getByRole('button', { name: 'Reply to thread-1' }),
       ),
     );
-    expect(within(header).getByText('Email actions thread-2')).toBeVisible();
-    expect(screen.getByText('Email composer thread-1')).toBeVisible();
-    expect(screen.getByText('Email composer thread-2')).toBeVisible();
-    await act(async () =>
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Instagram channel' }),
-      ),
-    );
-    expect(screen.queryByLabelText('Email thread')).toBeNull();
-    expect(screen.queryByText(/Email actions/)).toBeNull();
-    expect(screen.queryByText(/Email composer/)).toBeNull();
-  });
 
-  it('moves the latest shared editor inline without a duplicate and returns it to bottom', async () => {
-    renderPage();
-    await screen.findByText('Email composer thread-2');
-    const mainReply = screen.getByRole('region', { name: 'Main reply' });
-    expect(within(mainReply).getByTestId('draft-authority')).toHaveAttribute(
-      'data-presentation',
-      'main',
-    );
-    expect(
-      within(mainReply).queryByText('Main reply · First subject'),
-    ).not.toBeInTheDocument();
-    await act(async () =>
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Reply to thread-2' }),
-      ),
-    );
-    expect(screen.getAllByText('Email composer thread-2')).toHaveLength(1);
-    expect(
-      within(screen.getByRole('region', { name: 'Inline reply' })).getByText(
-        'Email composer thread-2',
-      ),
-    ).toBeVisible();
-    expect(
-      within(screen.getByRole('region', { name: 'Inline reply' })).getByTestId(
-        'draft-authority',
-      ),
-    ).toHaveAttribute('data-presentation', 'default');
-    await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Return to bottom' })),
-    );
-    expect(screen.getAllByText('Email composer thread-2')).toHaveLength(1);
+    expect(within(header).getByText('Email actions thread-1')).toBeVisible();
+    expect(screen.getAllByText('Email composer thread-1')).toHaveLength(1);
+    expect(screen.queryByText('Email composer thread-2')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-1',
+    );
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Main reply' })).toHaveFocus(),
     );
+  });
+
+  it('switches the main reply composer through the subject selector', async () => {
+    const { store } = renderPage();
+    await screen.findByText('Email composer thread-2');
+    const selector = screen.getByRole('combobox', { name: 'Reply subject' });
+    expect(selector).toHaveValue('thread-2');
+    expect(selector).toHaveTextContent('thread-1 · Spring Campaign');
+    expect(selector).toHaveTextContent('thread-2 · Holiday Campaign');
+
+    await act(async () =>
+      fireEvent.change(selector, { target: { value: 'thread-1' } }),
+    );
+
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-1',
+    );
+    expect(screen.getAllByText('Email composer thread-1')).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
   });
 
   it('does not use the contact activity target before bounded outreach history resolves', () => {

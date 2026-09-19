@@ -49,6 +49,9 @@ export class MyahInboxReplyProposalBody {
 
 @ObjectType('MyahInboxReplyProposal')
 export class MyahInboxReplyProposal {
+  @Field(() => String, { nullable: true })
+  contextFingerprint?: string | null;
+
   @Field(() => MyahInboxReplyProposalBody)
   body: MyahInboxReplyProposalBody;
 }

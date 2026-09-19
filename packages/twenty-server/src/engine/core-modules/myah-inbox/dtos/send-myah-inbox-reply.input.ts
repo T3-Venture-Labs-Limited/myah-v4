@@ -1,20 +1,10 @@
+import { MyahInboxReplyDraftInput } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import { Field, InputType, Int } from '@nestjs/graphql';
 
-import { IsOptional, IsInt, IsUUID, Min } from 'class-validator';
-
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { IsInt, Min } from 'class-validator';
 
 @InputType('SendMyahInboxReplyInput')
-export class SendMyahInboxReplyInput {
-  @Field(() => UUIDScalarType, { nullable: true })
-  @IsOptional()
-  @IsUUID()
-  expectedWorkspaceId?: string | null;
-
-  @Field(() => UUIDScalarType)
-  @IsUUID()
-  threadId: string;
-
+export class SendMyahInboxReplyInput extends MyahInboxReplyDraftInput {
   @Field(() => Int)
   @IsInt()
   @Min(0)

@@ -81,6 +81,7 @@ export const GENERATE_MYAH_INBOX_REPLY_PROPOSAL = gql`
     $input: GenerateMyahInboxReplyProposalInput!
   ) {
     generateMyahInboxReplyProposal(input: $input) {
+      contextFingerprint
       body {
         markdown
         blocknote
@@ -90,14 +91,8 @@ export const GENERATE_MYAH_INBOX_REPLY_PROPOSAL = gql`
 `;
 
 export const GET_MYAH_INBOX_REPLY_SEND_READINESS = gql`
-  query MyahInboxReplySendReadiness(
-    $threadId: UUID!
-    $expectedWorkspaceId: UUID
-  ) {
-    myahInboxReplySendReadiness(
-      threadId: $threadId
-      expectedWorkspaceId: $expectedWorkspaceId
-    ) {
+  query MyahInboxReplySendReadiness($input: MyahInboxReplyDraftInput!) {
+    myahInboxReplySendReadiness(input: $input) {
       status
       reason
     }
@@ -507,6 +502,76 @@ export const GET_INSTAGRAM_MESSAGE_SEND_STATUS = gql`
       state
       providerCode
       outcome
+    }
+  }
+`;
+
+const MYAH_INBOX_REPLY_CONTEXT_DRAFT_FIELDS = gql`
+  fragment MyahInboxReplyContextDraftFields on MyahInboxReplyContextDraft {
+    draftId
+    revision
+    executionState
+    body {
+      markdown
+      blocknote
+    }
+    resolvedContext {
+      kind
+      campaignId
+      contextFingerprint
+      target {
+        channel
+        deliveryTargetId
+        contactAnchorKind
+        contactAnchorId
+        creatorId
+      }
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_REPLY_DRAFT = gql`
+  ${MYAH_INBOX_REPLY_CONTEXT_DRAFT_FIELDS}
+  query MyahInboxReplyDraft($input: MyahInboxReplyDraftInput!) {
+    myahInboxReplyDraft(input: $input) {
+      ...MyahInboxReplyContextDraftFields
+    }
+  }
+`;
+
+export const REVIEW_MYAH_INBOX_REPLY_CONTEXT = gql`
+  ${MYAH_INBOX_REPLY_CONTEXT_DRAFT_FIELDS}
+  mutation ReviewMyahInboxReplyContext(
+    $input: ReviewMyahInboxReplyContextInput!
+  ) {
+    reviewMyahInboxReplyContext(input: $input) {
+      ...MyahInboxReplyContextDraftFields
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_REPLY_CONTEXT_OPTIONS = gql`
+  query MyahInboxReplyContextOptions(
+    $input: MyahInboxReplyContextOptionsInput!
+  ) {
+    myahInboxReplyContextOptions(input: $input) {
+      edges {
+        cursor
+        node {
+          id
+          name
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      generalAvailable
+      defaultContext {
+        kind
+        campaignId
+        campaignName
+      }
     }
   }
 `;

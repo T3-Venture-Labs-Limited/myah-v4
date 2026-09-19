@@ -335,6 +335,7 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
         "initiatorUserWorkspaceId",
         "actionName",
         "actionVersion",
+        "actionKind",
         "draftId",
         "contentDigest",
         "recipientFingerprint",
@@ -343,7 +344,7 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
         "state",
         "expiresAt"
       ) VALUES (
-        $1, $2, $3, 'send_instagram_message', 2, $4, $5, $6, $7, $8,
+        $1, $2, $3, 'send_instagram_message', 2, 'REPLY', $4, $5, $6, $7, $8,
         'APPROVED', $9
       )`,
       [

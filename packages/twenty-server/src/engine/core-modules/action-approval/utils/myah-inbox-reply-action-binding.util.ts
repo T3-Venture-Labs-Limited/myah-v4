@@ -1,5 +1,12 @@
-import { type ActionEvidenceLinkInput } from 'src/engine/core-modules/action-approval/types/action-approval.type';
-import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import {
+  type ActionEvidenceLinkInput,
+  type EmailContextV2Binding,
+  type MyahReplyContextSnapshot,
+} from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import {
+  computeActionContentDigest,
+  serializeMyahReplyContextSnapshot,
+} from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import {
   type CanonicalMyahInboxReplyGraph,
   type MyahInboxReplyEvidenceObjectMetadataIds,
@@ -69,6 +76,77 @@ export const buildMyahInboxReplyExpectedActionBinding = ({
   ],
 });
 
+export const buildMyahInboxReplyContextV2ExpectedActionBinding = ({
+  workspaceId,
+  initiatorUserWorkspaceId,
+  graph,
+  evidenceObjectMetadataIds,
+  snapshot,
+  agentChatThreadId,
+}: {
+  workspaceId: string;
+  initiatorUserWorkspaceId: string;
+  graph: CanonicalMyahInboxReplyGraph;
+  evidenceObjectMetadataIds: MyahInboxReplyEvidenceObjectMetadataIds;
+  snapshot: MyahReplyContextSnapshot;
+  agentChatThreadId?: string;
+}): EmailContextV2Binding & { workspaceId: string } => ({
+  workspaceId,
+  actionName: 'send_inbox_reply',
+  actionVersion: 2,
+  draftId: snapshot.draftId,
+  contentDigest: computeActionContentDigest(
+    JSON.stringify([graph.subject, graph.draftBody.markdown]),
+  ),
+  recipientFingerprint: computeActionContentDigest(
+    JSON.stringify([graph.recipientEmail]),
+  ),
+  sendingAccountFingerprint: computeActionContentDigest(
+    JSON.stringify([
+      graph.managedMailboxId,
+      graph.connectedAccountId,
+      graph.messageChannelId,
+      graph.senderEmail,
+      graph.senderDisplayName,
+    ]),
+  ),
+  actionContextFingerprint: computeActionContentDigest(
+    JSON.stringify([
+      graph.draftRevision,
+      graph.inReplyTo,
+      graph.messageThreadId,
+      graph.parentMessageId,
+      graph.parentAssociationDirection,
+      graph.providerThreadExternalId,
+      graph.providerMessageExternalId,
+      graph.connectedAccountId,
+      graph.messageChannelId,
+      graph.senderEmail,
+      graph.senderDisplayName,
+      snapshot.contextFingerprint,
+    ]),
+  ),
+  threadId: agentChatThreadId ?? null,
+  interactionContextType: agentChatThreadId
+    ? null
+    : 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT',
+  interactionContextId: agentChatThreadId ? null : snapshot.draftId,
+  myahReplyContextSnapshot: snapshot,
+  initiatorUserWorkspaceId,
+  evidenceLinks: [
+    {
+      objectMetadataId: evidenceObjectMetadataIds.messageThread,
+      recordId: graph.messageThreadId,
+      role: 'delivery_target',
+    },
+    {
+      objectMetadataId: evidenceObjectMetadataIds.message,
+      recordId: graph.parentMessageId,
+      role: 'thread_parent',
+    },
+  ],
+});
+
 export const matchesMyahInboxReplyBinding = (
   actual: MyahInboxReplyExpectedActionBindingWithWorkspace,
   expected: MyahInboxReplyExpectedActionBindingWithWorkspace,
@@ -84,6 +162,15 @@ export const matchesMyahInboxReplyBinding = (
     actual.actionContextFingerprint !== expected.actionContextFingerprint ||
     actual.threadId !== expected.threadId ||
     actual.initiatorUserWorkspaceId !== expected.initiatorUserWorkspaceId
+  )
+    return false;
+  if (
+    actual.actionVersion === 2 &&
+    expected.actionVersion === 2 &&
+    (actual.interactionContextType !== expected.interactionContextType ||
+      actual.interactionContextId !== expected.interactionContextId ||
+      serializeMyahReplyContextSnapshot(actual.myahReplyContextSnapshot) !==
+        serializeMyahReplyContextSnapshot(expected.myahReplyContextSnapshot))
   )
     return false;
   const comparable = (evidence: readonly ActionEvidenceLinkInput[]) =>
