@@ -159,6 +159,7 @@ describe('CampaignSentProjectionService', () => {
       expect.objectContaining({
         connectedAccount,
         expectedMessageId,
+        allowExpectedMessageIdAdoption: true,
         transactionManager: manager,
         workspaceId: IDS.workspaceId,
         messageChannelId: IDS.messageChannelId,
@@ -206,18 +207,48 @@ describe('CampaignSentProjectionService', () => {
     expect(events).toEqual(['commit', 'enqueue']);
   });
 
-  it('returns exact replay without repeating persistence', async () => {
-    const expectedMessageId = computeCampaignProjectedMessageId(IDS.attemptId);
+  it('records an exact import-first Message identity returned by canonical persistence', async () => {
+    const importedMessageId = '77777777-7777-4777-8777-777777777777';
+    const { service, sentPersistence, queries, expectedMessageId } = setup();
+
+    (sentPersistence.persistSentMessage as jest.Mock).mockResolvedValue({
+      messageId: importedMessageId,
+      messageThreadId: '66666666-6666-4666-8666-666666666666',
+    });
+
+    await expect(service.reconcile(IDS)).resolves.toBe('PROJECTED');
+    expect(sentPersistence.persistSentMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedMessageId }),
+    );
+    expect(
+      queries.find(({ sql }) =>
+        sql.includes('UPDATE core."outboundEmailAttempt"'),
+      )?.parameters,
+    ).toEqual([
+      IDS.attemptId,
+      importedMessageId,
+      '66666666-6666-4666-8666-666666666666',
+    ]);
+  });
+
+  it('returns exact replay for a previously adopted import-first Message identity', async () => {
+    const importedMessageId = '77777777-7777-4777-8777-777777777777';
     const { service, sentPersistence } = setup([
       {
         ...acceptedAttempt(),
-        projectedMessageId: expectedMessageId,
+        projectedMessageId: importedMessageId,
         projectedMessageThreadId: '66666666-6666-4666-8666-666666666666',
       },
     ]);
+    (sentPersistence.persistSentMessage as jest.Mock).mockResolvedValue({
+      messageId: importedMessageId,
+      messageThreadId: '66666666-6666-4666-8666-666666666666',
+    });
 
     await expect(service.reconcile(IDS)).resolves.toBe('EXACT_REPLAY');
-    expect(sentPersistence.persistSentMessage).toHaveBeenCalledTimes(1);
+    expect(sentPersistence.persistSentMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedMessageId: importedMessageId }),
+    );
   });
 
   it('passes a nullable header for accepted Microsoft evidence without trusted header material', async () => {

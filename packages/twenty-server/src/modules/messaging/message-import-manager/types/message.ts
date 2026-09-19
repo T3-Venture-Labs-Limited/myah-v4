@@ -27,6 +27,7 @@ export type Message = Omit<
   messageFolderExternalIds?: string[];
   labelIds?: string[];
   expectedMessageId?: string;
+  allowExpectedMessageIdAdoption?: boolean;
   providerOccurredAt?: string | null;
 };
 
