@@ -33,7 +33,9 @@ type WorkspaceOrmManager = {
 const readContextQuery = gql`
   query Task7ReadContext($input: MyahInboxReplyDraftInput!) {
     myahInboxReplyDraft(input: $input) {
-      contextFingerprint
+      resolvedContext {
+        contextFingerprint
+      }
     }
   }
 `;
@@ -251,7 +253,8 @@ describe('Myah Inbox reply proposal Nest integration', () => {
     );
     expect(contextResponse.body.errors).toBeUndefined();
     const expectedContextFingerprint =
-      contextResponse.body.data.myahInboxReplyDraft.contextFingerprint;
+      contextResponse.body.data.myahInboxReplyDraft.resolvedContext
+        .contextFingerprint;
     const directResponse = await makeGraphqlAPIRequest(
       {
         query: generateProposalMutation,

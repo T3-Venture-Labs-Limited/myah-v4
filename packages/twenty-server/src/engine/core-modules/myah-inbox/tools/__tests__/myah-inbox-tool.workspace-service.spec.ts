@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 import { type ToolSet } from 'ai';
 import { z } from 'zod';
@@ -76,6 +76,11 @@ const createService = () => {
   const mutationService = {
     updateMyahInboxThread: jest.fn().mockResolvedValue({ id: threadId }),
     saveMyahInboxDraft: jest.fn().mockResolvedValue({
+      status: 'SAVED',
+      revision: 4,
+      body: { markdown: 'Thanks!', blocknote: null },
+    }),
+    saveMyahInboxDraftForThread: jest.fn().mockResolvedValue({
       status: 'SAVED',
       revision: 4,
       body: { markdown: 'Thanks!', blocknote: null },
@@ -179,13 +184,11 @@ describe('MyahInboxToolWorkspaceService', () => {
     });
   });
 
-  it('propagates the compatibility rejection for the threadId-only legacy draft tool path', async () => {
+  it('delegates the threadId-only legacy draft tool path to the thread-based save and propagates its errors', async () => {
     const { service, mutationService } = createService();
     const toolSet = service.generateMyahInboxTools(context as never);
-    mutationService.saveMyahInboxDraft.mockRejectedValue(
-      new ConflictException(
-        'Email reply drafts require a refreshed contextual reply flow',
-      ),
+    mutationService.saveMyahInboxDraftForThread.mockRejectedValue(
+      new ForbiddenException('Inbox thread is not readable'),
     );
 
     await expect(
@@ -194,12 +197,11 @@ describe('MyahInboxToolWorkspaceService', () => {
         expectedRevision: 2,
         body: { markdown: 'legacy draft', blocknote: null },
       }),
-    ).rejects.toEqual(
-      new ConflictException(
-        'Email reply drafts require a refreshed contextual reply flow',
-      ),
+    ).rejects.toEqual(new ForbiddenException('Inbox thread is not readable'));
+    expect(mutationService.saveMyahInboxDraftForThread).toHaveBeenCalledTimes(
+      1,
     );
-    expect(mutationService.saveMyahInboxDraft).toHaveBeenCalledTimes(1);
+    expect(mutationService.saveMyahInboxDraft).not.toHaveBeenCalled();
   });
 
   it('requires explicit IDs for mutations and reply-send reads even with a selection', async () => {
@@ -275,7 +277,7 @@ describe('MyahInboxToolWorkspaceService', () => {
       revision: 7,
       body: { markdown: 'Current draft', blocknote: null },
     };
-    mutationService.saveMyahInboxDraft.mockResolvedValue(conflict);
+    mutationService.saveMyahInboxDraftForThread.mockResolvedValue(conflict);
     const toolSet = service.generateMyahInboxTools(context as never);
 
     await expect(
@@ -290,13 +292,16 @@ describe('MyahInboxToolWorkspaceService', () => {
       result: conflict,
     });
 
-    expect(mutationService.saveMyahInboxDraft).toHaveBeenCalledTimes(1);
-    expect(mutationService.saveMyahInboxDraft).toHaveBeenCalledWith({
+    expect(mutationService.saveMyahInboxDraftForThread).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(mutationService.saveMyahInboxDraftForThread).toHaveBeenCalledWith({
       ...requestContext,
       threadId: explicitThreadId,
       expectedRevision: 6,
       body: { markdown: 'New draft', blocknote: null },
     });
+    expect(mutationService.saveMyahInboxDraft).not.toHaveBeenCalled();
   });
 
   it('strictly validates mutation and reply-send tool inputs', () => {

@@ -156,11 +156,12 @@ export class MyahInboxToolWorkspaceService {
         messageThreadId,
         ...input
       }: z.infer<typeof saveMyahInboxReplyDraftInputSchema>) => {
-        const result = await this.myahInboxMutationService.saveMyahInboxDraft({
-          ...requestContext,
-          ...input,
-          threadId: parseThreadId(messageThreadId),
-        });
+        const result =
+          await this.myahInboxMutationService.saveMyahInboxDraftForThread({
+            ...requestContext,
+            ...input,
+            threadId: parseThreadId(messageThreadId),
+          });
 
         return {
           success: true,

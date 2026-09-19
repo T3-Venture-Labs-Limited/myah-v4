@@ -1346,17 +1346,27 @@ describe('Myah assistant skills scripted model integration', () => {
       inboxFixture,
       inboxChatThreadId,
     );
-    // This tool still saves through the legacy per-thread draft columns,
-    // which the shared fixture no longer seeds (it saves through the new
-    // per-Campaign-context draft API instead), so their revision is
-    // independent of inboxFixture.draftRevision.
-    const [{ myahReplyDraftRevision: legacyDraftRevision }] =
-      await global.testDataSource.query<{ myahReplyDraftRevision: number }[]>(
-        `SELECT "myahReplyDraftRevision"
-         FROM "${inboxChatFixture.schemaName}"."messageThread"
-         WHERE id = $1`,
-        [inboxFixture.threadIds.draft],
+    const creatorId = inboxFixture.creatorId;
+    const draftThreadId = inboxFixture.threadIds.draft;
+    // The Myah assistant chat tool has no operator-chosen Campaign context, so
+    // it always saves a General (no-Campaign) draft anchored to this thread's
+    // Creator, through the same per-context draft store the composer uses.
+    const readGeneralDraft = async () => {
+      const [row] = await global.testDataSource.query<
+        { bodyMarkdown: string | null; revision: number }[]
+      >(
+        `SELECT "bodyMarkdown", "revision"
+         FROM core."myahInboxReplyContextDraft"
+         WHERE "workspaceId" = $1 AND "contactAnchorKind" = 'CREATOR'
+           AND "contactAnchorId" = $2 AND "channel" = 'EMAIL'
+           AND "deliveryTargetId" = $3 AND "contextKind" = 'GENERAL'
+           AND "campaignId" IS NULL`,
+        [SEED_APPLE_WORKSPACE_ID, creatorId, draftThreadId],
       );
+
+      return row ?? { bodyMarkdown: null, revision: 0 };
+    };
+    const beforeDraft = await readGeneralDraft();
     const draftBody = {
       markdown: 'MYAH-156 scripted exact draft',
       blocknote: null,
@@ -1391,24 +1401,14 @@ describe('Myah assistant skills scripted model integration', () => {
             toolName: 'save_myah_inbox_reply_draft',
             arguments: {
               messageThreadId: inboxFixture.threadIds.draft,
-              expectedRevision: legacyDraftRevision,
+              expectedRevision: beforeDraft.revision,
               body: draftBody,
             },
           },
         },
       ],
     });
-    const [savedDraft] = await global.testDataSource.query<
-      {
-        myahReplyDraftBodyMarkdown: string;
-        myahReplyDraftRevision: number;
-      }[]
-    >(
-      `SELECT "myahReplyDraftBodyMarkdown", "myahReplyDraftRevision"
-       FROM "${inboxChatFixture.schemaName}"."messageThread"
-       WHERE id = $1`,
-      [inboxFixture.threadIds.draft],
-    );
+    const savedDraft = await readGeneralDraft();
     const staleExecution = await runScriptedChat({
       approvedToolName: 'save_myah_inbox_reply_draft',
       fixture: inboxChatFixture,
@@ -1419,7 +1419,7 @@ describe('Myah assistant skills scripted model integration', () => {
             toolName: 'save_myah_inbox_reply_draft',
             arguments: {
               messageThreadId: inboxFixture.threadIds.draft,
-              expectedRevision: legacyDraftRevision,
+              expectedRevision: beforeDraft.revision,
               body: {
                 markdown: 'MYAH-156 stale overwrite',
                 blocknote: null,
@@ -1437,8 +1437,8 @@ describe('Myah assistant skills scripted model integration', () => {
       'execute_tool',
     ]);
     expect(savedDraft).toEqual({
-      myahReplyDraftBodyMarkdown: draftBody.markdown,
-      myahReplyDraftRevision: legacyDraftRevision + 1,
+      bodyMarkdown: draftBody.markdown,
+      revision: beforeDraft.revision + 1,
     });
     expect(staleExecution.modelToolCalls).toEqual(['execute_tool']);
     expect(JSON.stringify(staleExecution.chunks)).toContain('CONFLICT');
