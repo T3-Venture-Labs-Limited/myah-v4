@@ -139,6 +139,86 @@ describe('MessagingMessageService Campaign evidence', () => {
     );
   });
 
+  it.each([
+    {
+      sentIds: [],
+      wrongRecipient: false,
+      error: 'Sent identity is not unique',
+    },
+    {
+      sentIds: ['archive-association', 'sent-association'],
+      wrongRecipient: false,
+      error: 'Sent identity is not unique',
+    },
+    {
+      sentIds: ['sent-association'],
+      wrongRecipient: true,
+      error: 'participant evidence conflicts',
+    },
+  ])(
+    'rejects unsafe IMAP adoption: $sentIds / wrong recipient $wrongRecipient',
+    async ({ sentIds, wrongRecipient, error }) => {
+      const imapMessage = {
+        ...message,
+        externalId: message.headerMessageId,
+        isImapSmtpHeaderFallback: true,
+        participants: [
+          ...message.participants,
+          {
+            role: MessageParticipantRole.TO,
+            handle: 'creator@example.com',
+            displayName: 'Creator',
+          },
+        ],
+      };
+      const owners = [expectedId, otherId].map((id) => ({
+        ...message,
+        id,
+        messageThreadId: 'thread-id',
+      }));
+      const associations = owners.map((owner, index) => ({
+        id: index === 0 ? 'archive-association' : 'sent-association',
+        messageId: owner.id,
+        messageChannelId: channelId,
+        messageExternalId: index === 0 ? 'Archive:101' : 'Sent:202',
+        messageThreadExternalId: message.messageThreadExternalId,
+        direction: message.direction,
+        message: owner,
+      }));
+      const harness = saveHarness({
+        messagesByHeader: owners,
+        messagesByExpectedId: [],
+        associations,
+        threadAssociations: associations,
+        participants: owners.flatMap((owner) =>
+          imapMessage.participants.map((participant) => ({
+            ...participant,
+            handle:
+              wrongRecipient && participant.role === MessageParticipantRole.TO
+                ? 'someone-else@example.com'
+                : participant.handle,
+            messageId: owner.id,
+          })),
+        ),
+      });
+      const query = jest.fn().mockResolvedValue(sentIds.map((id) => ({ id })));
+      await expect(
+        harness.service.saveMessagesWithinTransaction(
+          [imapMessage] as never,
+          channelId,
+          { queryRunner: { query } } as unknown as WorkspaceEntityManager,
+          workspaceId,
+        ),
+      ).rejects.toThrow(error);
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('folder."isSentFolder"=true'),
+        [['archive-association', 'sent-association'], workspaceId, channelId],
+      );
+      expect(harness.messageRepository.insert).not.toHaveBeenCalled();
+      expect(harness.associationRepository.insert).not.toHaveBeenCalled();
+    },
+  );
+
   it('keeps deterministic identity strict unless adoption is explicitly enabled', async () => {
     const persisted = {
       id: otherId,

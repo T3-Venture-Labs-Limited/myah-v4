@@ -69,6 +69,11 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
       'crossAccountOccurrence',
       'crossAccountAttempt',
       'crossAccountMessage',
+      'duplicateOccurrence',
+      'duplicateAttempt',
+      'duplicateMessage',
+      'sentFolder',
+      'archiveFolder',
       'workflow',
       'workflowVersion',
       'account',
@@ -94,6 +99,11 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
       external: 'myah-400-cross-account',
       thread: 'myah-400-cross-account-thread',
     },
+    duplicateImport: {
+      header: '<myah-400-duplicate-import@example.com>',
+      external: '<myah-400-duplicate-import@example.com>',
+      thread: '<myah-400-duplicate-import@example.com>',
+    },
   } as const;
 
   const persistOrdinaryImport = async ({
@@ -102,12 +112,14 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
     connectedAccountId = ids.account,
     sender = 'myah-400-sender@example.com',
     receivedAt,
+    copies,
   }: {
     identity: (typeof evidence)[keyof typeof evidence];
     messageChannelId?: string;
     connectedAccountId?: string;
     sender?: string;
     receivedAt: Date;
+    copies?: Array<{ externalId: string; messageFolderIds: string[] }>;
   }) => {
     const save =
       getDomainService<MessagingSaveMessagesAndEnqueueContactCreationService>(
@@ -121,32 +133,33 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
     return orm.executeInWorkspaceContext(
       () =>
         save.saveMessagesAndEnqueueContactCreation(
-          [
-            {
-              externalId: identity.external,
-              headerMessageId: identity.header,
-              messageThreadExternalId: identity.thread,
-              subject: 'Subject',
-              text: 'Body',
-              receivedAt: receivedAt.toISOString() as never,
-              providerOccurredAt: receivedAt.toISOString(),
-              direction: MessageDirection.OUTGOING,
-              attachments: [],
-              participants: [
-                {
-                  role: MessageParticipantRole.FROM,
-                  handle: sender.toUpperCase(),
-                  displayName: 'Imported Sender',
-                },
-                {
-                  role: MessageParticipantRole.TO,
-                  handle: 'Creator@Example.com',
-                  displayName: 'Imported Creator',
-                },
-              ],
-              isDraft: false,
-            },
-          ],
+          (
+            copies ?? [{ externalId: identity.external, messageFolderIds: [] }]
+          ).map((copy) => ({
+            externalId: copy.externalId,
+            headerMessageId: identity.header,
+            messageThreadExternalId: identity.thread,
+            subject: 'Subject',
+            text: 'Body',
+            receivedAt,
+            providerOccurredAt: receivedAt.toISOString(),
+            direction: MessageDirection.OUTGOING,
+            attachments: [],
+            participants: [
+              {
+                role: MessageParticipantRole.FROM,
+                handle: sender.toUpperCase(),
+                displayName: 'Imported Sender',
+              },
+              {
+                role: MessageParticipantRole.TO,
+                handle: 'Creator@Example.com',
+                displayName: 'Imported Creator',
+              },
+            ],
+            messageFolderIds: copy.messageFolderIds,
+            isDraft: false,
+          })),
           {
             id: messageChannelId,
             isContactAutoCreationEnabled: false,
@@ -209,6 +222,14 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
         ],
       );
       await manager.query(
+        `INSERT INTO core."messageFolder"
+         (id,"workspaceId",name,"isSentFolder","isSynced","externalId","messageChannelId")
+         VALUES
+         ($1,$2,'Sent',true,true,'Sent:1',$3),
+         ($4,$2,'Archive',false,true,'Archive:1',$3)`,
+        [ids.sentFolder, workspaceId, ids.channel, ids.archiveFolder],
+      );
+      await manager.query(
         `INSERT INTO "${schemaName}".campaign (id,name) VALUES ($1,'MYAH-400 projection')`,
         [ids.campaign],
       );
@@ -248,7 +269,7 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
         `INSERT INTO core."campaignActivation"
          (id,"workspaceId","campaignId","campaignExecutionId","authorizationId","authorizationGeneration",
           "workflowVersionId","activatedAt","createdEnrollmentCount","createdOccurrenceCount")
-         VALUES ($1,$2,$3,$4,$5,1,$6,now(),1,3)`,
+         VALUES ($1,$2,$3,$4,$5,1,$6,now(),1,4)`,
         [
           ids.activation,
           workspaceId,
@@ -262,7 +283,7 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
         `INSERT INTO core."campaignEnrollment"
          (id,"workspaceId","campaignId","campaignExecutionId","authorizationId","authorizationGeneration",
           "campaignCreatorId","creatorId","authoredMessageCount","nextAuthoredMessageIndex",state,"enrolledAt")
-         VALUES ($1,$2,$3,$4,$5,1,$6,$7,3,3,'ACTIVE',now())`,
+         VALUES ($1,$2,$3,$4,$5,1,$6,$7,4,4,'ACTIVE',now())`,
         [
           ids.enrollment,
           workspaceId,
@@ -294,6 +315,13 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
           messageId: ids.crossAccountMessage,
           authoredMessageIndex: 2,
           evidence: evidence.crossAccount,
+        },
+        {
+          attemptId: ids.duplicateAttempt,
+          occurrenceId: ids.duplicateOccurrence,
+          messageId: ids.duplicateMessage,
+          authoredMessageIndex: 3,
+          evidence: evidence.duplicateImport,
         },
       ];
       for (const attempt of attempts) {
@@ -370,11 +398,13 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
         ids.attempt,
         ids.importFirstAttempt,
         ids.crossAccountAttempt,
+        ids.duplicateAttempt,
       ];
       const occurrenceIds = [
         ids.occurrence,
         ids.importFirstOccurrence,
         ids.crossAccountOccurrence,
+        ids.duplicateOccurrence,
       ];
       const persisted = (await manager.query(
         `SELECT DISTINCT m.id,m."messageThreadId"
@@ -428,6 +458,10 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
       await manager.query(`DELETE FROM core."campaignExecution" WHERE id=$1`, [
         ids.execution,
       ]);
+      await manager.query(
+        `DELETE FROM core."messageFolder" WHERE id=ANY($1::uuid[])`,
+        [[ids.sentFolder, ids.archiveFolder]],
+      );
       await manager.query(
         `DELETE FROM core."messageChannel" WHERE id=ANY($1::uuid[])`,
         [channelIds],
@@ -510,11 +544,13 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
         receivedAt: persistedBeforeReplay.providerAcceptedAt,
       }),
     );
+    // Keep the Date in the application realm used by the real workspace ORM.
+    persistedBeforeReplay.providerAcceptedAt.setTime(
+      persistedBeforeReplay.providerAcceptedAt.getTime() + 1000,
+    );
     const ordinaryImport = await persistOrdinaryImport({
       identity: evidence.projectionFirst,
-      receivedAt: new Date(
-        persistedBeforeReplay.providerAcceptedAt.getTime() + 1000,
-      ),
+      receivedAt: persistedBeforeReplay.providerAcceptedAt,
     });
     expect(
       ordinaryImport?.messageExternalIdsAndIdsMap.get(
@@ -565,9 +601,8 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
       `SELECT "providerAcceptedAt" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
       [ids.importFirstAttempt],
     );
-    const importedReceivedAt = new Date(
-      attemptBeforeImport.providerAcceptedAt.getTime() + 1000,
-    );
+    const importedReceivedAt = attemptBeforeImport.providerAcceptedAt;
+    importedReceivedAt.setTime(importedReceivedAt.getTime() + 1000);
     const [ordinaryImport, concurrentReplay] = await Promise.all([
       persistOrdinaryImport({
         identity: evidence.importFirst,
@@ -698,5 +733,113 @@ describe('Campaign accepted-send projection workspace ORM boundary', () => {
       campaign_associations: 0,
       deterministic_messages: 0,
     });
+  });
+
+  it('adopts the unique Sent copy after one IMAP batch imports distinct folder UIDs for the same header', async () => {
+    const orm = getDomainService<GlobalWorkspaceOrmManager>(
+      'GlobalWorkspaceOrmManager',
+    );
+    const projection = getDomainService<CampaignSentProjectionService>(
+      'CampaignSentProjectionService',
+    );
+    await global.testDataSource.query(
+      `UPDATE core."connectedAccount" SET provider='imap_smtp_caldav' WHERE id=$1`,
+      [ids.account],
+    );
+    await global.testDataSource.query(
+      `UPDATE core."outboundEmailAttempt"
+          SET provider='imap_smtp_caldav',"providerMessageExternalId"=NULL,
+              "providerThreadExternalId"=NULL,"resolvedThreadExternalId"="providerHeaderMessageId"
+        WHERE "attemptId"=$1`,
+      [ids.duplicateAttempt],
+    );
+    const [attempt] = await global.testDataSource.query(
+      `SELECT "providerAcceptedAt" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
+      [ids.duplicateAttempt],
+    );
+    const imported = await persistOrdinaryImport({
+      identity: evidence.duplicateImport,
+      receivedAt: attempt.providerAcceptedAt,
+      copies: [
+        { externalId: 'Archive:101', messageFolderIds: [ids.archiveFolder] },
+        { externalId: 'Sent:202', messageFolderIds: [ids.sentFolder] },
+      ],
+    });
+    const archiveMessageId =
+      imported?.messageExternalIdsAndIdsMap.get('Archive:101');
+    const sentMessageId = imported?.messageExternalIdsAndIdsMap.get('Sent:202');
+    expect(archiveMessageId).toEqual(expect.any(String));
+    expect(sentMessageId).toEqual(expect.any(String));
+    expect(archiveMessageId).not.toBe(sentMessageId);
+
+    const mailboxCopiesQuery = `SELECT m.id,association."messageExternalId",folder.id AS "folderId",folder."isSentFolder"
+         FROM "${schemaName}".message m
+         JOIN "${schemaName}"."messageChannelMessageAssociation" association ON association."messageId"=m.id
+         JOIN "${schemaName}"."messageChannelMessageAssociationMessageFolder" link
+           ON link."messageChannelMessageAssociationId"=association.id
+         JOIN core."messageFolder" folder ON folder.id=link."messageFolderId"
+        WHERE m."headerMessageId"=$1 ORDER BY association."messageExternalId"`;
+    const beforeProjection = await global.testDataSource.query(
+      mailboxCopiesQuery,
+      [evidence.duplicateImport.header],
+    );
+    expect(beforeProjection).toEqual([
+      {
+        id: archiveMessageId,
+        messageExternalId: 'Archive:101',
+        folderId: ids.archiveFolder,
+        isSentFolder: false,
+      },
+      {
+        id: sentMessageId,
+        messageExternalId: 'Sent:202',
+        folderId: ids.sentFolder,
+        isSentFolder: true,
+      },
+    ]);
+
+    const coordinate = {
+      workspaceId,
+      campaignId: ids.campaign,
+      connectedAccountId: ids.account,
+      messageChannelId: ids.channel,
+      attemptId: ids.duplicateAttempt,
+    };
+    await expect(
+      orm.executeInWorkspaceContext(
+        () => projection.reconcile(coordinate),
+        buildSystemAuthContext(workspaceId),
+      ),
+    ).resolves.toBe('PROJECTED');
+    await expect(
+      orm.executeInWorkspaceContext(
+        () => projection.reconcile(coordinate),
+        buildSystemAuthContext(workspaceId),
+      ),
+    ).resolves.toBe('EXACT_REPLAY');
+
+    const [afterProjection] = await global.testDataSource.query(
+      `SELECT "projectedMessageId","projectedMessageThreadId",
+              (SELECT count(*)::int FROM "${schemaName}".message WHERE "headerMessageId"=$2) owners,
+              (SELECT count(*)::int FROM "${schemaName}"."messageChannelMessageAssociation"
+                WHERE "messageExternalId"=ANY($3::text[])) mailbox_associations
+         FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
+      [
+        ids.duplicateAttempt,
+        evidence.duplicateImport.header,
+        ['Archive:101', 'Sent:202'],
+      ],
+    );
+    expect(afterProjection).toEqual({
+      projectedMessageId: sentMessageId,
+      projectedMessageThreadId: expect.any(String),
+      owners: 2,
+      mailbox_associations: 2,
+    });
+    expect(
+      await global.testDataSource.query(mailboxCopiesQuery, [
+        evidence.duplicateImport.header,
+      ]),
+    ).toEqual(beforeProjection);
   });
 });

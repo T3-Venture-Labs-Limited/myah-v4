@@ -1,4 +1,7 @@
-import { MessageParticipantRole } from 'twenty-shared/types';
+import {
+  ConnectedAccountProvider,
+  MessageParticipantRole,
+} from 'twenty-shared/types';
 
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
@@ -78,6 +81,33 @@ describe('formatSentMessage', () => {
     expect(message.messageThreadExternalId).toBe('<msg-2@mail.example>');
     expect(message.headerMessageId).toBe('<msg-2@mail.example>');
   });
+
+  it.each([
+    [ConnectedAccountProvider.IMAP_SMTP_CALDAV, undefined, true, true],
+    [ConnectedAccountProvider.IMAP_SMTP_CALDAV, 'Sent:202', true, undefined],
+    [ConnectedAccountProvider.IMAP_SMTP_CALDAV, undefined, false, undefined],
+    [ConnectedAccountProvider.GOOGLE, undefined, true, undefined],
+    [ConnectedAccountProvider.MICROSOFT, undefined, true, undefined],
+  ])(
+    'marks only verified IMAP header-fallback adoption (%s, %s, %s)',
+    (provider, messageExternalId, allowExpectedMessageIdAdoption, expected) => {
+      const message = formatSentMessage(
+        buildInput({
+          connectedAccount: {
+            handle: 'sender@example.com',
+            provider,
+          } as ConnectedAccountEntity,
+          sendResult: {
+            headerMessageId: '<msg@mail.example>',
+            messageExternalId,
+          },
+          expectedMessageId: '00000000-0000-4000-8000-000000000010',
+          allowExpectedMessageIdAdoption,
+        }),
+      );
+      expect(message.isImapSmtpHeaderFallback).toBe(expected);
+    },
+  );
 
   it('should persist IMAP/SMTP replies under the parent thread external id rather than the immediate parent Message-ID', () => {
     const message = formatSentMessage(

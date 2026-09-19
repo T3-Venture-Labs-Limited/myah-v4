@@ -152,8 +152,12 @@ export class MessagingMessageService {
           new Set(expectedMessageIds).size !== expectedMessageIds.length ||
           messages.some(
             (message) =>
-              message.allowExpectedMessageIdAdoption === true &&
-              message.expectedMessageId === undefined,
+              (message.allowExpectedMessageIdAdoption === true &&
+                message.expectedMessageId === undefined) ||
+              (message.isImapSmtpHeaderFallback === true &&
+                (message.allowExpectedMessageIdAdoption !== true ||
+                  !message.headerMessageId?.trim() ||
+                  message.externalId !== message.headerMessageId)),
           )
         ) {
           throw new Error('Expected Message identities are invalid');
@@ -226,7 +230,36 @@ export class MessagingMessageService {
           transactionManager,
         );
 
-        this.requireExactDeterministicReplayEvidence({
+        let sentAssociationIds = new Set<string>();
+        if (
+          messages.some((message) => message.isImapSmtpHeaderFallback) &&
+          existingMessageChannelMessageAssociations.length > 0
+        ) {
+          if (!transactionQuery) {
+            throw new Error(
+              'IMAP Sent evidence requires an active transaction',
+            );
+          }
+          // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          const sentAssociations: { id: string }[] = await transactionQuery(
+            `SELECT DISTINCT link."messageChannelMessageAssociationId" AS id
+               FROM "${getWorkspaceSchemaName(workspaceId)}"."messageChannelMessageAssociationMessageFolder" link
+               JOIN core."messageFolder" folder ON folder.id=link."messageFolderId"
+              WHERE link."messageChannelMessageAssociationId"=ANY($1::uuid[])
+                AND folder."workspaceId"=$2 AND folder."messageChannelId"=$3
+                AND folder."isSentFolder"=true`,
+            [
+              existingMessageChannelMessageAssociations.map(({ id }) => id),
+              workspaceId,
+              messageChannelId,
+            ],
+          );
+          sentAssociationIds = new Set(sentAssociations.map(({ id }) => id));
+        }
+
+        const verifiedMessages = this.requireExactDeterministicReplayEvidence({
+          sentAssociationIds,
           associations: existingMessageChannelMessageAssociations,
           messages,
           messagesByExpectedId,
@@ -240,6 +273,7 @@ export class MessagingMessageService {
           messages,
           messageAccumulatorMap,
           existingMessagesInDB,
+          verifiedMessages,
         );
 
         await this.enrichMessageAccumulatorWithExistingMessageThreadIds(
@@ -679,7 +713,9 @@ export class MessagingMessageService {
       'messageThreadExternalId' | 'message'
     >[];
     participants: MessageParticipantWorkspaceEntity[];
-  }): void {
+    sentAssociationIds: Set<string>;
+  }): Map<string, MessageWorkspaceEntity> {
+    const verifiedMessages = new Map<string, MessageWorkspaceEntity>();
     const participantKey = (participant: {
       role: unknown;
       handle: unknown;
@@ -703,7 +739,7 @@ export class MessagingMessageService {
 
     for (const message of input.messages) {
       if (message.expectedMessageId === undefined) continue;
-      const headerOwners = input.messagesByHeader.filter(
+      let headerOwners = input.messagesByHeader.filter(
         (persisted) => persisted.headerMessageId === message.headerMessageId,
       );
       const expectedRows = input.messagesByExpectedId.filter(
@@ -713,6 +749,32 @@ export class MessagingMessageService {
         throw new Error('Expected Message identity is not unique');
       }
       const expected = expectedRows[0];
+      if (
+        message.isImapSmtpHeaderFallback &&
+        headerOwners.length > 0 &&
+        !(
+          expected !== undefined &&
+          headerOwners.length === 1 &&
+          input.associations.some(
+            (association) =>
+              association.messageId === expected.id &&
+              association.messageExternalId === message.externalId,
+          )
+        )
+      ) {
+        // SMTP's header is logical evidence, not an IMAP folder:UID locator.
+        // Preserve physical copies; only a unique Sent owner may be adopted.
+        headerOwners = headerOwners.filter((owner) =>
+          input.associations.some(
+            (association) =>
+              association.messageId === owner.id &&
+              input.sentAssociationIds.has(association.id),
+          ),
+        );
+        if (headerOwners.length !== 1) {
+          throw new Error('Expected IMAP Message Sent identity is not unique');
+        }
+      }
       if (
         expected !== undefined &&
         headerOwners.some((persisted) => persisted.id !== expected.id)
@@ -753,7 +815,8 @@ export class MessagingMessageService {
       );
       if (
         associations.length !== 1 ||
-        associations[0].messageExternalId !== message.externalId ||
+        (!message.isImapSmtpHeaderFallback &&
+          associations[0].messageExternalId !== message.externalId) ||
         associations[0].messageThreadExternalId !==
           message.messageThreadExternalId ||
         associations[0].direction !== message.direction
@@ -790,15 +853,25 @@ export class MessagingMessageService {
       ) {
         throw new Error('Expected Message participant evidence conflicts');
       }
+      verifiedMessages.set(message.externalId, persisted);
     }
+    return verifiedMessages;
   }
 
   private async enrichMessageAccumulatorWithExistingMessages(
     messages: MessageWithParticipants[],
     messageAccumulatorMap: Map<string, MessageAccumulator>,
     existingMessagesInDB: MessageWorkspaceEntity[],
+    verifiedMessages: Map<string, MessageWorkspaceEntity>,
   ) {
     for (const message of messages) {
+      const verified = verifiedMessages.get(message.externalId);
+      if (verified) {
+        messageAccumulatorMap.set(message.externalId, {
+          existingMessageInDB: verified,
+        });
+        continue;
+      }
       const expected =
         message.expectedMessageId === undefined
           ? undefined
@@ -951,8 +1024,9 @@ export class MessagingMessageService {
       if (existingMessageChannelMessageAssociation) {
         if (
           message.expectedMessageId !== undefined &&
-          (existingMessageChannelMessageAssociation.messageExternalId !==
-            message.externalId ||
+          ((!message.isImapSmtpHeaderFallback &&
+            existingMessageChannelMessageAssociation.messageExternalId !==
+              message.externalId) ||
             existingMessageChannelMessageAssociation.messageThreadExternalId !==
               message.messageThreadExternalId)
         ) {

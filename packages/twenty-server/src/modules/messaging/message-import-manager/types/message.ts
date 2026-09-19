@@ -28,6 +28,7 @@ export type Message = Omit<
   labelIds?: string[];
   expectedMessageId?: string;
   allowExpectedMessageIdAdoption?: boolean;
+  isImapSmtpHeaderFallback?: boolean;
   providerOccurredAt?: string | null;
 };
 
