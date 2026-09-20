@@ -194,6 +194,8 @@ const MyahInboxPageContent = ({
   );
   const [draftAuthorizationGeneration, setDraftAuthorizationGeneration] =
     useState(0);
+  const [restoringPreservedSelection, setRestoringPreservedSelection] =
+    useState(() => Boolean(preservedReturnSelectionRef.current?.contactId));
   const [inlineTarget, setInlineTarget] = useState<{
     scope: string;
     threadId: string;
@@ -234,6 +236,7 @@ const MyahInboxPageContent = ({
       ? myahInboxFilters
       : { ...myahInboxFilters, campaignId: null, campaignWorkspaceId: null };
   const contacts = useMyahInboxContacts(workspaceFilters, workspaceId);
+  const refreshContacts = contacts.refresh;
   const currentSelection =
     myahInboxContactSelection.workspaceId === workspaceId
       ? myahInboxContactSelection
@@ -408,8 +411,43 @@ const MyahInboxPageContent = ({
   }, [commitContactSelection, store]);
 
   useEffect(() => {
+    const preserved = preservedReturnSelectionRef.current;
+    if (
+      !restoringPreservedSelection ||
+      contacts.loading ||
+      contacts.error ||
+      !workspaceId ||
+      !preserved?.contactId
+    )
+      return;
+
+    let active = true;
+    void refreshContacts(preserved.contactId).then((result) => {
+      if (!active) return;
+      if (result.status === 'success' && result.selectedContact) {
+        setRetainedContact(result.selectedContact);
+      } else {
+        commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
+      }
+      setRestoringPreservedSelection(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    commitContactSelection,
+    contacts.error,
+    contacts.loading,
+    refreshContacts,
+    restoringPreservedSelection,
+    workspaceId,
+  ]);
+
+  useEffect(() => {
     if (
       pendingDestination ||
+      restoringPreservedSelection ||
       contacts.loading ||
       contacts.error ||
       !workspaceId
@@ -458,6 +496,7 @@ const MyahInboxPageContent = ({
     contacts.error,
     contacts.loading,
     currentSelection,
+    restoringPreservedSelection,
     invalidateWorkspace,
     selectedContact,
     commitContactSelection,

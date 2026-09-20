@@ -16,6 +16,7 @@ export type PersistSentMessageInput = {
   parentThreadExternalId?: string;
   workspaceId: string;
   expectedMessageId?: string;
+  allowExpectedMessageIdAdoption?: boolean;
   providerAcceptedAt?: Date;
   transactionManager?: WorkspaceEntityManager;
   captureContactsToCreate?: (

@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
+import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 
 const rows = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) && Array.isArray(value[0])
@@ -12,7 +13,11 @@ const rows = (value: unknown): Record<string, unknown>[] =>
 
 @Injectable()
 export class CampaignReplyService {
-  constructor(private readonly progression: CampaignProgressionService) {}
+  constructor(
+    private readonly progression: CampaignProgressionService,
+    @Optional()
+    private readonly timelineEventWriter?: CampaignTimelineEventWriterService,
+  ) {}
 
   async reconcileInboundMessageInTransaction(
     input: {
@@ -31,7 +36,7 @@ export class CampaignReplyService {
     if (!from || !input.threadExternalId.trim()) return;
     const matches = rows(
       await runner.query(
-        `SELECT a."workspaceId",a."campaignId",a."enrollmentId",a."authorizationId",auth.generation AS "authorizationGeneration",act.id AS "activationId",a."workflowVersionId",a."occurrenceId",a."connectedAccountId",a."messageChannelId",a."attemptId",e."campaignCreatorId"
+        `SELECT a."workspaceId",a."campaignId",a."enrollmentId",a."authorizationId",auth.generation AS "authorizationGeneration",act.id AS "activationId",a."workflowVersionId",a."occurrenceId",a."connectedAccountId",a."messageChannelId",a."attemptId",e."campaignCreatorId",e."creatorId"
          FROM core."outboundEmailAttempt" a
          JOIN core."campaignEnrollment" e ON e.id=a."enrollmentId" AND e."workspaceId"=a."workspaceId" AND e.state='ACTIVE'
          JOIN core."campaignSequenceAuthorization" auth ON auth."authorizationId"=a."authorizationId" AND auth."workspaceId"=a."workspaceId" AND auth."campaignId"=a."campaignId"
@@ -65,13 +70,44 @@ export class CampaignReplyService {
       manager,
     );
     if (result.status === 'EXACT_REPLAY') return;
-    await manager
-      .createQueryBuilder()
-      .update(`${getWorkspaceSchemaName(input.workspaceId)}.campaignCreator`)
-      .set({ stage: 'NEGOTIATING', updatedAt: () => 'clock_timestamp()' })
-      .where('id = :id', { id: match.campaignCreatorId })
-      .andWhere("stage IN ('READY', 'CONTACTED')")
-      .andWhere('"deletedAt" IS NULL')
-      .execute();
+    // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+    const schemaName = getWorkspaceSchemaName(input.workspaceId);
+    const stageUpdates = rows(
+      // pi-lens-ignore: sql-injection, no-sql-in-code
+      await runner.query(
+        `UPDATE "${schemaName}"."campaignCreator"
+         SET stage='NEGOTIATING', "updatedAt"=clock_timestamp()
+         WHERE id=$1 AND "campaignId"=$2
+           AND stage IN ('READY', 'CONTACTED') AND "deletedAt" IS NULL
+         RETURNING id`,
+        [match.campaignCreatorId, match.campaignId],
+      ),
+    );
+    if (stageUpdates.length === 1 && this.timelineEventWriter) {
+      const happenedAtRows = rows(
+        await runner.query('SELECT clock_timestamp() AS "happenedAt"'),
+      );
+      const happenedAt = new Date(
+        String(happenedAtRows[0]?.happenedAt),
+      ).toISOString();
+      await this.timelineEventWriter.writeInTransaction(
+        {
+          manager,
+          workspaceId: input.workspaceId,
+          campaignId: String(match.campaignId),
+        },
+        {
+          businessEventKey: `reply-stage:${input.inboundEvidenceId}:NEGOTIATING`,
+          eventKind: 'STAGE_CHANGED',
+          happenedAt,
+          sourceId: input.inboundEvidenceId,
+          sourceType: 'MESSAGE',
+          creatorId: String(match.creatorId),
+          messageId: input.inboundEvidenceId,
+          stageValue: 'NEGOTIATING',
+          stageLabel: 'Negotiating',
+        },
+      );
+    }
   }
 }

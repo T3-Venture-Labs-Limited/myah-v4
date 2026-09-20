@@ -21,7 +21,7 @@ type CampaignSignatureMaterial = Readonly<{ html: string | null }> | null;
 
 type CampaignRichTextSignature = Readonly<{
   markdown: string;
-  blocknote: string;
+  blocknote: string | null;
 }>;
 
 type CampaignSignatureStorageRow = Readonly<{
@@ -40,11 +40,13 @@ const getSignatureMaterial = (
     typeof emailSignature === 'object' &&
     emailSignature !== null &&
     !Array.isArray(emailSignature) &&
-    typeof (emailSignature as CampaignRichTextSignature).markdown ===
-      'string' &&
-    typeof (emailSignature as CampaignRichTextSignature).blocknote === 'string'
+    typeof (emailSignature as CampaignRichTextSignature).markdown === 'string'
   ) {
-    return { html: (emailSignature as CampaignRichTextSignature).markdown };
+    const { markdown, blocknote } = emailSignature as CampaignRichTextSignature;
+
+    // Workspace ORM hydrates the untouched storage NULL pair to this shape.
+    if (markdown === '' && blocknote === null) return { html: null };
+    if (typeof blocknote === 'string') return { html: markdown };
   }
 
   return undefined;

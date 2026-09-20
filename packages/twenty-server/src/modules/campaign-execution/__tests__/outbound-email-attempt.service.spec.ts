@@ -1725,6 +1725,7 @@ describe('frozen outcome semantics', () => {
       'getReceipt',
       'recordAcceptedFromState',
       'recordDefinitelyUnacceptedFromState',
+      'writeCampaignAttemptEvent',
       'requirePositiveReservationCount',
       'sampleObservedAt',
       'isExpectedSender',

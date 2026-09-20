@@ -28,7 +28,7 @@ describe('Campaign Creator journey-stage contract', () => {
       }),
       expect.objectContaining({
         value: 'ONBOARDED',
-        label: 'Onboarded',
+        label: 'Deal accepted',
         position: 3,
       }),
       expect.objectContaining({
@@ -37,20 +37,25 @@ describe('Campaign Creator journey-stage contract', () => {
         position: 4,
       }),
       expect.objectContaining({
+        value: 'PRODUCT_RECEIVED',
+        label: 'Product received',
+        position: 5,
+      }),
+      expect.objectContaining({
         value: 'WAITING_FOR_POST',
         label: 'Waiting on post',
-        position: 5,
+        position: 6,
       }),
       expect.objectContaining({
         value: 'POSTED',
         label: 'Posted',
-        position: 6,
+        position: 7,
       }),
       expect.objectContaining({
         id: 'b03a494e-e909-50a1-8c41-1c7e1644a334',
         value: 'DROPPED',
         label: 'Dropped',
-        position: 7,
+        position: 8,
       }),
     ]);
     expect(

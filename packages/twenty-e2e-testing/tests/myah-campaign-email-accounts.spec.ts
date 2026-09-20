@@ -47,9 +47,9 @@ const createCampaignMutation = `
   }
 `;
 
-const deleteCampaignMutation = `
-  mutation DeleteCampaign($campaignId: UUID!) {
-    deleteCampaign(id: $campaignId) { id }
+const destroyCampaignMutation = `
+  mutation DestroyCampaign($campaignId: UUID!) {
+    destroyCampaign(id: $campaignId) { id }
   }
 `;
 
@@ -265,7 +265,7 @@ test.afterEach(async ({ page }, testInfo) => {
       await postGraphqlWithAuth(
         page.request,
         authToken,
-        deleteCampaignMutation,
+        destroyCampaignMutation,
         {
           campaignId,
         },

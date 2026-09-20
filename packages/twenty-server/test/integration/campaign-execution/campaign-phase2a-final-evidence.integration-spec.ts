@@ -459,38 +459,44 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
         };
       },
     };
+    const connectedAccount = {
+      id: id.account,
+      workspaceId: id.workspace,
+      handle: 'sender@example.com',
+      handleAliases: [],
+    };
+    const messageChannel = {
+      id: id.channel,
+      workspaceId: id.workspace,
+      connectedAccountId: id.account,
+      handle: 'sender@example.com',
+      type: 'EMAIL',
+      connectedAccount,
+    };
+    const queryBuilderFor = (result: unknown) => {
+      const builder = {
+        leftJoinAndSelect: () => builder,
+        where: () => builder,
+        andWhere: () => builder,
+        getOneOrFail: async () => result,
+      };
+
+      return builder;
+    };
     const sentPersistence = new SentMessagePersistenceService(
-      {} as never,
+      {
+        createQueryBuilder: () => queryBuilderFor(messageChannel),
+      } as never,
       saveService as never,
     );
     const projectionDataSource = {
-      transaction: (work: (manager: EntityManager) => unknown) =>
-        dataSource.transaction(async (manager) => {
-          manager.getRepository = ((entity: { name?: string }) => ({
-            findOneOrFail: async () =>
-              entity.name === 'ConnectedAccountEntity'
-                ? {
-                    id: id.account,
-                    workspaceId: id.workspace,
-                    handle: 'sender@example.com',
-                    handleAliases: [],
-                  }
-                : {
-                    id: id.channel,
-                    workspaceId: id.workspace,
-                    connectedAccountId: id.account,
-                    handle: 'sender@example.com',
-                    type: 'EMAIL',
-                    connectedAccount: {
-                      id: id.account,
-                      workspaceId: id.workspace,
-                      handle: 'sender@example.com',
-                      handleAliases: [],
-                    },
-                  },
-          })) as never;
-          return work(manager);
+      coreDataSource: {
+        getRepository: () => ({
+          createQueryBuilder: () => queryBuilderFor(connectedAccount),
         }),
+      },
+      transaction: (work: (manager: EntityManager) => Promise<unknown>) =>
+        dataSource.transaction(work),
     };
     projection = new CampaignSentProjectionService(
       {

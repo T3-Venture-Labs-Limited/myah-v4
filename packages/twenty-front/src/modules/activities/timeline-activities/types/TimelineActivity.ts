@@ -3,6 +3,7 @@ import { type WorkspaceMember } from '~/generated-metadata/graphql';
 
 export type TimelineActivity = {
   id: string;
+  happensAt: string;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -14,7 +15,7 @@ export type TimelineActivity = {
   linkedRecordId: string | null;
   linkedObjectMetadataId: string | null;
   __typename: 'TimelineActivity';
-} & Record<string, any>;
+} & Record<string, unknown>;
 
 export type TimelineActivityWithRecord = TimelineActivity & {
   linkedRecordId: string;

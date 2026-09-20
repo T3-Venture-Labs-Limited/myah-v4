@@ -5,6 +5,7 @@ import { DataSource, type QueryRunner } from 'typeorm';
 
 import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794327-create-campaign-execution-authority-foundation';
 import { AddCampaignDispatchEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789066100000-add-campaign-dispatch-evidence';
+import { AddCampaignOperatorExclusionReasonFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971536-add-campaign-operator-exclusion-reason';
 import { setPgDateTypeParser } from 'src/database/pg/set-pg-date-type-parser';
 import { CampaignTestPreparationProofService } from 'src/engine/core-modules/campaign-test-authority/services/campaign-test-preparation-proof.service';
 import { WorkspaceCampaignCapacityTimeZoneService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone.service';
@@ -2372,6 +2373,9 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
         new CreateCampaignExecutionAuthorityFoundationFastInstanceCommand();
       const dispatchEvidenceCommand =
         new AddCampaignDispatchEvidenceFastInstanceCommand();
+      const operatorExclusionCommand =
+        new AddCampaignOperatorExclusionReasonFastInstanceCommand();
+      await operatorExclusionCommand.down(runner);
       await dispatchEvidenceCommand.down(runner);
       await command.down(runner);
       expect(
@@ -2402,6 +2406,7 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
       ).toEqual(unaffectedCatalog);
       await command.up(runner);
       await dispatchEvidenceCommand.up(runner);
+      await operatorExclusionCommand.up(runner);
       expect(
         await runner.query(
           `SELECT jsonb_agg(jsonb_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull)

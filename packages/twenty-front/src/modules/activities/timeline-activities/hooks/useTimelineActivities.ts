@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 
+import { FIND_MANY_TIMELINE_ACTIVITIES_ORDER_BY } from '@/activities/timeline-activities/constants/FindManyTimelineActivitiesOrderBy';
 import { useLinkedObjectsTitle } from '@/activities/timeline-activities/hooks/useLinkedObjectsTitle';
 import { type TimelineActivity } from '@/activities/timeline-activities/types/TimelineActivity';
 import { type ActivityTargetableObject } from '@/activities/types/ActivityTargetableEntity';
@@ -72,11 +73,7 @@ export const useTimelineActivities = (
     skip: !hasTimelineActivityField,
     objectNameSingular: CoreObjectNameSingular.TimelineActivity,
     filter,
-    orderBy: [
-      {
-        createdAt: 'DescNullsFirst',
-      },
-    ],
+    orderBy: FIND_MANY_TIMELINE_ACTIVITIES_ORDER_BY,
     recordGqlFields: depthOneRecordGqlFields,
     fetchPolicy: 'cache-and-network',
   });

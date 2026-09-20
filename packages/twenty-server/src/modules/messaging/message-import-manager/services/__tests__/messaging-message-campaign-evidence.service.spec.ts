@@ -16,6 +16,7 @@ describe('MessagingMessageService Campaign evidence', () => {
   const receivedAt = new Date('2026-09-11T10:00:00.000Z');
   const message = {
     expectedMessageId: expectedId,
+    allowExpectedMessageIdAdoption: true,
     externalId: 'provider-external',
     headerMessageId: '<accepted@example.com>',
     messageThreadExternalId: 'provider-thread',
@@ -82,14 +83,189 @@ describe('MessagingMessageService Campaign evidence', () => {
     };
   };
 
-  it('rejects a header-owned different Message when the expected row is absent before writes', async () => {
+  it('adopts an import-first Message only with exact channel, thread, content, and participant evidence', async () => {
+    const persisted = {
+      id: otherId,
+      headerMessageId: message.headerMessageId,
+      messageThreadId: 'thread-id',
+      subject: message.subject,
+      text: message.text,
+      isDraft: message.isDraft,
+      receivedAt: new Date('2026-09-11T10:00:01.000Z'),
+    };
+    const association = {
+      id: 'association-id',
+      messageId: otherId,
+      messageChannelId: channelId,
+      messageExternalId: message.externalId,
+      messageThreadExternalId: message.messageThreadExternalId,
+      direction: message.direction,
+    };
     const harness = saveHarness({
       messagesByExpectedId: [],
-      messagesByHeader: [
+      messagesByHeader: [persisted],
+      associations: [association],
+      threadAssociations: [{ ...association, message: persisted }],
+      participants: [
         {
-          id: otherId,
-          headerMessageId: message.headerMessageId,
-          messageThreadId: 'thread-id',
+          ...message.participants[0],
+          handle: ' Sender@Example.com ',
+          displayName: 'Imported Sender',
+          messageId: otherId,
+        },
+      ],
+    });
+
+    await expect(
+      harness.service.saveMessagesWithinTransaction(
+        [message] as never,
+        channelId,
+        {} as WorkspaceEntityManager,
+        workspaceId,
+      ),
+    ).resolves.toMatchObject({
+      messageExternalIdsAndIdsMap: new Map([[message.externalId, otherId]]),
+      messageExternalIdToMessageThreadIdMap: new Map([
+        [message.externalId, 'thread-id'],
+      ]),
+    });
+    expect(harness.messageRepository.insert).toHaveBeenCalledWith(
+      [],
+      expect.anything(),
+    );
+    expect(harness.associationRepository.insert).toHaveBeenCalledWith(
+      [],
+      expect.anything(),
+    );
+  });
+
+  it.each([
+    {
+      sentIds: [],
+      wrongRecipient: false,
+      error: 'Sent identity is not unique',
+    },
+    {
+      sentIds: ['archive-association', 'sent-association'],
+      wrongRecipient: false,
+      error: 'Sent identity is not unique',
+    },
+    {
+      sentIds: ['sent-association'],
+      wrongRecipient: true,
+      error: 'participant evidence conflicts',
+    },
+  ])(
+    'rejects unsafe IMAP adoption: $sentIds / wrong recipient $wrongRecipient',
+    async ({ sentIds, wrongRecipient, error }) => {
+      const imapMessage = {
+        ...message,
+        externalId: message.headerMessageId,
+        isImapSmtpHeaderFallback: true,
+        participants: [
+          ...message.participants,
+          {
+            role: MessageParticipantRole.TO,
+            handle: 'creator@example.com',
+            displayName: 'Creator',
+          },
+        ],
+      };
+      const owners = [expectedId, otherId].map((id) => ({
+        ...message,
+        id,
+        messageThreadId: 'thread-id',
+      }));
+      const associations = owners.map((owner, index) => ({
+        id: index === 0 ? 'archive-association' : 'sent-association',
+        messageId: owner.id,
+        messageChannelId: channelId,
+        messageExternalId: index === 0 ? 'Archive:101' : 'Sent:202',
+        messageThreadExternalId: message.messageThreadExternalId,
+        direction: message.direction,
+        message: owner,
+      }));
+      const harness = saveHarness({
+        messagesByHeader: owners,
+        messagesByExpectedId: [],
+        associations,
+        threadAssociations: associations,
+        participants: owners.flatMap((owner) =>
+          imapMessage.participants.map((participant) => ({
+            ...participant,
+            handle:
+              wrongRecipient && participant.role === MessageParticipantRole.TO
+                ? 'someone-else@example.com'
+                : participant.handle,
+            messageId: owner.id,
+          })),
+        ),
+      });
+      const query = jest.fn().mockResolvedValue(sentIds.map((id) => ({ id })));
+      await expect(
+        harness.service.saveMessagesWithinTransaction(
+          [imapMessage] as never,
+          channelId,
+          { queryRunner: { query } } as unknown as WorkspaceEntityManager,
+          workspaceId,
+        ),
+      ).rejects.toThrow(error);
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('folder."isSentFolder"=true'),
+        [['archive-association', 'sent-association'], workspaceId, channelId],
+      );
+      expect(harness.messageRepository.insert).not.toHaveBeenCalled();
+      expect(harness.associationRepository.insert).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps deterministic identity strict unless adoption is explicitly enabled', async () => {
+    const persisted = {
+      id: otherId,
+      headerMessageId: message.headerMessageId,
+      messageThreadId: 'thread-id',
+      subject: message.subject,
+      text: message.text,
+      isDraft: message.isDraft,
+      receivedAt,
+    };
+    const harness = saveHarness({
+      messagesByExpectedId: [],
+      messagesByHeader: [persisted],
+    });
+
+    await expect(
+      harness.service.saveMessagesWithinTransaction(
+        [{ ...message, allowExpectedMessageIdAdoption: false }] as never,
+        channelId,
+        {} as WorkspaceEntityManager,
+        workspaceId,
+      ),
+    ).rejects.toThrow(
+      'Expected Message identity conflicts with header identity',
+    );
+    expect(harness.messageRepository.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects an import-first Message without an exact association in this channel', async () => {
+    const persisted = {
+      id: otherId,
+      headerMessageId: message.headerMessageId,
+      messageThreadId: 'thread-id',
+      subject: message.subject,
+      text: message.text,
+      isDraft: message.isDraft,
+      receivedAt,
+    };
+    const harness = saveHarness({
+      messagesByExpectedId: [],
+      messagesByHeader: [persisted],
+      associations: [],
+      threadAssociations: [],
+      participants: [
+        {
+          ...message.participants[0],
+          messageId: otherId,
         },
       ],
     });
@@ -102,7 +278,7 @@ describe('MessagingMessageService Campaign evidence', () => {
         workspaceId,
       ),
     ).rejects.toThrow(
-      'Expected Message identity conflicts with header identity',
+      'Expected Message association conflicts with persisted identity',
     );
     expect(harness.messageRepository.insert).not.toHaveBeenCalled();
     expect(harness.associationRepository.insert).not.toHaveBeenCalled();

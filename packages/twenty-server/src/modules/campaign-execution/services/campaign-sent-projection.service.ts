@@ -119,12 +119,15 @@ export class CampaignSentProjectionService {
         attempt.attemptState !== 'ACCEPTED'
       )
         return 'DEFERRED';
-      const expectedMessageId = computeCampaignProjectedMessageId(
+      const deterministicMessageId = computeCampaignProjectedMessageId(
         input.attemptId,
       );
       const pointerReplay =
-        attempt.projectedMessageId === expectedMessageId &&
-        typeof attempt.projectedMessageThreadId === 'string';
+        isCanonicalUuid(attempt.projectedMessageId) &&
+        isCanonicalUuid(attempt.projectedMessageThreadId);
+      const expectedMessageId = pointerReplay
+        ? attempt.projectedMessageId
+        : deterministicMessageId;
       if (
         (!pointerReplay &&
           (attempt.projectedMessageId !== null ||
@@ -134,14 +137,16 @@ export class CampaignSentProjectionService {
         typeof attempt.resolvedThreadExternalId !== 'string'
       )
         return 'DEFERRED';
-      const connectedAccount = await manager
+      const connectedAccount = await dataSource.coreDataSource
         .getRepository(ConnectedAccountEntity)
-        .findOneOrFail({
-          where: {
-            id: input.connectedAccountId,
-            workspaceId: input.workspaceId,
-          },
-        });
+        .createQueryBuilder('connectedAccount', runner)
+        .where('connectedAccount.id = :connectedAccountId', {
+          connectedAccountId: input.connectedAccountId,
+        })
+        .andWhere('connectedAccount.workspaceId = :workspaceId', {
+          workspaceId: input.workspaceId,
+        })
+        .getOneOrFail();
       const persisted = await this.sentPersistence.persistSentMessage({
         sendResult: {
           headerMessageId:
@@ -169,6 +174,7 @@ export class CampaignSentProjectionService {
           : { parentThreadExternalId: attempt.threadExternalId }),
         workspaceId: input.workspaceId,
         expectedMessageId,
+        allowExpectedMessageIdAdoption: true,
         providerAcceptedAt: attempt.providerAcceptedAt,
         transactionManager: manager as WorkspaceEntityManager,
         captureContactsToCreate: (capturedContactsToCreate) => {
@@ -176,13 +182,23 @@ export class CampaignSentProjectionService {
           connectedAccountForContactCreation = connectedAccount;
         },
       });
-      if (!persisted || persisted.messageId !== expectedMessageId)
+      if (
+        !persisted ||
+        !isCanonicalUuid(persisted.messageId) ||
+        !isCanonicalUuid(persisted.messageThreadId)
+      )
         throw new Error('Campaign sent projection identity conflict');
       if (pointerReplay) {
-        if (persisted.messageThreadId !== attempt.projectedMessageThreadId)
+        if (
+          persisted.messageId !== attempt.projectedMessageId ||
+          persisted.messageThreadId !== attempt.projectedMessageThreadId
+        )
           throw new Error('Campaign sent projection identity conflict');
         return 'EXACT_REPLAY';
       }
+      // A normal mailbox import can persist this provider Message first. The
+      // canonical save chain returns that verified identity instead of creating
+      // a duplicate under the deterministic projection id.
       const changedResult = await runner.query(
         `UPDATE core."outboundEmailAttempt"
             SET "projectedMessageId"=$2,"projectedMessageThreadId"=$3,"updatedAt"=clock_timestamp()

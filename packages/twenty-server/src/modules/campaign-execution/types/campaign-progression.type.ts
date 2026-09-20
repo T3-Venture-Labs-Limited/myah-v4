@@ -41,6 +41,7 @@ export type CampaignOccurrenceClaimResult =
         | 'INVALID_EMAIL'
         | 'DUPLICATE_CREATOR_EMAIL'
         | 'SUPPRESSED_EMAIL'
+        | 'OPERATOR_EXCLUDED'
       >;
     }
   | { status: 'HELD'; reason: CampaignOccurrenceHoldReason }

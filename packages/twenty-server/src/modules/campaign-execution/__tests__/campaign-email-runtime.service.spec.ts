@@ -211,7 +211,7 @@ describe('CampaignEmailRuntimeService', () => {
       expect(call).toHaveLength(2);
   });
 
-  it('loads the core mailbox through the active runner without a class repository', async () => {
+  it('reconstructs the persisted mailbox and crosses the processing fence before provider dispatch', async () => {
     const account = {
       id: ids.accountId,
       workspaceId: ids.workspaceId,
@@ -241,7 +241,7 @@ describe('CampaignEmailRuntimeService', () => {
       activationId: ids.activationId,
       campaignExecutionId: ids.executionId,
       campaignId: ids.campaignId,
-      claimedAt: '2026-09-16T12:00:00.000Z',
+      claimedAt: new Date('2026-09-16T12:00:00.573Z'),
       connectedAccountId: ids.accountId,
       enrollmentId: ids.enrollmentId,
       html: '<p>Body</p>',
@@ -254,11 +254,11 @@ describe('CampaignEmailRuntimeService', () => {
       provider: 'imap_smtp_caldav',
       renderDigest: 'a'.repeat(64),
       senderPoolFingerprint: 'b'.repeat(64),
-      slotAt: '2026-09-16T12:00:00.000Z',
+      slotAt: new Date('2026-09-16T12:00:00.573Z'),
       subject: 'Subject',
       text: 'Body',
       toRecipient: 'recipient@example.com',
-      unknownAfter: '2026-09-16T12:01:00.000Z',
+      unknownAfter: new Date('2026-09-16T12:01:00.573Z'),
       workflowVersionId: ids.versionId,
       references: [],
       inReplyTo: null,
@@ -268,13 +268,17 @@ describe('CampaignEmailRuntimeService', () => {
     };
     const { service, getRepository, query } = setup();
     const receipt = {
-      unknownAfter: new Date('2026-09-16T12:01:00.000Z'),
-      updatedAt: new Date('2026-09-16T12:00:00.000Z'),
+      unknownAfter: new Date('2026-09-16T12:01:00.573Z'),
+      updatedAt: new Date('2026-09-16T12:00:00.573Z'),
     };
-    const sendMessage = jest.fn(async () => ({
-      headerMessageId: '<header@example.com>',
-      messageExternalId: 'provider-123',
-    }));
+    const events: string[] = [];
+    const sendMessage = jest.fn(async () => {
+      events.push('sendMessage');
+      return {
+        headerMessageId: '<header@example.com>',
+        messageExternalId: 'provider-123',
+      };
+    });
     const dispatch = new OutboundEmailDispatchService(
       {
         runInTransaction: async (work) => work({} as never),
@@ -289,10 +293,19 @@ describe('CampaignEmailRuntimeService', () => {
       },
       { now: jest.fn(() => 10_000) },
       {
-        beginSubmission: jest.fn(async () => ({
-          receipt,
-          status: 'PROCESSING_ACQUIRED' as const,
-        })),
+        beginSubmission: jest.fn(async (input) => {
+          expect(input.submissionCapability.reservationBinding).toMatchObject({
+            claimedAt: row.claimedAt,
+            localDate: '2026-09-16',
+            slotAt: row.slotAt,
+            unknownAfter: row.unknownAfter,
+          });
+          events.push('beginSubmission');
+          return {
+            receipt,
+            status: 'PROCESSING_ACQUIRED' as const,
+          };
+        }),
         blockReservedAttemptBeforeProvider: jest.fn(async () => ({
           receipt,
           status: 'RECORDED' as const,
@@ -327,12 +340,17 @@ describe('CampaignEmailRuntimeService', () => {
     );
 
     expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('a."localDate"::text AS "localDate"'),
+      [ids.attemptId, ids.workspaceId, ids.campaignId, 'RESERVED'],
+    );
+    expect(query).toHaveBeenCalledWith(
       expect.stringMatching(
         /^\s*SELECT id, "workspaceId", handle, provider, "connectionParameters"\s+FROM core\."connectedAccount"\s+WHERE id=\$1 AND "workspaceId"=\$2\s*$/s,
       ),
       [ids.accountId, ids.workspaceId],
     );
     expect(getRepository).not.toHaveBeenCalled();
+    expect(events).toEqual(['beginSubmission', 'sendMessage']);
     expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'recipient@example.com' }),
       expect.objectContaining({

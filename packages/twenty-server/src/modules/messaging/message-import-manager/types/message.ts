@@ -27,6 +27,8 @@ export type Message = Omit<
   messageFolderExternalIds?: string[];
   labelIds?: string[];
   expectedMessageId?: string;
+  allowExpectedMessageIdAdoption?: boolean;
+  isImapSmtpHeaderFallback?: boolean;
   providerOccurredAt?: string | null;
 };
 

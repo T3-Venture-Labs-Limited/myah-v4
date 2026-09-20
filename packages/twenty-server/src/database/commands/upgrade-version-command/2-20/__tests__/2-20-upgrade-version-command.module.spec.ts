@@ -4,6 +4,8 @@ import { CommandMeta } from 'nest-commander/src/constants';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
 import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
+import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
+import { CatchUpCampaignActivityControlMetadataWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748003-catch-up-campaign-activity-control-metadata.command';
 import { RepairInstagramSecurityCutoverCommand } from 'src/database/commands/upgrade-version-command/2-20/repair-instagram-security-cutover.command';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -241,9 +243,8 @@ describe('Instagram production upgrade provider compatibility', () => {
       getProviders: () => wrappers,
     } as unknown as DiscoveryService);
     registry.onModuleInit();
-    const sequence = new UpgradeSequenceReaderService(
-      registry,
-    ).getUpgradeSequence();
+    const reader = new UpgradeSequenceReaderService(registry);
+    const sequence = reader.getUpgradeSequence();
     const kindOrder = ['fast-instance', 'slow-instance', 'workspace'];
     const expected = decorated
       .filter((entry) =>
@@ -301,6 +302,15 @@ describe('Instagram production upgrade provider compatibility', () => {
             '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001' &&
           step.name !==
             '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002' &&
+          // Campaign activity control added a metadata sync and a catch-up
+          // command in the same timestamp range; neither is an Instagram
+          // cutover identity.
+          step.name !==
+            '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536' &&
+          step.name !==
+            '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003' &&
+          step.name !==
+            '2.20.0_AddCampaignOperatorExclusionReasonFastInstanceCommand_1789313971536' &&
           // Same reasoning for MYAH-354's fast-instance triage-mode command,
           // which also lands inside the widened fast-instance window now that
           // MYAH-359's v3-snapshot fast-instance command was renumbered above
@@ -327,37 +337,61 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // The Instagram security cutover sweep is no longer the final 2.20.0 step.
-    // MYAH-338's Campaign lifecycle status sync (PR #143) registered right
-    // after it. MYAH-354's contact-wide triage work (PR #161) registered two
-    // further workspace commands (initialize, then catch up) with later
-    // timestamps still. MYAH-359's composer metadata sync and its paired
-    // fast-instance v3-snapshot command were renumbered to real, current
-    // registration timestamps after all of the above landed on main first
-    // (append-only sequencing; see the timestamp-guard CI check), so the
-    // composer metadata sync is now the final 2.20.0 step. Ascending final
-    // order: security sweep, campaign lifecycle sync, triage initialize,
-    // triage catch up, composer metadata sync.
+    // Composer metadata is the final append-only 2.20.0 workspace step,
+    // after Campaign activity control's catch-up command.
     expect(sequence[sequence.length - 1]?.name).toBe(
       '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
     );
     expect(sequence[sequence.length - 2]?.name).toBe(
-      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
     );
     expect(sequence[sequence.length - 3]?.name).toBe(
-      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
     );
     expect(sequence[sequence.length - 4]?.name).toBe(
-      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
     );
     expect(sequence[sequence.length - 5]?.name).toBe(
+      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
+    );
+    expect(sequence[sequence.length - 6]?.name).toBe(
+      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+    );
+    expect(sequence[sequence.length - 7]?.name).toBe(
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
     );
+    const workspaceCommands = sequence
+      .filter((step) => step.kind === 'workspace')
+      .filter((step) => step.version === '2.20.0');
+    expect(
+      reader
+        .getPendingWorkspaceCommands({
+          workspaceCommands,
+          workspaceCursor: {
+            name: '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+            status: 'completed',
+          },
+        })
+        .map(({ name }) => name),
+    ).toEqual([
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+    ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(
         SynchronizeCampaignLifecycleStatusMetadataCommand,
       ),
     ).toEqual({ version: '2.20.0', timestamp: 1789313971535 });
+    expect(
+      getRegisteredWorkspaceCommandMetadata(
+        SynchronizeCampaignActivityControlMetadataCommand,
+      ),
+    ).toEqual({ version: '2.20.0', timestamp: 1789313971536 });
+    expect(
+      getRegisteredWorkspaceCommandMetadata(
+        CatchUpCampaignActivityControlMetadataWorkspaceCommand,
+      ),
+    ).toEqual({ version: '2.20.0', timestamp: 1789633748003 });
     expect(
       sequence.filter((step) =>
         EXPECTED_INSTAGRAM_IDENTITIES.some(

@@ -2489,6 +2489,9 @@ export const STANDARD_OBJECTS = {
       targetCreator: {
         universalIdentifier: '81c0d29d-abc3-5b58-a15d-e573ea52de57',
       },
+      targetCampaign: {
+        universalIdentifier: '68dab2ea-0318-51fd-b01c-ec675ae930a9',
+      },
       linkedRecordCachedName: {
         universalIdentifier: '20202020-cfdb-4bef-bbce-a29f41230934',
       },
