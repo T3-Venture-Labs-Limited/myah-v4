@@ -114,6 +114,7 @@ describe('MessagingMessageService Campaign evidence', () => {
             {
               ...message,
               expectedMessageId: undefined,
+              allowExpectedMessageIdAdoption: false,
               deliveryTargetId: mode === 'invalid target' ? '' : targetId,
             },
           ] as never,
@@ -147,11 +148,13 @@ describe('MessagingMessageService Campaign evidence', () => {
         {
           ...message,
           expectedMessageId: undefined,
+          allowExpectedMessageIdAdoption: false,
           deliveryTargetId: targetId,
         },
         {
           ...message,
           expectedMessageId: undefined,
+          allowExpectedMessageIdAdoption: false,
           externalId: 'second',
           headerMessageId: '<second@example.com>',
           deliveryTargetId: secondTargetId,
