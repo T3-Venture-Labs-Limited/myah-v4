@@ -2,6 +2,8 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { IsNull } from 'typeorm';
 import { type ObjectRecord } from 'twenty-shared/types';
 
+import { isInstagramMessageIdentitySnapshot } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { type InstagramMessageExpectedActionBinding } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { type ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { InstagramMessageLocalAuthorityReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-local-authority-reader.service';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
@@ -31,21 +33,31 @@ export class InstagramMessageProposalReaderService {
     }
     if (
       binding.actionName !== 'send_instagram_message' ||
-      binding.actionVersion !== 2 ||
+      (binding.actionVersion !== 2 && binding.actionVersion !== 3) ||
       binding.actionKind !== 'REPLY' ||
       !binding.threadId ||
       binding.interactionContextType != null ||
       binding.interactionContextId != null ||
+      (binding.actionVersion === 2
+        ? binding.instagramMessageSnapshot != null
+        : !isInstagramMessageIdentitySnapshot(
+            binding.instagramMessageSnapshot,
+          )) ||
+      binding.composerInputDigest != null ||
       !binding.recipientFingerprint ||
       !binding.sendingAccountFingerprint ||
       !binding.actionContextFingerprint
     ) {
       throw new Error('Instagram message proposal is unavailable');
     }
-    const expectedBinding = {
-      ...binding,
+    const {
+      instagramMessageSnapshot: _instagramMessageSnapshot,
+      composerInputDigest: _composerInputDigest,
+      ...legacyBinding
+    } = binding;
+    const commonBinding = {
+      ...legacyBinding,
       actionName: 'send_instagram_message' as const,
-      actionVersion: 2 as const,
       actionKind: 'REPLY' as const,
       recipientFingerprint: binding.recipientFingerprint,
       sendingAccountFingerprint: binding.sendingAccountFingerprint,
@@ -53,6 +65,18 @@ export class InstagramMessageProposalReaderService {
       interactionContextType: null,
       interactionContextId: null,
     };
+
+    const expectedBinding: InstagramMessageExpectedActionBinding & {
+      workspaceId: string;
+    } =
+      binding.actionVersion === 2
+        ? { ...commonBinding, actionVersion: 2 }
+        : {
+            ...commonBinding,
+            actionVersion: 3,
+            instagramMessageSnapshot: binding.instagramMessageSnapshot!,
+            composerInputDigest: null,
+          };
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {

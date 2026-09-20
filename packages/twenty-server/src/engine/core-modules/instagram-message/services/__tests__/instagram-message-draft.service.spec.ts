@@ -1,4 +1,4 @@
-import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 
 type DraftService = {
   saveDraft: (
@@ -92,6 +92,61 @@ const firstMessageInput = {
 };
 
 describe('InstagramMessageDraftService', () => {
+  it.each([
+    { name: 'body', patch: { body: 'changed' } },
+    {
+      name: 'target',
+      patch: { creatorRecordId: '00000000-0000-4000-8000-000000000099' },
+    },
+    { name: 'revision', patch: { expectedRevision: 1 } },
+  ])('freezes verified composer $name before approval', async ({ patch }) => {
+    const harness = buildHarness((sql) => {
+      if (sql.includes('information_schema.columns')) {
+        return [
+          { column_name: 'composerInputDigest' },
+          { column_name: 'instagramMessageSnapshot' },
+        ];
+      }
+      if (
+        sql.includes('SELECT "composerInputDigest", "instagramMessageSnapshot"')
+      ) {
+        return [
+          {
+            composerInputDigest: 'a'.repeat(64),
+            instagramMessageSnapshot: {
+              publicIdentifier: 'creator.name',
+              providerId: 'provider-id',
+              providerMessagingId: 'messaging-id',
+              creatorRecordId: creatorId,
+              accountBindingId: '00000000-0000-4000-8000-000000000010',
+              instagramAccountRecordId: '00000000-0000-4000-8000-000000000011',
+              unipileAccountId: 'account-id',
+              instagramUserId: 'instagram-user',
+              recipientSourceValues: [
+                { field: 'instagramUsername', value: 'creator.name' },
+              ],
+              actionKind: 'START_CHAT',
+              conversationRecordId: null,
+              providerChatId: null,
+              attendeeProviderId: null,
+            },
+          },
+        ];
+      }
+      return [];
+    });
+
+    await expect(
+      harness.service.saveDraft({ ...firstMessageInput, ...patch }),
+    ).rejects.toThrow('Instagram message draft is locked for execution');
+    expect(harness.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO'),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
   it.each([
     { kind: 'FIRST_MESSAGE', body: '' },
     { kind: 'FIRST_MESSAGE', body: '  \n  ' },
@@ -191,7 +246,7 @@ describe('InstagramMessageDraftService', () => {
         executionLocked: false,
       });
       expect(() =>
-        buildInstagramMessageActionAuthority({
+        buildLegacyInstagramMessageActionAuthority({
           workspaceId,
           initiatorUserWorkspaceId: workspaceMemberId,
           threadId: null,

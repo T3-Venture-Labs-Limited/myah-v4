@@ -80,8 +80,8 @@ export class InstagramMessageReconciliationJob {
         .andWhere('binding.actionName = :actionName', {
           actionName: 'send_instagram_message',
         })
-        .andWhere('binding.actionVersion = :actionVersion', {
-          actionVersion: 2,
+        .andWhere('binding.actionVersion IN (:...actionVersions)', {
+          actionVersions: [2, 3],
         })
         .orderBy('receipt.updatedAt', 'ASC')
         .addOrderBy('receipt.id', 'ASC')

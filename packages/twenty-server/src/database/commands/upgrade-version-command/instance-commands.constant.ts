@@ -131,6 +131,7 @@ import { AddUnipileInstagramSyncStateFastInstanceCommand } from 'src/database/co
 import { AddUnipileInstagramTriageModeFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789633748003-add-unipile-instagram-triage-mode';
 import { CreateInstagramActionBudgetFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619356-create-instagram-action-budget';
 import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619359-add-instagram-direct-action-context';
+import { AddInstagramMessageV3SnapshotFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789633748004-add-instagram-message-v3-snapshot';
 import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
 
 export const INSTANCE_COMMANDS = [
@@ -264,5 +265,6 @@ export const INSTANCE_COMMANDS = [
   AddUnipileInstagramTriageModeFastInstanceCommand,
   CreateInstagramActionBudgetFastInstanceCommand,
   AddInstagramDirectActionContextFastInstanceCommand,
+  AddInstagramMessageV3SnapshotFastInstanceCommand,
   InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
 ];

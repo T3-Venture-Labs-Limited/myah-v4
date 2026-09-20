@@ -1,3 +1,4 @@
+import { finitePgConnectTimeout } from 'src/database/typeorm/core/finite-pg-connect-timeout.util';
 import {
   Injectable,
   OnApplicationShutdown,
@@ -40,6 +41,9 @@ export class GlobalWorkspaceDataSourceService
             }
           : undefined,
         poolSize: this.twentyConfigService.get('PG_POOL_MAX_CONNECTIONS'),
+        connectTimeoutMS: finitePgConnectTimeout(
+          this.twentyConfigService.get('PG_DATABASE_PRIMARY_TIMEOUT_MS'),
+        ),
         extra: {
           query_timeout: this.twentyConfigService.get(
             'PG_DATABASE_PRIMARY_TIMEOUT_MS',
@@ -75,6 +79,9 @@ export class GlobalWorkspaceDataSourceService
               }
             : undefined,
           poolSize: this.twentyConfigService.get('PG_POOL_MAX_CONNECTIONS'),
+          connectTimeoutMS: finitePgConnectTimeout(
+            this.twentyConfigService.get('PG_DATABASE_REPLICA_TIMEOUT_MS'),
+          ),
           extra: {
             query_timeout: this.twentyConfigService.get(
               'PG_DATABASE_REPLICA_TIMEOUT_MS',

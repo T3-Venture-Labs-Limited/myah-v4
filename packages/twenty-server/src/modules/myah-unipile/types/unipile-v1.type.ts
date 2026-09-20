@@ -21,7 +21,8 @@ export type UnipileGetInstagramMessagingProfileInput = {
 
 export type UnipileInstagramMessagingProfile = {
   providerId: string;
-  // GET profile provider_messaging_id, distinct from profile and attendee IDs.
+  // Opaque GET profile provider_messaging_id. It is the only permitted
+  // Start Chat attendee input; callers must not substitute providerId or a handle.
   providerMessagingId: string;
   username: string;
 };
@@ -45,6 +46,8 @@ export type UnipileCreateHostedAuthLinkInput =
 
 export type UnipileStartChatInput = {
   accountId: string;
+  // Exact opaque provider_messaging_id from the resolved profile. The client
+  // intentionally has no profile-ID, username, or other identifier fallback.
   attendeeId: string;
   text: string;
 };

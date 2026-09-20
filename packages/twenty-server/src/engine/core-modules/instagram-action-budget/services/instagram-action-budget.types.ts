@@ -29,10 +29,20 @@ export type InspectInstagramActionBudgetInput = {
   instagramAccountRecordId: string;
 };
 
+export type InspectInstagramActionTargetInput =
+  InspectInstagramActionBudgetInput & {
+    providerMessagingId: string;
+    targetFingerprint: string;
+    // v2 rows used provider_id. Treat a matching active legacy reservation as busy.
+    legacyTargetFingerprints?: string[];
+  };
+
 export type ReserveInstagramActionInput = InspectInstagramActionBudgetInput & {
   actionExecutionReceiptId: string;
   actionKind: InstagramActionKind;
   targetFingerprint: string;
+  providerMessagingId?: string;
+  legacyTargetFingerprints?: string[];
 };
 
 export type ReservationTransitionInput = {

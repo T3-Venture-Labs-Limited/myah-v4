@@ -2883,6 +2883,11 @@ msgstr "Annual effective date: {annualEffectiveDate}"
 msgid "Annual price"
 msgstr "Annual price"
 
+#. js-lingui-id: X0gpk7
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Another attempt for this recipient is unresolved. Check its status; do not resend."
+msgstr "Another attempt for this recipient is unresolved. Check its status; do not resend."
+
 #. js-lingui-id: 9BhGWn
 #. placeholder {0}: fieldLabel ?? ''
 #: src/modules/object-record/advanced-filter/components/AdvancedFilterCompositeSubFieldSelectMenu.tsx
@@ -4682,6 +4687,11 @@ msgstr "Check connection"
 msgid "Check failed"
 msgstr "Check failed"
 
+#. js-lingui-id: l/BNQn
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Check status"
+msgstr "Check status"
+
 #. js-lingui-id: h5C4B4
 #: src/modules/settings/emailing-domains/components/SettingsEmailingDomainVerifyButton.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -5569,6 +5579,11 @@ msgstr "Confirm upgrade"
 msgid "Confirmation begins a local simulated stop. The assignment remains until provider inactivity is confirmed or resolved; no billing changes occur."
 msgstr "Confirmation begins a local simulated stop. The assignment remains until provider inactivity is confirmed or resolved; no billing changes occur."
 
+#. js-lingui-id: FHFzyp
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Confirmed recipient: @{handle}"
+msgstr "Confirmed recipient: @{handle}"
+
 #. js-lingui-id: KQ8wyV
 #. placeholder {0}: completionWarmupMailbox.address
 #. placeholder {0}: mailbox.address
@@ -6121,7 +6136,13 @@ msgstr "Could not disconnect Shopify."
 msgid "Could not disconnect the Instagram account."
 msgstr "Could not disconnect the Instagram account."
 
+#. js-lingui-id: lOs6q9
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Could not load Creators. Try searching again."
+msgstr "Could not load Creators. Try searching again."
+
 #. js-lingui-id: O5XFg7
+#: src/modules/command-menu-item/engine-command/global/components/MessageOnInstagramCommand.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not load Instagram connection status."
 msgstr "Could not load Instagram connection status."
@@ -6150,6 +6171,11 @@ msgstr "Could not open the API playground"
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Could not refresh validity token. Please contact support."
 msgstr "Could not refresh validity token. Please contact support."
+
+#. js-lingui-id: dLsd0v
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Could not resolve this recipient safely. Refresh the recipient to check again."
+msgstr "Could not resolve this recipient safely. Refresh the recipient to check again."
 
 #. js-lingui-id: lSckXc
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -7552,6 +7578,11 @@ msgstr "Deleting {objectLabel}"
 msgid "Deleting this method will remove it permanently from your account."
 msgstr "Deleting this method will remove it permanently from your account."
 
+#. js-lingui-id: GjMejE
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Delivery is unconfirmed. Do not resend. Check status to recover this exact attempt."
+msgstr "Delivery is unconfirmed. Do not resend. Check status to recover this exact attempt."
+
 #. js-lingui-id: kJHy3o
 #: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 msgid "Delivery outcome is unknown. This draft is locked to prevent a duplicate send."
@@ -8847,6 +8878,11 @@ msgstr "Enter a full email address, such as name@example.com."
 msgid "Enter a JSON object"
 msgstr "Enter a JSON object"
 
+#. js-lingui-id: AZVCjl
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Enter a message before sending."
+msgstr "Enter a message before sending."
+
 #. js-lingui-id: peBb6B
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx
 msgid "Enter a new secret value"
@@ -8882,6 +8918,11 @@ msgstr "Enter a UUID"
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "Enter a valid domain name, such as example.com."
 msgstr "Enter a valid domain name, such as example.com."
+
+#. js-lingui-id: F7tcx6
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Enter a valid Instagram handle or choose a Creator."
+msgstr "Enter a valid Instagram handle or choose a Creator."
 
 #. js-lingui-id: oiVP/+
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx
@@ -10524,6 +10565,7 @@ msgstr "Fresh quote ready. Accept it to complete locally."
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
 msgid "From"
 msgstr "From"
 
@@ -11680,10 +11722,20 @@ msgstr "Inspect these deterministic local fixture records, then explicitly resol
 msgid "Instagram"
 msgstr "Instagram"
 
+#. js-lingui-id: Ep9DUT
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Instagram accepted or is processing this attempt. Waiting for confirmation; do not resend."
+msgstr "Instagram accepted or is processing this attempt. Waiting for confirmation; do not resend."
+
 #. js-lingui-id: 3UgZpw
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Instagram account disconnected."
 msgstr "Instagram account disconnected."
+
+#. js-lingui-id: pJIHcA
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Instagram did not send this message. Your message and recipient have been kept. Check status before starting another attempt."
+msgstr "Instagram did not send this message. Your message and recipient have been kept. Check status before starting another attempt."
 
 #. js-lingui-id: UgwGHV
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -11694,6 +11746,21 @@ msgstr "Instagram disconnect is still being confirmed."
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Instagram messaging"
 msgstr "Instagram messaging"
+
+#. js-lingui-id: +Fs51L
+#: src/modules/command-menu-item/engine-command/global/components/MessageOnInstagramCommand.tsx
+msgid "Instagram messaging is unavailable."
+msgstr "Instagram messaging is unavailable."
+
+#. js-lingui-id: LnUacG
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Instagram recipients"
+msgstr "Instagram recipients"
+
+#. js-lingui-id: YzhNia
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Instagram sending is blocked. Your message and recipient have been kept. Check status before starting another attempt."
+msgstr "Instagram sending is blocked. Your message and recipient have been kept. Check status before starting another attempt."
 
 #. js-lingui-id: TKQ7K+
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -12809,6 +12876,11 @@ msgstr "Loading document viewer..."
 msgid "Loading emails"
 msgstr "Loading emails"
 
+#. js-lingui-id: I/dgjR
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Loading Instagram sender account"
+msgstr "Loading Instagram sender account"
+
 #. js-lingui-id: IFQsdb
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
 msgid "Loading jobs..."
@@ -13691,6 +13763,8 @@ msgstr "Merging..."
 
 #. js-lingui-id: xDAtGP
 #: src/modules/settings/event-logs/utils/getColumnsForEventLogTable.tsx
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
 msgid "Message"
 msgstr "Message"
 
@@ -13698,6 +13772,11 @@ msgstr "Message"
 #: src/modules/activities/timeline-activities/rows/message/components/EventCardMessage.tsx
 msgid "Message not found"
 msgstr "Message not found"
+
+#. js-lingui-id: YtFpN+
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Message sent. Open Inbox to view it. If the destination is not yet available, refresh or load more contacts in Inbox."
+msgstr "Message sent. Open Inbox to view it. If the destination is not yet available, refresh or load more contacts in Inbox."
 
 #. js-lingui-id: elpx6r
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminConnectedAccountHealthStatus.tsx
@@ -13713,6 +13792,11 @@ msgstr "Message Sync and Calendar Sync are not available because the service is 
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminConnectedAccountHealthStatus.tsx
 msgid "Message Sync is not available because the service is down"
 msgstr "Message Sync is not available because the service is down"
+
+#. js-lingui-id: TnotRl
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Message to send"
+msgstr "Message to send"
 
 #. js-lingui-id: t7TeQU
 #: src/pages/settings/admin-panel/SettingsAdminWorkspaceDetail.tsx
@@ -14022,6 +14106,11 @@ msgstr "Move Up"
 #: src/modules/auth/sign-in-up/components/internal/SignInUpWorkspaceCreationForm.tsx
 msgid "Move work forward across teams and agents"
 msgstr "Move work forward across teams and agents"
+
+#. js-lingui-id: evkNu0
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Multiple Creators match this handle. Resolve the duplicate Creator records before sending."
+msgstr "Multiple Creators match this handle. Resolve the duplicate Creator records before sending."
 
 #. js-lingui-id: asWVA5
 #: src/modules/object-record/spreadsheet-import/utils/getSpreadSheetFieldValidationDefinitions.ts
@@ -14358,6 +14447,12 @@ msgstr "New Group"
 msgid "New Index"
 msgstr "New Index"
 
+#. js-lingui-id: jBXBcV
+#: src/modules/side-panel/hooks/useOpenInstagramMessageInSidePanel.ts
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "New Instagram Message"
+msgstr "New Instagram Message"
+
 #. js-lingui-id: o8MyXb
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeysNew.tsx
 msgid "New key"
@@ -14488,6 +14583,11 @@ msgstr "Next"
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
 msgid "Next charge {totalRenewDate}. Invoice amount may vary if you add members or credits between periods"
 msgstr "Next charge {totalRenewDate}. Invoice amount may vary if you add members or credits between periods"
+
+#. js-lingui-id: JKdrjM
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Next eligible time:"
+msgstr "Next eligible time:"
 
 #. js-lingui-id: AxNmtI
 #: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/MatchColumnsStep.tsx
@@ -14713,6 +14813,11 @@ msgstr "No complete prewarmed bundle is selectable because of the listed local-i
 #: src/modules/settings/admin-panel/config-variables/components/SettingsAdminConfigVariables.tsx
 msgid "No config variables match your current filters. Try adjusting your filters or search criteria."
 msgstr "No config variables match your current filters. Try adjusting your filters or search criteria."
+
+#. js-lingui-id: hHULGk
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "No connected sender"
+msgstr "No connected sender"
 
 #. js-lingui-id: PlVbP6
 #: src/modules/ai/components/RoutingDebugDisplay.tsx
@@ -15973,6 +16078,11 @@ msgstr "Open in app"
 msgid "Open in Roles"
 msgstr "Open in Roles"
 
+#. js-lingui-id: zgOctv
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Open Inbox"
+msgstr "Open Inbox"
+
 #. js-lingui-id: xGd6Ih
 #: src/modules/auth/sign-in-up/components/EmailVerificationSent.tsx
 msgid "Open Outlook"
@@ -16707,6 +16817,11 @@ msgstr "Please check your cron expression syntax."
 #: src/pages/settings/security/SettingsSecurityApprovedAccessDomain.tsx
 msgid "Please check your email for a verification link."
 msgstr "Please check your email for a verification link."
+
+#. js-lingui-id: ByxPNu
+#: src/modules/command-menu-item/engine-command/global/components/MessageOnInstagramCommand.tsx
+msgid "Please contact your admin."
+msgstr "Please contact your admin."
 
 #. js-lingui-id: jEw0Mr
 #: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardIframeSettings.tsx
@@ -17777,6 +17892,11 @@ msgstr "Reduction to {0} takes effect on {1}."
 msgid "Refresh quote"
 msgstr "Refresh quote"
 
+#. js-lingui-id: mrUxcI
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Refresh recipient"
+msgstr "Refresh recipient"
+
 #. js-lingui-id: pTGa/J
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/admin-panel/SettingsAdminInferredVersion.tsx
@@ -18349,6 +18469,11 @@ msgstr "Resolve the pending mailbox-pool cancellation before creating another ma
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "Resolve warmup operation"
 msgstr "Resolve warmup operation"
+
+#. js-lingui-id: li0jg7
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Resolving Instagram recipient"
+msgstr "Resolving Instagram recipient"
 
 #. js-lingui-id: g0KMz6
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -19292,6 +19417,11 @@ msgstr "Search config variables"
 msgid "Search country"
 msgstr "Search country"
 
+#. js-lingui-id: AjJX+H
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Search Creators or enter @handle"
+msgstr "Search Creators or enter @handle"
+
 #. js-lingui-id: sSARNY
 #: src/modules/object-record/object-filter-dropdown/components/ObjectFilterDropdownCurrencySelect.tsx
 msgid "Search currency"
@@ -19419,6 +19549,11 @@ msgstr "Searched the web for {query}"
 #: src/modules/ai/constants/crud-tool-operation-verbs.constant.ts
 msgid "Searching {objectLabel}"
 msgstr "Searching {objectLabel}"
+
+#. js-lingui-id: LI4IZZ
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Searching Creators"
+msgstr "Searching Creators"
 
 #. js-lingui-id: JHkypn
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -19862,6 +19997,11 @@ msgstr "Select your preferred language"
 msgid "Selected"
 msgstr "Selected"
 
+#. js-lingui-id: wM+B6r
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Selected Creator"
+msgstr "Selected Creator"
+
 #. js-lingui-id: dQgE7t
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Selected managed-email subscription"
@@ -19881,6 +20021,7 @@ msgstr "Selected subscription"
 #: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
 #: src/modules/side-panel/pages/compose-email/components/SidePanelComposeEmailPage.tsx
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
 msgid "Send"
 msgstr "Send"
 
@@ -19970,6 +20111,11 @@ msgstr "Sending policy updated"
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestExecutionResult.tsx
 msgid "Sending request..."
 msgstr "Sending request..."
+
+#. js-lingui-id: YONfNs
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Sending. Do not resend. You can check this attempt's status if confirmation is interrupted."
+msgstr "Sending. Do not resend. You can check this attempt's status if confirmation is interrupted."
 
 #. js-lingui-id: IoAuJG
 #: src/modules/auth/sign-in-up/components/EmailVerificationSent.tsx
@@ -20817,6 +20963,11 @@ msgstr "Start date"
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 msgid "Start managed warmup"
 msgstr "Start managed warmup"
+
+#. js-lingui-id: 5dMxyI
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Start new attempt"
+msgstr "Start new attempt"
 
 #. js-lingui-id: Oh+o4I
 #. placeholder {0}: mailbox.address
@@ -21712,6 +21863,16 @@ msgstr "The cancellation could not be undone."
 msgid "The capacity review did not resolve to managed warmup."
 msgstr "The capacity review did not resolve to managed warmup."
 
+#. js-lingui-id: WEIlGD
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "The connected Instagram account is unavailable. Check the account connection before sending."
+msgstr "The connected Instagram account is unavailable. Check the account connection before sending."
+
+#. js-lingui-id: cQhNla
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "The connected Instagram account is unavailable. Refresh to check its connection."
+msgstr "The connected Instagram account is unavailable. Refresh to check its connection."
+
 #. js-lingui-id: LsqhzF
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -21767,6 +21928,11 @@ msgstr "The icon your workflow trigger will display in the command menu"
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
 msgid "The import could not be refreshed. Please try again."
 msgstr "The import could not be refreshed. Please try again."
+
+#. js-lingui-id: x9qbPf
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "The Instagram conversation is ambiguous. Check the recipient's chats before sending."
+msgstr "The Instagram conversation is ambiguous. Check the recipient's chats before sending."
 
 #. js-lingui-id: 8fGRCr
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -21942,6 +22108,11 @@ msgstr "The prewarmed review no longer matches local inventory."
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "The provider did not respond."
 msgstr "The provider did not respond."
+
+#. js-lingui-id: oM1MNU
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "The recipient or sender changed. Refresh the recipient before sending."
+msgstr "The recipient or sender changed. Refresh the recipient before sending."
 
 #. js-lingui-id: c82Ji/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
@@ -22168,6 +22339,11 @@ msgstr "This address is already taken"
 msgid "This app is not fully configured. Users won't be able to install it until all required server variables are set, and — for apps exposing a server route — until the app is claimed and installed on its owner workspace."
 msgstr "This app is not fully configured. Users won't be able to install it until all required server variables are set, and — for apps exposing a server route — until the app is claimed and installed on its owner workspace."
 
+#. js-lingui-id: +s1X+D
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "This attempt belongs to another workspace. Return to that workspace to check its status."
+msgstr "This attempt belongs to another workspace. Return to that workspace to check its status."
+
 #. js-lingui-id: Lbrpv9
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 msgid "This cancels mailbox service renewal at the end of the paid period. The mailbox remains active until then."
@@ -22192,6 +22368,11 @@ msgstr "This component runs without a UI and renders nothing here."
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 msgid "This connection does not exist or is not available for this application."
 msgstr "This connection does not exist or is not available for this application."
+
+#. js-lingui-id: nBZ1RV
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "This contact's Instagram conversation was deleted. Restore it in the Inbox or start a new conversation from the recipient's Instagram profile."
+msgstr "This contact's Instagram conversation was deleted. Restore it in the Inbox or start a new conversation from the recipient's Instagram profile."
 
 #. js-lingui-id: SLIRqz
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableHelpText.tsx
@@ -22324,6 +22505,11 @@ msgstr "This provider doesn't have a native SDK yet — it will use OpenAI-compa
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "This quote expired. Refresh it before completing this local review."
 msgstr "This quote expired. Refresh it before completing this local review."
+
+#. js-lingui-id: go5ufS
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "This recipient could not be resolved. Add a valid Instagram handle to the Creator and check that its Instagram fields agree, or choose another recipient."
+msgstr "This recipient could not be resolved. Add a valid Instagram handle to the Creator and check that its Instagram fields agree, or choose another recipient."
 
 #. js-lingui-id: dWJTyU
 #: src/modules/information-banner/components/deleted-record/InformationBannerDeletedRecord.tsx
@@ -22545,6 +22731,8 @@ msgstr "Title"
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "To"
@@ -23715,6 +23903,12 @@ msgstr "Usage Events"
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
 msgid "Usage period"
 msgstr "Usage period"
+
+#. js-lingui-id: +3gh4Z
+#. placeholder {0}: option.rawHandle
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Use @{0}"
+msgstr "Use @{0}"
 
 #. js-lingui-id: lUQn8r
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -25275,10 +25469,20 @@ msgstr "You can't change your email because you belong to 2 or more workspaces."
 msgid "You cannot impersonate your own account"
 msgstr "You cannot impersonate your own account"
 
+#. js-lingui-id: m79Vnd
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "You do not have permission for this Instagram message route."
+msgstr "You do not have permission for this Instagram message route."
+
 #. js-lingui-id: eqUj2Z
 #: src/modules/page-layout/widgets/components/PageLayoutWidgetForbiddenDisplay.tsx
 msgid "You do not have permission to access the {objectName} object"
 msgstr "You do not have permission to access the {objectName} object"
+
+#. js-lingui-id: /IlYOv
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "You do not have permission to send Instagram messages."
+msgstr "You do not have permission to send Instagram messages."
 
 #. js-lingui-id: XmZwK/
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx

@@ -81,7 +81,10 @@ export class InstagramSendOutcomeResolutionService {
           'Confirmed sent resolution requires one verified provider message',
         );
       } else if (input.outcome === 'CLEARED_NOT_SENT') {
-        if (inspection.kind !== 'NO_MATCH_COMPLETE') {
+        if (
+          inspection.kind !== 'NO_MATCH_COMPLETE' &&
+          inspection.kind !== 'NOT_DISPATCHED'
+        ) {
           throw new Error(
             'Cleared not sent resolution requires complete provider reconciliation',
           );
@@ -223,5 +226,12 @@ export class InstagramSendOutcomeResolutionService {
     } else if (receipt.state !== ActionExecutionReceiptState.SENT) {
       throw new Error('Verified Instagram send projection is incomplete');
     }
+    const projected = await this.dataSource
+      .getRepository(ActionExecutionReceiptEntity)
+      .findOne({
+        where: { id: input.receiptId, workspaceId: input.workspaceId },
+      });
+    if (projected?.state !== ActionExecutionReceiptState.SENT)
+      throw new Error('Verified Instagram send projection is incomplete');
   }
 }

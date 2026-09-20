@@ -1,3 +1,4 @@
+import { buildInstagramMessageEvidenceLinks } from 'src/engine/core-modules/action-approval/utils/build-instagram-message-evidence-links.util';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -5,12 +6,19 @@ import { IsNull, type Repository } from 'typeorm';
 import { type ObjectRecord } from 'twenty-shared/types';
 
 import {
-  buildInstagramMessageActionAuthority,
+  isInstagramMessageIdentitySnapshot,
+  buildLegacyInstagramMessageActionAuthority,
+  buildInstagramMessageV3ActionAuthority,
   INSTAGRAM_MESSAGE_ACTION_NAME,
-  INSTAGRAM_MESSAGE_ACTION_VERSION,
 } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
-import { type InstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.types';
-import { type ExpectedActionBindingWithWorkspace } from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import {
+  type BuildLegacyInstagramMessageActionAuthorityInput,
+  type InstagramMessageActionAuthority,
+} from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.types';
+import {
+  type InstagramMessageIdentitySnapshot,
+  type ExpectedActionBindingWithWorkspace,
+} from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { resolveInstagramRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-instagram-recipient.util';
 import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { buildSystemAuthContext } from 'src/engine/core-modules/auth/utils/build-system-auth-context.util';
@@ -27,14 +35,7 @@ import {
   UnipileInstagramAccountBindingStatus,
 } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 
-const OBJECT_UNIVERSAL_IDENTIFIER_BY_ROLE: Record<string, string> = {
-  INSTAGRAM_ACCOUNT: '2d357469-831a-4629-ad4b-47335900e883',
-  INSTAGRAM_MESSAGE_DRAFT: '85762d24-541b-407f-9d6a-cdf89552c665',
-  SOCIAL_CONVERSATION: '36817464-855f-42db-9fbb-f8853643f8d6',
-  CREATOR: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
-};
-
-type DraftRow = {
+export type InstagramMessageAuthorityDraftRow = {
   id: string;
   body: string | null;
   revision: number | string;
@@ -91,6 +92,68 @@ export class InstagramMessageLocalAuthorityReaderService {
     return this.rebuildAuthority(input, false);
   }
 
+  // Historical reads never reconstruct a sendable draft or re-resolve a handle.
+  async readV3RecoveryContext(input: {
+    workspaceId: string;
+    binding: ExpectedActionBindingWithWorkspace;
+  }): Promise<{
+    snapshot: InstagramMessageIdentitySnapshot;
+    contentDigest: string;
+  }> {
+    const { binding } = input;
+    if (
+      binding.workspaceId !== input.workspaceId ||
+      binding.actionName !== INSTAGRAM_MESSAGE_ACTION_NAME ||
+      binding.actionVersion !== 3 ||
+      !isInstagramMessageIdentitySnapshot(binding.instagramMessageSnapshot) ||
+      binding.instagramMessageSnapshot.actionKind !== binding.actionKind ||
+      !/^[0-9a-f]{64}$/i.test(binding.contentDigest)
+    )
+      throw new Error('Instagram historical identity is unavailable');
+    const snapshot = binding.instagramMessageSnapshot;
+    const workspace = await this.getWorkspace(input.workspaceId);
+    const account = await this.getActiveAccountBinding(input.workspaceId);
+    if (
+      account.id !== snapshot.accountBindingId ||
+      account.workspaceId !== input.workspaceId ||
+      account.workspaceInstagramAccountRecordId !==
+        snapshot.instagramAccountRecordId ||
+      account.unipileAccountId !== snapshot.unipileAccountId ||
+      account.instagramUserId !== snapshot.instagramUserId
+    )
+      throw new Error('Accepted Instagram account binding is unavailable');
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const creatorRepository =
+        await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+          input.workspaceId,
+          'creator',
+          { shouldBypassPermissionChecks: true },
+        );
+      const accountRepository =
+        await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+          input.workspaceId,
+          'myahInstagramAccount',
+          { shouldBypassPermissionChecks: true },
+        );
+      const creator = await creatorRepository.findOne({
+        where: { id: snapshot.creatorRecordId, deletedAt: IsNull() },
+        select: { id: true },
+      });
+      const accountRecord = await accountRepository.findOne({
+        where: {
+          id: snapshot.instagramAccountRecordId,
+          deletedAt: IsNull(),
+          status: 'ACTIVE',
+          unipileAccountId: snapshot.unipileAccountId,
+        },
+        select: { id: true },
+      });
+      if (!creator || !accountRecord)
+        throw new Error('Instagram historical target is unavailable');
+    }, buildSystemAuthContext({ workspace }));
+    return { snapshot, contentDigest: binding.contentDigest };
+  }
+
   async rebuildForReconciliation(input: {
     workspaceId: string;
     binding: ExpectedActionBindingWithWorkspace;
@@ -116,7 +179,9 @@ export class InstagramMessageLocalAuthorityReaderService {
   ): Promise<InstagramMessageActionAuthority> {
     if (
       input.binding.actionName !== INSTAGRAM_MESSAGE_ACTION_NAME ||
-      input.binding.actionVersion !== INSTAGRAM_MESSAGE_ACTION_VERSION
+      (input.binding.actionVersion !== 2 &&
+        input.binding.actionVersion !== 3) ||
+      input.workspaceId !== input.binding.workspaceId
     ) {
       throw new Error('Instagram message source graph is unavailable');
     }
@@ -136,6 +201,13 @@ export class InstagramMessageLocalAuthorityReaderService {
       accountBinding,
       draft,
       allowExistingTarget,
+      v3:
+        input.binding.actionVersion === 3
+          ? {
+              snapshot: input.binding.instagramMessageSnapshot,
+              composerInputDigest: input.binding.composerInputDigest,
+            }
+          : undefined,
       approvalContext: {
         initiatorUserWorkspaceId: input.binding.initiatorUserWorkspaceId,
         threadId: input.binding.threadId,
@@ -143,6 +215,19 @@ export class InstagramMessageLocalAuthorityReaderService {
         interactionContextId: input.binding.interactionContextId,
       },
     });
+    const evidenceKey = (links: typeof input.binding.evidenceLinks) =>
+      JSON.stringify(
+        links
+          .map(({ objectMetadataId, recordId, role }) =>
+            JSON.stringify([objectMetadataId, recordId, role]),
+          )
+          .sort(),
+      );
+    if (
+      evidenceKey(authority.expectedActionBinding.evidenceLinks) !==
+      evidenceKey(input.binding.evidenceLinks)
+    )
+      throw new Error('Instagram message proposal is unavailable');
     if (
       computeLogicalActionKey(authority.expectedActionBinding) !==
       computeLogicalActionKey(input.binding)
@@ -153,64 +238,15 @@ export class InstagramMessageLocalAuthorityReaderService {
     return authority;
   }
 
-  async createDirectAuthority(input: {
-    workspaceId: string;
-    initiatorUserWorkspaceId: string;
-    draftId: string;
-    expectedRevision: number;
-  }): Promise<InstagramMessageActionAuthority> {
-    const workspace = await this.getWorkspace(input.workspaceId);
-    const accountBinding = await this.getActiveAccountBinding(
-      input.workspaceId,
-    );
-    const draft = await this.loadDraft(workspace, input.draftId);
-    if (Number(draft.revision) !== input.expectedRevision) {
-      throw new Error('Instagram message draft revision changed');
-    }
-
-    return this.buildAuthority({
-      workspace,
-      accountBinding,
-      draft,
-      approvalContext: {
-        initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
-        threadId: null,
-        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
-        interactionContextId: input.draftId,
-      },
-    });
-  }
-
-  async createThreadReplyAuthority(input: {
-    workspaceId: string;
-    initiatorUserWorkspaceId: string;
-    threadId: string;
-    draftId: string;
-  }): Promise<InstagramMessageActionAuthority> {
-    const workspace = await this.getWorkspace(input.workspaceId);
-    const accountBinding = await this.getActiveAccountBinding(
-      input.workspaceId,
-    );
-    const draft = await this.loadDraft(workspace, input.draftId);
-
-    return this.buildAuthority({
-      workspace,
-      accountBinding,
-      draft,
-      approvalContext: {
-        initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
-        threadId: input.threadId,
-        interactionContextType: null,
-        interactionContextId: null,
-      },
-    });
-  }
-
-  private async buildAuthority(input: {
+  protected async buildAuthority(input: {
     workspace: FlatWorkspace;
     accountBinding: UnipileInstagramAccountBindingEntity;
-    draft: DraftRow;
+    draft: InstagramMessageAuthorityDraftRow;
     allowExistingTarget?: boolean;
+    v3?: {
+      snapshot: InstagramMessageIdentitySnapshot;
+      composerInputDigest: string | null;
+    };
     approvalContext: Pick<
       Extract<
         ExpectedActionBindingWithWorkspace,
@@ -231,8 +267,21 @@ export class InstagramMessageLocalAuthorityReaderService {
         primaryLinkUrl: input.draft.creatorInstagramLinkPrimaryLinkUrl,
       },
     });
-    const recipientProviderId =
-      input.draft.recipientProviderId?.trim() ?? recipient.normalizedUsername;
+    const recipientProviderId = input.v3
+      ? input.v3.snapshot.providerId
+      : (input.draft.recipientProviderId?.trim() ??
+        recipient.normalizedUsername);
+    // Composer drafts store profile IDs; Inbox drafts store verified attendee IDs.
+    // The immutable snapshot distinguishes both namespaces; never interchange them.
+    if (
+      input.v3 &&
+      input.draft.recipientProviderId !==
+        (input.v3.composerInputDigest
+          ? input.v3.snapshot.providerId
+          : input.v3.snapshot.providerMessagingId)
+    ) {
+      throw new Error('Instagram draft recipient is stale');
+    }
 
     if (
       input.draft.recipientUsername?.trim().toLowerCase() !==
@@ -250,7 +299,7 @@ export class InstagramMessageLocalAuthorityReaderService {
           input.workspace,
           input.accountBinding,
           recipient.normalizedUsername,
-          recipientProviderId,
+          input.v3?.snapshot.providerMessagingId ?? recipientProviderId,
         );
       }
     } else {
@@ -263,7 +312,8 @@ export class InstagramMessageLocalAuthorityReaderService {
         input.draft.conversationLifecycle !== 'ACTIVE' ||
         input.draft.conversationInstagramAccountId !==
           input.accountBinding.workspaceInstagramAccountRecordId ||
-        input.draft.conversationRecipientIgsid !== recipientProviderId
+        input.draft.conversationRecipientIgsid !==
+          (input.v3?.snapshot.providerMessagingId ?? recipientProviderId)
       ) {
         throw new Error('REPLY draft target is stale');
       }
@@ -275,7 +325,7 @@ export class InstagramMessageLocalAuthorityReaderService {
       input.accountBinding.workspaceInstagramAccountRecordId,
     );
 
-    return buildInstagramMessageActionAuthority({
+    const authorityInput: BuildLegacyInstagramMessageActionAuthorityInput = {
       workspaceId: input.workspace.id,
       initiatorUserWorkspaceId: input.approvalContext.initiatorUserWorkspaceId,
       threadId: input.approvalContext.threadId,
@@ -309,7 +359,14 @@ export class InstagramMessageLocalAuthorityReaderService {
         instagramUserId: input.accountBinding.instagramUserId,
       },
       evidenceLinks,
-    });
+    };
+    return input.v3
+      ? buildInstagramMessageV3ActionAuthority({
+          ...authorityInput,
+          instagramMessageSnapshot: input.v3.snapshot,
+          composerInputDigest: input.v3.composerInputDigest,
+        })
+      : buildLegacyInstagramMessageActionAuthority(authorityInput);
   }
 
   protected async assertNoLocalCurrentConversation(
@@ -348,12 +405,12 @@ export class InstagramMessageLocalAuthorityReaderService {
     }
   }
 
-  private async loadDraft(
+  protected async loadDraft(
     workspace: FlatWorkspace,
     draftId: string,
     allowSent = false,
     rolePermissionConfig?: RolePermissionConfig,
-  ): Promise<DraftRow> {
+  ): Promise<InstagramMessageAuthorityDraftRow> {
     if (rolePermissionConfig) {
       return this.loadReadableDraft(
         workspace.id,
@@ -367,7 +424,9 @@ export class InstagramMessageLocalAuthorityReaderService {
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(workspace.id);
-        const rows = await dataSource.query<DraftRow[]>(
+        const rows = await dataSource.query<
+          InstagramMessageAuthorityDraftRow[]
+        >(
           `SELECT
              d."id", d."body", d."revision", d."kind", d."creatorId",
              d."recipientUsername", d."recipientProviderId",
@@ -409,7 +468,7 @@ export class InstagramMessageLocalAuthorityReaderService {
     workspaceId: string,
     draftId: string,
     rolePermissionConfig: RolePermissionConfig,
-  ): Promise<DraftRow> {
+  ): Promise<InstagramMessageAuthorityDraftRow> {
     const read = async <T extends ObjectRecord>(
       objectName: string,
       id: string,
@@ -432,7 +491,7 @@ export class InstagramMessageLocalAuthorityReaderService {
     const draft = await read<
       ObjectRecord &
         Pick<
-          DraftRow,
+          InstagramMessageAuthorityDraftRow,
           | 'id'
           | 'body'
           | 'revision'
@@ -523,53 +582,19 @@ export class InstagramMessageLocalAuthorityReaderService {
 
   private async getEvidenceLinks(
     workspaceId: string,
-    draft: DraftRow,
+    draft: InstagramMessageAuthorityDraftRow,
     accountRecordId: string,
   ) {
-    const roleByUniversalIdentifier = Object.fromEntries(
-      Object.entries(OBJECT_UNIVERSAL_IDENTIFIER_BY_ROLE).map(
-        ([role, universalIdentifier]) => [universalIdentifier, role],
-      ),
-    );
     const objectMetadatas = await this.objectMetadataRepository.find({
       where: { workspaceId },
     });
-    const idByRole = Object.fromEntries(
-      objectMetadatas
-        .filter(({ universalIdentifier }) =>
-          Object.prototype.hasOwnProperty.call(
-            roleByUniversalIdentifier,
-            universalIdentifier,
-          ),
-        )
-        .map(({ id, universalIdentifier }) => [
-          roleByUniversalIdentifier[universalIdentifier],
-          id,
-        ]),
-    );
-    const recordsByRole: Record<string, string | null> = {
-      INSTAGRAM_ACCOUNT: accountRecordId,
-      INSTAGRAM_MESSAGE_DRAFT: draft.id,
-      SOCIAL_CONVERSATION: draft.conversationId,
-      CREATOR: draft.creatorId,
-    };
-    const evidenceLinks = Object.entries(recordsByRole)
-      .filter((entry): entry is [string, string] => entry[1] !== null)
-      .map(([role, recordId]) => ({
-        objectMetadataId: idByRole[role],
-        recordId,
-        role,
-      }));
-
-    if (
-      evidenceLinks.some(({ objectMetadataId }) => !objectMetadataId) ||
-      !evidenceLinks.some(({ role }) => role === 'INSTAGRAM_MESSAGE_DRAFT') ||
-      !evidenceLinks.some(({ role }) => role === 'INSTAGRAM_ACCOUNT')
-    ) {
-      throw new Error('Instagram message evidence metadata is unavailable');
-    }
-
-    return evidenceLinks;
+    return buildInstagramMessageEvidenceLinks({
+      objectMetadatas,
+      accountRecordId,
+      draftId: draft.id,
+      conversationRecordId: draft.conversationId,
+      creatorRecordId: draft.creatorId,
+    });
   }
 
   protected async getWorkspace(workspaceId: string): Promise<FlatWorkspace> {

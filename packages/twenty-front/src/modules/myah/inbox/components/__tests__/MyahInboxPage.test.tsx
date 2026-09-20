@@ -1,3 +1,4 @@
+import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -487,6 +488,165 @@ const renderPage = (store = createStore()) => {
 };
 
 describe('MyahInboxPage contact-first flow', () => {
+  it('waits for the real Creator contact and exact conversation, never default-selects over the pending destination', async () => {
+    const store = createStore();
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'creator-contact-2',
+      conversationRecordId: 'conversation-contact-2',
+    });
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [contacts[0]],
+    });
+    const view = renderPage(store);
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Message sent');
+    setDefaultHooks();
+    view.rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await waitFor(() =>
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual({
+        workspaceId: 'workspace-1',
+        contactId: 'contact-2',
+        channel: 'INSTAGRAM',
+        emailThreadId: null,
+        instagramConversationId: 'conversation-contact-2',
+      }),
+    );
+    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+  });
+
+  it('a newer explicit contact choice cancels a delayed destination', async () => {
+    const store = createStore();
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'creator-contact-2',
+      conversationRecordId: 'conversation-contact-2',
+    });
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [contacts[0]],
+    });
+    const view = renderPage(store);
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+    setDefaultHooks();
+    view.rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+  });
+
+  it('honors a non-default user choice while canceling an unloaded destination', async () => {
+    const store = createStore();
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'not-loaded',
+      conversationRecordId: 'not-loaded',
+    });
+    renderPage(store);
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' })),
+    );
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-2',
+    );
+  });
+
+  it.each([
+    ['creator-contact-2', 'different-conversation'],
+    ['different-creator', 'conversation-contact-2'],
+  ])(
+    'never infers destination from only part of %s / %s',
+    (creatorRecordId, conversationRecordId) => {
+      const store = createStore();
+      const pending = {
+        workspaceId: 'workspace-1',
+        creatorRecordId,
+        conversationRecordId,
+      };
+      store.set(myahInboxPendingInstagramSelectionState.atom, pending);
+      renderPage(store);
+      expect(
+        store.get(myahInboxContactSelectionState.atom).contactId,
+      ).toBeNull();
+      expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toEqual(
+        pending,
+      );
+    },
+  );
+
+  it('waits for the existing draft flush barrier and yields to a newer click while it is pending', async () => {
+    let finishFlush: (saved: boolean) => void = () => undefined;
+    flushWorkspace.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishFlush = resolve;
+        }),
+    );
+    const store = createStore();
+    store.set(myahInboxContactSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      contactId: 'contact-1',
+      channel: 'EMAIL',
+      emailThreadId: 'thread-2',
+      instagramConversationId: null,
+    });
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'creator-contact-2',
+      conversationRecordId: 'conversation-contact-2',
+    });
+    renderPage(store);
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+    await act(async () => finishFlush(true));
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
+  });
+
+  it('does not commit a flushed destination after workspace change', async () => {
+    let finishFlush: (saved: boolean) => void = () => undefined;
+    flushWorkspace.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishFlush = resolve;
+        }),
+    );
+    const store = createStore();
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'creator-contact-2',
+      conversationRecordId: 'conversation-contact-2',
+    });
+    renderPage(store);
+    act(() =>
+      store.set(currentWorkspaceState.atom, { id: 'workspace-2' } as never),
+    );
+    await act(async () => finishFlush(true));
+    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
+    expect(store.get(myahInboxContactSelectionState.atom).workspaceId).not.toBe(
+      'workspace-1',
+    );
+  });
+
   it('matches history gutters and leaves bottom space without restoring wrapper padding', () => {
     const source = readFileSync(
       resolve(__dirname, '../MyahInboxContactConversation.tsx'),
