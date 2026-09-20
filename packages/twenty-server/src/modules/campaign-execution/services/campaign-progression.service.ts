@@ -529,20 +529,26 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     const prior = node.replyToThread
       ? rows(
           await runner.query(
-            `SELECT a.* FROM core."outboundEmailAttempt" a JOIN core."campaignOccurrence" o ON o.id=a."occurrenceId"
-              WHERE a."workspaceId"=$1 AND a."campaignId"=$2 AND a."enrollmentId"=$3
-                AND a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='ACCEPTED'
-                AND o."authoredMessageIndex" < $4 ORDER BY o."authoredMessageIndex" DESC,a."attemptNumber" DESC LIMIT 2`,
-            [
-              input.workspaceId,
-              input.campaignId,
-              enrollment[0].id,
-              occurrence.authoredMessageIndex,
-            ],
+            `SELECT a.*, o."authoredMessageIndex",
+                    (o."workspaceId"=a."workspaceId" AND o."campaignId"=a."campaignId"
+                     AND o."enrollmentId"=a."enrollmentId" AND o."workflowVersionId"=a."workflowVersionId"
+                     AND o."messageId"=a."messageId") AS "occurrenceBindingMatches"
+               FROM core."outboundEmailAttempt" a LEFT JOIN core."campaignOccurrence" o ON o.id=a."occurrenceId"
+              WHERE a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='ACCEPTED'
+                AND ((a."workspaceId"=$1 AND a."campaignId"=$2 AND a."enrollmentId"=$3)
+                  OR (o."workspaceId"=$1 AND o."campaignId"=$2 AND o."enrollmentId"=$3))
+              ORDER BY o."authoredMessageIndex" DESC,a."attemptNumber" DESC`,
+            [input.workspaceId, input.campaignId, enrollment[0].id],
           ),
         )
       : [];
-    if (node.replyToThread && prior.length !== 1) {
+    // Distinct earlier steps are expected; competing accepted evidence is not.
+    if (
+      node.replyToThread &&
+      (prior.length === 0 ||
+        new Set(prior.map((attempt) => attempt.authoredMessageIndex)).size !==
+          prior.length)
+    ) {
       await this.holdOccurrenceAndEnrollment(
         input.occurrenceId,
         String(enrollment[0].id),
@@ -551,15 +557,39 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       );
       return { status: 'HELD', reason: 'THREAD_EVIDENCE_AMBIGUOUS' };
     }
-    const priorHeader =
-      prior[0]?.providerHeaderMessageId ??
-      prior[0]?.reconciledProviderHeaderMessageId;
+    // Inspect every accepted predecessor before selecting the nearest one. Filtering
+    // malformed bindings out of the query would silently turn them into absent history.
     if (
       node.replyToThread &&
-      (typeof priorHeader !== 'string' ||
-        typeof prior[0].resolvedThreadExternalId !== 'string' ||
-        typeof prior[0].projectedMessageId !== 'string' ||
-        typeof prior[0].projectedMessageThreadId !== 'string')
+      prior.some((attempt) => {
+        const index = Number(attempt.authoredMessageIndex);
+        return (
+          attempt.occurrenceBindingMatches !== true ||
+          attempt.workspaceId !== input.workspaceId ||
+          attempt.campaignId !== input.campaignId ||
+          attempt.enrollmentId !== enrollment[0].id ||
+          attempt.authorizationId !== projection.authorizationId ||
+          attempt.workflowVersionId !== projection.workflowVersionId ||
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= Number(occurrence.authoredMessageIndex) ||
+          plan.nodes[index]?.channel !== 'EMAIL' ||
+          plan.nodes[index]?.messageId !== attempt.messageId ||
+          attempt.normalizedRecipient !== creator.normalizedEmail ||
+          [
+            attempt.providerHeaderMessageId ??
+              attempt.reconciledProviderHeaderMessageId,
+            attempt.resolvedThreadExternalId,
+            attempt.projectedMessageId,
+            attempt.projectedMessageThreadId,
+            attempt.connectedAccountId,
+            attempt.messageChannelId,
+            attempt.normalizedSenderHandle,
+          ].some(
+            (value) => typeof value !== 'string' || value.trim().length === 0,
+          )
+        );
+      })
     ) {
       await this.holdOccurrenceAndEnrollment(
         input.occurrenceId,
@@ -569,6 +599,9 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       );
       return { status: 'HELD', reason: 'THREAD_EVIDENCE_MISSING' };
     }
+    const priorHeader =
+      prior[0]?.providerHeaderMessageId ??
+      prior[0]?.reconciledProviderHeaderMessageId;
     const selectionConstraint = node.replyToThread
       ? {
           kind: 'PINNED_REPLY' as const,
