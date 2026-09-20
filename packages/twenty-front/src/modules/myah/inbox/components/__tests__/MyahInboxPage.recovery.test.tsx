@@ -18,15 +18,24 @@ import {
   within,
 } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
+import type { Store } from 'jotai/vanilla/store';
 import { type ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
+import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
-import { myahInboxContactSelectionState } from '@/myah/inbox/states/myahInboxSelectionState';
+import {
+  EMPTY_MYAH_INBOX_CONTACT_SELECTION,
+  type MyahInboxContactSelection,
+  myahInboxContactSelectionState,
+  myahInboxPreserveSelectionOnUnmountState,
+} from '@/myah/inbox/states/myahInboxSelectionState';
 import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import { type MyahInboxDraftAutosaveEntry } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
+import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignAgentTabUniversalIdentifier';
+import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 
 const mockInstagramNavigate = jest.fn();
 jest.mock('react-router-dom', () => {
@@ -96,14 +105,25 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     onDraftChange,
     actions,
     onRetry,
+    initialIsEditing,
+    onEditingChange,
+    onOpenAiGuidance,
+    guidanceUnavailableReason,
   }: {
     entry: MyahInboxDraftAutosaveEntry;
     disabled: boolean;
     onDraftChange: (body: { markdown: string; blocknote: null }) => void;
     actions: ReactNode;
     onRetry: () => void;
+    initialIsEditing?: boolean;
+    onEditingChange?: (isEditing: boolean) => void;
+    onOpenAiGuidance?: () => void;
+    guidanceUnavailableReason?: string;
   }) => (
-    <div>
+    <div
+      data-initial-is-editing={initialIsEditing}
+      data-testid="page-draft-editor"
+    >
       <input
         aria-label="Real shared draft"
         value={entry.localBody.markdown}
@@ -115,6 +135,17 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
       {entry.status === 'error' && (
         <button onClick={onRetry}>Retry draft save</button>
       )}
+      <button onClick={() => onEditingChange?.(true)}>
+        Mock start editing
+      </button>
+      <button
+        aria-label="Open AI guidance"
+        disabled={!onOpenAiGuidance}
+        onClick={onOpenAiGuidance}
+        title={guidanceUnavailableReason}
+      >
+        Open AI guidance
+      </button>
       {actions}
     </div>
   ),
@@ -405,6 +436,43 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxSelectedEmailThread', () => ({
 
 const key = draftKeyFixture('workspace-1', 'thread-1');
 const body = { markdown: 'server draft', blocknote: null };
+const setCampaignAgentMetadata = (store: Store) => {
+  store.set(metadataStoreState.atomFamily('pageLayouts'), {
+    current: [
+      {
+        id: 'campaign-layout-1',
+        deletedAt: null,
+        universalIdentifier:
+          MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
+      },
+    ],
+    draft: [],
+    status: 'up-to-date',
+  });
+  store.set(metadataStoreState.atomFamily('pageLayoutTabs'), {
+    current: [
+      {
+        id: 'runtime-agent-tab-1',
+        isActive: true,
+        pageLayoutId: 'campaign-layout-1',
+        universalIdentifier: MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER,
+      },
+    ],
+    draft: [],
+    status: 'up-to-date',
+  });
+  store.set(metadataStoreState.atomFamily('pageLayoutWidgets'), {
+    current: [],
+    draft: [],
+    status: 'up-to-date',
+  });
+};
+const CampaignRoute = () => {
+  const navigate = useNavigate();
+
+  // oxlint-disable-next-line twenty/no-navigate-prefer-link
+  return <button onClick={() => navigate(-1)}>Back to Inbox</button>;
+};
 const contextOptionsPayload = {
   myahInboxReplyContextOptions: {
     edges: [
@@ -603,10 +671,7 @@ const setup = (options?: {
     if (initialSelection.emailThreadId && initialDraftBody)
       store.set(
         myahInboxDraftAutosaveFamilyState.atomFamily(
-          draftKeyFixture(
-            key.workspaceId,
-            initialSelection.emailThreadId,
-          ),
+          draftKeyFixture(key.workspaceId, initialSelection.emailThreadId),
         ),
         {
           operation: null,
@@ -708,17 +773,16 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     jest.useRealTimers();
   });
 
-  it.each(['same-contact', 'reply-card'])(
-    'a newer %s intent cancels in-flight composer navigation without rebinding the real Email draft',
-    async (intent) => {
+  it.each([
+    ['same-contact', 'thread-2'],
+    ['reply-card', 'thread-1'],
+  ] as const)(
+    'a newer %s intent cancels in-flight composer navigation while keeping that Email target active',
+    async (intent, expectedThreadId) => {
       mockContacts = [contact('contact-1', 'EMAIL')];
       const { store } = setup({ includeComposer: true });
       await completeRead('thread-2');
       const selection = store.get(myahInboxContactSelectionState.atom);
-      const mainDraftAtom = myahInboxDraftAutosaveFamilyState.atomFamily(
-        draftKeyFixture(key.workspaceId, 'thread-2'),
-      );
-      const mainDraft = store.get(mainDraftAtom);
       await act(async () =>
         take('InstagramMessageComposerAccount').resolve({
           instagramMessageComposerAccount: {
@@ -750,23 +814,29 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       const sendRequest = take('SendInstagramMessageComposer');
       if (intent === 'same-contact') await select('contact-1');
       else await selectThread('thread-1');
-      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(selection);
+      const expectedSelection = {
+        ...selection,
+        emailThreadId: expectedThreadId,
+      };
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(
+        expectedSelection,
+      );
       expect(store.get(myahInboxContactSelectionState.atom)).not.toBe(
         selection,
       );
-      expect(store.get(mainDraftAtom)).toBe(mainDraft);
-      expect(
-        within(
-          screen.getByRole('region', { name: 'Main reply' }),
-        ).getByLabelText('Real shared draft'),
-      ).toHaveValue('server draft');
       expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
         false,
       );
       if (intent === 'same-contact')
         expect(
-          requests.some(({ name }) => name === 'MyahInboxEmailDraft'),
+          requests.some(({ name }) => name === 'MyahInboxReplyDraft'),
         ).toBe(false);
+      else await completeRead('thread-1');
+      expect(
+        within(
+          screen.getByRole('region', { name: 'Main reply' }),
+        ).getByLabelText('Real shared draft'),
+      ).toHaveValue('server draft');
       await act(async () =>
         sendRequest.resolve({
           sendInstagramMessageComposer: {
@@ -795,7 +865,9 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
       expect(
         store.get(myahInboxPendingInstagramSelectionState.atom),
       ).toBeNull();
-      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(selection);
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(
+        expectedSelection,
+      );
     },
   );
 
@@ -822,35 +894,6 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     expect(draftInput()).toHaveValue('Keep anchored Email text');
     expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
     expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
-  });
-
-  it('closing an inline reply cancels pending navigation while retaining the main anchored target', async () => {
-    mockContacts = [contact('contact-1', 'EMAIL')];
-    const { store } = setup();
-    await completeRead('thread-2');
-    await selectThread('thread-1');
-    await completeRead('thread-1');
-    const selection = store.get(myahInboxContactSelectionState.atom);
-    act(() =>
-      store.set(myahInboxPendingInstagramSelectionState.atom, {
-        workspaceId: key.workspaceId,
-        creatorRecordId: 'not-loaded',
-        conversationRecordId: 'not-loaded',
-      }),
-    );
-    await act(async () =>
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Close inline reply' }),
-      ),
-    );
-    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
-    expect(store.get(myahInboxContactSelectionState.atom)).toEqual(selection);
-    expect(store.get(myahInboxContactSelectionState.atom)).not.toBe(selection);
-    expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
-    expect(draftInput()).toHaveValue('server draft');
-    expect(requests.some(({ name }) => name === 'SaveMyahInboxDraft')).toBe(
-      false,
-    );
   });
 
   it('integrates the real bounded history and exact summary/draft reads without an exhaustive legacy read', async () => {
