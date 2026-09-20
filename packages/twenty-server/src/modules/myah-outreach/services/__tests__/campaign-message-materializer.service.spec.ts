@@ -118,7 +118,7 @@ const dispatchContext = (
     campaignCreatorId,
     authorizationId: 'authorization-id',
     enrollmentId: 'enrollment-id',
-    occurrenceId: 'occurrence-id',
+    occurrenceId: 'current-occurrence-id',
     workflowVersionId,
     messageId,
     initiatorUserWorkspaceId: 'user-workspace-id',
