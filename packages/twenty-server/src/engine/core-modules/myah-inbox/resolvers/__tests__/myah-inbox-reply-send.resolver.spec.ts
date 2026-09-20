@@ -1,4 +1,8 @@
 import {
+  ReplyChannel,
+  ReplyContextKind,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
+import {
   ForbiddenException,
   type CanActivate,
   type ExecutionContext,
@@ -95,6 +99,10 @@ const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
 const userId = '20202020-1234-4678-9012-345678901235';
 const workspaceMemberId = '20202020-0b5c-4178-bed7-d371f6411eaa';
 const threadId = '20202020-0b5c-4178-bed7-d371f6411ea1';
+const selection = {
+  target: { channel: ReplyChannel.EMAIL, contactId: 'contact', threadId },
+  replyContext: { kind: ReplyContextKind.GENERAL },
+};
 const receiptId = '20202020-0b5c-4178-bed7-d371f6411ea2';
 const workspace = { id: workspaceId };
 const authContext = {
@@ -145,7 +153,7 @@ describe('MyahInboxReplySendResolver', () => {
 
     await resolver.sendMyahInboxReply(
       {
-        threadId,
+        ...selection,
         expectedDraftRevision: 4,
         senderEmail: 'attacker@example.com',
         body: 'attacker body',
@@ -156,7 +164,7 @@ describe('MyahInboxReplySendResolver', () => {
     );
 
     expect(send).toHaveBeenCalledWith({
-      threadId,
+      ...selection,
       expectedDraftRevision: 4,
       authContext,
       workspace,
@@ -170,14 +178,14 @@ describe('MyahInboxReplySendResolver', () => {
     const { resolver, getReadiness, getStatus } = createResolver();
 
     await resolver.myahInboxReplySendReadiness(
-      threadId,
+      { ...selection, expectedWorkspaceId: workspace.id },
       workspace as never,
       userWorkspaceId,
       workspaceMemberId,
     );
     await resolver.myahInboxReplySendStatus(
       {
-        threadId,
+        ...selection,
         receiptId,
         providerReceiptId: 'attacker-provider-id',
       } as never,
@@ -187,7 +195,7 @@ describe('MyahInboxReplySendResolver', () => {
     );
 
     expect(getReadiness).toHaveBeenCalledWith({
-      threadId,
+      ...selection,
       authContext,
       workspace,
       userWorkspaceId,
@@ -195,7 +203,7 @@ describe('MyahInboxReplySendResolver', () => {
       user: authContext.user,
     });
     expect(getStatus).toHaveBeenCalledWith({
-      threadId,
+      ...selection,
       receiptId,
       authContext,
       workspace,
@@ -213,16 +221,15 @@ describe('MyahInboxReplySendResolver', () => {
       const result =
         operation === 'readiness'
           ? resolver.myahInboxReplySendReadiness(
-              threadId,
+              { ...selection, expectedWorkspaceId },
               workspace as never,
               userWorkspaceId,
               workspaceMemberId,
-              expectedWorkspaceId,
             )
           : operation === 'send'
             ? resolver.sendMyahInboxReply(
                 {
-                  threadId,
+                  ...selection,
                   expectedDraftRevision: 4,
                   expectedWorkspaceId,
                 } as never,
@@ -231,7 +238,7 @@ describe('MyahInboxReplySendResolver', () => {
                 workspaceMemberId,
               )
             : resolver.myahInboxReplySendStatus(
-                { threadId, receiptId, expectedWorkspaceId } as never,
+                { ...selection, receiptId, expectedWorkspaceId } as never,
                 workspace as never,
                 userWorkspaceId,
                 workspaceMemberId,
@@ -248,7 +255,11 @@ describe('MyahInboxReplySendResolver', () => {
 
     await expect(
       resolver.sendMyahInboxReply(
-        { threadId, expectedDraftRevision: 4 },
+        {
+          ...selection,
+          expectedWorkspaceId: workspace.id,
+          expectedDraftRevision: 4,
+        },
         workspace as never,
         '20202020-1234-4678-9012-345678901299',
         workspaceMemberId,
@@ -262,7 +273,11 @@ describe('MyahInboxReplySendResolver', () => {
 
     await expect(
       resolver.sendMyahInboxReply(
-        { threadId, expectedDraftRevision: 4 },
+        {
+          ...selection,
+          expectedWorkspaceId: workspace.id,
+          expectedDraftRevision: 4,
+        },
         workspace as never,
         userWorkspaceId,
         '20202020-0b5c-4178-bed7-d371f6411e99',

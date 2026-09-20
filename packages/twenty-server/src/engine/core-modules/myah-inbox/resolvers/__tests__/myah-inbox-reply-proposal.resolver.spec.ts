@@ -1,3 +1,7 @@
+import {
+  ReplyChannel,
+  ReplyContextKind,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import { ForbiddenException } from '@nestjs/common';
 
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
@@ -13,6 +17,12 @@ const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
 const userId = '20202020-1234-4678-9012-345678901235';
 const workspaceMemberId = '20202020-0b5c-4178-bed7-d371f6411eaa';
 const threadId = '20202020-0b5c-4178-bed7-d371f6411ea1';
+const selection = {
+  expectedWorkspaceId: workspaceId,
+  target: { channel: ReplyChannel.EMAIL, contactId: 'contact', threadId },
+  replyContext: { kind: ReplyContextKind.GENERAL },
+  expectedContextFingerprint: 'a'.repeat(64),
+};
 const workspace = { id: workspaceId };
 const userAuthContext = {
   type: 'user',
@@ -35,26 +45,26 @@ describe('MyahInboxResolver reply proposal', () => {
   });
 
   it('calls the shared proposal service with only the authenticated user/workspace context and operator request', async () => {
-    const generateReplyProposal = jest.fn().mockResolvedValue(proposal);
+    const generateContextReplyProposal = jest.fn().mockResolvedValue(proposal);
     const resolver = new MyahInboxResolver(
       {} as never,
       {} as never,
-      { generateReplyProposal } as never,
+      { generateContextReplyProposal } as never,
     );
 
     await expect(
       resolver.generateMyahInboxReplyProposal(
         {
-          threadId,
+          ...selection,
           operatorInstructions: 'Confirm Tuesday.',
         },
         workspace as never,
         workspaceMemberId,
       ),
     ).resolves.toEqual(proposal);
-    expect(generateReplyProposal).toHaveBeenCalledWith({
+    expect(generateContextReplyProposal).toHaveBeenCalledWith({
       authContext: userAuthContext,
-      threadId,
+      ...selection,
       operatorInstructions: 'Confirm Tuesday.',
     });
   });
@@ -64,20 +74,20 @@ describe('MyahInboxResolver reply proposal', () => {
       type: 'system',
       workspace,
     } as never);
-    const generateReplyProposal = jest.fn();
+    const generateContextReplyProposal = jest.fn();
     const resolver = new MyahInboxResolver(
       {} as never,
       {} as never,
-      { generateReplyProposal } as never,
+      { generateContextReplyProposal } as never,
     );
 
     await expect(
       resolver.generateMyahInboxReplyProposal(
-        { threadId, operatorInstructions: 'Reply.' },
+        { ...selection, operatorInstructions: 'Reply.' },
         workspace as never,
         workspaceMemberId,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(generateReplyProposal).not.toHaveBeenCalled();
+    expect(generateContextReplyProposal).not.toHaveBeenCalled();
   });
 });

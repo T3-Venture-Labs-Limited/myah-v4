@@ -1,3 +1,8 @@
+import {
+  MyahInboxReplyDraftInput,
+  validateReplyTargetInput,
+  validateReplyContextInput,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 import { ForbiddenException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
@@ -5,7 +10,6 @@ import { Args, Mutation, Query } from '@nestjs/graphql';
 import { PermissionFlagType } from 'twenty-shared/constants';
 
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
 import {
@@ -39,20 +43,19 @@ export class MyahInboxReplySendResolver {
 
   @Query(() => MyahInboxReplySendReadiness)
   async myahInboxReplySendReadiness(
-    @Args('threadId', { type: () => UUIDScalarType }) threadId: string,
+    @Args('input') input: MyahInboxReplyDraftInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
     @AuthWorkspaceMemberId() workspaceMemberId: string,
-    @Args('expectedWorkspaceId', { type: () => UUIDScalarType, nullable: true })
-    expectedWorkspaceId?: string | null,
   ): Promise<MyahInboxReplySendReadiness> {
     return this.myahInboxReplySendService.getReadiness({
-      threadId,
+      target: validateReplyTargetInput(input.target),
+      replyContext: validateReplyContextInput(input.replyContext),
       ...this.getAuthenticatedRequestContext(
         workspace,
         userWorkspaceId,
         workspaceMemberId,
-        expectedWorkspaceId,
+        input.expectedWorkspaceId,
       ),
     });
   }
@@ -65,7 +68,8 @@ export class MyahInboxReplySendResolver {
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<MyahInboxReplySendResult> {
     return this.myahInboxReplySendService.send({
-      threadId: input.threadId,
+      target: validateReplyTargetInput(input.target),
+      replyContext: validateReplyContextInput(input.replyContext),
       expectedDraftRevision: input.expectedDraftRevision,
       ...this.getAuthenticatedRequestContext(
         workspace,
@@ -84,7 +88,8 @@ export class MyahInboxReplySendResolver {
     @AuthWorkspaceMemberId() workspaceMemberId: string,
   ): Promise<MyahInboxReplySendStatus> {
     return this.myahInboxReplySendService.getStatus({
-      threadId: input.threadId,
+      target: validateReplyTargetInput(input.target),
+      replyContext: validateReplyContextInput(input.replyContext),
       receiptId: input.receiptId,
       ...this.getAuthenticatedRequestContext(
         workspace,

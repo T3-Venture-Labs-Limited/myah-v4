@@ -337,27 +337,30 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // Composer metadata is the final append-only 2.20.0 workspace step,
-    // after Campaign activity control's catch-up command.
+    // Email provenance is the final append-only 2.20.0 workspace step,
+    // immediately after Instagram composer metadata.
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     );
     expect(sequence[sequence.length - 2]?.name).toBe(
-      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
     );
     expect(sequence[sequence.length - 3]?.name).toBe(
-      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
     );
     expect(sequence[sequence.length - 4]?.name).toBe(
-      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
     );
     expect(sequence[sequence.length - 5]?.name).toBe(
-      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
+      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
     );
     expect(sequence[sequence.length - 6]?.name).toBe(
-      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
     );
     expect(sequence[sequence.length - 7]?.name).toBe(
+      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+    );
+    expect(sequence[sequence.length - 8]?.name).toBe(
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
     );
     const workspaceCommands = sequence
@@ -376,6 +379,7 @@ describe('Instagram production upgrade provider compatibility', () => {
     ).toEqual([
       '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
       '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(

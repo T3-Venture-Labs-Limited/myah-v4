@@ -11,8 +11,12 @@ import {
 } from 'react';
 
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
-import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import {
+  myahInboxDraftAutosaveFamilyState,
+  myahInboxDraftAutosaveKeysState,
+} from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
+import {
+  myahInboxDraftKeyId as keyId,
   type MyahInboxDraftAutosaveEntry,
   type MyahInboxDraftOperationCapture,
   type MyahInboxDraftAutosaveKey,
@@ -36,9 +40,6 @@ const toRichText = (
 ): MyahInboxRichText | null =>
   body ? { markdown: body.markdown, blocknote: body.blocknote ?? null } : null;
 
-const keyId = (key: MyahInboxDraftAutosaveKey) =>
-  JSON.stringify([key.workspaceId, key.threadId]);
-
 type UpdateDraftParams = {
   key: MyahInboxDraftAutosaveKey;
   body: MyahInboxRichText;
@@ -49,6 +50,9 @@ export type MyahInboxDraftTargetCapture = {
   key: MyahInboxDraftAutosaveKey;
   token: symbol;
   isContextCurrent: () => boolean;
+  refreshAfterSave?: (
+    revision: number,
+  ) => Promise<MyahInboxDraftAutosaveThread | null>;
 };
 
 // Runtime handles share the same lifetime as the Jotai draft store, not a Page mount.
@@ -57,11 +61,25 @@ const runtimes = new WeakMap<
   {
     timers: Map<string, ReturnType<typeof setTimeout>>;
     runs: Map<string, Promise<void>>;
+    saves: Map<string, { targetToken: symbol; refreshing: boolean }>;
     keys: Map<string, MyahInboxDraftAutosaveKey>;
     forcedRecoveryKeys: Set<string>;
+    outcomeBodies: Map<
+      string,
+      {
+        targetToken: symbol;
+        revision: number;
+        localBody: MyahInboxRichText;
+        dirty: boolean;
+      }
+    >;
     targets: Map<
       string,
-      { capture: MyahInboxDraftTargetCapture; authorized: boolean }
+      {
+        capture: MyahInboxDraftTargetCapture;
+        authorized: boolean;
+        refreshing?: boolean;
+      }
     >;
   }
 >();
@@ -72,8 +90,10 @@ const getRuntime = (store: ReturnType<typeof useStore>) => {
     runtime = {
       timers: new Map(),
       runs: new Map(),
+      saves: new Map(),
       keys: new Map(),
       forcedRecoveryKeys: new Set(),
+      outcomeBodies: new Map(),
       targets: new Map(),
     };
     runtimes.set(store, runtime);
@@ -91,7 +111,7 @@ export type MyahInboxDraftAutosaveController = {
   releaseEditor: (key: MyahInboxDraftAutosaveKey, owner: symbol) => boolean;
   acquire: (
     key: MyahInboxDraftAutosaveKey,
-    kind: 'generating' | 'sending',
+    kind: 'generating' | 'sending' | 'reviewing',
     editorOwner?: symbol,
   ) => MyahInboxDraftOperationCapture | null;
   isOperationCurrent: (capture: MyahInboxDraftOperationCapture) => boolean;
@@ -118,11 +138,12 @@ export type MyahInboxDraftAutosaveController = {
     key: MyahInboxDraftAutosaveKey,
   ) => Promise<MyahInboxDraftAutosaveEntry>;
   retry: (key: MyahInboxDraftAutosaveKey) => Promise<void>;
-  reloadConflict: (key: MyahInboxDraftAutosaveKey) => void;
+  reloadConflict: (key: MyahInboxDraftAutosaveKey) => Promise<void>;
   applyProposal: (params: UpdateDraftParams) => Promise<boolean>;
   beginTargetRead: (
     key: MyahInboxDraftAutosaveKey,
     isContextCurrent: () => boolean,
+    refreshAfterSave?: MyahInboxDraftTargetCapture['refreshAfterSave'],
   ) => MyahInboxDraftTargetCapture;
   authorizeTarget: (
     capture: MyahInboxDraftTargetCapture,
@@ -234,9 +255,11 @@ export const useMyahInboxDraftAutosaveController =
           !entry ||
           !entry.dirty ||
           !isTargetAuthorized(key) ||
+          (entry.executionState != null && entry.executionState !== 'READY') ||
           entry.operation?.kind === 'pending' ||
           entry.operation?.kind === 'unknown' ||
           entry.operation?.kind === 'generating' ||
+          entry.operation?.kind === 'reviewing' ||
           entry.status === 'error' ||
           entry.status === 'conflict' ||
           entry.status === 'saving' ||
@@ -246,8 +269,31 @@ export const useMyahInboxDraftAutosaveController =
         }
 
         cancelTimer(key);
+        const target = targetsRef.current.get(keyId(key));
+        if (!target) return;
         const submittedBody = entry.localBody;
         const expectedRevision = entry.confirmedRevision;
+        const save = { targetToken: target.capture.token, refreshing: false };
+        const getSaveTarget = () => {
+          const currentTarget = targetsRef.current.get(keyId(key));
+          return currentTarget?.capture.token === save.targetToken
+            ? currentTarget
+            : undefined;
+        };
+        runtime.saves.set(keyId(key), save);
+        const ownsSave = () => {
+          const current = store.get(atom);
+          const currentTarget = targetsRef.current.get(keyId(key));
+          return (
+            runtime.saves.get(keyId(key)) === save &&
+            current?.confirmedRevision === expectedRevision &&
+            current.status === 'saving' &&
+            (!currentTarget ||
+              currentTarget.capture.token === save.targetToken) &&
+            (current.executionState === 'READY' ||
+              current.executionState === 'NEEDS_REVIEW')
+          );
+        };
         store.set(atom, {
           ...entry,
           dirty: false,
@@ -257,13 +303,21 @@ export const useMyahInboxDraftAutosaveController =
         });
 
         try {
+          if (!entry.input) throw new Error('Draft read identity is required');
           const result = await saveDraftRef.current({
-            expectedWorkspaceId: key.workspaceId,
-            threadId: key.threadId,
+            ...entry.input,
+            ...(entry.proposalContextFingerprint
+              ? { proposalContextFingerprint: entry.proposalContextFingerprint }
+              : {}),
             expectedRevision,
             body: submittedBody,
           });
 
+          // Validate before *any* completion write, including conflicts/errors.
+          // A detached save may retain ownership only until an authoritative
+          // read supersedes it (or explicitly hands off the same base revision).
+          // Recheck queued work: its expired timer may have joined this old run.
+          if (!ownsSave()) continue;
           if (result.status === MyahInboxDraftSaveStatus.CONFLICT) {
             const currentEntry = store.get(atom);
 
@@ -292,26 +346,97 @@ export const useMyahInboxDraftAutosaveController =
           }
 
           const savedBody = toRichText(result.body);
-          const hasNewerLocalBody = !areRichTextEqual(
-            currentEntry.localBody,
-            submittedBody,
-          );
+          const snapshot = runtime.outcomeBodies.get(keyId(key));
+          if (snapshot && snapshot.revision !== result.revision)
+            runtime.outcomeBodies.delete(keyId(key));
+          const outcomeLocked =
+            currentEntry.operation?.kind === 'pending' ||
+            currentEntry.operation?.kind === 'unknown' ||
+            currentEntry.executionState === 'OUTCOME_PENDING' ||
+            currentEntry.executionState === 'OUTCOME_UNKNOWN';
+          const hasNewerLocalBody = outcomeLocked
+            ? currentEntry.dirty
+            : !areRichTextEqual(currentEntry.localBody, submittedBody);
+          save.refreshing = true;
+          const saveTarget = getSaveTarget();
+          if (saveTarget) saveTarget.refreshing = true;
           store.set(atom, {
             ...currentEntry,
             confirmedRevision: result.revision,
-            confirmedBody: savedBody,
+            confirmedBody: outcomeLocked ? null : savedBody,
             dirty: hasNewerLocalBody,
             status: hasNewerLocalBody ? 'idle' : 'saved',
             error: null,
             conflict: null,
           });
-          if (!hasNewerLocalBody) {
+          // A committed save is never retried because its metadata read failed.
+          // Keep flush/operation acquisition gated while the exact capability
+          // refreshes, without preventing newer local edits or retaining "saving".
+          let refreshed: MyahInboxDraftAutosaveThread | null = null;
+          while (
+            runtime.saves.get(keyId(key)) === save &&
+            store.get(atom)?.confirmedRevision === result.revision
+          ) {
+            const refreshTarget = getSaveTarget();
+            if (
+              !refreshTarget?.capture.refreshAfterSave ||
+              !isTargetAuthorized(key)
+            )
+              break;
+            refreshTarget.refreshing = true;
+            try {
+              refreshed = await refreshTarget.capture.refreshAfterSave(
+                result.revision,
+              );
+            } catch {
+              refreshed = null;
+            }
+            // A same-base remount can transfer ownership even during this read.
+            // Discard the old capability's response and reread through its successor.
+            if (getSaveTarget() !== refreshTarget) {
+              refreshed = null;
+              continue;
+            }
+            if (
+              runtime.saves.get(keyId(key)) === save &&
+              store.get(atom)?.confirmedRevision === result.revision &&
+              (!refreshed ||
+                keyId(refreshed.key) !== keyId(key) ||
+                refreshed.revision !== result.revision)
+            ) {
+              invalidateTarget(refreshTarget.capture);
+            }
+            break;
+          }
+          save.refreshing = false;
+          const currentTarget = getSaveTarget();
+          if (currentTarget) currentTarget.refreshing = false;
+          const latest = store.get(atom);
+          if (
+            !latest ||
+            runtime.saves.get(keyId(key)) !== save ||
+            latest.confirmedRevision !== result.revision ||
+            (targetsRef.current.has(keyId(key)) && !currentTarget)
+          )
+            continue;
+          if (
+            refreshed &&
+            latest.operation?.kind !== 'pending' &&
+            latest.operation?.kind !== 'unknown' &&
+            latest.executionState !== 'OUTCOME_PENDING' &&
+            latest.executionState !== 'OUTCOME_UNKNOWN' &&
+            latest.executionState !== 'CONTEXT_UNAVAILABLE' &&
+            isTargetAuthorized(key)
+          ) {
+            reconcile(refreshed);
+          }
+          if (!latest.dirty) {
             clearPendingDebounce(key);
             cancelTimer(key);
-
             return;
           }
         } catch {
+          if (!ownsSave()) continue;
           const currentEntry = store.get(atom);
 
           if (currentEntry) {
@@ -326,6 +451,9 @@ export const useMyahInboxDraftAutosaveController =
           clearPendingDebounce(key);
 
           return;
+        } finally {
+          if (runtime.saves.get(keyId(key)) === save)
+            runtime.saves.delete(keyId(key));
         }
       }
     };
@@ -340,9 +468,11 @@ export const useMyahInboxDraftAutosaveController =
           const current = store.get(atom);
           if (
             !current?.dirty ||
+            (current.executionState != null &&
+              current.executionState !== 'READY') ||
             current.status === 'error' ||
             current.status === 'conflict' ||
-            ['generating', 'pending', 'unknown'].includes(
+            ['generating', 'reviewing', 'pending', 'unknown'].includes(
               current.operation?.kind ?? '',
             )
           )
@@ -363,14 +493,81 @@ export const useMyahInboxDraftAutosaveController =
       [cancelTimer, clearPendingDebounce, isTargetAuthorized, start, store],
     );
 
+    const maskOutcomeBody = useCallback(
+      (key: MyahInboxDraftAutosaveKey, entry: MyahInboxDraftAutosaveEntry) => {
+        const target = targetsRef.current.get(keyId(key));
+        if (
+          target &&
+          isTargetAuthorized(key) &&
+          (entry.executionState === 'READY' ||
+            entry.executionState === 'NEEDS_REVIEW')
+        ) {
+          runtime.outcomeBodies.set(keyId(key), {
+            targetToken: target.capture.token,
+            revision: entry.confirmedRevision,
+            localBody: entry.localBody,
+            dirty:
+              entry.dirty ||
+              (entry.status === 'saving' &&
+                !areRichTextEqual(
+                  entry.localBody,
+                  entry.confirmedBody ?? EMPTY_DRAFT,
+                )),
+          });
+        }
+        runtime.saves.delete(keyId(key));
+        if (target) target.refreshing = false;
+        cancelTimer(key);
+        const hasExposedBody =
+          !areRichTextEqual(entry.localBody, EMPTY_DRAFT) ||
+          entry.confirmedBody !== null ||
+          entry.conflict?.body != null;
+        return {
+          localBody: EMPTY_DRAFT,
+          confirmedBody: null,
+          conflict: null,
+          error: null,
+          status: 'idle' as const,
+          // BlockNote retains its initial document until the keyed instance changes.
+          editorVersion: entry.editorVersion + (hasExposedBody ? 1 : 0),
+        };
+      },
+      [cancelTimer, isTargetAuthorized, runtime],
+    );
+
     const reconcile = useCallback(
       (thread: MyahInboxDraftAutosaveThread) => {
         const atom = myahInboxDraftAutosaveFamilyState.atomFamily(thread.key);
         const entry = store.get(atom);
+        const executionState =
+          thread.executionState ?? entry?.executionState ?? 'READY';
+        const canReadBody =
+          executionState === 'READY' || executionState === 'NEEDS_REVIEW';
+        const unavailable = executionState === 'CONTEXT_UNAVAILABLE';
+        const maskedBody =
+          !canReadBody && entry ? maskOutcomeBody(thread.key, entry) : {};
+        if (!canReadBody) runtime.saves.delete(keyId(thread.key));
+        const snapshot = runtime.outcomeBodies.get(keyId(thread.key));
+        if (
+          snapshot &&
+          (snapshot.revision !== thread.revision ||
+            executionState === 'CONTEXT_UNAVAILABLE')
+        )
+          runtime.outcomeBodies.delete(keyId(thread.key));
+        thread = { ...thread, body: canReadBody ? thread.body : null };
         keysRef.current.set(keyId(thread.key), thread.key);
+        const registeredKeys = store.get(myahInboxDraftAutosaveKeysState);
+        if (!registeredKeys.some((key) => keyId(key) === keyId(thread.key)))
+          store.set(myahInboxDraftAutosaveKeysState, [
+            ...registeredKeys,
+            thread.key,
+          ]);
 
         if (!entry) {
           store.set(atom, {
+            executionState,
+            input: thread.input,
+            contextFingerprint: thread.contextFingerprint ?? null,
             operation: null,
             editorOwner: null,
             localBody: thread.body ?? EMPTY_DRAFT,
@@ -388,6 +585,25 @@ export const useMyahInboxDraftAutosaveController =
           return;
         }
 
+        store.set(atom, {
+          ...entry,
+          executionState,
+          input: thread.input ?? entry.input,
+          contextFingerprint:
+            thread.contextFingerprint ?? entry.contextFingerprint,
+          ...maskedBody,
+          ...(unavailable
+            ? {
+                dirty: false,
+                pendingDebounceVersion: null,
+                proposalContextFingerprint: null,
+                status: 'idle' as const,
+                error: null,
+                conflict: null,
+              }
+            : {}),
+        });
+        if (!canReadBody) return;
         if (
           entry.dirty ||
           entry.status === 'saving' ||
@@ -410,6 +626,10 @@ export const useMyahInboxDraftAutosaveController =
 
         store.set(atom, {
           ...entry,
+          executionState,
+          input: thread.input ?? entry.input,
+          contextFingerprint:
+            thread.contextFingerprint ?? entry.contextFingerprint,
           localBody: nextLocalBody,
           confirmedBody: thread.body,
           confirmedRevision: thread.revision,
@@ -422,23 +642,29 @@ export const useMyahInboxDraftAutosaveController =
               : 'idle',
         });
       },
-      [store],
+      [maskOutcomeBody, runtime, store],
     );
 
     const beginTargetRead = useCallback(
-      (key: MyahInboxDraftAutosaveKey, isContextCurrent: () => boolean) => {
+      (
+        key: MyahInboxDraftAutosaveKey,
+        isContextCurrent: () => boolean,
+        refreshAfterSave?: MyahInboxDraftTargetCapture['refreshAfterSave'],
+      ) => {
         cancelTimer(key);
+        runtime.outcomeBodies.delete(keyId(key));
         const capture = {
           key,
           token: Symbol('draft authorization'),
           isContextCurrent,
+          refreshAfterSave,
         };
         targetsRef.current.set(keyId(key), { capture, authorized: false });
         ownedTargetsRef.current.add(capture);
         keysRef.current.set(keyId(key), key);
         return capture;
       },
-      [cancelTimer],
+      [cancelTimer, runtime],
     );
 
     const invalidateTarget = useCallback(
@@ -449,10 +675,11 @@ export const useMyahInboxDraftAutosaveController =
           capture.token
         )
           return;
+        runtime.outcomeBodies.delete(keyId(capture.key));
         targetsRef.current.delete(keyId(capture.key));
         cancelTimer(capture.key);
       },
-      [cancelTimer],
+      [cancelTimer, runtime],
     );
 
     const invalidateWorkspace = useCallback(
@@ -485,12 +712,103 @@ export const useMyahInboxDraftAutosaveController =
           return false;
         target.authorized = true;
         runtime.forcedRecoveryKeys.delete(keyId(capture.key));
+        const snapshot = runtime.outcomeBodies.get(keyId(capture.key));
+        const atom = myahInboxDraftAutosaveFamilyState.atomFamily(capture.key);
+        const currentEntry = store.get(atom);
+        const executionState =
+          thread.executionState ?? currentEntry?.executionState ?? 'READY';
+        const readable =
+          executionState === 'READY' || executionState === 'NEEDS_REVIEW';
+        const outcomeLocked =
+          currentEntry?.operation?.kind === 'pending' ||
+          currentEntry?.operation?.kind === 'unknown';
+        const recoveringOutcome =
+          outcomeLocked ||
+          currentEntry?.executionState === 'OUTCOME_PENDING' ||
+          currentEntry?.executionState === 'OUTCOME_UNKNOWN' ||
+          currentEntry?.executionState === 'CONTEXT_UNAVAILABLE';
+        const save = runtime.saves.get(keyId(capture.key));
+        // A fresh authorized NEEDS_REVIEW read is authoritative: it supersedes
+        // any local dirty/saving/error/conflict state, which otherwise deadlocks
+        // Review (rejected) against Retry/Reload conflict (rejected while not
+        // READY). A same-base in-flight save is retired by the same rule.
+        const authoritativeReview = executionState === 'NEEDS_REVIEW';
+        const sameSaveBase =
+          readable &&
+          !recoveringOutcome &&
+          !authoritativeReview &&
+          currentEntry?.confirmedRevision === thread.revision &&
+          (currentEntry.contextFingerprint ?? null) ===
+            (thread.contextFingerprint ?? null) &&
+          areRichTextEqual(
+            currentEntry.confirmedBody ?? EMPTY_DRAFT,
+            thread.body ?? EMPTY_DRAFT,
+          );
+        if (save) {
+          // A remount can inherit a detached save only on the unchanged server
+          // base. A recovery/new revision must retire it before reconciliation.
+          if (sameSaveBase) {
+            save.targetToken = capture.token;
+            target.refreshing = save.refreshing;
+          } else runtime.saves.delete(keyId(capture.key));
+        }
+        const supersededSave =
+          currentEntry?.status === 'saving' && !sameSaveBase;
+        if (
+          readable &&
+          currentEntry &&
+          (recoveringOutcome || supersededSave || authoritativeReview)
+        ) {
+          // Only this current authorized recovery read supersedes an outcome lock.
+          // Post-save metadata reads use reconcile and cannot unlock a newer send.
+          // A valid same-capability snapshot still restores the user's unsaved
+          // bytes; only stale local status bookkeeping is discarded here.
+          const restoreLocalBody =
+            snapshot?.dirty === true &&
+            snapshot.targetToken === capture.token &&
+            snapshot.revision === thread.revision &&
+            currentEntry.confirmedRevision === thread.revision;
+          const localBody = restoreLocalBody
+            ? snapshot.localBody
+            : (thread.body ?? EMPTY_DRAFT);
+          cancelTimer(capture.key);
+          store.set(atom, {
+            ...currentEntry,
+            localBody,
+            confirmedBody: thread.body,
+            confirmedRevision: thread.revision,
+            operation: outcomeLocked ? null : currentEntry.operation,
+            dirty: restoreLocalBody,
+            pendingDebounceVersion: restoreLocalBody
+              ? currentEntry.pendingDebounceVersion
+              : null,
+            proposalContextFingerprint: restoreLocalBody
+              ? currentEntry.proposalContextFingerprint
+              : null,
+            status: 'idle',
+            error: null,
+            conflict: null,
+            editorVersion: areRichTextEqual(currentEntry.localBody, localBody)
+              ? currentEntry.editorVersion
+              : currentEntry.editorVersion + 1,
+          });
+        }
+        if (
+          snapshot &&
+          (readable ||
+            thread.executionState === 'CONTEXT_UNAVAILABLE' ||
+            snapshot.targetToken !== capture.token ||
+            snapshot.revision !== thread.revision)
+        )
+          runtime.outcomeBodies.delete(keyId(capture.key));
         reconcile(thread);
         const entry = store.get(
           myahInboxDraftAutosaveFamilyState.atomFamily(capture.key),
         );
         if (
-          entry?.dirty &&
+          (entry?.executionState === 'READY' ||
+            entry?.executionState === 'NEEDS_REVIEW') &&
+          entry.dirty &&
           entry.status !== 'error' &&
           entry.status !== 'conflict'
         ) {
@@ -517,6 +835,7 @@ export const useMyahInboxDraftAutosaveController =
         if (
           !entry ||
           !isTargetAuthorized(key) ||
+          (entry.executionState != null && entry.executionState !== 'READY') ||
           entry.operation ||
           (entry.editorOwner && entry.editorOwner !== editorOwner)
         ) {
@@ -537,6 +856,7 @@ export const useMyahInboxDraftAutosaveController =
         store.set(atom, {
           ...entry,
           localBody: body,
+          proposalContextFingerprint: null,
           dirty: true,
           status: isSaving ? 'saving' : 'idle',
           error: null,
@@ -577,6 +897,7 @@ export const useMyahInboxDraftAutosaveController =
         if (
           !entry ||
           !isTargetAuthorized(key) ||
+          (entry.executionState != null && entry.executionState !== 'READY') ||
           entry.operation ||
           entry.status !== 'error'
         ) {
@@ -596,13 +917,14 @@ export const useMyahInboxDraftAutosaveController =
     );
 
     const reloadConflict = useCallback(
-      (key: MyahInboxDraftAutosaveKey) => {
+      async (key: MyahInboxDraftAutosaveKey) => {
         const atom = myahInboxDraftAutosaveFamilyState.atomFamily(key);
         const entry = store.get(atom);
 
         if (
           !entry ||
           !isTargetAuthorized(key) ||
+          (entry.executionState != null && entry.executionState !== 'READY') ||
           entry.operation ||
           entry.status !== 'conflict' ||
           !entry.conflict
@@ -610,20 +932,57 @@ export const useMyahInboxDraftAutosaveController =
           return;
         }
 
-        cancelTimer(key);
-        store.set(atom, {
-          ...entry,
-          localBody: entry.conflict.body ?? EMPTY_DRAFT,
-          confirmedBody: entry.conflict.body,
-          confirmedRevision: entry.conflict.revision,
-          dirty: false,
-          status: 'saved',
-          error: null,
-          conflict: null,
-          editorVersion: entry.editorVersion + 1,
-        });
+        const target = targetsRef.current.get(keyId(key));
+        const capture = target?.capture;
+        const reread = capture?.refreshAfterSave;
+        const conflict = entry.conflict;
+        if (!target || !capture || !reread) {
+          // A conflict result carries no execution metadata, so its bytes alone
+          // cannot prove the review state. Without an exact current-capability
+          // reread the entry stays conflicted instead of becoming actionable.
+          return;
+        }
+
+        // Gate every action and local edit until the exact reread lands.
+        const token = Symbol('conflict metadata reread');
+        store.set(atom, { ...entry, operation: { token, kind: 'reviewing' } });
+        target.refreshing = true;
+        try {
+          const thread = await reread(conflict.revision);
+          const current = store.get(atom);
+          const stillOwned =
+            targetsRef.current.get(keyId(key))?.capture.token === capture.token;
+          if (
+            !thread ||
+            !current ||
+            keyId(thread.key) !== keyId(key) ||
+            thread.revision !== conflict.revision
+          ) {
+            // A superseded capability already reauthorized this key: leave that
+            // newer scope alone instead of invalidating it.
+            if (stillOwned) invalidateTarget(capture);
+            return;
+          }
+          cancelTimer(key);
+          store.set(atom, {
+            ...current,
+            operation: null,
+            conflict: null,
+            error: null,
+            dirty: false,
+            pendingDebounceVersion: null,
+            proposalContextFingerprint: null,
+            status: 'idle',
+          });
+          reconcile(thread);
+        } finally {
+          target.refreshing = false;
+          const current = store.get(atom);
+          if (current?.operation?.token === token)
+            store.set(atom, { ...current, operation: null });
+        }
       },
-      [cancelTimer, isTargetAuthorized, store],
+      [cancelTimer, invalidateTarget, isTargetAuthorized, reconcile, store],
     );
 
     const getEntry = useCallback(
@@ -665,7 +1024,7 @@ export const useMyahInboxDraftAutosaveController =
     const acquire = useCallback(
       (
         key: MyahInboxDraftAutosaveKey,
-        kind: 'generating' | 'sending',
+        kind: 'generating' | 'sending' | 'reviewing',
         editorOwner?: symbol,
       ) => {
         const entry = getEntry(key);
@@ -673,12 +1032,18 @@ export const useMyahInboxDraftAutosaveController =
         if (
           !entry ||
           !target ||
+          target.refreshing === true ||
           !isTargetAuthorized(key) ||
+          (kind === 'reviewing'
+            ? entry.executionState !== 'NEEDS_REVIEW'
+            : entry.executionState != null &&
+              entry.executionState !== 'READY') ||
           (entry.editorOwner && entry.editorOwner !== editorOwner) ||
           entry.operation ||
           entry.status === 'error' ||
           entry.status === 'conflict' ||
-          (kind === 'generating' && (entry.dirty || entry.status === 'saving'))
+          (kind !== 'sending' && entry.status === 'saving') ||
+          (kind === 'generating' && entry.dirty)
         )
           return null;
         const capture = {
@@ -687,6 +1052,7 @@ export const useMyahInboxDraftAutosaveController =
           targetToken: target.capture.token,
           editorOwner: entry.editorOwner,
           confirmedRevision: entry.confirmedRevision,
+          contextFingerprint: entry.contextFingerprint ?? null,
           debounceVersion: entry.debounceVersion,
           editorVersion: entry.editorVersion,
         };
@@ -735,10 +1101,13 @@ export const useMyahInboxDraftAutosaveController =
         if (entry?.operation?.token !== capture.token) return;
         store.set(myahInboxDraftAutosaveFamilyState.atomFamily(capture.key), {
           ...entry,
+          ...maskOutcomeBody(capture.key, entry),
+          executionState:
+            kind === 'pending' ? 'OUTCOME_PENDING' : 'OUTCOME_UNKNOWN',
           operation: { token: capture.token, kind },
         });
       },
-      [getEntry, store],
+      [getEntry, maskOutcomeBody, store],
     );
 
     const setReadinessLock = useCallback(
@@ -748,10 +1117,13 @@ export const useMyahInboxDraftAutosaveController =
         cancelTimer(key);
         store.set(myahInboxDraftAutosaveFamilyState.atomFamily(key), {
           ...entry,
+          ...maskOutcomeBody(key, entry),
+          executionState:
+            kind === 'pending' ? 'OUTCOME_PENDING' : 'OUTCOME_UNKNOWN',
           operation: { token: Symbol('server send outcome'), kind },
         });
       },
-      [cancelTimer, getEntry, isTargetAuthorized, store],
+      [cancelTimer, getEntry, isTargetAuthorized, maskOutcomeBody, store],
     );
 
     const reconcileOperation = useCallback(
@@ -761,13 +1133,12 @@ export const useMyahInboxDraftAutosaveController =
       ) => {
         if (
           keyId(thread.key) !== keyId(capture.key) ||
-          getEntry(capture.key)?.operation?.token !== capture.token
+          !isOperationCurrent(capture)
         )
           return;
-        // A receipt may update only its old key after navigation; it is not a new edit capability.
         reconcile(thread);
       },
-      [getEntry, reconcile],
+      [isOperationCurrent, reconcile],
     );
 
     const applyProposalIfCurrent = useCallback(
@@ -793,6 +1164,7 @@ export const useMyahInboxDraftAutosaveController =
           ...entry,
           operation: { token: capture.token, kind: 'applying' },
           localBody: body,
+          proposalContextFingerprint: capture.contextFingerprint,
           dirty: true,
           status: 'idle',
           editorVersion: entry.editorVersion + 1,
@@ -827,20 +1199,21 @@ export const useMyahInboxDraftAutosaveController =
         const uniqueKeys = [
           ...new Map(keys.map((key) => [keyId(key), key])).values(),
         ];
+        const flushIfDirty = async (key: MyahInboxDraftAutosaveKey) => {
+          const entry = getEntry(key);
+          if (
+            !entry ||
+            entry.operation ||
+            entry.status === 'error' ||
+            entry.status === 'conflict'
+          )
+            return;
+          // A closed, clean editor has no work and needs no read capability.
+          if (entry.dirty || entry.status === 'saving') await flush(key);
+        };
         while (true) {
           const results = await Promise.allSettled(
-            uniqueKeys.map(async (key) => {
-              const entry = getEntry(key);
-              if (!entry) return;
-              if (
-                entry.operation ||
-                entry.status === 'error' ||
-                entry.status === 'conflict'
-              )
-                return;
-              // A closed, clean editor has no work and needs no read capability.
-              if (entry.dirty || entry.status === 'saving') await flush(key);
-            }),
+            uniqueKeys.map((key) => flushIfDirty(key)),
           );
           if (results.some((result) => result.status === 'rejected'))
             return false;
@@ -856,7 +1229,9 @@ export const useMyahInboxDraftAutosaveController =
                   entry.status === 'error' ||
                   entry.status === 'conflict' ||
                   ((entry.dirty || entry.status === 'saving') &&
-                    !isTargetAuthorized(key))),
+                    (!isTargetAuthorized(key) ||
+                      (entry.executionState != null &&
+                        entry.executionState !== 'READY')))),
             )
           )
             return false;
@@ -893,7 +1268,7 @@ export const useMyahInboxDraftAutosaveController =
             // Never exempt outgoing targets, live editors, saves or operations.
             return (
               !runtime.forcedRecoveryKeys.has(keyId(key)) ||
-              activeThreadIds.includes(key.threadId) ||
+              activeThreadIds.includes(key.deliveryTargetId) ||
               Boolean(entry?.editorOwner || entry?.operation) ||
               entry?.status === 'saving' ||
               isTargetAuthorized(key)

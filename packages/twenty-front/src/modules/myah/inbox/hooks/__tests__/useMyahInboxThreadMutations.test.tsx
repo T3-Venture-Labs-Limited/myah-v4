@@ -1,3 +1,4 @@
+import { draftInputFixture } from '@/myah/inbox/hooks/__tests__/fixtures/myahInboxDraftAutosaveTestFixture';
 import { getDefaultStore } from 'jotai';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { act, renderHook } from '@testing-library/react';
@@ -19,6 +20,8 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
 }));
 
 jest.mock('~/generated/graphql', () => ({
+  ...jest.requireActual('~/generated/graphql'),
+  ReviewMyahInboxReplyContextDocument: { name: 'ReviewMyahInboxReplyContext' },
   UpdateMyahInboxThreadDocument: { name: 'UpdateMyahInboxThread' },
   SaveMyahInboxDraftDocument: { name: 'SaveMyahInboxDraft' },
   GenerateMyahInboxReplyProposalDocument: {
@@ -54,14 +57,15 @@ describe('useMyahInboxThreadMutations', () => {
     } as never);
     await expect(
       result.current.saveDraft({
-        ...captured,
+        ...draftInputFixture(),
         expectedRevision: 2,
         body: { markdown: 'recovery', blocknote: null },
       }),
     ).rejects.toThrow('workspace');
     await expect(
       result.current.generateProposal({
-        ...captured,
+        ...draftInputFixture(),
+        expectedContextFingerprint: 'fingerprint',
         operatorInstructions: 'draft',
       }),
     ).rejects.toThrow('workspace');
@@ -117,8 +121,7 @@ describe('useMyahInboxThreadMutations', () => {
     let saveResult;
     await act(async () => {
       saveResult = await result.current.saveDraft({
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
+        ...draftInputFixture(),
         expectedRevision: 2,
         body: { markdown: 'draft', blocknote: null },
       });
@@ -127,8 +130,7 @@ describe('useMyahInboxThreadMutations', () => {
     expect(mockSave).toHaveBeenCalledWith({
       variables: {
         input: {
-          expectedWorkspaceId: 'workspace-1',
-          threadId: 'thread-1',
+          ...draftInputFixture(),
           expectedRevision: 2,
           body: { markdown: 'draft', blocknote: null },
         },
@@ -149,8 +151,8 @@ describe('useMyahInboxThreadMutations', () => {
     let proposalResult;
     await act(async () => {
       proposalResult = await result.current.generateProposal({
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
+        ...draftInputFixture(),
+        expectedContextFingerprint: 'fingerprint',
         operatorInstructions: 'Keep it concise',
       });
     });
@@ -158,8 +160,8 @@ describe('useMyahInboxThreadMutations', () => {
     expect(mockGenerate).toHaveBeenCalledWith({
       variables: {
         input: {
-          expectedWorkspaceId: 'workspace-1',
-          threadId: 'thread-1',
+          ...draftInputFixture(),
+          expectedContextFingerprint: 'fingerprint',
           operatorInstructions: 'Keep it concise',
         },
       },

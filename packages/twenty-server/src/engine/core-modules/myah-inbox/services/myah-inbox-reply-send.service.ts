@@ -1,3 +1,8 @@
+import { matchesMyahInboxReplyBinding } from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-action-binding.util';
+import {
+  type ReplyTarget,
+  type ReplyContext,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 
 import { isDefined, parseMyahReplyRichText } from 'twenty-shared/utils';
@@ -34,7 +39,9 @@ type MyahInboxReplySendRequestContext = {
   workspace: { id: string };
   userWorkspaceId: string;
   workspaceMemberId: string;
-  threadId: string;
+  threadId?: string;
+  target?: ReplyTarget;
+  replyContext?: ReplyContext;
 };
 
 export type MyahInboxReplySendRequest = MyahInboxReplySendRequestContext & {
@@ -83,6 +90,68 @@ export class MyahInboxReplySendService {
     private readonly approvedExecutionService: MyahInboxReplyApprovedExecutionService,
   ) {}
 
+  private targetId(input: MyahInboxReplySendRequestContext): string {
+    if (input.target?.channel === 'EMAIL') return input.target.threadId;
+    if (input.threadId && !input.target) return input.threadId;
+    throw new Error('An exact Email reply target is required');
+  }
+
+  private async readDraft(input: MyahInboxReplySendRequestContext) {
+    if (input.target && input.replyContext) {
+      const { draft, resolved } = await this.actionDefinition.readContextDraft({
+        workspaceId: input.workspace.id,
+        initiatorUserWorkspaceId: input.userWorkspaceId,
+        target: input.target,
+        replyContext: input.replyContext,
+      });
+      return {
+        ...draft,
+        messageThreadMetadataId: '',
+        contextState: resolved.state,
+        contextAcknowledged:
+          !!resolved.contextFingerprint &&
+          (draft.reviewedContextFingerprint ??
+            draft.proposalContextFingerprint) === resolved.contextFingerprint,
+      };
+    }
+    return {
+      ...(await this.actionDefinition.getReadableDraftSnapshot({
+        workspaceId: input.workspace.id,
+        initiatorUserWorkspaceId: input.userWorkspaceId,
+        messageThreadId: this.targetId(input),
+      })),
+      draftId: this.targetId(input),
+      contextState: 'READY',
+      contextAcknowledged: true,
+    };
+  }
+
+  private buildAuthority(
+    input: MyahInboxReplySendRequestContext & {
+      expectedDraftRevision?: number;
+    },
+    skipProviderPreflight = false,
+  ) {
+    const common = {
+      workspaceId: input.workspace.id,
+      initiatorUserWorkspaceId: input.userWorkspaceId,
+      ...(skipProviderPreflight ? { skipProviderPreflight: true } : {}),
+      ...(input.expectedDraftRevision === undefined
+        ? {}
+        : { expectedDraftRevision: input.expectedDraftRevision }),
+    };
+    return input.target && input.replyContext
+      ? this.actionDefinition.buildContextAuthority({
+          ...common,
+          target: input.target,
+          replyContext: input.replyContext,
+        })
+      : this.actionDefinition.buildAuthority({
+          ...common,
+          messageThreadId: this.targetId(input),
+        });
+  }
+
   async getReadiness(
     input: MyahInboxReplySendRequestContext,
   ): Promise<MyahInboxReplySendReadiness> {
@@ -94,19 +163,19 @@ export class MyahInboxReplySendService {
     };
 
     try {
-      const draft = await this.actionDefinition.getReadableDraftSnapshot({
-        workspaceId: input.workspace.id,
-        initiatorUserWorkspaceId: input.userWorkspaceId,
-        messageThreadId: input.threadId,
-      });
+      const draft = await this.readDraft(input);
 
       draftState = { revision: draft.revision, body: draft.body };
 
-      const executionState =
-        await this.actionApprovalService.getInboxReplyDraftExecutionState({
-          workspaceId: input.workspace.id,
-          draftId: input.threadId,
-        });
+      const executionState = await (input.target
+        ? this.actionApprovalService.getInboxReplyTargetExecutionState({
+            workspaceId: input.workspace.id,
+            deliveryTargetId: this.targetId(input),
+          })
+        : this.actionApprovalService.getInboxReplyDraftExecutionState({
+            workspaceId: input.workspace.id,
+            draftId: this.targetId(input),
+          }));
 
       if (executionState === 'UNKNOWN') {
         return {
@@ -123,11 +192,18 @@ export class MyahInboxReplySendService {
         };
       }
 
-      const authority = await this.actionDefinition.buildAuthority({
-        workspaceId: input.workspace.id,
-        initiatorUserWorkspaceId: input.userWorkspaceId,
-        messageThreadId: input.threadId,
-      });
+      if (
+        input.target &&
+        (draft.contextState !== 'READY' || !draft.contextAcknowledged)
+      ) {
+        return {
+          status: MyahInboxReplySendReadinessStatus.NEEDS_REVIEW,
+          reason: 'Review the current reply context before sending.',
+          ...draftState,
+        };
+      }
+
+      const authority = await this.buildAuthority(input);
 
       try {
         parseMyahReplyRichText(authority.canonicalGraph.draftBody);
@@ -170,7 +246,7 @@ export class MyahInboxReplySendService {
 
       return this.toExecutionResult(input, execution);
     } catch {
-      await this.invalidateBinding(input, preparation.binding.id);
+      await this.invalidateBinding(input, preparation.binding);
 
       return this.toStaleOutcome(input);
     }
@@ -184,17 +260,42 @@ export class MyahInboxReplySendService {
       }
   > {
     try {
-      return await this.actionApprovalService.executeInboxReplyLocked(
-        { workspaceId: input.workspace.id, draftId: input.threadId },
+      const preflightAuthority = await this.buildAuthority(input);
+      const locked = input.target
+        ? this.actionApprovalService.executeInboxReplyTargetLocked.bind(
+            this.actionApprovalService,
+          )
+        : this.actionApprovalService.executeInboxReplyLocked.bind(
+            this.actionApprovalService,
+          );
+      return await locked(
+        {
+          workspaceId: input.workspace.id,
+          draftId: this.targetId(input),
+          ...(input.target ? { deliveryTargetId: this.targetId(input) } : {}),
+        },
         async () => {
+          if (
+            input.target &&
+            (await this.actionApprovalService.getInboxReplyTargetExecutionState(
+              {
+                workspaceId: input.workspace.id,
+                deliveryTargetId: this.targetId(input),
+              },
+            ))
+          )
+            return { result: this.toStaleOutcome(input) };
           let authority: MyahInboxReplyActionAuthority;
           try {
-            authority = await this.actionDefinition.buildAuthority({
-              workspaceId: input.workspace.id,
-              initiatorUserWorkspaceId: input.userWorkspaceId,
-              messageThreadId: input.threadId,
-              expectedDraftRevision: input.expectedDraftRevision,
-            });
+            authority = await this.buildAuthority(input, true);
+            if (
+              !matchesMyahInboxReplyBinding(
+                preflightAuthority.expectedActionBinding,
+                authority.expectedActionBinding,
+              )
+            ) {
+              return { result: this.toStaleOutcome(input) };
+            }
           } catch {
             return { result: this.toStaleOutcome(input) };
           }
@@ -241,19 +342,24 @@ export class MyahInboxReplySendService {
     this.assertUserRequest(input);
 
     try {
-      const draft = await this.actionDefinition.getReadableDraftSnapshot({
-        workspaceId: input.workspace.id,
-        initiatorUserWorkspaceId: input.userWorkspaceId,
-        messageThreadId: input.threadId,
-      });
-      const receipt =
-        await this.actionApprovalService.findInboxReplyExecutionReceipt({
-          workspaceId: input.workspace.id,
-          receiptId: input.receiptId,
-          draftId: input.threadId,
-          initiatorUserWorkspaceId: input.userWorkspaceId,
-          messageThreadMetadataId: draft.messageThreadMetadataId,
-        });
+      const draft = await this.readDraft(input);
+      const receipt = input.target
+        ? draft.draftId
+          ? await this.actionApprovalService.findExecutionReceipt({
+              workspaceId: input.workspace.id,
+              receiptId: input.receiptId,
+              actionName: 'send_inbox_reply',
+              draftId: draft.draftId,
+              initiatorUserWorkspaceId: input.userWorkspaceId,
+            })
+          : null
+        : await this.actionApprovalService.findInboxReplyExecutionReceipt({
+            workspaceId: input.workspace.id,
+            receiptId: input.receiptId,
+            draftId: this.targetId(input),
+            initiatorUserWorkspaceId: input.userWorkspaceId,
+            messageThreadMetadataId: draft.messageThreadMetadataId,
+          });
 
       if (!receipt) {
         return {
@@ -307,15 +413,15 @@ export class MyahInboxReplySendService {
 
   private async invalidateBinding(
     input: MyahInboxReplySendRequest,
-    approvalBindingId: string,
+    binding: ActionApprovalBindingEntity,
   ): Promise<void> {
     try {
       await this.actionApprovalService.invalidateApprovedInboxReplyBinding({
         workspaceId: input.workspace.id,
-        approvalBindingId,
+        approvalBindingId: binding.id,
         initiatorUserWorkspaceId: input.userWorkspaceId,
-        threadId: input.threadId,
-        draftId: input.threadId,
+        threadId: binding.threadId,
+        draftId: binding.draftId,
       });
     } catch {
       // A stale outcome is safer than exposing cleanup storage failures.

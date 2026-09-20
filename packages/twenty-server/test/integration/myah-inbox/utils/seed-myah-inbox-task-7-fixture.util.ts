@@ -9,6 +9,7 @@ import {
 
 import { MessageChannelMetadataService } from 'src/engine/metadata-modules/message-channel/message-channel-metadata.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import {
   SEED_APPLE_WORKSPACE_ID,
@@ -133,6 +134,7 @@ type MessageFixture = {
   deletedAssociation?: boolean;
   senderHandle?: string;
   senderDisplayName?: string;
+  direction?: MessageDirection;
 };
 
 const messageFixtures: MessageFixture[] = [
@@ -276,6 +278,22 @@ const messageFixtures: MessageFixture[] = [
     deletedAssociation: true,
   },
   {
+    // The only outgoing message on the draft thread: gives the Creator +
+    // Campaign combination real delivered-correspondence evidence, so a
+    // Campaign-context draft save on this thread is eligible.
+    id: '21270000-2015-4000-8000-000000000015',
+    participantId: '21270000-3015-4000-8000-000000000015',
+    associationId: '21270000-4015-4000-8000-000000000015',
+    threadId: threadIds.draft,
+    channelId: channelIds.shared,
+    externalId: 'task7-draft-outbound-evidence',
+    threadExternalId: 'task7-draft-thread',
+    subject: `${markers.draftSubject} outbound evidence`,
+    text: 'Task 7 confirmed outbound campaign reply',
+    receivedAt: '2026-07-24T05:00:00.000Z',
+    direction: MessageDirection.OUTGOING,
+  },
+  {
     id: '21270000-2009-4000-8000-000000000009',
     participantId: '21270000-3009-4000-8000-000000000009',
     associationId: '21270000-4009-4000-8000-000000000009',
@@ -349,6 +367,14 @@ const updateThreadMutation = gql`
       campaign {
         id
       }
+    }
+  }
+`;
+
+const readDraftQuery = gql`
+  query SeedTask7ReadDraft($input: MyahInboxReplyDraftInput!) {
+    myahInboxReplyDraft(input: $input) {
+      revision
     }
   }
 `;
@@ -571,7 +597,7 @@ const seedNativeRecords = async (operatorAccessToken: string) => {
           messageId: message.id,
           messageExternalId: message.externalId,
           messageThreadExternalId: message.threadExternalId,
-          direction: MessageDirection.INCOMING,
+          direction: message.direction ?? MessageDirection.INCOMING,
         },
         token: operatorAccessToken,
       });
@@ -1012,12 +1038,27 @@ export const seedMyahInboxTask7Fixture = async ({
     }
   }
 
+  // Email reply drafts are stored per immutable contact anchor, channel, exact
+  // target and context, so the fixture reads and writes through the contextual
+  // draft API rather than the retired legacy thread columns.
+  const draftInput = {
+    expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
+    target: {
+      channel: 'EMAIL',
+      contactId: encodeMyahInboxContactId({
+        workspaceId: SEED_APPLE_WORKSPACE_ID,
+        identity: { kind: 'creator', recordId: creatorId },
+      }),
+      threadId: threadIds.draft,
+    },
+    replyContext: { kind: 'CAMPAIGN', campaignId },
+  };
+
   const currentDraftResponse = await makeGraphqlAPIRequest(
-    findOneOperationFactory({
-      objectMetadataSingularName: 'messageThread',
-      gqlFields: 'id myahReplyDraftRevision',
-      filter: { id: { eq: threadIds.draft } },
-    }),
+    {
+      query: readDraftQuery,
+      variables: { input: draftInput },
+    },
     operatorAccessToken,
   );
 
@@ -1028,13 +1069,13 @@ export const seedMyahInboxTask7Fixture = async ({
   }
 
   const currentRevision =
-    currentDraftResponse.body.data.messageThread.myahReplyDraftRevision;
+    currentDraftResponse.body.data.myahInboxReplyDraft.revision;
   const draftResponse = await makeGraphqlAPIRequest(
     {
       query: saveDraftMutation,
       variables: {
         input: {
-          threadId: threadIds.draft,
+          ...draftInput,
           expectedRevision: currentRevision,
           body: { markdown: 'Task 7 baseline shared draft', blocknote: null },
         },

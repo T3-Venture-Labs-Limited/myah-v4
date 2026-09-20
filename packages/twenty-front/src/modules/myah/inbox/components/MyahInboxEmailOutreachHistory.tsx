@@ -1,10 +1,4 @@
-import {
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { styled } from '@linaria/react';
 import {
   IconArrowBackUp,
@@ -144,14 +138,10 @@ const compareMessages = (
 export type MyahInboxEmailOutreachHistoryProps = {
   history: History;
   onReply: (threadId: string) => void;
-  inlineThreadId: string | null;
-  inlineEditor: ReactNode;
 };
 export const MyahInboxEmailOutreachHistory = ({
   history,
   onReply,
-  inlineThreadId,
-  inlineEditor,
 }: MyahInboxEmailOutreachHistoryProps) => {
   const cards = getMyahInboxOutreachCards(history);
   const [replyExpansion, setReplyExpansion] = useState<ReplyExpansionState>(
@@ -633,7 +623,6 @@ export const MyahInboxEmailOutreachHistory = ({
                   </div>
                 ))}
               </StyledReplies>
-              {inlineThreadId === card.threadId && inlineEditor}
             </StyledCard>
           </div>
         );

@@ -171,7 +171,6 @@ const fixture = (
     );
   }
   const hooks = new WorkspaceQueryHookService(storage, {} as never);
-  const routing = jest.spyOn(hooks, 'shouldRunPreQueryHooksInTransaction');
   const rawHooks = jest.spyOn(hooks, 'executeRawInputPreQueryHooks');
   const postProcessorHooks = jest.spyOn(hooks, 'executePreQueryHooks');
   // Stop at the persistence boundary, never open an ambient workspace datasource.
@@ -280,7 +279,6 @@ const fixture = (
     persistence,
     datasource,
     execute,
-    routing,
     rawHooks,
     postProcessorHooks,
     hooks,
@@ -306,7 +304,6 @@ describe.each(['REST', 'GraphQL'] as const)(
             f.invoke(transport, { [field]: value }),
           ).rejects.toThrow();
           expect(f.execute).toHaveBeenCalledTimes(1);
-          expect(f.routing).toHaveReturnedWith(false);
           expect(f.process).not.toHaveBeenCalled();
           expect(f.position.overridePositionOnRecords).not.toHaveBeenCalled();
           expect(f.rawHooks).not.toHaveBeenCalled();

@@ -34,6 +34,47 @@ export type MyahInboxReplyExpectedActionBinding = ActionBindingBase & {
   actionContextFingerprint: string;
 };
 
+export type MyahReplyContextSnapshot = {
+  schemaVersion: 1;
+  channel: 'EMAIL' | 'INSTAGRAM';
+  deliveryTargetId: string;
+  draftId: string;
+  replyContext: { kind: 'CAMPAIGN'; campaignId: string } | { kind: 'GENERAL' };
+  contactAnchor: {
+    kind: 'CREATOR' | 'EMAIL_THREAD' | 'INSTAGRAM_CONVERSATION';
+    id: string;
+  };
+  creatorId: string | null;
+  eligibilityEvidenceDigest: string;
+  authoredContextFingerprint: string | null;
+  reviewedContextFingerprint: string | null;
+  contextFingerprint: string;
+};
+
+export type EmailContextV2Binding = {
+  actionName: 'send_inbox_reply';
+  actionVersion: 2;
+  draftId: string;
+  contentDigest: string;
+  recipientFingerprint: string;
+  sendingAccountFingerprint: string;
+  actionContextFingerprint: string;
+  threadId: string | null;
+  interactionContextType: 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT' | null;
+  interactionContextId: string | null;
+  myahReplyContextSnapshot: MyahReplyContextSnapshot;
+  initiatorUserWorkspaceId: string;
+  evidenceLinks: readonly ActionEvidenceLinkInput[];
+};
+
+export const isContextEmailV2 = (
+  binding: ExpectedActionBinding,
+): binding is EmailContextV2Binding =>
+  binding.actionName === 'send_inbox_reply' && binding.actionVersion === 2;
+
+export const emailV2TargetId = (binding: EmailContextV2Binding): string =>
+  binding.myahReplyContextSnapshot.deliveryTargetId;
+
 export type InstagramMessageActionKind = 'START_CHAT' | 'REPLY';
 
 export type InstagramMessageIdentitySnapshot = {
@@ -105,6 +146,7 @@ export type ExpectedActionBinding =
   | InstagramReplyExpectedActionBinding
   | OutreachEmailExpectedActionBinding
   | MyahInboxReplyExpectedActionBinding
+  | EmailContextV2Binding
   | InstagramMessageExpectedActionBinding;
 
 export type ExpectedActionBindingWithWorkspace = ExpectedActionBinding & {

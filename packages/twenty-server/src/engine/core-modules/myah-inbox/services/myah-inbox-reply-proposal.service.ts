@@ -1,3 +1,14 @@
+import {
+  MyahInboxReplyContextService,
+  type ResolvedReplyContext,
+} from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import {
+  validateReplyTargetInput,
+  validateReplyContextInput,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
+import { decodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
+import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
@@ -8,7 +19,10 @@ import { z } from 'zod';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
-import { MYAH_INBOX_MAX_OPERATOR_INSTRUCTIONS_LENGTH } from 'src/engine/core-modules/myah-inbox/dtos/generate-myah-inbox-reply-proposal.input';
+import {
+  MYAH_INBOX_MAX_OPERATOR_INSTRUCTIONS_LENGTH,
+  type GenerateMyahInboxReplyProposalInput,
+} from 'src/engine/core-modules/myah-inbox/dtos/generate-myah-inbox-reply-proposal.input';
 import {
   MyahInboxReplyProposal,
   MyahInboxReplyProposalModelOutputSchema,
@@ -37,6 +51,7 @@ import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai
 export type MyahInboxReplyProposalContextInput = {
   authContext: UserWorkspaceAuthContext;
   threadId: string;
+  selectedContext?: ResolvedReplyContext;
 };
 
 export type GenerateMyahInboxReplyProposalRequest =
@@ -76,7 +91,72 @@ export class MyahInboxReplyProposalService {
     private readonly billingUsageService: BillingUsageService,
     private readonly aiBillingService: AiBillingService,
     private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
+    private readonly replyContexts: MyahInboxReplyContextService,
+    private readonly approvals: ActionApprovalService,
   ) {}
+  async generateContextReplyProposal(
+    input: GenerateMyahInboxReplyProposalInput & {
+      authContext: UserWorkspaceAuthContext;
+    },
+  ): Promise<MyahInboxReplyProposal> {
+    assertMyahInboxExpectedWorkspace(
+      input.authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
+    const target = validateReplyTargetInput(input.target);
+    const replyContext = validateReplyContextInput(input.replyContext);
+    if (target.channel !== 'EMAIL')
+      throw new ForbiddenException('Instagram generation is not available');
+    const request = {
+      target,
+      replyContext,
+      authContext: input.authContext,
+      user: input.authContext.user,
+      workspace: input.authContext.workspace,
+      workspaceMemberId: input.authContext.workspaceMemberId,
+      contactIdentity: decodeMyahInboxContactId(
+        target.contactId,
+        input.expectedWorkspaceId,
+      ),
+    };
+    const selectedContext = await this.approvals.executeInboxReplyTargetLocked(
+      {
+        workspaceId: input.expectedWorkspaceId,
+        deliveryTargetId: target.threadId,
+        draftId: target.threadId,
+      },
+      async () => {
+        const resolved = await this.replyContexts.resolveForAction(request);
+        if (
+          !resolved.contextFingerprint ||
+          resolved.contextFingerprint !== input.expectedContextFingerprint ||
+          (await this.approvals.getInboxReplyTargetExecutionState({
+            workspaceId: input.expectedWorkspaceId,
+            deliveryTargetId: target.threadId,
+          }))
+        ) {
+          throw new ForbiddenException(
+            'Reply context changed or delivery is pending',
+          );
+        }
+        return resolved;
+      },
+    );
+    const proposal = await this.generateReplyProposal({
+      authContext: input.authContext,
+      threadId: target.threadId,
+      operatorInstructions: input.operatorInstructions,
+      selectedContext,
+    });
+    const fresh = await this.replyContexts.resolveForAction(request);
+    if (fresh.contextFingerprint !== selectedContext.contextFingerprint)
+      throw new ForbiddenException('Reply context changed during generation');
+    return {
+      ...proposal,
+      contextFingerprint: selectedContext.contextFingerprint,
+    };
+  }
+
   async getReplyBriefing(
     input: MyahInboxReplyProposalContextInput,
   ): Promise<MyahInboxReplyBriefing> {
@@ -105,6 +185,7 @@ export class MyahInboxReplyProposalService {
     } = await this.loadAuthorizedContext({
       authContext: input.authContext,
       threadId: parsedInput.threadId,
+      selectedContext: input.selectedContext,
     });
     const { thread } = briefing;
     const actorFullName = [
@@ -377,6 +458,7 @@ export class MyahInboxReplyProposalService {
         workspace: input.authContext.workspace,
         workspaceMemberId: input.authContext.workspaceMemberId,
         threadId: input.threadId,
+        selectedContext: input.selectedContext,
       },
     );
 
