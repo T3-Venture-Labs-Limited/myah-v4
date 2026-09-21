@@ -69,6 +69,12 @@ describe('Campaign three-email threaded continuation', () => {
   let runtime: CampaignEmailRuntimeService;
   let providerCalls: number;
   let seedSecondAsNewThread: boolean;
+  let schedulingFixture: {
+    acceptedAt: string;
+    timeZone: string;
+    start: string;
+    end: string;
+  } | null;
 
   beforeAll(async () => {
     dataSource = await new DataSource(
@@ -82,6 +88,7 @@ describe('Campaign three-email threaded continuation', () => {
     schema = getWorkspaceSchemaName(id.workspace);
     providerCalls = 0;
     seedSecondAsNewThread = false;
+    schedulingFixture = null;
     const reply = (messageId: string) =>
       messageId !== id.message &&
       !(seedSecondAsNewThread && messageId === id.nextMessage);
@@ -95,7 +102,7 @@ describe('Campaign three-email threaded continuation', () => {
             replyToThread: reply(messageId),
           }),
         ),
-        delaysSeconds: [60, 60],
+        delaysSeconds: [120, 120],
       }),
       loadEmailByVersionInTransaction: async (
         coordinates: Record<string, string>,
@@ -259,6 +266,22 @@ describe('Campaign three-email threaded continuation', () => {
       dispatch,
       {
         reconcile: async ({ attemptId }: { attemptId: string }) => {
+          // Pin only synthetic receipt/window inputs; scheduling reads and writes remain real SQL.
+          if (schedulingFixture) {
+            await dataSource.query(
+              `UPDATE core."outboundEmailAttempt" SET "providerAcceptedAt"=$2 WHERE "attemptId"=$1`,
+              [attemptId, schedulingFixture.acceptedAt],
+            );
+            await dataSource.query(
+              `UPDATE core."campaignExecution" SET "timeZone"=$2,"startLocalTime"=$3,"endLocalTime"=$4 WHERE id=$1`,
+              [
+                id.execution,
+                schedulingFixture.timeZone,
+                schedulingFixture.start,
+                schedulingFixture.end,
+              ],
+            );
+          }
           await dataSource.query(
             `UPDATE core."outboundEmailAttempt" SET "projectedMessageId"=$1,"projectedMessageThreadId"=$2 WHERE "attemptId"=$3`,
             [
@@ -443,6 +466,59 @@ describe('Campaign three-email threaded continuation', () => {
       [id.workspace],
     );
   };
+
+  it.each([
+    [
+      'UTC',
+      '00:00',
+      '23:59',
+      '2026-09-20T12:46:18.999Z',
+      '2026-09-20T12:48:18.999Z',
+    ],
+    // One millisecond before the exclusive close stays inside the local window.
+    [
+      'America/New_York',
+      '09:00',
+      '17:00',
+      '2026-10-31T20:57:59.999Z',
+      '2026-10-31T20:59:59.999Z',
+    ],
+    // Exactly at close rolls to the next opening, across the DST offset change.
+    [
+      'America/New_York',
+      '09:00',
+      '17:00',
+      '2026-10-31T20:58:00.000Z',
+      '2026-11-01T14:00:00.000Z',
+    ],
+    [
+      'America/New_York',
+      '09:00',
+      '17:00',
+      '2026-09-20T12:57:59.999Z',
+      '2026-09-20T13:00:00.000Z',
+    ],
+  ])(
+    'persists exact acceptance-anchored scheduling in %s (%s–%s) from %s',
+    async (timeZone, start, end, acceptedAt, expectedDueAt) => {
+      schedulingFixture = { acceptedAt, timeZone, start, end };
+      const first = await send(0);
+      expect(first.providerAcceptedAt).toBeInstanceOf(Date);
+      expect(first.providerAcceptedAt.toISOString()).toBe(acceptedAt);
+      const [next] = await dataSource.query(
+        `SELECT "dueAt" FROM core."campaignOccurrence" WHERE "enrollmentId"=$1 AND "authoredMessageIndex"=1`,
+        [id.enrollment],
+      );
+      expect(next.dueAt).toBeInstanceOf(Date);
+      expect(next.dueAt.toISOString()).toBe(expectedDueAt);
+      const [completed] = await dataSource.query(
+        `SELECT "terminalAt" FROM core."campaignOccurrence" WHERE id=$1`,
+        [first.occurrenceId],
+      );
+      expect(completed.terminalAt.toISOString()).toBe(acceptedAt);
+      expect(providerCalls).toBe(1);
+    },
+  );
 
   it('continues through Emails 2 and 3 with distinct identities through the real thread material path', async () => {
     const first = await send(0);

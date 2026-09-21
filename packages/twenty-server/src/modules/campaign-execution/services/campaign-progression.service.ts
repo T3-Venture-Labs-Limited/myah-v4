@@ -903,7 +903,10 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         [campaignExecutionId, workspaceId, campaignId, candidate],
       ),
     );
-    const dueAt = new Date(String(result[0]?.dueAt));
+    const dueAt =
+      result[0]?.dueAt instanceof Date
+        ? result[0].dueAt
+        : new Date(String(result[0]?.dueAt));
     if (result.length !== 1 || !Number.isFinite(dueAt.getTime()))
       throw new Error('Campaign next sending window was unavailable');
     return dueAt;
@@ -1032,7 +1035,10 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       return { status: 'PROJECTION_PENDING' };
     if (attempt.occurrenceState === 'SUCCEEDED')
       return { status: 'EXACT_REPLAY' };
-    const acceptedAt = new Date(String(attempt.providerAcceptedAt));
+    const acceptedAt =
+      attempt.providerAcceptedAt instanceof Date
+        ? attempt.providerAcceptedAt
+        : new Date(String(attempt.providerAcceptedAt));
     if (!Number.isFinite(acceptedAt.getTime()))
       return { status: 'TERMINAL_SUPPRESSED' };
     const wasUnknown = attempt.occurrenceState === 'UNKNOWN';
@@ -1890,14 +1896,17 @@ export class CampaignProgressionService implements CampaignProgressionPort {
           [input.enrollmentId, input.nextOccurrence.authoredMessageIndex],
         ),
       );
+      const replayDueAt =
+        replay[0]?.dueAt instanceof Date
+          ? replay[0].dueAt
+          : new Date(String(replay[0]?.dueAt));
       if (
         replay.length !== 1 ||
         replay[0].id !== input.nextOccurrence.occurrenceId ||
         replay[0].workflowVersionId !==
           input.nextOccurrence.workflowVersionId ||
         replay[0].messageId !== input.nextOccurrence.messageId ||
-        new Date(String(replay[0].dueAt)).getTime() !==
-          input.nextOccurrence.dueAt.getTime()
+        replayDueAt.getTime() !== input.nextOccurrence.dueAt.getTime()
       )
         throw new Error('Next Campaign occurrence identity collision');
     }

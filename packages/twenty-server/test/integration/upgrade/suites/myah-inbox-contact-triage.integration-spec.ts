@@ -484,9 +484,14 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
       creatorId: snoozeCreator,
       ownerId: ownerNew,
       state: 'SNOOZED',
-      snoozedUntil: '2026-09-21T08:00:00.000Z',
+      snoozedUntil: null,
       updatedAt: '2026-09-15T09:00:00.000Z',
     });
+    await global.testDataSource.query(
+      `UPDATE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."messageThread"
+       SET "snoozedUntil"=now() + interval '1 day'
+       WHERE id='20202020-0000-4000-8000-000000000122'`,
+    );
 
     // An expired legacy snooze is immediately actionable during migration.
     await insertThread({
@@ -1421,9 +1426,14 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
         lastInboundOrderKey: null,
       }),
     );
-    expect(new Date(restoredSnooze.snoozedUntil ?? '').toISOString()).toBe(
-      '2026-09-21T08:00:00.000Z',
-    );
+    await expect(
+      global.testDataSource.query(
+        `SELECT "snoozedUntil" > now() AS "isFuture"
+         FROM "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahInboxContactTriage"
+         WHERE "contactIdentityKey"=$1`,
+        [`creator:${snoozeCreator}`],
+      ),
+    ).resolves.toEqual([{ isFuture: true }]);
     expect(new Date(restoredSnooze.stateDecisionAt).toISOString()).not.toBe(
       '2099-01-01T00:00:00.000Z',
     );
@@ -1532,9 +1542,14 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
         inboxOwnerId: ownerNew,
       }),
     );
-    expect(new Date(snoozeTriage.snoozedUntil ?? '').toISOString()).toBe(
-      '2026-09-21T08:00:00.000Z',
-    );
+    await expect(
+      global.testDataSource.query(
+        `SELECT "snoozedUntil" > now() AS "isFuture"
+         FROM "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahInboxContactTriage"
+         WHERE "contactIdentityKey"=$1`,
+        [`creator:${snoozeCreator}`],
+      ),
+    ).resolves.toEqual([{ isFuture: true }]);
     await expect(triageFor(`creator:${tieCreator}`)).resolves.toEqual([
       expect.objectContaining({ inboxState: 'CLOSED', inboxOwnerId: ownerNew }),
     ]);
