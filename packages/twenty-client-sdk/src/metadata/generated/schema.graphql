@@ -408,6 +408,7 @@ enum EngineComponentKey {
   FRONT_COMPONENT_RENDERER
   REPLY_TO_EMAIL_THREAD
   COMPOSE_EMAIL
+  MESSAGE_ON_INSTAGRAM
   COMPOSE_CAMPAIGN
   GO_TO_PEOPLE
   GO_TO_COMPANIES
@@ -3134,6 +3135,7 @@ type CampaignOutreachAudienceExcludedCreator {
 
 enum CampaignOutreachAudienceExclusionReason {
   INVALID_MEMBERSHIP
+  OPERATOR_EXCLUDED
   MISSING_CREATOR
   INVALID_STAGE
   NON_EMAIL_CONTACT_METHOD
@@ -3155,6 +3157,47 @@ type CampaignOutreachAudienceReview {
 enum CampaignOutreachAudienceReviewState {
   LOADED
   ERROR
+}
+
+type CampaignActivityMessageDTO {
+  id: ID!
+  threadId: ID!
+  happenedAt: String!
+  state: String!
+}
+
+type CampaignActivityCreatorDTO {
+  campaignCreatorId: ID!
+  creatorId: ID!
+  creatorName: String
+  stage: String
+  stageLabel: String
+  latestOutbound: CampaignActivityMessageDTO
+  latestInbound: CampaignActivityMessageDTO
+  plannedAt: String
+  currentAttemptState: String
+  reason: String
+  needsAttention: Boolean!
+  inboxContactId: String
+  inboxThreadId: ID
+  excluded: Boolean!
+  mayStillSend: Boolean!
+}
+
+type CampaignActivityPageInfoDTO {
+  hasNextPage: Boolean!
+  endCursor: String
+}
+
+type CampaignActivityConnectionDTO {
+  nodes: [CampaignActivityCreatorDTO!]!
+  pageInfo: CampaignActivityPageInfoDTO!
+}
+
+type ExcludeCampaignCreatorResultDTO {
+  status: String!
+  excludedAt: String!
+  mayStillSend: Boolean!
 }
 
 type CampaignSendingWindowMutationResultDTO {
@@ -3662,6 +3705,7 @@ type Query {
   pieChartData(input: PieChartDataInput!): PieChartData!
   lineChartData(input: LineChartDataInput!): LineChartData!
   barChartData(input: BarChartDataInput!): BarChartData!
+  campaignActivity(input: CampaignActivityInput!): CampaignActivityConnectionDTO!
   campaignOutreachAudienceReview(campaignId: UUID!): CampaignOutreachAudienceReview!
   getAutoCompleteAddress(address: String!, token: String!, country: String, isFieldCity: Boolean): [AutocompleteResult!]!
   getAddressDetails(placeId: String!, token: String!): PlaceDetailsResult!
@@ -3793,6 +3837,12 @@ input LineChartDataInput {
 input BarChartDataInput {
   objectMetadataId: UUID!
   configuration: JSON!
+}
+
+input CampaignActivityInput {
+  campaignId: ID!
+  first: Int! = 25
+  after: String
 }
 
 input UsageAnalyticsInput {
@@ -4056,6 +4106,7 @@ type Mutation {
   trackAnalytics(type: AnalyticsType!, name: String, event: String, properties: JSON): Analytics!
   duplicateDashboard(id: UUID!): DuplicatedDashboard!
   impersonate(userId: UUID!, workspaceId: UUID!): Impersonate!
+  excludeCampaignCreator(input: ExcludeCampaignCreatorInput!): ExcludeCampaignCreatorResultDTO!
   startCampaignExecution(input: StartCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
   updateCampaignSendingWindow(input: UpdateCampaignSendingWindowInput!): CampaignSendingWindowMutationResultDTO!
   stopCampaignExecution(input: StopCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
@@ -5310,6 +5361,12 @@ input UpdateSkillInput {
 enum AnalyticsType {
   PAGEVIEW
   TRACK
+}
+
+input ExcludeCampaignCreatorInput {
+  campaignId: UUID!
+  campaignCreatorId: UUID!
+  reason: String!
 }
 
 input StartCampaignExecutionInput {

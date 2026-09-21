@@ -2,8 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { type QueryRunner, type Repository } from 'typeorm';
+import { INSTAGRAM_MESSAGE_MAX_BODY_BYTES } from 'twenty-shared/constants';
+import { getUtf8ByteLength } from 'twenty-shared/utils';
 
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import { isInstagramMessageIdentitySnapshot } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { resolveInstagramRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-instagram-recipient.util';
 import { buildSystemAuthContext } from 'src/engine/core-modules/auth/utils/build-system-auth-context.util';
@@ -139,6 +142,11 @@ export class InstagramMessageDraftService {
     ) {
       throw new Error('Invalid Instagram message draft');
     }
+    if (getUtf8ByteLength(body) > INSTAGRAM_MESSAGE_MAX_BODY_BYTES) {
+      throw new Error(
+        `Instagram message draft exceeds ${INSTAGRAM_MESSAGE_MAX_BODY_BYTES} bytes`,
+      );
+    }
     if (
       await this.actionApprovalService.isDraftExecutionLocked({
         workspaceId: input.workspaceId,
@@ -157,6 +165,16 @@ export class InstagramMessageDraftService {
         const schemaName = getWorkspaceSchemaName(workspace.id);
 
         return dataSource.transaction(async (manager) => {
+          if (
+            await this.isVerifiedComposerDraft(
+              dataSource,
+              schemaName,
+              input.draftId,
+              manager.queryRunner,
+            )
+          ) {
+            throw new Error('Instagram message draft is locked for execution');
+          }
           const target = await this.resolveTarget(
             dataSource,
             manager.queryRunner,
@@ -270,6 +288,43 @@ export class InstagramMessageDraftService {
     );
   }
 
+  private async isVerifiedComposerDraft(
+    dataSource: GlobalWorkspaceDataSource,
+    schemaName: string,
+    draftId: string,
+    queryRunner: QueryRunner | undefined,
+  ): Promise<boolean> {
+    const columns = await dataSource.query<Array<{ column_name: string }>>(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = $1
+         AND table_name = '_myahInstagramReplyDraft'
+         AND column_name = ANY($2)`,
+      [schemaName, ['composerInputDigest', 'instagramMessageSnapshot']],
+      queryRunner,
+      { shouldBypassPermissionChecks: true },
+    );
+    if (columns.length !== 2) return false;
+    const [draft] = await dataSource.query<
+      Array<{
+        composerInputDigest: string | null;
+        instagramMessageSnapshot: unknown;
+      }>
+    >(
+      `SELECT "composerInputDigest", "instagramMessageSnapshot"
+       FROM "${schemaName}"."_myahInstagramReplyDraft"
+       WHERE "id" = $1 AND "deletedAt" IS NULL`,
+      [draftId],
+      queryRunner,
+      { shouldBypassPermissionChecks: true },
+    );
+    return (
+      typeof draft?.composerInputDigest === 'string' &&
+      /^[0-9a-f]{64}$/i.test(draft.composerInputDigest) &&
+      isInstagramMessageIdentitySnapshot(draft.instagramMessageSnapshot)
+    );
+  }
+
   async markSent(input: {
     workspaceId: string;
     draftId: string;
@@ -296,6 +351,7 @@ export class InstagramMessageDraftService {
         ) {
           throw new Error('Instagram message draft content changed');
         }
+        // pi-lens-ignore: no-sql-in-code, sql-injection
         await dataSource.query(
           `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
              SET "status" = 'SENT',

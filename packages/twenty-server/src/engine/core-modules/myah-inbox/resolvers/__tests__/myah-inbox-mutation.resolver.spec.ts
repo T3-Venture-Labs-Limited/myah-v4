@@ -1,3 +1,7 @@
+import {
+  ReplyChannel,
+  ReplyContextKind,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import { ForbiddenException } from '@nestjs/common';
 import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
 import { validate } from 'class-validator';
@@ -78,7 +82,9 @@ describe('MyahInboxResolver mutations', () => {
   it('passes authenticated request context to the separate draft mutation service method', async () => {
     const { resolver, saveMyahInboxDraft } = createResolver();
     const input = {
-      threadId,
+      expectedWorkspaceId: workspace.id,
+      target: { channel: ReplyChannel.EMAIL, contactId: 'contact', threadId },
+      replyContext: { kind: ReplyContextKind.GENERAL },
       expectedRevision: 2,
       body: { markdown: 'copy', blocknote: null },
     };
@@ -116,7 +122,17 @@ describe('MyahInboxResolver mutations', () => {
               workspaceMemberId,
             )
           : resolver.saveMyahInboxDraft(
-              { threadId, expectedRevision: 2, body: null },
+              {
+                expectedWorkspaceId: workspace.id,
+                target: {
+                  channel: ReplyChannel.EMAIL,
+                  contactId: 'contact',
+                  threadId,
+                },
+                replyContext: { kind: ReplyContextKind.GENERAL },
+                expectedRevision: 2,
+                body: null,
+              },
               workspace as never,
               workspaceMemberId,
             ),

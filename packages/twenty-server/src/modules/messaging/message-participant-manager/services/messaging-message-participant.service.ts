@@ -32,13 +32,18 @@ export class MessagingMessageParticipantService {
           );
 
         const existingParticipantsBasedOnMessageIds =
-          await messageParticipantRepository.find({
-            where: {
-              messageId: In(
-                participants.map((participant) => participant.messageId),
-              ),
+          await messageParticipantRepository.find(
+            {
+              where: {
+                messageId: In(
+                  participants.map((participant) => participant.messageId),
+                ),
+              },
             },
-          });
+            transactionManager,
+          );
+        const normalizeHandle = (handle: string | null) =>
+          handle?.trim().toLowerCase() ?? '';
 
         const participantsToCreate: Pick<
           MessageParticipantWorkspaceEntity,
@@ -49,8 +54,8 @@ export class MessagingMessageParticipantService {
               !existingParticipantsBasedOnMessageIds.find(
                 (existingParticipant) =>
                   existingParticipant.messageId === participant.messageId &&
-                  existingParticipant.handle === participant.handle &&
-                  existingParticipant.displayName === participant.displayName &&
+                  normalizeHandle(existingParticipant.handle) ===
+                    normalizeHandle(participant.handle) &&
                   existingParticipant.role === participant.role,
               ),
           )

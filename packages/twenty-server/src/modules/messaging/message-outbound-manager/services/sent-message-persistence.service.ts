@@ -42,16 +42,27 @@ export class SentMessagePersistenceService {
     ) {
       throw new Error('Sent Message persistence requires active manager');
     }
-    const messageChannelRepository = suppliedRunner
-      ? suppliedRunner.manager.getRepository(MessageChannelEntity)
-      : this.messageChannelRepository;
-    const messageChannel = await messageChannelRepository.findOneOrFail({
-      where: {
-        id: input.messageChannelId,
-        workspaceId: input.workspaceId,
-      },
-      relations: { connectedAccount: true },
-    });
+    const messageChannel = suppliedRunner
+      ? await this.messageChannelRepository
+          .createQueryBuilder('messageChannel', suppliedRunner)
+          .leftJoinAndSelect(
+            'messageChannel.connectedAccount',
+            'connectedAccount',
+          )
+          .where('messageChannel.id = :messageChannelId', {
+            messageChannelId: input.messageChannelId,
+          })
+          .andWhere('messageChannel.workspaceId = :workspaceId', {
+            workspaceId: input.workspaceId,
+          })
+          .getOneOrFail()
+      : await this.messageChannelRepository.findOneOrFail({
+          where: {
+            id: input.messageChannelId,
+            workspaceId: input.workspaceId,
+          },
+          relations: { connectedAccount: true },
+        });
 
     const connectedAccount = messageChannel.connectedAccount;
     if (

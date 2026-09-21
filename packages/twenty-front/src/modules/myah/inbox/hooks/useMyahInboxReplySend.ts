@@ -1,3 +1,7 @@
+import {
+  myahInboxDraftKeyId,
+  type MyahInboxDraftAutosaveKey,
+} from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { useStore } from 'jotai';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useMutation, useQuery } from '@apollo/client/react';
@@ -9,7 +13,7 @@ import {
   MyahInboxReplySendReadinessDocument,
   MyahInboxReplySendStatusDocument,
   SendMyahInboxReplyDocument,
-  type SendMyahInboxReplyInput,
+  type MyahInboxReplyDraftInput,
 } from '~/generated/graphql';
 
 const POLL_INTERVAL_MS = 1_000;
@@ -90,10 +94,12 @@ const waitForNextPoll = (operation: PollingOperation) => {
 };
 
 export const useMyahInboxReplySend = (
-  workspaceId: string,
-  threadId: string,
+  key: MyahInboxDraftAutosaveKey,
+  input: MyahInboxReplyDraftInput | undefined,
   confirmedRevision: number,
 ) => {
+  const { workspaceId } = key;
+  const identity = myahInboxDraftKeyId(key);
   const store = useStore();
   const apolloCoreClient = useApolloCoreClient();
   const {
@@ -103,7 +109,8 @@ export const useMyahInboxReplySend = (
   } = useQuery(MyahInboxReplySendReadinessDocument, {
     client: apolloCoreClient,
     fetchPolicy: 'network-only',
-    variables: { threadId, expectedWorkspaceId: workspaceId },
+    variables: { input: input! },
+    skip: !input,
   });
   const [sendMyahInboxReply, { loading: sending }] = useMutation(
     SendMyahInboxReplyDocument,
@@ -116,10 +123,10 @@ export const useMyahInboxReplySend = (
   // oxlint-disable-next-line twenty/no-state-useref
   const nextPollingOperationTokenRef = useRef(0);
   // oxlint-disable-next-line twenty/no-state-useref
-  const readinessKeyRef = useRef({ threadId, confirmedRevision });
+  const readinessKeyRef = useRef({ identity, confirmedRevision });
   // oxlint-disable-next-line twenty/no-state-useref
-  const scopeRef = useRef({ workspaceId, threadId });
-  scopeRef.current = { workspaceId, threadId };
+  const scopeRef = useRef(identity);
+  scopeRef.current = identity;
 
   useEffect(() => {
     const activePollingOperations = activePollingOperationsRef.current;
@@ -128,37 +135,36 @@ export const useMyahInboxReplySend = (
       activePollingOperations.forEach(cancelPollingOperation);
       activePollingOperations.clear();
     };
-  }, [workspaceId, threadId]);
+  }, [identity]);
 
   useEffect(() => {
     const previousReadinessKey = readinessKeyRef.current;
 
-    readinessKeyRef.current = { threadId, confirmedRevision };
+    readinessKeyRef.current = { identity, confirmedRevision };
     if (
-      previousReadinessKey.threadId === threadId &&
+      previousReadinessKey.identity === identity &&
       previousReadinessKey.confirmedRevision !== confirmedRevision
     ) {
       void refetchReadiness();
     }
-  }, [confirmedRevision, refetchReadiness, threadId]);
+  }, [confirmedRevision, refetchReadiness, identity]);
 
   const send = useCallback(
     async ({
-      threadId: draftThreadId,
       expectedDraftRevision,
-    }: SendMyahInboxReplyInput): Promise<MyahInboxReplySendResult> => {
+    }: {
+      expectedDraftRevision: number;
+    }): Promise<MyahInboxReplySendResult> => {
       if (
         store.get(currentWorkspaceState.atom)?.id !== workspaceId ||
-        draftThreadId !== threadId ||
-        scopeRef.current.workspaceId !== workspaceId ||
-        scopeRef.current.threadId !== threadId
+        !input ||
+        scopeRef.current !== identity
       ) {
         throw new Error('Inbox send target changed');
       }
       const isScopeCurrent = () =>
         store.get(currentWorkspaceState.atom)?.id === workspaceId &&
-        scopeRef.current.workspaceId === workspaceId &&
-        scopeRef.current.threadId === threadId;
+        scopeRef.current === identity;
       const token = nextPollingOperationTokenRef.current++;
       const operation: PollingOperation = {
         cancelled: false,
@@ -179,8 +185,7 @@ export const useMyahInboxReplySend = (
         const response = await sendMyahInboxReply({
           variables: {
             input: {
-              expectedWorkspaceId: workspaceId,
-              threadId: draftThreadId,
+              ...input,
               expectedDraftRevision,
             },
           },
@@ -225,8 +230,7 @@ export const useMyahInboxReplySend = (
               query: MyahInboxReplySendStatusDocument,
               variables: {
                 input: {
-                  expectedWorkspaceId: workspaceId,
-                  threadId: draftThreadId,
+                  ...input,
                   receiptId: initialReceiptId,
                 },
               },
@@ -277,11 +281,14 @@ export const useMyahInboxReplySend = (
         activePollingOperations.delete(token);
       }
     },
-    [apolloCoreClient, sendMyahInboxReply, store, threadId, workspaceId],
+    [apolloCoreClient, sendMyahInboxReply, store, identity, input, workspaceId],
   );
 
   return {
-    readiness: readinessData?.myahInboxReplySendReadiness ?? null,
+    readiness:
+      readinessLoading || !input
+        ? null
+        : (readinessData?.myahInboxReplySendReadiness ?? null),
     readinessLoading,
     send,
     sending,

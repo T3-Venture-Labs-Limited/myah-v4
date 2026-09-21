@@ -1,11 +1,28 @@
+// Installed metadata/storage readiness is exercised with real workspace context in
+// instagram-message-composer-readiness.util.spec.ts; these retain their existing
+// recovery/permission/persistence fixtures.
+jest.mock(
+  'src/engine/core-modules/instagram-message/services/instagram-message-composer-readiness.util',
+  () => ({
+    isInstagramComposerReady: jest.fn().mockResolvedValue(true),
+    assertInstagramComposerReady: jest.fn().mockResolvedValue(undefined),
+  }),
+);
+
 import { FieldMetadataType } from 'twenty-shared/types';
 
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { validateOperationIsPermittedOrThrow } from 'src/engine/twenty-orm/repository/permissions.utils';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+  PermissionsExceptionMessage,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { IsNull, Not } from 'typeorm';
 
 import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
+import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const draftId = '00000000-0000-4000-8000-000000000002';
@@ -66,6 +83,8 @@ const buildHarness = (input?: {
             {
               id: bindingId,
               workspaceInstagramAccountRecordId: accountId,
+              unipileAccountId: 'opaque-unipile-account-id',
+              instagramUserId: 'opaque-instagram-user-id',
             },
           ],
     ),
@@ -102,6 +121,72 @@ const expectExactActiveAccountLookup = (
     select: { id: true },
   });
 };
+
+describe('InstagramMessageRecordAccessService composer account checks', () => {
+  it('returns only a complete readable account and maps role object or field denial to unavailable', async () => {
+    const harness = buildHarness();
+    harness.repositories.myahInstagramAccount.findOne.mockResolvedValueOnce({
+      id: accountId,
+      label: 'Authorized account',
+    });
+    await expect(
+      harness.service.getComposerAccount({ workspaceId, rolePermissionConfig }),
+    ).resolves.toEqual({
+      bindingId,
+      instagramAccountRecordId: accountId,
+      unipileAccountId: 'opaque-unipile-account-id',
+      instagramUserId: 'opaque-instagram-user-id',
+      label: 'Authorized account',
+    });
+
+    harness.repositories.myahInstagramAccount.findOne.mockRejectedValueOnce(
+      new PermissionsException(
+        PermissionsExceptionMessage.PERMISSION_DENIED,
+        PermissionsExceptionCode.PERMISSION_DENIED,
+      ),
+    );
+    await expect(
+      harness.service.getComposerAccount({ workspaceId, rolePermissionConfig }),
+    ).resolves.toBeNull();
+
+    harness.repositories.myahInstagramAccount.findOne.mockResolvedValueOnce(
+      null,
+    );
+    await expect(
+      harness.service.getComposerAccount({ workspaceId, rolePermissionConfig }),
+    ).resolves.toBeNull();
+  });
+
+  it('rejects incomplete opaque binding identifiers without querying an account', async () => {
+    const harness = buildHarness();
+    harness.accountBindingRepository.find.mockResolvedValueOnce([
+      {
+        id: bindingId,
+        workspaceInstagramAccountRecordId: accountId,
+        unipileAccountId: '',
+        instagramUserId: 'opaque-instagram-user-id',
+      },
+    ]);
+
+    await expect(
+      harness.service.getComposerAccount({ workspaceId, rolePermissionConfig }),
+    ).resolves.toBeNull();
+    expect(
+      harness.repositories.myahInstagramAccount.findOne,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('does not hide non-permission account errors', async () => {
+    const harness = buildHarness();
+    harness.repositories.myahInstagramAccount.findOne.mockRejectedValueOnce(
+      new Error('database unavailable'),
+    );
+
+    await expect(
+      harness.service.getComposerAccount({ workspaceId, rolePermissionConfig }),
+    ).rejects.toThrow('database unavailable');
+  });
+});
 
 describe('InstagramMessageRecordAccessService execution checks', () => {
   it('uses the reply conversation account rather than another readable active account', async () => {
@@ -432,4 +517,89 @@ describe('InstagramMessageRecordAccessService returned draft field checks', () =
       );
     },
   );
+});
+
+describe('InstagramMessageRecordAccessService confirmed destination scoping', () => {
+  it('scopes the binding read without duplicating workspaceId and returns the exact destination', async () => {
+    const harness = buildHarness();
+    const repositories = harness.repositories as unknown as Record<
+      string,
+      { find?: jest.Mock; findOne?: jest.Mock }
+    >;
+    const violations: string[] = [];
+    const scopedFindOneMock = (
+      rows: unknown,
+    ): jest.Mock<
+      Promise<unknown>,
+      [unknown, { where?: Record<string, unknown> }]
+    > =>
+      jest.fn(async (_workspaceId, options) =>
+        'workspaceId' in (options?.where ?? {})
+          ? (violations.push('binding'), null)
+          : rows,
+      );
+    const accountBindingRepository =
+      harness.accountBindingRepository as unknown as {
+        findOne: jest.Mock;
+      };
+    accountBindingRepository.findOne = scopedFindOneMock({
+      id: bindingId,
+      workspaceInstagramAccountRecordId: accountId,
+      unipileAccountId: 'opaque-unipile-account-id',
+      instagramUserId: 'opaque-instagram-user-id',
+    });
+    repositories.myahSocialConversation = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: conversationId,
+          creatorId,
+          recipientIgsid: 'opaque-provider-messaging-id',
+          lifecycle: 'ACTIVE',
+        },
+      ]),
+    };
+    repositories.myahSocialMessage = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'provider-message-id',
+          text: 'Exact sent body',
+          direction: 'OUTBOUND',
+          providerCreatedAt: '2026-09-03T12:00:01.000Z',
+        },
+      ]),
+    };
+
+    await expect(
+      harness.service.getConfirmedDestination({
+        workspaceId,
+        rolePermissionConfig,
+        source: {
+          snapshot: {
+            actionKind: 'REPLY',
+            accountBindingId: bindingId,
+            instagramAccountRecordId: accountId,
+            unipileAccountId: 'opaque-unipile-account-id',
+            instagramUserId: 'opaque-instagram-user-id',
+            creatorRecordId: creatorId,
+            providerMessagingId: 'opaque-provider-messaging-id',
+            providerChatId: 'provider-chat',
+            providerId: null,
+            conversationRecordId: conversationId,
+            publicIdentifier: 'creator',
+            attendeeProviderId: null,
+            recipientSourceValues: [
+              { field: 'instagramUsername', value: 'creator' },
+            ],
+          } as never,
+          providerChatId: 'provider-chat',
+          providerMessageId: 'provider-message-id',
+          contentDigest: computeActionContentDigest('Exact sent body'),
+        },
+      }),
+    ).resolves.toEqual({
+      creatorRecordId: creatorId,
+      conversationRecordId: conversationId,
+    });
+    expect(violations).toEqual([]);
+  });
 });

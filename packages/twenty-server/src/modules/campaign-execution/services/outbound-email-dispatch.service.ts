@@ -1784,6 +1784,23 @@ const snapshotValidReservationSubmissionFromDispatchInput = (
   }
 };
 
+const hasTrapSafeDispatchMaterial = (value: unknown): boolean => {
+  try {
+    const envelope = readStrictRecord(
+      value,
+      ['kind', 'material', 'submission'],
+      [],
+      new WeakSet<object>(),
+    );
+
+    assertSafeStrippedValue(envelope.material, new WeakSet<object>());
+
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const isRecorded = (
   result: AttemptOutcomeResult,
 ): result is Extract<
@@ -1833,7 +1850,13 @@ export class OutboundEmailDispatchService {
       providerAccount = snapshot.providerAccount;
       providerInput = snapshot.providerInput;
       if (!isValidDispatchInput(baseline)) {
-        return { status: 'CONTRACT_CONFLICT' };
+        return reservationSubmission === null
+          ? { status: 'CONTRACT_CONFLICT' }
+          : this.blockReservedInNewTransaction(
+              reservationSubmission,
+              'DISPATCH_CONTRACT_CONFLICT',
+              { status: 'CONTRACT_CONFLICT' },
+            );
       }
     } catch (error) {
       try {
@@ -1871,7 +1894,14 @@ export class OutboundEmailDispatchService {
         // Malformed snapshot failures remain sanitized contract conflicts.
       }
 
-      return { status: 'CONTRACT_CONFLICT' };
+      return reservationSubmission !== null &&
+        hasTrapSafeDispatchMaterial(input)
+        ? this.blockReservedInNewTransaction(
+            reservationSubmission,
+            'DISPATCH_CONTRACT_CONFLICT',
+            { status: 'CONTRACT_CONFLICT' },
+          )
+        : { status: 'CONTRACT_CONFLICT' };
     }
 
     try {

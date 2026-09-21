@@ -1,4 +1,8 @@
 import {
+  ReplyChannel,
+  ReplyContextKind,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
+import {
   MyahInboxReplyUnavailableCode,
   MyahInboxReplyUnavailableError,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
@@ -123,6 +127,8 @@ const draftSnapshot = {
 
 const createService = (overrides?: {
   executeInboxReplyLocked?: jest.Mock;
+  buildContextAuthority?: jest.Mock;
+  readContextDraft?: jest.Mock;
   buildAuthority?: jest.Mock;
   rebuildExecutionAuthority?: jest.Mock;
   getReadableDraftSnapshot?: jest.Mock;
@@ -215,6 +221,8 @@ const createService = (overrides?: {
     service: new MyahInboxReplySendService(
       {
         executeInboxReplyLocked,
+        executeInboxReplyTargetLocked: executeInboxReplyLocked,
+        getInboxReplyTargetExecutionState: getInboxReplyDraftExecutionState,
         createApprovedInboxReplyBinding,
         invalidateApprovedInboxReplyBinding,
         reserveExecutionForBinding,
@@ -226,6 +234,14 @@ const createService = (overrides?: {
       } as never,
       {
         buildAuthority,
+        buildContextAuthority:
+          overrides?.buildContextAuthority ?? buildAuthority,
+        readContextDraft:
+          overrides?.readContextDraft ??
+          jest.fn(async () => ({
+            draft: { ...draftSnapshot, draftId: 'context-A' },
+            resolved: { state: 'READY' },
+          })),
         rebuildExecutionAuthority,
         getReadableDraftSnapshot,
       } as never,
@@ -724,6 +740,30 @@ describe('MyahInboxReplySendService', () => {
     expect(setup.execute).toHaveBeenCalledTimes(1);
   });
 
+  it('reports F1-authored/F2-current as NEEDS_REVIEW while preserving the readable body', async () => {
+    const setup = createService({
+      readContextDraft: jest.fn(async () => ({
+        draft: {
+          ...draftSnapshot,
+          draftId: 'context-A',
+          proposalContextFingerprint: 'a'.repeat(64),
+          reviewedContextFingerprint: null,
+        },
+        resolved: { state: 'READY', contextFingerprint: 'b'.repeat(64) },
+      })),
+    });
+    await expect(
+      setup.service.getReadiness({
+        ...request(),
+        threadId: undefined,
+        target: { channel: ReplyChannel.EMAIL, contactId: 'opaque', threadId },
+        replyContext: { kind: ReplyContextKind.GENERAL },
+      }),
+    ).resolves.toMatchObject({
+      status: 'NEEDS_REVIEW',
+      body: authority.canonicalGraph.draftBody,
+    });
+  });
   it.each(['PENDING', 'UNKNOWN'])(
     'does not expose %s readiness for an unreadable thread',
     async (state) => {
@@ -759,4 +799,101 @@ describe('MyahInboxReplySendService', () => {
     });
     expect(setup.sendMessage).not.toHaveBeenCalled();
   });
+});
+
+describe('MyahInboxReplySendService contextual direct send', () => {
+  const contextualRequest = () => ({
+    ...request(),
+    threadId: undefined,
+    target: { channel: ReplyChannel.EMAIL, contactId: 'opaque', threadId },
+    replyContext: { kind: ReplyContextKind.GENERAL },
+  });
+  it('uses a direct v2 binding and target-first reservation for the selected draft', async () => {
+    const v2 = {
+      ...authority,
+      expectedActionBinding: {
+        ...expectedActionBinding,
+        actionVersion: 2,
+        draftId: 'context-A',
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_EMAIL_CONTEXT_DRAFT',
+        interactionContextId: 'context-A',
+        myahReplyContextSnapshot: {
+          schemaVersion: 1,
+          channel: 'EMAIL',
+          deliveryTargetId: threadId,
+          draftId: 'context-A',
+          replyContext: { kind: 'GENERAL' },
+          contactAnchor: { kind: 'EMAIL_THREAD', id: threadId },
+          creatorId: null,
+          eligibilityEvidenceDigest: 'a'.repeat(64),
+          contextFingerprint: 'b'.repeat(64),
+          authoredContextFingerprint: 'b'.repeat(64),
+          reviewedContextFingerprint: null,
+        },
+      },
+    };
+    const buildContextAuthority = jest.fn(async () => v2);
+    const setup = createService({ buildContextAuthority });
+    await setup.service.send(contextualRequest() as never);
+    expect(buildContextAuthority).toHaveBeenCalled();
+    expect(setup.createApprovedInboxReplyBinding).toHaveBeenCalledWith(
+      v2.expectedActionBinding,
+    );
+    expect(setup.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ binding: v2.expectedActionBinding }),
+    );
+    expect(setup.executeInboxReplyLocked).toHaveBeenCalledWith(
+      expect.objectContaining({ deliveryTargetId: threadId }),
+      expect.any(Function),
+    );
+    expect(setup.sendMessage).not.toHaveBeenCalled();
+  });
+  it.each(['PENDING', 'UNKNOWN'])(
+    'does not create another binding while any sibling or v1 Agent target is %s',
+    async (state) => {
+      const setup = createService({
+        getInboxReplyDraftExecutionState: jest.fn(async () => state),
+      });
+      await setup.service.send(contextualRequest() as never);
+      expect(setup.createApprovedInboxReplyBinding).not.toHaveBeenCalled();
+      expect(setup.execute).not.toHaveBeenCalled();
+      await expect(
+        setup.service.getReadiness(contextualRequest() as never),
+      ).resolves.toMatchObject({ status: `OUTCOME_${state}` });
+    },
+  );
+});
+
+it('does provider preflight before the direct lock and rejects drift before creating approval', async () => {
+  let locked = false;
+  const build = jest.fn(async (input) => {
+    expect(input.skipProviderPreflight === true).toBe(locked);
+    return locked
+      ? {
+          ...authority,
+          expectedActionBinding: {
+            ...expectedActionBinding,
+            sendingAccountFingerprint: 'changed',
+          },
+        }
+      : authority;
+  });
+  const setup = createService({
+    buildAuthority: build,
+    executeInboxReplyLocked: jest.fn(async (_input, operation) => {
+      locked = true;
+      try {
+        return await operation({});
+      } finally {
+        locked = false;
+      }
+    }),
+  });
+  await expect(setup.service.send(request())).resolves.toMatchObject({
+    outcome: 'STALE',
+  });
+  expect(build).toHaveBeenCalledTimes(2);
+  expect(setup.createApprovedInboxReplyBinding).not.toHaveBeenCalled();
+  expect(setup.execute).not.toHaveBeenCalled();
 });

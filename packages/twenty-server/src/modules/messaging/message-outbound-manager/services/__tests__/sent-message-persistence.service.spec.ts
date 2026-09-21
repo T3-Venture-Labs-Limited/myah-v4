@@ -33,14 +33,22 @@ describe('SentMessagePersistenceService', () => {
         .fn()
         .mockResolvedValue(true),
     };
+    const messageChannel = {
+      id: messageChannelId,
+      workspaceId,
+      connectedAccountId: connectedAccount.id,
+      handle: connectedAccount.handle,
+      connectedAccount,
+    };
+    const messageChannelQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOneOrFail: jest.fn().mockResolvedValue(messageChannel),
+    };
     const messageChannelRepository = {
-      findOneOrFail: jest.fn().mockResolvedValue({
-        id: messageChannelId,
-        workspaceId,
-        connectedAccountId: connectedAccount.id,
-        handle: connectedAccount.handle,
-        connectedAccount,
-      }),
+      findOneOrFail: jest.fn().mockResolvedValue(messageChannel),
+      createQueryBuilder: jest.fn(() => messageChannelQueryBuilder),
     };
     const transactionManager = {
       queryRunner: {
@@ -49,7 +57,9 @@ describe('SentMessagePersistenceService', () => {
         manager: undefined as unknown,
         query: jest.fn().mockResolvedValue([]),
       },
-      getRepository: jest.fn().mockReturnValue(messageChannelRepository),
+      getRepository: jest.fn(() => {
+        throw new Error('Entity target must be a string');
+      }),
     };
     transactionManager.queryRunner.manager = transactionManager;
     const saveService =
@@ -105,6 +115,11 @@ describe('SentMessagePersistenceService', () => {
       transactionManager: transactionManager as never,
     });
 
+    expect(transactionManager.getRepository).not.toHaveBeenCalled();
+    expect(messageChannelRepository.createQueryBuilder).toHaveBeenCalledWith(
+      'messageChannel',
+      transactionManager.queryRunner,
+    );
     expect(triageService.ensureSourceContactInTransaction).toHaveBeenCalledWith(
       {
         workspaceId,
@@ -152,15 +167,23 @@ describe('SentMessagePersistenceService', () => {
       contactsToCreate,
     });
     const captureContactsToCreate = jest.fn();
+    const messageChannel = {
+      id: messageChannelId,
+      workspaceId,
+      connectedAccountId: connectedAccount.id,
+      handle: connectedAccount.handle,
+      isContactAutoCreationEnabled: true,
+      connectedAccount,
+    };
+    const messageChannelQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOneOrFail: jest.fn().mockResolvedValue(messageChannel),
+    };
     const messageChannelRepository = {
-      findOneOrFail: jest.fn().mockResolvedValue({
-        id: messageChannelId,
-        workspaceId,
-        connectedAccountId: connectedAccount.id,
-        handle: connectedAccount.handle,
-        isContactAutoCreationEnabled: true,
-        connectedAccount,
-      }),
+      findOneOrFail: jest.fn().mockResolvedValue(messageChannel),
+      createQueryBuilder: jest.fn(() => messageChannelQueryBuilder),
     };
     const transactionManager = {
       queryRunner: {

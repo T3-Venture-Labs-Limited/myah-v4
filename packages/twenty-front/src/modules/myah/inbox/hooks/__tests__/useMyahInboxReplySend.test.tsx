@@ -1,3 +1,7 @@
+import {
+  draftKeyFixture,
+  draftInputFixture,
+} from '@/myah/inbox/hooks/__tests__/fixtures/myahInboxDraftAutosaveTestFixture';
 import { getDefaultStore } from 'jotai';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { act, renderHook } from '@testing-library/react';
@@ -36,9 +40,11 @@ const createDeferred = <Value,>() => {
 
 const workspaceId = 'workspace-1';
 const threadId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
+const key = draftKeyFixture(workspaceId, threadId);
+const input = draftInputFixture(key);
 const receiptId = '30303030-1c25-4d02-bf25-6aeccf7ea419';
 const renderReplySendHook = () =>
-  renderHook(() => useMyahInboxReplySend(workspaceId, threadId, 4));
+  renderHook(() => useMyahInboxReplySend(key, input, 4));
 
 describe('useMyahInboxReplySend', () => {
   beforeEach(() => {
@@ -68,13 +74,54 @@ describe('useMyahInboxReplySend', () => {
     jest.useRealTimers();
   });
 
+  it('rejects a captured campaign A send after B on the same delivery target', async () => {
+    const { result, rerender } = renderHook(
+      ({ campaignId }) => {
+        const selectedKey = { ...key, campaignId };
+        return useMyahInboxReplySend(
+          selectedKey,
+          draftInputFixture(selectedKey),
+          4,
+        );
+      },
+      { initialProps: { campaignId: 'a' } },
+    );
+    const sendA = result.current.send;
+    rerender({ campaignId: 'b' });
+    await expect(sendA({ expectedDraftRevision: 4 })).rejects.toThrow(
+      'target changed',
+    );
+    expect(sendMutation).not.toHaveBeenCalled();
+    expect(mockUseQuery).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        variables: { input: draftInputFixture({ ...key, campaignId: 'b' }) },
+      }),
+    );
+  });
+
+  it('does not dispatch readiness or send without an authorized read input', async () => {
+    const { result } = renderHook(() =>
+      useMyahInboxReplySend(key, undefined, 4),
+    );
+    expect(mockUseQuery).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ skip: true }),
+    );
+    await expect(
+      result.current.send({ expectedDraftRevision: 4 }),
+    ).rejects.toThrow('target changed');
+    expect(result.current.readiness).toBeNull();
+    expect(sendMutation).not.toHaveBeenCalled();
+  });
+
   it('stops captured-workspace send dispatch even before a rerender on workspace switch', async () => {
     const { result } = renderReplySendHook();
     const send = result.current.send;
     getDefaultStore().set(currentWorkspaceState.atom, {
       id: 'workspace-2',
     } as never);
-    await expect(send({ threadId, expectedDraftRevision: 4 })).rejects.toThrow(
+    await expect(send({ expectedDraftRevision: 4 })).rejects.toThrow(
       'target changed',
     );
     expect(sendMutation).not.toHaveBeenCalled();
@@ -94,7 +141,7 @@ describe('useMyahInboxReplySend', () => {
     const { result } = renderReplySendHook();
     let pending!: Promise<MyahInboxReplySendResult>;
     await act(async () => {
-      pending = result.current.send({ threadId, expectedDraftRevision: 4 });
+      pending = result.current.send({ expectedDraftRevision: 4 });
     });
     getDefaultStore().set(currentWorkspaceState.atom, {
       id: 'workspace-2',
@@ -113,20 +160,13 @@ describe('useMyahInboxReplySend', () => {
       expect.anything(),
       expect.objectContaining({
         fetchPolicy: 'network-only',
-        variables: { threadId, expectedWorkspaceId: workspaceId },
+        variables: { input },
       }),
     );
     expect(statusQuery).not.toHaveBeenCalled();
   });
 
   it('refetches readiness once when a saved revision changes on the same thread', () => {
-    const useReplySend = useMyahInboxReplySend as unknown as (
-      workspace: string,
-      thread: string,
-      confirmedRevision: number,
-    ) => {
-      readiness: { status: string; reason: string | null } | null;
-    };
     mockUseQuery.mockReturnValue({
       data: {
         myahInboxReplySendReadiness: {
@@ -139,7 +179,7 @@ describe('useMyahInboxReplySend', () => {
     } as never);
     const { result, rerender } = renderHook(
       ({ confirmedRevision }) =>
-        useReplySend(workspaceId, threadId, confirmedRevision),
+        useMyahInboxReplySend(key, input, confirmedRevision),
       { initialProps: { confirmedRevision: 4 } },
     );
 
@@ -183,7 +223,6 @@ describe('useMyahInboxReplySend', () => {
     let sendResult: MyahInboxReplySendResult | undefined;
     await act(async () => {
       sendResult = await result.current.send({
-        threadId,
         expectedDraftRevision: 4,
         unexpectedBrowserInput: 'must not reach GraphQL',
       } as never);
@@ -192,8 +231,7 @@ describe('useMyahInboxReplySend', () => {
     expect(sendMutation).toHaveBeenCalledWith({
       variables: {
         input: {
-          expectedWorkspaceId: workspaceId,
-          threadId,
+          ...input,
           expectedDraftRevision: 4,
         },
       },
@@ -238,7 +276,7 @@ describe('useMyahInboxReplySend', () => {
 
     let sendResult: Promise<MyahInboxReplySendResult> | undefined;
     await act(async () => {
-      const send = result.current.send({ threadId, expectedDraftRevision: 4 });
+      const send = result.current.send({ expectedDraftRevision: 4 });
       await Promise.resolve();
       sendResult = send;
     });
@@ -256,7 +294,7 @@ describe('useMyahInboxReplySend', () => {
       expect.objectContaining({
         fetchPolicy: 'network-only',
         variables: {
-          input: { expectedWorkspaceId: workspaceId, threadId, receiptId },
+          input: { ...input, receiptId },
         },
       }),
     );
@@ -265,7 +303,7 @@ describe('useMyahInboxReplySend', () => {
       expect.objectContaining({
         fetchPolicy: 'network-only',
         variables: {
-          input: { expectedWorkspaceId: workspaceId, threadId, receiptId },
+          input: { ...input, receiptId },
         },
       }),
     );
@@ -287,7 +325,7 @@ describe('useMyahInboxReplySend', () => {
 
     await act(async () => {
       await expect(
-        result.current.send({ threadId, expectedDraftRevision: 4 }),
+        result.current.send({ expectedDraftRevision: 4 }),
       ).resolves.toMatchObject({
         outcome: 'UNKNOWN',
         error:
@@ -301,7 +339,11 @@ describe('useMyahInboxReplySend', () => {
   it('keeps overlapping send polls independent', async () => {
     const secondThreadId = '50505050-1c25-4d02-bf25-6aeccf7ea419';
     const secondHook = renderHook(() =>
-      useMyahInboxReplySend(workspaceId, secondThreadId, 8),
+      useMyahInboxReplySend(
+        draftKeyFixture(workspaceId, secondThreadId),
+        draftInputFixture(draftKeyFixture(workspaceId, secondThreadId)),
+        8,
+      ),
     );
     const secondReceiptId = '60606060-1c25-4d02-bf25-6aeccf7ea419';
     let secondStatusCalls = 0;
@@ -360,13 +402,12 @@ describe('useMyahInboxReplySend', () => {
     let firstSend: Promise<MyahInboxReplySendResult> | undefined;
     let secondSend: Promise<MyahInboxReplySendResult> | undefined;
     await act(async () => {
-      firstSend = result.current.send({ threadId, expectedDraftRevision: 4 });
+      firstSend = result.current.send({ expectedDraftRevision: 4 });
       await Promise.resolve();
       await Promise.resolve();
     });
     await act(async () => {
       secondSend = secondHook.result.current.send({
-        threadId: secondThreadId,
         expectedDraftRevision: 8,
       });
       await Promise.resolve();
@@ -380,7 +421,7 @@ describe('useMyahInboxReplySend', () => {
     expect(statusQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         variables: {
-          input: { expectedWorkspaceId: workspaceId, threadId, receiptId },
+          input: { ...input, receiptId },
         },
       }),
     );
@@ -388,8 +429,7 @@ describe('useMyahInboxReplySend', () => {
       expect.objectContaining({
         variables: {
           input: {
-            expectedWorkspaceId: workspaceId,
-            threadId: secondThreadId,
+            ...draftInputFixture(draftKeyFixture(workspaceId, secondThreadId)),
             receiptId: secondReceiptId,
           },
         },
@@ -423,7 +463,7 @@ describe('useMyahInboxReplySend', () => {
 
     let sendResult: Promise<MyahInboxReplySendResult> | undefined;
     await act(async () => {
-      const send = result.current.send({ threadId, expectedDraftRevision: 4 });
+      const send = result.current.send({ expectedDraftRevision: 4 });
       await Promise.resolve();
       sendResult = send;
     });
@@ -462,7 +502,6 @@ describe('useMyahInboxReplySend', () => {
       let sendResult: Promise<MyahInboxReplySendResult> | undefined;
       await act(async () => {
         const send = result.current.send({
-          threadId,
           expectedDraftRevision: 4,
         });
         await Promise.resolve();
@@ -491,7 +530,7 @@ describe('useMyahInboxReplySend', () => {
     const { result, unmount } = renderReplySendHook();
     let sendResult: Promise<MyahInboxReplySendResult> | undefined;
     await act(async () => {
-      const send = result.current.send({ threadId, expectedDraftRevision: 4 });
+      const send = result.current.send({ expectedDraftRevision: 4 });
       await Promise.resolve();
       sendResult = send;
     });
@@ -511,7 +550,7 @@ describe('useMyahInboxReplySend', () => {
     const { result, unmount } = renderReplySendHook();
 
     act(() => {
-      void result.current.send({ threadId, expectedDraftRevision: 4 });
+      void result.current.send({ expectedDraftRevision: 4 });
     });
     unmount();
     await act(async () => {
@@ -549,7 +588,7 @@ describe('useMyahInboxReplySend', () => {
     const { result, unmount } = renderReplySendHook();
 
     act(() => {
-      void result.current.send({ threadId, expectedDraftRevision: 4 });
+      void result.current.send({ expectedDraftRevision: 4 });
     });
     await act(async () => {
       await Promise.resolve();
@@ -584,7 +623,7 @@ describe('useMyahInboxReplySend', () => {
 
     await act(async () => {
       await expect(
-        result.current.send({ threadId, expectedDraftRevision: 4 }),
+        result.current.send({ expectedDraftRevision: 4 }),
       ).resolves.toMatchObject({
         outcome: 'UNKNOWN',
         error:

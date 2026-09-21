@@ -1,42 +1,18 @@
 import { useMutation } from '@apollo/client/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import {
-  GET_INSTAGRAM_MESSAGE_SEND_STATUS,
-  SEND_INSTAGRAM_MESSAGE,
-} from '@/myah/inbox/graphql/operations';
+import { SEND_INSTAGRAM_MESSAGE } from '@/myah/inbox/graphql/operations';
 import { type MyahInboxInstagramDraft } from '@/myah/inbox/hooks/useMyahInboxInstagramDraft';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 
-const POLL_INTERVAL_MS = 1_000;
-const MAX_STATUS_POLLS = 15;
+import {
+  pollInstagramMessageSendStatus,
+  type InstagramMessageSendResult,
+} from '@/myah/inbox/utils/pollInstagramMessageSendStatus';
+
 const UNKNOWN_SEND_ERROR =
   "We couldn't confirm whether the Instagram message was sent. Check the conversation before trying again.";
-
-type Resolvers<Value> = {
-  promise: Promise<Value>;
-  resolve: (value: Value | PromiseLike<Value>) => void;
-};
-
-const waitForStatusPoll = (): Promise<void> => {
-  const { promise, resolve } = (
-    Promise as PromiseConstructor & {
-      withResolvers<Value>(): Resolvers<Value>;
-    }
-  ).withResolvers<void>();
-
-  setTimeout(resolve, POLL_INTERVAL_MS);
-
-  return promise;
-};
-
-export type MyahInboxInstagramSendResult = {
-  status: string;
-  receiptId: string | null;
-  code: string | null;
-  nextEligibleAt: string | null;
-  error: string | null;
-};
+export type MyahInboxInstagramSendResult = InstagramMessageSendResult;
 
 type UseMyahInboxInstagramSendParams = {
   draft: Pick<
@@ -52,27 +28,12 @@ type InstagramSendResponse = {
   nextEligibleAt: string | null;
 };
 
-type InstagramSendStatusResponse = {
-  receiptId: string;
-  state: string;
-  providerCode: string | null;
-  outcome: string | null;
-};
-
 type SendMutationData = {
   sendInstagramMessage: InstagramSendResponse;
 };
 
 type SendMutationVariables = {
   input: { draftId: string; expectedRevision: number };
-};
-
-type SendStatusQueryData = {
-  instagramMessageSendStatus: InstagramSendStatusResponse;
-};
-
-type SendStatusQueryVariables = {
-  input: { receiptId: string };
 };
 
 type SendAttempt = {
@@ -323,58 +284,15 @@ export const useMyahInboxInstagramSend = ({
         return unknownResult(null);
       }
 
-      for (let poll = 0; poll < MAX_STATUS_POLLS; poll++) {
-        await waitForStatusPoll();
-
-        try {
-          const response = await apolloCoreClient.query<
-            SendStatusQueryData,
-            SendStatusQueryVariables
-          >({
-            query: GET_INSTAGRAM_MESSAGE_SEND_STATUS,
-            variables: { input: { receiptId: initialResult.receiptId } },
-            fetchPolicy: 'network-only',
-          });
-          const sendStatus = response.data?.instagramMessageSendStatus;
-
-          if (!sendStatus) {
-            publishUnknownLock(draftId);
-            return unknownResult(initialResult.receiptId);
-          }
-
-          // Receipt state is the canonical typed contract. Provider outcome is
-          // redacted free text (for example, "accepted") and cannot unlock a
-          // pending send or change its no-resend state.
-          const status = sendStatus.state;
-
-          if (status === 'PENDING' || status === 'PROVIDER_ACCEPTED') {
-            continue;
-          }
-          if (status === 'UNKNOWN') {
-            publishUnknownLock(draftId);
-            return unknownResult(sendStatus.receiptId);
-          }
-          if (status === 'BLOCKED') {
-            publishBlockedLock(draftId, null);
-          } else {
-            locksByDraftId.delete(draftId);
-          }
-
-          return {
-            status,
-            receiptId: sendStatus.receiptId,
-            code: sendStatus.providerCode,
-            nextEligibleAt: null,
-            error: status === 'BLOCKED' ? sendStatus.providerCode : null,
-          };
-        } catch {
-          publishUnknownLock(draftId);
-          return unknownResult(initialResult.receiptId);
-        }
-      }
-
-      publishUnknownLock(draftId);
-      return unknownResult(initialResult.receiptId);
+      const result = await pollInstagramMessageSendStatus(
+        apolloCoreClient,
+        initialResult.receiptId,
+      );
+      if (result.status === 'UNKNOWN') publishUnknownLock(draftId);
+      else if (result.status === 'BLOCKED')
+        publishBlockedLock(draftId, result.nextEligibleAt);
+      else locksByDraftId.delete(draftId);
+      return result;
     };
 
     setSending(true);

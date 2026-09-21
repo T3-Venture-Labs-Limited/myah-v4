@@ -22,6 +22,7 @@ import { normalizeCampaignCreatorEmail } from 'src/modules/myah-outreach/utils/n
 const SYSTEM_PERMISSIONS = { shouldBypassPermissionChecks: true } as const;
 const REASON_ORDER: readonly CampaignOutreachAudienceExclusionReason[] = [
   'INVALID_MEMBERSHIP',
+  'OPERATOR_EXCLUDED',
   'MISSING_CREATOR',
   'INVALID_STAGE',
   'NON_EMAIL_CONTACT_METHOD',
@@ -39,6 +40,7 @@ type Membership = ObjectLiteral & {
   creatorId: unknown;
   stage: unknown;
   selectedContactMethod: unknown;
+  excludedAt?: unknown;
   deletedAt?: unknown;
 };
 type Creator = ObjectLiteral & {
@@ -107,6 +109,7 @@ export class CampaignOutreachAudienceReviewService {
             creatorId: true,
             stage: true,
             selectedContactMethod: true,
+            excludedAt: true,
             deletedAt: true,
           },
         }),
@@ -209,6 +212,7 @@ export class CampaignOutreachAudienceReviewService {
           creatorId: true,
           stage: true,
           selectedContactMethod: true,
+          excludedAt: true,
           deletedAt: true,
         },
       },
@@ -319,6 +323,7 @@ export class CampaignOutreachAudienceReviewService {
         membership.deletedAt != null
       )
         reasons.push('INVALID_MEMBERSHIP');
+      if (membership.excludedAt != null) reasons.push('OPERATOR_EXCLUDED');
       if (!creator) reasons.push('MISSING_CREATOR');
       if (
         !MYAH_CAMPAIGN_CREATOR_OUTREACH_ELIGIBLE_STAGES.has(

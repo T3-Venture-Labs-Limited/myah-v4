@@ -3,6 +3,7 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { PageLayoutContent } from '@/page-layout/components/PageLayoutContent';
 import { MyahCampaignAudienceControls } from '@/page-layout/components/MyahCampaignAudienceControls';
+import { MyahCampaignHome } from '@/page-layout/components/MyahCampaignHome';
 import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 import { PageLayoutContentProvider } from '@/page-layout/contexts/PageLayoutContentContext';
 import { useCurrentPageLayout } from '@/page-layout/hooks/useCurrentPageLayout';
@@ -57,13 +58,14 @@ export const PageLayoutLeftPanel = ({
     tab: pinnedTab,
     pageLayoutType: currentPageLayout.type,
   });
-  const shouldRenderCampaignAudienceControls =
-    campaignPermissions.canUpdateObjectRecords &&
+  const shouldRenderCampaignHome =
     targetRecordIdentifier.targetObjectNameSingular === 'campaign' &&
     currentPageLayout.universalIdentifier ===
       MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER &&
     pinnedTab.universalIdentifier ===
       MYAH_CAMPAIGN_INFORMATION_TAB_UNIVERSAL_IDENTIFIER;
+  const shouldRenderCampaignAudienceControls =
+    campaignPermissions.canUpdateObjectRecords && shouldRenderCampaignHome;
 
   return (
     <StyledContainer>
@@ -85,6 +87,9 @@ export const PageLayoutLeftPanel = ({
           defaultEnableYScroll={true}
         >
           <PageLayoutContent />
+          {shouldRenderCampaignHome ? (
+            <MyahCampaignHome campaignId={targetRecordIdentifier.id} />
+          ) : null}
           {shouldRenderCampaignAudienceControls ? (
             <MyahCampaignAudienceControls
               campaignId={targetRecordIdentifier.id}

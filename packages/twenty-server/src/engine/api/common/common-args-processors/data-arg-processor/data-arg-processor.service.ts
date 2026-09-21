@@ -24,6 +24,7 @@ import { transformFullNameField } from 'src/engine/api/common/common-args-proces
 import { transformNumericField } from 'src/engine/api/common/common-args-processors/data-arg-processor/transformer-utils/transform-numeric-field.util';
 import { transformRawJsonField } from 'src/engine/api/common/common-args-processors/data-arg-processor/transformer-utils/transform-raw-json-field.util';
 import { transformTextField } from 'src/engine/api/common/common-args-processors/data-arg-processor/transformer-utils/transform-text-field.util';
+import { assertInstagramComposerFieldsNotWritten } from 'src/engine/api/common/common-args-processors/data-arg-processor/utils/assert-instagram-composer-fields-not-written.util';
 import { isRelationNestedOperation } from 'src/engine/api/common/common-args-processors/data-arg-processor/utils/is-relation-nested-operation.util';
 import { validateActorFieldOrThrow } from 'src/engine/api/common/common-args-processors/data-arg-processor/validator-utils/validate-actor-field-or-throw.util';
 import { validateAddressFieldOrThrow } from 'src/engine/api/common/common-args-processors/data-arg-processor/validator-utils/validate-address-field-or-throw.util';
@@ -86,6 +87,12 @@ export class DataArgProcessorService {
     if (!isDefined(partialRecordInputs)) {
       return [];
     }
+
+    assertInstagramComposerFieldsNotWritten({
+      partialRecordInputs,
+      flatObjectMetadata,
+      flatFieldMetadataMaps,
+    });
 
     const workspace = authContext.workspace;
 

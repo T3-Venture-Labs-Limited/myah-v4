@@ -37,6 +37,7 @@ type MessageDirection = 'INBOUND' | 'OUTBOUND' | 'UNKNOWN';
 
 type ConversationRecord = {
   id: string;
+  creatorId?: string | null;
 };
 type WorkspaceQueryExecutor = Pick<GlobalWorkspaceDataSource, 'query'> & {
   manager: WorkspaceEntityManager;
@@ -60,10 +61,20 @@ export type UnipileInstagramProjectionBinding = Pick<
   | 'deactivatedAt'
 >;
 
+// Shared so callers can recognise this refusal by identity rather than by
+// substring-matching a human-readable message.
+export const INSTAGRAM_CONVERSATION_DELETED_MESSAGE =
+  'Instagram conversation is deleted';
+
 export type UnipileInstagramChatProjectionInput = {
   workspace: WorkspaceIdentity;
   binding: UnipileInstagramProjectionBinding;
   chat: UnipileInstagramChat;
+  creatorRecordId?: string;
+  expectedConversationRecordId?: string;
+  // Manual composer callers must never resurrect an operator-deleted conversation,
+  // even when they resolve a raw handle and therefore pass no Creator.
+  restoreDeletedConversation?: boolean;
 };
 
 export type UnipileInstagramMessageProjectionInput =
@@ -167,13 +178,13 @@ export class UnipileInstagramProjectionService {
 
           const activeRecords = await querySource.query<ConversationRecord[]>(
             `
-            SELECT "id"
+            SELECT "id", "creatorId"
             FROM "${schemaName}"."_myahSocialConversation"
             WHERE "provider" = $1
               AND "instagramAccountId" = $2
               AND "providerConversationId" = $3
               AND "deletedAt" IS NULL
-            LIMIT 2
+            LIMIT 2 FOR UPDATE
           `,
             [
               'UNIPILE',
@@ -190,6 +201,7 @@ export class UnipileInstagramProjectionService {
 
           if (activeRecords.length === 1) {
             const [record] = activeRecords;
+            this.assertConversationOwner(record, input);
 
             await lockSource(record.id);
             await this.updateConversation(
@@ -204,13 +216,13 @@ export class UnipileInstagramProjectionService {
 
           const deletedRecords = await querySource.query<ConversationRecord[]>(
             `
-            SELECT "id"
+            SELECT "id", "creatorId"
             FROM "${schemaName}"."_myahSocialConversation"
             WHERE "provider" = $1
               AND "instagramAccountId" = $2
               AND "providerConversationId" = $3
               AND "deletedAt" IS NOT NULL
-            LIMIT 2
+            LIMIT 2 FOR UPDATE
           `,
             [
               'UNIPILE',
@@ -228,7 +240,17 @@ export class UnipileInstagramProjectionService {
           }
 
           if (deletedRecords.length === 1) {
+            // Verified manual receipts must not resurrect an operator-deleted target.
+            // Legacy sync callers (without a verified Creator) retain restoration.
+            if (
+              input.creatorRecordId ||
+              input.restoreDeletedConversation === false
+            )
+              throw new ConflictException(
+                INSTAGRAM_CONVERSATION_DELETED_MESSAGE,
+              );
             const [record] = deletedRecords;
+            this.assertConversationOwner(record, input);
 
             await lockSource(record.id);
             await this.restoreConversation(
@@ -241,6 +263,10 @@ export class UnipileInstagramProjectionService {
             return initializeSourceContact(record.id);
           }
 
+          if (input.expectedConversationRecordId)
+            throw new ConflictException(
+              'Instagram conversation does not match approval',
+            );
           const conversationRecordId = randomUUID();
           const displayName = input.chat.name ?? input.chat.attendeeProviderId;
 
@@ -254,10 +280,10 @@ export class UnipileInstagramProjectionService {
               "providerConversationId", "recipientIgsid", "recipientDisplayName",
               "instagramAccountId", "createdBySource", "createdByWorkspaceMemberId",
               "createdByName", "createdByContext", "updatedBySource",
-              "updatedByWorkspaceMemberId", "updatedByName", "updatedByContext"
+              "updatedByWorkspaceMemberId", "updatedByName", "updatedByContext", "creatorId"
             ) VALUES (
               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-              $16, $17
+              $16, $17, $18
             )
           `,
             [
@@ -278,6 +304,7 @@ export class UnipileInstagramProjectionService {
               null,
               'System',
               {},
+              input.creatorRecordId ?? null,
             ],
             undefined,
             queryOptions,
@@ -341,7 +368,7 @@ export class UnipileInstagramProjectionService {
 
           const conversations = await querySource.query<ConversationRecord[]>(
             `
-            SELECT "id"
+            SELECT "id", "creatorId"
             FROM "${schemaName}"."_myahSocialConversation"
             WHERE "id" = $1
               AND "instagramAccountId" = $2
@@ -367,6 +394,13 @@ export class UnipileInstagramProjectionService {
             );
           }
 
+          if (
+            input.creatorRecordId &&
+            conversations[0].creatorId !== input.creatorRecordId
+          )
+            throw new ConflictException(
+              'Instagram conversation Creator does not match',
+            );
           const activeRecords = await querySource.query<MessageRecord[]>(
             `
             SELECT "id", "createdAt", "deliveryState", "deliveryStateUpdatedAt"
@@ -743,6 +777,27 @@ export class UnipileInstagramProjectionService {
     );
   }
 
+  private assertConversationOwner(
+    record: ConversationRecord,
+    input: UnipileInstagramChatProjectionInput,
+  ): void {
+    if (
+      input.expectedConversationRecordId &&
+      record.id !== input.expectedConversationRecordId
+    )
+      throw new ConflictException(
+        'Instagram conversation does not match approval',
+      );
+    if (
+      input.creatorRecordId &&
+      record.creatorId != null &&
+      record.creatorId !== input.creatorRecordId
+    )
+      throw new ConflictException(
+        'Instagram conversation Creator does not match',
+      );
+  }
+
   private async updateConversation(
     dataSource: WorkspaceQueryExecutor,
     schemaName: string,
@@ -766,7 +821,8 @@ export class UnipileInstagramProjectionService {
           "updatedBySource" = $6,
           "updatedByWorkspaceMemberId" = $7,
           "updatedByName" = $8,
-          "updatedByContext" = $9
+          "updatedByContext" = $9,
+          "creatorId" = COALESCE("creatorId", $11)
         WHERE "id" = $10
       `,
       [
@@ -780,6 +836,7 @@ export class UnipileInstagramProjectionService {
         'System',
         {},
         id,
+        input.creatorRecordId ?? null,
       ],
       undefined,
       queryOptions,
@@ -810,7 +867,8 @@ export class UnipileInstagramProjectionService {
           "updatedBySource" = $6,
           "updatedByWorkspaceMemberId" = $7,
           "updatedByName" = $8,
-          "updatedByContext" = $9
+          "updatedByContext" = $9,
+          "creatorId" = COALESCE("creatorId", $11)
         WHERE "id" = $10
       `,
       [
@@ -824,6 +882,7 @@ export class UnipileInstagramProjectionService {
         'System',
         {},
         id,
+        input.creatorRecordId ?? null,
       ],
       undefined,
       queryOptions,

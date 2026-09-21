@@ -28,6 +28,12 @@
       },
       "parallel": false,
       "configurations": {
+        "myah-353-isolated": {
+          "cwd": "packages/twenty-server",
+          "commands": [
+            "NODE_ENV=test NODE_OPTIONS=\"--max-old-space-size=6144\" nx jest --config ./jest-myah-353-isolated.config.ts --logHeapUsage"
+          ]
+        },
         "with-db-reset": {
           "cwd": "packages/twenty-server",
           "commands": [

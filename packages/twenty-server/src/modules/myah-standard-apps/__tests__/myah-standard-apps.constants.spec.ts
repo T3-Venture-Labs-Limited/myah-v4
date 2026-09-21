@@ -12,7 +12,15 @@ describe('Myah standard app allowlist', () => {
     ).toBe(true);
     expect(
       Object.keys(MYAH_STANDARD_APP_UNIVERSAL_IDENTIFIER_LOOKUP),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
+  });
+
+  it('recognizes the Myah Instagram messaging identifier', () => {
+    expect(
+      isMyahStandardAppUniversalIdentifier(
+        '4738ebcd-6662-4ecc-a190-374fa0525951',
+      ),
+    ).toBe(true);
   });
 
   it('rejects legacy Creator Ops, display names, and unknown identifiers', () => {

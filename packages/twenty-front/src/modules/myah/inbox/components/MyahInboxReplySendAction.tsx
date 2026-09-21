@@ -4,6 +4,7 @@ import {
   useMyahInboxReplySend,
 } from '@/myah/inbox/hooks/useMyahInboxReplySend';
 import {
+  myahInboxDraftKeyId,
   type MyahInboxDraftAutosaveEntry,
   type MyahInboxDraftAutosaveKey,
   type MyahInboxDraftAutosaveThread,
@@ -40,6 +41,7 @@ export const MyahInboxReplySendAction = ({
   onSendingChange,
   onSent,
 }: MyahInboxReplySendActionProps) => {
+  const identity = myahInboxDraftKeyId(draftKey);
   const autosaveController = useMyahInboxDraftAutosaveControllerContext();
   const apolloCoreClient = useApolloCoreClient();
   const {
@@ -49,8 +51,8 @@ export const MyahInboxReplySendAction = ({
     enqueueWarningSnackBar,
   } = useSnackBar();
   const { readiness, readinessLoading, send, sending } = useMyahInboxReplySend(
-    draftKey.workspaceId,
-    draftKey.threadId,
+    draftKey,
+    entry.input,
     entry.confirmedRevision,
   );
   // oxlint-disable-next-line twenty/no-state-useref
@@ -63,7 +65,7 @@ export const MyahInboxReplySendAction = ({
     return () => {
       mountedRef.current = false;
     };
-  }, [draftKey.workspaceId, draftKey.threadId]);
+  }, [identity]);
   const [isSending, setIsSending] = useState(false);
   const [localIsUnknown, setIsUnknown] = useState(false);
   const [localIsPending, setIsPending] = useState(false);
@@ -91,6 +93,7 @@ export const MyahInboxReplySendAction = ({
   const canAttemptSend =
     !disabled &&
     !entry.operation &&
+    entry.executionState === 'READY' &&
     autosaveController.isTargetAuthorized(draftKey) &&
     !isSending &&
     !sending &&
@@ -156,8 +159,8 @@ export const MyahInboxReplySendAction = ({
     if (!capture) return;
     const isCurrent = () =>
       mountedRef.current &&
-      scopeRef.current.workspaceId === capture.key.workspaceId &&
-      scopeRef.current.threadId === capture.key.threadId &&
+      myahInboxDraftKeyId(scopeRef.current) ===
+        myahInboxDraftKeyId(capture.key) &&
       autosaveController.isOperationCurrent(capture);
     setIsSending(true);
     onSendingChange?.(true);
@@ -169,6 +172,7 @@ export const MyahInboxReplySendAction = ({
 
       if (
         !isCurrent() ||
+        flushed.executionState !== 'READY' ||
         flushed.dirty ||
         flushed.status === 'saving' ||
         flushed.status === 'error' ||
@@ -179,36 +183,34 @@ export const MyahInboxReplySendAction = ({
       }
 
       const result = await send({
-        expectedWorkspaceId: capture.key.workspaceId,
-        threadId: capture.key.threadId,
         expectedDraftRevision: flushed.confirmedRevision,
       });
-      if (
-        result.body !== null ||
-        result.outcome === MyahInboxReplySendOutcome.SENT
-      ) {
-        autosaveController.reconcileOperation(capture, {
-          key: capture.key,
-          revision: result.revision,
-          body: result.body,
-        });
-      }
       const remainsPending =
         result.outcome === MyahInboxReplySendOutcome.SENDING;
+      const remainsUnknown =
+        result.outcome === MyahInboxReplySendOutcome.UNKNOWN;
+      // Install the lock before reconciliation so result bytes cannot escape
+      // through either the shared entry or the presentation callback.
       if (remainsPending) autosaveController.setOutcomeLock(capture, 'pending');
-      if (result.outcome === MyahInboxReplySendOutcome.UNKNOWN)
-        autosaveController.setOutcomeLock(capture, 'unknown');
+      if (remainsUnknown) autosaveController.setOutcomeLock(capture, 'unknown');
+      const reconciled: MyahInboxDraftAutosaveThread = {
+        key: capture.key,
+        revision: result.revision,
+        body: remainsPending || remainsUnknown ? null : result.body,
+        ...(remainsPending
+          ? { executionState: 'OUTCOME_PENDING' as const }
+          : remainsUnknown
+            ? { executionState: 'OUTCOME_UNKNOWN' as const }
+            : {}),
+      };
+      const shouldReconcile =
+        result.body !== null ||
+        result.outcome === MyahInboxReplySendOutcome.SENT;
+      if (shouldReconcile)
+        autosaveController.reconcileOperation(capture, reconciled);
       if (!isCurrent()) return;
       setIsPending(remainsPending);
-      if (
-        result.body !== null ||
-        result.outcome === MyahInboxReplySendOutcome.SENT
-      )
-        onDraftReconciled?.({
-          key: capture.key,
-          revision: result.revision,
-          body: result.body,
-        });
+      if (shouldReconcile) onDraftReconciled?.(reconciled);
       keepSharedDraftLocked =
         remainsPending || result.outcome === MyahInboxReplySendOutcome.UNKNOWN;
       handleOutcome(result);

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 
 jest.mock(
@@ -21,29 +22,31 @@ jest.mock(
 
 import { setPgDateTypeParser } from 'src/database/pg/set-pg-date-type-parser';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { CampaignEmailRuntimeService } from 'src/modules/campaign-execution/services/campaign-email-runtime.service';
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
+import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 import { computeCampaignProjectedMessageId } from 'src/modules/campaign-execution/utils/campaign-execution-identity.util';
 
 setPgDateTypeParser();
 
 const id = {
-  workspace: 'c43e698f-7728-4e77-8871-4440fbaaa86e',
-  campaign: '2bb53476-7c63-449a-8005-fe7f6a901ff2',
-  execution: 'f437132b-2d88-4da9-861b-4c4e3aee9636',
-  authorization: 'de3f6527-7966-4379-8061-b201a34bdd63',
-  activation: '3e213e2b-985a-43f2-8e0b-615dec216686',
-  workflow: '7853d2f2-9987-4a68-b35c-3df8a0168b24',
-  version: '75e18372-3bcb-43d1-a8d9-14ad64b47e9a',
-  enrollment: 'a993cdf2-c775-4251-bc9e-c63d2af7cd8d',
-  occurrence: '709b54d0-2947-4fa8-966d-4436db41cddc',
-  campaignCreator: '5546b5d6-178a-456c-9f6b-355800295a67',
-  creator: '34046bfe-02aa-40b5-84e3-df46a95b5b21',
-  message: '67e6f072-7566-4196-b8ad-6f3c02645d9b',
-  nextMessage: 'a8257028-d164-41e5-b36e-f21e8c22b18b',
-  account: 'ecf079f6-25e0-4415-9eaa-ff4665247a53',
-  channel: '218b67db-d266-427a-8638-957d75bc7231',
+  workspace: randomUUID(),
+  campaign: randomUUID(),
+  execution: randomUUID(),
+  authorization: randomUUID(),
+  activation: randomUUID(),
+  workflow: randomUUID(),
+  version: randomUUID(),
+  enrollment: randomUUID(),
+  occurrence: randomUUID(),
+  campaignCreator: randomUUID(),
+  creator: randomUUID(),
+  message: randomUUID(),
+  nextMessage: randomUUID(),
+  account: randomUUID(),
+  channel: randomUUID(),
 } as const;
 const schema = getWorkspaceSchemaName(id.workspace);
 const fingerprint = 'a'.repeat(64);
@@ -137,18 +140,20 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
   let attemptService: OutboundEmailAttemptService;
   let service: CampaignProgressionService;
   let attemptId: string;
+  let reservationLocalDate: string;
 
   beforeAll(async () => {
     dataSource = await new DataSource(
       global.testDataSource.options,
     ).initialize();
     const capacity = new MailboxCapacityService();
-    const localDate = new Date().toISOString().slice(0, 10);
+    reservationLocalDate = new Date().toISOString().slice(0, 10);
     const capacityResult = () => {
       const observedAt = new Date();
+      observedAt.setMilliseconds(573);
       const selected = {
         sender: mailbox,
-        localDate,
+        localDate: reservationLocalDate,
         acceptedCount: 0,
         reservedCount: 0,
         earliestEligibleAt: observedAt,
@@ -243,6 +248,18 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
         [id.workspace, `phase2a-${id.workspace.slice(0, 8)}`, schema],
       );
       await manager.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+      await manager.query(
+        `INSERT INTO core."connectedAccount" (id,"workspaceId",handle,provider,"userWorkspaceId",visibility,"dailySendLimit","minimumSendIntervalMs")
+         SELECT $1,$2,'sender@example.com','google',"userWorkspaceId",visibility,100,0
+           FROM core."connectedAccount" ORDER BY "createdAt" LIMIT 1`,
+        [id.account, id.workspace],
+      );
+      await manager.query(
+        `INSERT INTO core."messageChannel" (id,"workspaceId",visibility,handle,type,"pendingGroupEmailsAction","syncStage","connectedAccountId")
+         SELECT $1,$2,visibility,'sender@example.com','EMAIL','NONE','MESSAGE_LIST_FETCH_PENDING',$3
+           FROM core."messageChannel" ORDER BY "createdAt" LIMIT 1`,
+        [id.channel, id.workspace, id.account],
+      );
       await manager.query(`ALTER TABLE core."outboundEmailAttempt"
         ADD COLUMN IF NOT EXISTS "providerHeaderMessageId" text,
         ADD COLUMN IF NOT EXISTS "reconciledProviderHeaderMessageId" text,
@@ -264,15 +281,15 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
         `CREATE TABLE IF NOT EXISTS "${schema}".campaign (id uuid PRIMARY KEY,"lifecycleStatus" text NOT NULL,"sequenceAuthorization" jsonb)`,
       );
       await manager.query(
-        `CREATE TABLE IF NOT EXISTS "${schema}"."campaignCreator" (id uuid PRIMARY KEY,stage text,"deletedAt" timestamptz,"updatedAt" timestamptz DEFAULT now())`,
+        `CREATE TABLE IF NOT EXISTS "${schema}"."campaignCreator" (id uuid PRIMARY KEY,"campaignId" uuid NOT NULL,stage text,"deletedAt" timestamptz,"updatedAt" timestamptz DEFAULT now())`,
       );
       await manager.query(
         `INSERT INTO "${schema}".campaign VALUES ($1,'ACTIVE',$2::jsonb) ON CONFLICT DO NOTHING`,
         [id.campaign, JSON.stringify(projection)],
       );
       await manager.query(
-        `INSERT INTO "${schema}"."campaignCreator" (id,stage) VALUES ($1,'READY') ON CONFLICT DO NOTHING`,
-        [id.campaignCreator],
+        `INSERT INTO "${schema}"."campaignCreator" (id,"campaignId",stage) VALUES ($1,$2,'READY') ON CONFLICT DO NOTHING`,
+        [id.campaignCreator, id.campaign],
       );
       await manager.query(
         `INSERT INTO core."campaignExecution" (id,"workspaceId","campaignId","timeZone","startLocalTime","endLocalTime","campaignCapacityTimeZone") VALUES ($1,$2,$3,'UTC','00:00','23:59','UTC') ON CONFLICT DO NOTHING`,
@@ -387,6 +404,100 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
     expect(day.reservedCount).toBe(1);
   });
 
+  it('preserves PostgreSQL reservation precision through runtime reconstruction and processing acquisition', async () => {
+    const providerCalls: string[] = [];
+    const outbound = {
+      getProviderRequestTimeoutMs: jest.fn(() => 30_000),
+      sendMessage: jest.fn(async () => {
+        const [processing] = await dataSource.query(
+          `SELECT "attemptState","finalEvidenceDigest" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
+          [attemptId],
+        );
+        expect(processing.attemptState).toBe('PROCESSING');
+        expect(processing.finalEvidenceDigest).toHaveLength(64);
+        providerCalls.push('sendMessage');
+        return {
+          headerMessageId: '<header@example.com>',
+          messageExternalId: 'provider-runtime',
+        };
+      }),
+    };
+    const dispatch = new OutboundEmailDispatchService(
+      {
+        runInTransaction: (work) => dataSource.transaction(work),
+        runPreProviderTransaction: (work) => dataSource.transaction(work),
+      },
+      {
+        revalidate: jest.fn(async ({ materialEvidence, submission }) => ({
+          projectedMessageId: materialEvidence.projectedMessageId,
+          status: 'AUTHORIZED' as const,
+          submission,
+        })),
+      },
+      { now: jest.fn(() => performance.now()) },
+      attemptService,
+      outbound as never,
+    );
+    const dispatchSpy = jest.spyOn(dispatch, 'dispatch');
+    const progressionRoutes = {
+      reconcileAcceptedInTransaction: jest.fn(),
+      reconcileDefinitelyUnacceptedInTransaction: jest.fn(),
+      reconcileUnknownInTransaction: jest.fn(),
+    };
+    const runtime = new CampaignEmailRuntimeService(
+      {
+        getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
+      } as never,
+      progressionRoutes as never,
+      dispatch,
+      { reconcile: jest.fn(async () => 'PROJECTED') } as never,
+    );
+    const [before] = await dataSource.query(
+      `SELECT "claimedAt","slotAt","unknownAfter","localDate" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
+      [attemptId],
+    );
+    for (const value of [
+      before.claimedAt,
+      before.slotAt,
+      before.unknownAfter,
+    ]) {
+      expect(value).toBeInstanceOf(Date);
+      expect(value.getUTCMilliseconds()).toBe(573);
+    }
+    expect(before.localDate).toBe(reservationLocalDate);
+    await (runtime as any).dispatchAttempt(
+      id.workspace,
+      id.campaign,
+      attemptId,
+    );
+
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    await expect(dispatchSpy.mock.results[0].value).resolves.toMatchObject({
+      status: 'ACCEPTED_RECORDED',
+    });
+    expect(providerCalls).toEqual(['sendMessage']);
+    expect(outbound.sendMessage).toHaveBeenCalledTimes(1);
+    expect(
+      progressionRoutes.reconcileAcceptedInTransaction,
+    ).toHaveBeenCalledTimes(1);
+
+    await dataSource.query(
+      `UPDATE core."outboundEmailAttempt"
+          SET "attemptState"='RESERVED',"capacityState"='RESERVED',"finalEvidenceDigest"=NULL,
+              "providerMessageId"=NULL,"providerAcceptedAt"=NULL,"providerHeaderMessageId"=NULL,
+              "providerMessageExternalId"=NULL,"providerThreadExternalId"=NULL,
+              "resolvedThreadExternalId"=NULL,"providerDeliveredRecipients"=NULL,
+              "safeOutcomeReason"=NULL,"retryable"=NULL
+        WHERE "attemptId"=$1`,
+      [attemptId],
+    );
+    await dataSource.query(
+      `UPDATE core."mailboxCapacityDay" SET "reservedCount"=1,"acceptedCount"=0
+        WHERE "workspaceId"=$1 AND "connectedAccountId"=$2`,
+      [id.workspace, id.account],
+    );
+  });
+
   it('records accepted projected evidence and progresses exactly once with deterministic dueAt and READY-only stage CAS', async () => {
     const [attempt] = await dataSource.query(
       `SELECT * FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
@@ -494,7 +605,7 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
     expect(state.stage).toBe('CONTACTED');
     expect(state.next_count).toBe(1);
     expect(new Date(state.next_due).getTime()).toBe(
-      Math.floor(new Date(state.accepted_at).getTime() / 1000) * 1000 + 60_000,
+      new Date(state.accepted_at).getTime() + 60_000,
     );
   });
 

@@ -1,5 +1,8 @@
 import { isNonEmptyString } from '@sniptt/guards';
-import { MessageParticipantRole } from 'twenty-shared/types';
+import {
+  ConnectedAccountProvider,
+  MessageParticipantRole,
+} from 'twenty-shared/types';
 
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 import {
@@ -64,8 +67,20 @@ export const formatSentMessage = (
     attachments: [],
     participants,
     isDraft: false,
+    ...(input.deliveryTargetId === undefined
+      ? {}
+      : { deliveryTargetId: input.deliveryTargetId }),
     ...(input.expectedMessageId === undefined
       ? {}
       : { expectedMessageId: input.expectedMessageId }),
+    ...(input.allowExpectedMessageIdAdoption
+      ? { allowExpectedMessageIdAdoption: true }
+      : {}),
+    ...(input.allowExpectedMessageIdAdoption &&
+    input.connectedAccount.provider ===
+      ConnectedAccountProvider.IMAP_SMTP_CALDAV &&
+    !isNonEmptyString(input.sendResult.messageExternalId)
+      ? { isImapSmtpHeaderFallback: true }
+      : {}),
   };
 };

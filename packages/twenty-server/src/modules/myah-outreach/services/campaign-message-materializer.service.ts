@@ -784,8 +784,7 @@ export class CampaignMessageMaterializerService {
           evidence.providerMessageId ||
         context.replyEvidence.providerThreadId !== evidence.providerThreadId ||
         context.renderContext.replyEvidenceId !== evidence.evidenceId ||
-        context.renderContext.enrollmentId !== evidence.enrollmentId ||
-        context.renderContext.occurrenceId !== evidence.occurrenceId
+        context.renderContext.enrollmentId !== evidence.enrollmentId
       ) {
         return [
           blocker(

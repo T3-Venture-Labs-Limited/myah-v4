@@ -885,6 +885,51 @@ export type CalendarConfiguration = {
   configurationType: WidgetConfigurationType;
 };
 
+export type CampaignActivityConnectionDto = {
+  __typename?: 'CampaignActivityConnectionDTO';
+  nodes: Array<CampaignActivityCreatorDto>;
+  pageInfo: CampaignActivityPageInfoDto;
+};
+
+export type CampaignActivityCreatorDto = {
+  __typename?: 'CampaignActivityCreatorDTO';
+  campaignCreatorId: Scalars['ID']['output'];
+  creatorId: Scalars['ID']['output'];
+  creatorName?: Maybe<Scalars['String']['output']>;
+  currentAttemptState?: Maybe<Scalars['String']['output']>;
+  excluded: Scalars['Boolean']['output'];
+  inboxContactId?: Maybe<Scalars['String']['output']>;
+  inboxThreadId?: Maybe<Scalars['ID']['output']>;
+  latestInbound?: Maybe<CampaignActivityMessageDto>;
+  latestOutbound?: Maybe<CampaignActivityMessageDto>;
+  mayStillSend: Scalars['Boolean']['output'];
+  needsAttention: Scalars['Boolean']['output'];
+  plannedAt?: Maybe<Scalars['String']['output']>;
+  reason?: Maybe<Scalars['String']['output']>;
+  stage?: Maybe<Scalars['String']['output']>;
+  stageLabel?: Maybe<Scalars['String']['output']>;
+};
+
+export type CampaignActivityInput = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  campaignId: Scalars['ID']['input'];
+  first?: Scalars['Int']['input'];
+};
+
+export type CampaignActivityMessageDto = {
+  __typename?: 'CampaignActivityMessageDTO';
+  happenedAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  state: Scalars['String']['output'];
+  threadId: Scalars['ID']['output'];
+};
+
+export type CampaignActivityPageInfoDto = {
+  __typename?: 'CampaignActivityPageInfoDTO';
+  endCursor?: Maybe<Scalars['String']['output']>;
+  hasNextPage: Scalars['Boolean']['output'];
+};
+
 export type CampaignAudiencePreviewDto = {
   __typename?: 'CampaignAudiencePreviewDTO';
   duplicateEmails: Scalars['Int']['output'];
@@ -1002,6 +1047,7 @@ export enum CampaignOutreachAudienceExclusionReason {
   INVALID_STAGE = 'INVALID_STAGE',
   MISSING_CREATOR = 'MISSING_CREATOR',
   NON_EMAIL_CONTACT_METHOD = 'NON_EMAIL_CONTACT_METHOD',
+  OPERATOR_EXCLUDED = 'OPERATOR_EXCLUDED',
   SUPPRESSED_EMAIL = 'SUPPRESSED_EMAIL'
 }
 
@@ -1888,6 +1934,7 @@ export enum EngineComponentKey {
   HIDE_DELETED_RECORDS = 'HIDE_DELETED_RECORDS',
   IMPORT_RECORDS = 'IMPORT_RECORDS',
   MERGE_MULTIPLE_RECORDS = 'MERGE_MULTIPLE_RECORDS',
+  MESSAGE_ON_INSTAGRAM = 'MESSAGE_ON_INSTAGRAM',
   NAVIGATE_TO_NEXT_RECORD = 'NAVIGATE_TO_NEXT_RECORD',
   NAVIGATE_TO_PREVIOUS_RECORD = 'NAVIGATE_TO_PREVIOUS_RECORD',
   NAVIGATION = 'NAVIGATION',
@@ -1999,6 +2046,19 @@ export type ExactCampaignEmailSenderResultDto = {
   __typename?: 'ExactCampaignEmailSenderResultDTO';
   reason?: Maybe<Scalars['String']['output']>;
   sender?: Maybe<CampaignSenderReadinessDto>;
+  status: Scalars['String']['output'];
+};
+
+export type ExcludeCampaignCreatorInput = {
+  campaignCreatorId: Scalars['UUID']['input'];
+  campaignId: Scalars['UUID']['input'];
+  reason: Scalars['String']['input'];
+};
+
+export type ExcludeCampaignCreatorResultDto = {
+  __typename?: 'ExcludeCampaignCreatorResultDTO';
+  excludedAt: Scalars['String']['output'];
+  mayStillSend: Scalars['Boolean']['output'];
   status: Scalars['String']['output'];
 };
 
@@ -3224,6 +3284,7 @@ export type Mutation = {
   emailPasswordResetLink: EmailPasswordResetLink;
   endSubscriptionTrialPeriod: BillingEndTrialPeriod;
   evaluateAgentTurn: AgentTurnEvaluation;
+  excludeCampaignCreator: ExcludeCampaignCreatorResultDto;
   executeOneLogicFunction: LogicFunctionExecutionResult;
   generateApiKeyToken: ApiKeyToken;
   generateApplicationToken: ApplicationTokenPair;
@@ -3967,6 +4028,11 @@ export type MutationEmailPasswordResetLinkArgs = {
 
 export type MutationEvaluateAgentTurnArgs = {
   turnId: Scalars['UUID']['input'];
+};
+
+
+export type MutationExcludeCampaignCreatorArgs = {
+  input: ExcludeCampaignCreatorInput;
 };
 
 
@@ -5168,6 +5234,7 @@ export type Query = {
   applicationRegistrationTarballUrl?: Maybe<Scalars['String']['output']>;
   barChartData: BarChartData;
   billingPortalSession: BillingSession;
+  campaignActivity: CampaignActivityConnectionDto;
   campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDto;
   campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDto;
   campaignEmailAccountCandidates: Array<CampaignEmailAccountDto>;
@@ -5331,6 +5398,11 @@ export type QueryBarChartDataArgs = {
 export type QueryBillingPortalSessionArgs = {
   forPaymentMethodUpdate?: InputMaybe<Scalars['Boolean']['input']>;
   returnUrlPath?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryCampaignActivityArgs = {
+  input: CampaignActivityInput;
 };
 
 

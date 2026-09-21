@@ -10,11 +10,13 @@ import {
   CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_APPROVED_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_BODY_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_COMPOSER_INPUT_DIGEST_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_CREATOR_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_GENERATED_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_INBOUND_MESSAGE_RECORD_ID_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_INBOUND_PROVIDER_MESSAGE_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_INSTAGRAM_MESSAGE_SNAPSHOT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_KIND_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_RECIPIENT_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
@@ -272,6 +274,30 @@ export default defineObject({
       label: 'Revision',
       name: 'revision',
       defaultValue: 1,
+    },
+    {
+      universalIdentifier:
+        REPLY_DRAFT_COMPOSER_INPUT_DIGEST_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      label: 'Composer input digest',
+      name: 'composerInputDigest',
+      isNullable: true,
+      isUIEditable: false,
+      defaultValue: null,
+      description:
+        'Server-owned immutable digest for a verified Instagram composer attempt.',
+    },
+    {
+      universalIdentifier:
+        REPLY_DRAFT_INSTAGRAM_MESSAGE_SNAPSHOT_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RAW_JSON,
+      label: 'Instagram message snapshot',
+      name: 'instagramMessageSnapshot',
+      isNullable: true,
+      isUIEditable: false,
+      defaultValue: null,
+      description:
+        'Server-owned immutable identity snapshot for a verified Instagram composer attempt.',
     },
     {
       universalIdentifier: REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,

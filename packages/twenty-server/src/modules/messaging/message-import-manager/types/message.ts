@@ -26,7 +26,11 @@ export type Message = Omit<
   messageFolderIds?: string[];
   messageFolderExternalIds?: string[];
   labelIds?: string[];
+  // Internal accepted-receipt routing, not populated by provider import drivers.
+  deliveryTargetId?: string;
   expectedMessageId?: string;
+  allowExpectedMessageIdAdoption?: boolean;
+  isImapSmtpHeaderFallback?: boolean;
   providerOccurredAt?: string | null;
 };
 

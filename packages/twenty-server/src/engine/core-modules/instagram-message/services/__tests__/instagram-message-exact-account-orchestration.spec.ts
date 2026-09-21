@@ -18,6 +18,35 @@ import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/ins
 import { InstagramMessageSendService } from 'src/engine/core-modules/instagram-message/services/instagram-message-send.service';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 
+// Seed historical receipt authority without invoking the fresh provider-aware producer.
+class LegacyReceiptAuthorityReaderFixture extends InstagramMessageAuthorityReaderService {
+  async readHistoricalAuthority(input: {
+    workspaceId: string;
+    initiatorUserWorkspaceId: string;
+    draftId: string;
+    expectedRevision: number;
+  }) {
+    const workspace = await this.getWorkspace(input.workspaceId);
+    const accountBinding = await this.getActiveAccountBinding(
+      input.workspaceId,
+    );
+    const draft = await this.loadDraft(workspace, input.draftId);
+    if (Number(draft.revision) !== input.expectedRevision)
+      throw new Error('draft revision changed');
+    return this.buildAuthority({
+      workspace,
+      accountBinding,
+      draft,
+      approvalContext: {
+        initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+        interactionContextId: input.draftId,
+      },
+    });
+  }
+}
+
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const userWorkspaceId = '00000000-0000-4000-8000-000000000002';
 const draftId = '00000000-0000-4000-8000-000000000003';
@@ -137,7 +166,7 @@ const buildHarness = () => {
       return repositories[objectName as keyof typeof repositories];
     }),
   };
-  const authorityReader = new InstagramMessageAuthorityReaderService(
+  const authorityReader = new LegacyReceiptAuthorityReaderFixture(
     { findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }) } as never,
     globalWorkspaceOrmManager as never,
     accountBindingRepository as never,
@@ -201,7 +230,7 @@ const buildHarness = () => {
   };
 };
 
-describe('Instagram exact-account non-sending orchestration', () => {
+describe('Instagram historical v2 exact-account non-sending orchestration', () => {
   it('retains a second account fixture, selects the canonical reply account, and stops at budget BLOCKED before provider I/O', async () => {
     const harness = buildHarness();
 
@@ -209,7 +238,7 @@ describe('Instagram exact-account non-sending orchestration', () => {
       PermissionsException,
     );
 
-    const authority = await harness.authorityReader.createDirectAuthority({
+    const authority = await harness.authorityReader.readHistoricalAuthority({
       workspaceId,
       initiatorUserWorkspaceId: userWorkspaceId,
       draftId,
@@ -399,7 +428,7 @@ describeIsolatedPostgres(
     let deniedDraftId: string;
     let canonicalInstagramAccountId: string;
     let deniedInstagramAccountId: string;
-    let authorityReader: InstagramMessageAuthorityReaderService;
+    let authorityReader: LegacyReceiptAuthorityReaderFixture;
     let recordAccess: InstagramMessageRecordAccessService;
     let sendService: InstagramMessageSendService;
     let providerClient: Record<string, jest.Mock>;
@@ -712,7 +741,7 @@ describeIsolatedPostgres(
       const bindings = new WorkspaceScopedRepository(
         coreDataSource.getRepository('bindingFixture') as never,
       );
-      authorityReader = new InstagramMessageAuthorityReaderService(
+      authorityReader = new LegacyReceiptAuthorityReaderFixture(
         coreDataSource.getRepository('workspaceFixture') as never,
         globalWorkspaceOrmManager,
         bindings as never,
@@ -751,7 +780,7 @@ describeIsolatedPostgres(
       expect(() => globalWorkspaceDataSource.query('SELECT 1')).toThrow(
         PermissionsException,
       );
-      const authority = await authorityReader.createDirectAuthority({
+      const authority = await authorityReader.readHistoricalAuthority({
         workspaceId: isolatedWorkspaceId,
         initiatorUserWorkspaceId: userWorkspaceId,
         draftId: canonicalDraftId,

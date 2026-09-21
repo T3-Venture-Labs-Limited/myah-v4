@@ -6,6 +6,7 @@ import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/wo
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { USER_WORKSPACE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-user-workspaces.util';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 
@@ -28,6 +29,16 @@ type WorkspaceOrmManager = {
     options: { shouldBypassPermissionChecks: boolean },
   ) => Promise<{ count: () => Promise<number> }>;
 };
+
+const readContextQuery = gql`
+  query Task7ReadContext($input: MyahInboxReplyDraftInput!) {
+    myahInboxReplyDraft(input: $input) {
+      resolvedContext {
+        contextFingerprint
+      }
+    }
+  }
+`;
 
 const generateProposalMutation = gql`
   mutation Task7GenerateProposal($input: GenerateMyahInboxReplyProposalInput!) {
@@ -218,12 +229,41 @@ describe('Myah Inbox reply proposal Nest integration', () => {
       'persistSentMessage',
     );
     const beforeMessageCount = await countNativeMessages();
+    const replyTarget = {
+      channel: 'EMAIL',
+      contactId: encodeMyahInboxContactId({
+        workspaceId: SEED_APPLE_WORKSPACE_ID,
+        identity: { kind: 'creator', recordId: fixture.creatorId },
+      }),
+      threadId: fixture.threadIds.draft,
+    };
+    const replyContext = { kind: 'CAMPAIGN', campaignId: fixture.campaignId };
+    const contextResponse = await makeGraphqlAPIRequest(
+      {
+        query: readContextQuery,
+        variables: {
+          input: {
+            expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
+            target: replyTarget,
+            replyContext,
+          },
+        },
+      },
+      APPLE_JANE_ADMIN_ACCESS_TOKEN,
+    );
+    expect(contextResponse.body.errors).toBeUndefined();
+    const expectedContextFingerprint =
+      contextResponse.body.data.myahInboxReplyDraft.resolvedContext
+        .contextFingerprint;
     const directResponse = await makeGraphqlAPIRequest(
       {
         query: generateProposalMutation,
         variables: {
           input: {
-            threadId: fixture.threadIds.draft,
+            expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
+            target: replyTarget,
+            replyContext,
+            expectedContextFingerprint,
             operatorInstructions: 'Confirm Tuesday.',
           },
         },

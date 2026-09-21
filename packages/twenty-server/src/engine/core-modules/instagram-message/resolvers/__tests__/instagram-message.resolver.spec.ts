@@ -1,3 +1,20 @@
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { createV3RecoveryFixture } from '../../services/__tests__/instagram-message-v3-recovery.fixture';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+// Installed metadata/storage readiness is exercised with real workspace context in
+// instagram-message-composer-readiness.util.spec.ts; these retain their existing
+// recovery/permission/persistence fixtures.
+jest.mock(
+  'src/engine/core-modules/instagram-message/services/instagram-message-composer-readiness.util',
+  () => ({
+    isInstagramComposerReady: jest.fn().mockResolvedValue(true),
+    assertInstagramComposerReady: jest.fn().mockResolvedValue(undefined),
+  }),
+);
+
 import { InstagramMessageSendService } from 'src/engine/core-modules/instagram-message/services/instagram-message-send.service';
 import { FieldMetadataType } from 'twenty-shared/types';
 
@@ -38,6 +55,58 @@ jest.mock(
 );
 
 describe('InstagramMessageResolver', () => {
+  it('registers composer preparation as a mutation', () => {
+    expect(
+      Reflect.getMetadata(
+        'graphql:resolver_type',
+        InstagramMessageResolver.prototype.prepareInstagramMessageComposer,
+      ),
+    ).toBe('Mutation');
+  });
+
+  it('maps inaccessible composer account readiness to a generic query result', async () => {
+    const permissionService = {
+      canQueryComposerAccount: jest.fn().mockResolvedValue(true),
+    };
+    const recordAccessService = {
+      getComposerAccount: jest.fn().mockResolvedValue(null),
+    };
+    const resolver = Reflect.construct(InstagramMessageResolver, [
+      {},
+      {},
+      {},
+      recordAccessService,
+      {},
+      permissionService,
+      {},
+    ]) as InstagramMessageResolver;
+    const resolverWithContext = resolver as unknown as {
+      executeInAuthenticatedWorkspaceContext: jest.Mock;
+    };
+    resolverWithContext.executeInAuthenticatedWorkspaceContext = jest.fn(
+      async (
+        _workspace: WorkspaceEntity,
+        _userWorkspaceId: string,
+        _workspaceMemberId: string,
+        callback: (rolePermissionConfig: {
+          unionOf: string[];
+        }) => Promise<unknown>,
+      ) => callback({ unionOf: ['role-id'] }),
+    );
+
+    await expect(
+      resolver.instagramMessageComposerAccount(
+        { id: 'workspace-id' } as WorkspaceEntity,
+        'user-workspace-id',
+        'workspace-member-id',
+      ),
+    ).resolves.toEqual({
+      status: 'BLOCKED',
+      code: 'ACCOUNT_UNAVAILABLE',
+      sender: null,
+    });
+  });
+
   it('keeps permissionless draft reads denied while an authorized missing draft returns null', async () => {
     const workspaceId = '20202020-3b29-4b61-a263-5a0a61b7b395';
     const userWorkspaceId = '20202020-4b29-4b61-a263-5a0a61b7b395';
@@ -648,6 +717,8 @@ describe('InstagramMessageResolver first-contact execution and authorized recove
       state: 'PROVIDER_ACCEPTED',
       providerCode: 'accepted',
       outcome: null,
+      creatorRecordId: null,
+      conversationRecordId: null,
     });
     expect(h.approval.getDirectInstagramReceiptForViewer).toHaveBeenCalledWith({
       receiptId: 'receipt-id',
@@ -676,4 +747,126 @@ describe('InstagramMessageResolver first-contact execution and authorized recove
     expect(h.projector.projectReceiptWithWriter).not.toHaveBeenCalled();
     expect(h.storedReceipt.state).toBe('PROVIDER_ACCEPTED');
   });
+});
+
+describe('InstagramMessageResolver confirmed immutable destination', () => {
+  const setup = () => {
+    const h = createV3RecoveryFixture();
+    const workspace = { id: h.workspaceId } as WorkspaceEntity;
+    const user = h.binding.initiatorUserWorkspaceId;
+    const member = 'member-v3';
+    const role = { unionOf: ['destination-role'] };
+    mockGetWorkspaceAuthContext.mockReturnValue({
+      type: 'user',
+      workspace,
+      userWorkspaceId: user,
+      workspaceMemberId: member,
+      user: { id: 'user-v3' },
+    });
+    mockGetWorkspaceContext.mockReturnValue({
+      userWorkspaceRoleMap: new Map(),
+      apiKeyRoleMap: new Map(),
+    });
+    mockResolveRolePermissionConfig.mockReturnValue(role);
+    const approval = new ActionApprovalService(
+      { getRepository: () => h.receiptRepository } as never,
+      h.projector,
+    );
+    const permission = { assertCanSend: jest.fn() };
+    const resolver = new InstagramMessageResolver(
+      approval,
+      h.draft,
+      {} as never,
+      h.access,
+      { isMyahTeamMember: () => false } as never,
+      permission as never,
+      h.orm as never,
+    );
+    const status = () =>
+      resolver.instagramMessageSendStatus(
+        { receiptId: h.receipt.id },
+        workspace,
+        user,
+        member,
+      );
+    return { ...h, status, role, permission };
+  };
+  it('returns IDs only after durable message projection with current role-scoped reads, not current handles', async () => {
+    const h = setup();
+    await expect(h.status()).resolves.toMatchObject({
+      state: 'PROVIDER_ACCEPTED',
+      creatorRecordId: null,
+      conversationRecordId: null,
+    });
+    await h.projector.projectReceipt(h.receipt.id);
+    h.orm.getRepository.mockClear();
+    await expect(h.status()).resolves.toMatchObject({
+      state: 'SENT',
+      creatorRecordId: h.creatorId,
+      conversationRecordId: h.rows.myahSocialConversation[0].id,
+    });
+    expect(
+      h.orm.getRepository.mock.calls.every(([, , role]) => role === h.role),
+    ).toBe(true);
+    expect(h.fetch).toHaveBeenCalledTimes(2);
+  });
+  it('suppresses destination IDs on current record/field permission denial without provider access', async () => {
+    const h = setup();
+    await h.projector.projectReceipt(h.receipt.id);
+    h.fetch.mockClear();
+    h.orm.getRepository.mockRejectedValue(
+      new PermissionsException(
+        'denied',
+        PermissionsExceptionCode.PERMISSION_DENIED,
+      ),
+    );
+    await expect(h.status()).resolves.toMatchObject({
+      state: 'SENT',
+      creatorRecordId: null,
+      conversationRecordId: null,
+    });
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.permission.assertCanSend).toHaveBeenCalled();
+  });
+
+  it.each([
+    'creator',
+    'conversation',
+    'message',
+    'account',
+    'binding',
+    'owner',
+    'ambiguous',
+    'body',
+    'wrong-message',
+    'wrong-chat',
+  ])(
+    'does not expose a destination for inaccessible/mismatched %s',
+    async (failure) => {
+      const h = setup();
+      await h.projector.projectReceipt(h.receipt.id);
+      if (failure === 'creator') h.rows.creator = [];
+      if (failure === 'conversation') h.rows.myahSocialConversation = [];
+      if (failure === 'message') h.rows.myahSocialMessage = [];
+      if (failure === 'account') h.rows.myahInstagramAccount = [];
+      if (failure === 'binding') h.account.status = 'INACTIVE';
+      if (failure === 'owner')
+        h.rows.myahSocialConversation[0].creatorId = 'other';
+      if (failure === 'ambiguous')
+        h.rows.myahSocialConversation.push({
+          ...h.rows.myahSocialConversation[0],
+          id: 'duplicate',
+        });
+      if (failure === 'body') h.rows.myahSocialMessage[0].text = 'edited';
+      if (failure === 'wrong-message')
+        h.receipt.providerExternalMessageId = 'other';
+      if (failure === 'wrong-chat')
+        h.receipt.providerThreadExternalId = 'other';
+      await expect(h.status()).resolves.toMatchObject({
+        state: 'SENT',
+        creatorRecordId: null,
+        conversationRecordId: null,
+      });
+    },
+  );
 });

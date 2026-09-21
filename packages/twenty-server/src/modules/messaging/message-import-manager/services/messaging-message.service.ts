@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 import { v4 } from 'uuid';
 
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
@@ -18,6 +18,10 @@ import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/co
 import { type MessageThreadWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-thread.workspace-entity';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
+
+const normalizeNullableHeaderMessageId = (
+  value: string | null | undefined,
+): string | null => (value === undefined || value === '' ? null : value);
 
 type MessageAccumulator = {
   existingMessageInDB?: MessageWorkspaceEntity;
@@ -103,7 +107,65 @@ export class MessagingMessageService {
             'messageParticipant',
           );
 
+        // Resolve the immutable local target inside the write transaction. A
+        // provider-returned thread ID must never route an accepted v2 receipt.
+        const deliveryTargetIds = new Set(
+          messages
+            .map((message) => message.deliveryTargetId)
+            .filter((id) => id !== undefined),
+        );
+        for (const deliveryTargetId of [...deliveryTargetIds].sort()) {
+          if (
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+              deliveryTargetId,
+            )
+          ) {
+            throw new Error('Pinned Message delivery target is invalid');
+          }
+          const target = await messageThreadRepository.findOne(
+            {
+              where: { id: deliveryTargetId, deletedAt: IsNull() },
+              select: { id: true },
+              lock: { mode: 'pessimistic_write' },
+            },
+            transactionManager,
+          );
+          if (target?.id !== deliveryTargetId)
+            throw new Error('Pinned Message delivery target is unavailable');
+        }
+
         const messageAccumulatorMap = new Map<string, MessageAccumulator>();
+        const transactionQuery = transactionManager.queryRunner?.query.bind(
+          transactionManager.queryRunner,
+        );
+        if (lockInboxSources && !transactionQuery) {
+          throw new Error(
+            'Email source locking requires an active transaction manager',
+          );
+        }
+        if (transactionQuery) {
+          if (lockInboxSources) {
+            await transactionQuery(
+              "SELECT set_config('search_path', $1, true)",
+              [getWorkspaceSchemaName(workspaceId)],
+            );
+          }
+          const identityKeys = [
+            ...new Set(
+              messages.map((message) => {
+                const headerMessageId = message.headerMessageId?.trim();
+
+                return `EMAIL_MESSAGE:${workspaceId}:${headerMessageId || message.externalId}`;
+              }),
+            ),
+          ].sort();
+          for (const identityKey of identityKeys) {
+            await transactionQuery(MYAH_INBOX_SOURCE_ADVISORY_LOCK_SQL, [
+              identityKey,
+            ]);
+          }
+        }
+
         const expectedMessageIds = messages
           .map((message) => message.expectedMessageId)
           .filter(isDefined);
@@ -114,7 +176,16 @@ export class MessagingMessageService {
                 id,
               ),
           ) ||
-          new Set(expectedMessageIds).size !== expectedMessageIds.length
+          new Set(expectedMessageIds).size !== expectedMessageIds.length ||
+          messages.some(
+            (message) =>
+              (message.allowExpectedMessageIdAdoption === true &&
+                message.expectedMessageId === undefined) ||
+              (message.isImapSmtpHeaderFallback === true &&
+                (message.allowExpectedMessageIdAdoption !== true ||
+                  !message.headerMessageId?.trim() ||
+                  message.externalId !== message.headerMessageId)),
+          )
         ) {
           throw new Error('Expected Message identities are invalid');
         }
@@ -180,13 +251,42 @@ export class MessagingMessageService {
         const existingParticipants = await messageParticipantRepository.find(
           {
             where: {
-              messageId: In(messagesByExpectedId.map((message) => message.id)),
+              messageId: In(existingMessagesInDB.map((message) => message.id)),
             },
           },
           transactionManager,
         );
 
-        this.requireExactDeterministicReplayEvidence({
+        let sentAssociationIds = new Set<string>();
+        if (
+          messages.some((message) => message.isImapSmtpHeaderFallback) &&
+          existingMessageChannelMessageAssociations.length > 0
+        ) {
+          if (!transactionQuery) {
+            throw new Error(
+              'IMAP Sent evidence requires an active transaction',
+            );
+          }
+          // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          const sentAssociations: { id: string }[] = await transactionQuery(
+            `SELECT DISTINCT link."messageChannelMessageAssociationId" AS id
+               FROM "${getWorkspaceSchemaName(workspaceId)}"."messageChannelMessageAssociationMessageFolder" link
+               JOIN core."messageFolder" folder ON folder.id=link."messageFolderId"
+              WHERE link."messageChannelMessageAssociationId"=ANY($1::uuid[])
+                AND folder."workspaceId"=$2 AND folder."messageChannelId"=$3
+                AND folder."isSentFolder"=true`,
+            [
+              existingMessageChannelMessageAssociations.map(({ id }) => id),
+              workspaceId,
+              messageChannelId,
+            ],
+          );
+          sentAssociationIds = new Set(sentAssociations.map(({ id }) => id));
+        }
+
+        const verifiedMessages = this.requireExactDeterministicReplayEvidence({
+          sentAssociationIds,
           associations: existingMessageChannelMessageAssociations,
           messages,
           messagesByExpectedId,
@@ -200,6 +300,7 @@ export class MessagingMessageService {
           messages,
           messageAccumulatorMap,
           existingMessagesInDB,
+          verifiedMessages,
         );
 
         await this.enrichMessageAccumulatorWithExistingMessageThreadIds(
@@ -220,18 +321,7 @@ export class MessagingMessageService {
           messageAccumulatorMap,
         );
 
-        if (lockInboxSources) {
-          const query = transactionManager.queryRunner?.query.bind(
-            transactionManager.queryRunner,
-          );
-          if (!query) {
-            throw new Error(
-              'Email source locking requires an active transaction manager',
-            );
-          }
-          await query("SELECT set_config('search_path', $1, true)", [
-            getWorkspaceSchemaName(workspaceId),
-          ]);
+        if (lockInboxSources && transactionQuery) {
           const threadIds = [
             ...new Set(
               Array.from(messageAccumulatorMap.values())
@@ -250,7 +340,7 @@ export class MessagingMessageService {
             );
           }
           if (threadIds.length > 0) {
-            await query(
+            await transactionQuery(
               'SELECT id FROM "messageThread" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE',
               [threadIds],
             );
@@ -650,7 +740,9 @@ export class MessagingMessageService {
       'messageThreadExternalId' | 'message'
     >[];
     participants: MessageParticipantWorkspaceEntity[];
-  }): void {
+    sentAssociationIds: Set<string>;
+  }): Map<string, MessageWorkspaceEntity> {
+    const verifiedMessages = new Map<string, MessageWorkspaceEntity>();
     const participantKey = (participant: {
       role: unknown;
       handle: unknown;
@@ -661,46 +753,97 @@ export class MessagingMessageService {
         participant.handle ?? null,
         participant.displayName ?? null,
       ]);
+    const participantIdentityKey = (participant: {
+      role: unknown;
+      handle: unknown;
+    }) =>
+      JSON.stringify([
+        participant.role,
+        typeof participant.handle === 'string'
+          ? participant.handle.trim().toLowerCase()
+          : (participant.handle ?? null),
+      ]);
 
     for (const message of input.messages) {
       if (message.expectedMessageId === undefined) continue;
-      const headerOwners = input.messagesByHeader.filter(
+      let headerOwners = input.messagesByHeader.filter(
         (persisted) => persisted.headerMessageId === message.headerMessageId,
       );
+      const expectedRows = input.messagesByExpectedId.filter(
+        (persisted) => persisted.id === message.expectedMessageId,
+      );
+      if (expectedRows.length > 1) {
+        throw new Error('Expected Message identity is not unique');
+      }
+      const expected = expectedRows[0];
       if (
-        headerOwners.some(
-          (persisted) => persisted.id !== message.expectedMessageId,
+        message.isImapSmtpHeaderFallback &&
+        headerOwners.length > 0 &&
+        !(
+          expected !== undefined &&
+          headerOwners.length === 1 &&
+          input.associations.some(
+            (association) =>
+              association.messageId === expected.id &&
+              association.messageExternalId === message.externalId,
+          )
         )
+      ) {
+        // SMTP's header is logical evidence, not an IMAP folder:UID locator.
+        // Preserve physical copies; only a unique Sent owner may be adopted.
+        headerOwners = headerOwners.filter((owner) =>
+          input.associations.some(
+            (association) =>
+              association.messageId === owner.id &&
+              input.sentAssociationIds.has(association.id),
+          ),
+        );
+        if (headerOwners.length !== 1) {
+          throw new Error('Expected IMAP Message Sent identity is not unique');
+        }
+      }
+      if (
+        expected !== undefined &&
+        headerOwners.some((persisted) => persisted.id !== expected.id)
       ) {
         throw new Error(
           'Expected Message identity conflicts with header identity',
         );
       }
-      const expectedRows = input.messagesByExpectedId.filter(
-        (persisted) => persisted.id === message.expectedMessageId,
-      );
-      if (expectedRows.length === 0) continue;
-      if (expectedRows.length !== 1) {
-        throw new Error('Expected Message identity is not unique');
+      if (expected === undefined && headerOwners.length > 1) {
+        throw new Error('Expected Message header identity is not unique');
       }
-      const expected = expectedRows[0];
       if (
-        expected.headerMessageId !== message.headerMessageId ||
-        expected.subject !== message.subject ||
-        expected.text !== message.text ||
-        expected.isDraft !== message.isDraft ||
-        expected.receivedAt?.getTime() !== message.receivedAt?.getTime()
+        expected === undefined &&
+        headerOwners.length === 1 &&
+        message.allowExpectedMessageIdAdoption !== true
+      ) {
+        throw new Error(
+          'Expected Message identity conflicts with header identity',
+        );
+      }
+      const persisted = expected ?? headerOwners[0];
+      if (persisted === undefined) continue;
+      if (
+        normalizeNullableHeaderMessageId(persisted.headerMessageId) !==
+          normalizeNullableHeaderMessageId(message.headerMessageId) ||
+        persisted.subject !== message.subject ||
+        persisted.text !== message.text ||
+        persisted.isDraft !== message.isDraft ||
+        (message.allowExpectedMessageIdAdoption !== true &&
+          persisted.receivedAt?.getTime() !== message.receivedAt?.getTime())
       ) {
         throw new Error(
           'Expected Message exact replay conflicts with persisted content',
         );
       }
       const associations = input.associations.filter(
-        (association) => association.messageId === message.expectedMessageId,
+        (association) => association.messageId === persisted.id,
       );
       if (
         associations.length !== 1 ||
-        associations[0].messageExternalId !== message.externalId ||
+        (!message.isImapSmtpHeaderFallback &&
+          associations[0].messageExternalId !== message.externalId) ||
         associations[0].messageThreadExternalId !==
           message.messageThreadExternalId ||
         associations[0].direction !== message.direction
@@ -713,23 +856,23 @@ export class MessagingMessageService {
         (association) =>
           association.messageThreadExternalId ===
             message.messageThreadExternalId &&
-          association.message?.id === message.expectedMessageId,
+          association.message?.id === persisted.id,
       );
       if (
         threadAssociations.length !== 1 ||
         threadAssociations[0].message?.messageThreadId !==
-          expected.messageThreadId
+          persisted.messageThreadId
       ) {
         throw new Error('Expected Message thread evidence conflicts');
       }
-      const expectedParticipants = message.participants
-        .map(participantKey)
-        .sort();
+      const key =
+        message.allowExpectedMessageIdAdoption === true
+          ? participantIdentityKey
+          : participantKey;
+      const expectedParticipants = message.participants.map(key).sort();
       const persistedParticipants = input.participants
-        .filter(
-          (participant) => participant.messageId === message.expectedMessageId,
-        )
-        .map(participantKey)
+        .filter((participant) => participant.messageId === persisted.id)
+        .map(key)
         .sort();
       if (
         JSON.stringify(expectedParticipants) !==
@@ -737,15 +880,25 @@ export class MessagingMessageService {
       ) {
         throw new Error('Expected Message participant evidence conflicts');
       }
+      verifiedMessages.set(message.externalId, persisted);
     }
+    return verifiedMessages;
   }
 
   private async enrichMessageAccumulatorWithExistingMessages(
     messages: MessageWithParticipants[],
     messageAccumulatorMap: Map<string, MessageAccumulator>,
     existingMessagesInDB: MessageWorkspaceEntity[],
+    verifiedMessages: Map<string, MessageWorkspaceEntity>,
   ) {
     for (const message of messages) {
+      const verified = verifiedMessages.get(message.externalId);
+      if (verified) {
+        messageAccumulatorMap.set(message.externalId, {
+          existingMessageInDB: verified,
+        });
+        continue;
+      }
       const expected =
         message.expectedMessageId === undefined
           ? undefined
@@ -762,7 +915,9 @@ export class MessagingMessageService {
       if (
         message.expectedMessageId !== undefined &&
         byHeader !== undefined &&
-        message.expectedMessageId !== byHeader.id
+        ((expected === undefined &&
+          message.allowExpectedMessageIdAdoption !== true) ||
+          (expected !== undefined && expected.id !== byHeader.id))
       ) {
         throw new Error(
           'Expected Message identity conflicts with header identity',
@@ -771,11 +926,13 @@ export class MessagingMessageService {
       const existingMessage = expected ?? byHeader;
       if (
         expected !== undefined &&
-        (expected.headerMessageId !== message.headerMessageId ||
+        (normalizeNullableHeaderMessageId(expected.headerMessageId) !==
+          normalizeNullableHeaderMessageId(message.headerMessageId) ||
           expected.subject !== message.subject ||
           expected.text !== message.text ||
           expected.isDraft !== message.isDraft ||
-          expected.receivedAt?.getTime() !== message.receivedAt?.getTime())
+          (message.allowExpectedMessageIdAdoption !== true &&
+            expected.receivedAt?.getTime() !== message.receivedAt?.getTime()))
       ) {
         throw new Error(
           'Expected Message exact replay conflicts with persisted content',
@@ -809,6 +966,23 @@ export class MessagingMessageService {
         throw new Error(
           `Message accumulator should reference the message, this should never happen`,
         );
+      }
+
+      if (message.deliveryTargetId !== undefined) {
+        const existingTargetId =
+          messageAccumulator.existingMessageInDB?.messageThreadId;
+        if (
+          existingTargetId !== undefined &&
+          existingTargetId !== message.deliveryTargetId
+        ) {
+          throw new Error(
+            'Pinned Message delivery target conflicts with existing Message',
+          );
+        }
+        messageAccumulator.existingThreadInDB = {
+          id: message.deliveryTargetId,
+        };
+        continue;
       }
 
       const messageChannelMessageAssociationReferencingMessageThread =
@@ -894,8 +1068,9 @@ export class MessagingMessageService {
       if (existingMessageChannelMessageAssociation) {
         if (
           message.expectedMessageId !== undefined &&
-          (existingMessageChannelMessageAssociation.messageExternalId !==
-            message.externalId ||
+          ((!message.isImapSmtpHeaderFallback &&
+            existingMessageChannelMessageAssociation.messageExternalId !==
+              message.externalId) ||
             existingMessageChannelMessageAssociation.messageThreadExternalId !==
               message.messageThreadExternalId)
         ) {
@@ -921,6 +1096,8 @@ export class MessagingMessageService {
           `Message accumulator should reference the message, this should never happen`,
         );
       }
+
+      if (message.deliveryTargetId !== undefined) continue;
 
       const previousMessageWithSameThreadExternalId = messages.find(
         (otherMessage, otherMessageIndex) =>

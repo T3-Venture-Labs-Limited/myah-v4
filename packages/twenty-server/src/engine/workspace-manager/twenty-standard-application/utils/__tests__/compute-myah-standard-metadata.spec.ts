@@ -1111,19 +1111,30 @@ describe('Myah standard metadata contract', () => {
     }
   });
 
-  it('keeps Campaign Creator stage API-compatible as text', () => {
+  it('publishes Campaign Creator stage as a selectable funnel', () => {
     const stage =
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
         MYAH_STANDARD_OBJECTS.campaignCreator.fields.stage.universalIdentifier
       ];
 
+    if (!stage) throw new Error('Campaign Creator stage metadata is missing');
     expect(stage).toMatchObject({
       name: 'stage',
-      type: FieldMetadataType.TEXT,
+      type: FieldMetadataType.SELECT,
       isNullable: true,
       defaultValue: "'READY'",
-      options: null,
     });
+    expect(stage.options?.map(({ value }) => value)).toEqual([
+      'READY',
+      'CONTACTED',
+      'NEGOTIATING',
+      'ONBOARDED',
+      'PRODUCT_SENT',
+      'PRODUCT_RECEIVED',
+      'WAITING_FOR_POST',
+      'POSTED',
+      'DROPPED',
+    ]);
   });
 
   it('materializes retained Campaign Creator List sources as read-only provenance', () => {
@@ -1429,9 +1440,14 @@ describe('Myah standard metadata contract', () => {
         MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
     );
 
-    expect(creatorSearchFieldMetadata).toHaveLength(2);
+    expect(creatorSearchFieldMetadata).toHaveLength(3);
     expect(creatorSearchFieldMetadata).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
+              .universalIdentifier,
+        }),
         expect.objectContaining({
           fieldMetadataUniversalIdentifier:
             MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,

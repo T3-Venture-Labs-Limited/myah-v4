@@ -2,6 +2,7 @@ import { type ObjectRecord } from 'twenty-shared/types';
 
 import {
   type ActionEvidenceLinkInput,
+  type EmailContextV2Binding,
   type MyahInboxReplyExpectedActionBinding,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -57,7 +58,8 @@ export type MyahInboxReplyReadableDraftSnapshot = {
   messageThreadMetadataId: string;
 };
 export type MyahInboxReplyExpectedActionBindingWithWorkspace =
-  MyahInboxReplyExpectedActionBinding & { workspaceId: string };
+  | (MyahInboxReplyExpectedActionBinding & { workspaceId: string })
+  | (EmailContextV2Binding & { workspaceId: string });
 
 export type CanonicalMyahInboxReplyGraph = {
   messageThreadId: string;
@@ -93,7 +95,7 @@ export type MyahInboxReplyActionProposal = MyahInboxReplyActionAuthority & {
 
 export type MyahInboxReplyActionApprovalProposal = {
   action: 'send_inbox_reply';
-  actionVersion: 1;
+  actionVersion: 1 | 2;
   body: string;
   recipientLabel: string;
   sendingAccountLabel: string;

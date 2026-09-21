@@ -1,8 +1,15 @@
+import { type InstagramMessageConfirmedDestinationSource } from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { isInstagramComposerReady } from './instagram-message-composer-readiness.util';
 import { Injectable } from '@nestjs/common';
 
 import { IsNull, Not } from 'typeorm';
 import { type ObjectRecord } from 'twenty-shared/types';
 
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
@@ -32,6 +39,196 @@ export class InstagramMessageRecordAccessService {
     @InjectWorkspaceScopedRepository(UnipileInstagramAccountBindingEntity)
     private readonly accountBindingRepository: WorkspaceScopedRepository<UnipileInstagramAccountBindingEntity>,
   ) {}
+
+  async getConfirmedDestination(input: {
+    workspaceId: string;
+    rolePermissionConfig: RolePermissionConfig;
+    source: InstagramMessageConfirmedDestinationSource;
+  }): Promise<{
+    creatorRecordId: string;
+    conversationRecordId: string;
+  } | null> {
+    const { snapshot, providerChatId, providerMessageId, contentDigest } =
+      input.source;
+    if (
+      snapshot.actionKind === 'REPLY' &&
+      snapshot.providerChatId !== providerChatId
+    )
+      return null;
+    try {
+      const binding = await this.accountBindingRepository.findOne(
+        input.workspaceId,
+        {
+          where: {
+            id: snapshot.accountBindingId,
+            workspaceInstagramAccountRecordId:
+              snapshot.instagramAccountRecordId,
+            unipileAccountId: snapshot.unipileAccountId,
+            instagramUserId: snapshot.instagramUserId,
+            status: UnipileInstagramAccountBindingStatus.ACTIVE,
+            deactivatedAt: IsNull(),
+          },
+        },
+      );
+      if (!binding) return null;
+      const repository = (name: string) =>
+        this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+          input.workspaceId,
+          name,
+          input.rolePermissionConfig,
+        );
+      const creator = await (
+        await repository('creator')
+      ).findOne({
+        where: { id: snapshot.creatorRecordId, deletedAt: IsNull() },
+        select: { id: true },
+      });
+      const account = await (
+        await repository('myahInstagramAccount')
+      ).findOne({
+        where: {
+          id: snapshot.instagramAccountRecordId,
+          deletedAt: IsNull(),
+          status: 'ACTIVE',
+          unipileAccountId: snapshot.unipileAccountId,
+        },
+        select: { id: true },
+      });
+      if (!creator || !account) return null;
+      const conversations = await (
+        await repository('myahSocialConversation')
+      ).find({
+        where: {
+          provider: 'UNIPILE',
+          instagramAccountId: snapshot.instagramAccountRecordId,
+          providerConversationId: providerChatId,
+          deletedAt: IsNull(),
+        },
+        select: {
+          id: true,
+          creatorId: true,
+          recipientIgsid: true,
+          lifecycle: true,
+        },
+        take: 2,
+      });
+      if (
+        conversations.length !== 1 ||
+        conversations[0].creatorId !== snapshot.creatorRecordId ||
+        conversations[0].recipientIgsid !== snapshot.providerMessagingId ||
+        conversations[0].lifecycle !== 'ACTIVE' ||
+        (snapshot.actionKind === 'REPLY' &&
+          conversations[0].id !== snapshot.conversationRecordId)
+      )
+        return null;
+      const messages = await (
+        await repository('myahSocialMessage')
+      ).find({
+        where: {
+          conversationId: conversations[0].id,
+          provider: 'UNIPILE',
+          providerMessageId,
+          deletedAt: IsNull(),
+        },
+        select: {
+          id: true,
+          text: true,
+          direction: true,
+          providerCreatedAt: true,
+        },
+        take: 2,
+      });
+      if (
+        messages.length !== 1 ||
+        messages[0].direction !== 'OUTBOUND' ||
+        typeof messages[0].text !== 'string' ||
+        computeActionContentDigest(messages[0].text) !== contentDigest ||
+        !messages[0].providerCreatedAt ||
+        !Number.isFinite(new Date(messages[0].providerCreatedAt).getTime())
+      )
+        return null;
+      return {
+        creatorRecordId: creator.id,
+        conversationRecordId: conversations[0].id,
+      };
+    } catch (error) {
+      if (this.isPermissionDenied(error)) return null;
+      throw error;
+    }
+  }
+
+  async getComposerAccount(input: {
+    workspaceId: string;
+    rolePermissionConfig: RolePermissionConfig;
+  }): Promise<{
+    bindingId: string;
+    instagramAccountRecordId: string;
+    unipileAccountId: string;
+    instagramUserId: string;
+    label: string;
+  } | null> {
+    try {
+      if (
+        !(await isInstagramComposerReady(
+          this.globalWorkspaceOrmManager,
+          input.workspaceId,
+        ))
+      )
+        return null;
+      const bindings = await this.accountBindingRepository.find(
+        input.workspaceId,
+        {
+          take: 2,
+          where: {
+            status: UnipileInstagramAccountBindingStatus.ACTIVE,
+            deactivatedAt: IsNull(),
+          },
+        },
+      );
+      if (bindings.length !== 1) return null;
+
+      const [binding] = bindings;
+      if (
+        !this.isNonEmptyOpaqueId(binding.id) ||
+        !this.isNonEmptyOpaqueId(binding.workspaceInstagramAccountRecordId) ||
+        !this.isNonEmptyOpaqueId(binding.unipileAccountId) ||
+        !this.isNonEmptyOpaqueId(binding.instagramUserId)
+      ) {
+        return null;
+      }
+
+      const accountRepository =
+        await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+          input.workspaceId,
+          'myahInstagramAccount',
+          input.rolePermissionConfig,
+        );
+      const account = (await accountRepository.findOne({
+        where: {
+          id: binding.workspaceInstagramAccountRecordId,
+          deletedAt: IsNull(),
+          status: 'ACTIVE',
+          unipileAccountId: binding.unipileAccountId,
+        },
+        select: { id: true, label: true },
+      })) as (ObjectRecord & { id: string; label: string | null }) | null;
+      if (!account || !this.isNonEmptyOpaqueId(account.id)) return null;
+
+      return {
+        bindingId: binding.id,
+        instagramAccountRecordId: account.id,
+        unipileAccountId: binding.unipileAccountId,
+        instagramUserId: binding.instagramUserId,
+        label:
+          typeof account.label === 'string'
+            ? account.label
+            : 'Instagram account',
+      };
+    } catch (error) {
+      if (this.isPermissionDenied(error)) return null;
+      throw error;
+    }
+  }
 
   async assertCanReadDraft(input: {
     workspaceId: string;
@@ -179,6 +376,17 @@ export class InstagramMessageRecordAccessService {
     }
 
     return conversation;
+  }
+
+  private isNonEmptyOpaqueId(value: unknown): value is string {
+    return typeof value === 'string' && value.length > 0;
+  }
+
+  private isPermissionDenied(error: unknown): boolean {
+    return (
+      error instanceof PermissionsException &&
+      error.code === PermissionsExceptionCode.PERMISSION_DENIED
+    );
   }
 
   private async getActiveAccountRecordId(

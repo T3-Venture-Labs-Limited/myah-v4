@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
+import { MyahInboxReplyContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
 import { MyahInboxReplyBriefingService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service';
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
@@ -42,6 +44,8 @@ describe('MyahInboxToolProvider dependency graph', () => {
         },
         ...[
           MyahInboxQueryService,
+          MyahInboxReplyContextService,
+          ActionApprovalService,
           MyahInboxReplyBriefingService,
           MyahInboxMutationService,
           MyahInboxReplySendService,

@@ -2888,6 +2888,11 @@ msgstr ""
 msgid "Annual price"
 msgstr ""
 
+#. js-lingui-id: X0gpk7
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Another attempt for this recipient is unresolved. Check its status; do not resend."
+msgstr ""
+
 #. js-lingui-id: 9BhGWn
 #. placeholder {0}: fieldLabel ?? ''
 #: src/modules/object-record/advanced-filter/components/AdvancedFilterCompositeSubFieldSelectMenu.tsx
@@ -4687,6 +4692,11 @@ msgstr ""
 msgid "Check failed"
 msgstr ""
 
+#. js-lingui-id: l/BNQn
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Check status"
+msgstr ""
+
 #. js-lingui-id: h5C4B4
 #: src/modules/settings/emailing-domains/components/SettingsEmailingDomainVerifyButton.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -5574,6 +5584,11 @@ msgstr "確認升級"
 msgid "Confirmation begins a local simulated stop. The assignment remains until provider inactivity is confirmed or resolved; no billing changes occur."
 msgstr ""
 
+#. js-lingui-id: FHFzyp
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Confirmed recipient: @{handle}"
+msgstr ""
+
 #. js-lingui-id: KQ8wyV
 #. placeholder {0}: completionWarmupMailbox.address
 #. placeholder {0}: mailbox.address
@@ -6126,7 +6141,13 @@ msgstr ""
 msgid "Could not disconnect the Instagram account."
 msgstr ""
 
+#. js-lingui-id: lOs6q9
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Could not load Creators. Try searching again."
+msgstr ""
+
 #. js-lingui-id: O5XFg7
+#: src/modules/command-menu-item/engine-command/global/components/MessageOnInstagramCommand.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not load Instagram connection status."
 msgstr ""
@@ -6155,6 +6176,11 @@ msgstr ""
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Could not refresh validity token. Please contact support."
 msgstr "無法重新整理有效性權杖。請聯絡支援。"
+
+#. js-lingui-id: dLsd0v
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Could not resolve this recipient safely. Refresh the recipient to check again."
+msgstr ""
 
 #. js-lingui-id: lSckXc
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -7557,6 +7583,11 @@ msgstr ""
 msgid "Deleting this method will remove it permanently from your account."
 msgstr "刪除此方法將永久從您的帳戶移除。"
 
+#. js-lingui-id: GjMejE
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Delivery is unconfirmed. Do not resend. Check status to recover this exact attempt."
+msgstr ""
+
 #. js-lingui-id: kJHy3o
 #: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 msgid "Delivery outcome is unknown. This draft is locked to prevent a duplicate send."
@@ -8852,6 +8883,11 @@ msgstr ""
 msgid "Enter a JSON object"
 msgstr "輸入 JSON 物件"
 
+#. js-lingui-id: AZVCjl
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Enter a message before sending."
+msgstr ""
+
 #. js-lingui-id: peBb6B
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx
 msgid "Enter a new secret value"
@@ -8886,6 +8922,11 @@ msgstr "輸入 UUID"
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.spec.ts
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "Enter a valid domain name, such as example.com."
+msgstr ""
+
+#. js-lingui-id: F7tcx6
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Enter a valid Instagram handle or choose a Creator."
 msgstr ""
 
 #. js-lingui-id: oiVP/+
@@ -10529,6 +10570,7 @@ msgstr ""
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
 msgid "From"
 msgstr ""
 
@@ -11662,9 +11704,19 @@ msgstr ""
 msgid "Instagram"
 msgstr ""
 
+#. js-lingui-id: Ep9DUT
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Instagram accepted or is processing this attempt. Waiting for confirmation; do not resend."
+msgstr ""
+
 #. js-lingui-id: 3UgZpw
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Instagram account disconnected."
+msgstr ""
+
+#. js-lingui-id: pJIHcA
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Instagram did not send this message. Your message and recipient have been kept. Check status before starting another attempt."
 msgstr ""
 
 #. js-lingui-id: UgwGHV
@@ -11675,6 +11727,21 @@ msgstr ""
 #. js-lingui-id: ZEZf5o
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Instagram messaging"
+msgstr ""
+
+#. js-lingui-id: +Fs51L
+#: src/modules/command-menu-item/engine-command/global/components/MessageOnInstagramCommand.tsx
+msgid "Instagram messaging is unavailable."
+msgstr ""
+
+#. js-lingui-id: LnUacG
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Instagram recipients"
+msgstr ""
+
+#. js-lingui-id: YzhNia
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Instagram sending is blocked. Your message and recipient have been kept. Check status before starting another attempt."
 msgstr ""
 
 #. js-lingui-id: TKQ7K+
@@ -12791,6 +12858,11 @@ msgstr "正在載入文件檢視器..."
 msgid "Loading emails"
 msgstr "正在載入電子郵件"
 
+#. js-lingui-id: I/dgjR
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Loading Instagram sender account"
+msgstr ""
+
 #. js-lingui-id: IFQsdb
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
 msgid "Loading jobs..."
@@ -13673,6 +13745,8 @@ msgstr "正在合併..."
 
 #. js-lingui-id: xDAtGP
 #: src/modules/settings/event-logs/utils/getColumnsForEventLogTable.tsx
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
 msgid "Message"
 msgstr ""
 
@@ -13680,6 +13754,11 @@ msgstr ""
 #: src/modules/activities/timeline-activities/rows/message/components/EventCardMessage.tsx
 msgid "Message not found"
 msgstr "消息未找到"
+
+#. js-lingui-id: YtFpN+
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Message sent. Open Inbox to view it. If the destination is not yet available, refresh or load more contacts in Inbox."
+msgstr ""
 
 #. js-lingui-id: elpx6r
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminConnectedAccountHealthStatus.tsx
@@ -13695,6 +13774,11 @@ msgstr "消息同步和日曆同步不可用，因為服務已關閉"
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminConnectedAccountHealthStatus.tsx
 msgid "Message Sync is not available because the service is down"
 msgstr "消息同步不可用，因為服務已關閉"
+
+#. js-lingui-id: TnotRl
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Message to send"
+msgstr ""
 
 #. js-lingui-id: t7TeQU
 #: src/pages/settings/admin-panel/SettingsAdminWorkspaceDetail.tsx
@@ -14003,6 +14087,11 @@ msgstr ""
 #. js-lingui-id: 4RHX6n
 #: src/modules/auth/sign-in-up/components/internal/SignInUpWorkspaceCreationForm.tsx
 msgid "Move work forward across teams and agents"
+msgstr ""
+
+#. js-lingui-id: evkNu0
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Multiple Creators match this handle. Resolve the duplicate Creator records before sending."
 msgstr ""
 
 #. js-lingui-id: asWVA5
@@ -14340,6 +14429,12 @@ msgstr "新增群組"
 msgid "New Index"
 msgstr ""
 
+#. js-lingui-id: jBXBcV
+#: src/modules/side-panel/hooks/useOpenInstagramMessageInSidePanel.ts
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "New Instagram Message"
+msgstr ""
+
 #. js-lingui-id: o8MyXb
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeysNew.tsx
 msgid "New key"
@@ -14469,6 +14564,11 @@ msgstr "下一步"
 #. js-lingui-id: L0DCk4
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
 msgid "Next charge {totalRenewDate}. Invoice amount may vary if you add members or credits between periods"
+msgstr ""
+
+#. js-lingui-id: JKdrjM
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Next eligible time:"
 msgstr ""
 
 #. js-lingui-id: AxNmtI
@@ -14695,6 +14795,11 @@ msgstr ""
 #: src/modules/settings/admin-panel/config-variables/components/SettingsAdminConfigVariables.tsx
 msgid "No config variables match your current filters. Try adjusting your filters or search criteria."
 msgstr "沒有配置變量符合您當前的篩選條件。嘗試調整您的篩選或搜索條件。"
+
+#. js-lingui-id: hHULGk
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "No connected sender"
+msgstr ""
 
 #. js-lingui-id: PlVbP6
 #: src/modules/ai/components/RoutingDebugDisplay.tsx
@@ -15955,6 +16060,11 @@ msgstr ""
 msgid "Open in Roles"
 msgstr "在角色中開啟"
 
+#. js-lingui-id: zgOctv
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Open Inbox"
+msgstr ""
+
 #. js-lingui-id: xGd6Ih
 #: src/modules/auth/sign-in-up/components/EmailVerificationSent.tsx
 msgid "Open Outlook"
@@ -16689,6 +16799,11 @@ msgstr "請檢查您的排程語法。"
 #: src/pages/settings/security/SettingsSecurityApprovedAccessDomain.tsx
 msgid "Please check your email for a verification link."
 msgstr "請檢查您的電子郵件以獲取驗證鏈接。"
+
+#. js-lingui-id: ByxPNu
+#: src/modules/command-menu-item/engine-command/global/components/MessageOnInstagramCommand.tsx
+msgid "Please contact your admin."
+msgstr ""
 
 #. js-lingui-id: jEw0Mr
 #: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardIframeSettings.tsx
@@ -17759,6 +17874,11 @@ msgstr ""
 msgid "Refresh quote"
 msgstr ""
 
+#. js-lingui-id: mrUxcI
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Refresh recipient"
+msgstr ""
+
 #. js-lingui-id: pTGa/J
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/admin-panel/SettingsAdminInferredVersion.tsx
@@ -18330,6 +18450,11 @@ msgstr ""
 #. js-lingui-id: lerLyW
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "Resolve warmup operation"
+msgstr ""
+
+#. js-lingui-id: li0jg7
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Resolving Instagram recipient"
 msgstr ""
 
 #. js-lingui-id: g0KMz6
@@ -19274,6 +19399,11 @@ msgstr "搜索配置變量"
 msgid "Search country"
 msgstr "搜索國家"
 
+#. js-lingui-id: AjJX+H
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Search Creators or enter @handle"
+msgstr ""
+
 #. js-lingui-id: sSARNY
 #: src/modules/object-record/object-filter-dropdown/components/ObjectFilterDropdownCurrencySelect.tsx
 msgid "Search currency"
@@ -19400,6 +19530,11 @@ msgstr "已在網路上搜尋 {query}"
 #. js-lingui-id: EvDUJy
 #: src/modules/ai/constants/crud-tool-operation-verbs.constant.ts
 msgid "Searching {objectLabel}"
+msgstr ""
+
+#. js-lingui-id: LI4IZZ
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Searching Creators"
 msgstr ""
 
 #. js-lingui-id: JHkypn
@@ -19844,6 +19979,11 @@ msgstr "選擇您偏好的語言"
 msgid "Selected"
 msgstr ""
 
+#. js-lingui-id: wM+B6r
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Selected Creator"
+msgstr ""
+
 #. js-lingui-id: dQgE7t
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Selected managed-email subscription"
@@ -19861,8 +20001,10 @@ msgstr ""
 
 #. js-lingui-id: JlFcis
 #: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+#: src/modules/myah/inbox/components/MyahInboxReplyWorkspace.tsx
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
 #: src/modules/side-panel/pages/compose-email/components/SidePanelComposeEmailPage.tsx
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
 msgid "Send"
 msgstr ""
 
@@ -19952,6 +20094,11 @@ msgstr ""
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestExecutionResult.tsx
 msgid "Sending request..."
 msgstr "正在傳送請求..."
+
+#. js-lingui-id: YONfNs
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Sending. Do not resend. You can check this attempt's status if confirmation is interrupted."
+msgstr ""
 
 #. js-lingui-id: IoAuJG
 #: src/modules/auth/sign-in-up/components/EmailVerificationSent.tsx
@@ -20798,6 +20945,11 @@ msgstr ""
 #. js-lingui-id: Sa0shu
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 msgid "Start managed warmup"
+msgstr ""
+
+#. js-lingui-id: 5dMxyI
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "Start new attempt"
 msgstr ""
 
 #. js-lingui-id: Oh+o4I
@@ -21664,6 +21816,16 @@ msgstr ""
 msgid "The capacity review did not resolve to managed warmup."
 msgstr ""
 
+#. js-lingui-id: WEIlGD
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "The connected Instagram account is unavailable. Check the account connection before sending."
+msgstr ""
+
+#. js-lingui-id: cQhNla
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "The connected Instagram account is unavailable. Refresh to check its connection."
+msgstr ""
+
 #. js-lingui-id: LsqhzF
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -21718,6 +21880,11 @@ msgstr "您的工作流程觸發器在指令選單中顯示的圖示"
 #. js-lingui-id: xhsoGs
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
 msgid "The import could not be refreshed. Please try again."
+msgstr ""
+
+#. js-lingui-id: x9qbPf
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "The Instagram conversation is ambiguous. Check the recipient's chats before sending."
 msgstr ""
 
 #. js-lingui-id: 8fGRCr
@@ -21893,6 +22060,11 @@ msgstr ""
 #. js-lingui-id: CYWb/M
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "The provider did not respond."
+msgstr ""
+
+#. js-lingui-id: oM1MNU
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "The recipient or sender changed. Refresh the recipient before sending."
 msgstr ""
 
 #. js-lingui-id: c82Ji/
@@ -22118,6 +22290,11 @@ msgstr ""
 msgid "This app is not fully configured. Users won't be able to install it until all required server variables are set, and — for apps exposing a server route — until the app is claimed and installed on its owner workspace."
 msgstr ""
 
+#. js-lingui-id: +s1X+D
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "This attempt belongs to another workspace. Return to that workspace to check its status."
+msgstr ""
+
 #. js-lingui-id: Lbrpv9
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 msgid "This cancels mailbox service renewal at the end of the paid period. The mailbox remains active until then."
@@ -22141,6 +22318,11 @@ msgstr ""
 #. js-lingui-id: LqhE3c
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 msgid "This connection does not exist or is not available for this application."
+msgstr ""
+
+#. js-lingui-id: nBZ1RV
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "This contact's Instagram conversation was deleted. Restore it in the Inbox or start a new conversation from the recipient's Instagram profile."
 msgstr ""
 
 #. js-lingui-id: SLIRqz
@@ -22273,6 +22455,11 @@ msgstr "此供應商尚無原生 SDK — 將使用與 OpenAI 相容的模式。�
 #. js-lingui-id: PdxHUp
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "This quote expired. Refresh it before completing this local review."
+msgstr ""
+
+#. js-lingui-id: go5ufS
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "This recipient could not be resolved. Add a valid Instagram handle to the Creator and check that its Instagram fields agree, or choose another recipient."
 msgstr ""
 
 #. js-lingui-id: dWJTyU
@@ -22495,6 +22682,8 @@ msgstr ""
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "To"
@@ -23664,6 +23853,12 @@ msgstr "使用事件"
 #. js-lingui-id: 6SbZqO
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
 msgid "Usage period"
+msgstr ""
+
+#. js-lingui-id: +3gh4Z
+#. placeholder {0}: option.rawHandle
+#: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
+msgid "Use @{0}"
 msgstr ""
 
 #. js-lingui-id: lUQn8r
@@ -25225,10 +25420,20 @@ msgstr ""
 msgid "You cannot impersonate your own account"
 msgstr ""
 
+#. js-lingui-id: m79Vnd
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "You do not have permission for this Instagram message route."
+msgstr ""
+
 #. js-lingui-id: eqUj2Z
 #: src/modules/page-layout/widgets/components/PageLayoutWidgetForbiddenDisplay.tsx
 msgid "You do not have permission to access the {objectName} object"
 msgstr "您無權訪問{objectName}對象"
+
+#. js-lingui-id: /IlYOv
+#: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
+msgid "You do not have permission to send Instagram messages."
+msgstr ""
 
 #. js-lingui-id: XmZwK/
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx

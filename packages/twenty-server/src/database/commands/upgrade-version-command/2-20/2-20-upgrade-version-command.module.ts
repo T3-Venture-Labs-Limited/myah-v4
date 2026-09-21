@@ -1,8 +1,14 @@
+import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
+import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
 import { Module } from '@nestjs/common';
+import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
 import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
+import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
 import { InitializeMyahInboxContactTriageWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748001-initialize-myah-inbox-contact-triage.command';
 import { CatchUpMyahInboxContactTriageWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748002-catch-up-myah-inbox-contact-triage.command';
+import { CatchUpCampaignActivityControlMetadataWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748003-catch-up-campaign-activity-control-metadata.command';
+import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
@@ -47,6 +53,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     WorkspaceMigrationRunnerModule,
   ],
   providers: [
+    SynchronizeInstagramComposerMetadataCommand,
     SynchronizeMyahStandardMetadataCommand,
     SynchronizeManagedEmailCampaignAssignmentMetadataCommand,
     SynchronizeSourceControlledMyahMetadataService,
@@ -69,8 +76,13 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     RepairOrphanedObjectNavigationCommandsCommand,
     SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand,
     SynchronizeCampaignLifecycleStatusMetadataCommand,
+    SynchronizeCampaignActivityControlMetadataCommand,
     InitializeMyahInboxContactTriageWorkspaceCommand,
     CatchUpMyahInboxContactTriageWorkspaceCommand,
+    CatchUpCampaignActivityControlMetadataWorkspaceCommand,
+    CreateMyahInboxReplyContextDraftsFastInstanceCommand,
+    CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
+    InstallMyahInboxEmailGeneralProvenanceCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,

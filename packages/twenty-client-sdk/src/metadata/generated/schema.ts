@@ -309,7 +309,7 @@ export interface CommandMenuItem {
     __typename: 'CommandMenuItem'
 }
 
-export type EngineComponentKey = 'NAVIGATE_TO_NEXT_RECORD' | 'NAVIGATE_TO_PREVIOUS_RECORD' | 'CREATE_NEW_RECORD' | 'DELETE_RECORDS' | 'RESTORE_RECORDS' | 'DESTROY_RECORDS' | 'ADD_TO_FAVORITES' | 'REMOVE_FROM_FAVORITES' | 'EXPORT_NOTE_TO_PDF' | 'EXPORT_RECORDS' | 'UPDATE_MULTIPLE_RECORDS' | 'MERGE_MULTIPLE_RECORDS' | 'IMPORT_RECORDS' | 'EXPORT_VIEW' | 'SEE_DELETED_RECORDS' | 'CREATE_NEW_VIEW' | 'HIDE_DELETED_RECORDS' | 'EDIT_RECORD_PAGE_LAYOUT' | 'EDIT_DASHBOARD_LAYOUT' | 'SAVE_DASHBOARD_LAYOUT' | 'CANCEL_DASHBOARD_LAYOUT' | 'DUPLICATE_DASHBOARD' | 'ACTIVATE_WORKFLOW' | 'DEACTIVATE_WORKFLOW' | 'DISCARD_DRAFT_WORKFLOW' | 'TEST_WORKFLOW' | 'SEE_ACTIVE_VERSION_WORKFLOW' | 'SEE_RUNS_WORKFLOW' | 'SEE_VERSIONS_WORKFLOW' | 'ADD_NODE_WORKFLOW' | 'TIDY_UP_WORKFLOW' | 'DUPLICATE_WORKFLOW' | 'SEE_VERSION_WORKFLOW_RUN' | 'SEE_WORKFLOW_WORKFLOW_RUN' | 'STOP_WORKFLOW_RUN' | 'RETRY_WORKFLOW_RUN' | 'SEE_RUNS_WORKFLOW_VERSION' | 'SEE_WORKFLOW_WORKFLOW_VERSION' | 'USE_AS_DRAFT_WORKFLOW_VERSION' | 'SEE_VERSIONS_WORKFLOW_VERSION' | 'SEARCH_RECORDS' | 'SEARCH_RECORDS_FALLBACK' | 'ASK_AI' | 'VIEW_PREVIOUS_AI_CHATS' | 'NAVIGATION' | 'TRIGGER_WORKFLOW_VERSION' | 'FRONT_COMPONENT_RENDERER' | 'REPLY_TO_EMAIL_THREAD' | 'COMPOSE_EMAIL' | 'COMPOSE_CAMPAIGN' | 'GO_TO_PEOPLE' | 'GO_TO_COMPANIES' | 'GO_TO_DASHBOARDS' | 'GO_TO_OPPORTUNITIES' | 'GO_TO_SETTINGS' | 'GO_TO_TASKS' | 'GO_TO_NOTES' | 'GO_TO_WORKFLOWS' | 'GO_TO_RUNS' | 'DELETE_SINGLE_RECORD' | 'DELETE_MULTIPLE_RECORDS' | 'RESTORE_SINGLE_RECORD' | 'RESTORE_MULTIPLE_RECORDS' | 'DESTROY_SINGLE_RECORD' | 'DESTROY_MULTIPLE_RECORDS' | 'EXPORT_FROM_RECORD_INDEX' | 'EXPORT_FROM_RECORD_SHOW' | 'EXPORT_MULTIPLE_RECORDS'
+export type EngineComponentKey = 'NAVIGATE_TO_NEXT_RECORD' | 'NAVIGATE_TO_PREVIOUS_RECORD' | 'CREATE_NEW_RECORD' | 'DELETE_RECORDS' | 'RESTORE_RECORDS' | 'DESTROY_RECORDS' | 'ADD_TO_FAVORITES' | 'REMOVE_FROM_FAVORITES' | 'EXPORT_NOTE_TO_PDF' | 'EXPORT_RECORDS' | 'UPDATE_MULTIPLE_RECORDS' | 'MERGE_MULTIPLE_RECORDS' | 'IMPORT_RECORDS' | 'EXPORT_VIEW' | 'SEE_DELETED_RECORDS' | 'CREATE_NEW_VIEW' | 'HIDE_DELETED_RECORDS' | 'EDIT_RECORD_PAGE_LAYOUT' | 'EDIT_DASHBOARD_LAYOUT' | 'SAVE_DASHBOARD_LAYOUT' | 'CANCEL_DASHBOARD_LAYOUT' | 'DUPLICATE_DASHBOARD' | 'ACTIVATE_WORKFLOW' | 'DEACTIVATE_WORKFLOW' | 'DISCARD_DRAFT_WORKFLOW' | 'TEST_WORKFLOW' | 'SEE_ACTIVE_VERSION_WORKFLOW' | 'SEE_RUNS_WORKFLOW' | 'SEE_VERSIONS_WORKFLOW' | 'ADD_NODE_WORKFLOW' | 'TIDY_UP_WORKFLOW' | 'DUPLICATE_WORKFLOW' | 'SEE_VERSION_WORKFLOW_RUN' | 'SEE_WORKFLOW_WORKFLOW_RUN' | 'STOP_WORKFLOW_RUN' | 'RETRY_WORKFLOW_RUN' | 'SEE_RUNS_WORKFLOW_VERSION' | 'SEE_WORKFLOW_WORKFLOW_VERSION' | 'USE_AS_DRAFT_WORKFLOW_VERSION' | 'SEE_VERSIONS_WORKFLOW_VERSION' | 'SEARCH_RECORDS' | 'SEARCH_RECORDS_FALLBACK' | 'ASK_AI' | 'VIEW_PREVIOUS_AI_CHATS' | 'NAVIGATION' | 'TRIGGER_WORKFLOW_VERSION' | 'FRONT_COMPONENT_RENDERER' | 'REPLY_TO_EMAIL_THREAD' | 'COMPOSE_EMAIL' | 'MESSAGE_ON_INSTAGRAM' | 'COMPOSE_CAMPAIGN' | 'GO_TO_PEOPLE' | 'GO_TO_COMPANIES' | 'GO_TO_DASHBOARDS' | 'GO_TO_OPPORTUNITIES' | 'GO_TO_SETTINGS' | 'GO_TO_TASKS' | 'GO_TO_NOTES' | 'GO_TO_WORKFLOWS' | 'GO_TO_RUNS' | 'DELETE_SINGLE_RECORD' | 'DELETE_MULTIPLE_RECORDS' | 'RESTORE_SINGLE_RECORD' | 'RESTORE_MULTIPLE_RECORDS' | 'DESTROY_SINGLE_RECORD' | 'DESTROY_MULTIPLE_RECORDS' | 'EXPORT_FROM_RECORD_INDEX' | 'EXPORT_FROM_RECORD_SHOW' | 'EXPORT_MULTIPLE_RECORDS'
 
 export type CommandMenuItemAvailabilityType = 'GLOBAL' | 'GLOBAL_OBJECT_CONTEXT' | 'RECORD_SELECTION' | 'FALLBACK'
 
@@ -2835,7 +2835,7 @@ export interface CampaignOutreachAudienceExcludedCreator {
     __typename: 'CampaignOutreachAudienceExcludedCreator'
 }
 
-export type CampaignOutreachAudienceExclusionReason = 'INVALID_MEMBERSHIP' | 'MISSING_CREATOR' | 'INVALID_STAGE' | 'NON_EMAIL_CONTACT_METHOD' | 'INVALID_EMAIL' | 'SUPPRESSED_EMAIL' | 'DUPLICATE_CREATOR_EMAIL'
+export type CampaignOutreachAudienceExclusionReason = 'INVALID_MEMBERSHIP' | 'OPERATOR_EXCLUDED' | 'MISSING_CREATOR' | 'INVALID_STAGE' | 'NON_EMAIL_CONTACT_METHOD' | 'INVALID_EMAIL' | 'SUPPRESSED_EMAIL' | 'DUPLICATE_CREATOR_EMAIL'
 
 export interface CampaignOutreachAudienceReview {
     state: CampaignOutreachAudienceReviewState
@@ -2849,6 +2849,52 @@ export interface CampaignOutreachAudienceReview {
 }
 
 export type CampaignOutreachAudienceReviewState = 'LOADED' | 'ERROR'
+
+export interface CampaignActivityMessageDTO {
+    id: Scalars['ID']
+    threadId: Scalars['ID']
+    happenedAt: Scalars['String']
+    state: Scalars['String']
+    __typename: 'CampaignActivityMessageDTO'
+}
+
+export interface CampaignActivityCreatorDTO {
+    campaignCreatorId: Scalars['ID']
+    creatorId: Scalars['ID']
+    creatorName?: Scalars['String']
+    stage?: Scalars['String']
+    stageLabel?: Scalars['String']
+    latestOutbound?: CampaignActivityMessageDTO
+    latestInbound?: CampaignActivityMessageDTO
+    plannedAt?: Scalars['String']
+    currentAttemptState?: Scalars['String']
+    reason?: Scalars['String']
+    needsAttention: Scalars['Boolean']
+    inboxContactId?: Scalars['String']
+    inboxThreadId?: Scalars['ID']
+    excluded: Scalars['Boolean']
+    mayStillSend: Scalars['Boolean']
+    __typename: 'CampaignActivityCreatorDTO'
+}
+
+export interface CampaignActivityPageInfoDTO {
+    hasNextPage: Scalars['Boolean']
+    endCursor?: Scalars['String']
+    __typename: 'CampaignActivityPageInfoDTO'
+}
+
+export interface CampaignActivityConnectionDTO {
+    nodes: CampaignActivityCreatorDTO[]
+    pageInfo: CampaignActivityPageInfoDTO
+    __typename: 'CampaignActivityConnectionDTO'
+}
+
+export interface ExcludeCampaignCreatorResultDTO {
+    status: Scalars['String']
+    excludedAt: Scalars['String']
+    mayStillSend: Scalars['Boolean']
+    __typename: 'ExcludeCampaignCreatorResultDTO'
+}
 
 export interface CampaignSendingWindowMutationResultDTO {
     status: Scalars['String']
@@ -3304,6 +3350,7 @@ export interface Query {
     pieChartData: PieChartData
     lineChartData: LineChartData
     barChartData: BarChartData
+    campaignActivity: CampaignActivityConnectionDTO
     campaignOutreachAudienceReview: CampaignOutreachAudienceReview
     getAutoCompleteAddress: AutocompleteResult[]
     getAddressDetails: PlaceDetailsResult
@@ -3561,6 +3608,7 @@ export interface Mutation {
     trackAnalytics: Analytics
     duplicateDashboard: DuplicatedDashboard
     impersonate: Impersonate
+    excludeCampaignCreator: ExcludeCampaignCreatorResultDTO
     startCampaignExecution: CampaignExecutionMutationResultDTO
     updateCampaignSendingWindow: CampaignSendingWindowMutationResultDTO
     stopCampaignExecution: CampaignExecutionMutationResultDTO
@@ -6602,6 +6650,57 @@ export interface CampaignOutreachAudienceReviewGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface CampaignActivityMessageDTOGenqlSelection{
+    id?: boolean | number
+    threadId?: boolean | number
+    happenedAt?: boolean | number
+    state?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignActivityCreatorDTOGenqlSelection{
+    campaignCreatorId?: boolean | number
+    creatorId?: boolean | number
+    creatorName?: boolean | number
+    stage?: boolean | number
+    stageLabel?: boolean | number
+    latestOutbound?: CampaignActivityMessageDTOGenqlSelection
+    latestInbound?: CampaignActivityMessageDTOGenqlSelection
+    plannedAt?: boolean | number
+    currentAttemptState?: boolean | number
+    reason?: boolean | number
+    needsAttention?: boolean | number
+    inboxContactId?: boolean | number
+    inboxThreadId?: boolean | number
+    excluded?: boolean | number
+    mayStillSend?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignActivityPageInfoDTOGenqlSelection{
+    hasNextPage?: boolean | number
+    endCursor?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignActivityConnectionDTOGenqlSelection{
+    nodes?: CampaignActivityCreatorDTOGenqlSelection
+    pageInfo?: CampaignActivityPageInfoDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ExcludeCampaignCreatorResultDTOGenqlSelection{
+    status?: boolean | number
+    excludedAt?: boolean | number
+    mayStillSend?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface CampaignSendingWindowMutationResultDTOGenqlSelection{
     status?: boolean | number
     reason?: boolean | number
@@ -7097,6 +7196,7 @@ export interface QueryGenqlSelection{
     pieChartData?: (PieChartDataGenqlSelection & { __args: {input: PieChartDataInput} })
     lineChartData?: (LineChartDataGenqlSelection & { __args: {input: LineChartDataInput} })
     barChartData?: (BarChartDataGenqlSelection & { __args: {input: BarChartDataInput} })
+    campaignActivity?: (CampaignActivityConnectionDTOGenqlSelection & { __args: {input: CampaignActivityInput} })
     campaignOutreachAudienceReview?: (CampaignOutreachAudienceReviewGenqlSelection & { __args: {campaignId: Scalars['UUID']} })
     getAutoCompleteAddress?: (AutocompleteResultGenqlSelection & { __args: {address: Scalars['String'], token: Scalars['String'], country?: (Scalars['String'] | null), isFieldCity?: (Scalars['Boolean'] | null)} })
     getAddressDetails?: (PlaceDetailsResultGenqlSelection & { __args: {placeId: Scalars['String'], token: Scalars['String']} })
@@ -7155,6 +7255,8 @@ export interface PieChartDataInput {objectMetadataId: Scalars['UUID'],configurat
 export interface LineChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
 
 export interface BarChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
+
+export interface CampaignActivityInput {campaignId: Scalars['ID'],first: Scalars['Int'],after?: (Scalars['String'] | null)}
 
 export interface UsageAnalyticsInput {periodStart?: (Scalars['DateTime'] | null),periodEnd?: (Scalars['DateTime'] | null),userWorkspaceId?: (Scalars['String'] | null),operationTypes?: (UsageOperationType[] | null)}
 
@@ -7403,6 +7505,7 @@ export interface MutationGenqlSelection{
     trackAnalytics?: (AnalyticsGenqlSelection & { __args: {type: AnalyticsType, name?: (Scalars['String'] | null), event?: (Scalars['String'] | null), properties?: (Scalars['JSON'] | null)} })
     duplicateDashboard?: (DuplicatedDashboardGenqlSelection & { __args: {id: Scalars['UUID']} })
     impersonate?: (ImpersonateGenqlSelection & { __args: {userId: Scalars['UUID'], workspaceId: Scalars['UUID']} })
+    excludeCampaignCreator?: (ExcludeCampaignCreatorResultDTOGenqlSelection & { __args: {input: ExcludeCampaignCreatorInput} })
     startCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StartCampaignExecutionInput} })
     updateCampaignSendingWindow?: (CampaignSendingWindowMutationResultDTOGenqlSelection & { __args: {input: UpdateCampaignSendingWindowInput} })
     stopCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StopCampaignExecutionInput} })
@@ -7833,6 +7936,8 @@ export interface AgentChatApprovalDecisionInput {decision: Scalars['String'],com
 export interface CreateSkillInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],label: Scalars['String'],icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content: Scalars['String']}
 
 export interface UpdateSkillInput {id: Scalars['UUID'],name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),content?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null)}
+
+export interface ExcludeCampaignCreatorInput {campaignId: Scalars['UUID'],campaignCreatorId: Scalars['UUID'],reason: Scalars['String']}
 
 export interface StartCampaignExecutionInput {campaignId: Scalars['UUID'],startIdempotencyKey: Scalars['UUID']}
 
@@ -10026,6 +10131,46 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
 
 
 
+    const CampaignActivityMessageDTO_possibleTypes: string[] = ['CampaignActivityMessageDTO']
+    export const isCampaignActivityMessageDTO = (obj?: { __typename?: any } | null): obj is CampaignActivityMessageDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignActivityMessageDTO"')
+      return CampaignActivityMessageDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignActivityCreatorDTO_possibleTypes: string[] = ['CampaignActivityCreatorDTO']
+    export const isCampaignActivityCreatorDTO = (obj?: { __typename?: any } | null): obj is CampaignActivityCreatorDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignActivityCreatorDTO"')
+      return CampaignActivityCreatorDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignActivityPageInfoDTO_possibleTypes: string[] = ['CampaignActivityPageInfoDTO']
+    export const isCampaignActivityPageInfoDTO = (obj?: { __typename?: any } | null): obj is CampaignActivityPageInfoDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignActivityPageInfoDTO"')
+      return CampaignActivityPageInfoDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignActivityConnectionDTO_possibleTypes: string[] = ['CampaignActivityConnectionDTO']
+    export const isCampaignActivityConnectionDTO = (obj?: { __typename?: any } | null): obj is CampaignActivityConnectionDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignActivityConnectionDTO"')
+      return CampaignActivityConnectionDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ExcludeCampaignCreatorResultDTO_possibleTypes: string[] = ['ExcludeCampaignCreatorResultDTO']
+    export const isExcludeCampaignCreatorResultDTO = (obj?: { __typename?: any } | null): obj is ExcludeCampaignCreatorResultDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isExcludeCampaignCreatorResultDTO"')
+      return ExcludeCampaignCreatorResultDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
     const CampaignSendingWindowMutationResultDTO_possibleTypes: string[] = ['CampaignSendingWindowMutationResultDTO']
     export const isCampaignSendingWindowMutationResultDTO = (obj?: { __typename?: any } | null): obj is CampaignSendingWindowMutationResultDTO => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSendingWindowMutationResultDTO"')
@@ -10463,6 +10608,7 @@ export const enumEngineComponentKey = {
    FRONT_COMPONENT_RENDERER: 'FRONT_COMPONENT_RENDERER' as const,
    REPLY_TO_EMAIL_THREAD: 'REPLY_TO_EMAIL_THREAD' as const,
    COMPOSE_EMAIL: 'COMPOSE_EMAIL' as const,
+   MESSAGE_ON_INSTAGRAM: 'MESSAGE_ON_INSTAGRAM' as const,
    COMPOSE_CAMPAIGN: 'COMPOSE_CAMPAIGN' as const,
    GO_TO_PEOPLE: 'GO_TO_PEOPLE' as const,
    GO_TO_COMPANIES: 'GO_TO_COMPANIES' as const,
@@ -10928,6 +11074,7 @@ export const enumCaptchaDriverType = {
 
 export const enumCampaignOutreachAudienceExclusionReason = {
    INVALID_MEMBERSHIP: 'INVALID_MEMBERSHIP' as const,
+   OPERATOR_EXCLUDED: 'OPERATOR_EXCLUDED' as const,
    MISSING_CREATOR: 'MISSING_CREATOR' as const,
    INVALID_STAGE: 'INVALID_STAGE' as const,
    NON_EMAIL_CONTACT_METHOD: 'NON_EMAIL_CONTACT_METHOD' as const,

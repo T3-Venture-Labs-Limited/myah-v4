@@ -1,3 +1,4 @@
+import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -240,12 +241,20 @@ jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
     scopeGeneration,
     targetAvailable,
     presentation,
+    replyTargets,
+    onReplyTargetChange,
   }: {
     scopeGeneration: string;
     targetAvailable: boolean;
     presentation?: 'default' | 'main';
     thread: { id: string };
     onSent?: () => void | Promise<void>;
+    replyTargets?: Array<{
+      threadId: string;
+      subject: string | null;
+      campaignLabel: string | null;
+    }>;
+    onReplyTargetChange?: (threadId: string) => void;
   }) => (
     <div
       data-testid="draft-authority"
@@ -254,6 +263,20 @@ jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
       data-presentation={presentation}
     >
       Email composer {thread.id}
+      {presentation === 'main' && replyTargets ? (
+        <select
+          aria-label="Reply subject"
+          value={thread.id}
+          onChange={(event) => onReplyTargetChange?.(event.target.value)}
+        >
+          {replyTargets.map((target) => (
+            <option key={target.threadId} value={target.threadId}>
+              {target.subject}
+              {target.campaignLabel ? ` · ${target.campaignLabel}` : ''}
+            </option>
+          ))}
+        </select>
+      ) : null}
       <button onClick={() => void onSent?.()}>Simulate Email sent</button>
     </div>
   ),
@@ -410,6 +433,8 @@ const setDefaultHooks = () => {
                     threadId: id,
                     rootMessageId: `${id}-root`,
                     subject: id,
+                    campaignLabel:
+                      index === 0 ? 'Spring Campaign' : 'Holiday Campaign',
                     startTimestamp: `2026-09-0${index + 1}T00:00:00Z`,
                     historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
                   })),
@@ -487,6 +512,165 @@ const renderPage = (store = createStore()) => {
 };
 
 describe('MyahInboxPage contact-first flow', () => {
+  it('waits for the real Creator contact and exact conversation, never default-selects over the pending destination', async () => {
+    const store = createStore();
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'creator-contact-2',
+      conversationRecordId: 'conversation-contact-2',
+    });
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [contacts[0]],
+    });
+    const view = renderPage(store);
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Message sent');
+    setDefaultHooks();
+    view.rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await waitFor(() =>
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual({
+        workspaceId: 'workspace-1',
+        contactId: 'contact-2',
+        channel: 'INSTAGRAM',
+        emailThreadId: null,
+        instagramConversationId: 'conversation-contact-2',
+      }),
+    );
+    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+  });
+
+  it('a newer explicit contact choice cancels a delayed destination', async () => {
+    const store = createStore();
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'creator-contact-2',
+      conversationRecordId: 'conversation-contact-2',
+    });
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [contacts[0]],
+    });
+    const view = renderPage(store);
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+    setDefaultHooks();
+    view.rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+  });
+
+  it('honors a non-default user choice while canceling an unloaded destination', async () => {
+    const store = createStore();
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'not-loaded',
+      conversationRecordId: 'not-loaded',
+    });
+    renderPage(store);
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' })),
+    );
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-2',
+    );
+  });
+
+  it.each([
+    ['creator-contact-2', 'different-conversation'],
+    ['different-creator', 'conversation-contact-2'],
+  ])(
+    'never infers destination from only part of %s / %s',
+    (creatorRecordId, conversationRecordId) => {
+      const store = createStore();
+      const pending = {
+        workspaceId: 'workspace-1',
+        creatorRecordId,
+        conversationRecordId,
+      };
+      store.set(myahInboxPendingInstagramSelectionState.atom, pending);
+      renderPage(store);
+      expect(
+        store.get(myahInboxContactSelectionState.atom).contactId,
+      ).toBeNull();
+      expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toEqual(
+        pending,
+      );
+    },
+  );
+
+  it('waits for the existing draft flush barrier and yields to a newer click while it is pending', async () => {
+    let finishFlush: (saved: boolean) => void = () => undefined;
+    flushWorkspace.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishFlush = resolve;
+        }),
+    );
+    const store = createStore();
+    store.set(myahInboxContactSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      contactId: 'contact-1',
+      channel: 'EMAIL',
+      emailThreadId: 'thread-2',
+      instagramConversationId: null,
+    });
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'creator-contact-2',
+      conversationRecordId: 'conversation-contact-2',
+    });
+    renderPage(store);
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+    await act(async () => finishFlush(true));
+    expect(store.get(myahInboxContactSelectionState.atom).contactId).toBe(
+      'contact-1',
+    );
+    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
+  });
+
+  it('does not commit a flushed destination after workspace change', async () => {
+    let finishFlush: (saved: boolean) => void = () => undefined;
+    flushWorkspace.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishFlush = resolve;
+        }),
+    );
+    const store = createStore();
+    store.set(myahInboxPendingInstagramSelectionState.atom, {
+      workspaceId: 'workspace-1',
+      creatorRecordId: 'creator-contact-2',
+      conversationRecordId: 'conversation-contact-2',
+    });
+    renderPage(store);
+    act(() =>
+      store.set(currentWorkspaceState.atom, { id: 'workspace-2' } as never),
+    );
+    await act(async () => finishFlush(true));
+    expect(store.get(myahInboxPendingInstagramSelectionState.atom)).toBeNull();
+    expect(store.get(myahInboxContactSelectionState.atom).workspaceId).not.toBe(
+      'workspace-1',
+    );
+  });
+
   it('matches history gutters and leaves bottom space without restoring wrapper padding', () => {
     const source = readFileSync(
       resolve(__dirname, '../MyahInboxContactConversation.tsx'),
@@ -804,72 +988,46 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(refreshContacts).toHaveBeenCalledTimes(1);
   });
 
-  it('removes the complete selector and keeps header/main exact scope when an older card replies inline', async () => {
-    renderPage();
+  it('selects the exact older card in the main reply composer without an inline editor', async () => {
+    const { store } = renderPage();
     const header = await screen.findByLabelText('Contact conversation header');
-    expect(
-      within(header).getByRole('group', {
-        name: 'Email actions for First subject',
-      }),
-    ).toBeVisible();
-    expect(
-      within(header).queryByText('Email actions for First subject'),
-    ).toBeNull();
     expect(within(header).getByText('Email actions thread-2')).toBeVisible();
-    expect(screen.queryByLabelText('Email thread')).toBeNull();
+
     await act(async () =>
       fireEvent.click(
         screen.getByRole('button', { name: 'Reply to thread-1' }),
       ),
     );
-    expect(within(header).getByText('Email actions thread-2')).toBeVisible();
-    expect(screen.getByText('Email composer thread-1')).toBeVisible();
-    expect(screen.getByText('Email composer thread-2')).toBeVisible();
-    await act(async () =>
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Instagram channel' }),
-      ),
-    );
-    expect(screen.queryByLabelText('Email thread')).toBeNull();
-    expect(screen.queryByText(/Email actions/)).toBeNull();
-    expect(screen.queryByText(/Email composer/)).toBeNull();
-  });
 
-  it('moves the latest shared editor inline without a duplicate and returns it to bottom', async () => {
-    renderPage();
-    await screen.findByText('Email composer thread-2');
-    const mainReply = screen.getByRole('region', { name: 'Main reply' });
-    expect(within(mainReply).getByTestId('draft-authority')).toHaveAttribute(
-      'data-presentation',
-      'main',
-    );
-    expect(
-      within(mainReply).queryByText('Main reply · First subject'),
-    ).not.toBeInTheDocument();
-    await act(async () =>
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Reply to thread-2' }),
-      ),
-    );
-    expect(screen.getAllByText('Email composer thread-2')).toHaveLength(1);
-    expect(
-      within(screen.getByRole('region', { name: 'Inline reply' })).getByText(
-        'Email composer thread-2',
-      ),
-    ).toBeVisible();
-    expect(
-      within(screen.getByRole('region', { name: 'Inline reply' })).getByTestId(
-        'draft-authority',
-      ),
-    ).toHaveAttribute('data-presentation', 'default');
-    await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Return to bottom' })),
-    );
-    expect(screen.getAllByText('Email composer thread-2')).toHaveLength(1);
+    expect(within(header).getByText('Email actions thread-1')).toBeVisible();
+    expect(screen.getAllByText('Email composer thread-1')).toHaveLength(1);
+    expect(screen.queryByText('Email composer thread-2')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-1',
+    );
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Main reply' })).toHaveFocus(),
     );
+  });
+
+  it('switches the main reply composer through the subject selector', async () => {
+    const { store } = renderPage();
+    await screen.findByText('Email composer thread-2');
+    const selector = screen.getByRole('combobox', { name: 'Reply subject' });
+    expect(selector).toHaveValue('thread-2');
+    expect(selector).toHaveTextContent('thread-1 · Spring Campaign');
+    expect(selector).toHaveTextContent('thread-2 · Holiday Campaign');
+
+    await act(async () =>
+      fireEvent.change(selector, { target: { value: 'thread-1' } }),
+    );
+
+    expect(store.get(myahInboxContactSelectionState.atom).emailThreadId).toBe(
+      'thread-1',
+    );
+    expect(screen.getAllByText('Email composer thread-1')).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: 'Inline reply' })).toBeNull();
   });
 
   it('does not use the contact activity target before bounded outreach history resolves', () => {

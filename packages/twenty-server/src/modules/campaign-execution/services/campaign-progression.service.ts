@@ -11,6 +11,7 @@ import { campaignMailboxAdvisoryKeys } from 'src/engine/core-modules/campaign-ex
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { CampaignOutreachAudienceReviewService } from 'src/modules/campaign-execution/services/campaign-outreach-audience-review.service';
+import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import {
   OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION,
@@ -74,6 +75,8 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     private readonly audienceService?: CampaignOutreachAudienceReviewService,
     @Optional() private readonly senderService?: CampaignSenderReadinessService,
     @Optional() private readonly renderService?: CampaignMessageRenderService,
+    @Optional()
+    private readonly timelineEventWriter?: CampaignTimelineEventWriterService,
   ) {}
 
   async claimAndReserveDueOccurrenceInTransaction(
@@ -238,12 +241,15 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       );
       return { status: 'HELD', reason: 'WORKSPACE_NOT_ACTIVE' };
     }
-    if (occurrence.state === 'HELD') {
-      const reason = String(occurrence.holdReason);
-      if (!CAMPAIGN_OCCURRENCE_HOLD_REASONS.includes(reason as never))
-        throw new Error('Persisted Campaign hold reason is invalid');
-      return { status: 'HELD', reason: reason as CampaignOccurrenceHoldReason };
-    }
+    const persistedHoldReason =
+      occurrence.state === 'HELD' ? String(occurrence.holdReason) : null;
+    if (
+      persistedHoldReason !== null &&
+      !CAMPAIGN_OCCURRENCE_HOLD_REASONS.includes(persistedHoldReason as never)
+    )
+      throw new Error('Persisted Campaign hold reason is invalid');
+    const recoveringHoldReason =
+      persistedHoldReason as CampaignOccurrenceHoldReason | null;
     if (
       ['SUCCEEDED', 'SKIPPED', 'CANCELLED'].includes(String(occurrence.state))
     )
@@ -300,7 +306,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     if (dueAt.getTime() > observedAt.getTime())
       return { status: 'NOT_DUE', nextDueAt: dueAt };
     if (
-      occurrence.state !== 'PENDING' ||
+      !['PENDING', 'HELD'].includes(String(occurrence.state)) ||
       enrollment[0].state !== 'ACTIVE' ||
       Number(enrollment[0].nextAuthoredMessageIndex) !==
         Number(occurrence.authoredMessageIndex)
@@ -311,24 +317,28 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         campaign[0].lifecycleStatus === 'PAUSED'
           ? 'CAMPAIGN_PAUSED'
           : 'CAMPAIGN_COMPLETED';
-      await this.cancelOccurrenceInTransaction(
+      const cancelled = await this.cancelOccurrenceInTransaction(
         input.occurrenceId,
         reason,
         manager,
       );
-      return { status: 'CANCELLED', reason };
+      return cancelled.status === 'CHANGED'
+        ? { status: 'CANCELLED', reason }
+        : { status: 'TERMINAL' };
     }
     if (
       authorization[0].state !== 'ACTIVE' ||
       projection.state !== 'ACTIVE' ||
       projection.preparedFingerprint !== authorization[0].preparedFingerprint
     ) {
-      await this.cancelOccurrenceInTransaction(
+      const cancelled = await this.cancelOccurrenceInTransaction(
         input.occurrenceId,
         'AUTHORIZATION_REVOKED',
         manager,
       );
-      return { status: 'CANCELLED', reason: 'AUTHORIZATION_REVOKED' };
+      return cancelled.status === 'CHANGED'
+        ? { status: 'CANCELLED', reason: 'AUTHORIZATION_REVOKED' }
+        : { status: 'TERMINAL' };
     }
     if (
       this.attemptService === undefined ||
@@ -395,17 +405,37 @@ export class CampaignProgressionService implements CampaignProgressionPort {
           candidate.campaignCreatorId === enrollment[0].campaignCreatorId,
       );
       const reason = this.enrollmentExclusionReason(excluded?.reasons ?? []);
-      await runner.query(
-        `UPDATE core."campaignOccurrence" SET state='SKIPPED',"holdReason"=NULL,"terminalReason"=$2,
-          "terminalAt"=$3,"updatedAt"=clock_timestamp() WHERE id=$1 AND state='PENDING'`,
-        [input.occurrenceId, reason, observedAt],
+      const skipped = rows(
+        await runner.query(
+          `UPDATE core."campaignOccurrence" SET state='SKIPPED',"holdReason"=NULL,"terminalReason"=$2,
+            "terminalAt"=$3,"updatedAt"=clock_timestamp() WHERE id=$1 AND state IN ('PENDING','HELD')
+            RETURNING "terminalAt"`,
+          [input.occurrenceId, reason, observedAt],
+        ),
       );
-      await this.excludeEnrollmentInTransaction(
+      if (skipped.length !== 1)
+        throw new Error('Campaign eligibility exclusion CAS failed');
+      await this.writeTerminalTimelineEvent(manager, {
+        workspaceId: input.workspaceId,
+        campaignId: input.campaignId,
+        creatorId: String(enrollment[0].creatorId),
+        sourceId: input.occurrenceId,
+        sourceType: 'OCCURRENCE',
+        terminalAt: skipped[0].terminalAt,
+        reason,
+      });
+      const excludedEnrollment = await this.excludeEnrollmentInTransaction(
         String(enrollment[0].id),
         reason,
         manager,
       );
-      return { status: 'EXCLUDED', reason };
+      if (excludedEnrollment.status !== 'CHANGED')
+        throw new Error('Campaign eligibility enrollment exclusion CAS failed');
+      const result: CampaignOccurrenceClaimResult = {
+        status: 'EXCLUDED',
+        reason,
+      };
+      return result;
     }
     const execution = rows(
       await runner.query(
@@ -437,11 +467,21 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     }
     if (execution[0].insideWindow !== true) {
       const nextDueAt = new Date(String(execution[0].nextWindowAt));
-      await runner.query(
-        `UPDATE core."campaignOccurrence" SET "dueAt"=$2,"updatedAt"=clock_timestamp() WHERE id=$1 AND state='PENDING'`,
-        [input.occurrenceId, nextDueAt],
+      const deferred = await this.deferOccurrenceAndRecoverEnrollment(
+        {
+          occurrenceId: input.occurrenceId,
+          enrollmentId: String(enrollment[0].id),
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+          creatorId: String(enrollment[0].creatorId),
+          recoveringHoldReason,
+          nextDueAt,
+        },
+        manager,
       );
-      return { status: 'DEFERRED', nextDueAt };
+      return deferred
+        ? { status: 'DEFERRED', nextDueAt }
+        : { status: 'TERMINAL' };
     }
     const senderPool =
       await this.senderService.getCampaignEmailSenderPoolInTransaction(
@@ -489,20 +529,26 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     const prior = node.replyToThread
       ? rows(
           await runner.query(
-            `SELECT a.* FROM core."outboundEmailAttempt" a JOIN core."campaignOccurrence" o ON o.id=a."occurrenceId"
-              WHERE a."workspaceId"=$1 AND a."campaignId"=$2 AND a."enrollmentId"=$3
-                AND a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='ACCEPTED'
-                AND o."authoredMessageIndex" < $4 ORDER BY o."authoredMessageIndex" DESC,a."attemptNumber" DESC LIMIT 2`,
-            [
-              input.workspaceId,
-              input.campaignId,
-              enrollment[0].id,
-              occurrence.authoredMessageIndex,
-            ],
+            `SELECT a.*, o."authoredMessageIndex",
+                    (o."workspaceId"=a."workspaceId" AND o."campaignId"=a."campaignId"
+                     AND o."enrollmentId"=a."enrollmentId" AND o."workflowVersionId"=a."workflowVersionId"
+                     AND o."messageId"=a."messageId") AS "occurrenceBindingMatches"
+               FROM core."outboundEmailAttempt" a LEFT JOIN core."campaignOccurrence" o ON o.id=a."occurrenceId"
+              WHERE a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='ACCEPTED'
+                AND ((a."workspaceId"=$1 AND a."campaignId"=$2 AND a."enrollmentId"=$3)
+                  OR (o."workspaceId"=$1 AND o."campaignId"=$2 AND o."enrollmentId"=$3))
+              ORDER BY o."authoredMessageIndex" DESC,a."attemptNumber" DESC`,
+            [input.workspaceId, input.campaignId, enrollment[0].id],
           ),
         )
       : [];
-    if (node.replyToThread && prior.length !== 1) {
+    // Distinct earlier steps are expected; competing accepted evidence is not.
+    if (
+      node.replyToThread &&
+      (prior.length === 0 ||
+        new Set(prior.map((attempt) => attempt.authoredMessageIndex)).size !==
+          prior.length)
+    ) {
       await this.holdOccurrenceAndEnrollment(
         input.occurrenceId,
         String(enrollment[0].id),
@@ -511,15 +557,39 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       );
       return { status: 'HELD', reason: 'THREAD_EVIDENCE_AMBIGUOUS' };
     }
-    const priorHeader =
-      prior[0]?.providerHeaderMessageId ??
-      prior[0]?.reconciledProviderHeaderMessageId;
+    // Inspect every accepted predecessor before selecting the nearest one. Filtering
+    // malformed bindings out of the query would silently turn them into absent history.
     if (
       node.replyToThread &&
-      (typeof priorHeader !== 'string' ||
-        typeof prior[0].resolvedThreadExternalId !== 'string' ||
-        typeof prior[0].projectedMessageId !== 'string' ||
-        typeof prior[0].projectedMessageThreadId !== 'string')
+      prior.some((attempt) => {
+        const index = Number(attempt.authoredMessageIndex);
+        return (
+          attempt.occurrenceBindingMatches !== true ||
+          attempt.workspaceId !== input.workspaceId ||
+          attempt.campaignId !== input.campaignId ||
+          attempt.enrollmentId !== enrollment[0].id ||
+          attempt.authorizationId !== projection.authorizationId ||
+          attempt.workflowVersionId !== projection.workflowVersionId ||
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= Number(occurrence.authoredMessageIndex) ||
+          plan.nodes[index]?.channel !== 'EMAIL' ||
+          plan.nodes[index]?.messageId !== attempt.messageId ||
+          attempt.normalizedRecipient !== creator.normalizedEmail ||
+          [
+            attempt.providerHeaderMessageId ??
+              attempt.reconciledProviderHeaderMessageId,
+            attempt.resolvedThreadExternalId,
+            attempt.projectedMessageId,
+            attempt.projectedMessageThreadId,
+            attempt.connectedAccountId,
+            attempt.messageChannelId,
+            attempt.normalizedSenderHandle,
+          ].some(
+            (value) => typeof value !== 'string' || value.trim().length === 0,
+          )
+        );
+      })
     ) {
       await this.holdOccurrenceAndEnrollment(
         input.occurrenceId,
@@ -529,6 +599,9 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       );
       return { status: 'HELD', reason: 'THREAD_EVIDENCE_MISSING' };
     }
+    const priorHeader =
+      prior[0]?.providerHeaderMessageId ??
+      prior[0]?.reconciledProviderHeaderMessageId;
     const selectionConstraint = node.replyToThread
       ? {
           kind: 'PINNED_REPLY' as const,
@@ -547,11 +620,21 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       manager,
     );
     if (capacity.status === 'NOT_READY') {
-      await runner.query(
-        `UPDATE core."campaignOccurrence" SET "dueAt"=$2,"updatedAt"=clock_timestamp() WHERE id=$1 AND state='PENDING'`,
-        [input.occurrenceId, capacity.nextEligibleAt],
+      const deferred = await this.deferOccurrenceAndRecoverEnrollment(
+        {
+          occurrenceId: input.occurrenceId,
+          enrollmentId: String(enrollment[0].id),
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+          creatorId: String(enrollment[0].creatorId),
+          recoveringHoldReason,
+          nextDueAt: capacity.nextEligibleAt,
+        },
+        manager,
       );
-      return { status: 'DEFERRED', nextDueAt: capacity.nextEligibleAt };
+      return deferred
+        ? { status: 'DEFERRED', nextDueAt: capacity.nextEligibleAt }
+        : { status: 'TERMINAL' };
     }
     if (capacity.status !== 'ELIGIBLE_NOW') {
       await this.holdOccurrenceAndEnrollment(
@@ -696,11 +779,21 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       manager,
     );
     if (reserved.status === 'NOT_READY') {
-      await runner.query(
-        `UPDATE core."campaignOccurrence" SET "dueAt"=$2,"updatedAt"=clock_timestamp() WHERE id=$1 AND state='PENDING'`,
-        [input.occurrenceId, reserved.nextEligibleAt],
+      const deferred = await this.deferOccurrenceAndRecoverEnrollment(
+        {
+          occurrenceId: input.occurrenceId,
+          enrollmentId: String(enrollment[0].id),
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+          creatorId: String(enrollment[0].creatorId),
+          recoveringHoldReason,
+          nextDueAt: reserved.nextEligibleAt,
+        },
+        manager,
       );
-      return { status: 'DEFERRED', nextDueAt: reserved.nextEligibleAt };
+      return deferred
+        ? { status: 'DEFERRED', nextDueAt: reserved.nextEligibleAt }
+        : { status: 'TERMINAL' };
     }
     if (reserved.status !== 'RESERVED' && reserved.status !== 'EXACT_REPLAY') {
       const reason =
@@ -750,13 +843,37 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       throw new Error('Campaign immutable render identity collision');
     const changed = rows(
       await runner.query(
-        `UPDATE core."campaignOccurrence" SET state='IN_FLIGHT',"updatedAt"=clock_timestamp()
-          WHERE id=$1 AND state='PENDING' AND "dueAt" <= $2 RETURNING id`,
+        `UPDATE core."campaignOccurrence" SET state='IN_FLIGHT',"holdReason"=NULL,"updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state IN ('PENDING','HELD') AND "dueAt" <= $2 RETURNING id,"updatedAt"`,
         [input.occurrenceId, observedAt],
       ),
     );
     if (changed.length !== 1)
       throw new Error('Campaign occurrence claim CAS failed');
+    if (recoveringHoldReason !== null) {
+      await runner.query(
+        `UPDATE core."campaignEnrollment" SET "holdReason"=NULL,"updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state='ACTIVE' AND "holdReason"=$2`,
+        [enrollment[0].id, recoveringHoldReason],
+      );
+      const happenedAt = new Date(String(changed[0].updatedAt)).toISOString();
+      await this.timelineEventWriter?.writeInTransaction(
+        {
+          manager,
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+        },
+        {
+          businessEventKey: `hold-recovery:${input.occurrenceId}:${happenedAt}:${recoveringHoldReason}`,
+          eventKind: 'HOLD_RECOVERED',
+          happenedAt,
+          sourceId: input.occurrenceId,
+          sourceType: 'OCCURRENCE',
+          creatorId: String(enrollment[0].creatorId),
+          reason: recoveringHoldReason,
+        },
+      );
+    }
     return { status: 'RESERVED', attemptId };
   }
 
@@ -786,7 +903,10 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         [campaignExecutionId, workspaceId, campaignId, candidate],
       ),
     );
-    const dueAt = new Date(String(result[0]?.dueAt));
+    const dueAt =
+      result[0]?.dueAt instanceof Date
+        ? result[0].dueAt
+        : new Date(String(result[0]?.dueAt));
     if (result.length !== 1 || !Number.isFinite(dueAt.getTime()))
       throw new Error('Campaign next sending window was unavailable');
     return dueAt;
@@ -851,7 +971,9 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     | 'INVALID_EMAIL'
     | 'DUPLICATE_CREATOR_EMAIL'
     | 'SUPPRESSED_EMAIL'
+    | 'OPERATOR_EXCLUDED'
   > {
+    if (reasons.includes('OPERATOR_EXCLUDED')) return 'OPERATOR_EXCLUDED';
     if (reasons.includes('SUPPRESSED_EMAIL')) return 'SUPPRESSED_EMAIL';
     if (reasons.includes('DUPLICATE_CREATOR_EMAIL'))
       return 'DUPLICATE_CREATOR_EMAIL';
@@ -904,6 +1026,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       enrollmentState: locked.enrollment.state,
       authoredMessageCount: locked.enrollment.authoredMessageCount,
       campaignCreatorId: locked.enrollment.campaignCreatorId,
+      creatorId: locked.enrollment.creatorId,
     };
     if (
       typeof attempt.projectedMessageId !== 'string' ||
@@ -912,18 +1035,34 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       return { status: 'PROJECTION_PENDING' };
     if (attempt.occurrenceState === 'SUCCEEDED')
       return { status: 'EXACT_REPLAY' };
+    const acceptedAt =
+      attempt.providerAcceptedAt instanceof Date
+        ? attempt.providerAcceptedAt
+        : new Date(String(attempt.providerAcceptedAt));
+    if (!Number.isFinite(acceptedAt.getTime()))
+      return { status: 'TERMINAL_SUPPRESSED' };
+    const wasUnknown = attempt.occurrenceState === 'UNKNOWN';
     if (attempt.enrollmentState !== 'ACTIVE') {
-      await runner.query(
-        `UPDATE core."campaignOccurrence" SET state='SUCCEEDED', "holdReason"=NULL,
-          "terminalReason"='PROVIDER_ACCEPTED', "terminalAt"=$2, "updatedAt"=clock_timestamp()
-          WHERE id=$1 AND state IN ('IN_FLIGHT','UNKNOWN')`,
-        [attempt.occurrenceId, attempt.providerAcceptedAt],
+      const changed = rows(
+        await runner.query(
+          `UPDATE core."campaignOccurrence" SET state='SUCCEEDED', "holdReason"=NULL,
+            "terminalReason"='PROVIDER_ACCEPTED', "terminalAt"=$2, "updatedAt"=clock_timestamp()
+            WHERE id=$1 AND state IN ('IN_FLIGHT','UNKNOWN') RETURNING id`,
+          [attempt.occurrenceId, attempt.providerAcceptedAt],
+        ),
       );
+      if (changed.length === 1)
+        await this.writeAcceptedTimelineEvents(
+          input,
+          manager,
+          attempt,
+          acceptedAt,
+          wasUnknown,
+        );
       return { status: 'TERMINAL_SUPPRESSED' };
     }
     const acceptedIndex = Number(attempt.authoredMessageIndex);
     const authoredCount = Number(attempt.authoredMessageCount);
-    const acceptedAt = new Date(String(attempt.providerAcceptedAt));
     if (
       !Number.isSafeInteger(acceptedIndex) ||
       !Number.isSafeInteger(authoredCount) ||
@@ -995,6 +1134,31 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       },
       manager,
     );
+    if (result.status === 'CHANGED') {
+      const eventContext = {
+        manager,
+        workspaceId: input.workspaceId,
+        campaignId: input.campaignId,
+      };
+      await this.writeAcceptedTimelineEvents(
+        input,
+        manager,
+        attempt,
+        acceptedAt,
+        wasUnknown,
+      );
+      if (nextOccurrence) {
+        await this.timelineEventWriter?.writeInTransaction(eventContext, {
+          businessEventKey: `occurrence:${nextOccurrence.occurrenceId}:SCHEDULED`,
+          eventKind: 'SCHEDULED',
+          happenedAt: acceptedAt.toISOString(),
+          sourceId: nextOccurrence.occurrenceId,
+          sourceType: 'OCCURRENCE',
+          creatorId: String(attempt.creatorId),
+        });
+      }
+    }
+
     return result.status === 'EXACT_REPLAY'
       ? { status: 'EXACT_REPLAY' }
       : result.status === 'CHANGED'
@@ -1018,12 +1182,34 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       locked.attempt.attemptState !== 'DEFINITELY_UNACCEPTED'
     )
       throw new Error('Definitely-unaccepted Campaign evidence is unavailable');
+    const wasUnknown = locked.occurrence.state === 'UNKNOWN';
     await this.holdOccurrenceAndEnrollment(
       input.occurrenceId,
       input.enrollmentId,
       'DEFINITELY_UNACCEPTED_REVIEW',
       runnerOf(manager),
     );
+    if (wasUnknown) {
+      const happenedAt = new Date(
+        String(locked.attempt.updatedAt),
+      ).toISOString();
+      await this.timelineEventWriter?.writeInTransaction(
+        {
+          manager,
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+        },
+        {
+          businessEventKey: `attempt:${input.attemptId}:UNKNOWN_RECOVERED_UNACCEPTED`,
+          eventKind: 'UNKNOWN_RECOVERED_UNACCEPTED',
+          happenedAt,
+          sourceId: input.attemptId,
+          sourceType: 'ATTEMPT',
+          creatorId: String(locked.enrollment.creatorId),
+          reason: String(locked.attempt.safeOutcomeReason),
+        },
+      );
+    }
     return { status: 'HELD' };
   }
 
@@ -1036,11 +1222,34 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       return { status: 'EXACT_REPLAY' };
     if (locked === null || locked.attempt.attemptState !== 'UNKNOWN')
       throw new Error('Unknown Campaign evidence is unavailable');
-    await runnerOf(manager).query(
-      `UPDATE core."campaignOccurrence" SET state='UNKNOWN', "holdReason"=NULL,
-        "terminalReason"=NULL, "terminalAt"=NULL, "updatedAt"=clock_timestamp()
-        WHERE id=$1 AND state='IN_FLIGHT'`,
-      [input.occurrenceId],
+    const changed = rows(
+      await runnerOf(manager).query(
+        `UPDATE core."campaignOccurrence" SET state='UNKNOWN', "holdReason"=NULL,
+          "terminalReason"=NULL, "terminalAt"=NULL, "updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state='IN_FLIGHT' RETURNING "updatedAt"`,
+        [input.occurrenceId],
+      ),
+    );
+    if (changed.length !== 1)
+      throw new Error('Unknown Campaign occurrence CAS failed');
+    const happenedAt = new Date(
+      String(locked.attempt.updatedAt ?? changed[0].updatedAt),
+    ).toISOString();
+    await this.timelineEventWriter?.writeInTransaction(
+      {
+        manager,
+        workspaceId: input.workspaceId,
+        campaignId: input.campaignId,
+      },
+      {
+        businessEventKey: `attempt:${input.attemptId}:UNKNOWN`,
+        eventKind: 'UNKNOWN',
+        happenedAt,
+        sourceId: input.attemptId,
+        sourceType: 'ATTEMPT',
+        creatorId: String(locked.enrollment.creatorId),
+        reason: 'PROVIDER_OUTCOME_UNCONFIRMED',
+      },
     );
     return { status: 'UNKNOWN' };
   }
@@ -1159,12 +1368,14 @@ export class CampaignProgressionService implements CampaignProgressionPort {
           return { status: 'BLOCKED_RESERVED' };
       }
     }
-    await this.cancelOccurrenceInTransaction(
+    const cancelled = await this.cancelOccurrenceInTransaction(
       input.occurrenceId,
       input.reason,
       manager,
     );
-    return { status: 'CANCELLED' };
+    if (cancelled.status === 'CHANGED') return { status: 'CANCELLED' };
+    if (cancelled.status === 'EXACT_REPLAY') return { status: 'EXACT_REPLAY' };
+    throw new Error('Campaign occurrence cancellation CAS failed');
   }
 
   async terminalizeReplyInTransaction(
@@ -1230,17 +1441,34 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         String(attempt.attemptState),
       ),
     );
-    await runner.query(
-      `UPDATE core."campaignEnrollment" SET state='REPLIED', "holdReason"=NULL,
-        "terminalReason"='REPLY_RECEIVED', "terminalAt"=clock_timestamp(), "updatedAt"=clock_timestamp()
-        WHERE id=$1 AND state='ACTIVE'`,
-      [input.enrollmentId],
+    const replied = rows(
+      await runner.query(
+        `UPDATE core."campaignEnrollment" SET state='REPLIED', "holdReason"=NULL,
+          "terminalReason"='REPLY_RECEIVED', "terminalAt"=clock_timestamp(), "updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state='ACTIVE' RETURNING "terminalAt"`,
+        [input.enrollmentId],
+      ),
     );
+    if (replied.length !== 1)
+      throw new Error('Campaign reply terminalization CAS failed');
     await runner.query(
       `UPDATE core."campaignOccurrence" SET state='CANCELLED', "holdReason"=NULL,
-        "terminalReason"='ENROLLMENT_REPLIED', "terminalAt"=clock_timestamp(), "updatedAt"=clock_timestamp()
+        "terminalReason"='ENROLLMENT_REPLIED', "terminalAt"=$2, "updatedAt"=clock_timestamp()
         WHERE "enrollmentId"=$1 AND state IN ('PENDING','HELD')`,
-      [input.enrollmentId],
+      [input.enrollmentId, replied[0].terminalAt],
+    );
+    const happenedAt = new Date(String(replied[0].terminalAt)).toISOString();
+    await this.timelineEventWriter?.writeInTransaction(
+      { manager, workspaceId: input.workspaceId, campaignId: input.campaignId },
+      {
+        businessEventKey: `reply:${input.inboundEvidenceId}`,
+        eventKind: 'REPLIED',
+        happenedAt,
+        sourceId: input.inboundEvidenceId,
+        sourceType: 'MESSAGE',
+        creatorId: String(enrollment[0].creatorId),
+        messageId: input.inboundEvidenceId,
+      },
     );
     return { status: processing ? 'PROCESSING_IN_FLIGHT' : 'REPLIED' };
   }
@@ -1334,14 +1562,30 @@ export class CampaignProgressionService implements CampaignProgressionPort {
   ): Promise<CampaignProgressionTransitionResult> {
     if (!CAMPAIGN_OCCURRENCE_HOLD_REASONS.includes(reason))
       throw new Error('Invalid Campaign occurrence hold reason');
-    return this.transitionOccurrence(
-      occurrenceId,
-      `state='HELD', "holdReason"=$2, "terminalReason"=NULL, "terminalAt"=NULL`,
-      [reason],
-      ['PENDING', 'IN_FLIGHT'],
-      (row) => row.state === 'HELD' && row.holdReason === reason,
-      manager,
+    const runner = runnerOf(manager);
+    const occurrence = rows(
+      await runner.query(
+        `SELECT id, "enrollmentId", state, "holdReason" FROM core."campaignOccurrence" WHERE id=$1 FOR UPDATE`,
+        [occurrenceId],
+      ),
     );
+    if (occurrence.length !== 1) return { status: 'NOT_FOUND' };
+    if (occurrence[0].state === 'HELD' && occurrence[0].holdReason === reason)
+      return { status: 'EXACT_REPLAY' };
+    if (
+      !['PENDING', 'IN_FLIGHT', 'UNKNOWN', 'HELD'].includes(
+        String(occurrence[0].state),
+      )
+    )
+      return { status: 'STATE_CONFLICT' };
+    return (await this.holdOccurrenceAndEnrollment(
+      occurrenceId,
+      String(occurrence[0].enrollmentId),
+      reason,
+      runner,
+    ))
+      ? { status: 'CHANGED' }
+      : { status: 'STATE_CONFLICT' };
   }
 
   async cancelOccurrenceInTransaction(
@@ -1351,14 +1595,41 @@ export class CampaignProgressionService implements CampaignProgressionPort {
   ): Promise<CampaignProgressionTransitionResult> {
     if (!CAMPAIGN_OCCURRENCE_TERMINAL_REASONS.includes(reason))
       throw new Error('Invalid Campaign occurrence terminal reason');
-    return this.transitionOccurrence(
-      occurrenceId,
-      `state='CANCELLED', "holdReason"=NULL, "terminalReason"=$2, "terminalAt"=clock_timestamp()`,
-      [reason],
-      ['PENDING', 'IN_FLIGHT'],
-      (row) => row.state === 'CANCELLED' && row.terminalReason === reason,
-      manager,
+    const runner = runnerOf(manager);
+    const locked = rows(
+      await runner.query(
+        `SELECT o.id,o.state,o."terminalReason",o."workspaceId",o."campaignId",e."creatorId"
+           FROM core."campaignOccurrence" o
+           JOIN core."campaignEnrollment" e ON e.id=o."enrollmentId"
+          WHERE o.id=$1 FOR UPDATE OF o`,
+        [occurrenceId],
+      ),
     );
+    if (locked.length !== 1) return { status: 'NOT_FOUND' };
+    if (!['PENDING', 'IN_FLIGHT', 'HELD'].includes(String(locked[0].state)))
+      return locked[0].state === 'CANCELLED' &&
+        locked[0].terminalReason === reason
+        ? { status: 'EXACT_REPLAY' }
+        : { status: 'STATE_CONFLICT' };
+    const changed = rows(
+      await runner.query(
+        `UPDATE core."campaignOccurrence" SET state='CANCELLED', "holdReason"=NULL,
+                "terminalReason"=$2, "terminalAt"=clock_timestamp(), "updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state IN ('PENDING','IN_FLIGHT','HELD') RETURNING "terminalAt"`,
+        [occurrenceId, reason],
+      ),
+    );
+    if (changed.length !== 1) return { status: 'STATE_CONFLICT' };
+    await this.writeTerminalTimelineEvent(manager, {
+      workspaceId: String(locked[0].workspaceId),
+      campaignId: String(locked[0].campaignId),
+      creatorId: String(locked[0].creatorId),
+      sourceId: occurrenceId,
+      sourceType: 'OCCURRENCE',
+      terminalAt: changed[0].terminalAt,
+      reason,
+    });
+    return { status: 'CHANGED' };
   }
 
   async markUnknownInTransaction(
@@ -1385,7 +1656,8 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     const runner = runnerOf(manager);
     const locked = rows(
       await runner.query(
-        `SELECT id, state, "terminalReason" FROM core."campaignEnrollment" WHERE id=$1 FOR UPDATE`,
+        `SELECT id,state,"terminalReason","workspaceId","campaignId","creatorId"
+           FROM core."campaignEnrollment" WHERE id=$1 FOR UPDATE`,
         [enrollmentId],
       ),
     );
@@ -1397,13 +1669,88 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       await runner.query(
         `UPDATE core."campaignEnrollment" SET state='EXCLUDED', "holdReason"=NULL,
                 "terminalReason"=$2, "terminalAt"=clock_timestamp(), "updatedAt"=clock_timestamp()
-          WHERE id=$1 AND state='ACTIVE' RETURNING id`,
+          WHERE id=$1 AND state='ACTIVE' RETURNING "terminalAt"`,
         [enrollmentId, reason],
       ),
     );
-    return changed.length === 1
-      ? { status: 'CHANGED' }
-      : { status: 'STATE_CONFLICT' };
+    if (changed.length !== 1) return { status: 'STATE_CONFLICT' };
+    await this.writeTerminalTimelineEvent(manager, {
+      workspaceId: String(locked[0].workspaceId),
+      campaignId: String(locked[0].campaignId),
+      creatorId: String(locked[0].creatorId),
+      sourceId: enrollmentId,
+      sourceType: 'ENROLLMENT',
+      terminalAt: changed[0].terminalAt,
+      reason,
+    });
+    return { status: 'CHANGED' };
+  }
+
+  private async writeTerminalTimelineEvent(
+    manager: EntityManager,
+    input: {
+      workspaceId: string;
+      campaignId: string;
+      creatorId: string;
+      sourceId: string;
+      sourceType: 'ENROLLMENT' | 'OCCURRENCE';
+      terminalAt: unknown;
+      reason:
+        | CampaignEnrollmentTerminalReason
+        | CampaignOccurrenceTerminalReason;
+    },
+  ): Promise<void> {
+    if (this.timelineEventWriter === undefined) return;
+    const happenedAt = new Date(String(input.terminalAt)).toISOString();
+    await this.timelineEventWriter.writeInTransaction(
+      {
+        manager: manager as WorkspaceEntityManager,
+        workspaceId: input.workspaceId,
+        campaignId: input.campaignId,
+      },
+      {
+        businessEventKey: `terminal:${input.sourceType.toLowerCase()}:${input.sourceId}:${happenedAt}:${input.reason}`,
+        eventKind: 'TERMINAL',
+        happenedAt,
+        sourceId: input.sourceId,
+        sourceType: input.sourceType,
+        creatorId: input.creatorId,
+        reason: input.reason,
+      },
+    );
+  }
+
+  private async writeAcceptedTimelineEvents(
+    input: CampaignAttemptRoutingCoordinate,
+    manager: WorkspaceEntityManager,
+    attempt: Record<string, unknown>,
+    acceptedAt: Date,
+    wasUnknown: boolean,
+  ): Promise<void> {
+    const context = {
+      manager,
+      workspaceId: input.workspaceId,
+      campaignId: input.campaignId,
+    };
+    const event = {
+      happenedAt: acceptedAt.toISOString(),
+      sourceId: input.attemptId,
+      sourceType: 'ATTEMPT' as const,
+      creatorId: String(attempt.creatorId),
+      messageId: String(attempt.projectedMessageId),
+      messageThreadId: String(attempt.projectedMessageThreadId),
+    };
+    await this.timelineEventWriter?.writeInTransaction(context, {
+      ...event,
+      businessEventKey: `attempt:${input.attemptId}:MESSAGE_ACCEPTED`,
+      eventKind: 'MESSAGE_ACCEPTED',
+    });
+    if (wasUnknown)
+      await this.timelineEventWriter?.writeInTransaction(context, {
+        ...event,
+        businessEventKey: `attempt:${input.attemptId}:UNKNOWN_RECOVERED_ACCEPTED`,
+        eventKind: 'UNKNOWN_RECOVERED_ACCEPTED',
+      });
   }
 
   private async reconcileAcceptedWithSnapshotInTransaction(
@@ -1482,8 +1829,8 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     await runner.query(
       `UPDATE "${schemaName}"."campaignCreator"
           SET stage='CONTACTED', "updatedAt"=clock_timestamp()
-        WHERE id=$1 AND stage='READY' AND "deletedAt" IS NULL`,
-      [input.campaignCreatorId],
+        WHERE id=$1 AND "campaignId"=$2 AND stage='READY' AND "deletedAt" IS NULL`,
+      [input.campaignCreatorId, input.campaignId],
     );
 
     if (enrollment.state !== 'ACTIVE') return { status: 'CHANGED' };
@@ -1494,7 +1841,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
           `UPDATE core."campaignEnrollment" SET state='FINISHED', "nextAuthoredMessageIndex"="authoredMessageCount",
                   "holdReason"=NULL, "terminalReason"='SEQUENCE_COMPLETED', "terminalAt"=$2,
                   "updatedAt"=clock_timestamp()
-            WHERE id=$1 AND state='ACTIVE' AND "nextAuthoredMessageIndex"=$3 RETURNING id`,
+            WHERE id=$1 AND state='ACTIVE' AND "nextAuthoredMessageIndex"=$3 RETURNING "terminalAt"`,
           [
             input.enrollmentId,
             input.acceptedAt,
@@ -1502,9 +1849,17 @@ export class CampaignProgressionService implements CampaignProgressionPort {
           ],
         ),
       );
-      return finished.length === 1
-        ? { status: 'CHANGED' }
-        : { status: 'STATE_CONFLICT' };
+      if (finished.length !== 1) return { status: 'STATE_CONFLICT' };
+      await this.writeTerminalTimelineEvent(manager, {
+        workspaceId: input.workspaceId,
+        campaignId: input.campaignId,
+        creatorId: String(enrollment.creatorId),
+        sourceId: input.enrollmentId,
+        sourceType: 'ENROLLMENT',
+        terminalAt: finished[0].terminalAt,
+        reason: 'SEQUENCE_COMPLETED',
+      });
+      return { status: 'CHANGED' };
     }
     if (input.nextOccurrence.authoredMessageIndex !== nextIndex)
       throw new Error('Next Campaign occurrence index is not contiguous');
@@ -1541,14 +1896,17 @@ export class CampaignProgressionService implements CampaignProgressionPort {
           [input.enrollmentId, input.nextOccurrence.authoredMessageIndex],
         ),
       );
+      const replayDueAt =
+        replay[0]?.dueAt instanceof Date
+          ? replay[0].dueAt
+          : new Date(String(replay[0]?.dueAt));
       if (
         replay.length !== 1 ||
         replay[0].id !== input.nextOccurrence.occurrenceId ||
         replay[0].workflowVersionId !==
           input.nextOccurrence.workflowVersionId ||
         replay[0].messageId !== input.nextOccurrence.messageId ||
-        new Date(String(replay[0].dueAt)).getTime() !==
-          input.nextOccurrence.dueAt.getTime()
+        replayDueAt.getTime() !== input.nextOccurrence.dueAt.getTime()
       )
         throw new Error('Next Campaign occurrence identity collision');
     }
@@ -1735,23 +2093,103 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     );
   }
 
+  private async deferOccurrenceAndRecoverEnrollment(
+    input: {
+      occurrenceId: string;
+      enrollmentId: string;
+      workspaceId: string;
+      campaignId: string;
+      creatorId: string;
+      recoveringHoldReason: CampaignOccurrenceHoldReason | null;
+      nextDueAt: Date;
+    },
+    manager: WorkspaceEntityManager,
+  ): Promise<boolean> {
+    const runner = runnerOf(manager);
+    const changed = rows(
+      await runner.query(
+        `UPDATE core."campaignOccurrence" SET state='PENDING', "dueAt"=$2, "holdReason"=NULL,
+          "terminalReason"=NULL, "terminalAt"=NULL, "updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state IN ('PENDING','HELD') RETURNING "updatedAt"`,
+        [input.occurrenceId, input.nextDueAt],
+      ),
+    );
+    if (changed.length !== 1) return false;
+    await runner.query(
+      `UPDATE core."campaignEnrollment" SET "holdReason"=NULL,"updatedAt"=clock_timestamp()
+        WHERE id=$1 AND state='ACTIVE' AND "holdReason" IS NOT NULL`,
+      [input.enrollmentId],
+    );
+    if (input.recoveringHoldReason !== null) {
+      const happenedAt = new Date(String(changed[0].updatedAt)).toISOString();
+      await this.timelineEventWriter?.writeInTransaction(
+        {
+          manager,
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+        },
+        {
+          businessEventKey: `hold-recovery:${input.occurrenceId}:${happenedAt}:${input.recoveringHoldReason}`,
+          eventKind: 'HOLD_RECOVERED',
+          happenedAt,
+          sourceId: input.occurrenceId,
+          sourceType: 'OCCURRENCE',
+          creatorId: input.creatorId,
+          reason: input.recoveringHoldReason,
+        },
+      );
+    }
+    return true;
+  }
+
   private async holdOccurrenceAndEnrollment(
     occurrenceId: string,
     enrollmentId: string,
     reason: CampaignOccurrenceHoldReason,
     runner: QueryRunner,
-  ): Promise<void> {
-    await runner.query(
-      `UPDATE core."campaignOccurrence" SET state='HELD', "holdReason"=$2,
-        "terminalReason"=NULL, "terminalAt"=NULL, "updatedAt"=clock_timestamp()
-        WHERE id=$1 AND state IN ('PENDING','IN_FLIGHT','UNKNOWN','HELD')`,
-      [occurrenceId, reason],
+  ): Promise<boolean> {
+    const changed = rows(
+      await runner.query(
+        `UPDATE core."campaignOccurrence" SET state='HELD', "holdReason"=$2,
+          "terminalReason"=NULL, "terminalAt"=NULL, "updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state IN ('PENDING','IN_FLIGHT','UNKNOWN','HELD')
+            AND (state <> 'HELD' OR "holdReason" IS DISTINCT FROM $2)
+          RETURNING "workspaceId", "campaignId", "enrollmentId", "updatedAt"`,
+        [occurrenceId, reason],
+      ),
     );
     await runner.query(
       `UPDATE core."campaignEnrollment" SET "holdReason"=$2, "updatedAt"=clock_timestamp()
-        WHERE id=$1 AND state='ACTIVE'`,
+        WHERE id=$1 AND state='ACTIVE' AND "holdReason" IS DISTINCT FROM $2`,
       [enrollmentId, reason],
     );
+    if (changed.length !== 1) return false;
+    if (this.timelineEventWriter === undefined) return true;
+    const creator = rows(
+      await runner.query(
+        `SELECT "creatorId" FROM core."campaignEnrollment" WHERE id=$1`,
+        [enrollmentId],
+      ),
+    );
+    const happenedAt = new Date(String(changed[0].updatedAt)).toISOString();
+    await this.timelineEventWriter.writeInTransaction(
+      {
+        manager: runner.manager as WorkspaceEntityManager,
+        workspaceId: String(changed[0].workspaceId),
+        campaignId: String(changed[0].campaignId),
+      },
+      {
+        businessEventKey: `hold:${occurrenceId}:${happenedAt}:${reason}`,
+        eventKind: 'HELD',
+        happenedAt,
+        sourceId: occurrenceId,
+        sourceType: 'OCCURRENCE',
+        creatorId:
+          creator.length === 1 ? String(creator[0].creatorId) : undefined,
+        reason,
+      },
+    );
+    return true;
   }
 
   private async transitionOccurrence(

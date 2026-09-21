@@ -67,7 +67,7 @@ export class CampaignEmailRuntimeService {
     const work = await this.query(
       `WITH pending AS (
            SELECT 'PENDING' AS kind,"workspaceId","campaignId",id,NULL::uuid AS "attemptId"
-             FROM core."campaignOccurrence" WHERE state='PENDING' AND "dueAt" <= clock_timestamp()
+             FROM core."campaignOccurrence" WHERE state IN ('PENDING','HELD') AND "dueAt" <= clock_timestamp()
              ORDER BY "dueAt",id LIMIT 100
          ), reserved AS (
            SELECT 'RESERVED' AS kind,a."workspaceId",a."campaignId",a."occurrenceId" AS id,a."attemptId"
@@ -209,7 +209,7 @@ export class CampaignEmailRuntimeService {
         throw new Error('Campaign runtime requires active manager');
       const rows = records(
         await runner.query(
-          `SELECT a.*,r.subject,r.html,r.text,r."toRecipient",r."inReplyTo",r."threadExternalId",r.references,
+          `SELECT a.*,a."localDate"::text AS "localDate",r.subject,r.html,r.text,r."toRecipient",r."inReplyTo",r."threadExternalId",r.references,
                   ca.id AS "accountId",mc.id AS "channelId",act.id AS "activationId",act."campaignExecutionId",auth.generation AS "authorizationGeneration"
              FROM core."outboundEmailAttempt" a
              JOIN core."campaignOutboundRender" r ON r."attemptId"=a."attemptId" AND r."workspaceId"=a."workspaceId"
@@ -241,9 +241,16 @@ export class CampaignEmailRuntimeService {
         workspaceId,
       );
       const references = Array.isArray(row.references) ? row.references : [];
-      const claimedAt = new Date(String(row.claimedAt));
-      const slotAt = new Date(String(row.slotAt));
-      const unknownAfter = new Date(String(row.unknownAfter));
+      const claimedAt =
+        row.claimedAt instanceof Date
+          ? row.claimedAt
+          : new Date(String(row.claimedAt));
+      const slotAt =
+        row.slotAt instanceof Date ? row.slotAt : new Date(String(row.slotAt));
+      const unknownAfter =
+        row.unknownAfter instanceof Date
+          ? row.unknownAfter
+          : new Date(String(row.unknownAfter));
       if (
         [claimedAt, slotAt, unknownAfter].some((value) =>
           Number.isNaN(value.getTime()),

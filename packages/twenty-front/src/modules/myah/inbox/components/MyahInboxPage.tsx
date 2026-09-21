@@ -1,10 +1,21 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { getMyahInboxOutreachCards } from '@/myah/inbox/components/MyahInboxEmailOutreachHistory';
-import { useAtomValue, useStore } from 'jotai';
-import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
+import { atom, useAtomValue, useStore } from 'jotai';
+import {
+  myahInboxDraftAutosaveFamilyState,
+  myahInboxDraftAutosaveKeysState,
+} from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxContactConversation } from '@/myah/inbox/components/MyahInboxContactConversation';
 import { MyahInboxContextEffect } from '@/myah/inbox/components/MyahInboxContextEffect';
@@ -41,7 +52,7 @@ import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { IconInbox } from 'twenty-ui/icon';
-import { SegmentedControl } from 'twenty-ui/input';
+import { Button, SegmentedControl } from 'twenty-ui/input';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledWorkspace = styled.div`
@@ -157,6 +168,25 @@ const MyahInboxPageContent = ({
 }) => {
   const isMobile = useIsMobile();
   const store = useStore();
+  const [
+    myahInboxPendingInstagramSelection,
+    setMyahInboxPendingInstagramSelection,
+  ] = useAtomState(myahInboxPendingInstagramSelectionState);
+  const pendingDestination =
+    myahInboxPendingInstagramSelection?.workspaceId === workspaceId
+      ? myahInboxPendingInstagramSelection
+      : null;
+  useEffect(() => {
+    if (
+      myahInboxPendingInstagramSelection &&
+      myahInboxPendingInstagramSelection.workspaceId !== workspaceId
+    )
+      setMyahInboxPendingInstagramSelection(null);
+  }, [
+    myahInboxPendingInstagramSelection,
+    workspaceId,
+    setMyahInboxPendingInstagramSelection,
+  ]);
   const { theme } = useContext(ThemeContext);
   const { flushWorkspaceForNavigation, invalidateWorkspace } =
     useMyahInboxDraftAutosaveControllerContext();
@@ -174,10 +204,8 @@ const MyahInboxPageContent = ({
   );
   const [draftAuthorizationGeneration, setDraftAuthorizationGeneration] =
     useState(0);
-  const [inlineTarget, setInlineTarget] = useState<{
-    scope: string;
-    threadId: string;
-  } | null>(null);
+  const [restoringPreservedSelection, setRestoringPreservedSelection] =
+    useState(() => Boolean(preservedReturnSelectionRef.current?.contactId));
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('contacts');
   const [retainedContact, setRetainedContact] =
     useState<MyahInboxContact | null>(null);
@@ -197,14 +225,15 @@ const MyahInboxPageContent = ({
   // Invalidates async refresh results after any newer selection transition.
   // oxlint-disable-next-line twenty/no-state-useref
   const selectionGenerationRef = useRef(0);
+  // Keeps an explicit card/selector choice pinned while its Contact scope remains active.
   // oxlint-disable-next-line twenty/no-state-useref
-  const committedScope = useRef('');
+  const explicitReplyTargetRef = useRef<{
+    scope: string;
+    threadId: string;
+  } | null>(null);
   const commitContactSelection = useCallback(
     (nextSelection: typeof myahInboxContactSelection) => {
       selectionGenerationRef.current += 1;
-      const nextScope = `${nextSelection.workspaceId}:${nextSelection.contactId}:${nextSelection.channel}`;
-      if (committedScope.current !== nextScope) setInlineTarget(null);
-      committedScope.current = nextScope;
       setMyahInboxContactSelection(nextSelection);
     },
     [setMyahInboxContactSelection],
@@ -214,6 +243,7 @@ const MyahInboxPageContent = ({
       ? myahInboxFilters
       : { ...myahInboxFilters, campaignId: null, campaignWorkspaceId: null };
   const contacts = useMyahInboxContacts(workspaceFilters, workspaceId);
+  const refreshContacts = contacts.refresh;
   const currentSelection =
     myahInboxContactSelection.workspaceId === workspaceId
       ? myahInboxContactSelection
@@ -243,22 +273,28 @@ const MyahInboxPageContent = ({
       : null;
   const outreachCards = getMyahInboxOutreachCards(email);
   const targetScope = `${workspaceId}:${currentSelection.contactId}:${currentSelection.channel}`;
-  const inlineThreadId =
-    inlineTarget?.scope === targetScope ? inlineTarget.threadId : null;
-  const inlineThread = useMyahInboxSelectedEmailThread(
-    workspaceId,
-    email.status === 'ready' &&
-      inlineThreadId &&
-      inlineThreadId !== currentSelection.emailThreadId
-      ? inlineThreadId
-      : null,
-    summaryAuthorizationKey,
-  );
-  const mainEntry = useAtomValue(
-    myahInboxDraftAutosaveFamilyState.atomFamily({
-      workspaceId: workspaceId ?? '',
-      threadId: currentSelection.emailThreadId ?? '',
-    }),
+  useEffect(() => {
+    if (explicitReplyTargetRef.current?.scope !== targetScope) {
+      explicitReplyTargetRef.current = null;
+    }
+  }, [targetScope]);
+  const mainEntries = useAtomValue(
+    useMemo(
+      () =>
+        atom((get) =>
+          get(myahInboxDraftAutosaveKeysState)
+            .filter(
+              (key) =>
+                key.workspaceId === workspaceId &&
+                key.channel === 'EMAIL' &&
+                key.deliveryTargetId === currentSelection.emailThreadId,
+            )
+            .map((key) =>
+              get(myahInboxDraftAutosaveFamilyState.atomFamily(key)),
+            ),
+        ),
+      [workspaceId, currentSelection.emailThreadId],
+    ),
   );
   useEffect(() => {
     if (
@@ -278,21 +314,30 @@ const MyahInboxPageContent = ({
     );
     if (
       currentSelection.emailThreadId &&
+      explicitReplyTargetRef.current?.scope === targetScope &&
+      explicitReplyTargetRef.current.threadId === currentSelection.emailThreadId
+    )
+      return;
+    if (
+      currentSelection.emailThreadId &&
       (!selectedCard ||
         !latestCard ||
         latestCard.startTimestamp.localeCompare(selectedCard.startTimestamp) <
           0 ||
         (latestCard.startTimestamp === selectedCard.startTimestamp &&
           latestCard.threadId.localeCompare(selectedCard.threadId) <= 0) ||
-        !mainEntry ||
-        mainEntry.dirty ||
-        mainEntry.operation ||
-        mainEntry.status === 'saving' ||
-        mainEntry.status === 'error' ||
-        mainEntry.status === 'conflict' ||
-        mainEntry.localBody.markdown ||
-        mainEntry.localBody.blocknote ||
-        inlineThreadId === currentSelection.emailThreadId)
+        !mainEntries.length ||
+        mainEntries.some(
+          (mainEntry) =>
+            !mainEntry ||
+            mainEntry.dirty ||
+            Boolean(mainEntry.operation) ||
+            mainEntry.status === 'saving' ||
+            mainEntry.status === 'error' ||
+            mainEntry.status === 'conflict' ||
+            Boolean(mainEntry.localBody.markdown) ||
+            Boolean(mainEntry.localBody.blocknote),
+        ))
     )
       return;
     commitContactSelection({
@@ -302,9 +347,9 @@ const MyahInboxPageContent = ({
   }, [
     latestThreadId,
     currentSelection,
-    mainEntry,
-    inlineThreadId,
+    mainEntries,
     outreachCards,
+    targetScope,
     commitContactSelection,
   ]);
   const selectedThread = useMyahInboxSelectedEmailThread(
@@ -388,7 +433,47 @@ const MyahInboxPageContent = ({
   }, [commitContactSelection, store]);
 
   useEffect(() => {
-    if (contacts.loading || contacts.error || !workspaceId) {
+    const preserved = preservedReturnSelectionRef.current;
+    if (
+      !restoringPreservedSelection ||
+      contacts.loading ||
+      contacts.error ||
+      !workspaceId ||
+      !preserved?.contactId
+    )
+      return;
+
+    let active = true;
+    void refreshContacts(preserved.contactId).then((result) => {
+      if (!active) return;
+      if (result.status === 'success' && result.selectedContact) {
+        setRetainedContact(result.selectedContact);
+      } else {
+        commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
+      }
+      setRestoringPreservedSelection(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    commitContactSelection,
+    contacts.error,
+    contacts.loading,
+    refreshContacts,
+    restoringPreservedSelection,
+    workspaceId,
+  ]);
+
+  useEffect(() => {
+    if (
+      pendingDestination ||
+      restoringPreservedSelection ||
+      contacts.loading ||
+      contacts.error ||
+      !workspaceId
+    ) {
       return;
     }
 
@@ -428,10 +513,12 @@ const MyahInboxPageContent = ({
       }
     }
   }, [
+    pendingDestination,
     contacts.contacts,
     contacts.error,
     contacts.loading,
     currentSelection,
+    restoringPreservedSelection,
     invalidateWorkspace,
     selectedContact,
     commitContactSelection,
@@ -453,12 +540,7 @@ const MyahInboxPageContent = ({
       workspaceId,
       // Contact membership includes dormant recovery drafts, not just live targets.
       currentSelection.channel === 'EMAIL' && currentSelection.emailThreadId
-        ? [
-            ...new Set([
-              currentSelection.emailThreadId,
-              ...(inlineThreadId ? [inlineThreadId] : []),
-            ]),
-          ]
+        ? [currentSelection.emailThreadId]
         : [],
     );
     if (
@@ -476,10 +558,89 @@ const MyahInboxPageContent = ({
     return saved;
   };
 
+  useEffect(() => {
+    if (
+      !pendingDestination ||
+      !workspaceId ||
+      contacts.loading ||
+      contacts.error
+    )
+      return;
+    const matches = contacts.contacts.filter(
+      (contact) =>
+        contact.creator?.id === pendingDestination.creatorRecordId &&
+        contact.instagram.state === 'READY' &&
+        contact.instagram.conversations.length === 1 &&
+        contact.instagram.conversations[0].id ===
+          pendingDestination.conversationRecordId,
+    );
+    if (matches.length !== 1) return;
+    const contact = matches[0];
+    const generation = selectionGenerationRef.current;
+    let active = true;
+    void flushWorkspaceForNavigation(
+      workspaceId,
+      currentSelection.channel === 'EMAIL' && currentSelection.emailThreadId
+        ? [currentSelection.emailThreadId]
+        : [],
+    ).then((saved) => {
+      if (
+        !active ||
+        !saved ||
+        workspaceRef.current !== workspaceId ||
+        selectionGenerationRef.current !== generation ||
+        store.get(myahInboxPendingInstagramSelectionState.atom) !==
+          pendingDestination
+      )
+        return;
+      const nextSelection = getMyahInboxSelectionForChannel({
+        workspaceId,
+        contact,
+        channel: 'INSTAGRAM',
+        previousSelection: null,
+      });
+      if (
+        nextSelection.instagramConversationId !==
+        pendingDestination.conversationRecordId
+      )
+        return;
+      setMyahInboxPendingInstagramSelection(null);
+      setRetainedContact(contact);
+      commitContactSelection(nextSelection);
+      if (isMobile) setMobilePanel('conversation');
+    });
+    return () => {
+      active = false;
+    };
+  }, [
+    pendingDestination,
+    workspaceId,
+    contacts.contacts,
+    contacts.loading,
+    contacts.error,
+    flushWorkspaceForNavigation,
+    store,
+    setMyahInboxPendingInstagramSelection,
+    commitContactSelection,
+    isMobile,
+    currentSelection.channel,
+    currentSelection.emailThreadId,
+  ]);
+
+  const cancelPendingDestination = () => {
+    // Even choosing the current target is newer intent than an in-flight composer send.
+    // Preserve every selection value; only the existing navigation identity guard changes.
+    setMyahInboxContactSelection({ ...myahInboxContactSelection });
+    selectionGenerationRef.current += 1;
+    if (workspaceId) initializedWorkspaceIdsRef.current.add(workspaceId);
+    setMyahInboxPendingInstagramSelection(null);
+  };
+
   const handleSelectContact = async (
     contactId: string,
     options?: { openConversation?: boolean },
   ) => {
+    cancelPendingDestination();
     if (!workspaceId) {
       return;
     }
@@ -513,6 +674,7 @@ const MyahInboxPageContent = ({
   };
 
   const handleSelectChannel = async (channel: MyahInboxChannel) => {
+    cancelPendingDestination();
     if (!workspaceId || !selectedContact) {
       return;
     }
@@ -530,6 +692,7 @@ const MyahInboxPageContent = ({
   };
 
   const handleReplyToCard = async (threadId: string) => {
+    cancelPendingDestination();
     if (
       !workspaceId ||
       !selectedContact ||
@@ -538,43 +701,25 @@ const MyahInboxPageContent = ({
       )
     )
       return;
-    if (!(await flushAffectedDrafts())) return;
-    setInlineTarget({ scope: targetScope, threadId });
+    if (
+      threadId !== currentSelection.emailThreadId &&
+      !(await flushAffectedDrafts())
+    )
+      return;
+    explicitReplyTargetRef.current = { scope: targetScope, threadId };
+    if (threadId !== currentSelection.emailThreadId)
+      commitContactSelection({
+        ...currentSelection,
+        emailThreadId: threadId,
+      });
     const generation = selectionGenerationRef.current;
     requestAnimationFrame(() => {
       if (selectionGenerationRef.current !== generation) return;
-      document
-        .querySelector<HTMLElement>('[aria-label="Inline reply"]')
-        ?.focus();
-    });
-  };
-  const handleCloseInline = async () => {
-    if (!(await flushAffectedDrafts())) return;
-    setInlineTarget(null);
-    const generation = selectionGenerationRef.current;
-    requestAnimationFrame(() => {
-      if (selectionGenerationRef.current !== generation) return;
-      if (inlineThreadId === currentSelection.emailThreadId) {
-        document
-          .querySelector<HTMLElement>('[aria-label="Main reply"]')
-          ?.focus();
-        return;
-      }
-      const invoker = [
-        ...document.querySelectorAll<HTMLElement>('[data-reply-thread-id]'),
-      ]
-        .find((node) => node.dataset.replyThreadId === inlineThreadId)
-        ?.querySelector('button');
-      invoker?.focus();
+      document.querySelector<HTMLElement>('[aria-label="Main reply"]')?.focus();
     });
   };
   const handleSwitchToLatest = async () => {
-    if (!latestThreadId || !(await flushAffectedDrafts())) return;
-    setInlineTarget(null);
-    commitContactSelection({
-      ...currentSelection,
-      emailThreadId: latestThreadId,
-    });
+    if (latestThreadId) await handleReplyToCard(latestThreadId);
   };
 
   const handleRefresh = async (
@@ -633,6 +778,7 @@ const MyahInboxPageContent = ({
   };
 
   const handleFiltersChange = async (nextFilters: MyahInboxFilters) => {
+    cancelPendingDestination();
     if (!(await flushAffectedDrafts())) return;
     const campaignChanged =
       nextFilters.campaignId !== myahInboxFilters.campaignId;
@@ -730,14 +876,7 @@ const MyahInboxPageContent = ({
             return email.rebase();
           },
         }}
-        inlineThreadId={inlineThreadId}
-        inlineThread={
-          inlineThreadId === currentSelection.emailThreadId
-            ? selectedThread
-            : inlineThread
-        }
         latestThreadId={latestThreadId}
-        onCloseInline={handleCloseInline}
         onSwitchToLatest={handleSwitchToLatest}
         selectedThread={selectedThread}
         onSelectChannel={handleSelectChannel}
@@ -771,6 +910,18 @@ const MyahInboxPageContent = ({
         workspaceId={workspaceId}
         thread={selectedThread.thread}
       />
+      {pendingDestination ? (
+        <StyledSelectionStatus role="status" aria-live="polite">
+          Message sent. Waiting for its exact Instagram conversation. Refresh or
+          load more contacts, or adjust Inbox filters if it is not visible.
+          <Button
+            title="Refresh Inbox"
+            variant="secondary"
+            size="small"
+            onClick={() => void contacts.refresh(null, { force: true })}
+          />
+        </StyledSelectionStatus>
+      ) : null}
       {status?.workspaceId === workspaceId ? (
         <StyledSelectionStatus role="status" aria-live="polite">
           {status.message}

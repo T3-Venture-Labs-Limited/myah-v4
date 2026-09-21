@@ -1,9 +1,16 @@
+import { createV3RecoveryFixture } from './instagram-message-v3-recovery.fixture';
+import { InstagramMessageSendService } from '../instagram-message-send.service';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { InstagramMessageAuthorityReaderService } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.service';
 import { InstagramMessageReconciliationService } from 'src/engine/core-modules/instagram-message/services/instagram-message-reconciliation.service';
 import { ActionExecutionReceiptState } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
-import { buildInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 
 type SendService = {
+  executeApprovedWithDraftLockHeld: (
+    input: Record<string, unknown>,
+    binding: Record<string, unknown>,
+  ) => Promise<Record<string, unknown>>;
   executeApproved: (
     input: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>;
@@ -34,7 +41,7 @@ const loadService = (): SendServiceConstructor | undefined => {
   }
 };
 
-const authority = buildInstagramMessageActionAuthority({
+const authority = buildLegacyInstagramMessageActionAuthority({
   workspaceId,
   initiatorUserWorkspaceId: userWorkspaceId,
   threadId: null,
@@ -113,7 +120,7 @@ const buildHarness = (
     startChat: jest.fn(),
   };
   const projector = {
-    projectReceiptWithWriter: jest.fn().mockResolvedValue(undefined),
+    projectReceiptWithWriter: jest.fn().mockResolvedValue({ projected: true }),
   };
   const messageProjectionWriter = { project: jest.fn() };
   const permissionService = {
@@ -165,9 +172,198 @@ const executeInput = {
 };
 
 describe('InstagramMessageSendService', () => {
-  it('turns the direct Send click into one already-approved draft-bound v2 authority before execution', async () => {
+  it('fails closed when v3 START authority reconstruction is unavailable; receipt recovery remains first', async () => {
     const harness = buildHarness();
+    const forbiddenWork = [
+      ...Object.values(harness.authorityService),
+      harness.actionApprovalService.reserveExecutionForBinding,
+      ...Object.values(harness.budgetService),
+      ...Object.values(harness.client),
+    ];
+    for (const spy of forbiddenWork) {
+      spy.mockImplementation(() => {
+        throw new Error('forbidden work before v3 guard');
+      });
+    }
+    const v3StartBinding = {
+      ...authority.expectedActionBinding,
+      actionVersion: 3,
+      actionKind: 'START_CHAT',
+      interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+      interactionContextId: draftId,
+      composerInputDigest: 'e'.repeat(64),
+      instagramMessageSnapshot: {
+        publicIdentifier: 'creator.name',
+        providerId: 'recipient-profile-id',
+        providerMessagingId: 'recipient-messaging-id',
+        creatorRecordId: '00000000-0000-4000-8000-000000000007',
+        accountBindingId: '00000000-0000-4000-8000-000000000008',
+        instagramAccountRecordId: '00000000-0000-4000-8000-000000000009',
+        unipileAccountId: 'provider-account',
+        instagramUserId: 'brand-provider-user',
+        recipientSourceValues: [
+          { field: 'instagramUsername', value: '@Creator.Name' },
+        ],
+        actionKind: 'START_CHAT',
+        conversationRecordId: null,
+        providerChatId: null,
+        attendeeProviderId: null,
+      },
+    };
 
+    await expect(
+      harness.service.executeApprovedWithDraftLockHeld(
+        {
+          ...executeInput,
+          interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+        },
+        v3StartBinding,
+      ),
+    ).rejects.toThrow('forbidden work before v3 guard');
+    expect(
+      harness.authorityService.rebuildExecutionAuthority,
+    ).toHaveBeenCalledTimes(1);
+    harness.authorityService.rebuildExecutionAuthority.mockClear();
+    for (const spy of forbiddenWork) expect(spy).not.toHaveBeenCalled();
+    // Terminal receipt recovery retains existing target-release bookkeeping;
+    // it must still never rebuild authority, reserve, or contact the provider.
+    harness.budgetService.releaseStartTargetForReceipt.mockResolvedValue(
+      undefined,
+    );
+    harness.actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue(
+      {
+        id: receiptId,
+        state: ActionExecutionReceiptState.SENT,
+      } as never,
+    );
+    await expect(
+      harness.service.executeApprovedWithDraftLockHeld(
+        {
+          ...executeInput,
+          interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+        },
+        v3StartBinding,
+      ),
+    ).resolves.toEqual({ status: 'SENT', receiptId });
+    expect(
+      harness.budgetService.releaseStartTargetForReceipt,
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      actionExecutionReceiptId: receiptId,
+      reason: 'PROJECTED',
+    });
+    for (const spy of forbiddenWork) {
+      if (spy !== harness.budgetService.releaseStartTargetForReceipt) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    }
+
+    expect(
+      harness.actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expect(harness.budgetService.reserve).not.toHaveBeenCalled();
+    expect(harness.client.startChat).not.toHaveBeenCalled();
+    expect(harness.client.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when v3 REPLY authority reconstruction is unavailable; receipt recovery remains first', async () => {
+    const harness = buildHarness();
+    const forbiddenWork = [
+      ...Object.values(harness.authorityService),
+      harness.actionApprovalService.reserveExecutionForBinding,
+      ...Object.values(harness.budgetService),
+      ...Object.values(harness.client),
+    ];
+    for (const spy of forbiddenWork) {
+      spy.mockImplementation(() => {
+        throw new Error('forbidden work before v3 guard');
+      });
+    }
+    const v3ReplyBinding = {
+      ...authority.expectedActionBinding,
+      actionVersion: 3 as const,
+      actionKind: 'REPLY' as const,
+      interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT' as const,
+      interactionContextId: draftId,
+      composerInputDigest: 'e'.repeat(64),
+      instagramMessageSnapshot: {
+        publicIdentifier: 'creator.name',
+        providerId: 'recipient-profile-id',
+        providerMessagingId: 'recipient-messaging-id',
+        creatorRecordId: '00000000-0000-4000-8000-000000000007',
+        accountBindingId: '00000000-0000-4000-8000-000000000008',
+        instagramAccountRecordId: '00000000-0000-4000-8000-000000000009',
+        unipileAccountId: 'provider-account',
+        instagramUserId: 'brand-provider-user',
+        recipientSourceValues: [
+          { field: 'instagramUsername', value: '@Creator.Name' },
+        ],
+        actionKind: 'REPLY' as const,
+        conversationRecordId: '00000000-0000-4000-8000-000000000010',
+        providerChatId: 'provider-chat',
+        attendeeProviderId: 'recipient-messaging-id',
+      },
+    };
+
+    await expect(
+      harness.service.executeApprovedWithDraftLockHeld(
+        {
+          ...executeInput,
+          interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+        },
+        v3ReplyBinding,
+      ),
+    ).rejects.toThrow('forbidden work before v3 guard');
+    expect(
+      harness.authorityService.rebuildExecutionAuthority,
+    ).toHaveBeenCalledTimes(1);
+    harness.authorityService.rebuildExecutionAuthority.mockClear();
+    for (const spy of forbiddenWork) expect(spy).not.toHaveBeenCalled();
+    // Terminal receipt recovery retains existing target-release bookkeeping;
+    // it must still never rebuild authority, reserve, or contact the provider.
+    harness.budgetService.releaseStartTargetForReceipt.mockResolvedValue(
+      undefined,
+    );
+    harness.actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue(
+      {
+        id: receiptId,
+        state: ActionExecutionReceiptState.SENT,
+      } as never,
+    );
+    await expect(
+      harness.service.executeApprovedWithDraftLockHeld(
+        {
+          ...executeInput,
+          interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+        },
+        v3ReplyBinding,
+      ),
+    ).resolves.toEqual({ status: 'SENT', receiptId });
+    expect(
+      harness.budgetService.releaseStartTargetForReceipt,
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      actionExecutionReceiptId: receiptId,
+      reason: 'PROJECTED',
+    });
+    for (const spy of forbiddenWork) {
+      if (spy !== harness.budgetService.releaseStartTargetForReceipt) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    }
+
+    expect(
+      harness.authorityService.rebuildExecutionAuthority,
+    ).not.toHaveBeenCalled();
+    expect(
+      harness.actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expect(harness.budgetService.reserve).not.toHaveBeenCalled();
+    expect(harness.client.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not execute a stale v2 direct producer through the fresh v3 context', async () => {
+    const harness = buildHarness();
     await expect(
       harness.service.sendDirect({
         workspaceId,
@@ -176,25 +372,8 @@ describe('InstagramMessageSendService', () => {
         expectedRevision: 2,
         rolePermissionConfig: executeInput.rolePermissionConfig,
       }),
-    ).resolves.toEqual({ status: 'SENT', receiptId });
-    expect(harness.authorityService.createDirectAuthority).toHaveBeenCalledWith(
-      {
-        workspaceId,
-        initiatorUserWorkspaceId: userWorkspaceId,
-        draftId,
-        expectedRevision: 2,
-      },
-    );
-    expect(
-      harness.actionApprovalService.createApprovedInstagramMessageBinding,
-    ).toHaveBeenCalledWith(authority.expectedActionBinding);
-    expect(harness.client.sendMessage).toHaveBeenCalledTimes(1);
-    expect(
-      harness.permissionService.assertCanSend.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      harness.authorityService.createDirectAuthority.mock
-        .invocationCallOrder[0],
-    );
+    ).rejects.toThrow('Instagram approval context changed');
+    expect(harness.client.sendMessage).not.toHaveBeenCalled();
   });
 
   it('reserves receipt and budget, marks attempted immediately before one REPLY, records accepted before receipt projection', async () => {
@@ -244,6 +423,66 @@ describe('InstagramMessageSendService', () => {
       receiptId,
       harness.messageProjectionWriter,
     );
+  });
+
+  it('fails before any provider call when the draft body exceeds 1000 UTF-8 bytes', async () => {
+    const harness = buildHarness();
+    const oversizedAuthority = buildLegacyInstagramMessageActionAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      threadId: null,
+      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+      interactionContextId: draftId,
+      draft: { ...authority.canonicalGraph.draft, body: 'a'.repeat(1001) },
+      account: authority.canonicalGraph.account,
+      evidenceLinks: [],
+    });
+
+    harness.authorityService.rebuildExecutionAuthority.mockResolvedValue(
+      oversizedAuthority,
+    );
+
+    await expect(
+      harness.service.executeApproved(executeInput),
+    ).resolves.toEqual({ status: 'FAILED', receiptId });
+    expect(harness.client.sendMessage).not.toHaveBeenCalled();
+    expect(harness.client.startChat).not.toHaveBeenCalled();
+    expect(harness.budgetService.markProviderAttempted).not.toHaveBeenCalled();
+    expect(harness.budgetService.releasePreDispatch).toHaveBeenCalledWith({
+      workspaceId,
+      reservationId,
+      reason: 'PROVIDER_DISPATCH_NOT_STARTED',
+    });
+    expect(
+      harness.actionApprovalService.recordProviderTerminalState,
+    ).toHaveBeenCalledWith({
+      receiptId,
+      state: ActionExecutionReceiptState.FAILED,
+      code: 'failed',
+    });
+  });
+
+  it('accepts a draft body of exactly 1000 UTF-8 bytes and still dispatches', async () => {
+    const harness = buildHarness();
+    const atLimitAuthority = buildLegacyInstagramMessageActionAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      threadId: null,
+      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+      interactionContextId: draftId,
+      draft: { ...authority.canonicalGraph.draft, body: 'a'.repeat(1000) },
+      account: authority.canonicalGraph.account,
+      evidenceLinks: [],
+    });
+
+    harness.authorityService.rebuildExecutionAuthority.mockResolvedValue(
+      atLimitAuthority,
+    );
+
+    await expect(
+      harness.service.executeApproved(executeInput),
+    ).resolves.toEqual({ status: 'SENT', receiptId });
+    expect(harness.client.sendMessage).toHaveBeenCalledTimes(1);
   });
 
   it('rechecks exact draft and target record access immediately before execution', async () => {
@@ -508,11 +747,46 @@ const buildCurrentSourceHarness = async (
     } as never,
     readClient as never,
   );
-  const original = await reader.createDirectAuthority({
+  const original = buildLegacyInstagramMessageActionAuthority({
     workspaceId,
     initiatorUserWorkspaceId: userWorkspaceId,
-    draftId,
-    expectedRevision: 2,
+    threadId: null,
+    interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+    interactionContextId: draftId,
+    draft: {
+      ...authority.canonicalGraph.draft,
+      kind,
+      conversationRecordId: draft.conversationId,
+      providerConversationId: draft.providerConversationId,
+      recipientProviderId: draft.recipientProviderId,
+    },
+    account,
+    evidenceLinks: [
+      {
+        objectMetadataId: 'account-metadata',
+        recordId: account.workspaceInstagramAccountRecordId,
+        role: 'INSTAGRAM_ACCOUNT',
+      },
+      {
+        objectMetadataId: 'draft-metadata',
+        recordId: draftId,
+        role: 'INSTAGRAM_MESSAGE_DRAFT',
+      },
+      ...(draft.conversationId
+        ? [
+            {
+              objectMetadataId: 'conversation-metadata',
+              recordId: draft.conversationId,
+              role: 'SOCIAL_CONVERSATION',
+            },
+          ]
+        : []),
+      {
+        objectMetadataId: 'creator-metadata',
+        recordId: draft.creatorId!,
+        role: 'CREATOR',
+      },
+    ],
   });
   const harness = buildHarness(reader);
   harness.actionApprovalService.getApprovedBinding.mockResolvedValue(
@@ -778,7 +1052,7 @@ describe('InstagramMessageSendService final readiness safety boundaries', () => 
 });
 
 const startAuthority = (identity: string) =>
-  buildInstagramMessageActionAuthority({
+  buildLegacyInstagramMessageActionAuthority({
     ...authority.expectedActionBinding,
     ...authority.canonicalGraph,
     evidenceLinks: [...authority.expectedActionBinding.evidenceLinks],
@@ -793,7 +1067,10 @@ const startAuthority = (identity: string) =>
     },
   });
 
-const expectNoFreshStartWork = (harness: ReturnType<typeof buildHarness>) => {
+const expectNoFreshStartWork = (
+  harness: ReturnType<typeof buildHarness>,
+  projectionAttempted = false,
+) => {
   expect(harness.authorityService.createDirectAuthority).not.toHaveBeenCalled();
   expect(
     harness.authorityService.rebuildExecutionAuthority,
@@ -819,8 +1096,72 @@ const expectNoFreshStartWork = (harness: ReturnType<typeof buildHarness>) => {
   expect(harness.budgetService.releaseStartTarget).not.toHaveBeenCalled();
   expect(harness.client.startChat).not.toHaveBeenCalled();
   expect(harness.client.sendMessage).not.toHaveBeenCalled();
-  expect(harness.projector.projectReceiptWithWriter).not.toHaveBeenCalled();
+  if (!projectionAttempted)
+    expect(harness.projector.projectReceiptWithWriter).not.toHaveBeenCalled();
 };
+
+describe.each(['START_CHAT', 'REPLY'] as const)(
+  'InstagramMessageSendService v3 %s receipt replay',
+  (actionKind) => {
+    it.each([
+      'PROCESSING',
+      'PROVIDER_ACCEPTED',
+      'UNKNOWN',
+      'SENT',
+      'BLOCKED',
+    ] as const)(
+      'preserves stored %s across repeated public execution',
+      async (state) => {
+        const h = buildHarness();
+        h.actionApprovalService.getApprovedBinding.mockResolvedValue({
+          ...authority.expectedActionBinding,
+          actionVersion: 3,
+          actionKind,
+        });
+        if (state === 'PROVIDER_ACCEPTED')
+          h.projector.projectReceiptWithWriter.mockRejectedValue(
+            new Error('projection unavailable'),
+          );
+        const stored = { id: receiptId, state };
+        h.actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue(
+          stored,
+        );
+        for (let repeat = 0; repeat < 3; repeat++) {
+          const result = h.service.executeApproved(executeInput);
+          if (state === 'PROCESSING')
+            await expect(result).rejects.toThrow(
+              'Instagram message execution is pending',
+            );
+          else
+            await expect(result).resolves.toEqual({ status: state, receiptId });
+          expect(stored).toEqual({ id: receiptId, state });
+          expectNoFreshStartWork(h, state === 'PROVIDER_ACCEPTED');
+          if (state === 'PROVIDER_ACCEPTED')
+            expect(h.projector.projectReceiptWithWriter).toHaveBeenCalledTimes(
+              repeat + 1,
+            );
+          expect(
+            h.authorityService.assertReadyAfterReservation,
+          ).not.toHaveBeenCalled();
+          expect(h.client.getChat).not.toHaveBeenCalled();
+          expect(h.client.listChats).not.toHaveBeenCalled();
+          if (state === 'SENT')
+            expect(
+              h.budgetService.releaseStartTargetForReceipt,
+            ).toHaveBeenCalledWith({
+              workspaceId,
+              actionExecutionReceiptId: receiptId,
+              reason: 'PROJECTED',
+            });
+          else
+            expect(
+              h.budgetService.releaseStartTargetForReceipt,
+            ).not.toHaveBeenCalled();
+        }
+      },
+    );
+  },
+);
 
 describe.each(['creator.name', '17841400000000000', 'creator-provider-id'])(
   'InstagramMessageSendService first-contact safety for %s',
@@ -963,6 +1304,25 @@ describe.each(['creator.name', '17841400000000000', 'creator-provider-id'])(
 );
 
 describe('InstagramMessageSendService preserved entrypoint validation and REPLY recovery', () => {
+  it('preserves historical v2 REPLY PROCESSING finalization', async () => {
+    const h = buildHarness();
+    const stored = { id: receiptId, state: 'PROCESSING' };
+    h.actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue(
+      stored,
+    );
+    await expect(h.service.executeApproved(executeInput)).resolves.toEqual({
+      status: 'FAILED',
+      receiptId,
+    });
+    expect(stored.state).toBe('PROCESSING');
+    expectNoFreshStartWork(h);
+    expect(h.budgetService.releaseStartTargetForReceipt).toHaveBeenCalledWith({
+      workspaceId,
+      actionExecutionReceiptId: receiptId,
+      reason: 'RESOLVED',
+    });
+  });
+
   it('retains kind/revision rejection before permission checks', async () => {
     const harness = buildHarness();
     harness.authorityService.getDraftActionKind.mockRejectedValue(
@@ -1046,4 +1406,74 @@ describe('InstagramMessageSendService preserved entrypoint validation and REPLY 
     expect(harness.budgetService.reserve).not.toHaveBeenCalled();
     expectNoDispatch(harness);
   });
+});
+
+describe('InstagramMessageSendService durable v3 acceptance replay', () => {
+  it.each(['START_CHAT', 'REPLY'] as const)(
+    'recovers %s through real binding reads, client, writer and projector without dispatch or fresh authority',
+    async (kind) => {
+      const h = createV3RecoveryFixture(kind);
+      const approval = new ActionApprovalService(
+        {
+          getRepository: () => h.receiptRepository,
+          transaction: async (callback: (manager: unknown) => unknown) =>
+            callback({
+              findOne: async () => ({ ...h.binding, state: 'CONSUMED' }),
+              find: async () => [],
+            }),
+        } as never,
+        h.projector,
+      );
+      const permission = { assertCanSend: jest.fn() };
+      const budget = { releaseStartTargetForReceipt: jest.fn() };
+      const fresh = jest.spyOn(h.reader, 'rebuildExecutionAuthority');
+      const send = new InstagramMessageSendService(
+        approval,
+        h.reader,
+        {
+          withLock: async (_input: unknown, callback: () => unknown) =>
+            callback(),
+        } as never,
+        budget as never,
+        h.client,
+        h.projector,
+        h.writer,
+        permission as never,
+        h.access,
+      );
+      // Simulate the workspace projection commit followed by loss before receipt SENT.
+      await expect(
+        h.projector.projectReceipt(h.receipt.id, {
+          afterWorkspaceProjection: async () => {
+            throw new Error('postcommit response lost');
+          },
+        }),
+      ).rejects.toThrow('postcommit response lost');
+      expect(h.receipt.state).toBe('PROVIDER_ACCEPTED');
+      const input = {
+        workspaceId: h.workspaceId,
+        initiatorUserWorkspaceId: h.binding.initiatorUserWorkspaceId,
+        approvalBindingId: h.binding.id,
+        threadId: null,
+        interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT' as const,
+        interactionContextId: h.binding.draftId,
+        rolePermissionConfig: { unionOf: ['recovery-role'] },
+      };
+      for (let replay = 0; replay < 3; replay += 1) {
+        await expect(send.executeApproved(input)).resolves.toEqual({
+          status: 'SENT',
+          receiptId: h.receipt.id,
+        });
+      }
+      expect(h.rows.myahSocialConversation).toHaveLength(1);
+      expect(h.rows.myahSocialMessage).toHaveLength(1);
+      expect(fresh).not.toHaveBeenCalled();
+      expect(
+        h.fetch.mock.calls.every(
+          ([url, init]) => init.method === 'GET' && !url.includes('/users'),
+        ),
+      ).toBe(true);
+      expect(budget.releaseStartTargetForReceipt).toHaveBeenCalled();
+    },
+  );
 });
