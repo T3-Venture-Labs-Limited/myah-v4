@@ -66,8 +66,24 @@ screenshots/
 /.letta/
 
 # Local-only agent, worktree, planning, and documentation artifacts
-/.agents/
-/.pi/
+# Share only the reviewed documentation-routing skill; keep other agent state private.
+!/.agents/
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/researching-myah-stack/
+/.agents/skills/researching-myah-stack/*
+!/.agents/skills/researching-myah-stack/SKILL.md
+!/.agents/skills/researching-myah-stack/LICENSE
+!/.agents/skills/researching-myah-stack/references/
+/.agents/skills/researching-myah-stack/references/*
+!/.agents/skills/researching-myah-stack/references/library-routes.md
+# Pi discovery adapter only; personal settings, roles, prompts and other skills stay ignored.
+!/.pi/
+/.pi/*
+!/.pi/skills/
+/.pi/skills/*
+!/.pi/skills/researching-myah-stack
 /.worktrees/
 /.omp/
 /.docs/
