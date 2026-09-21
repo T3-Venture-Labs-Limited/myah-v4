@@ -395,6 +395,162 @@ describe('CampaignProgressionService', () => {
     },
   );
 
+  it.each([
+    [
+      'Date inputs',
+      new Date('2026-09-20T12:46:18.999Z'),
+      new Date('2026-09-20T12:48:18.999Z'),
+      'PROGRESSED',
+    ],
+    [
+      'string inputs',
+      '2026-09-20T08:46:18.999-04:00',
+      '2026-09-20T12:48:18.999Z',
+      'PROGRESSED',
+    ],
+    [
+      'Date acceptance/string window',
+      new Date('2026-09-20T12:46:18.999Z'),
+      '2026-09-20T12:48:18.999Z',
+      'PROGRESSED',
+    ],
+    [
+      'string acceptance/Date window',
+      '2026-09-20T12:46:18.999Z',
+      new Date('2026-09-20T12:48:18.999Z'),
+      'PROGRESSED',
+    ],
+    ['invalid acceptance', 'invalid', null, 'TERMINAL_SUPPRESSED'],
+    ['invalid Date acceptance', new Date(NaN), null, 'TERMINAL_SUPPRESSED'],
+    ['null acceptance', null, null, 'TERMINAL_SUPPRESSED'],
+    ['missing acceptance', undefined, null, 'TERMINAL_SUPPRESSED'],
+    ['invalid window', '2026-09-20T12:46:18.999Z', 'invalid', 'unavailable'],
+    [
+      'invalid Date window',
+      '2026-09-20T12:46:18.999Z',
+      new Date(NaN),
+      'unavailable',
+    ],
+    ['null window', '2026-09-20T12:46:18.999Z', null, 'unavailable'],
+    ['missing window', '2026-09-20T12:46:18.999Z', undefined, 'unavailable'],
+    [
+      'Date replay',
+      '2026-09-20T12:46:18.999Z',
+      new Date('2026-09-20T12:48:18.999Z'),
+      'PROGRESSED',
+    ],
+    [
+      'string replay',
+      '2026-09-20T12:46:18.999Z',
+      '2026-09-20T12:48:18.999Z',
+      'PROGRESSED',
+    ],
+    [
+      'one millisecond replay collision',
+      '2026-09-20T12:46:18.999Z',
+      new Date('2026-09-20T12:48:18.999Z'),
+      'collision',
+    ],
+  ])(
+    'preserves exact scheduling and fail-closed boundaries: %s',
+    async (name, acceptedAt, windowAt, expected) => {
+      let inserted: unknown[] = [];
+      let candidate: Date | undefined;
+      const query = jest.fn(async (sql: string, parameters: unknown[] = []) => {
+        if (sql.includes('core.workspace')) return [{ id: ids.workspaceId }];
+        if (sql.includes('.campaign WHERE'))
+          return [{ lifecycleStatus: 'ACTIVE' }];
+        if (sql.includes('campaignSequenceAuthorization'))
+          return [{ state: 'ACTIVE' }];
+        if (sql.includes('campaignActivation'))
+          return [{ id: ids.activationId }];
+        if (sql.includes('AS "dueAt"')) {
+          candidate = parameters[3] as Date;
+          return windowAt === undefined ? [] : [{ dueAt: windowAt }];
+        }
+        if (sql.includes('SELECT id, "workflowVersionId"'))
+          return [
+            {
+              id: inserted[0],
+              workflowVersionId: inserted[4],
+              messageId: inserted[5],
+              dueAt:
+                expected === 'collision'
+                  ? new Date('2026-09-20T12:48:18.998Z')
+                  : windowAt,
+            },
+          ];
+        if (sql.includes('campaignEnrollment') && sql.includes('SELECT'))
+          return [
+            {
+              id: ids.enrollmentId,
+              state: 'ACTIVE',
+              authoredMessageCount: 2,
+              nextAuthoredMessageIndex: 0,
+              campaignCreatorId: ids.creatorId,
+              creatorId: ids.creatorId,
+            },
+          ];
+        if (sql.includes('campaignOccurrence') && sql.includes('SELECT'))
+          return [
+            {
+              id: ids.occurrenceId,
+              state: 'IN_FLIGHT',
+              authoredMessageIndex: 0,
+            },
+          ];
+        if (sql.includes('outboundEmailAttempt'))
+          return [
+            {
+              ...routing,
+              attemptState: 'ACCEPTED',
+              providerAcceptedAt: acceptedAt,
+              projectedMessageId: ids.creatorId,
+              projectedMessageThreadId: ids.creatorId,
+            },
+          ];
+        if (sql.includes('INSERT INTO core."campaignOccurrence"')) {
+          inserted = parameters;
+          return String(name).includes('replay') ? [] : [{ id: parameters[0] }];
+        }
+        if (sql.includes('UPDATE')) return [{ id: ids.occurrenceId }];
+        return [];
+      });
+      const service = new CampaignProgressionService(undefined, undefined, {
+        loadExecutionPlanInTransaction: async () => ({
+          kind: 'READY',
+          delaysSeconds: [120],
+          nodes: [
+            { messageId: ids.occurrenceId, channel: 'EMAIL' },
+            { messageId: ids.creatorId, channel: 'EMAIL' },
+          ],
+        }),
+      } as never);
+      const result = service.reconcileAcceptedInTransaction(
+        routing,
+        managerWith(query) as never,
+      );
+      if (expected === 'unavailable' || expected === 'collision') {
+        await expect(result).rejects.toThrow(
+          expected === 'unavailable'
+            ? 'Campaign next sending window was unavailable'
+            : 'Next Campaign occurrence identity collision',
+        );
+      } else {
+        await expect(result).resolves.toEqual({ status: expected });
+      }
+      if (expected === 'PROGRESSED') {
+        expect(candidate?.toISOString()).toBe('2026-09-20T12:48:18.999Z');
+        expect(inserted[7]).toEqual(new Date('2026-09-20T12:48:18.999Z'));
+      }
+      if (expected === 'TERMINAL_SUPPRESSED' || expected === 'unavailable') {
+        expect(
+          query.mock.calls.some(([sql]) => /^\s*(UPDATE|INSERT)\b/.test(sql)),
+        ).toBe(false);
+      }
+    },
+  );
+
   it('locks the full routing graph in canonical order before marking UNKNOWN', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('core.workspace')) return [{ id: ids.workspaceId }];

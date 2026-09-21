@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 
 jest.mock(
@@ -31,21 +32,21 @@ import { computeCampaignProjectedMessageId } from 'src/modules/campaign-executio
 setPgDateTypeParser();
 
 const id = {
-  workspace: 'c43e698f-7728-4e77-8871-4440fbaaa86e',
-  campaign: '2bb53476-7c63-449a-8005-fe7f6a901ff2',
-  execution: 'f437132b-2d88-4da9-861b-4c4e3aee9636',
-  authorization: 'de3f6527-7966-4379-8061-b201a34bdd63',
-  activation: '3e213e2b-985a-43f2-8e0b-615dec216686',
-  workflow: '7853d2f2-9987-4a68-b35c-3df8a0168b24',
-  version: '75e18372-3bcb-43d1-a8d9-14ad64b47e9a',
-  enrollment: 'a993cdf2-c775-4251-bc9e-c63d2af7cd8d',
-  occurrence: '709b54d0-2947-4fa8-966d-4436db41cddc',
-  campaignCreator: '5546b5d6-178a-456c-9f6b-355800295a67',
-  creator: '34046bfe-02aa-40b5-84e3-df46a95b5b21',
-  message: '67e6f072-7566-4196-b8ad-6f3c02645d9b',
-  nextMessage: 'a8257028-d164-41e5-b36e-f21e8c22b18b',
-  account: 'ecf079f6-25e0-4415-9eaa-ff4665247a53',
-  channel: '218b67db-d266-427a-8638-957d75bc7231',
+  workspace: randomUUID(),
+  campaign: randomUUID(),
+  execution: randomUUID(),
+  authorization: randomUUID(),
+  activation: randomUUID(),
+  workflow: randomUUID(),
+  version: randomUUID(),
+  enrollment: randomUUID(),
+  occurrence: randomUUID(),
+  campaignCreator: randomUUID(),
+  creator: randomUUID(),
+  message: randomUUID(),
+  nextMessage: randomUUID(),
+  account: randomUUID(),
+  channel: randomUUID(),
 } as const;
 const schema = getWorkspaceSchemaName(id.workspace);
 const fingerprint = 'a'.repeat(64);
@@ -604,7 +605,7 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
     expect(state.stage).toBe('CONTACTED');
     expect(state.next_count).toBe(1);
     expect(new Date(state.next_due).getTime()).toBe(
-      Math.floor(new Date(state.accepted_at).getTime() / 1000) * 1000 + 60_000,
+      new Date(state.accepted_at).getTime() + 60_000,
     );
   });
 
