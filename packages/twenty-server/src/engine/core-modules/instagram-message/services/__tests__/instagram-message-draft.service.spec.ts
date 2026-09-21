@@ -287,6 +287,53 @@ describe('InstagramMessageDraftService', () => {
     },
   );
 
+  it.each([999, 1000])(
+    'accepts a body of %i UTF-8 bytes',
+    async (byteLength) => {
+      const harness = buildHarness((sql) => {
+        if (sql.includes('FROM "workspace_') && sql.includes('"creator"')) {
+          return [{ instagramUsername: 'creator.name' }];
+        }
+        if (sql.includes('INSERT INTO')) {
+          return [{ id: draftId, revision: 1, body: 'a'.repeat(byteLength) }];
+        }
+
+        return [];
+      });
+
+      await expect(
+        harness.service.saveDraft({
+          ...firstMessageInput,
+          body: 'a'.repeat(byteLength),
+        }),
+      ).resolves.toMatchObject({ status: 'SAVED' });
+    },
+  );
+
+  it('rejects a body of 1001 UTF-8 bytes before any write', async () => {
+    const harness = buildHarness();
+
+    await expect(
+      harness.service.saveDraft({
+        ...firstMessageInput,
+        body: 'a'.repeat(1001),
+      }),
+    ).rejects.toThrow('Instagram message draft exceeds 1000 bytes');
+    expect(harness.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects a body whose UTF-8 byte length exceeds 1000 due to multi-byte emoji, even though .length is under 1000', async () => {
+    const harness = buildHarness();
+    // Each '\u{1F600}' (😀) is 4 UTF-8 bytes but 2 UTF-16 code units -> 251 emoji is 502 chars / 1004 bytes
+    const body = '\u{1F600}'.repeat(251);
+
+    expect(body.length).toBeLessThan(1000);
+    await expect(
+      harness.service.saveDraft({ ...firstMessageInput, body }),
+    ).rejects.toThrow('Instagram message draft exceeds 1000 bytes');
+    expect(harness.query).not.toHaveBeenCalled();
+  });
+
   it('returns the current body for a stale clear without overwriting it', async () => {
     const harness = buildHarness((sql) => {
       if (sql.includes('"creator"'))

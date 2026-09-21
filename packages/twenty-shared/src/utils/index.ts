@@ -159,6 +159,7 @@ export { formatToShortNumber } from './format/formatToShortNumber';
 export { fromArrayToUniqueKeyRecord } from './from-array-to-unique-key-record.util';
 export { fromArrayToValuesByKeyRecord } from './fromArrayToValuesByKeyRecord.util';
 export { getURLSafely } from './getURLSafely';
+export { getUtf8ByteLength } from './getUtf8ByteLength';
 export {
   getNodeTypename,
   getConnectionTypename,
