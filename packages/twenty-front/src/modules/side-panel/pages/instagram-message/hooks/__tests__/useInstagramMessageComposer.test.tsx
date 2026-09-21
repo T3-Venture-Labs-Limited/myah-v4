@@ -52,7 +52,11 @@ const sent = {
   creatorRecordId: 'creator',
   conversationRecordId: 'conversation',
 };
-const calls: Array<{ name: string; variables: Record<string, unknown> }> = [];
+const calls: Array<{
+  name: string;
+  variables: Record<string, unknown>;
+  operationType?: string;
+}> = [];
 let respond: (
   name: string,
   variables: Record<string, unknown>,
@@ -84,7 +88,9 @@ const setup = () => {
   };
 };
 const mutations = () =>
-  calls.filter(({ name }) => name === 'SendInstagramMessageComposer');
+  calls
+    .filter(({ name }) => name === 'SendInstagramMessageComposer')
+    .map(({ name, variables }) => ({ name, variables }));
 beforeEach(() => {
   calls.length = 0;
   mockPermission = true;
@@ -124,9 +130,16 @@ beforeEach(() => {
     link: new ApolloLink(
       (operation) =>
         new Observable((observer) => {
+          const definition = operation.query.definitions.find(
+            ({ kind }) => kind === 'OperationDefinition',
+          );
           calls.push({
             name: operation.operationName ?? '',
             variables: operation.variables,
+            operationType:
+              definition?.kind === 'OperationDefinition'
+                ? definition.operation
+                : undefined,
           });
           void respond(operation.operationName ?? '', operation.variables).then(
             (data) => {
@@ -140,6 +153,19 @@ beforeEach(() => {
   });
 });
 afterEach(() => mockClient.stop());
+
+it('prepares the composer through a mutation operation', async () => {
+  const view = setup();
+
+  await waitFor(() =>
+    expect(
+      calls.find(({ name }) => name === 'PrepareInstagramMessageComposer')
+        ?.operationType,
+    ).toBe('mutation'),
+  );
+
+  view.unmount();
+});
 
 it('freezes exact input synchronously for double click, retains it through remount, never sends on mount', async () => {
   const view = setup();

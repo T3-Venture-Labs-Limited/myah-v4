@@ -55,6 +55,15 @@ jest.mock(
 );
 
 describe('InstagramMessageResolver', () => {
+  it('registers composer preparation as a mutation', () => {
+    expect(
+      Reflect.getMetadata(
+        'graphql:resolver_type',
+        InstagramMessageResolver.prototype.prepareInstagramMessageComposer,
+      ),
+    ).toBe('Mutation');
+  });
+
   it('maps inaccessible composer account readiness to a generic query result', async () => {
     const permissionService = {
       canQueryComposerAccount: jest.fn().mockResolvedValue(true),
