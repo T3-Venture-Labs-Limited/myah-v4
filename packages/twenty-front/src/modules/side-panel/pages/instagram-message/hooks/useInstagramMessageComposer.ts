@@ -158,13 +158,11 @@ export const useInstagramMessageComposer = () => {
     const recipient = instagramMessageComposer.recipient;
     const timer = setTimeout(() => {
       void client
-        .query<{
+        .mutate<{
           prepareInstagramMessageComposer: InstagramMessageComposerPreparedDto;
         }>({
-          query: PREPARE_INSTAGRAM_MESSAGE_COMPOSER,
+          mutation: PREPARE_INSTAGRAM_MESSAGE_COMPOSER,
           variables: { input: recipient },
-          fetchPolicy: 'network-only',
-          context: { queryDeduplication: false },
         })
         .then(({ data }) => {
           if (

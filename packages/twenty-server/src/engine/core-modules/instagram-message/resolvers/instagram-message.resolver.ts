@@ -97,7 +97,7 @@ export class InstagramMessageResolver {
     );
   }
 
-  @Query(() => InstagramMessageComposerPreparedDto)
+  @Mutation(() => InstagramMessageComposerPreparedDto)
   async prepareInstagramMessageComposer(
     @Args('input') input: PrepareInstagramMessageComposerInputDto,
     @AuthWorkspace() workspace: WorkspaceEntity,
