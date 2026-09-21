@@ -14,7 +14,7 @@ export const INSTAGRAM_MESSAGE_COMPOSER_ACCOUNT = gql`
 `;
 
 export const PREPARE_INSTAGRAM_MESSAGE_COMPOSER = gql`
-  query PrepareInstagramMessageComposer(
+  mutation PrepareInstagramMessageComposer(
     $input: PrepareInstagramMessageComposerInputDto!
   ) {
     prepareInstagramMessageComposer(input: $input) {

@@ -425,6 +425,66 @@ describe('InstagramMessageSendService', () => {
     );
   });
 
+  it('fails before any provider call when the draft body exceeds 1000 UTF-8 bytes', async () => {
+    const harness = buildHarness();
+    const oversizedAuthority = buildLegacyInstagramMessageActionAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      threadId: null,
+      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+      interactionContextId: draftId,
+      draft: { ...authority.canonicalGraph.draft, body: 'a'.repeat(1001) },
+      account: authority.canonicalGraph.account,
+      evidenceLinks: [],
+    });
+
+    harness.authorityService.rebuildExecutionAuthority.mockResolvedValue(
+      oversizedAuthority,
+    );
+
+    await expect(
+      harness.service.executeApproved(executeInput),
+    ).resolves.toEqual({ status: 'FAILED', receiptId });
+    expect(harness.client.sendMessage).not.toHaveBeenCalled();
+    expect(harness.client.startChat).not.toHaveBeenCalled();
+    expect(harness.budgetService.markProviderAttempted).not.toHaveBeenCalled();
+    expect(harness.budgetService.releasePreDispatch).toHaveBeenCalledWith({
+      workspaceId,
+      reservationId,
+      reason: 'PROVIDER_DISPATCH_NOT_STARTED',
+    });
+    expect(
+      harness.actionApprovalService.recordProviderTerminalState,
+    ).toHaveBeenCalledWith({
+      receiptId,
+      state: ActionExecutionReceiptState.FAILED,
+      code: 'failed',
+    });
+  });
+
+  it('accepts a draft body of exactly 1000 UTF-8 bytes and still dispatches', async () => {
+    const harness = buildHarness();
+    const atLimitAuthority = buildLegacyInstagramMessageActionAuthority({
+      workspaceId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      threadId: null,
+      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+      interactionContextId: draftId,
+      draft: { ...authority.canonicalGraph.draft, body: 'a'.repeat(1000) },
+      account: authority.canonicalGraph.account,
+      evidenceLinks: [],
+    });
+
+    harness.authorityService.rebuildExecutionAuthority.mockResolvedValue(
+      atLimitAuthority,
+    );
+
+    await expect(
+      harness.service.executeApproved(executeInput),
+    ).resolves.toEqual({ status: 'SENT', receiptId });
+    expect(harness.client.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('rechecks exact draft and target record access immediately before execution', async () => {
     const harness = buildHarness();
     harness.recordAccessService.assertCanExecuteDraft.mockRejectedValue(
