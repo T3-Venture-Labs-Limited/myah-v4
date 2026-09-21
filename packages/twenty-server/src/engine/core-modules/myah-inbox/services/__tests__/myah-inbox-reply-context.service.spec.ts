@@ -334,6 +334,135 @@ describe('MyahInboxReplyContextService', () => {
     });
   });
 
+  it('rejects an Email-thread alias when the linked Creator is unreadable', async () => {
+    const creatorId = '20202020-f7c5-4e2f-a44a-240b2d3a9d04';
+    const resolver = new MyahInboxReplyContextQueryEvidenceResolver(
+      {
+        getThreadSummary: jest.fn().mockResolvedValue({
+          id: threadId,
+          creator: null,
+        }),
+      } as never,
+      {
+        executeInWorkspaceContext: jest.fn(async (run) => run()),
+        getRepository: jest.fn(async (_workspaceId, objectName) => {
+          if (objectName === 'messageThread') {
+            return {
+              findOne: jest.fn().mockResolvedValue({
+                id: threadId,
+                creatorId,
+                myahCampaignId: null,
+              }),
+            };
+          }
+          if (objectName === 'creator') {
+            return { findOne: jest.fn().mockResolvedValue(null) };
+          }
+          return emptyEvidenceRepository;
+        }),
+      } as never,
+      visibilityPolicy as never,
+    );
+
+    await expect(
+      resolver.resolveCurrentEvidence({
+        ...readRequest,
+        replyContext: { kind: ReplyContextKind.GENERAL },
+        contactIdentity: { kind: 'email-thread', recordId: threadId },
+      }),
+    ).resolves.toMatchObject({
+      readable: false,
+      eligible: false,
+      target: { contactAnchor: { kind: 'UNAVAILABLE' } },
+    });
+  });
+
+  it('keeps an in-flight Email-thread draft readable after a visible Creator relink', async () => {
+    const creatorId = '20202020-f7c5-4e2f-a44a-240b2d3a9d04';
+    const resolver = new MyahInboxReplyContextQueryEvidenceResolver(
+      {
+        getThreadSummary: jest.fn().mockResolvedValue({
+          id: threadId,
+          creator: { id: creatorId },
+        }),
+      } as never,
+      {
+        executeInWorkspaceContext: jest.fn(async (run) => run()),
+        getRepository: jest.fn(async (_workspaceId, objectName) => {
+          if (objectName === 'messageThread') {
+            return {
+              findOne: jest.fn().mockResolvedValue({
+                id: threadId,
+                creatorId,
+                myahCampaignId: null,
+              }),
+            };
+          }
+          if (objectName === 'creator') {
+            return {
+              findOne: jest.fn().mockResolvedValue({
+                id: creatorId,
+                name: 'Readable Creator',
+              }),
+            };
+          }
+          return emptyEvidenceRepository;
+        }),
+      } as never,
+      visibilityPolicy as never,
+    );
+
+    await expect(
+      resolver.resolveCurrentEvidence({
+        ...readRequest,
+        replyContext: { kind: ReplyContextKind.GENERAL },
+        contactIdentity: { kind: 'email-thread', recordId: threadId },
+      }),
+    ).resolves.toMatchObject({
+      readable: true,
+      eligible: true,
+      target: { contactAnchor: { kind: 'EMAIL_THREAD', id: threadId } },
+    });
+  });
+
+  it('keeps a genuinely unlinked General thread readable through its Email-thread anchor', async () => {
+    const resolver = new MyahInboxReplyContextQueryEvidenceResolver(
+      {
+        getThreadSummary: jest.fn().mockResolvedValue({
+          id: threadId,
+          creator: null,
+        }),
+      } as never,
+      {
+        executeInWorkspaceContext: jest.fn(async (run) => run()),
+        getRepository: jest.fn(async (_workspaceId, objectName) =>
+          objectName === 'messageThread'
+            ? {
+                findOne: jest.fn().mockResolvedValue({
+                  id: threadId,
+                  creatorId: null,
+                  myahCampaignId: null,
+                }),
+              }
+            : emptyEvidenceRepository,
+        ),
+      } as never,
+      visibilityPolicy as never,
+    );
+
+    await expect(
+      resolver.resolveCurrentEvidence({
+        ...readRequest,
+        replyContext: { kind: ReplyContextKind.GENERAL },
+        contactIdentity: { kind: 'email-thread', recordId: threadId },
+      }),
+    ).resolves.toMatchObject({
+      readable: true,
+      eligible: true,
+      target: { contactAnchor: { kind: 'EMAIL_THREAD', id: threadId } },
+    });
+  });
+
   it('keeps readable historical Campaign context as NEEDS_REVIEW when the current thread association changed', async () => {
     const creatorId = '20202020-f7c5-4e2f-a44a-240b2d3a9d04';
     const selectedCampaignId = campaignId;
@@ -776,6 +905,9 @@ describe('Email reply context persisted evidence and fingerprint', () => {
       {} as never,
       contexts,
       drafts as never,
+      {
+        listOptions: jest.fn().mockResolvedValue({ generalAvailable: true }),
+      } as never,
     );
     const reader = {
       read: jest.fn(async ({ resolvedContext }) => ({
@@ -813,6 +945,11 @@ describe('Email reply context persisted evidence and fingerprint', () => {
       replyContext: { kind: ReplyContextKind.GENERAL },
     });
     const threadRequest = requestFor('email-thread', threadId);
+    repositories.messageThread.findOne.mockResolvedValue({
+      id: threadId,
+      creatorId: null,
+      myahCampaignId: null,
+    });
     await expect(
       publicResolver.myahInboxReplyDraft(
         threadRequest,
@@ -825,6 +962,11 @@ describe('Email reply context persisted evidence and fingerprint', () => {
     });
     await mutations.saveMyahInboxDraft(threadRequest);
     expect(rows.get(threadId)?.body.markdown).toBe('A private draft');
+    repositories.messageThread.findOne.mockResolvedValue({
+      id: threadId,
+      creatorId,
+      myahCampaignId: null,
+    });
     const requestA = requestFor('creator', creatorId);
     await mutations.saveMyahInboxDraft(requestA);
     const creatorB = '20202020-f7c5-4e2f-a44a-240b2d3a9d09';
@@ -849,8 +991,8 @@ describe('Email reply context persisted evidence and fingerprint', () => {
       });
       await expect(mutations.saveMyahInboxDraft(oldRequest)).rejects.toThrow();
     }
-    // The thread-anchored draft doesn't depend on the thread's linked
-    // Creator, so relinking the thread away from Creator A never touches it.
+    // A readable relink preserves the pre-link thread-anchored draft, while
+    // the stale Creator A identity above remains unavailable.
     await expect(
       publicResolver.myahInboxReplyDraft(
         threadRequest,
@@ -861,6 +1003,7 @@ describe('Email reply context persisted evidence and fingerprint', () => {
       body: { markdown: 'A private draft', blocknote: null },
       executionState: 'READY',
     });
+    expect(rows.get(threadId)?.body.markdown).toBe('A private draft');
     const requestB = requestFor('creator', creatorB);
     await expect(
       publicResolver.myahInboxReplyDraft(

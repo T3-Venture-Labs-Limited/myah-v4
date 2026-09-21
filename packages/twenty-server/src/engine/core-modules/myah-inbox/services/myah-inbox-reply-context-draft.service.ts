@@ -37,6 +37,7 @@ export type SaveReplyContextDraftInput = AnchoredReplyIdentity & {
   body: MyahRichText | null;
   // This value is provided only by the verified proposal-result path.
   proposalContextFingerprint?: string | null;
+  clearContextAcknowledgement?: boolean;
 };
 
 export type ReviewReplyContextDraftInput = AnchoredReplyIdentity & {
@@ -152,15 +153,16 @@ export class MyahInboxReplyContextDraftService {
          SET "bodyMarkdown" = $8, "bodyBlocknote" = $9,
              "revision" = "revision" + 1,
              "proposalContextFingerprint" = CASE
-               WHEN $10::varchar IS NULL THEN "proposalContextFingerprint"
-               ELSE $10::varchar
+               WHEN $10::varchar IS NOT NULL THEN $10::varchar
+               WHEN $11::boolean THEN NULL
+               ELSE "proposalContextFingerprint"
              END,
              "reviewedContextFingerprint" = CASE
-               WHEN $10::varchar IS NULL THEN "reviewedContextFingerprint"
-               ELSE NULL
+               WHEN $10::varchar IS NOT NULL OR $11::boolean THEN NULL
+               ELSE "reviewedContextFingerprint"
              END,
              "updatedAt" = NOW()
-         WHERE ${IDENTITY_PREDICATE} AND "revision" = $11 AND "id" = $12
+         WHERE ${IDENTITY_PREDICATE} AND "revision" = $12 AND "id" = $13
          RETURNING "id", "revision", "bodyMarkdown", "bodyBlocknote",
                    "proposalContextFingerprint", "reviewedContextFingerprint"`,
         [
@@ -168,6 +170,7 @@ export class MyahInboxReplyContextDraftService {
           input.body?.markdown ?? null,
           input.body?.blocknote ?? null,
           input.proposalContextFingerprint ?? null,
+          input.clearContextAcknowledgement ?? false,
           input.expectedRevision,
           current.id,
         ],

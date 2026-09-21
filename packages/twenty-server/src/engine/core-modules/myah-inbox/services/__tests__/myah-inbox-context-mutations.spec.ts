@@ -61,9 +61,19 @@ const setup = () => {
     resolveForAction: jest.fn(async () => resolved),
     resolveForRead: jest.fn(async () => resolved),
   };
+  const options = {
+    listOptions: jest.fn(
+      async (): Promise<any> => ({
+        edges: [],
+        pageInfo: { hasNextPage: false, endCursor: null },
+        generalAvailable: true,
+        defaultContext: { kind: ReplyContextKind.GENERAL },
+      }),
+    ),
+  };
   const drafts = {
     read: jest.fn(async () => snapshot),
-    save: jest.fn(async () => ({
+    save: jest.fn(async (_input: unknown) => ({
       status: 'SAVED',
       revision: 5,
       body: input.body,
@@ -76,13 +86,22 @@ const setup = () => {
   const Service = MyahInboxMutationService as unknown as new (
     ...args: unknown[]
   ) => MyahInboxMutationService;
-  const service = new Service({}, {}, {}, approvals, {}, contexts, drafts);
-  return { service, approvals, contexts, drafts };
+  const service = new Service(
+    {},
+    {},
+    {},
+    approvals,
+    {},
+    contexts,
+    drafts,
+    options,
+  );
+  return { service, approvals, contexts, drafts, options, resolved };
 };
 
 describe('Myah Inbox public context mutations', () => {
   it('saves only the resolved anchored context and never acknowledges changed guidance on an edit', async () => {
-    const { service, drafts, approvals } = setup();
+    const { service, drafts, approvals, options } = setup();
     await expect(
       service.saveMyahInboxDraft(input as never),
     ).resolves.toMatchObject({ status: 'SAVED' });
@@ -97,8 +116,116 @@ describe('Myah Inbox public context mutations', () => {
       }),
     );
     expect(drafts.review).not.toHaveBeenCalled();
+    expect(options.listOptions).not.toHaveBeenCalled();
     expect(approvals.executeInboxReplyTargetLocked).toHaveBeenCalled();
   });
+  it('uses the expected context fingerprint only for freshness and does not persist acknowledgement', async () => {
+    const { service, drafts } = setup();
+
+    await expect(
+      service.saveMyahInboxDraft({
+        ...input,
+        expectedContextFingerprint: 'b'.repeat(64),
+        proposalContextFingerprint: null,
+      } as never),
+    ).resolves.toMatchObject({ status: 'SAVED' });
+
+    expect(drafts.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proposalContextFingerprint: null,
+        clearContextAcknowledgement: true,
+        expectedRevision: 4,
+      }),
+    );
+    expect(drafts.save.mock.calls[0][0]).not.toHaveProperty(
+      'expectedContextFingerprint',
+    );
+  });
+
+  it('rejects combining freshness-only and proposal fingerprints', async () => {
+    const { service, drafts, approvals } = setup();
+
+    await expect(
+      service.saveMyahInboxDraft({
+        ...input,
+        expectedContextFingerprint: 'b'.repeat(64),
+        proposalContextFingerprint: 'b'.repeat(64),
+      } as never),
+    ).rejects.toThrow(
+      'Expected context fingerprint cannot accompany proposal fingerprint',
+    );
+    expect(approvals.executeInboxReplyTargetLocked).not.toHaveBeenCalled();
+    expect(drafts.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects a freshness-only fingerprint when context changes under the target lock', async () => {
+    const { service, contexts, drafts, resolved } = setup();
+    contexts.resolveForAction
+      .mockResolvedValueOnce(resolved)
+      .mockResolvedValueOnce({
+        ...resolved,
+        contextFingerprint: 'c'.repeat(64),
+      });
+
+    await expect(
+      service.saveMyahInboxDraft({
+        ...input,
+        expectedContextFingerprint: 'b'.repeat(64),
+        proposalContextFingerprint: null,
+      } as never),
+    ).rejects.toThrow('Reply context changed before applying the proposal');
+    expect(drafts.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects unavailable General before and inside the target lock', async () => {
+    const creatorInput = {
+      ...input,
+      target: {
+        ...input.target,
+        contactId: encodeMyahInboxContactId({
+          workspaceId,
+          identity: { kind: 'creator', recordId: draftId },
+        }),
+      },
+    };
+    const beforeLock = setup();
+    beforeLock.options.listOptions.mockResolvedValueOnce({
+      edges: [],
+      pageInfo: { hasNextPage: false, endCursor: null },
+      generalAvailable: false,
+      defaultContext: null,
+    });
+    await expect(
+      beforeLock.service.saveMyahInboxDraft(creatorInput as never),
+    ).rejects.toThrow('General reply context is not available');
+    expect(
+      beforeLock.approvals.executeInboxReplyTargetLocked,
+    ).not.toHaveBeenCalled();
+    expect(beforeLock.drafts.save).not.toHaveBeenCalled();
+
+    const insideLock = setup();
+    insideLock.options.listOptions
+      .mockResolvedValueOnce({
+        edges: [],
+        pageInfo: { hasNextPage: false, endCursor: null },
+        generalAvailable: true,
+        defaultContext: { kind: ReplyContextKind.GENERAL },
+      })
+      .mockResolvedValueOnce({
+        edges: [],
+        pageInfo: { hasNextPage: false, endCursor: null },
+        generalAvailable: false,
+        defaultContext: null,
+      });
+    await expect(
+      insideLock.service.saveMyahInboxDraft(creatorInput as never),
+    ).rejects.toThrow('General reply context is not available');
+    expect(
+      insideLock.approvals.executeInboxReplyTargetLocked,
+    ).toHaveBeenCalled();
+    expect(insideLock.drafts.save).not.toHaveBeenCalled();
+  });
+
   it('rejects stale proposal fingerprints and target-wide UNKNOWN before a write', async () => {
     const { service, drafts, approvals } = setup();
     await expect(

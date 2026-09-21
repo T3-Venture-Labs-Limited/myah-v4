@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
-import { MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
+import {
+  MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH,
+  MYAH_INBOX_MAX_PAGE_SIZE,
+} from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 import { MYAH_INBOX_MAX_OPERATOR_INSTRUCTIONS_LENGTH } from 'src/engine/core-modules/myah-inbox/dtos/generate-myah-inbox-reply-proposal.input';
+import { ReplyContextKind } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 
 export const messageThreadIdInputSchema = z
   .string()
@@ -24,8 +28,34 @@ export const searchMyahInboxThreadsInputSchema = z
   })
   .strict();
 
+export const myahInboxReplyContextSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal(ReplyContextKind.GENERAL) }).strict(),
+  z
+    .object({
+      kind: z.literal(ReplyContextKind.CAMPAIGN),
+      campaignId: z.string().uuid(),
+    })
+    .strict(),
+]);
+
+export const listMyahInboxReplyContextsInputSchema = z
+  .object({
+    messageThreadId: messageThreadIdInputSchema,
+    first: z.number().int().min(1).max(MYAH_INBOX_MAX_PAGE_SIZE).optional(),
+    after: z
+      .string()
+      .min(1)
+      .max(2048)
+      .regex(/^[A-Za-z0-9_-]+$/)
+      .optional(),
+  })
+  .strict();
+
 export const getMyahInboxThreadContextInputSchema = z
-  .object({ messageThreadId: selectedMessageThreadIdInputSchema })
+  .object({
+    messageThreadId: selectedMessageThreadIdInputSchema,
+    replyContext: myahInboxReplyContextSchema.optional(),
+  })
   .strict();
 
 export const generateMyahInboxReplyProposalInputSchema = z
@@ -56,6 +86,8 @@ export const updateMyahInboxThreadInputSchema = z
 export const saveMyahInboxReplyDraftInputSchema = z
   .object({
     messageThreadId: messageThreadIdInputSchema,
+    replyContext: myahInboxReplyContextSchema,
+    expectedContextFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     expectedRevision: z.number().int().min(0),
     body: z
       .object({
