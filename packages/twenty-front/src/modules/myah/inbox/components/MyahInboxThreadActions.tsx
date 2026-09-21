@@ -10,7 +10,7 @@ import { FormSingleRecordPicker } from '@/object-record/record-field/ui/form-typ
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { styled } from '@linaria/react';
-import { IconTarget, IconUser } from 'twenty-ui/icon';
+import { IconUser } from 'twenty-ui/icon';
 import { IconButton } from 'twenty-ui/input';
 import { AppTooltip, TooltipDelay, TooltipPosition } from 'twenty-ui/surfaces';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -55,10 +55,9 @@ export const MyahInboxThreadActions = ({
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
 
   const creatorPickerTriggerRef = useRef<HTMLDivElement>(null);
-  const campaignPickerTriggerRef = useRef<HTMLDivElement>(null);
 
-  const areRecordPickersReady = ['creator', 'campaign'].every((nameSingular) =>
-    objectMetadataItems.some((item) => item.nameSingular === nameSingular),
+  const isCreatorPickerReady = objectMetadataItems.some(
+    (item) => item.nameSingular === 'creator',
   );
 
   const update = async (
@@ -80,7 +79,7 @@ export const MyahInboxThreadActions = ({
     }
   };
 
-  if (!areRecordPickersReady) {
+  if (!isCreatorPickerReady) {
     return (
       <StyledStatus role="status">Loading conversation actions</StyledStatus>
     );
@@ -140,59 +139,9 @@ export const MyahInboxThreadActions = ({
         }
         dropdownPlacement="bottom-end"
       />
-      <Dropdown
-        dropdownRole="dialog"
-        dropdownId={`myah-inbox-campaign-${thread.id}`}
-        dropdownAriaLabel="Campaign selector"
-        clickableComponentAriaLabel="Campaign selector"
-        isClickableComponentKeyboardAccessible
-        onClickableComponentRef={(element) => {
-          campaignPickerTriggerRef.current = element;
-        }}
-        onClose={() => {
-          campaignPickerTriggerRef.current?.focus();
-        }}
-        clickableComponent={
-          <IconButton
-            Icon={IconTarget}
-            ariaHidden
-            ariaLabel="Campaign"
-            dataTestId="myah-inbox-thread-campaign-action"
-            size="small"
-            tabIndex={-1}
-            variant="tertiary"
-          />
-        }
-        dropdownComponents={
-          <DropdownContent>
-            <StyledDropdownForm>
-              <FormSingleRecordPicker
-                label="Campaign"
-                objectNameSingulars={['campaign']}
-                defaultValue={thread.campaign?.id ?? null}
-                shouldPreventRecordNavigation
-                shouldAutoFocusPickerTrigger
-                onChange={(campaignId) =>
-                  void update(
-                    { threadId: thread.id, campaignId },
-                    'Campaign updated',
-                  )
-                }
-              />
-            </StyledDropdownForm>
-          </DropdownContent>
-        }
-        dropdownPlacement="bottom-end"
-      />
       <AppTooltip
         anchorSelect="[data-testid='myah-inbox-thread-creator-action']"
         content="Change creator"
-        delay={TooltipDelay.shortDelay}
-        place={TooltipPosition.Top}
-      />
-      <AppTooltip
-        anchorSelect="[data-testid='myah-inbox-thread-campaign-action']"
-        content="Change campaign"
         delay={TooltipDelay.shortDelay}
         place={TooltipPosition.Top}
       />

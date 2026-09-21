@@ -15,6 +15,11 @@ jest.mock('twenty-ui/theme-constants', () => ({
 const mockUpdateThread = jest.fn();
 const mockOpenMyahInboxContextInSidePanel = jest.fn();
 const mockOpenRecordInSidePanel = jest.fn();
+let mockObjectMetadataItems = [
+  { nameSingular: 'creator' },
+  { nameSingular: 'campaign' },
+  { nameSingular: 'workspaceMember' },
+];
 
 jest.mock('@/side-panel/hooks/useOpenRecordInSidePanel', () => ({
   useOpenRecordInSidePanel: () => ({
@@ -38,11 +43,7 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
 
 jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: () => ({
-    objectMetadataItems: [
-      { nameSingular: 'creator' },
-      { nameSingular: 'campaign' },
-      { nameSingular: 'workspaceMember' },
-    ],
+    objectMetadataItems: mockObjectMetadataItems,
   }),
 }));
 
@@ -264,13 +265,18 @@ const unlinkedThread = {
 describe('MyahInboxThreadActions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockObjectMetadataItems = [
+      { nameSingular: 'creator' },
+      { nameSingular: 'campaign' },
+      { nameSingular: 'workspaceMember' },
+    ];
     getDefaultStore().set(currentWorkspaceState.atom, {
       id: 'workspace-1',
     } as never);
     mockUpdateThread.mockResolvedValue({});
   });
 
-  it('uses labelled compact action controls instead of visible header forms', () => {
+  it('keeps only the labelled Creator action in the conversation header', () => {
     render(
       <MyahInboxThreadActions
         thread={unlinkedThread}
@@ -282,16 +288,10 @@ describe('MyahInboxThreadActions', () => {
       screen.getByRole('button', { name: 'Creator selector' }),
     ).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Campaign selector' }),
-    ).toBeVisible();
-    expect(
-      screen.queryByRole('button', { name: 'Owner' }),
+      screen.queryByRole('button', { name: 'Campaign selector' }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'State' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Snooze' }),
+      screen.queryByTestId('myah-inbox-thread-campaign-action'),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(
@@ -299,14 +299,9 @@ describe('MyahInboxThreadActions', () => {
         .getByRole('button', { name: 'Creator selector' })
         .closest('[role="dialog"]'),
     ).not.toBeNull();
-    expect(
-      screen
-        .getByRole('button', { name: 'Campaign selector' })
-        .closest('[role="dialog"]'),
-    ).not.toBeNull();
   });
 
-  it('restores focus to the Creator and Campaign triggers when their dialogs close', () => {
+  it('restores focus to the Creator trigger when its dialog closes', () => {
     render(
       <MyahInboxThreadActions
         thread={unlinkedThread}
@@ -324,20 +319,27 @@ describe('MyahInboxThreadActions', () => {
     );
 
     expect(creatorTrigger).toHaveFocus();
-
-    const campaignTrigger = screen.getByRole('button', {
-      name: 'Campaign selector',
-    });
-    fireEvent.keyDown(campaignTrigger, { key: 'Enter' });
-    screen.getByRole('combobox', { name: 'Campaign' }).focus();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Close Campaign selector' }),
-    );
-
-    expect(campaignTrigger).toHaveFocus();
   });
 
-  it('keeps only Creator and Campaign controls at thread level', () => {
+  it('does not wait for Campaign metadata before rendering Creator actions', () => {
+    mockObjectMetadataItems = [{ nameSingular: 'creator' }];
+
+    render(
+      <MyahInboxThreadActions
+        thread={unlinkedThread}
+        onThreadUpdated={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Creator selector' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Loading conversation actions'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps only the Creator tooltip at thread level', () => {
     render(
       <MyahInboxThreadActions
         thread={unlinkedThread}
@@ -351,12 +353,7 @@ describe('MyahInboxThreadActions', () => {
           ([props]) => (props as { anchorSelect: string }).anchorSelect,
         ),
       ),
-    ).toEqual(
-      new Set([
-        "[data-testid='myah-inbox-thread-creator-action']",
-        "[data-testid='myah-inbox-thread-campaign-action']",
-      ]),
-    );
+    ).toEqual(new Set(["[data-testid='myah-inbox-thread-creator-action']"]));
     expect(
       screen.queryByRole('button', { name: 'Conversation details' }),
     ).not.toBeInTheDocument();
@@ -410,58 +407,6 @@ describe('MyahInboxThreadActions', () => {
         expectedWorkspaceId: 'workspace-1',
         threadId: 'thread-1',
         creatorId: null,
-      });
-    });
-  });
-
-  it('writes only the selected campaign for an unlinked thread', async () => {
-    render(
-      <MyahInboxThreadActions
-        thread={unlinkedThread}
-        onThreadUpdated={jest.fn()}
-      />,
-    );
-
-    fireEvent.keyDown(
-      screen.getByRole('button', { name: 'Campaign selector' }),
-      { key: ' ' },
-    );
-    fireEvent.change(screen.getByRole('combobox', { name: 'Campaign' }), {
-      target: { value: 'campaign-1' },
-    });
-
-    await waitFor(() => {
-      expect(mockUpdateThread).toHaveBeenCalledTimes(1);
-      expect(mockUpdateThread).toHaveBeenCalledWith({
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
-        campaignId: 'campaign-1',
-      });
-    });
-  });
-
-  it('clears only the linked campaign', async () => {
-    render(
-      <MyahInboxThreadActions
-        thread={{
-          ...unlinkedThread,
-          campaign: { id: 'campaign-1', name: 'Spring campaign' },
-        }}
-        onThreadUpdated={jest.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Campaign selector' }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Campaign' }), {
-      target: { value: '' },
-    });
-
-    await waitFor(() => {
-      expect(mockUpdateThread).toHaveBeenCalledTimes(1);
-      expect(mockUpdateThread).toHaveBeenCalledWith({
-        expectedWorkspaceId: 'workspace-1',
-        threadId: 'thread-1',
-        campaignId: null,
       });
     });
   });

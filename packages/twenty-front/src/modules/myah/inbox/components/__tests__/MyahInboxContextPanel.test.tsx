@@ -99,7 +99,7 @@ const linkedThread: MyahInboxThread = {
 };
 
 describe('MyahInboxContextPanel', () => {
-  it('renders linked Creator and Campaign native overviews without record actions', () => {
+  it('renders linked Creator context without singleton Campaign context', () => {
     render(<MyahInboxContextPanel thread={linkedThread} />);
 
     expect(
@@ -108,14 +108,12 @@ describe('MyahInboxContextPanel', () => {
     expect(
       screen.queryByRole('button', { name: 'Open Creator' }),
     ).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Campaign' }));
-
+    expect(screen.getByRole('tab', { name: 'Creator' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Timeline' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Tasks' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Notes' })).toBeInTheDocument();
     expect(
-      screen.getByText('native campaign campaign-1 default-tab-only'),
-    ).toBeVisible();
-    expect(
-      screen.queryByRole('button', { name: 'Open Campaign' }),
+      screen.queryByRole('tab', { name: 'Campaign' }),
     ).not.toBeInTheDocument();
   });
 
@@ -141,7 +139,7 @@ describe('MyahInboxContextPanel', () => {
     expect(screen.getByText('Creator notes')).toBeInTheDocument();
   });
 
-  it('keeps unlinked Creator, Campaign, and activity states explicit', () => {
+  it('keeps unlinked Creator and activity states explicit', () => {
     render(
       <MyahInboxContextPanel
         thread={{ ...linkedThread, creator: null, campaign: null }}
@@ -152,11 +150,6 @@ describe('MyahInboxContextPanel', () => {
       screen.getByText(/No Creator linked\. Use the Creator action/),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Campaign' }));
-    expect(
-      screen.getByText(/No Campaign linked\. Use the Campaign action/),
-    ).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('tab', { name: 'Timeline' }));
     expect(
       screen.getByText(/Link a Creator to view Creator activity/),
@@ -164,25 +157,18 @@ describe('MyahInboxContextPanel', () => {
   });
 });
 
-it('keeps the current tab while same-thread Campaign linkage changes', () => {
+it('keeps the current tab while same-thread data changes', () => {
   const view = render(<MyahInboxContextPanel thread={linkedThread} />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Campaign' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Timeline' }));
   view.rerender(
     <MyahInboxContextPanel
-      thread={{
-        ...linkedThread,
-        campaign: { id: 'campaign-2', name: 'Changed Campaign' },
-      }}
+      thread={{ ...linkedThread, subject: 'Changed subject' }}
     />,
   );
-  expect(screen.getByRole('tab', { name: 'Campaign' })).toHaveAttribute(
+
+  expect(screen.getByRole('tab', { name: 'Timeline' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  expect(
-    screen.getByText('native campaign campaign-2 default-tab-only'),
-  ).toBeVisible();
-  expect(
-    screen.queryByText('native campaign campaign-1 default-tab-only'),
-  ).not.toBeInTheDocument();
+  expect(screen.getByText('Creator timeline')).toBeVisible();
 });
