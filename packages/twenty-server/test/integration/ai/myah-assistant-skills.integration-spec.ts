@@ -71,6 +71,43 @@ const genericApprovalMessage = (toolName: string) => ({
   ],
 });
 
+type InboxSelectedContextResult = {
+  kind: 'CAMPAIGN' | 'GENERAL';
+  campaignId?: string;
+  contextFingerprint: string;
+  draftRevision: number;
+  draftBody: { markdown: string; blocknote: null } | null;
+};
+
+const findInboxSelectedContext = (
+  value: unknown,
+): InboxSelectedContextResult | undefined => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findInboxSelectedContext(item);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof value !== 'object' || value === null) return undefined;
+
+  const record = value as Record<string, unknown>;
+  const selected = record.selectedContext;
+  if (
+    typeof selected === 'object' &&
+    selected !== null &&
+    typeof (selected as Record<string, unknown>).contextFingerprint ===
+      'string'
+  ) {
+    return selected as InboxSelectedContextResult;
+  }
+  for (const child of Object.values(record)) {
+    const found = findInboxSelectedContext(child);
+    if (found) return found;
+  }
+  return undefined;
+};
+
 const registeredApprovalMessage = (actionApprovalBindingId: string) => ({
   id: 'registered-approval',
   role: 'assistant' as const,
@@ -1338,7 +1375,7 @@ describe('Myah assistant skills scripted model integration', () => {
     );
   });
 
-  it('saves one exact Inbox draft revision and returns a stale conflict without retrying', async () => {
+  it('saves explicit Campaign and General Inbox contexts without fallback, acknowledgement, or retry', async () => {
     if (!inboxFixture || !inboxChatThreadId) {
       throw new Error('Expected seeded Inbox fixture and chat thread');
     }
@@ -1346,102 +1383,281 @@ describe('Myah assistant skills scripted model integration', () => {
       inboxFixture,
       inboxChatThreadId,
     );
+    const draftThreadId = inboxFixture.threadIds.owner;
     const creatorId = inboxFixture.creatorId;
-    const draftThreadId = inboxFixture.threadIds.draft;
-    // The Myah assistant chat tool has no operator-chosen Campaign context, so
-    // it always saves a General (no-Campaign) draft anchored to this thread's
-    // Creator, through the same per-context draft store the composer uses.
-    const readGeneralDraft = async () => {
-      const [row] = await global.testDataSource.query<
-        { bodyMarkdown: string | null; revision: number }[]
+    const replyContextRows = async () =>
+      global.testDataSource.query<
+        {
+          contextKind: 'CAMPAIGN' | 'GENERAL';
+          campaignId: string | null;
+          bodyMarkdown: string | null;
+          revision: number;
+          proposalContextFingerprint: string | null;
+          reviewedContextFingerprint: string | null;
+        }[]
       >(
-        `SELECT "bodyMarkdown", "revision"
+        `SELECT "contextKind", "campaignId", "bodyMarkdown", "revision",
+                "proposalContextFingerprint", "reviewedContextFingerprint"
          FROM core."myahInboxReplyContextDraft"
          WHERE "workspaceId" = $1 AND "contactAnchorKind" = 'CREATOR'
            AND "contactAnchorId" = $2 AND "channel" = 'EMAIL'
-           AND "deliveryTargetId" = $3 AND "contextKind" = 'GENERAL'
-           AND "campaignId" IS NULL`,
+           AND "deliveryTargetId" = $3
+         ORDER BY "contextKind", "campaignId" NULLS FIRST`,
         [SEED_APPLE_WORKSPACE_ID, creatorId, draftThreadId],
       );
+    const readContext = async (replyContext: Record<string, unknown>) => {
+      const execution = await runScriptedChat({
+        fixture: inboxChatFixture,
+        calls: [
+          {
+            toolName: 'execute_tool',
+            input: {
+              toolName: 'get_myah_inbox_thread_context',
+              arguments: { messageThreadId: draftThreadId, replyContext },
+            },
+          },
+        ],
+      });
+      const selectedContext = findInboxSelectedContext(execution.chunks);
+      if (!selectedContext) {
+        throw new Error('Expected selected Inbox reply context in tool output');
+      }
+      return { execution, selectedContext };
+    };
 
-      return row ?? { bodyMarkdown: null, revision: 0 };
-    };
-    const beforeDraft = await readGeneralDraft();
-    const draftBody = {
-      markdown: 'MYAH-156 scripted exact draft',
-      blocknote: null,
-    };
-    const saveExecution = await runScriptedChat({
-      approvedToolName: 'save_myah_inbox_reply_draft',
-      fixture: inboxChatFixture,
-      calls: [
-        { toolName: 'load_skills', input: { skillNames: ['myah-inbox'] } },
-        {
-          toolName: 'learn_tools',
-          input: {
-            toolNames: [
-              'get_myah_inbox_reply_send_readiness',
-              'save_myah_inbox_reply_draft',
-            ],
-            aspects: ['schema'],
-          },
-        },
-        {
-          toolName: 'execute_tool',
-          input: {
-            toolName: 'get_myah_inbox_reply_send_readiness',
-            arguments: {
-              messageThreadId: inboxFixture.threadIds.draft,
+    await global.testDataSource.query(
+      `INSERT INTO core."myahInboxEmailGeneralProvenance"
+         ("workspaceId", "deliveryTargetId", "creatorId", "revokedAt")
+       VALUES ($1, $2, $3, NULL)
+       ON CONFLICT ("workspaceId", "deliveryTargetId") DO UPDATE
+       SET "creatorId" = EXCLUDED."creatorId", "revokedAt" = NULL`,
+      [SEED_APPLE_WORKSPACE_ID, draftThreadId, inboxFixture.creatorId],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM core."myahInboxReplyContextDraft"
+       WHERE "workspaceId" = $1 AND "deliveryTargetId" = $2`,
+      [SEED_APPLE_WORKSPACE_ID, draftThreadId],
+    );
+
+    try {
+      const discovery = await runScriptedChat({
+        fixture: inboxChatFixture,
+        calls: [
+          { toolName: 'load_skills', input: { skillNames: ['myah-inbox'] } },
+          {
+            toolName: 'learn_tools',
+            input: {
+              toolNames: [
+                'list_myah_inbox_reply_contexts',
+                'get_myah_inbox_thread_context',
+                'save_myah_inbox_reply_draft',
+              ],
+              aspects: ['schema'],
             },
           },
-        },
-        {
-          toolName: 'execute_tool',
-          input: {
-            toolName: 'save_myah_inbox_reply_draft',
-            arguments: {
-              messageThreadId: inboxFixture.threadIds.draft,
-              expectedRevision: beforeDraft.revision,
-              body: draftBody,
+          {
+            toolName: 'execute_tool',
+            input: {
+              toolName: 'list_myah_inbox_reply_contexts',
+              arguments: { messageThreadId: draftThreadId, first: 20 },
             },
           },
-        },
-      ],
-    });
-    const savedDraft = await readGeneralDraft();
-    const staleExecution = await runScriptedChat({
-      approvedToolName: 'save_myah_inbox_reply_draft',
-      fixture: inboxChatFixture,
-      calls: [
-        {
-          toolName: 'execute_tool',
-          input: {
-            toolName: 'save_myah_inbox_reply_draft',
-            arguments: {
-              messageThreadId: inboxFixture.threadIds.draft,
-              expectedRevision: beforeDraft.revision,
-              body: {
-                markdown: 'MYAH-156 stale overwrite',
-                blocknote: null,
+        ],
+      });
+      expect(JSON.stringify(discovery.chunks)).toContain(
+        inboxFixture.campaignId,
+      );
+      expect(JSON.stringify(discovery.chunks)).toContain(
+        '"generalAvailable":true',
+      );
+
+      const campaignContext = {
+        kind: 'CAMPAIGN',
+        campaignId: inboxFixture.campaignId,
+      };
+      const campaignRead = await readContext(campaignContext);
+      const campaignBody = {
+        markdown: 'MYAH-395 Campaign draft',
+        blocknote: null,
+      };
+      const campaignSave = await runScriptedChat({
+        approvedToolName: 'save_myah_inbox_reply_draft',
+        fixture: inboxChatFixture,
+        calls: [
+          {
+            toolName: 'execute_tool',
+            input: {
+              toolName: 'save_myah_inbox_reply_draft',
+              arguments: {
+                messageThreadId: draftThreadId,
+                replyContext: campaignContext,
+                expectedContextFingerprint:
+                  campaignRead.selectedContext.contextFingerprint,
+                expectedRevision:
+                  campaignRead.selectedContext.draftRevision,
+                body: campaignBody,
               },
             },
           },
-        },
-      ],
-    });
+          {
+            toolName: 'execute_tool',
+            input: {
+              toolName: 'get_myah_inbox_thread_context',
+              arguments: {
+                messageThreadId: draftThreadId,
+                replyContext: campaignContext,
+              },
+            },
+          },
+        ],
+      });
 
-    expect(saveExecution.modelToolCalls).toEqual([
-      'load_skills',
-      'learn_tools',
-      'execute_tool',
-      'execute_tool',
-    ]);
-    expect(savedDraft).toEqual({
-      bodyMarkdown: draftBody.markdown,
-      revision: beforeDraft.revision + 1,
-    });
-    expect(staleExecution.modelToolCalls).toEqual(['execute_tool']);
-    expect(JSON.stringify(staleExecution.chunks)).toContain('CONFLICT');
+      const generalContext = { kind: 'GENERAL' };
+      const generalRead = await readContext(generalContext);
+      const generalBody = {
+        markdown: 'MYAH-395 General draft',
+        blocknote: null,
+      };
+      const generalSave = await runScriptedChat({
+        approvedToolName: 'save_myah_inbox_reply_draft',
+        fixture: inboxChatFixture,
+        calls: [
+          {
+            toolName: 'execute_tool',
+            input: {
+              toolName: 'save_myah_inbox_reply_draft',
+              arguments: {
+                messageThreadId: draftThreadId,
+                replyContext: generalContext,
+                expectedContextFingerprint:
+                  generalRead.selectedContext.contextFingerprint,
+                expectedRevision: generalRead.selectedContext.draftRevision,
+                body: generalBody,
+              },
+            },
+          },
+          {
+            toolName: 'execute_tool',
+            input: {
+              toolName: 'get_myah_inbox_thread_context',
+              arguments: {
+                messageThreadId: draftThreadId,
+                replyContext: generalContext,
+              },
+            },
+          },
+        ],
+      });
+
+      const savedRows = await replyContextRows();
+      expect(savedRows).toEqual([
+        expect.objectContaining({
+          contextKind: 'CAMPAIGN',
+          campaignId: inboxFixture.campaignId,
+          bodyMarkdown: campaignBody.markdown,
+          revision: 1,
+          proposalContextFingerprint: null,
+          reviewedContextFingerprint: null,
+        }),
+        expect.objectContaining({
+          contextKind: 'GENERAL',
+          campaignId: null,
+          bodyMarkdown: generalBody.markdown,
+          revision: 1,
+          proposalContextFingerprint: null,
+          reviewedContextFingerprint: null,
+        }),
+      ]);
+      expect(campaignSave.modelToolCalls).toEqual([
+        'execute_tool',
+        'execute_tool',
+      ]);
+      expect(generalSave.modelToolCalls).toEqual([
+        'execute_tool',
+        'execute_tool',
+      ]);
+      expect(
+        [...campaignSave.modelToolCalls, ...generalSave.modelToolCalls],
+      ).not.toEqual(
+        expect.arrayContaining([
+          'get_myah_inbox_reply_send_readiness',
+          'send_myah_inbox_reply',
+        ]),
+      );
+
+      const staleRevision = await runScriptedChat({
+        approvedToolName: 'save_myah_inbox_reply_draft',
+        fixture: inboxChatFixture,
+        calls: [
+          {
+            toolName: 'execute_tool',
+            input: {
+              toolName: 'save_myah_inbox_reply_draft',
+              arguments: {
+                messageThreadId: draftThreadId,
+                replyContext: campaignContext,
+                expectedContextFingerprint:
+                  campaignRead.selectedContext.contextFingerprint,
+                expectedRevision: 0,
+                body: {
+                  markdown: 'MYAH-395 stale revision overwrite',
+                  blocknote: null,
+                },
+              },
+            },
+          },
+        ],
+      });
+      expect(JSON.stringify(staleRevision.chunks)).toContain('CONFLICT');
+      expect(staleRevision.modelToolCalls).toEqual(['execute_tool']);
+
+      const rejectedWrites = [
+        {
+          replyContext: campaignContext,
+          expectedContextFingerprint: 'a'.repeat(64),
+        },
+        {
+          replyContext: { kind: 'CAMPAIGN', campaignId: randomUUID() },
+          expectedContextFingerprint:
+            campaignRead.selectedContext.contextFingerprint,
+        },
+      ];
+      for (const rejected of rejectedWrites) {
+        await runScriptedChat({
+          approvedToolName: 'save_myah_inbox_reply_draft',
+          fixture: inboxChatFixture,
+          calls: [
+            {
+              toolName: 'execute_tool',
+              input: {
+                toolName: 'save_myah_inbox_reply_draft',
+                arguments: {
+                  messageThreadId: draftThreadId,
+                  ...rejected,
+                  expectedRevision: 1,
+                  body: {
+                    markdown: 'MYAH-395 rejected overwrite',
+                    blocknote: null,
+                  },
+                },
+              },
+            },
+          ],
+        });
+      }
+      expect(await replyContextRows()).toEqual(savedRows);
+    } finally {
+      await global.testDataSource.query(
+        `DELETE FROM core."myahInboxReplyContextDraft"
+         WHERE "workspaceId" = $1 AND "deliveryTargetId" = $2`,
+        [SEED_APPLE_WORKSPACE_ID, draftThreadId],
+      );
+      await global.testDataSource.query(
+        `DELETE FROM core."myahInboxEmailGeneralProvenance"
+         WHERE "workspaceId" = $1 AND "deliveryTargetId" = $2`,
+        [SEED_APPLE_WORKSPACE_ID, draftThreadId],
+      );
+    }
   });
 
   it('stops for registered Inbox approval, executes one stubbed send, and hides an unreadable thread', async () => {

@@ -438,6 +438,9 @@ describe('MyahInboxReplyProposalService', () => {
       setup.service,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     ).generateMyahInboxTools({
       workspaceId,
       roleId,
@@ -858,6 +861,9 @@ describe('MyahInboxReplyProposalService', () => {
     const toolSet = new MyahInboxToolWorkspaceService(
       {} as never,
       setup.service,
+      {} as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
     ).generateMyahInboxTools({

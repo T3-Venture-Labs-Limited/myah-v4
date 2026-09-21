@@ -1,6 +1,7 @@
 import { type MyahReplyContextSnapshot } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { MyahInboxReplyContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
 import { MyahInboxReplyContextDraftService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-draft.service';
+import { MyahInboxReplyContextOptionsService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-options.service';
 import {
   ReplyChannel,
   ReplyContextKind,
@@ -11,7 +12,6 @@ import {
 import {
   decodeMyahInboxContactId,
   encodeMyahInboxContactId,
-  type MyahInboxContactIdentity,
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 import {
@@ -75,7 +75,9 @@ export type SaveMyahInboxDraftMutationInput = {
   expectedWorkspaceId?: string | null;
 } & MyahInboxMutationRequest;
 type ContextDraftMutationInput = SaveMyahInboxDraftInput &
-  MyahInboxMutationRequest;
+  MyahInboxMutationRequest & {
+    expectedContextFingerprint?: string | null;
+  };
 
 type InboxThreadRecord = ObjectLiteral & {
   id: string;
@@ -110,6 +112,7 @@ export class MyahInboxMutationService {
     private readonly dataSource: DataSource,
     private readonly replyContexts: MyahInboxReplyContextService,
     private readonly contextDrafts: MyahInboxReplyContextDraftService,
+    private readonly replyContextOptions: MyahInboxReplyContextOptionsService,
   ) {}
 
   async updateMyahInboxThread(
@@ -214,6 +217,23 @@ export class MyahInboxMutationService {
       );
     }
     this.assertUserRequest(input);
+    if (
+      input.expectedContextFingerprint != null &&
+      input.proposalContextFingerprint != null
+    ) {
+      throw new BadRequestException(
+        'Expected context fingerprint cannot accompany proposal fingerprint',
+      );
+    }
+    const expectedContextFingerprint =
+      input.expectedContextFingerprint ?? input.proposalContextFingerprint;
+    if (
+      expectedContextFingerprint != null &&
+      !/^[a-f0-9]{64}$/.test(expectedContextFingerprint)
+    ) {
+      throw new BadRequestException('Invalid expected context fingerprint');
+    }
+    await this.assertGeneralAvailable(input);
     const { resolved, identity } = await this.resolveContextMutation(input);
     return this.actionApprovalService.executeInboxReplyTargetLocked(
       {
@@ -227,12 +247,12 @@ export class MyahInboxMutationService {
           identity.deliveryTargetId,
         );
         // Re-authorize after acquiring the target lock; the caller fingerprint is not authority.
+        await this.assertGeneralAvailable(input);
         const fresh = await this.resolveContextMutation(input);
         if (
-          input.proposalContextFingerprint != null &&
-          (input.proposalContextFingerprint !==
-            fresh.resolved.contextFingerprint ||
-            resolved.contextFingerprint !== fresh.resolved.contextFingerprint)
+          expectedContextFingerprint != null &&
+          (expectedContextFingerprint !== resolved.contextFingerprint ||
+            expectedContextFingerprint !== fresh.resolved.contextFingerprint)
         ) {
           throw new ConflictException(
             'Reply context changed before applying the proposal',
@@ -243,43 +263,12 @@ export class MyahInboxMutationService {
           expectedRevision: input.expectedRevision,
           body: input.body,
           proposalContextFingerprint: input.proposalContextFingerprint,
+          clearContextAcknowledgement:
+            input.expectedContextFingerprint != null &&
+            input.proposalContextFingerprint == null,
         });
       },
     );
-  }
-
-  // The Myah assistant chat tool only ever knows a threadId (no operator-
-  // chosen Campaign context exists in that surface). This derives the same
-  // Creator/thread anchor the Inbox policy already exposes for the thread
-  // and always saves a General (no-Campaign) draft, matching the tool's
-  // pre-existing single-draft-per-thread contract.
-  async saveMyahInboxDraftForThread(
-    input: SaveMyahInboxDraftMutationInput,
-  ): Promise<MyahInboxDraftSaveResult> {
-    this.assertUserRequest(input);
-
-    const thread = await this.myahInboxQueryService.getThreadSummary({
-      ...input,
-      threadId: input.threadId,
-    });
-    const contactIdentity: MyahInboxContactIdentity = thread.creator
-      ? { kind: 'creator', recordId: thread.creator.id }
-      : { kind: 'email-thread', recordId: input.threadId };
-
-    return this.saveMyahInboxDraft({
-      ...input,
-      expectedWorkspaceId: input.workspace.id,
-      target: {
-        channel: ReplyChannel.EMAIL,
-        contactId: encodeMyahInboxContactId({
-          workspaceId: input.workspace.id,
-          identity: contactIdentity,
-        }),
-        threadId: input.threadId,
-      },
-      replyContext: { kind: ReplyContextKind.GENERAL },
-      proposalContextFingerprint: null,
-    });
   }
 
   async reviewMyahInboxReplyContext(
@@ -316,6 +305,31 @@ export class MyahInboxMutationService {
         });
       },
     );
+  }
+
+  private async assertGeneralAvailable(
+    input: MyahInboxReplyDraftInput & MyahInboxMutationRequest,
+  ) {
+    const target = validateReplyTargetInput(input.target);
+    const replyContext = validateReplyContextInput(input.replyContext);
+    if (
+      target.channel !== ReplyChannel.EMAIL ||
+      replyContext.kind !== ReplyContextKind.GENERAL ||
+      decodeMyahInboxContactId(target.contactId, input.workspace.id).kind !==
+        'creator'
+    ) {
+      return;
+    }
+    const options = await this.replyContextOptions.listOptions({
+      ...input,
+      user: input.user!,
+      expectedWorkspaceId: input.expectedWorkspaceId,
+      target,
+      first: 1,
+    });
+    if (!options.generalAvailable) {
+      throw new ForbiddenException('General reply context is not available');
+    }
   }
 
   private async resolveContextMutation(

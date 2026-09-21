@@ -4,6 +4,8 @@ import { BillingUsageService } from 'src/engine/core-modules/billing/services/bi
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
 import { MyahInboxReplyContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
+import { MyahInboxReplyContextDraftService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-draft.service';
+import { MyahInboxReplyContextOptionsService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-options.service';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
 import { MyahInboxReplyBriefingService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service';
@@ -45,6 +47,8 @@ describe('MyahInboxToolProvider dependency graph', () => {
         ...[
           MyahInboxQueryService,
           MyahInboxReplyContextService,
+          MyahInboxReplyContextDraftService,
+          MyahInboxReplyContextOptionsService,
           ActionApprovalService,
           MyahInboxReplyBriefingService,
           MyahInboxMutationService,

@@ -206,13 +206,26 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
           }
 
           const identity = input.contactIdentity;
+          const creator = thread.creatorId
+            ? await creatorRepository.findOne({
+                where: { id: thread.creatorId, deletedAt: IsNull() },
+                select: {
+                  id: true,
+                  name: true,
+                  language: true,
+                  location: true,
+                  categories: true,
+                  niches: true,
+                },
+              })
+            : null;
 
-          // A thread with no linked Creator can still hold a General
-          // (no-Campaign) draft, anchored to the thread itself rather than
-          // a Creator. Campaign eligibility cannot be evaluated without a
-          // Creator, so Campaign context stays unavailable for this anchor.
+          // Preserve an in-flight thread-anchored General draft after a
+          // visible Creator relink, but never use that alias to bypass a
+          // linked Creator hidden by the current policy.
           if (identity.kind === 'email-thread') {
             if (
+              (thread.creatorId !== null && !creator) ||
               identity.recordId !== targetInput.threadId ||
               input.replyContext.kind !== 'GENERAL'
             ) {
@@ -243,19 +256,6 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
               threadCampaign: { state: 'UNASSOCIATED' },
             };
           }
-          const creator = thread.creatorId
-            ? await creatorRepository.findOne({
-                where: { id: thread.creatorId, deletedAt: IsNull() },
-                select: {
-                  id: true,
-                  name: true,
-                  language: true,
-                  location: true,
-                  categories: true,
-                  niches: true,
-                },
-              })
-            : null;
           const selectedCampaign =
             input.replyContext.kind === 'CAMPAIGN'
               ? await campaignRepository.findOne({
