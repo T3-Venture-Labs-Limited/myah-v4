@@ -76,6 +76,15 @@ jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
 }));
 jest.mock('twenty-ui/input', () => ({
   SegmentedControl: () => null,
+  IconButton: ({
+    ariaLabel,
+    disabled,
+    onClick,
+  }: {
+    ariaLabel: string;
+    disabled?: boolean;
+    onClick?: () => void;
+  }) => <button aria-label={ariaLabel} disabled={disabled} onClick={onClick} />,
   Button: ({
     title,
     ariaLabel,
@@ -292,7 +301,10 @@ jest.mock('@/side-panel/components/SidePanelToggleButton', () => ({
   SidePanelToggleButton: () => <button>Side panel</button>,
 }));
 
-jest.mock('twenty-ui/icon', () => ({ IconInbox: () => null }));
+jest.mock('twenty-ui/icon', () => ({
+  IconInbox: () => null,
+  IconInfoCircle: () => null,
+}));
 
 const contact = (
   id: string,

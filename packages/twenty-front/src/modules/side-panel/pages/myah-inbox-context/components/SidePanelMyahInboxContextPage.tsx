@@ -21,24 +21,26 @@ export const SidePanelMyahInboxContextPage = () => {
     myahInboxContactSelectionState,
   );
   const { pathname } = useLocation();
-  const thread = myahInboxContext?.thread;
+  const contact = myahInboxContext?.contact;
 
   if (
     pathname !== '/myah/inbox' ||
     !currentWorkspace?.id ||
     !myahInboxContext ||
-    !thread ||
+    !contact ||
     myahInboxContext.workspaceId !== currentWorkspace.id ||
     myahInboxContactSelection.workspaceId !== currentWorkspace.id ||
-    myahInboxContactSelection.emailThreadId !== thread.id
+    myahInboxContactSelection.contactId !== contact.id
   ) {
-    return <StyledStatus>No conversation selected.</StyledStatus>;
+    return (
+      <StyledStatus>Select a contact to view Creator context.</StyledStatus>
+    );
   }
 
   return (
     <MyahInboxContextPanel
-      key={`${currentWorkspace.id}:${thread.id}`}
-      thread={thread}
+      key={`${currentWorkspace.id}:${contact.id}`}
+      creator={contact.creator}
     />
   );
 };

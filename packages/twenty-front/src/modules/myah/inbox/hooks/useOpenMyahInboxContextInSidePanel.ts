@@ -9,7 +9,7 @@ export const useOpenMyahInboxContextInSidePanel = () => {
   const openMyahInboxContextInSidePanel = useCallback(() => {
     navigateSidePanelMenu({
       page: SidePanelPages.MyahInboxContext,
-      pageTitle: 'Inbox context',
+      pageTitle: 'Creator context',
       pageIcon: IconInfoCircle,
       pageId: v4(),
       resetNavigationStack: true,

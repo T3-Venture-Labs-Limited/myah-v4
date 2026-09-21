@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react';
 import { NotesCard } from '@/activities/notes/components/NotesCard';
 import { TasksCard } from '@/activities/tasks/components/TasksCard';
 import { TimelineCard } from '@/activities/timeline-activities/components/TimelineCard';
-import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
+import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 import { SidePanelRecordPageContent } from '@/side-panel/pages/record-page/components/SidePanelRecordPage';
 import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { SidePanelProvider } from '@/ui/layout/side-panel/contexts/SidePanelContext';
@@ -14,7 +14,7 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 type MyahInboxContextTab = 'creator' | 'timeline' | 'tasks' | 'notes';
 
 type MyahInboxContextPanelProps = {
-  thread: MyahInboxThread;
+  creator: MyahInboxContact['creator'];
 };
 
 type MyahInboxRecordOverviewProps = {
@@ -132,14 +132,14 @@ const MyahInboxCreatorActivityContext = ({
 };
 
 export const MyahInboxContextPanel = ({
-  thread,
+  creator,
 }: MyahInboxContextPanelProps) => {
   const [activeTab, setActiveTab] = useState<MyahInboxContextTab>('creator');
-  const creatorId = thread.creator?.id ?? null;
+  const creatorId = creator?.id ?? null;
 
   return (
     <StyledContextPanel>
-      <StyledTabList role="tablist" aria-label="Inbox context">
+      <StyledTabList role="tablist" aria-label="Creator context">
         {CONTEXT_TABS.map((tab) => (
           <StyledTab
             key={tab.id}

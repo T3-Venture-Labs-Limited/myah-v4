@@ -1,10 +1,10 @@
-import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
+import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 import { createAtomState } from '@/ui/utilities/state/jotai/utils/createAtomState';
 
 export type MyahInboxContext = {
   ownerId: string;
   workspaceId: string | null;
-  thread: MyahInboxThread | null;
+  contact: MyahInboxContact | null;
   isWide: boolean;
 };
 
