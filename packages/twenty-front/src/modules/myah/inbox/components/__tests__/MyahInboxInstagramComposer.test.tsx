@@ -159,4 +159,113 @@ describe('MyahInboxInstagramComposer', () => {
       screen.getByRole('button', { name: 'Review and send' }),
     ).toBeEnabled();
   });
+
+  it.each([999, 1000])(
+    'enables send and shows the byte count for a body of %i UTF-8 bytes',
+    (byteLength) => {
+      render(
+        <MyahInboxInstagramComposer
+          body={'a'.repeat(byteLength)}
+          channelState="READY"
+          onBodyChange={jest.fn()}
+          onReviewAndSend={jest.fn()}
+          username="creator"
+        />,
+      );
+
+      expect(screen.getByText(`${byteLength} / 1000`)).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Review and send' }),
+      ).toBeEnabled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    },
+  );
+
+  it('disables send and shows an actionable message for a body of 1001 UTF-8 bytes', () => {
+    render(
+      <MyahInboxInstagramComposer
+        body={'a'.repeat(1001)}
+        channelState="READY"
+        onBodyChange={jest.fn()}
+        onReviewAndSend={jest.fn()}
+        username="creator"
+      />,
+    );
+
+    expect(screen.getByText('1001 / 1000')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Review and send' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/too long/i);
+  });
+
+  it('prioritizes the actionable length error over another draft error', () => {
+    render(
+      <MyahInboxInstagramComposer
+        body={'a'.repeat(1001)}
+        channelState="READY"
+        error="Could not save the Instagram draft"
+        onBodyChange={jest.fn()}
+        onReviewAndSend={jest.fn()}
+        username="creator"
+      />,
+    );
+
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent(/too long/i);
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/could not save/i);
+  });
+
+  it('disables send when multi-byte emoji push the body over the byte limit despite a short .length', () => {
+    // Each '\u{1F600}' emoji is 4 UTF-8 bytes but 2 UTF-16 code units.
+    const body = '\u{1F600}'.repeat(251); // 502 chars, 1004 bytes
+    expect(body.length).toBeLessThan(1000);
+
+    render(
+      <MyahInboxInstagramComposer
+        body={body}
+        channelState="READY"
+        onBodyChange={jest.fn()}
+        onReviewAndSend={jest.fn()}
+        username="creator"
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Review and send' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/too long/i);
+  });
+
+  it('measures a multiline body correctly and re-enables send once trimmed to the limit', () => {
+    const overLimitBody = `${'a'.repeat(500)}\n${'b'.repeat(501)}`; // 1002 bytes
+    const { rerender } = render(
+      <MyahInboxInstagramComposer
+        body={overLimitBody}
+        channelState="READY"
+        onBodyChange={jest.fn()}
+        onReviewAndSend={jest.fn()}
+        username="creator"
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Review and send' }),
+    ).toBeDisabled();
+
+    const atLimitBody = `${'a'.repeat(500)}\n${'b'.repeat(499)}`; // 1000 bytes
+    rerender(
+      <MyahInboxInstagramComposer
+        body={atLimitBody}
+        channelState="READY"
+        onBodyChange={jest.fn()}
+        onReviewAndSend={jest.fn()}
+        username="creator"
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Review and send' }),
+    ).toBeEnabled();
+  });
 });

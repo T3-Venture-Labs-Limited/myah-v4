@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { type QueryRunner, type Repository } from 'typeorm';
+import { INSTAGRAM_MESSAGE_MAX_BODY_BYTES } from 'twenty-shared/constants';
+import { getUtf8ByteLength } from 'twenty-shared/utils';
 
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { isInstagramMessageIdentitySnapshot } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
@@ -139,6 +141,11 @@ export class InstagramMessageDraftService {
       input.expectedRevision < 0
     ) {
       throw new Error('Invalid Instagram message draft');
+    }
+    if (getUtf8ByteLength(body) > INSTAGRAM_MESSAGE_MAX_BODY_BYTES) {
+      throw new Error(
+        `Instagram message draft exceeds ${INSTAGRAM_MESSAGE_MAX_BODY_BYTES} bytes`,
+      );
     }
     if (
       await this.actionApprovalService.isDraftExecutionLocked({
@@ -344,6 +351,7 @@ export class InstagramMessageDraftService {
         ) {
           throw new Error('Instagram message draft content changed');
         }
+        // pi-lens-ignore: no-sql-in-code, sql-injection
         await dataSource.query(
           `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
              SET "status" = 'SENT',

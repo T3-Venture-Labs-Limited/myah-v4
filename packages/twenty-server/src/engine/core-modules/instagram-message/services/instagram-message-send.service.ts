@@ -2,6 +2,9 @@ import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval
 import { computeInstagramActionTargetFingerprints } from 'src/engine/core-modules/instagram-action-budget/utils/instagram-action-target-fingerprint.util';
 import { Inject, Injectable } from '@nestjs/common';
 
+import { INSTAGRAM_MESSAGE_MAX_BODY_BYTES } from 'twenty-shared/constants';
+import { getUtf8ByteLength } from 'twenty-shared/utils';
+
 import { ActionExecutionReceiptState } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
@@ -321,6 +324,13 @@ export class InstagramMessageSendService {
       };
       const draft = authority.canonicalGraph.draft;
       const account = authority.canonicalGraph.account;
+      if (
+        getUtf8ByteLength(draft.body.trim()) > INSTAGRAM_MESSAGE_MAX_BODY_BYTES
+      ) {
+        throw new Error(
+          `Instagram message body exceeds ${INSTAGRAM_MESSAGE_MAX_BODY_BYTES} bytes`,
+        );
+      }
       const providerOutcome =
         draft.kind === 'START_CHAT'
           ? await this.unipileClient.startChat(

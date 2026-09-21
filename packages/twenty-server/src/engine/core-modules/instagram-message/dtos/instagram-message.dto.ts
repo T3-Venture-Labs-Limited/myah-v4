@@ -8,7 +8,10 @@ import {
   Min,
 } from 'class-validator';
 
+import { INSTAGRAM_MESSAGE_MAX_BODY_BYTES } from 'twenty-shared/constants';
+
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { MaxUtf8ByteLength } from 'src/engine/core-modules/instagram-message/validators/max-utf8-byte-length.validator';
 
 @InputType()
 export class SaveInstagramMessageDraftInput {
@@ -27,6 +30,7 @@ export class SaveInstagramMessageDraftInput {
 
   @Field()
   @IsString()
+  @MaxUtf8ByteLength(INSTAGRAM_MESSAGE_MAX_BODY_BYTES)
   body: string;
 
   @Field(() => UUIDScalarType, { nullable: true })
