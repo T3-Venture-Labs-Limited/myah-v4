@@ -11,12 +11,7 @@ import { styled } from '@linaria/react';
 import { PageLayoutType } from '~/generated-metadata/graphql';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
-type MyahInboxContextTab =
-  | 'creator'
-  | 'campaign'
-  | 'timeline'
-  | 'tasks'
-  | 'notes';
+type MyahInboxContextTab = 'creator' | 'timeline' | 'tasks' | 'notes';
 
 type MyahInboxContextPanelProps = {
   thread: MyahInboxThread;
@@ -30,7 +25,6 @@ type MyahInboxRecordOverviewProps = {
 
 const CONTEXT_TABS: Array<{ id: MyahInboxContextTab; label: string }> = [
   { id: 'creator', label: 'Creator' },
-  { id: 'campaign', label: 'Campaign' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'notes', label: 'Notes' },
@@ -142,7 +136,6 @@ export const MyahInboxContextPanel = ({
 }: MyahInboxContextPanelProps) => {
   const [activeTab, setActiveTab] = useState<MyahInboxContextTab>('creator');
   const creatorId = thread.creator?.id ?? null;
-  const campaignId = thread.campaign?.id ?? null;
 
   return (
     <StyledContextPanel>
@@ -166,13 +159,6 @@ export const MyahInboxContextPanel = ({
             objectNameSingular="creator"
             objectRecordId={creatorId}
             emptyMessage="No Creator linked. Use the Creator action in the conversation header to link or create one."
-          />
-        )}
-        {activeTab === 'campaign' && (
-          <MyahInboxRecordOverview
-            objectNameSingular="campaign"
-            objectRecordId={campaignId}
-            emptyMessage="No Campaign linked. Use the Campaign action in the conversation header to select one."
           />
         )}
         {activeTab === 'timeline' && (
