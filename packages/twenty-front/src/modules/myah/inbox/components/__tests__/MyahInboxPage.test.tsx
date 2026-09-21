@@ -1,6 +1,7 @@
 import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { type ComponentType } from 'react';
 
 import {
   act,
@@ -33,6 +34,7 @@ const mockUseMyahInboxContactEmailMessages = jest.fn();
 const mockUseMyahInboxEmailHistory = jest.fn();
 const mockUseMyahInboxSelectedEmailThread = jest.fn();
 const mockContextEffect = jest.fn();
+const mockOpenCreatorContext = jest.fn();
 let isMobile = false;
 let mockThreadUpdated: (message: string) => void;
 let mockContactLinked: (id: string) => void | Promise<void>;
@@ -111,11 +113,17 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxSelectedEmailThread', () => ({
 jest.mock('@/myah/inbox/components/MyahInboxContextEffect', () => ({
   MyahInboxContextEffect: (props: {
     workspaceId: string | null;
-    thread: { id: string } | null;
+    contact: MyahInboxContact | null;
   }) => {
     mockContextEffect(props);
     return null;
   },
+}));
+
+jest.mock('@/myah/inbox/hooks/useOpenMyahInboxContextInSidePanel', () => ({
+  useOpenMyahInboxContextInSidePanel: () => ({
+    openMyahInboxContextInSidePanel: mockOpenCreatorContext,
+  }),
 }));
 
 jest.mock('@/myah/inbox/components/MyahInboxContactList', () => ({
@@ -309,7 +317,10 @@ jest.mock('@/side-panel/components/SidePanelToggleButton', () => ({
   SidePanelToggleButton: () => <button>Side panel</button>,
 }));
 
-jest.mock('twenty-ui/icon', () => ({ IconInbox: () => null }));
+jest.mock('twenty-ui/icon', () => ({
+  IconInbox: () => null,
+  IconInfoCircle: () => <svg data-testid="creator-context-icon" />,
+}));
 
 jest.mock('twenty-ui/input', () => ({
   Button: ({
@@ -325,6 +336,21 @@ jest.mock('twenty-ui/input', () => ({
   }) => (
     <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
       {title}
+    </button>
+  ),
+  IconButton: ({
+    Icon,
+    ariaLabel,
+    onClick,
+    disabled,
+  }: {
+    Icon?: ComponentType;
+    ariaLabel: string;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) => (
+    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
+      {Icon && <Icon />}
     </button>
   ),
   SegmentedControl: ({
@@ -700,13 +726,27 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(wrapperStyles).toContain('scrollbar-gutter: stable;');
   });
 
-  it('publishes only the authorized selected Email thread to the context sidecar', async () => {
-    renderPage();
+  it('publishes the authorized selected contact for Email and Instagram', async () => {
+    const instagramOnlyContact: MyahInboxContact = {
+      ...contacts[1],
+      email: {
+        isAvailable: false,
+        threadCount: 0,
+        threadIds: [],
+        latestThreadId: null,
+        needsAttention: false,
+      },
+    };
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [contacts[0], instagramOnlyContact],
+    });
+    const { store } = renderPage();
 
     await waitFor(() =>
       expect(mockContextEffect).toHaveBeenLastCalledWith({
         workspaceId: 'workspace-1',
-        thread: expect.objectContaining({ id: 'thread-2' }),
+        contact: expect.objectContaining({ id: 'contact-1' }),
       }),
     );
 
@@ -715,7 +755,12 @@ describe('MyahInboxPage contact-first flow', () => {
     );
     expect(mockContextEffect).toHaveBeenLastCalledWith({
       workspaceId: 'workspace-1',
-      thread: null,
+      contact: expect.objectContaining({ id: 'contact-2' }),
+    });
+    expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+      contactId: 'contact-2',
+      channel: 'INSTAGRAM',
+      emailThreadId: null,
     });
   });
 
@@ -1237,6 +1282,31 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(
       screen.getByRole('option', { name: 'Select contact-1' }),
     ).toHaveFocus();
+  });
+
+  it('opens Creator context from the same mobile control in both channels', async () => {
+    isMobile = true;
+    renderPage();
+    await screen.findByText('Selected: contact-1');
+
+    fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' }));
+    const creatorContextButton = screen.getByRole('button', {
+      name: 'Creator context',
+    });
+    expect(
+      within(creatorContextButton).getByTestId('creator-context-icon'),
+    ).toBeVisible();
+    expect(creatorContextButton).not.toHaveTextContent(/\S/);
+    fireEvent.click(creatorContextButton);
+    expect(mockOpenCreatorContext).toHaveBeenCalledTimes(1);
+
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Creator context' }));
+    expect(mockOpenCreatorContext).toHaveBeenCalledTimes(2);
   });
 
   it('best-effort flushes on page hide but invalidates authority on forced unmount', async () => {

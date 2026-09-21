@@ -908,7 +908,7 @@ const MyahInboxPageContent = ({
     >
       <MyahInboxContextEffect
         workspaceId={workspaceId}
-        thread={selectedThread.thread}
+        contact={selectedContact}
       />
       {pendingDestination ? (
         <StyledSelectionStatus role="status" aria-live="polite">

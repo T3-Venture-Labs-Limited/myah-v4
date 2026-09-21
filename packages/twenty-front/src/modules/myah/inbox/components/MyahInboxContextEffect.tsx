@@ -9,8 +9,8 @@ import { SidePanelPages } from 'twenty-shared/types';
 import { useStore } from 'jotai';
 import { useLocation } from 'react-router-dom';
 import { useMediaQuery } from 'react-responsive';
-import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { myahInboxContextState } from '@/myah/inbox/states/myahInboxContextState';
+import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 
 type MyahInboxContextVisibility = {
   ready: boolean;
@@ -21,12 +21,12 @@ type MyahInboxContextVisibility = {
 
 type MyahInboxContextEffectProps = {
   workspaceId: string | null;
-  thread: MyahInboxThread | null;
+  contact: MyahInboxContact | null;
 };
 
 export const MyahInboxContextEffect = ({
   workspaceId,
-  thread,
+  contact,
 }: MyahInboxContextEffectProps) => {
   const store = useStore();
   const ownerId = useId();
@@ -55,7 +55,7 @@ export const MyahInboxContextEffect = ({
     store.set(myahInboxContextState.atom, {
       ownerId,
       workspaceId,
-      thread,
+      contact,
       isWide,
     });
     return () => {
@@ -63,7 +63,7 @@ export const MyahInboxContextEffect = ({
         store.set(myahInboxContextState.atom, null);
       }
     };
-  }, [isWide, ownerId, pathname, store, thread, workspaceId]);
+  }, [contact, isWide, ownerId, pathname, store, workspaceId]);
 
   useEffect(() => {
     let disposed = false;
@@ -112,7 +112,7 @@ export const MyahInboxContextEffect = ({
       if (
         context.isWide &&
         context.workspaceId &&
-        context.thread &&
+        context.contact &&
         !opened &&
         !store.get(isSidePanelClosingState.atom) &&
         !next.dismissed &&
