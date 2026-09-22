@@ -949,8 +949,8 @@ describeIsolated('SocialProfileService (isolated PostgreSQL)', () => {
     await client.query(
       `INSERT INTO "${workspaceSchema}"."creator" (
         id, name, "instagramUsername", "instagramFollowerCount",
-        "tiktokUsername", "tiktokFollowerCount", notes, "instagramBio"
-      ) VALUES ($1, 'Legacy Creator', $2, 1200, $3, 500, 'inline note', 'legacy bio')`,
+        "tiktokUsername", "tiktokFollowerCount", notes, "instagramBio", "tiktokBio"
+      ) VALUES ($1, 'Legacy Creator', $2, 1200, $3, 500, 'inline note', 'legacy bio', 'private tiktok bio')`,
       [legacyCreatorId, instagramHandle, tiktokHandle],
     );
     // pi-lens-ignore: sql-injection, no-sql-in-code -- schema is derived from an allowlisted isolated workspace UUID.
