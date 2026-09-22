@@ -10,7 +10,6 @@ import { ActorModule } from 'src/engine/core-modules/actor/actor.module';
 import { AdminPanelModule } from 'src/engine/core-modules/admin-panel/admin-panel.module';
 import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
 import { AppTokenModule } from 'src/engine/core-modules/app-token/app-token.module';
-import { ApplicationDevelopmentModule } from 'src/engine/core-modules/application/application-development/application-development.module';
 import { ApplicationInstallModule } from 'src/engine/core-modules/application/application-install/application-install.module';
 import { MarketplaceModule } from 'src/engine/core-modules/application/application-marketplace/marketplace.module';
 import { ApplicationOAuthModule } from 'src/engine/core-modules/application/application-oauth/application-oauth.module';
@@ -25,7 +24,6 @@ import { AppBillingModule } from 'src/engine/core-modules/billing/app-billing/ap
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { BillingGraphqlApiExceptionFilter } from 'src/engine/core-modules/billing/filters/billing-graphql-api-exception.filter';
 import { CacheStorageModule } from 'src/engine/core-modules/cache-storage/cache-storage.module';
-import { TimelineCalendarEventModule } from 'src/engine/core-modules/calendar/timeline-calendar-event.module';
 import { CaptchaModule } from 'src/engine/core-modules/captcha/captcha.module';
 import { CustomerAccountModule } from 'src/engine/core-modules/customer-account/customer-account.module';
 import { CloudflareModule } from 'src/engine/core-modules/cloudflare/cloudflare.module';
@@ -83,7 +81,6 @@ import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.modul
 import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/workspace-event-emitter.module';
 import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
 import { ChannelSyncModule } from 'src/modules/connected-account/channel-sync/channel-sync.module';
-import { CreateCalendarEventModule } from 'src/modules/calendar/calendar-event-creation-manager/create-calendar-event.module';
 import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 import { SendEmailModule } from 'src/modules/messaging/message-outbound-manager/send-email.module';
 import { ClientConfigModule } from './client-config/client-config.module';
@@ -111,11 +108,9 @@ import { FileModule } from './file/file.module';
     ApplicationModule,
     ApplicationInstallModule,
     ApplicationUpgradeModule,
-    ApplicationDevelopmentModule,
     MarketplaceModule,
     AppTokenModule,
     TimelineMessagingModule,
-    TimelineCalendarEventModule,
     UserModule,
     WorkspaceModule,
     WorkspaceInvitationModule,
@@ -143,7 +138,6 @@ import { FileModule } from './file/file.module';
     ImapSmtpCaldavModule,
     ChannelSyncModule,
     SendEmailModule,
-    CreateCalendarEventModule,
     FileStorageModule.forRoot(),
     LoggerModule.forRootAsync({
       useFactory: loggerModuleFactory,
@@ -195,7 +189,6 @@ import { FileModule } from './file/file.module';
     AuthModule,
     FeatureFlagModule,
     TimelineMessagingModule,
-    TimelineCalendarEventModule,
     UserModule,
     WorkspaceModule,
     WorkspaceInvitationModule,

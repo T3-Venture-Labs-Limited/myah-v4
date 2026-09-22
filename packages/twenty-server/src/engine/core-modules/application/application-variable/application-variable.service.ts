@@ -13,6 +13,7 @@ import { SECRET_APPLICATION_VARIABLE_MASK } from 'src/engine/core-modules/applic
 import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 @Injectable()
 export class ApplicationVariableEntityService {
@@ -52,6 +53,22 @@ export class ApplicationVariableEntityService {
     workspaceId: string;
     plainTextValue: PlaintextString;
   }) {
+    const { flatApplicationMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'flatApplicationMaps',
+      ]);
+    const application = flatApplicationMaps.byId[applicationId];
+
+    if (
+      !isDefined(application) ||
+      isRetiredApplicationUniversalIdentifier(application.universalIdentifier)
+    ) {
+      throw new ApplicationVariableEntityException(
+        `Application with id ${applicationId} not found`,
+        ApplicationVariableEntityExceptionCode.APPLICATION_VARIABLE_NOT_FOUND,
+      );
+    }
+
     const existingVariable = await this.applicationVariableRepository.findOne({
       where: { key, applicationId },
     });

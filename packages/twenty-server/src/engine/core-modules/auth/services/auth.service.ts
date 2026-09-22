@@ -20,6 +20,7 @@ import {
 } from 'src/engine/core-modules/app-token/app-token.entity';
 import { INVITATION_APP_TOKEN_TYPES } from 'src/engine/core-modules/workspace-invitation/constants/invitation-app-token-types';
 import { ApplicationRegistrationService } from 'src/engine/core-modules/application/application-registration/application-registration.service';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { EventLogEmitterService } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.service';
 import { IMPERSONATION_EVENT } from 'src/engine/core-modules/event-logs/emit/events/workspace-event/impersonation/impersonation';
 import {
@@ -514,7 +515,12 @@ export class AuthService {
     const applicationRegistration =
       await this.applicationRegistrationService.findOneByClientId(clientId);
 
-    if (!applicationRegistration) {
+    if (
+      !applicationRegistration ||
+      isRetiredApplicationUniversalIdentifier(
+        applicationRegistration.universalIdentifier,
+      )
+    ) {
       throw new AuthException(
         `Client not found for '${clientId}'`,
         AuthExceptionCode.CLIENT_NOT_FOUND,

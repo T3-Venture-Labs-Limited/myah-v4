@@ -3,7 +3,7 @@ import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
-import { MYAH_CREATOR_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { MYAH_CREATOR_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 
 const CREATOR_PAGE_LAYOUT_TAB_UNIVERSAL_IDENTIFIERS = Object.values(
   MYAH_CREATOR_PAGE_LAYOUT_CONFIG.tabs,

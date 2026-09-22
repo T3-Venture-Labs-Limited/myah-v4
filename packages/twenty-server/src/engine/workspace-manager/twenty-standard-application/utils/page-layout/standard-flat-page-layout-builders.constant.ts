@@ -1,6 +1,6 @@
 import { type FlatPageLayout } from 'src/engine/metadata-modules/flat-page-layout/types/flat-page-layout.type';
 import { type StandardPageLayoutConfig } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-config';
-import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 import {
   type CreateStandardPageLayoutArgs,
   createStandardPageLayoutFlatMetadata,

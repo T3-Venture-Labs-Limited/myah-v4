@@ -6,7 +6,6 @@ import {
 } from './create-standard-view-filter-flat-metadata.util';
 
 type MyahViewFilterObjectName =
-  | 'brandBrainUpdateProposal'
   | 'creator'
   | 'campaignCreator'
   | 'campaignCreatorList';
@@ -18,22 +17,6 @@ type Args = Omit<
 export const computeMyahViewFilters = (
   args: Args,
 ): Record<string, FlatViewFilter> => ({
-  ...(args.objectName === 'brandBrainUpdateProposal'
-    ? {
-        pendingBrandBrainProposalsStatusIs:
-          createStandardViewFilterFlatMetadata({
-            ...args,
-            objectName: 'brandBrainUpdateProposal',
-            context: {
-              viewName: 'view25d4c1a3',
-              viewFilterName: 'status',
-              fieldName: 'status',
-              operand: ViewFilterOperand.IS,
-              value: JSON.stringify(['PENDING']),
-            },
-          }),
-      }
-    : {}),
   ...(args.objectName === 'creator'
     ? {
         qualifiedCreatorsWithEmailCreatorStatusIs:

@@ -53,10 +53,15 @@ export const buildMyahBrandBrainAdminStandardFlatRole = (
     ...args,
     context: {
       ...base,
+      isEditable: false,
+      canBeAssignedToUsers: false,
+      canBeAssignedToAgents: false,
+      canBeAssignedToApiKeys: false,
       roleName: 'brandBrainAdmin',
       universalIdentifier: MYAH_BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER,
-      label: 'Brand Brain Admin',
-      description: 'Can manage Brand Brain pages and links in the local MVP.',
+      label: 'Retired Brand Brain content reader',
+      description:
+        'Read-only compatibility access for preserved Brand Brain content.',
       icon: 'IconNotebook',
       objectPermissionUniversalIdentifiers:
         BRAND_BRAIN_OBJECT_PERMISSION_UNIVERSAL_IDENTIFIERS,

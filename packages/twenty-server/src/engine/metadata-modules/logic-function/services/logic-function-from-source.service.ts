@@ -6,6 +6,7 @@ import { v4 } from 'uuid';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { LogicFunctionExecutorService } from 'src/engine/core-modules/logic-function/logic-function-executor/logic-function-executor.service';
 import { LogicFunctionResourceService } from 'src/engine/core-modules/logic-function/logic-function-resource/logic-function-resource.service';
@@ -140,6 +141,8 @@ export class LogicFunctionFromSourceService {
         workspaceId,
       });
 
+    this.assertApplicationIsAvailable(ownerFlatApplication);
+
     const newId = v4();
 
     const { sourceHandlerPath, builtHandlerPath } = existingLogicFunction;
@@ -232,6 +235,8 @@ export class LogicFunctionFromSourceService {
         workspaceId,
       });
 
+    this.assertApplicationIsAvailable(ownerFlatApplication);
+
     const sourceHandlerCode =
       updateLogicFunctionFromSourceInput.update.sourceHandlerCode;
 
@@ -280,6 +285,8 @@ export class LogicFunctionFromSourceService {
     const effectiveOwnerFlatApplication =
       ownerFlatApplication ?? resolvedOwnerFlatApplication;
 
+    this.assertApplicationIsAvailable(effectiveOwnerFlatApplication);
+
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
         {
@@ -321,6 +328,8 @@ export class LogicFunctionFromSourceService {
         id,
         workspaceId,
       });
+
+    this.assertApplicationIsAvailable(ownerFlatApplication);
 
     const sourceCode = await this.logicFunctionResourceService.getSourceFile({
       workspaceId,
@@ -371,11 +380,13 @@ export class LogicFunctionFromSourceService {
     payload: object;
     workspaceId: string;
   }): Promise<LogicFunctionExecutionResultDTO> {
-    const { flatLogicFunction } =
+    const { flatLogicFunction, ownerFlatApplication } =
       await this.helperService.findLogicFunctionAndApplicationOrThrow({
         id,
         workspaceId,
       });
+
+    this.assertApplicationIsAvailable(ownerFlatApplication);
 
     if (!flatLogicFunction.isBuildUpToDate) {
       await this.buildOneFromSource({ workspaceId, id });
@@ -418,11 +429,24 @@ export class LogicFunctionFromSourceService {
         workspaceId,
       });
 
+    this.assertApplicationIsAvailable(ownerFlatApplication);
+
     return this.logicFunctionResourceService.getSourceFile({
       workspaceId,
       applicationUniversalIdentifier: ownerFlatApplication.universalIdentifier,
       sourceHandlerPath: flatLogicFunction.sourceHandlerPath,
     });
+  }
+
+  private assertApplicationIsAvailable(application: FlatApplication): void {
+    if (
+      isRetiredApplicationUniversalIdentifier(application.universalIdentifier)
+    ) {
+      throw new LogicFunctionException(
+        'Logic function not found.',
+        LogicFunctionExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
+      );
+    }
   }
 
   private async findFlatLogicFunctionByIdAndConvertToDto({

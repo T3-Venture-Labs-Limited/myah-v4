@@ -100,14 +100,9 @@ export const SettingsToolDetail = () => {
     : schemaData?.getToolInputSchema;
 
   const functionLink = isCustomTool
-    ? isDefined(logicFunction?.applicationId)
-      ? getSettingsPath(SettingsPath.ApplicationLogicFunctionDetail, {
-          applicationId: logicFunction.applicationId,
-          logicFunctionId: logicFunction?.id ?? '',
-        })
-      : getSettingsPath(SettingsPath.LogicFunctionDetail, {
-          logicFunctionId: logicFunction?.id ?? '',
-        })
+    ? getSettingsPath(SettingsPath.LogicFunctionDetail, {
+        logicFunctionId: logicFunction?.id ?? '',
+      })
     : undefined;
 
   const debouncedSaveName = useDebouncedCallback(async (value: string) => {

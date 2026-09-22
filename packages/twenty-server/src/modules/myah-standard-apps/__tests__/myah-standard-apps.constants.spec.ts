@@ -4,26 +4,23 @@ import {
 } from 'src/modules/myah-standard-apps/myah-standard-apps.constants';
 
 describe('Myah standard app allowlist', () => {
-  it('recognizes the immutable Brand Brain identifier', () => {
-    expect(
-      isMyahStandardAppUniversalIdentifier(
-        '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991',
-      ),
-    ).toBe(true);
-    expect(
-      Object.keys(MYAH_STANDARD_APP_UNIVERSAL_IDENTIFIER_LOOKUP),
-    ).toHaveLength(2);
-  });
-
-  it('recognizes the Myah Instagram messaging identifier', () => {
+  it('recognizes only the retained Myah Instagram messaging identifier', () => {
     expect(
       isMyahStandardAppUniversalIdentifier(
         '4738ebcd-6662-4ecc-a190-374fa0525951',
       ),
     ).toBe(true);
+    expect(Object.keys(MYAH_STANDARD_APP_UNIVERSAL_IDENTIFIER_LOOKUP)).toEqual([
+      '4738ebcd-6662-4ecc-a190-374fa0525951',
+    ]);
   });
 
-  it('rejects legacy Creator Ops, display names, and unknown identifiers', () => {
+  it('rejects retired Brand Brain, legacy Creator Ops, display names, and unknown identifiers', () => {
+    expect(
+      isMyahStandardAppUniversalIdentifier(
+        '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991',
+      ),
+    ).toBe(false);
     expect(
       isMyahStandardAppUniversalIdentifier(
         '72f2fd16-880c-4c63-852f-dbf63f51c152',

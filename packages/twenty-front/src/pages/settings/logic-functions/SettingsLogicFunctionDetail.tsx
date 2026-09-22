@@ -19,8 +19,6 @@ import {
   IconPlayerPlay,
   IconSettings,
 } from 'twenty-ui/icon';
-import { useQuery } from '@apollo/client/react';
-import { FindOneApplicationDocument } from '~/generated-metadata/graphql';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { SettingsLogicFunctionCodeEditorTab } from '@/settings/logic-functions/components/tabs/SettingsLogicFunctionCodeEditorTab';
@@ -34,20 +32,7 @@ export const SettingsLogicFunctionDetail = () => {
   const navigate = useNavigate();
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
 
-  const { data, loading: applicationLoading } = useQuery(
-    FindOneApplicationDocument,
-    {
-      variables: { id: applicationId ?? '' },
-      skip: !isDefined(applicationId),
-    },
-  );
-
-  const applicationName = data?.findOneApplication?.name;
-
-  const applicationVariableKeys =
-    data?.findOneApplication?.applicationVariables?.map(
-      (variable) => variable.key,
-    ) ?? [];
+  const applicationVariableKeys: string[] = [];
 
   const workspaceCustomApplicationId =
     currentWorkspace?.workspaceCustomApplication?.id;
@@ -93,40 +78,18 @@ export const SettingsLogicFunctionDetail = () => {
   const isSettingsTab = activeTabId === 'settings';
   const isTestTab = activeTabId === 'test';
 
-  const breadcrumbLinks = isDefined(applicationId)
-    ? (() => {
-        const applicationContentHref = getSettingsPath(
-          SettingsPath.ApplicationDetail,
-          { applicationId },
-          undefined,
-          'content',
-        );
-        return [
-          {
-            children: t`Workspace`,
-            href: getSettingsPath(SettingsPath.General),
-          },
-          {
-            children: t`Applications`,
-            href: getSettingsPath(SettingsPath.Applications),
-          },
-          { children: applicationName ?? '', href: applicationContentHref },
-          { children: t`Logic functions`, href: applicationContentHref },
-          { children: logicFunction?.name ?? '' },
-        ];
-      })()
-    : [
-        {
-          children: t`Workspace`,
-          href: getSettingsPath(SettingsPath.General),
-        },
-        {
-          children: t`AI`,
-          href: getSettingsPath(SettingsPath.AI),
-        },
-        { children: t`Logic functions` },
-        { children: logicFunction?.name ?? '' },
-      ];
+  const breadcrumbLinks = [
+    {
+      children: t`Workspace`,
+      href: getSettingsPath(SettingsPath.General),
+    },
+    {
+      children: t`AI`,
+      href: getSettingsPath(SettingsPath.AI),
+    },
+    { children: t`Logic functions` },
+    { children: logicFunction?.name ?? '' },
+  ];
 
   const files = [
     {
@@ -137,8 +100,7 @@ export const SettingsLogicFunctionDetail = () => {
   ];
 
   return (
-    !loading &&
-    !applicationLoading && (
+    !loading && (
       <SettingsPageLayout
         title={
           <SettingsLogicFunctionLabelContainer
@@ -165,7 +127,7 @@ export const SettingsLogicFunctionDetail = () => {
               formValues={formValues}
               onChange={onChange}
               readonly={isReadonly}
-              applicationName={applicationName}
+              applicationName={undefined}
             />
           )}
           {isSettingsTab && (

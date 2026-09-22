@@ -1,56 +1,31 @@
 import { ToolRegistryService } from 'src/engine/core-modules/tool-provider/services/tool-registry.service';
 
-const BRAND_BRAIN_TOOL_NAME = 'app_brand_brain_get_context';
+const context = {
+  workspaceId: 'workspace-id',
+  roleId: 'role-id',
+  rolePermissionConfig: { shouldBypassPermissionChecks: true as const },
+};
 
-const descriptor = (category: 'BRAND_BRAIN' | 'LOGIC_FUNCTION') => ({
-  name: BRAND_BRAIN_TOOL_NAME,
-  label: 'Get Brand Brain Context',
-  description: 'Read Brand Brain context.',
-  inputSchema: { type: 'object', properties: {} },
-  category,
-  executionRef:
-    category === 'BRAND_BRAIN'
-      ? ({ kind: 'static', toolId: BRAND_BRAIN_TOOL_NAME } as const)
-      : ({
-          kind: 'logic_function',
-          logicFunctionUniversalIdentifier: 'legacy-function-id',
-        } as const),
-});
-
-const provider = ({
-  category,
-  available = true,
-}: {
-  category: 'BRAND_BRAIN' | 'LOGIC_FUNCTION';
-  available?: boolean;
-}) => ({
-  category,
-  isAvailable: jest.fn().mockResolvedValue(available),
-  generateDescriptors: jest.fn().mockResolvedValue([descriptor(category)]),
+const logicFunctionProvider = (toolNames: string[]) => ({
+  category: 'LOGIC_FUNCTION',
+  isAvailable: jest.fn().mockResolvedValue(true),
+  generateDescriptors: jest.fn().mockResolvedValue(
+    toolNames.map((name) => ({
+      name,
+      label: name,
+      description: 'Installed application tool.',
+      inputSchema: { type: 'object', properties: {} },
+      category: 'LOGIC_FUNCTION',
+      executionRef: {
+        kind: 'logic_function',
+        logicFunctionUniversalIdentifier: `${name}-id`,
+      },
+    })),
+  ),
   executeStaticTool: jest.fn(),
 });
 
 describe('ToolRegistryService', () => {
-  const context = {
-    workspaceId: 'workspace-id',
-    roleId: 'role-id',
-    rolePermissionConfig: { shouldBypassPermissionChecks: true as const },
-  };
-
-  it('keeps the native Brand Brain descriptor when a legacy logic function has the same name', async () => {
-    const nativeProvider = provider({ category: 'BRAND_BRAIN' });
-    const legacyProvider = provider({ category: 'LOGIC_FUNCTION' });
-    const registry = new ToolRegistryService(
-      [nativeProvider, legacyProvider] as never,
-      {} as never,
-      {} as never,
-    );
-
-    await expect(registry.getCatalog(context)).resolves.toEqual([
-      descriptor('BRAND_BRAIN'),
-    ]);
-  });
-
   it('keeps the native selected-Inbox tool when a logic function has the same name', async () => {
     const name = 'get_myah_inbox_thread_context';
     const nativeDescriptor = {
@@ -61,30 +36,15 @@ describe('ToolRegistryService', () => {
       category: 'MYAH_INBOX',
       executionRef: { kind: 'static', toolId: name },
     };
-    const logicFunctionDescriptor = {
-      ...nativeDescriptor,
-      category: 'LOGIC_FUNCTION',
-      executionRef: {
-        kind: 'logic_function',
-        logicFunctionUniversalIdentifier: 'legacy-inbox-function-id',
-      },
-    };
+    const legacyProvider = logicFunctionProvider([name]);
     const nativeProvider = {
       category: 'MYAH_INBOX',
       isAvailable: jest.fn().mockResolvedValue(true),
       generateDescriptors: jest.fn().mockResolvedValue([nativeDescriptor]),
       executeStaticTool: jest.fn(),
     };
-    const logicFunctionProvider = {
-      category: 'LOGIC_FUNCTION',
-      isAvailable: jest.fn().mockResolvedValue(true),
-      generateDescriptors: jest
-        .fn()
-        .mockResolvedValue([logicFunctionDescriptor]),
-      executeStaticTool: jest.fn(),
-    };
     const registry = new ToolRegistryService(
-      [logicFunctionProvider, nativeProvider] as never,
+      [legacyProvider, nativeProvider] as never,
       {} as never,
       {} as never,
     );
@@ -94,74 +54,39 @@ describe('ToolRegistryService', () => {
     ]);
   });
 
-  it('hydrates the native implementation when eager loading colliding tools', async () => {
-    const nativeProvider = provider({ category: 'BRAND_BRAIN' });
-    const legacyProvider = provider({ category: 'LOGIC_FUNCTION' });
-    const dispatch = jest.fn().mockResolvedValue({
-      success: true,
-      message: 'Brand Brain context loaded',
-    });
+  it('rejects retired Brand Brain tools from stale installed metadata', async () => {
+    const retiredToolNames = [
+      'app_brand_brain_get_context',
+      'app_brand_brain_search_or_read',
+      'app_brand_brain_seed_or_update_from_brief',
+      'app_brand_brain_update_page_content',
+    ];
+    const dispatch = jest.fn();
     const registry = new ToolRegistryService(
-      [nativeProvider, legacyProvider] as never,
+      [logicFunctionProvider(retiredToolNames)] as never,
       { dispatch } as never,
       {} as never,
     );
 
-    const tools = await registry.getToolsByCategories(context);
-
-    await tools[BRAND_BRAIN_TOOL_NAME]?.execute?.(
-      {},
-      { toolCallId: 'tool-call-id', messages: [] },
-    );
-    expect(dispatch).toHaveBeenCalledWith(
-      descriptor('BRAND_BRAIN'),
-      {},
-      context,
-    );
-  });
-
-  it('retains a legacy Brand Brain logic function when the native provider is unavailable', async () => {
-    const nativeProvider = provider({
-      category: 'BRAND_BRAIN',
-      available: false,
+    await expect(registry.getCatalog(context)).resolves.toEqual([]);
+    await expect(
+      registry.resolveAndExecute(retiredToolNames[0], {}, context),
+    ).resolves.toEqual({
+      success: false,
+      message: `Tool "${retiredToolNames[0]}" not found`,
+      error: `Tool "${retiredToolNames[0]}" not found. Use learn_tools to discover available tools.`,
     });
-    const legacyProvider = provider({ category: 'LOGIC_FUNCTION' });
-    const registry = new ToolRegistryService(
-      [nativeProvider, legacyProvider] as never,
-      {} as never,
-      {} as never,
-    );
-
-    await expect(registry.getCatalog(context)).resolves.toEqual([
-      descriptor('LOGIC_FUNCTION'),
-    ]);
+    expect(dispatch).not.toHaveBeenCalled();
   });
+
   it('never exposes retired Instagram app tools from stale installed metadata', async () => {
     const retiredToolNames = [
       'app_myah_list_instagram_conversations',
       'app_myah_list_instagram_messages',
       'app_myah_send_instagram_reply',
     ];
-    const logicFunctionProvider = {
-      category: 'LOGIC_FUNCTION',
-      isAvailable: jest.fn().mockResolvedValue(true),
-      generateDescriptors: jest.fn().mockResolvedValue(
-        retiredToolNames.map((name) => ({
-          name,
-          label: name,
-          description: 'Retired Instagram app tool.',
-          inputSchema: { type: 'object', properties: {} },
-          category: 'LOGIC_FUNCTION',
-          executionRef: {
-            kind: 'logic_function',
-            logicFunctionUniversalIdentifier: `${name}-id`,
-          },
-        })),
-      ),
-      executeStaticTool: jest.fn(),
-    };
     const registry = new ToolRegistryService(
-      [logicFunctionProvider] as never,
+      [logicFunctionProvider(retiredToolNames)] as never,
       {} as never,
       {} as never,
     );

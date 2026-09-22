@@ -121,17 +121,8 @@ describe('MyahNavigationRouteDispatcher', () => {
 
   it.each<{
     routes: ResolvedMyahNavigationRoute[];
-    initialEntry:
-      | '/myah/brand-brain'
-      | '/myah/segments'
-      | '/myah/creator-discovery';
+    initialEntry: '/myah/segments' | '/myah/creator-discovery';
   }>([
-    {
-      initialEntry: '/myah/brand-brain',
-      routes: [
-        { status: 'missing', route: getMyahNavigationRoute('brand-brain') },
-      ],
-    },
     {
       initialEntry: '/myah/segments',
       routes: [
@@ -153,9 +144,12 @@ describe('MyahNavigationRouteDispatcher', () => {
     },
   );
 
-  it('renders NotFound for an unknown page ID', () => {
-    renderDispatcher([]);
+  it.each(['/myah/brand-brain', '/myah/unknown'])(
+    'renders NotFound for stale or unknown route %s',
+    (initialEntry) => {
+      renderDispatcher([], initialEntry);
 
-    expect(screen.getByText('Not Found')).toBeVisible();
-  });
+      expect(screen.getByText('Not Found')).toBeVisible();
+    },
+  );
 });

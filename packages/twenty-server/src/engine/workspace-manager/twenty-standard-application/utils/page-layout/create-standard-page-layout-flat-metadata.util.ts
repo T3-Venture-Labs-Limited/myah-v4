@@ -4,7 +4,7 @@ import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { type FlatPageLayout } from 'src/engine/metadata-modules/flat-page-layout/types/flat-page-layout.type';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 import { PageLayoutType } from 'src/engine/metadata-modules/page-layout/enums/page-layout-type.enum';
-import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 import { type StandardObjectMetadataRelatedEntityIds } from 'src/engine/workspace-manager/twenty-standard-application/utils/get-standard-object-metadata-related-entity-ids.util';
 import { type StandardPageLayoutMetadataRelatedEntityIds } from 'src/engine/workspace-manager/twenty-standard-application/utils/get-standard-page-layout-metadata-related-entity-ids.util';
 
@@ -26,7 +26,6 @@ export type CreateStandardPageLayoutArgs = {
 };
 
 const MYAH_OBJECT_NAMES_BY_UNIVERSAL_IDENTIFIER: Record<string, string> = {
-  '6a8289d7-8034-4f70-b3fa-47bc0e52828f': 'brandBrainPage',
   '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de': 'creator',
 };
 export const findObjectNameByUniversalIdentifier = (

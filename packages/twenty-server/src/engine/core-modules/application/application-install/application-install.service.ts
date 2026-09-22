@@ -15,6 +15,7 @@ import {
   ApplicationExceptionCode,
 } from 'src/engine/core-modules/application/application.exception';
 import { ApplicationRegistrationEntity } from 'src/engine/core-modules/application/application-registration/application-registration.entity';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { ApplicationRegistrationService } from 'src/engine/core-modules/application/application-registration/application-registration.service';
 import { ApplicationRegistrationSourceType } from 'src/engine/core-modules/application/application-registration/enums/application-registration-source-type.enum';
 import { ManifestAssetUrlResolverService } from 'src/engine/core-modules/application/application-registration/manifest-asset-url-resolver.service';
@@ -80,7 +81,12 @@ export class ApplicationInstallService {
       where: { id: params.appRegistrationId },
     });
 
-    if (!appRegistration) {
+    if (
+      !appRegistration ||
+      isRetiredApplicationUniversalIdentifier(
+        appRegistration.universalIdentifier,
+      )
+    ) {
       throw new ApplicationException(
         `Application registration with id ${params.appRegistrationId} not found`,
         ApplicationExceptionCode.APPLICATION_NOT_FOUND,

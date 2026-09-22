@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import {
   IconApi,
   IconAt,
-  IconCalendarEvent,
   IconCode,
   IconDownload,
   IconFileExport,
@@ -99,16 +98,6 @@ export const useActionRolePermissionFlagConfig = ({
         isRelevantForUsers: true,
       },
       {
-        key: PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL,
-        name: t`Create Calendar Event`,
-        description: t`Create calendar events via connected accounts`,
-        Icon: IconCalendarEvent,
-        isToolPermission: true,
-        isRelevantForAgents: true,
-        isRelevantForApiKeys: true,
-        isRelevantForUsers: true,
-      },
-      {
         key: PermissionFlagType.HTTP_REQUEST_TOOL,
         name: t`HTTP Request`,
         description: t`Make HTTP requests to external APIs`,
@@ -151,7 +140,7 @@ export const useActionRolePermissionFlagConfig = ({
       {
         key: PermissionFlagType.CONNECTED_ACCOUNTS,
         name: t`Sync Account`,
-        description: t`Sync email and calendar accounts`,
+        description: t`Sync email accounts`,
         Icon: IconAt,
         isToolPermission: true,
         isRelevantForAgents: false,

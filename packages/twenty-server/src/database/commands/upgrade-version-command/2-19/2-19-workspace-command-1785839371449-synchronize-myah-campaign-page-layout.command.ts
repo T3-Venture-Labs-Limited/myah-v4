@@ -8,7 +8,7 @@ import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/c
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 
 const campaignPageLayoutTabs = Object.values(
   MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs,

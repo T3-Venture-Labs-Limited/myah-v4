@@ -1,7 +1,5 @@
-import { isGoogleCalendarEnabledState } from '@/client-config/states/isGoogleCalendarEnabledState';
 import { isGoogleMessagingEnabledState } from '@/client-config/states/isGoogleMessagingEnabledState';
 import { isImapSmtpCaldavEnabledState } from '@/client-config/states/isImapSmtpCaldavEnabledState';
-import { isMicrosoftCalendarEnabledState } from '@/client-config/states/isMicrosoftCalendarEnabledState';
 import { isMicrosoftMessagingEnabledState } from '@/client-config/states/isMicrosoftMessagingEnabledState';
 import { useTriggerApisOAuth } from '@/settings/accounts/hooks/useTriggerApiOAuth';
 import { SettingsCard } from '@/settings/components/SettingsCard';
@@ -50,12 +48,6 @@ export const EmailAccountConnectionCards = ({
   const isMicrosoftMessagingEnabled = useAtomStateValue(
     isMicrosoftMessagingEnabledState,
   );
-  const isGoogleCalendarEnabled = useAtomStateValue(
-    isGoogleCalendarEnabledState,
-  );
-  const isMicrosoftCalendarEnabled = useAtomStateValue(
-    isMicrosoftCalendarEnabledState,
-  );
   const isImapSmtpCaldavEnabled = useAtomStateValue(
     isImapSmtpCaldavEnabledState,
   );
@@ -67,7 +59,7 @@ export const EmailAccountConnectionCards = ({
 
   return (
     <StyledCardsContainer>
-      {(isGoogleMessagingEnabled || isGoogleCalendarEnabled) && (
+      {isGoogleMessagingEnabled && (
         <StyledCardButton
           onClick={() =>
             triggerApisOAuth(ConnectedAccountProvider.GOOGLE, {
@@ -82,7 +74,7 @@ export const EmailAccountConnectionCards = ({
           />
         </StyledCardButton>
       )}
-      {(isMicrosoftMessagingEnabled || isMicrosoftCalendarEnabled) && (
+      {isMicrosoftMessagingEnabled && (
         <StyledCardButton
           onClick={() =>
             triggerApisOAuth(ConnectedAccountProvider.MICROSOFT, {

@@ -95,7 +95,7 @@ export const SettingPublicDomain = () => {
         enqueueSuccessSnackBar({
           message: t`Public domain successfully deleted`,
         });
-        navigate(SettingsPath.Applications);
+        navigate(SettingsPath.General);
         refetchPublicDomains();
       },
       onError: (error) =>
@@ -152,15 +152,11 @@ export const SettingPublicDomain = () => {
           children: <Trans>Workspace</Trans>,
           href: getSettingsPath(SettingsPath.General),
         },
-        {
-          children: <Trans>Apps</Trans>,
-          href: getSettingsPath(SettingsPath.Applications),
-        },
         { children: <Trans>Public Domain</Trans> },
       ]}
       actionButton={
         <SaveAndCancelButtons
-          onCancel={() => navigate(SettingsPath.Applications)}
+          onCancel={() => navigate(SettingsPath.General)}
           isSaveDisabled={loading || isDefined(selectedPublicDomain)}
           onSave={onCreate}
         />

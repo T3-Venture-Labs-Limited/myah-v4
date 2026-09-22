@@ -327,8 +327,8 @@ describe('useSettingsNavigationItems', () => {
     expect(
       workspaceSection?.items.find(
         (item) => item.path === SettingsPath.Applications,
-      )?.isHidden,
-    ).toBe(true);
+      ),
+    ).toBeUndefined();
     expect(
       otherSection?.items.find((item) => item.path === SettingsPath.AdminPanel)
         ?.isHidden,
@@ -380,8 +380,8 @@ describe('useSettingsNavigationItems', () => {
     expect(
       workspaceSection?.items.find(
         (item) => item.path === SettingsPath.Applications,
-      )?.isHidden,
-    ).toBe(false);
+      ),
+    ).toBeUndefined();
     expect(
       otherSection?.items.find((item) => item.path === SettingsPath.AdminPanel)
         ?.isHidden,

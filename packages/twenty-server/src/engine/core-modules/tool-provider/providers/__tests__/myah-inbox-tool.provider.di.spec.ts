@@ -17,7 +17,6 @@ import { ToolExecutorService } from 'src/engine/core-modules/tool-provider/servi
 import { ToolOutputSpillService } from 'src/engine/core-modules/tool/services/tool-output-spill.service';
 import { AgentActorContextService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-actor-context.service';
 import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/services/ai-billing.service';
-import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
 import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
@@ -30,7 +29,6 @@ describe('MyahInboxToolProvider dependency graph', () => {
       providers: [
         MyahInboxReplyProposalService,
         MyahInboxToolWorkspaceService,
-        BrandBrainPreflightService,
         MyahInboxToolProvider,
         ToolRegistryService,
         {

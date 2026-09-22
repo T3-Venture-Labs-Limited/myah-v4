@@ -17,12 +17,6 @@ const SignInUp = lazy(() =>
   })),
 );
 
-const Authorize = lazy(() =>
-  import('~/pages/auth/Authorize').then((module) => ({
-    default: module.Authorize,
-  })),
-);
-
 const PasswordReset = lazy(() =>
   import('~/pages/auth/PasswordReset').then((module) => ({
     default: module.PasswordReset,
@@ -64,14 +58,6 @@ const createRootAppRouter = () =>
             }
           />
         </Route>
-        <Route
-          path={AppPath.Authorize}
-          element={
-            <LazyRoute>
-              <Authorize />
-            </LazyRoute>
-          }
-        />
         <Route
           path={AppPath.NotFoundWildcard}
           element={<Navigate to={AppPath.SignInUp} replace />}

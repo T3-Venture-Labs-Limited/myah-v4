@@ -27,7 +27,6 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { DashboardToolsModule } from 'src/modules/dashboard/tools/dashboard-tools.module';
-import { MyahBrandBrainModule } from 'src/modules/myah-brand-brain/myah-brand-brain.module';
 import { CampaignOutreachToolsModule } from 'src/modules/myah-outreach/campaign-outreach-tools.module';
 import { WorkflowToolsModule } from 'src/modules/workflow/workflow-tools/workflow-tools.module';
 
@@ -42,7 +41,6 @@ import { AgentChatStreamingService } from './services/agent-chat-streaming.servi
 import { AgentChatService } from './services/agent-chat.service';
 import { AgentTitleGenerationService } from './services/agent-title-generation.service';
 import { ChatExecutionService } from './services/chat-execution.service';
-import { BrandBrainPreflightService } from './services/brand-brain-preflight.service';
 import { MessagePruningService } from './services/message-pruning.service';
 import { SystemPromptBuilderService } from './services/system-prompt-builder.service';
 
@@ -72,7 +70,6 @@ import { SystemPromptBuilderService } from './services/system-prompt-builder.ser
     MetricsModule,
     ToolProviderModule,
     DashboardToolsModule,
-    MyahBrandBrainModule,
     WorkflowToolsModule,
     CampaignOutreachToolsModule,
   ],
@@ -86,7 +83,6 @@ import { SystemPromptBuilderService } from './services/system-prompt-builder.ser
     AgentChatStreamingService,
     AgentTitleGenerationService,
     ChatExecutionService,
-    BrandBrainPreflightService,
     MessagePruningService,
     StreamAgentChatJob,
     SystemPromptBuilderService,

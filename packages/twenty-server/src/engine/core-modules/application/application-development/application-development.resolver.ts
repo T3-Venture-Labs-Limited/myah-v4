@@ -25,6 +25,7 @@ import { resolveManifestAssetUrls } from 'src/engine/core-modules/application/ap
 import { ApplicationRegistrationVariableService } from 'src/engine/core-modules/application/application-registration-variable/application-registration-variable.service';
 import { ApplicationRegistrationService } from 'src/engine/core-modules/application/application-registration/application-registration.service';
 import { ApplicationRegistrationSourceType } from 'src/engine/core-modules/application/application-registration/enums/application-registration-source-type.enum';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import {
   ApplicationException,
   ApplicationExceptionCode,
@@ -76,6 +77,7 @@ export class ApplicationDevelopmentResolver {
     @Args() { universalIdentifier, name }: CreateDevelopmentApplicationInput,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
   ): Promise<DevelopmentApplicationDTO> {
+    this.assertApplicationIsAvailable(universalIdentifier);
     await this.throttlePerApplication(universalIdentifier, workspaceId);
 
     const applicationRegistrationId =
@@ -113,6 +115,7 @@ export class ApplicationDevelopmentResolver {
     @Args() { manifest, dryRun }: ApplicationInput,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
   ): Promise<WorkspaceMigrationDTO> {
+    this.assertApplicationIsAvailable(manifest.application.universalIdentifier);
     await this.throttlePerApplication(
       manifest.application.universalIdentifier,
       workspaceId,
@@ -207,6 +210,7 @@ export class ApplicationDevelopmentResolver {
       filePath,
     }: UploadApplicationFileInput,
   ): Promise<FileDTO> {
+    this.assertApplicationIsAvailable(applicationUniversalIdentifier);
     await this.throttlePerApplication(
       applicationUniversalIdentifier,
       workspaceId,
@@ -263,6 +267,15 @@ export class ApplicationDevelopmentResolver {
       resourcePath: filePath,
       settings: { isTemporaryFile: false, toDelete: false },
     });
+  }
+
+  private assertApplicationIsAvailable(universalIdentifier: string): void {
+    if (isRetiredApplicationUniversalIdentifier(universalIdentifier)) {
+      throw new ApplicationException(
+        `Application "${universalIdentifier}" not found.`,
+        ApplicationExceptionCode.APPLICATION_NOT_FOUND,
+      );
+    }
   }
 
   private async throttlePerApplication(

@@ -9,8 +9,8 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
 import { buildApplicationLogoUrl } from '@/applications/utils/buildApplicationLogoUrl';
-import CustomLogo from '~/pages/settings/applications/assets/custom-illustrations/custom-logo.webp';
-import StandardLogo from '~/pages/settings/applications/assets/standard-illustrations/standard-logo.webp';
+import CustomLogo from '@/applications/assets/custom-logo.webp';
+import StandardLogo from '@/applications/assets/standard-logo.webp';
 
 type UseApplicationChipDataArgs = {
   applicationId?: string | null;

@@ -6,6 +6,10 @@ import { Repository } from 'typeorm';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { ApplicationException } from 'src/engine/core-modules/application/application.exception';
 import {
+  RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+  RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+} from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
+import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
@@ -67,11 +71,42 @@ describe('ApplicationTokenService', () => {
   });
 
   describe('generateApplicationAccessToken', () => {
+    it('rejects retired applications before signing access or refresh tokens', async () => {
+      jest
+        .spyOn(workspaceRepository, 'findOne')
+        .mockResolvedValue({ id: 'workspace-id' } as WorkspaceEntity);
+      jest.spyOn(applicationRepository, 'findOne').mockResolvedValue({
+        id: 'application-id',
+        universalIdentifier:
+          RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      } as ApplicationEntity);
+
+      for (const operation of [
+        () =>
+          service.generateApplicationTokenPair({
+            workspaceId: 'workspace-id',
+            applicationId: 'application-id',
+          }),
+        () =>
+          service.renewApplicationTokens({
+            workspaceId: 'workspace-id',
+            applicationId: 'application-id',
+          }),
+      ]) {
+        await expect(operation()).rejects.toBeInstanceOf(ApplicationException);
+      }
+      expect(jwtWrapperService.signAsyncOrThrow).not.toHaveBeenCalled();
+    });
+
     it('should generate an application access token successfully', async () => {
       const workspaceId = 'workspace-id';
       const applicationId = 'application-id';
       const mockWorkspace = { id: workspaceId };
-      const mockApplication = { id: applicationId };
+      const mockApplication = {
+        id: applicationId,
+        universalIdentifier:
+          RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+      };
       const mockToken = 'mock-token';
 
       jest
@@ -108,7 +143,11 @@ describe('ApplicationTokenService', () => {
       const userWorkspaceId = 'user-workspace-id';
       const userId = 'user-id';
       const mockWorkspace = { id: workspaceId };
-      const mockApplication = { id: applicationId };
+      const mockApplication = {
+        id: applicationId,
+        universalIdentifier:
+          RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+      };
       const mockToken = 'mock-token';
 
       jest
@@ -265,7 +304,11 @@ describe('ApplicationTokenService', () => {
       const workspaceId = 'workspace-id';
       const applicationId = 'application-id';
       const mockWorkspace = { id: workspaceId };
-      const mockApplication = { id: applicationId };
+      const mockApplication = {
+        id: applicationId,
+        universalIdentifier:
+          RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+      };
       const mockToken = 'mock-token';
 
       jest
@@ -300,7 +343,11 @@ describe('ApplicationTokenService', () => {
       const workspaceId = 'workspace-id';
       const applicationId = 'application-id';
       const mockWorkspace = { id: workspaceId };
-      const mockApplication = { id: applicationId };
+      const mockApplication = {
+        id: applicationId,
+        universalIdentifier:
+          RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+      };
       const mockToken = 'mock-token';
 
       jest

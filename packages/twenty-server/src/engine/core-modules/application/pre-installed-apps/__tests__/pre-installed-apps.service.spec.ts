@@ -9,6 +9,11 @@ import {
   ApplicationException,
   ApplicationExceptionCode,
 } from 'src/engine/core-modules/application/application.exception';
+import {
+  RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+  RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+  RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER,
+} from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 describe('PreInstalledAppsService', () => {
   let service: PreInstalledAppsService;
@@ -49,7 +54,72 @@ describe('PreInstalledAppsService', () => {
     jest.clearAllMocks();
   });
 
+  describe('installOnWorkspace', () => {
+    it('skips retired apps while installing retained Instagram', async () => {
+      applicationRegistrationRepository.find.mockResolvedValue([
+        {
+          id: 'brand-brain-registration',
+          universalIdentifier:
+            RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+          name: 'Brand Brain',
+        },
+        {
+          id: 'shopify-registration',
+          universalIdentifier: RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER,
+          name: 'Myah Shopify',
+        },
+        {
+          id: 'custom-registration',
+          universalIdentifier: '00000000-0000-4000-8000-000000000001',
+          name: 'Legacy custom app',
+        },
+        {
+          id: 'instagram-registration',
+          universalIdentifier:
+            RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+          name: 'Myah Instagram Messaging',
+        },
+      ] as ApplicationRegistrationEntity[]);
+
+      await service.installOnWorkspace('workspace-1');
+
+      expect(
+        applicationInstallService.installApplication,
+      ).toHaveBeenCalledTimes(1);
+      expect(applicationInstallService.installApplication).toHaveBeenCalledWith(
+        {
+          appRegistrationId: 'instagram-registration',
+          workspaceId: 'workspace-1',
+        },
+      );
+    });
+  });
+
   describe('backfillApplicationOnAllWorkspaces', () => {
+    it.each([
+      [
+        'brand-brain-registration',
+        RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ],
+      [
+        'shopify-registration',
+        RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ],
+    ])(
+      'rejects queued retired app backfill %s',
+      async (id, universalIdentifier) => {
+        applicationRegistrationRepository.findOne.mockResolvedValue({
+          id,
+          universalIdentifier,
+        } as ApplicationRegistrationEntity);
+
+        await expect(
+          service.backfillApplicationOnAllWorkspaces(id),
+        ).rejects.toThrow(ApplicationException);
+        expect(workspaceIteratorService.iterate).not.toHaveBeenCalled();
+      },
+    );
+
     it('should throw when the registration does not exist', async () => {
       applicationRegistrationRepository.findOne.mockResolvedValue(null);
 
@@ -63,7 +133,9 @@ describe('PreInstalledAppsService', () => {
     it('should install the app on every iterated workspace', async () => {
       applicationRegistrationRepository.findOne.mockResolvedValue({
         id: 'app-1',
-        name: 'My App',
+        name: 'Myah Instagram Messaging',
+        universalIdentifier:
+          RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
       } as ApplicationRegistrationEntity);
 
       workspaceIteratorService.iterate.mockImplementation(
@@ -97,7 +169,9 @@ describe('PreInstalledAppsService', () => {
     it('should swallow already-installed errors so the backfill stays idempotent', async () => {
       applicationRegistrationRepository.findOne.mockResolvedValue({
         id: 'app-1',
-        name: 'My App',
+        name: 'Myah Instagram Messaging',
+        universalIdentifier:
+          RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
       } as ApplicationRegistrationEntity);
 
       applicationInstallService.installApplication.mockRejectedValue(
@@ -125,7 +199,9 @@ describe('PreInstalledAppsService', () => {
     it('should rethrow unexpected install errors to the iterator', async () => {
       applicationRegistrationRepository.findOne.mockResolvedValue({
         id: 'app-1',
-        name: 'My App',
+        name: 'Myah Instagram Messaging',
+        universalIdentifier:
+          RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
       } as ApplicationRegistrationEntity);
 
       const unexpectedError = new Error('boom');

@@ -21,6 +21,10 @@ import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
 const DISABLED_TOOL_NAMES: Record<string, true> = {
+  app_brand_brain_get_context: true,
+  app_brand_brain_search_or_read: true,
+  app_brand_brain_seed_or_update_from_brief: true,
+  app_brand_brain_update_page_content: true,
   app_myah_list_instagram_conversations: true,
   app_myah_list_instagram_messages: true,
   app_myah_send_instagram_reply: true,
@@ -50,7 +54,7 @@ export class ToolRegistryService {
       }),
     );
 
-    return this.preferNativeDescriptors(results.flat()).filter(
+    return this.preferNativeInboxDescriptors(results.flat()).filter(
       ({ name }) => DISABLED_TOOL_NAMES[name] !== true,
     );
   }
@@ -381,7 +385,7 @@ export class ToolRegistryService {
         }),
     );
 
-    const descriptors = this.preferNativeDescriptors(
+    const descriptors = this.preferNativeInboxDescriptors(
       results.flat() as ToolDescriptor[],
     );
 
@@ -408,17 +412,13 @@ export class ToolRegistryService {
     return toolSet;
   }
 
-  private preferNativeDescriptors<T extends ToolIndexEntry | ToolDescriptor>(
-    descriptors: T[],
-  ): T[] {
+  private preferNativeInboxDescriptors<
+    T extends ToolIndexEntry | ToolDescriptor,
+  >(descriptors: T[]): T[] {
     const nativeToolNames = new Set(
       descriptors
-        .filter(
-          (descriptor) =>
-            descriptor.category === 'BRAND_BRAIN' ||
-            descriptor.category === 'MYAH_INBOX',
-        )
-        .map((descriptor) => descriptor.name),
+        .filter(({ category }) => category === 'MYAH_INBOX')
+        .map(({ name }) => name),
     );
 
     return descriptors.filter(

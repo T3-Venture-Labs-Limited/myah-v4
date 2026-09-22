@@ -103,14 +103,14 @@ export const SettingsAccountsConnectionForm = ({
   const getDescription = () => {
     if (protocolSelection !== undefined) {
       return isEditing
-        ? t`Update the selected protocol's connection settings.`
-        : t`Choose one protocol, then enter its connection settings.`;
+        ? t`Update the selected email protocol's connection settings.`
+        : t`Choose an email protocol, then enter its connection settings.`;
     }
 
     if (isEditing) {
-      return t`Update your account's configuration. Configure any combination of IMAP, SMTP, and CalDAV as needed.`;
+      return t`Update your account's IMAP and SMTP configuration.`;
     }
-    return t`You can set up any combination of IMAP (receiving emails), SMTP (sending emails), and CalDAV (calendar sync).`;
+    return t`Configure IMAP to receive email and SMTP to send email.`;
   };
 
   const handlePortChange = (value: string) => Number(value);
@@ -161,12 +161,6 @@ export const SettingsAccountsConnectionForm = ({
                 <div>
                   <strong>SMTP</strong>
                   <p>{t`Send email.`}</p>
-                </div>
-              </CardPicker>
-              <CardPicker aria-label="CALDAV" value="CALDAV">
-                <div>
-                  <strong>CalDAV</strong>
-                  <p>{t`Sync calendar events.`}</p>
                 </div>
               </CardPicker>
             </RadioGroup>
@@ -387,69 +381,6 @@ export const SettingsAccountsConnectionForm = ({
                 />
               </StyledFieldGroup>
             </StyledFieldRow>
-          </StyledConnectionSection>
-        )}
-
-        {shouldShowProtocol('CALDAV') && (
-          <StyledConnectionSection key="CALDAV">
-            <StyledSectionHeader>
-              <StyledSectionTitle>{t`CalDAV Configuration`}</StyledSectionTitle>
-              <StyledSectionDescription>
-                {t`Configure CalDAV settings to sync your calendar events.`}{' '}
-                {t`Leave blank if you don't need calendar sync.`}
-              </StyledSectionDescription>
-            </StyledSectionHeader>
-
-            <Controller
-              name="CALDAV.host"
-              control={control}
-              render={({ field, fieldState }) => (
-                <SettingsTextInput
-                  ref={field.ref}
-                  instanceId="caldav-host-connection-form"
-                  label={t`CalDAV Server`}
-                  placeholder={t`caldav.example.com`}
-                  name={field.name}
-                  value={field.value || ''}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
-
-            <Controller
-              name="CALDAV.username"
-              control={control}
-              render={({ field, fieldState }) => (
-                <SettingsTextInput
-                  ref={field.ref}
-                  instanceId="caldav-username-connection-form"
-                  label={t`CalDAV Username`}
-                  placeholder={t`john.doe`}
-                  name={field.name}
-                  required={false}
-                  value={field.value || ''}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
-
-            <SettingsAccountsPasswordController
-              key="CALDAV"
-              protocol="CALDAV"
-              label={t`CalDAV Password`}
-              control={control}
-              disabled={isPasswordInputDisabled('CALDAV')}
-              onUnlock={() =>
-                setIsProtocolPasswordBeingEdited((prev) => ({
-                  ...prev,
-                  CALDAV: true,
-                }))
-              }
-            />
           </StyledConnectionSection>
         )}
       </StyledFormContainer>

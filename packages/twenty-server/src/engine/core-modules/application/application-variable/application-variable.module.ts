@@ -5,7 +5,6 @@ import { NestjsQueryTypeOrmModule } from '@ptc-org/nestjs-query-typeorm';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { ApplicationVariableEntity } from 'src/engine/core-modules/application/application-variable/application-variable.entity';
-import { ApplicationVariableEntityResolver } from 'src/engine/core-modules/application/application-variable/application-variable.resolver';
 import { ApplicationVariableEntityService } from 'src/engine/core-modules/application/application-variable/application-variable.service';
 import { WorkspaceApplicationVariableMapCacheService } from 'src/engine/core-modules/application/application-variable/workspace-application-variable-map-cache.service';
 import { SecretEncryptionModule } from 'src/engine/core-modules/secret-encryption/secret-encryption.module';
@@ -24,7 +23,6 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
   ],
   providers: [
     ApplicationVariableEntityService,
-    ApplicationVariableEntityResolver,
     WorkspaceApplicationVariableMapCacheService,
   ],
   exports: [

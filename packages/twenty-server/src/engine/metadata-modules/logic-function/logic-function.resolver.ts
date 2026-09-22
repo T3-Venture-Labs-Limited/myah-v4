@@ -7,7 +7,9 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
+import { type FlatApplicationCacheMaps } from 'src/engine/core-modules/application/types/flat-application-cache-maps.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { FeatureFlagGuard } from 'src/engine/guards/feature-flag.guard';
@@ -22,6 +24,10 @@ import { LogicFunctionIdInput } from 'src/engine/metadata-modules/logic-function
 import { LogicFunctionLogsDTO } from 'src/engine/metadata-modules/logic-function/dtos/logic-function-logs.dto';
 import { LogicFunctionLogsInput } from 'src/engine/metadata-modules/logic-function/dtos/logic-function-logs.input';
 import { LogicFunctionDTO } from 'src/engine/metadata-modules/logic-function/dtos/logic-function.dto';
+import {
+  LogicFunctionException,
+  LogicFunctionExceptionCode,
+} from 'src/engine/metadata-modules/logic-function/logic-function.exception';
 import { UpdateLogicFunctionFromSourceInput } from 'src/engine/metadata-modules/logic-function/dtos/update-logic-function-from-source.input';
 import { LogicFunctionFromSourceService } from 'src/engine/metadata-modules/logic-function/services/logic-function-from-source.service';
 import { type FlatLogicFunction } from 'src/engine/metadata-modules/logic-function/types/flat-logic-function.type';
@@ -52,11 +58,11 @@ export class LogicFunctionResolver {
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
   ): Promise<LogicFunctionDTO> {
     try {
-      const { flatLogicFunctionMaps } =
+      const { flatLogicFunctionMaps, flatApplicationMaps } =
         await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
           {
             workspaceId,
-            flatMapsKeys: ['flatLogicFunctionMaps'],
+            flatMapsKeys: ['flatLogicFunctionMaps', 'flatApplicationMaps'],
           },
         );
 
@@ -64,6 +70,11 @@ export class LogicFunctionResolver {
         id,
         flatLogicFunctionMaps,
       });
+
+      this.assertLogicFunctionIsAvailable(
+        flatLogicFunction.applicationId,
+        flatApplicationMaps,
+      );
 
       return fromFlatLogicFunctionToLogicFunctionDto({ flatLogicFunction });
     } catch (error) {
@@ -76,11 +87,11 @@ export class LogicFunctionResolver {
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
   ): Promise<LogicFunctionDTO[]> {
     try {
-      const { flatLogicFunctionMaps } =
+      const { flatLogicFunctionMaps, flatApplicationMaps } =
         await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
           {
             workspaceId,
-            flatMapsKeys: ['flatLogicFunctionMaps'],
+            flatMapsKeys: ['flatLogicFunctionMaps', 'flatApplicationMaps'],
           },
         );
 
@@ -88,7 +99,11 @@ export class LogicFunctionResolver {
         .filter(
           (flatLogicFunction): flatLogicFunction is FlatLogicFunction =>
             isDefined(flatLogicFunction) &&
-            !isDefined(flatLogicFunction.deletedAt),
+            !isDefined(flatLogicFunction.deletedAt) &&
+            !this.isRetiredLogicFunction(
+              flatLogicFunction.applicationId,
+              flatApplicationMaps,
+            ),
         )
         .map((flatLogicFunction) =>
           fromFlatLogicFunctionToLogicFunctionDto({ flatLogicFunction }),
@@ -130,6 +145,13 @@ export class LogicFunctionResolver {
       }
 
       const application = flatApplicationMaps.byId[logicFunction.applicationId];
+
+      if (
+        isDefined(application) &&
+        isRetiredApplicationUniversalIdentifier(application.universalIdentifier)
+      ) {
+        return {};
+      }
 
       return application?.availablePackages ?? {};
     } catch (error) {
@@ -218,6 +240,30 @@ export class LogicFunctionResolver {
       return true;
     } catch (error) {
       return logicFunctionGraphQLApiExceptionHandler(error);
+    }
+  }
+
+  private isRetiredLogicFunction(
+    applicationId: string,
+    flatApplicationMaps: FlatApplicationCacheMaps,
+  ): boolean {
+    const application = flatApplicationMaps.byId[applicationId];
+
+    return (
+      isDefined(application) &&
+      isRetiredApplicationUniversalIdentifier(application.universalIdentifier)
+    );
+  }
+
+  private assertLogicFunctionIsAvailable(
+    applicationId: string,
+    flatApplicationMaps: FlatApplicationCacheMaps,
+  ): void {
+    if (this.isRetiredLogicFunction(applicationId, flatApplicationMaps)) {
+      throw new LogicFunctionException(
+        'Logic function not found.',
+        LogicFunctionExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
+      );
     }
   }
 

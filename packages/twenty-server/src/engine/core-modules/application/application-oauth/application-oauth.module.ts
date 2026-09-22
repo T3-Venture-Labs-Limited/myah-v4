@@ -8,7 +8,6 @@ import { ApplicationEntity } from 'src/engine/core-modules/application/applicati
 import { ApplicationModule as ApplicationCoreModule } from 'src/engine/core-modules/application/application.module';
 import { ApplicationOAuthResolver } from 'src/engine/core-modules/application/application-oauth/application-oauth.resolver';
 import { OAuthDiscoveryController } from 'src/engine/core-modules/application/application-oauth/controllers/oauth-discovery.controller';
-import { OAuthRegistrationController } from 'src/engine/core-modules/application/application-oauth/controllers/oauth-registration.controller';
 import { OAuthTokenController } from 'src/engine/core-modules/application/application-oauth/controllers/oauth-token.controller';
 import { OAuthService } from 'src/engine/core-modules/application/application-oauth/oauth.service';
 import { ApplicationRegistrationModule } from 'src/engine/core-modules/application/application-registration/application-registration.module';
@@ -40,11 +39,7 @@ import { DomainServerConfigModule } from 'src/engine/core-modules/domain/domain-
     TwentyConfigModule,
     WorkspaceCacheStorageModule,
   ],
-  controllers: [
-    OAuthTokenController,
-    OAuthDiscoveryController,
-    OAuthRegistrationController,
-  ],
+  controllers: [OAuthTokenController, OAuthDiscoveryController],
   providers: [OAuthService, ApplicationOAuthResolver],
   exports: [OAuthService],
 })

@@ -81,7 +81,6 @@ export class MicrosoftAPIsAuthController {
         refreshToken,
         transientToken,
         redirectLocation: requestedRedirectLocation,
-        calendarVisibility,
         messageVisibility,
         skipMessageChannelConfiguration,
       } = user;
@@ -118,7 +117,6 @@ export class MicrosoftAPIsAuthController {
           workspaceId: workspaceId,
           accessToken,
           refreshToken,
-          calendarVisibility,
           messageVisibility,
           skipMessageChannelConfiguration,
         });

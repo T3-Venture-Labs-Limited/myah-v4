@@ -6,7 +6,7 @@ import { WorkspaceIteratorService } from 'src/database/commands/command-runners/
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
-import { MYAH_CREATOR_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { MYAH_CREATOR_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 
 const creatorPageLayoutTabs = Object.values(
   MYAH_CREATOR_PAGE_LAYOUT_CONFIG.tabs,

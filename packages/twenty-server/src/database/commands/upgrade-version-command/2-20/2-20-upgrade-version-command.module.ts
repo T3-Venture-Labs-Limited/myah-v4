@@ -1,5 +1,8 @@
 import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
 import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
+import { RetireBrandBrainMetadataCommand } from './2-20-workspace-command-1790000000410-retire-brand-brain-metadata.command';
+import { RetireShopifyConnectionsCommand } from './2-20-workspace-command-1790000000411-retire-shopify-connections.command';
+import { RetireCalendarSyncCommand } from './2-20-workspace-command-1790000000412-retire-calendar-sync.command';
 import { Module } from '@nestjs/common';
 import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
@@ -34,6 +37,9 @@ import { SynchronizeInstagramMessagePermissionsCommand } from 'src/database/comm
 import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
 import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619373-backfill-composio-instagram-history.command';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
+import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
+import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/workspace-metadata-version/workspace-metadata-version.module';
@@ -43,7 +49,12 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([FieldMetadataEntity]),
+    TypeOrmModule.forFeature([
+      FieldMetadataEntity,
+      ConnectedAccountEntity,
+      CalendarChannelEntity,
+      ObjectMetadataEntity,
+    ]),
     ApplicationModule,
     MyahInboxContactTriageModule,
     WorkspaceCacheModule,
@@ -83,6 +94,9 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     CreateMyahInboxReplyContextDraftsFastInstanceCommand,
     CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
+    RetireBrandBrainMetadataCommand,
+    RetireShopifyConnectionsCommand,
+    RetireCalendarSyncCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,

@@ -12,6 +12,7 @@ import {
 import { type AccessTokenJwtPayload } from 'src/engine/core-modules/auth/types/access-token-jwt-payload.type';
 import { type ApiKeyTokenJwtPayload } from 'src/engine/core-modules/auth/types/api-key-token-jwt-payload.type';
 import { ApplicationAccessTokenJwtPayload } from 'src/engine/core-modules/auth/types/application-access-token-jwt-payload.type';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import {
   type AuthContext,
   type AuthContextUser,
@@ -34,7 +35,7 @@ import { Repository } from 'typeorm';
 @Injectable()
 export class JwtAuthStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
-    private readonly jwtWrapperService: JwtWrapperService,
+    jwtWrapperService: JwtWrapperService,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     private readonly workspaceCacheService: WorkspaceCacheService,
@@ -347,7 +348,12 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     const application = flatApplicationMaps.byId[applicationId];
 
-    if (!isDefined(application)) {
+    if (
+      !isDefined(application) ||
+      !isSupportedApplicationUniversalIdentifier(
+        application.universalIdentifier,
+      )
+    ) {
       throw new AuthException(
         'Application not found',
         AuthExceptionCode.APPLICATION_NOT_FOUND,

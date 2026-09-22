@@ -13,6 +13,7 @@ import { SECRET_APPLICATION_VARIABLE_MASK } from 'src/engine/core-modules/applic
 import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 describe('ApplicationVariableEntityService', () => {
   let service: ApplicationVariableEntityService;
@@ -64,6 +65,16 @@ describe('ApplicationVariableEntityService', () => {
         {
           provide: WorkspaceCacheService,
           useValue: {
+            getOrRecompute: jest.fn().mockResolvedValue({
+              flatApplicationMaps: {
+                byId: {
+                  [mockApplicationId]: {
+                    id: mockApplicationId,
+                    universalIdentifier: 'active-application',
+                  },
+                },
+              },
+            }),
             invalidateAndRecompute: jest.fn(),
           },
         },
@@ -83,6 +94,37 @@ describe('ApplicationVariableEntityService', () => {
   });
 
   describe('update', () => {
+    it('rejects retired application variables before persistence', async () => {
+      workspaceCacheService.getOrRecompute.mockResolvedValue({
+        flatApplicationMaps: {
+          byId: {
+            [mockApplicationId]: {
+              id: mockApplicationId,
+              universalIdentifier:
+                RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+            },
+          },
+        },
+      } as never);
+
+      await expect(
+        service.update({
+          key: 'API_KEY',
+          plainTextValue: 'new-secret-value' as PlaintextString,
+          applicationId: mockApplicationId,
+          workspaceId: mockWorkspaceId,
+        }),
+      ).rejects.toMatchObject({
+        code: ApplicationVariableEntityExceptionCode.APPLICATION_VARIABLE_NOT_FOUND,
+      });
+      expect(repository.findOne).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
+      expect(secretEncryptionService.encryptVersioned).not.toHaveBeenCalled();
+      expect(
+        workspaceCacheService.invalidateAndRecompute,
+      ).not.toHaveBeenCalled();
+    });
+
     it('should encrypt value with workspaceId-scoped envelope when variable is secret', async () => {
       const existingVariable = {
         id: '1',

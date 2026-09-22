@@ -6,17 +6,8 @@ import { type FlatView } from 'src/engine/metadata-modules/flat-view/types/flat-
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 import { v4 } from 'uuid';
-const BRAND_BRAIN_PAGE_OBJECT_UNIVERSAL_IDENTIFIER =
-  '6a8289d7-8034-4f70-b3fa-47bc0e52828f';
+
 const MYAH_NAVIGATION_ITEMS = {
-  brandBrainPages: {
-    universalIdentifier: '43f7a291-b0a4-481d-a5e4-b557e1a8f65d',
-    type: NavigationMenuItemType.OBJECT,
-    icon: 'IconNotebook',
-    position: 0,
-    targetObjectUniversalIdentifier:
-      BRAND_BRAIN_PAGE_OBJECT_UNIVERSAL_IDENTIFIER,
-  },
   creators: {
     universalIdentifier: 'd06225df-32da-5c5d-b5d1-2b8d48fdca1c',
     type: NavigationMenuItemType.VIEW,
@@ -54,29 +45,16 @@ export const computeMyahNavigationMenuItems = ({
   workspaceId,
   applicationId,
   now,
-  dependencyFlatEntityMaps: { flatObjectMetadataMaps, flatViewMaps },
+  dependencyFlatEntityMaps: { flatViewMaps },
 }: Args): Record<keyof typeof MYAH_NAVIGATION_ITEMS, FlatNavigationMenuItem> =>
   Object.fromEntries(
     Object.entries(MYAH_NAVIGATION_ITEMS).map(([name, definition]) => {
-      const targetObject =
-        definition.type === NavigationMenuItemType.OBJECT
-          ? findFlatEntityByUniversalIdentifier({
-              flatEntityMaps: flatObjectMetadataMaps,
-              universalIdentifier: definition.targetObjectUniversalIdentifier,
-            })
-          : undefined;
-      const targetView =
-        definition.type === NavigationMenuItemType.VIEW
-          ? findFlatEntityByUniversalIdentifier({
-              flatEntityMaps: flatViewMaps,
-              universalIdentifier: definition.viewUniversalIdentifier,
-            })
-          : undefined;
+      const targetView = findFlatEntityByUniversalIdentifier({
+        flatEntityMaps: flatViewMaps,
+        universalIdentifier: definition.viewUniversalIdentifier,
+      });
 
-      if (definition.type === NavigationMenuItemType.OBJECT && !targetObject) {
-        throw new Error(`Object not found for navigation menu item ${name}`);
-      }
-      if (definition.type === NavigationMenuItemType.VIEW && !targetView) {
+      if (!targetView) {
         throw new Error(`View not found for navigation menu item ${name}`);
       }
 
@@ -92,22 +70,10 @@ export const computeMyahNavigationMenuItems = ({
           workspaceId,
           userWorkspaceId: null,
           targetRecordId: null,
-          targetObjectMetadataId:
-            definition.type === NavigationMenuItemType.OBJECT
-              ? (targetObject?.id ?? null)
-              : null,
-          targetObjectMetadataUniversalIdentifier:
-            definition.type === NavigationMenuItemType.OBJECT
-              ? (targetObject?.universalIdentifier ?? null)
-              : null,
-          viewId:
-            definition.type === NavigationMenuItemType.VIEW
-              ? (targetView?.id ?? null)
-              : null,
-          viewUniversalIdentifier:
-            definition.type === NavigationMenuItemType.VIEW
-              ? (targetView?.universalIdentifier ?? null)
-              : null,
+          targetObjectMetadataId: null,
+          targetObjectMetadataUniversalIdentifier: null,
+          viewId: targetView.id,
+          viewUniversalIdentifier: targetView.universalIdentifier,
           folderId: null,
           folderUniversalIdentifier: null,
           pageLayoutId: null,

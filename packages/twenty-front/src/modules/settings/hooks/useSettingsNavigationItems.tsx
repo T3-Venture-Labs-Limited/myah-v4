@@ -1,3 +1,4 @@
+import { DOCUMENTATION_BASE_URL } from 'twenty-shared/constants';
 import { FeatureFlagKey, SettingsPath } from 'twenty-shared/types';
 
 import { useAuth } from '@/auth/hooks/useAuth';
@@ -16,10 +17,8 @@ import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 import { t } from '@lingui/core/macro';
 import { isNonEmptyString } from '@sniptt/guards';
 import {
-  IconApps,
   IconAt,
   IconBrandInstagram,
-  IconCalendarEvent,
   IconColorSwatch,
   type IconComponent,
   IconCurrencyDollar,
@@ -72,6 +71,16 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
   const isEmailGroupFeatureEnabled = useIsFeatureEnabled(
     FeatureFlagKey.IS_EMAIL_GROUP_ENABLED,
   );
+  const openDocumentation = () => {
+    const url = new URL(
+      getDocumentationUrl({ locale: currentWorkspaceMember?.locale }),
+    );
+
+    if (url.origin === new URL(DOCUMENTATION_BASE_URL).origin) {
+      window.open(url.href, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return [
     {
       label: t`User`,
@@ -96,13 +105,6 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
               label: t`Emails`,
               path: SettingsPath.AccountsEmails,
               Icon: IconMail,
-              isHidden: !permissionMap[PermissionFlagType.CONNECTED_ACCOUNTS],
-              indentationLevel: 2,
-            },
-            {
-              label: t`Calendars`,
-              path: SettingsPath.AccountsCalendars,
-              Icon: IconCalendarEvent,
               isHidden: !permissionMap[PermissionFlagType.CONNECTED_ACCOUNTS],
               indentationLevel: 2,
             },
@@ -164,13 +166,6 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
         //   isHidden: !permissionMap[PermissionFlagType.API_KEYS_AND_WEBHOOKS],
         // },
         {
-          label: t`Apps`,
-          path: SettingsPath.Applications,
-          Icon: IconApps,
-          isHidden:
-            !isMyahTeamUser || !permissionMap[PermissionFlagType.APPLICATIONS],
-        },
-        {
           label: t`AI`,
           path: SettingsPath.AI,
           Icon: IconSparkles,
@@ -209,11 +204,7 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
         },
         {
           label: t`Documentation`,
-          onClick: () =>
-            window.open(
-              getDocumentationUrl({ locale: currentWorkspaceMember?.locale }),
-              '_blank',
-            ),
+          onClick: openDocumentation,
           Icon: IconHelpCircle,
         },
         {

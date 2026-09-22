@@ -14,7 +14,6 @@ import { WorkspaceIteratorService } from 'src/database/commands/command-runners/
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
-import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import {
   CreateWebhookSubscriptionJob,
@@ -40,8 +39,6 @@ export class CreateWebhookSubscriptionForConnectedAccountCommand extends ActiveO
   constructor(
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
-    @InjectRepository(CalendarChannelEntity)
-    private readonly calendarChannelRepository: Repository<CalendarChannelEntity>,
     @InjectMessageQueue(MessageQueue.webhookQueue)
     private readonly webhookQueueService: MessageQueueService,
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
@@ -66,23 +63,12 @@ export class CreateWebhookSubscriptionForConnectedAccountCommand extends ActiveO
       workspaceId,
       isDryRun,
     );
-
-    const calendarChannelIds = await this.findEligibleChannelIds(
-      this.calendarChannelRepository,
-      workspaceId,
-    );
-
-    await this.enqueueChannels(
-      WebhookSubscriptionChannelType.CALENDAR,
-      calendarChannelIds,
-      workspaceId,
-      isDryRun,
-    );
   }
 
-  private async findEligibleChannelIds<
-    TChannel extends MessageChannelEntity | CalendarChannelEntity,
-  >(repository: Repository<TChannel>, workspaceId: string): Promise<string[]> {
+  private async findEligibleChannelIds(
+    repository: Repository<MessageChannelEntity>,
+    workspaceId: string,
+  ): Promise<string[]> {
     const rows = await repository
       .createQueryBuilder('core')
       .select('core.id', 'id')

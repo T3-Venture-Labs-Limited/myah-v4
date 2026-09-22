@@ -8,6 +8,8 @@ import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-op
 import { AgentAsyncExecutorService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-async-executor.service';
 import { type AgentExecutionResult } from 'src/engine/metadata-modules/ai/ai-agent-execution/types/agent-execution-result.type';
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
+import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import {
@@ -33,6 +35,7 @@ export class AiAgentWorkflowAction implements WorkflowAction {
     private readonly workflowRunStepLogService: WorkflowRunStepLogWorkspaceService,
     @InjectWorkspaceScopedRepository(AgentEntity)
     private readonly agentRepository: WorkspaceScopedRepository<AgentEntity>,
+    private readonly applicationService: ApplicationService,
   ) {}
 
   async execute({
@@ -69,6 +72,24 @@ export class AiAgentWorkflowAction implements WorkflowAction {
         `Agent with id ${agentId} not found`,
         WorkflowStepExecutorExceptionCode.INVALID_STEP_INPUT,
       );
+    }
+
+    if (agent) {
+      const application = await this.applicationService.findById(
+        agent.applicationId,
+      );
+
+      if (
+        !application ||
+        !isSupportedApplicationUniversalIdentifier(
+          application.universalIdentifier,
+        )
+      ) {
+        throw new WorkflowStepExecutorException(
+          `Agent with id ${agentId} not found`,
+          WorkflowStepExecutorExceptionCode.INVALID_STEP_INPUT,
+        );
+      }
     }
 
     const executionContext =

@@ -20,6 +20,7 @@ import {
 import { buildApplicationLogEnvelopes } from 'src/engine/core-modules/event-logs/producers/application-log/build-application-log-envelopes';
 import { parseApplicationLogLines } from 'src/engine/core-modules/event-logs/producers/application-log/parse-application-log-lines';
 import { ApplicationRegistrationVariableEntity } from 'src/engine/core-modules/application/application-registration-variable/application-registration-variable.entity';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import type { FlatApplicationVariable } from 'src/engine/metadata-modules/flat-application-variable/types/flat-application-variable.type';
 import { FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { EventLogEmitterService } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.service';
@@ -112,6 +113,17 @@ export class LogicFunctionExecutorService {
         workspaceId,
         logicFunctionId,
       });
+
+    if (
+      !isSupportedApplicationUniversalIdentifier(
+        flatApplication.universalIdentifier,
+      )
+    ) {
+      throw new LogicFunctionExecutionException(
+        'Logic function not found',
+        LogicFunctionExecutionExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
+      );
+    }
 
     const envVariables = await this.getExecutionEnvVariables({
       workspaceId,

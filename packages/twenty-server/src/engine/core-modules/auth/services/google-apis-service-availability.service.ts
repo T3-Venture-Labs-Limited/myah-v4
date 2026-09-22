@@ -6,7 +6,6 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 
 export type GoogleApisServiceAvailability = {
   isMessagingAvailable: boolean;
-  isCalendarAvailable: boolean;
 };
 
 @Injectable()
@@ -30,14 +29,8 @@ export class GoogleApisServiceAvailabilityService {
       access_token: accessToken,
     });
 
-    const [isMessagingAvailable, isCalendarAvailable] = await Promise.all([
-      this.checkMessagingAvailability(oAuth2Client),
-      this.checkCalendarAvailability(oAuth2Client),
-    ]);
-
     return {
-      isMessagingAvailable,
-      isCalendarAvailable,
+      isMessagingAvailable: await this.checkMessagingAvailability(oAuth2Client),
     };
   }
 
@@ -67,40 +60,6 @@ export class GoogleApisServiceAvailabilityService {
       }
 
       this.logger.error('Error checking messaging availability', error);
-
-      throw error;
-    }
-  }
-
-  private async checkCalendarAvailability(
-    oAuth2Client: InstanceType<typeof google.auth.OAuth2>,
-  ): Promise<boolean> {
-    if (!this.twentyConfigService.get('CALENDAR_PROVIDER_GOOGLE_ENABLED')) {
-      return false;
-    }
-
-    try {
-      const calendarClient = google.calendar({
-        version: 'v3',
-        auth: oAuth2Client,
-      });
-
-      await calendarClient.events.list({
-        calendarId: 'primary',
-        maxResults: 1,
-      });
-
-      return true;
-    } catch (error) {
-      if (this.isServiceNotEnabledError(error)) {
-        this.logger.log(
-          'Calendar service is not enabled for this Google Workspace account',
-        );
-
-        return false;
-      }
-
-      this.logger.error('Error checking Calendar availability', error);
 
       throw error;
     }

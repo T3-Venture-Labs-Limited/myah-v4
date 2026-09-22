@@ -651,7 +651,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
   it('teaches the exact approval-gated creator outreach sequence', () => {
     const prompt = CHAT_SYSTEM_PROMPTS.BASE;
     const orderedSteps = [
-      '1. Load the selected Campaign Creator, Creator, Campaign, and available Brand Brain context',
+      '1. Load the selected Campaign Creator, Creator, and Campaign context',
       '2. Learn and execute `prepare_outreach_email_draft` with the canonical IDs, subject, body, and optional parent header ID',
       '3. Review the exact returned preview',
       '4. Call `request_approval` in its own step with only `toolName: "send_outreach_email"` and `actionInput: { outreachActionId }`',
@@ -673,8 +673,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
       'Never substitute the recipient or sending account',
       'Never bypass approval',
       'Never include credentials',
-      'Brand Brain is drafting context only',
-      'Do not persist Brand Brain records, prompts, or source text',
+      'Do not persist reference context, prompts, or source text',
       'durable subject and body snapshot',
     ]) {
       expect(prompt).toContain(requiredSafetyText);

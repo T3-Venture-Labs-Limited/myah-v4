@@ -146,9 +146,9 @@ export const usePageChangeEffectNavigateLocation = () => {
 
   if (
     onboardingStatus === OnboardingStatus.APPS_INSTALLATION &&
-    !isMatchingLocation(location, AppPath.InstallApps)
+    !isMatchingLocation(location, AppPath.InviteTeam)
   ) {
-    return AppPath.InstallApps;
+    return AppPath.InviteTeam;
   }
 
   if (

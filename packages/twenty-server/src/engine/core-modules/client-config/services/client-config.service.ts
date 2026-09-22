@@ -266,15 +266,11 @@ export class ClientConfigService {
       isMicrosoftMessagingEnabled: this.twentyConfigService.get(
         'MESSAGING_PROVIDER_MICROSOFT_ENABLED',
       ),
-      isMicrosoftCalendarEnabled: this.twentyConfigService.get(
-        'CALENDAR_PROVIDER_MICROSOFT_ENABLED',
-      ),
+      isMicrosoftCalendarEnabled: false,
       isGoogleMessagingEnabled: this.twentyConfigService.get(
         'MESSAGING_PROVIDER_GMAIL_ENABLED',
       ),
-      isGoogleCalendarEnabled: this.twentyConfigService.get(
-        'CALENDAR_PROVIDER_GOOGLE_ENABLED',
-      ),
+      isGoogleCalendarEnabled: false,
       isConfigVariablesInDbEnabled: this.twentyConfigService.get(
         'IS_CONFIG_VARIABLES_IN_DB_ENABLED',
       ),

@@ -1,21 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import {
-  CalendarChannelSyncStage,
-  MessageChannelSyncStage,
-} from 'twenty-shared/types';
+import { MessageChannelSyncStage } from 'twenty-shared/types';
 import { Repository } from 'typeorm';
 
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
-import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
-import {
-  CalendarEventListFetchJob,
-  type CalendarEventListFetchJobData,
-} from 'src/modules/calendar/calendar-event-import-manager/jobs/calendar-event-list-fetch.job';
 import {
   MessagingMessageListFetchJob,
   type MessagingMessageListFetchJobData,
@@ -26,12 +18,8 @@ export class WebhookSyncTriggerService {
   constructor(
     @InjectMessageQueue(MessageQueue.messagingQueue)
     private readonly messagingQueueService: MessageQueueService,
-    @InjectMessageQueue(MessageQueue.calendarQueue)
-    private readonly calendarQueueService: MessageQueueService,
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
-    @InjectRepository(CalendarChannelEntity)
-    private readonly calendarChannelRepository: Repository<CalendarChannelEntity>,
   ) {}
 
   async triggerMessagingSync(
@@ -72,52 +60,6 @@ export class WebhookSyncTriggerService {
         })
         .where({
           id: messageChannelId,
-          workspaceId,
-        })
-        .execute();
-
-      throw error;
-    }
-  }
-
-  async triggerCalendarSync(
-    calendarChannelId: string,
-    workspaceId: string,
-  ): Promise<void> {
-    const updateResult = await this.calendarChannelRepository
-      .createQueryBuilder()
-      .update()
-      .set({
-        syncStage: CalendarChannelSyncStage.CALENDAR_EVENT_LIST_FETCH_SCHEDULED,
-        syncStageStartedAt: new Date(),
-      })
-      .where({
-        id: calendarChannelId,
-        workspaceId,
-        isSyncEnabled: true,
-        syncStage: CalendarChannelSyncStage.CALENDAR_EVENT_LIST_FETCH_PENDING,
-      })
-      .returning('id')
-      .execute();
-
-    if (updateResult.raw.length === 0) {
-      return;
-    }
-
-    try {
-      await this.calendarQueueService.add<CalendarEventListFetchJobData>(
-        CalendarEventListFetchJob.name,
-        { workspaceId, calendarChannelId },
-      );
-    } catch (error) {
-      await this.calendarChannelRepository
-        .createQueryBuilder()
-        .update()
-        .set({
-          syncStage: CalendarChannelSyncStage.CALENDAR_EVENT_LIST_FETCH_PENDING,
-        })
-        .where({
-          id: calendarChannelId,
           workspaceId,
         })
         .execute();

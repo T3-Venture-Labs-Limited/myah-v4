@@ -17,7 +17,6 @@ import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   IconAt,
-  IconCalendarEvent,
   IconDotsVertical,
   IconMail,
   IconPlayerPlay,
@@ -113,14 +112,6 @@ export const SettingsAccountsRowDropdownMenu = ({
                   closeDropdown(dropdownId);
                 }}
               />
-              <MenuItem
-                LeftIcon={IconCalendarEvent}
-                text={t`Calendar settings`}
-                onClick={() => {
-                  navigate(SettingsPath.AccountsCalendars);
-                  closeDropdown(dropdownId);
-                }}
-              />
               {account.authFailedAt && (
                 <MenuItem
                   LeftIcon={IconRefresh}
@@ -149,8 +140,7 @@ export const SettingsAccountsRowDropdownMenu = ({
         title={t`Data deletion`}
         subtitle={
           <Trans>
-            All emails and events linked to this account ({accountHandle}) will
-            be deleted
+            All emails linked to this account ({accountHandle}) will be deleted
           </Trans>
         }
         onConfirmClick={deleteAccount}

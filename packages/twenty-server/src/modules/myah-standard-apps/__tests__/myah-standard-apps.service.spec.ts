@@ -9,7 +9,7 @@ import {
 } from 'src/engine/core-modules/application/jobs/backfill-application-installation.job-constants';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
-import { BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/modules/myah-standard-apps/myah-standard-apps.constants';
+import { MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/modules/myah-standard-apps/myah-standard-apps.constants';
 import { MyahStandardAppsService } from 'src/modules/myah-standard-apps/myah-standard-apps.service';
 
 describe('MyahStandardAppsService', () => {
@@ -79,14 +79,17 @@ describe('MyahStandardAppsService', () => {
   it('promotes an allowlisted tarball owned by the platform publisher and queues its backfill', async () => {
     transactionalApplicationRegistrationRepository.findOneBy.mockResolvedValue({
       id: registrationId,
-      universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
       ownerWorkspaceId: publisherWorkspaceId,
       sourceType: ApplicationRegistrationSourceType.TARBALL,
       isPreInstalled: false,
     } as ApplicationRegistrationEntity);
 
     await expect(
-      service.promoteAndBackfill(BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER),
+      service.promoteAndBackfill(
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ),
     ).resolves.toEqual({
       applicationRegistrationId: registrationId,
       backfillJobId: `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registrationId}`,
@@ -117,21 +120,25 @@ describe('MyahStandardAppsService', () => {
     transactionalApplicationRegistrationRepository.findOneBy
       .mockResolvedValueOnce({
         id: registrationId,
-        universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        universalIdentifier:
+          MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
         ownerWorkspaceId: publisherWorkspaceId,
         sourceType: ApplicationRegistrationSourceType.TARBALL,
         isPreInstalled: false,
       } as ApplicationRegistrationEntity)
       .mockResolvedValueOnce({
         id: registrationId,
-        universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        universalIdentifier:
+          MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
         ownerWorkspaceId: publisherWorkspaceId,
         sourceType: ApplicationRegistrationSourceType.TARBALL,
         isPreInstalled: true,
       } as ApplicationRegistrationEntity);
 
     await expect(
-      service.promoteAndBackfill(BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER),
+      service.promoteAndBackfill(
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ),
     ).resolves.toEqual({
       applicationRegistrationId: registrationId,
       backfillJobId: `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registrationId}`,
@@ -146,21 +153,25 @@ describe('MyahStandardAppsService', () => {
     transactionalApplicationRegistrationRepository.findOneBy
       .mockResolvedValueOnce({
         id: registrationId,
-        universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        universalIdentifier:
+          MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
         ownerWorkspaceId: publisherWorkspaceId,
         sourceType: ApplicationRegistrationSourceType.TARBALL,
         isPreInstalled: false,
       } as ApplicationRegistrationEntity)
       .mockResolvedValueOnce({
         id: registrationId,
-        universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        universalIdentifier:
+          MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
         ownerWorkspaceId: '33333333-3333-4333-8333-333333333333',
         sourceType: ApplicationRegistrationSourceType.TARBALL,
         isPreInstalled: false,
       } as ApplicationRegistrationEntity);
 
     await expect(
-      service.promoteAndBackfill(BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER),
+      service.promoteAndBackfill(
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ),
     ).rejects.toThrow('not owned by the configured Myah publisher workspace');
 
     expect(
@@ -172,7 +183,8 @@ describe('MyahStandardAppsService', () => {
   it('keeps an approved registration preinstalled when queueing fails so a retry can resume the backfill', async () => {
     transactionalApplicationRegistrationRepository.findOneBy.mockResolvedValue({
       id: registrationId,
-      universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
       ownerWorkspaceId: publisherWorkspaceId,
       sourceType: ApplicationRegistrationSourceType.TARBALL,
       isPreInstalled: false,
@@ -180,7 +192,9 @@ describe('MyahStandardAppsService', () => {
     workspaceQueueService.add.mockRejectedValue(new Error('queue unavailable'));
 
     await expect(
-      service.promoteAndBackfill(BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER),
+      service.promoteAndBackfill(
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ),
     ).rejects.toThrow('queue unavailable');
 
     expect(
@@ -196,10 +210,13 @@ describe('MyahStandardAppsService', () => {
       { id: `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registrationId}` },
     );
   });
-  it('rejects an application outside the first-party allowlist', async () => {
-    await expect(
-      service.promoteAndBackfill('00000000-0000-0000-0000-000000000000'),
-    ).rejects.toThrow('not an approved Myah standard app');
+  it.each([
+    '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991',
+    '00000000-0000-0000-0000-000000000000',
+  ])('rejects retired or unknown application %s', async (applicationId) => {
+    await expect(service.promoteAndBackfill(applicationId)).rejects.toThrow(
+      'not an approved Myah standard app',
+    );
 
     expect(
       transactionalApplicationRegistrationRepository.findOneBy,
@@ -210,14 +227,17 @@ describe('MyahStandardAppsService', () => {
   it('rejects a registration not owned by the configured publisher workspace', async () => {
     transactionalApplicationRegistrationRepository.findOneBy.mockResolvedValue({
       id: registrationId,
-      universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
       ownerWorkspaceId: '33333333-3333-4333-8333-333333333333',
       sourceType: ApplicationRegistrationSourceType.TARBALL,
       isPreInstalled: false,
     } as ApplicationRegistrationEntity);
 
     await expect(
-      service.promoteAndBackfill(BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER),
+      service.promoteAndBackfill(
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ),
     ).rejects.toThrow('not owned by the configured Myah publisher workspace');
 
     expect(

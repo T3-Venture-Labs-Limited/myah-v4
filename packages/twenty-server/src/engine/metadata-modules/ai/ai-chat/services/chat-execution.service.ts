@@ -74,7 +74,6 @@ import {
   REQUEST_APPROVAL_TOOL_NAME,
 } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 import { MessagePruningService } from 'src/engine/metadata-modules/ai/ai-chat/services/message-pruning.service';
-import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { type ExtractedFile } from 'src/engine/metadata-modules/ai/ai-chat/types/extracted-file.type';
 import {
@@ -140,7 +139,6 @@ export class ChatExecutionService {
     private readonly systemPromptBuilder: SystemPromptBuilderService,
     private readonly exceptionHandlerService: ExceptionHandlerService,
     private readonly nativeToolBinder: NativeToolBinderService,
-    private readonly brandBrainPreflightService: BrandBrainPreflightService,
     private readonly messagePruningService: MessagePruningService,
     private readonly metricsService: MetricsService,
     private readonly instagramMessageAuthorityReader: InstagramMessageAuthorityReaderService,
@@ -468,40 +466,6 @@ export class ChatExecutionService {
         browsingContext.type,
       );
     }
-
-    const brandBrainPreflight = await this.brandBrainPreflightService.run({
-      lastUserMessageText:
-        lastUserMessageText ?? this.extractLastUserText(processedMessages),
-      toolContext,
-    });
-
-    if (brandBrainPreflight.contextPart) {
-      processedMessages =
-        this.brandBrainPreflightService.injectContextIntoLastUserMessage(
-          processedMessages,
-          brandBrainPreflight.contextPart,
-        );
-    }
-
-    this.metricsService.recordHistogram({
-      key: MetricsKeys.AiChatBrandBrainPreflightMs,
-      value: brandBrainPreflight.durationMs,
-      unit: 'ms',
-      attributes: {
-        required: String(brandBrainPreflight.required),
-        called: String(brandBrainPreflight.called),
-        cacheHit: String(brandBrainPreflight.cacheHit),
-      },
-    });
-
-    this.logger.log(
-      `[BRAND_BRAIN_PREFLIGHT] required=${brandBrainPreflight.required} ` +
-        `called=${brandBrainPreflight.called} ` +
-        `brand=${brandBrainPreflight.brandSlug ?? brandBrainPreflight.brandNameOrSlug ?? 'none'} ` +
-        `pageCount=${brandBrainPreflight.pageCount ?? 'n/a'} ` +
-        `durationMs=${brandBrainPreflight.durationMs} ` +
-        `cacheHit=${brandBrainPreflight.cacheHit}`,
-    );
 
     const systemPrompt = this.systemPromptBuilder.buildFullPrompt(
       toolCatalog,

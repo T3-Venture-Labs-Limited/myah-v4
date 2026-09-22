@@ -12,6 +12,7 @@ import type { WorkspaceIteratorService } from 'src/database/commands/command-run
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
 import type { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
@@ -1027,12 +1028,22 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
   });
 
 
-  it('transfers selected Myah metadata ownership after a successful migration', async () => {
-    findByUniversalIdentifier.mockResolvedValue({
-      id: 'legacy-myah-application-id',
-    });
+  it('transfers selected Myah metadata ownership from a legacy Brand Brain application', async () => {
+    findByUniversalIdentifier.mockImplementation(
+      async ({ universalIdentifier }: { universalIdentifier: string }) =>
+        universalIdentifier ===
+        RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER
+          ? { id: 'legacy-brand-brain-application-id' }
+          : null,
+    );
 
     await runOnWorkspace();
+
+    expect(findByUniversalIdentifier).toHaveBeenCalledWith({
+      universalIdentifier:
+        RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      workspaceId: WORKSPACE_ID,
+    });
 
     expect(createQueryRunner).toHaveBeenCalledTimes(2);
     expect(update).toHaveBeenCalledWith(

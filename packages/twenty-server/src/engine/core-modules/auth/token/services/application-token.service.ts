@@ -23,6 +23,7 @@ import {
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 const APPLICATION_REFRESH_TOKEN_INVALID_OR_EXPIRED_MESSAGE =
   'Application refresh token invalid or expired';
@@ -221,13 +222,17 @@ export class ApplicationTokenService {
       where: { id: applicationId, workspaceId },
     });
 
-    assertIsDefinedOrThrow(
-      application,
-      new ApplicationException(
+    if (
+      !application ||
+      !isSupportedApplicationUniversalIdentifier(
+        application.universalIdentifier,
+      )
+    ) {
+      throw new ApplicationException(
         'Application not found',
         ApplicationExceptionCode.APPLICATION_NOT_FOUND,
-      ),
-    );
+      );
+    }
   }
 
   private async signApplicationToken({

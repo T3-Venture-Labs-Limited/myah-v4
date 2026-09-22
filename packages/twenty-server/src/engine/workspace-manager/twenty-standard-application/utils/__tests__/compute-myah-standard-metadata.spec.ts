@@ -23,7 +23,7 @@ import { FieldDisplayMode } from 'src/engine/metadata-modules/page-layout-widget
 import {
   MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
   MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
-} from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 import { buildMyahStandardMetadataContract } from './myah-standard-metadata-contract.fixture';
 
 const contract = buildMyahStandardMetadataContract();
@@ -98,6 +98,67 @@ describe('Myah standard metadata contract', () => {
             ).toBeUndefined();
         }
       }
+    }
+  });
+
+  it('keeps retired Brand Brain metadata inert and undiscoverable', () => {
+    const brandBrainObjectUniversalIdentifiers = [
+      MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.brandBrainLink.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.brandBrainUpdateProposal.universalIdentifier,
+    ];
+
+    for (const universalIdentifier of brandBrainObjectUniversalIdentifiers) {
+      expect(
+        result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+          universalIdentifier
+        ],
+      ).toEqual(
+        expect.objectContaining({
+          isSearchable: false,
+          isUIEditable: false,
+          isUICreatable: false,
+        }),
+      );
+    }
+
+    expect(
+      result.allFlatEntityMaps.flatNavigationMenuItemMaps.byUniversalIdentifier[
+        '43f7a291-b0a4-481d-a5e4-b557e1a8f65d'
+      ],
+    ).toBeUndefined();
+    expect(
+      result.allFlatEntityMaps.flatRoleMaps.byUniversalIdentifier[
+        BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER
+      ],
+    ).toEqual(
+      expect.objectContaining({
+        isEditable: false,
+        canBeAssignedToUsers: false,
+        canBeAssignedToAgents: false,
+        canBeAssignedToApiKeys: false,
+      }),
+    );
+  });
+
+  it('keeps retired calendar and call-recording metadata inactive', () => {
+    for (const universalIdentifier of [
+      STANDARD_OBJECTS.calendarChannelEventAssociation.universalIdentifier,
+      STANDARD_OBJECTS.calendarEventParticipant.universalIdentifier,
+      STANDARD_OBJECTS.calendarEvent.universalIdentifier,
+      STANDARD_OBJECTS.callRecording.universalIdentifier,
+    ]) {
+      expect(
+        result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+          universalIdentifier
+        ],
+      ).toEqual(
+        expect.objectContaining({
+          isActive: false,
+          isUIEditable: false,
+          isUICreatable: false,
+        }),
+      );
     }
   });
 
@@ -1323,8 +1384,8 @@ describe('Myah standard metadata contract', () => {
       ].map((objectMetadataUniversalIdentifier) => ({
         roleUniversalIdentifier: BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER,
         objectMetadataUniversalIdentifier,
-        canUpdateObjectRecords: true,
-        canSoftDeleteObjectRecords: true,
+        canUpdateObjectRecords: false,
+        canSoftDeleteObjectRecords: false,
       })),
       ...writableCreatorOpsObjectUniversalIdentifiers.map(
         (objectMetadataUniversalIdentifier) => ({

@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { ApplicationInstallService } from 'src/engine/core-modules/application/application-install/application-install.service';
 import { ApplicationRegistrationEntity } from 'src/engine/core-modules/application/application-registration/application-registration.entity';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import {
   ApplicationException,
   ApplicationExceptionCode,
@@ -30,12 +31,13 @@ export class PreInstalledAppsService {
       where: { isPreInstalled: true },
     });
 
-    if (registrations.length === 0) {
-      return;
-    }
+    const activeRegistrations = registrations.filter(
+      ({ universalIdentifier }) =>
+        isSupportedApplicationUniversalIdentifier(universalIdentifier),
+    );
 
     await Promise.allSettled(
-      registrations.map(async (registration) => {
+      activeRegistrations.map(async (registration) => {
         try {
           await this.applicationInstallService.installApplication({
             appRegistrationId: registration.id,
@@ -48,6 +50,8 @@ export class PreInstalledAppsService {
             }`,
           );
         }
+
+        return undefined;
       }),
     );
   }
@@ -59,7 +63,12 @@ export class PreInstalledAppsService {
       where: { id: applicationRegistrationId, isPreInstalled: true },
     });
 
-    if (!registration) {
+    if (
+      !registration ||
+      !isSupportedApplicationUniversalIdentifier(
+        registration.universalIdentifier,
+      )
+    ) {
       throw new ApplicationException(
         `Pre-installed application registration with id ${applicationRegistrationId} not found`,
         ApplicationExceptionCode.APPLICATION_NOT_FOUND,

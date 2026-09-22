@@ -48,12 +48,6 @@ const PasswordReset = lazy(() =>
   })),
 );
 
-const Authorize = lazy(() =>
-  import('~/pages/auth/Authorize').then((module) => ({
-    default: module.Authorize,
-  })),
-);
-
 const WorkspaceActivation = lazyWithPreload(() =>
   import('~/pages/onboarding/WorkspaceActivation').then((module) => ({
     default: module.WorkspaceActivation,
@@ -69,12 +63,6 @@ const CreateProfile = lazyWithPreload(() =>
 const SyncEmails = lazyWithPreload(() =>
   import('~/pages/onboarding/SyncEmails').then((module) => ({
     default: module.SyncEmails,
-  })),
-);
-
-const InstallApps = lazyWithPreload(() =>
-  import('~/pages/onboarding/InstallApps').then((module) => ({
-    default: module.InstallApps,
   })),
 );
 
@@ -124,7 +112,6 @@ const preloadOnboardingPages = () => {
   void WorkspaceActivation.preload();
   void CreateProfile.preload();
   void SyncEmails.preload();
-  void InstallApps.preload();
   void InviteTeam.preload();
   void ChooseYourPlan.preload();
 
@@ -293,14 +280,7 @@ const createWorkspaceAppRouter = (
                 </LazyRoute>
               }
             />
-            <Route
-              path={AppPath.InstallApps}
-              element={
-                <LazyRoute fallback={<OnboardingStepPageLoader />}>
-                  <InstallApps />
-                </LazyRoute>
-              }
-            />
+
             <Route
               path={AppPath.InviteTeam}
               element={
@@ -318,14 +298,6 @@ const createWorkspaceAppRouter = (
               }
             />
           </Route>
-          <Route
-            path={AppPath.Authorize}
-            element={
-              <LazyRoute>
-                <Authorize />
-              </LazyRoute>
-            }
-          />
         </Route>
       </Route>,
     ),

@@ -1,11 +1,16 @@
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
 
 import { AdminPanelResolver } from 'src/engine/core-modules/admin-panel/admin-panel.resolver';
-import { ApplicationDevelopmentResolver } from 'src/engine/core-modules/application/application-development/application-development.resolver';
+import { ApplicationInstallModule } from 'src/engine/core-modules/application/application-install/application-install.module';
 import { ApplicationInstallResolver } from 'src/engine/core-modules/application/application-install/application-install.resolver';
+import { MarketplaceModule } from 'src/engine/core-modules/application/application-marketplace/marketplace.module';
 import { MarketplaceResolver } from 'src/engine/core-modules/application/application-marketplace/marketplace.resolver';
 import { ApplicationOAuthResolver } from 'src/engine/core-modules/application/application-oauth/application-oauth.resolver';
+import { ApplicationRegistrationModule } from 'src/engine/core-modules/application/application-registration/application-registration.module';
+import { ApplicationRegistrationResolver } from 'src/engine/core-modules/application/application-registration/application-registration.resolver';
+import { ApplicationUpgradeModule } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.module';
 import { ApplicationUpgradeResolver } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.resolver';
+import { ApplicationVariableEntityModule } from 'src/engine/core-modules/application/application-variable/application-variable.module';
 import { ApplicationVariableEntityResolver } from 'src/engine/core-modules/application/application-variable/application-variable.resolver';
 import { EnterpriseResolver } from 'src/engine/core-modules/enterprise/enterprise.resolver';
 import { EventLogsLiveResolver } from 'src/engine/core-modules/event-logs/event-logs-live.resolver';
@@ -32,21 +37,31 @@ describe('Myah Team platform boundary guards', () => {
   });
 
   it.each([
-    ['ApplicationInstallResolver', ApplicationInstallResolver],
-    ['ApplicationDevelopmentResolver', ApplicationDevelopmentResolver],
-    ['ApplicationUpgradeResolver', ApplicationUpgradeResolver],
-    ['ApplicationVariableEntityResolver', ApplicationVariableEntityResolver],
-    ['MarketplaceResolver', MarketplaceResolver],
     ['EventLogsResolver', EventLogsResolver],
     ['EventLogsLiveResolver', EventLogsLiveResolver],
   ])('keeps %s scoped to workspace permissions', (_name, resolver) => {
     expect(getGuards(resolver)).not.toContain(MyahTeamGuard);
   });
 
-  it('keeps application-token minting scoped to workspace permissions', () => {
+  it.each([
+    [ApplicationInstallModule, ApplicationInstallResolver],
+    [ApplicationUpgradeModule, ApplicationUpgradeResolver],
+    [ApplicationVariableEntityModule, ApplicationVariableEntityResolver],
+    [MarketplaceModule, MarketplaceResolver],
+    [ApplicationRegistrationModule, ApplicationRegistrationResolver],
+  ])(
+    'does not register customer application resolver %p',
+    (module, resolver) => {
+      expect(
+        Reflect.getMetadata(MODULE_METADATA.PROVIDERS, module) ?? [],
+      ).not.toContain(resolver);
+    },
+  );
+
+  it('removes customer application-token minting', () => {
     expect(
-      getGuards(ApplicationOAuthResolver.prototype.generateApplicationToken),
-    ).not.toEqual(expect.arrayContaining([MyahTeamGuard]));
+      'generateApplicationToken' in ApplicationOAuthResolver.prototype,
+    ).toBe(false);
   });
 
   it('requires a Team identity to synchronize the marketplace catalog', () => {

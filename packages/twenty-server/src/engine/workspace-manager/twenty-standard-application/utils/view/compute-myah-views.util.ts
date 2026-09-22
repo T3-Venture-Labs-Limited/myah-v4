@@ -8,42 +8,6 @@ import {
 type Args = Omit<CreateStandardViewArgs, 'context'>;
 
 export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
-  brandBrainPageRecordPageFields: createStandardViewFlatMetadata({
-    ...args,
-    objectName: 'brandBrainPage',
-    context: {
-      viewName: 'view2774101b',
-      name: 'Brand Brain Page Record Fields',
-      type: ViewType.FIELDS_WIDGET,
-      key: null,
-      position: 0,
-      icon: 'IconList',
-    },
-  }),
-  pendingBrandBrainProposals: createStandardViewFlatMetadata({
-    ...args,
-    objectName: 'brandBrainUpdateProposal',
-    context: {
-      viewName: 'view25d4c1a3',
-      name: 'Pending Brand Brain Proposals',
-      type: ViewType.TABLE,
-      key: null,
-      position: 2,
-      icon: 'IconFilePencil',
-    },
-  }),
-  allBrandBrainPages: createStandardViewFlatMetadata({
-    ...args,
-    objectName: 'brandBrainPage',
-    context: {
-      viewName: 'view914bd2ad',
-      name: 'All Brand Brain',
-      type: ViewType.TABLE,
-      key: null,
-      position: 0,
-      icon: 'IconNotebook',
-    },
-  }),
   campaigns: createStandardViewFlatMetadata({
     ...args,
     objectName: 'campaign',
@@ -190,20 +154,6 @@ export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
     },
   }),
 });
-export const computeMyahBrandBrainPageViews = (args: Args) =>
-  Object.fromEntries(
-    Object.entries(computeMyahViews(args)).filter(
-      ([key]) =>
-        key === 'brandBrainPageRecordPageFields' ||
-        key === 'allBrandBrainPages',
-    ),
-  );
-export const computeMyahBrandBrainUpdateProposalViews = (args: Args) =>
-  Object.fromEntries(
-    Object.entries(computeMyahViews(args)).filter(
-      ([key]) => key === 'pendingBrandBrainProposals',
-    ),
-  );
 export const computeMyahCampaignViews = (args: Args) =>
   Object.fromEntries(
     Object.entries(computeMyahViews(args)).filter(

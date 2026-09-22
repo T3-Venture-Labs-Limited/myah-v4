@@ -22,7 +22,6 @@ import {
   IconAt,
   IconBell,
   IconBuildingSkyscraper,
-  IconCalendarEvent,
   IconCheckbox,
   IconColorSwatch,
   IconMail,
@@ -149,12 +148,6 @@ export const Settings: Story = {
               label="Emails"
               to={getSettingsPath(SettingsPath.AccountsEmails)}
               Icon={IconMail}
-              subItemState="intermediate-before-selected"
-            />
-            <NavigationDrawerSubItem
-              label="Calendar"
-              to={getSettingsPath(SettingsPath.AccountsCalendars)}
-              Icon={IconCalendarEvent}
               subItemState="last-selected"
             />
           </NavigationDrawerItemGroup>

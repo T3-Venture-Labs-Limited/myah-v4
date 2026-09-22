@@ -73,11 +73,6 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
       { id: 'tasks', group: 'outreach', availability: 'available' },
       { id: 'approvals', group: 'outreach', availability: 'deferred' },
       {
-        id: 'brand-brain',
-        group: 'brand-workspace',
-        availability: 'available',
-      },
-      {
         id: 'connected-channels',
         group: 'brand-workspace',
         availability: 'deferred',
@@ -187,19 +182,17 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
         nameSingular: CoreObjectNameSingular.Task,
       },
     });
-    expect(getMyahNavigationRoute('brand-brain').destination).toEqual({
-      kind: 'native-object',
-      object: {
-        kind: 'app-object',
-        universalIdentifier: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
-      },
-    });
-
     for (const route of MYAH_NAVIGATION_ROUTES.filter(
       ({ availability }) => availability !== 'available',
     )) {
       expect(route).not.toHaveProperty('destination');
     }
+  });
+
+  it('does not register the retired Brand Brain route', () => {
+    expect(MYAH_NAVIGATION_ROUTES.map(({ id }) => id)).not.toContain(
+      'brand-brain',
+    );
   });
 
   it('uses semantic icons for visible Soon entries', () => {

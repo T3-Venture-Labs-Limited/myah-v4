@@ -5,12 +5,7 @@ import { SettingsCard } from '@/settings/components/SettingsCard';
 import { useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import {
-  IconBrandInstagram,
-  IconCalendarEvent,
-  IconMailCog,
-  IconTags,
-} from 'twenty-ui/icon';
+import { IconBrandInstagram, IconMailCog } from 'twenty-ui/icon';
 import { H2Title } from 'twenty-ui/typography';
 import { Section } from 'twenty-ui/layout';
 import { UndecoratedLink } from 'twenty-ui/navigation';
@@ -42,7 +37,7 @@ export const SettingsAccountsSettingsSection = () => {
     <Section>
       <H2Title
         title={t`Settings`}
-        description={t`Configure your emails and calendar settings.`}
+        description={t`Configure your email and Instagram settings.`}
       />
       <StyledCardsContainer>
         <StyledCardLinkSlot>
@@ -60,20 +55,6 @@ export const SettingsAccountsSettingsSection = () => {
           </UndecoratedLink>
         </StyledCardLinkSlot>
         <StyledCardLinkSlot>
-          <UndecoratedLink to={getSettingsPath(SettingsPath.AccountsCalendars)}>
-            <SettingsCard
-              Icon={
-                <IconCalendarEvent
-                  size={theme.icon.size.lg}
-                  stroke={theme.icon.stroke.sm}
-                />
-              }
-              title={t`Calendar`}
-              description={t`Configure and customize your calendar preferences.`}
-            />
-          </UndecoratedLink>
-        </StyledCardLinkSlot>
-        <StyledCardLinkSlot>
           <UndecoratedLink to={getSettingsPath(SettingsPath.AccountsInstagram)}>
             <SettingsCard
               Icon={
@@ -84,20 +65,6 @@ export const SettingsAccountsSettingsSection = () => {
               }
               title={t`Instagram`}
               description={t`Connect Instagram messaging for your workspace.`}
-            />
-          </UndecoratedLink>
-        </StyledCardLinkSlot>
-        <StyledCardLinkSlot>
-          <UndecoratedLink to={getSettingsPath(SettingsPath.AccountsShopify)}>
-            <SettingsCard
-              Icon={
-                <IconTags
-                  size={theme.icon.size.lg}
-                  stroke={theme.icon.stroke.sm}
-                />
-              }
-              title={t`Shopify`}
-              description={t`Connect a store so Myah can read brand and product context.`}
             />
           </UndecoratedLink>
         </StyledCardLinkSlot>

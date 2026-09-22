@@ -27,8 +27,7 @@ export class MicrosoftAPIsOauthExchangeCodeForTokenGuard extends AuthGuard(
       const state = JSON.parse(request.query.state);
 
       if (
-        !this.twentyConfigService.get('MESSAGING_PROVIDER_MICROSOFT_ENABLED') &&
-        !this.twentyConfigService.get('CALENDAR_PROVIDER_MICROSOFT_ENABLED')
+        !this.twentyConfigService.get('MESSAGING_PROVIDER_MICROSOFT_ENABLED')
       ) {
         throw new AuthException(
           'Microsoft apis auth is not enabled',

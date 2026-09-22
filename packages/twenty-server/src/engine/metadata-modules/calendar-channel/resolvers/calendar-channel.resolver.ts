@@ -1,5 +1,5 @@
 import { UseGuards, UseInterceptors } from '@nestjs/common';
-import { Args, Mutation, Query } from '@nestjs/graphql';
+import { Args, Query } from '@nestjs/graphql';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
@@ -10,7 +10,6 @@ import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { CalendarChannelMetadataService } from 'src/engine/metadata-modules/calendar-channel/calendar-channel-metadata.service';
 import { CalendarChannelDTO } from 'src/engine/metadata-modules/calendar-channel/dtos/calendar-channel.dto';
-import { UpdateCalendarChannelInput } from 'src/engine/metadata-modules/calendar-channel/dtos/update-calendar-channel.input';
 import { CalendarChannelGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/calendar-channel/interceptors/calendar-channel-graphql-api-exception.interceptor';
 
 @UseGuards(WorkspaceAuthGuard)
@@ -48,23 +47,4 @@ export class CalendarChannelResolver {
     });
   }
 
-  @Mutation(() => CalendarChannelDTO)
-  @UseGuards(NoPermissionGuard)
-  async updateCalendarChannel(
-    @Args('input') input: UpdateCalendarChannelInput,
-    @AuthWorkspace() workspace: WorkspaceEntity,
-    @AuthUserWorkspaceId() userWorkspaceId: string,
-  ): Promise<CalendarChannelDTO> {
-    await this.calendarChannelMetadataService.verifyOwnership({
-      id: input.id,
-      userWorkspaceId,
-      workspaceId: workspace.id,
-    });
-
-    return this.calendarChannelMetadataService.update({
-      id: input.id,
-      workspaceId: workspace.id,
-      data: input.update,
-    });
-  }
 }

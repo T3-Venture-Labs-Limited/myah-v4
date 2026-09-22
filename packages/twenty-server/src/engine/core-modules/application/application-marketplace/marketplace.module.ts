@@ -6,7 +6,6 @@ import { MarketplaceCatalogSyncCronCommand } from 'src/engine/core-modules/appli
 import { MarketplaceCatalogSyncCronJob } from 'src/engine/core-modules/application/application-marketplace/crons/marketplace-catalog-sync.cron.job';
 import { MarketplaceCatalogSyncService } from 'src/engine/core-modules/application/application-marketplace/marketplace-catalog-sync.service';
 import { MarketplaceQueryService } from 'src/engine/core-modules/application/application-marketplace/marketplace-query.service';
-import { MarketplaceResolver } from 'src/engine/core-modules/application/application-marketplace/marketplace.resolver';
 import { MarketplaceService } from 'src/engine/core-modules/application/application-marketplace/marketplace.service';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
@@ -28,7 +27,6 @@ import { MarketplaceCatalogSyncCommand } from 'src/engine/core-modules/applicati
     MarketplaceCatalogSyncCronJob,
     MarketplaceCatalogSyncCronCommand,
     MarketplaceCatalogSyncCommand,
-    MarketplaceResolver,
   ],
   exports: [
     MarketplaceCatalogSyncService,

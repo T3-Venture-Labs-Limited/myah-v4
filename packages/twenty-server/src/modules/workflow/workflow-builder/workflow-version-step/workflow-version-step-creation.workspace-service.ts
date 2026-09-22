@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
+import { WorkflowActionType } from 'twenty-shared/workflow';
 
 import { type CreateWorkflowVersionStepInput } from 'src/engine/core-modules/workflow/dtos/create-workflow-version-step.input';
 import { type WorkflowVersionStepChangesDTO } from 'src/engine/core-modules/workflow/dtos/workflow-version-step-changes.dto';
@@ -136,6 +137,13 @@ export class WorkflowVersionStepCreationWorkspaceService {
       throw new WorkflowVersionStepException(
         'Step not found',
         WorkflowVersionStepExceptionCode.NOT_FOUND,
+      );
+    }
+
+    if (stepToDuplicate.type === WorkflowActionType.CREATE_CALENDAR_EVENT) {
+      throw new WorkflowVersionStepException(
+        'Calendar event creation is no longer available',
+        WorkflowVersionStepExceptionCode.INVALID_REQUEST,
       );
     }
 

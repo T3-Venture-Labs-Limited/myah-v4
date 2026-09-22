@@ -16,6 +16,7 @@ import { ApplicationRegistrationEntity } from 'src/engine/core-modules/applicati
 import { ApplicationRegistrationService } from 'src/engine/core-modules/application/application-registration/application-registration.service';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { OAuthErrorResponse } from 'src/engine/core-modules/application/application-oauth/types/oauth-error-response.type';
 import { OAuthTokenResponse } from 'src/engine/core-modules/application/application-oauth/types/oauth-token-response.type';
 import { ApplicationTokenService } from 'src/engine/core-modules/auth/token/services/application-token.service';
@@ -528,7 +529,12 @@ export class OAuthService {
     const applicationRegistration =
       await this.applicationRegistrationService.findOneByClientId(clientId);
 
-    if (!applicationRegistration) {
+    if (
+      !applicationRegistration ||
+      !isSupportedApplicationUniversalIdentifier(
+        applicationRegistration.universalIdentifier,
+      )
+    ) {
       return this.errorResponse('invalid_client', 'Client not found');
     }
 

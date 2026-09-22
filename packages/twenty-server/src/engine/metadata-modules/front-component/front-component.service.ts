@@ -4,6 +4,8 @@ import { FileFolder } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
+import { type FlatApplicationCacheMaps } from 'src/engine/core-modules/application/types/flat-application-cache-maps.type';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
 import { fileFolderConfigs } from 'src/engine/core-modules/file/interfaces/file-folder.interface';
@@ -38,16 +40,20 @@ export class FrontComponentService {
   ) {}
 
   async findAll(workspaceId: string): Promise<FrontComponentDTO[]> {
-    const { flatFrontComponentMaps } =
+    const { flatFrontComponentMaps, flatApplicationMaps } =
       await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
           workspaceId,
-          flatMapsKeys: ['flatFrontComponentMaps'],
+          flatMapsKeys: ['flatFrontComponentMaps', 'flatApplicationMaps'],
         },
       );
 
     return Object.values(flatFrontComponentMaps.byUniversalIdentifier)
-      .filter(isDefined)
+      .filter(
+        (component): component is FlatFrontComponent =>
+          isDefined(component) &&
+          !this.isRetiredOwner(component.applicationId, flatApplicationMaps),
+      )
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(fromFlatFrontComponentToFrontComponentDto);
   }
@@ -56,11 +62,11 @@ export class FrontComponentService {
     id: string,
     workspaceId: string,
   ): Promise<FrontComponentDTO | null> {
-    const { flatFrontComponentMaps } =
+    const { flatFrontComponentMaps, flatApplicationMaps } =
       await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
           workspaceId,
-          flatMapsKeys: ['flatFrontComponentMaps'],
+          flatMapsKeys: ['flatFrontComponentMaps', 'flatApplicationMaps'],
         },
       );
 
@@ -69,7 +75,10 @@ export class FrontComponentService {
       flatEntityMaps: flatFrontComponentMaps,
     });
 
-    if (!isDefined(flatFrontComponent)) {
+    if (
+      !isDefined(flatFrontComponent) ||
+      this.isRetiredOwner(flatFrontComponent.applicationId, flatApplicationMaps)
+    ) {
       return null;
     }
 
@@ -92,6 +101,10 @@ export class FrontComponentService {
           { workspaceId },
         )
       ).workspaceCustomFlatApplication;
+
+    this.assertApplicationIsAvailable(
+      resolvedOwnerFlatApplication.universalIdentifier,
+    );
 
     const flatFrontComponentToCreate =
       fromCreateFrontComponentInputToFlatFrontComponentToCreate({
@@ -161,13 +174,33 @@ export class FrontComponentService {
         )
       ).workspaceCustomFlatApplication;
 
-    const { flatFrontComponentMaps: existingFlatFrontComponentMaps } =
+    const {
+      flatFrontComponentMaps: existingFlatFrontComponentMaps,
+      flatApplicationMaps,
+    } =
       await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
           workspaceId,
-          flatMapsKeys: ['flatFrontComponentMaps'],
+          flatMapsKeys: ['flatFrontComponentMaps', 'flatApplicationMaps'],
         },
       );
+    const existingFlatFrontComponent = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: id,
+      flatEntityMaps: existingFlatFrontComponentMaps,
+    });
+
+    if (
+      !isDefined(existingFlatFrontComponent) ||
+      this.isRetiredOwner(
+        existingFlatFrontComponent.applicationId,
+        flatApplicationMaps,
+      )
+    ) {
+      throw new FrontComponentException(
+        'Front component not found',
+        FrontComponentExceptionCode.FRONT_COMPONENT_NOT_FOUND,
+      );
+    }
 
     const flatFrontComponentToUpdate =
       fromUpdateFrontComponentInputToFlatFrontComponentToUpdateOrThrow({
@@ -236,11 +269,14 @@ export class FrontComponentService {
         )
       ).workspaceCustomFlatApplication;
 
-    const { flatFrontComponentMaps: existingFlatFrontComponentMaps } =
+    const {
+      flatFrontComponentMaps: existingFlatFrontComponentMaps,
+      flatApplicationMaps,
+    } =
       await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
           workspaceId,
-          flatMapsKeys: ['flatFrontComponentMaps'],
+          flatMapsKeys: ['flatFrontComponentMaps', 'flatApplicationMaps'],
         },
       );
 
@@ -249,7 +285,13 @@ export class FrontComponentService {
       flatEntityMaps: existingFlatFrontComponentMaps,
     });
 
-    if (!isDefined(existingFlatFrontComponent)) {
+    if (
+      !isDefined(existingFlatFrontComponent) ||
+      this.isRetiredOwner(
+        existingFlatFrontComponent.applicationId,
+        flatApplicationMaps,
+      )
+    ) {
       throw new FrontComponentException(
         'Front component to destroy not found',
         FrontComponentExceptionCode.FRONT_COMPONENT_NOT_FOUND,
@@ -281,6 +323,29 @@ export class FrontComponentService {
     }
 
     return existingFlatFrontComponent;
+  }
+
+  private isRetiredOwner(
+    applicationId: string,
+    flatApplicationMaps: FlatApplicationCacheMaps,
+  ): boolean {
+    const application = flatApplicationMaps.byId[applicationId];
+
+    return (
+      isDefined(application) &&
+      !isSupportedApplicationUniversalIdentifier(
+        application.universalIdentifier,
+      )
+    );
+  }
+
+  private assertApplicationIsAvailable(universalIdentifier: string): void {
+    if (!isSupportedApplicationUniversalIdentifier(universalIdentifier)) {
+      throw new FrontComponentException(
+        'Front component not found',
+        FrontComponentExceptionCode.FRONT_COMPONENT_NOT_FOUND,
+      );
+    }
   }
 
   async findByIdOrThrow(

@@ -35,10 +35,7 @@ export class GoogleAPIsOauthExchangeCodeForTokenGuard extends AuthGuard(
       const request = context.switchToHttp().getRequest();
       const state = JSON.parse(request.query.state);
 
-      if (
-        !this.twentyConfigService.get('MESSAGING_PROVIDER_GMAIL_ENABLED') &&
-        !this.twentyConfigService.get('CALENDAR_PROVIDER_GOOGLE_ENABLED')
-      ) {
+      if (!this.twentyConfigService.get('MESSAGING_PROVIDER_GMAIL_ENABLED')) {
         throw new AuthException(
           'Google apis auth is not enabled',
           AuthExceptionCode.GOOGLE_API_AUTH_DISABLED,

@@ -14,7 +14,7 @@ import { type ThrottlerService } from 'src/engine/core-modules/throttler/throttl
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
 
-import { BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/modules/myah-standard-apps/myah-standard-apps.constants';
+import { MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/modules/myah-standard-apps/myah-standard-apps.constants';
 import { MyahStandardAppsController } from 'src/modules/myah-standard-apps/myah-standard-apps.controller';
 import { MyahStandardAppsDeploymentGuard } from 'src/modules/myah-standard-apps/guards/myah-standard-apps-deployment.guard';
 import { type MyahStandardAppsService } from 'src/modules/myah-standard-apps/myah-standard-apps.service';
@@ -136,10 +136,12 @@ describe('Myah standard app deployment trigger', () => {
     const controller = new MyahStandardAppsController(service);
 
     await expect(
-      controller.promote(BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER),
+      controller.promote(
+        MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ),
     ).resolves.toEqual(result);
     expect(service.promoteAndBackfill).toHaveBeenCalledWith(
-      BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      MYAH_INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
     );
   });
 

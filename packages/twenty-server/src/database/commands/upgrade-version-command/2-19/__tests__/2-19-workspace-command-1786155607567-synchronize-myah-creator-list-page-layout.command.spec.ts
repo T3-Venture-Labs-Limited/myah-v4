@@ -7,7 +7,7 @@ import { SynchronizeMyahCreatorListPageLayoutCommand } from 'src/database/comman
 import type { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import { MYAH_CREATOR_LIST_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { MYAH_CREATOR_LIST_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 
 const args: RunOnWorkspaceArgs = {
   workspaceId: '20202020-0000-0000-0000-000000000001',

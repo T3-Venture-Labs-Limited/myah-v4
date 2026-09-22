@@ -18,7 +18,6 @@ import { MicrosoftAuthController } from 'src/engine/core-modules/auth/controller
 import { OAuthPropagatorController } from 'src/engine/core-modules/auth/controllers/oauth-propagator.controller';
 import { SSOAuthController } from 'src/engine/core-modules/auth/controllers/sso-auth.controller';
 import { AuthSsoService } from 'src/engine/core-modules/auth/services/auth-sso.service';
-import { CreateCalendarChannelService } from 'src/engine/core-modules/auth/services/create-calendar-channel.service';
 import { CreateConnectedAccountService } from 'src/engine/core-modules/auth/services/create-connected-account.service';
 import { CreateMessageChannelService } from 'src/engine/core-modules/auth/services/create-message-channel.service';
 import { CreateSSOConnectedAccountService } from 'src/engine/core-modules/auth/services/create-sso-connected-account.service';
@@ -62,14 +61,12 @@ import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { UserModule } from 'src/engine/core-modules/user/user.module';
 import { WorkspaceInvitationModule } from 'src/engine/core-modules/workspace-invitation/workspace-invitation.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionModule } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.module';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
-import { CalendarChannelSyncStatusService } from 'src/modules/calendar/common/services/calendar-channel-sync-status.service';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
 import { EmailAliasManagerModule } from 'src/modules/connected-account/email-alias-manager/email-alias-manager.module';
 import { MessagingCommonModule } from 'src/modules/messaging/common/messaging-common.module';
@@ -99,7 +96,6 @@ import { JwtAuthStrategy } from './strategies/jwt.auth.strategy';
       ObjectMetadataEntity,
       ConnectedAccountEntity,
       MessageChannelEntity,
-      CalendarChannelEntity,
     ]),
     UserWorkspaceModule,
     OnboardingModule,
@@ -156,12 +152,7 @@ import { JwtAuthStrategy } from './strategies/jwt.auth.strategy';
     RefreshTokenService,
     LoginTokenService,
     ResetPasswordService,
-    // So far, it's not possible to have controllers in business modules
-    // which forces us to have these services in the auth module
-    // TODO: Move these calendar, message, and connected account services to the business modules once possible
-    CalendarChannelSyncStatusService,
     CreateMessageChannelService,
-    CreateCalendarChannelService,
     CreateConnectedAccountService,
     CreateSSOConnectedAccountService,
     UpdateConnectedAccountOnReconnectService,
@@ -173,7 +164,6 @@ import { JwtAuthStrategy } from './strategies/jwt.auth.strategy';
     LoginTokenService,
     RefreshTokenService,
     CreateMessageChannelService,
-    CreateCalendarChannelService,
   ],
 })
 export class AuthModule {}

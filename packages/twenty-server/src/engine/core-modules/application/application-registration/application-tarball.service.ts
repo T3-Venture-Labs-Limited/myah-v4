@@ -27,6 +27,7 @@ import {
   type VersionValidationFailureReason,
 } from 'src/engine/core-modules/application/application-package/application-version-validation.service';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
 import type { ApplicationManifest } from 'twenty-shared/application';
 import { ApplicationRegistrationVariableService } from 'src/engine/core-modules/application/application-registration-variable/application-registration-variable.service';
@@ -61,6 +62,10 @@ export class ApplicationTarballService {
     universalIdentifier?: string;
     ownerWorkspaceId: string;
   }): Promise<ApplicationRegistrationEntity> {
+    if (isDefined(params.universalIdentifier)) {
+      this.assertApplicationRegistrationIsAvailable(params.universalIdentifier);
+    }
+
     const tempDir = join(tmpdir(), 'twenty-tarball-upload', v4());
 
     await fs.mkdir(tempDir, { recursive: true });
@@ -118,6 +123,8 @@ export class ApplicationTarballService {
           ApplicationRegistrationExceptionCode.INVALID_INPUT,
         );
       }
+
+      this.assertApplicationRegistrationIsAvailable(universalIdentifier);
 
       let appRegistration = await this.appRegistrationRepository.findOne({
         where: {
@@ -232,6 +239,17 @@ export class ApplicationTarballService {
       });
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  }
+
+  private assertApplicationRegistrationIsAvailable(
+    universalIdentifier: string,
+  ): void {
+    if (isRetiredApplicationUniversalIdentifier(universalIdentifier)) {
+      throw new ApplicationRegistrationException(
+        `Application registration "${universalIdentifier}" not found.`,
+        ApplicationRegistrationExceptionCode.APPLICATION_REGISTRATION_NOT_FOUND,
+      );
     }
   }
 }

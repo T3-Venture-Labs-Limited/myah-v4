@@ -30,6 +30,7 @@ import { WorkspaceInvitationService } from 'src/engine/core-modules/workspace-in
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { ApplicationRegistrationService } from 'src/engine/core-modules/application/application-registration/application-registration.service';
+import { RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { CreateSSOConnectedAccountService } from 'src/engine/core-modules/auth/services/create-sso-connected-account.service';
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
@@ -49,6 +50,8 @@ describe('AuthService', () => {
   let userWorkspaceService: UserWorkspaceService;
   let workspaceInvitationService: WorkspaceInvitationService;
   let permissionsService: PermissionsService;
+  let appTokenRepository: Repository<AppTokenEntity>;
+  let applicationRegistrationService: ApplicationRegistrationService;
   let signInUpServiceMock: jest.Mocked<
     Pick<SignInUpService, 'validatePassword'>
   >;
@@ -72,6 +75,8 @@ describe('AuthService', () => {
         {
           provide: getRepositoryToken(AppTokenEntity),
           useValue: {
+            create: jest.fn(),
+            save: jest.fn(),
             createQueryBuilder: jest.fn().mockReturnValue({
               leftJoin: jest.fn().mockReturnThis(),
               andWhere: jest.fn().mockReturnThis(),
@@ -174,7 +179,9 @@ describe('AuthService', () => {
         },
         {
           provide: ApplicationRegistrationService,
-          useValue: {},
+          useValue: {
+            findOneByClientId: jest.fn(),
+          },
         },
         {
           provide: FeatureFlagService,
@@ -208,6 +215,12 @@ describe('AuthService', () => {
       getRepositoryToken(UserEntity),
     );
     permissionsService = module.get<PermissionsService>(PermissionsService);
+    appTokenRepository = module.get<Repository<AppTokenEntity>>(
+      getRepositoryToken(AppTokenEntity),
+    );
+    applicationRegistrationService = module.get<ApplicationRegistrationService>(
+      ApplicationRegistrationService,
+    );
     signInUpServiceMock = module.get(SignInUpService) as jest.Mocked<
       Pick<SignInUpService, 'validatePassword'>
     >;
@@ -399,6 +412,32 @@ describe('AuthService', () => {
     ).toHaveBeenCalledTimes(1);
     expect(addUserToWorkspaceIfUserNotInWorkspaceSpy).toHaveBeenCalledTimes(1);
     expect(UserFindOneSpy).toHaveBeenCalledTimes(1);
+  });
+
+  describe('generateAuthorizationCode', () => {
+    it('rejects retired application clients before creating a token', async () => {
+      jest
+        .spyOn(applicationRegistrationService, 'findOneByClientId')
+        .mockResolvedValue({
+          universalIdentifier:
+            RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+          oAuthClientId: 'retired-client-id',
+        } as never);
+
+      await expect(
+        service.generateAuthorizationCode(
+          {
+            clientId: 'retired-client-id',
+            redirectUrl: 'https://example.com/callback',
+          },
+          { id: 'user-id' } as never,
+          { id: 'workspace-id' } as never,
+        ),
+      ).rejects.toMatchObject({ code: AuthExceptionCode.CLIENT_NOT_FOUND });
+
+      expect(appTokenRepository.create).not.toHaveBeenCalled();
+      expect(appTokenRepository.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('checkAccessForSignIn', () => {

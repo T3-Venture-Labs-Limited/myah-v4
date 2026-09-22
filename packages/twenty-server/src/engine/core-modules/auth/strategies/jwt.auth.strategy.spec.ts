@@ -12,6 +12,7 @@ import { ImpersonationAuthorizationService } from 'src/engine/core-modules/imper
 import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 import { JwtAuthStrategy } from './jwt.auth.strategy';
 
@@ -410,6 +411,34 @@ describe('JwtAuthStrategy', () => {
   });
 
   describe('APPLICATION_ACCESS token validation', () => {
+    it('rejects access tokens for retired applications', async () => {
+      const applicationId = randomUUID();
+      const workspaceId = randomUUID();
+      const workspace = new WorkspaceEntity();
+
+      workspace.id = workspaceId;
+      workspaceStore[workspaceId] = workspace;
+      applicationStore[workspaceId] = {
+        [applicationId]: {
+          id: applicationId,
+          universalIdentifier:
+            RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        },
+      };
+      strategy = createStrategy();
+
+      await expect(
+        strategy.validate({
+          sub: applicationId,
+          type: JwtTokenTypeEnum.APPLICATION_ACCESS,
+          applicationId,
+          workspaceId,
+        } as JwtPayload),
+      ).rejects.toMatchObject({
+        code: AuthExceptionCode.APPLICATION_NOT_FOUND,
+      });
+    });
+
     it('should throw AuthExceptionCode if type is APPLICATION_ACCESS, and application not found', async () => {
       const validApplicationId = randomUUID();
       const validWorkspaceId = randomUUID();

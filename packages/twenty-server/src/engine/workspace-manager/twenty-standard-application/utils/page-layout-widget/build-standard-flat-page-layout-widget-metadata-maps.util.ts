@@ -9,7 +9,7 @@ import { FieldDisplayMode } from 'src/engine/metadata-modules/page-layout-widget
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
 import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
 import { type AllPageLayoutWidgetConfiguration } from 'src/engine/metadata-modules/page-layout-widget/types/all-page-layout-widget-configuration.type';
-import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
 import { type StandardRecordPageLayoutConfig } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-config/standard-page-layout-config.type';
 import { computeMyFirstDashboardWidgets } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-widget/compute-my-first-dashboard-widgets.util';
@@ -85,7 +85,6 @@ const RECORD_PAGE_FIELDS_VIEW_NAME_BY_OBJECT: Partial<
   workflowAutomatedTrigger: 'workflowAutomatedTriggerRecordPageFields',
   workflowRun: 'workflowRunRecordPageFields',
   workflowVersion: 'workflowVersionRecordPageFields',
-  brandBrainPage: 'brandBrainPageRecordPageFields',
   creator: 'creatorRecordPageFields',
 };
 const buildRecordPageWidgetConfigurations = ({
@@ -235,7 +234,6 @@ const buildFieldsWidgetConfiguration = ({
   const myahRecordPageFieldsViewUniversalIdentifiers: Partial<
     Record<AllStandardObjectName, string>
   > = {
-    brandBrainPage: '2774101b-3c0b-485b-91f5-b92d30bdcb6e',
     creator: 'fdbaccb5-56d4-4c36-98c7-0f5ab0b7cc1e',
   };
   const viewUniversalIdentifier =

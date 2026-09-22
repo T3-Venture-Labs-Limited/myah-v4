@@ -318,29 +318,10 @@ export class WorkflowVersionStepOperationsWorkspaceService {
         };
       }
       case WorkflowActionType.CREATE_CALENDAR_EVENT: {
-        return {
-          builtStep: {
-            ...baseStep,
-            name: 'Create Calendar Event',
-            type: WorkflowActionType.CREATE_CALENDAR_EVENT,
-            settings: {
-              ...BASE_STEP_DEFINITION,
-              input: {
-                connectedAccountId: '',
-                title: '',
-                description: '',
-                location: '',
-                startsAt: '',
-                endsAt: '',
-                isFullDay: false,
-                timeZone: '',
-                attendees: '',
-                sendInvitations: false,
-                addConferencing: false,
-              },
-            },
-          },
-        };
+        throw new WorkflowVersionStepException(
+          'Calendar event creation is no longer available',
+          WorkflowVersionStepExceptionCode.INVALID_REQUEST,
+        );
       }
       case WorkflowActionType.DRAFT_EMAIL: {
         return {

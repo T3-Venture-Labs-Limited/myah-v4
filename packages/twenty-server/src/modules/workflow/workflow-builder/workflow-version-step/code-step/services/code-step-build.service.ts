@@ -5,6 +5,7 @@ import { FeatureFlagKey } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
 import { LogicFunctionExecutionMode } from 'src/engine/metadata-modules/logic-function/logic-function.entity';
@@ -193,6 +194,15 @@ export class CodeStepBuildService {
         throw new WorkflowTriggerException(
           `Logic function '${logicFunctionId}' references applicationId='${flatLogicFunction.applicationId ?? 'null'}' that did not resolve to an application`,
           WorkflowTriggerExceptionCode.INTERNAL_ERROR,
+        );
+      }
+
+      if (
+        isRetiredApplicationUniversalIdentifier(applicationUniversalIdentifier)
+      ) {
+        throw new WorkflowTriggerException(
+          `CODE step references unavailable logic function '${logicFunctionId}'`,
+          WorkflowTriggerExceptionCode.INVALID_WORKFLOW_VERSION,
         );
       }
 

@@ -81,7 +81,6 @@ export class GoogleAPIsAuthController {
         refreshToken,
         transientToken,
         redirectLocation: requestedRedirectLocation,
-        calendarVisibility,
         messageVisibility,
         skipMessageChannelConfiguration,
       } = user;
@@ -111,7 +110,6 @@ export class GoogleAPIsAuthController {
           workspaceId,
           accessToken,
           refreshToken,
-          calendarVisibility,
           messageVisibility,
           skipMessageChannelConfiguration,
         });

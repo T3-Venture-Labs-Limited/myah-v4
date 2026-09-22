@@ -242,88 +242,10 @@ const SettingsToolDetail = lazy(() =>
   })),
 );
 
-const SettingsApplications = lazy(() =>
-  import('~/pages/settings/applications/SettingsApplications').then(
-    (module) => ({
-      default: module.SettingsApplications,
-    }),
-  ),
-);
-
-const SettingsApplicationDetails = lazy(() =>
-  import('~/pages/settings/applications/SettingsApplicationDetails').then(
-    (module) => ({
-      default: module.SettingsApplicationDetails,
-    }),
-  ),
-);
-
-const SettingsApplicationConnectionDetail = lazy(() =>
-  import('~/pages/settings/applications/SettingsApplicationConnectionDetail').then(
-    (module) => ({
-      default: module.SettingsApplicationConnectionDetail,
-    }),
-  ),
-);
-
-const SettingsApplicationFrontComponentDetail = lazy(() =>
-  import('~/pages/settings/applications/SettingsApplicationFrontComponentDetail').then(
-    (module) => ({
-      default: module.SettingsApplicationFrontComponentDetail,
-    }),
-  ),
-);
-
-const SettingsApplicationCommandMenuItemDetail = lazy(() =>
-  import('~/pages/settings/applications/SettingsApplicationCommandMenuItemDetail').then(
-    (module) => ({
-      default: module.SettingsApplicationCommandMenuItemDetail,
-    }),
-  ),
-);
-
 const SettingsLayout = lazy(() =>
   import('~/pages/settings/layout/SettingsLayout').then((module) => ({
     default: module.SettingsLayout,
   })),
-);
-
-const SettingsLayoutViewDetail = lazy(() =>
-  import('~/pages/settings/layout/SettingsLayoutViewDetail').then((module) => ({
-    default: module.SettingsLayoutViewDetail,
-  })),
-);
-
-const SettingsLayoutPageLayoutDetail = lazy(() =>
-  import('~/pages/settings/layout/SettingsLayoutPageLayoutDetail').then(
-    (module) => ({
-      default: module.SettingsLayoutPageLayoutDetail,
-    }),
-  ),
-);
-
-const SettingsAdminApplicationRegistrationDetail = lazy(() =>
-  import('~/pages/settings/admin-panel/SettingsAdminApplicationRegistrationDetail').then(
-    (module) => ({
-      default: module.SettingsAdminApplicationRegistrationDetail,
-    }),
-  ),
-);
-
-const SettingsAvailableApplicationDetails = lazy(() =>
-  import('~/pages/settings/applications/SettingsAvailableApplicationDetails').then(
-    (module) => ({
-      default: module.SettingsAvailableApplicationDetails,
-    }),
-  ),
-);
-
-const SettingsApplicationRegistrationDetails = lazy(() =>
-  import('~/pages/settings/applications/SettingsApplicationRegistrationDetails').then(
-    (module) => ({
-      default: module.SettingsApplicationRegistrationDetails,
-    }),
-  ),
 );
 
 const SettingsAgentForm = lazy(() =>
@@ -398,14 +320,6 @@ const SettingsAccountsEmails = lazy(() =>
   })),
 );
 
-const SettingsAccountsCalendars = lazy(() =>
-  import('~/pages/settings/accounts/SettingsAccountsCalendars').then(
-    (module) => ({
-      default: module.SettingsAccountsCalendars,
-    }),
-  ),
-);
-
 const SettingsAccountsInstagram = lazy(() =>
   import('~/pages/settings/accounts/SettingsAccountsInstagram').then(
     (module) => ({
@@ -413,14 +327,6 @@ const SettingsAccountsInstagram = lazy(() =>
     }),
   ),
 );
-const SettingsAccountsShopify = lazy(() =>
-  import('~/pages/settings/accounts/SettingsAccountsShopify').then(
-    (module) => ({
-      default: module.SettingsAccountsShopify,
-    }),
-  ),
-);
-
 const SettingsBilling = lazy(() =>
   import('~/pages/settings/billing/SettingsBilling').then((module) => ({
     default: module.SettingsBilling,
@@ -705,12 +611,14 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
       >
         <Route path={SettingsPath.Accounts} element={<SettingsAccounts />} />
         <Route
-          path={SettingsPath.AccountsEmails}
-          element={<SettingsAccountsEmails />}
+          path="accounts/calendars"
+          element={
+            <Navigate to={getSettingsPath(SettingsPath.Accounts)} replace />
+          }
         />
         <Route
-          path={SettingsPath.AccountsCalendars}
-          element={<SettingsAccountsCalendars />}
+          path={SettingsPath.AccountsEmails}
+          element={<SettingsAccountsEmails />}
         />
         <Route
           path={SettingsPath.AccountsComposio}
@@ -724,10 +632,6 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.AccountsInstagram}
           element={<SettingsAccountsInstagram />}
-        />
-        <Route
-          path={SettingsPath.AccountsShopify}
-          element={<SettingsAccountsShopify />}
         />
         <Route
           path={SettingsPath.NewAccount}
@@ -1010,59 +914,17 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
       </Route>
 
       <Route
+        path={SettingsPath.Applications}
         element={
-          <MyahTeamSettingsRouteGuard fallbackPath={SettingsPath.General} />
+          <Navigate to={getSettingsPath(SettingsPath.General)} replace />
         }
-      >
-        <Route
-          element={
-            <SettingsProtectedRouteWrapper
-              settingsPermission={PermissionFlagType.APPLICATIONS}
-            />
-          }
-        >
-          <Route
-            path={SettingsPath.Applications}
-            element={<SettingsApplications />}
-          />
-          <Route
-            path={SettingsPath.ApplicationDetail}
-            element={<SettingsApplicationDetails />}
-          />
-          <Route
-            path={SettingsPath.ApplicationConnectionDetail}
-            element={<SettingsApplicationConnectionDetail />}
-          />
-          <Route
-            path={SettingsPath.AvailableApplicationDetail}
-            element={<SettingsAvailableApplicationDetails />}
-          />
-          <Route
-            path={SettingsPath.ApplicationRegistrationDetail}
-            element={<SettingsApplicationRegistrationDetails />}
-          />
-          <Route
-            path={SettingsPath.ApplicationLogicFunctionDetail}
-            element={<SettingsLogicFunctionDetail />}
-          />
-          <Route
-            path={SettingsPath.ApplicationFrontComponentDetail}
-            element={<SettingsApplicationFrontComponentDetail />}
-          />
-          <Route
-            path={SettingsPath.ApplicationCommandMenuItemDetail}
-            element={<SettingsApplicationCommandMenuItemDetail />}
-          />
-          <Route
-            path={SettingsPath.ApplicationViewDetail}
-            element={<SettingsLayoutViewDetail />}
-          />
-          <Route
-            path={SettingsPath.ApplicationPageLayoutDetail}
-            element={<SettingsLayoutPageLayoutDetail />}
-          />
-        </Route>
-      </Route>
+      />
+      <Route
+        path={`${SettingsPath.Applications}/*`}
+        element={
+          <Navigate to={getSettingsPath(SettingsPath.General)} replace />
+        }
+      />
 
       <Route
         path="security"
@@ -1155,10 +1017,6 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
             <Route
               path={SettingsPath.AdminPanelWorkspaceDetail}
               element={<SettingsAdminWorkspaceDetail />}
-            />
-            <Route
-              path={SettingsPath.AdminPanelApplicationRegistrationDetail}
-              element={<SettingsAdminApplicationRegistrationDetail />}
             />
             <Route
               path={SettingsPath.AdminPanelWorkspaceChatThread}

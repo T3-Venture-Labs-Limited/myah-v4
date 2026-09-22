@@ -33,6 +33,7 @@ import { validateRedirectUri } from 'src/engine/core-modules/auth/utils/validate
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { ApplicationRegistrationVariableService } from 'src/engine/core-modules/application/application-registration-variable/application-registration-variable.service';
 import { MARKETPLACE_CURATED_APPLICATIONS } from 'src/engine/core-modules/application/application-marketplace/constants/marketplace-curated-applications.constant';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 const BCRYPT_SALT_ROUNDS = 10;
 
@@ -97,18 +98,28 @@ export class ApplicationRegistrationService {
   async findMany(
     ownerWorkspaceId: string,
   ): Promise<ApplicationRegistrationEntity[]> {
-    return this.applicationRegistrationRepository.find({
+    const registrations = await this.applicationRegistrationRepository.find({
       select: APPLICATION_REGISTRATION_WITHOUT_MANIFEST_SELECT,
       where: { ownerWorkspaceId },
       order: { createdAt: 'DESC' },
     });
+
+    return registrations.filter(
+      ({ universalIdentifier }) =>
+        !isRetiredApplicationUniversalIdentifier(universalIdentifier),
+    );
   }
 
   async findAll(): Promise<ApplicationRegistrationEntity[]> {
-    return this.applicationRegistrationRepository.find({
+    const registrations = await this.applicationRegistrationRepository.find({
       select: APPLICATION_REGISTRATION_WITHOUT_MANIFEST_SELECT,
       order: { createdAt: 'DESC' },
     });
+
+    return registrations.filter(
+      ({ universalIdentifier }) =>
+        !isRetiredApplicationUniversalIdentifier(universalIdentifier),
+    );
   }
 
   async findOneById(
@@ -120,7 +131,10 @@ export class ApplicationRegistrationService {
       where: { id, ownerWorkspaceId },
     });
 
-    if (!registration) {
+    if (
+      !registration ||
+      isRetiredApplicationUniversalIdentifier(registration.universalIdentifier)
+    ) {
       throw new ApplicationRegistrationException(
         `Application registration with id ${id} not found`,
         ApplicationRegistrationExceptionCode.APPLICATION_REGISTRATION_NOT_FOUND,
@@ -136,7 +150,10 @@ export class ApplicationRegistrationService {
       where: { id },
     });
 
-    if (!registration) {
+    if (
+      !registration ||
+      isRetiredApplicationUniversalIdentifier(registration.universalIdentifier)
+    ) {
       throw new ApplicationRegistrationException(
         `Application registration with id ${id} not found`,
         ApplicationRegistrationExceptionCode.APPLICATION_REGISTRATION_NOT_FOUND,
@@ -150,9 +167,14 @@ export class ApplicationRegistrationService {
   async findOneByClientId(
     clientId: string,
   ): Promise<ApplicationRegistrationEntity | null> {
-    return this.applicationRegistrationRepository.findOne({
+    const registration = await this.applicationRegistrationRepository.findOne({
       where: { oAuthClientId: clientId },
     });
+
+    return registration &&
+      !isRetiredApplicationUniversalIdentifier(registration.universalIdentifier)
+      ? registration
+      : null;
   }
 
   // Global lookup — used by OAuth authorize page (no workspace scoping)
@@ -161,10 +183,20 @@ export class ApplicationRegistrationService {
   ): Promise<PublicApplicationRegistrationDTO | null> {
     const registration = await this.applicationRegistrationRepository.findOne({
       where: { oAuthClientId: clientId },
-      select: ['id', 'name', 'logo', 'websiteUrl', 'oAuthScopes'],
+      select: [
+        'id',
+        'universalIdentifier',
+        'name',
+        'logo',
+        'websiteUrl',
+        'oAuthScopes',
+      ],
     });
 
-    if (!registration) {
+    if (
+      !registration ||
+      isRetiredApplicationUniversalIdentifier(registration.universalIdentifier)
+    ) {
       return null;
     }
 
@@ -180,6 +212,10 @@ export class ApplicationRegistrationService {
   async findOneByUniversalIdentifier(
     universalIdentifier: string,
   ): Promise<ApplicationRegistrationEntity | null> {
+    if (isRetiredApplicationUniversalIdentifier(universalIdentifier)) {
+      return null;
+    }
+
     return this.applicationRegistrationRepository.findOne({
       where: { universalIdentifier },
     });
@@ -194,6 +230,8 @@ export class ApplicationRegistrationService {
     clientSecret: string;
   }> {
     const universalIdentifier = input.universalIdentifier ?? v4();
+
+    this.assertApplicationRegistrationIsAvailable(universalIdentifier);
 
     const existingByUid =
       await this.findOneByUniversalIdentifier(universalIdentifier);
@@ -242,7 +280,11 @@ export class ApplicationRegistrationService {
   ): Promise<ApplicationRegistrationEntity> {
     const { id, update } = input;
 
-    await this.findOneById(id, ownerWorkspaceId);
+    const registration = await this.findOneById(id, ownerWorkspaceId);
+
+    this.assertApplicationRegistrationIsAvailable(
+      registration.universalIdentifier,
+    );
     await this.applyUpdate(id, update);
 
     return this.findOneById(id, ownerWorkspaceId);
@@ -253,7 +295,11 @@ export class ApplicationRegistrationService {
   ): Promise<ApplicationRegistrationEntity> {
     const { id, update } = input;
 
-    await this.findOneByIdGlobal(id);
+    const registration = await this.findOneByIdGlobal(id);
+
+    this.assertApplicationRegistrationIsAvailable(
+      registration.universalIdentifier,
+    );
     await this.applyUpdate(id, update);
 
     return this.findOneByIdGlobal(id);
@@ -306,6 +352,10 @@ export class ApplicationRegistrationService {
           where: { id: applicationRegistrationId },
         });
 
+      this.assertApplicationRegistrationIsAvailable(
+        existing.universalIdentifier,
+      );
+
       if (
         preventVersionDowngrade &&
         isDefined(latestAvailableVersion) &&
@@ -335,7 +385,11 @@ export class ApplicationRegistrationService {
   }
 
   async delete(id: string, ownerWorkspaceId: string): Promise<boolean> {
-    await this.findOneById(id, ownerWorkspaceId);
+    const registration = await this.findOneById(id, ownerWorkspaceId);
+
+    this.assertApplicationRegistrationIsAvailable(
+      registration.universalIdentifier,
+    );
     await this.applicationRegistrationRepository.softDelete(id);
 
     return true;
@@ -345,7 +399,11 @@ export class ApplicationRegistrationService {
     id: string,
     ownerWorkspaceId: string,
   ): Promise<string> {
-    await this.findOneById(id, ownerWorkspaceId);
+    const registration = await this.findOneById(id, ownerWorkspaceId);
+
+    this.assertApplicationRegistrationIsAvailable(
+      registration.universalIdentifier,
+    );
 
     const { clientSecret, clientSecretHash } =
       await this.generateClientSecret();
@@ -379,6 +437,8 @@ export class ApplicationRegistrationService {
       | 'manifest'
     >,
   ): Promise<void> {
+    this.assertApplicationRegistrationIsAvailable(params.universalIdentifier);
+
     const existing = await this.findOneByUniversalIdentifier(
       params.universalIdentifier,
     );
@@ -486,17 +546,22 @@ export class ApplicationRegistrationService {
       },
     });
 
-    return registrations.map((registration) => ({
-      id: registration.id,
-      universalIdentifier: registration.universalIdentifier,
-      name: registration.name,
-      sourcePackage: registration.sourcePackage,
-      isFeatured: registration.isFeatured,
-      description: registration.description,
-      author: registration.author,
-      category: registration.category,
-      logoUrl: registration.logo,
-    }));
+    return registrations
+      .filter(
+        ({ universalIdentifier }) =>
+          !isRetiredApplicationUniversalIdentifier(universalIdentifier),
+      )
+      .map((registration) => ({
+        id: registration.id,
+        universalIdentifier: registration.universalIdentifier,
+        name: registration.name,
+        sourcePackage: registration.sourcePackage,
+        isFeatured: registration.isFeatured,
+        description: registration.description,
+        author: registration.author,
+        category: registration.category,
+        logoUrl: registration.logo,
+      }));
   }
 
   async getStats(
@@ -625,6 +690,10 @@ export class ApplicationRegistrationService {
       params.currentOwnerWorkspaceId,
     );
 
+    this.assertApplicationRegistrationIsAvailable(
+      registration.universalIdentifier,
+    );
+
     const targetWorkspace = await this.workspaceRepository.findOne({
       where: { subdomain: params.targetWorkspaceSubdomain },
     });
@@ -650,6 +719,17 @@ export class ApplicationRegistrationService {
     return this.applicationRegistrationRepository.findOneOrFail({
       where: { id: registration.id },
     });
+  }
+
+  private assertApplicationRegistrationIsAvailable(
+    universalIdentifier: string,
+  ): void {
+    if (isRetiredApplicationUniversalIdentifier(universalIdentifier)) {
+      throw new ApplicationRegistrationException(
+        `Application registration "${universalIdentifier}" not found.`,
+        ApplicationRegistrationExceptionCode.APPLICATION_REGISTRATION_NOT_FOUND,
+      );
+    }
   }
 
   private async generateClientSecret(): Promise<{

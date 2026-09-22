@@ -17,6 +17,7 @@ import {
   ApplicationExceptionCode,
 } from 'src/engine/core-modules/application/application.exception';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
 import { LOGIC_FUNCTION_DRIVER_FACTORY_TOKEN } from 'src/engine/core-modules/logic-function/logic-function-drivers/constants/logic-function-driver-factory.token';
@@ -58,6 +59,8 @@ export class ApplicationSyncService {
     workspaceMigration: WorkspaceMigration;
     hasSchemaMetadataChanged: boolean;
   }> {
+    this.assertApplicationIsAvailable(manifest.application.universalIdentifier);
+
     const ownerFlatApplication: FlatApplication = dryRun
       ? await this.findInstalledApplicationOrThrow({ workspaceId, manifest })
       : await this.syncApplication({
@@ -147,6 +150,8 @@ export class ApplicationSyncService {
     manifest: Manifest;
     applicationRegistrationId?: string;
   }): Promise<void> {
+    this.assertApplicationIsAvailable(manifest.application.universalIdentifier);
+
     if (!isDefined(manifest.application.preInstallLogicFunction)) {
       return;
     }
@@ -180,19 +185,25 @@ export class ApplicationSyncService {
     applicationRegistrationId?: string;
   }): Promise<ApplicationEntity> {
     const name = manifest.application.displayName;
-    const packageJson = JSON.parse(
-      (
-        await streamToBuffer(
-          await this.fileStorageService.readFile({
-            applicationUniversalIdentifier:
-              manifest.application.universalIdentifier,
-            fileFolder: FileFolder.Dependencies,
-            resourcePath: 'package.json',
-            workspaceId,
-          }),
-        )
-      ).toString('utf-8'),
-    ) as PackageJson;
+    const packageJsonBuffer = await streamToBuffer(
+      await this.fileStorageService.readFile({
+        applicationUniversalIdentifier:
+          manifest.application.universalIdentifier,
+        fileFolder: FileFolder.Dependencies,
+        resourcePath: 'package.json',
+        workspaceId,
+      }),
+    );
+    let packageJson: PackageJson;
+
+    try {
+      packageJson = JSON.parse(packageJsonBuffer.toString('utf-8'));
+    } catch {
+      throw new ApplicationException(
+        'Application package.json is invalid.',
+        ApplicationExceptionCode.INVALID_INPUT,
+      );
+    }
 
     const application = await this.applicationService.findOneApplicationOrThrow(
       {
@@ -223,6 +234,8 @@ export class ApplicationSyncService {
     workspaceId: string;
     applicationUniversalIdentifier: string;
   }): Promise<WorkspaceMigration> {
+    this.assertApplicationIsAvailable(applicationUniversalIdentifier);
+
     const application = await this.applicationService.findOneApplicationOrThrow(
       { universalIdentifier: applicationUniversalIdentifier, workspaceId },
     );
@@ -289,6 +302,15 @@ export class ApplicationSyncService {
     });
 
     return validateAndBuildResult.workspaceMigration;
+  }
+
+  private assertApplicationIsAvailable(universalIdentifier: string): void {
+    if (isRetiredApplicationUniversalIdentifier(universalIdentifier)) {
+      throw new ApplicationException(
+        `Application "${universalIdentifier}" not found.`,
+        ApplicationExceptionCode.APPLICATION_NOT_FOUND,
+      );
+    }
   }
 
   private async cleanupApplicationRuntimeResources({

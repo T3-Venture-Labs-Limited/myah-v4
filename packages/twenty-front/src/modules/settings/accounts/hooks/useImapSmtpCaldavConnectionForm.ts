@@ -26,7 +26,6 @@ import {
 } from '@/settings/accounts/validation-schemas/connectionImapSmtpCalDav';
 import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { isNonEmptyString } from '@sniptt/guards';
-import { ACCOUNT_TYPES } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
 import { useConnectedImapSmtpCaldavAccount } from './useConnectedImapSmtpCaldavAccount';
 
@@ -39,6 +38,8 @@ type UseConnectionFormProps = {
 export type ConnectionFormData = {
   handle: string;
 } & ImapSmtpCaldavAccountInput;
+
+const EMAIL_ACCOUNT_TYPES = ['IMAP', 'SMTP'] as const;
 
 const DEFAULT_PROTOCOL_VALUES: Record<string, ConnectionParametersInput> = {
   IMAP: {
@@ -53,12 +54,6 @@ const DEFAULT_PROTOCOL_VALUES: Record<string, ConnectionParametersInput> = {
     port: 587,
     password: '',
     connectionSecurity: EmailConnectionSecurity.STARTTLS,
-  },
-  CALDAV: {
-    host: '',
-    port: 443,
-    password: '',
-    connectionSecurity: EmailConnectionSecurity.SSL_TLS,
   },
 };
 
@@ -102,10 +97,6 @@ export const useImapSmtpCaldavConnectionForm = ({
           ...DEFAULT_PROTOCOL_VALUES.SMTP,
           ...connectedAccount.connectionParameters?.SMTP,
         },
-        CALDAV: {
-          ...DEFAULT_PROTOCOL_VALUES.CALDAV,
-          ...connectedAccount.connectionParameters?.CALDAV,
-        },
       });
     }
   }, [connectedAccount, reset]);
@@ -124,7 +115,7 @@ export const useImapSmtpCaldavConnectionForm = ({
         ? isProtocolConfiguredForUpdate
         : isProtocolConfigured;
 
-      return ACCOUNT_TYPES.filter((protocol) => {
+      return EMAIL_ACCOUNT_TYPES.filter((protocol) => {
         const protocolConfig = values[protocol];
         return (
           isDefined(protocolConfig) &&

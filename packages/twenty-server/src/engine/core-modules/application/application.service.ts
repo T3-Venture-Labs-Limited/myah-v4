@@ -16,6 +16,7 @@ import {
   ApplicationException,
   ApplicationExceptionCode,
 } from 'src/engine/core-modules/application/application.exception';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { WORKSPACE_CUSTOM_APPLICATION_NAME } from 'src/engine/core-modules/application/constants/workspace-custom-application.constant';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
@@ -149,10 +150,15 @@ export class ApplicationService {
   async findManyApplications(
     workspaceId: string,
   ): Promise<ApplicationEntity[]> {
-    return this.applicationRepository.find({
+    const applications = await this.applicationRepository.find({
       where: { workspaceId },
       relations: ['applicationRegistration'],
     });
+
+    return applications.filter(
+      ({ universalIdentifier }) =>
+        !isRetiredApplicationUniversalIdentifier(universalIdentifier),
+    );
   }
 
   async findManyInstalledFlatApplications(
@@ -165,7 +171,11 @@ export class ApplicationService {
 
     return Object.values(flatApplicationMaps.byId).filter(
       (flatApplication): flatApplication is FlatApplication =>
-        isDefined(flatApplication) && !isDefined(flatApplication.deletedAt),
+        isDefined(flatApplication) &&
+        !isDefined(flatApplication.deletedAt) &&
+        !isRetiredApplicationUniversalIdentifier(
+          flatApplication.universalIdentifier,
+        ),
     );
   }
 
@@ -178,6 +188,13 @@ export class ApplicationService {
     universalIdentifier?: string;
     workspaceId: string;
   }): Promise<ApplicationEntity | null> {
+    if (
+      isDefined(universalIdentifier) &&
+      isRetiredApplicationUniversalIdentifier(universalIdentifier)
+    ) {
+      return null;
+    }
+
     if (!isDefined(id) && !isDefined(universalIdentifier)) {
       throw new ApplicationException(
         `Either id or universalIdentifier must be provided to find application.`,
@@ -195,7 +212,10 @@ export class ApplicationService {
       relations: ['packageJsonFile', 'yarnLockFile', 'applicationRegistration'],
     });
 
-    if (!isDefined(application)) {
+    if (
+      !isDefined(application) ||
+      isRetiredApplicationUniversalIdentifier(application.universalIdentifier)
+    ) {
       return null;
     }
 
@@ -445,6 +465,13 @@ export class ApplicationService {
     },
     queryRunner?: QueryRunner,
   ): Promise<ApplicationRegistrationEntity> {
+    if (isRetiredApplicationUniversalIdentifier(universalIdentifier)) {
+      throw new ApplicationException(
+        `Application "${universalIdentifier}" not found.`,
+        ApplicationExceptionCode.APPLICATION_NOT_FOUND,
+      );
+    }
+
     const applicationRegistration =
       this.applicationRegistrationRepository.create({
         universalIdentifier,
@@ -477,8 +504,19 @@ export class ApplicationService {
   ): Promise<void> {
     const defaultPackageFields = await getDefaultApplicationPackageFields();
 
+    let parsedPackageJson: unknown;
+
+    try {
+      parsedPackageJson = JSON.parse(defaultPackageFields.packageJsonContent);
+    } catch {
+      throw new ApplicationException(
+        'Default application package.json is invalid.',
+        ApplicationExceptionCode.INVALID_INPUT,
+      );
+    }
+
     const packageJsonChecksum = logicFunctionCreateHash(
-      JSON.stringify(JSON.parse(defaultPackageFields.packageJsonContent)),
+      JSON.stringify(parsedPackageJson),
     );
     const yarnLockChecksum = logicFunctionCreateHash(
       defaultPackageFields.yarnLockContent,
@@ -536,6 +574,16 @@ export class ApplicationService {
     data: Partial<ApplicationEntity> & { workspaceId: string },
     queryRunner?: QueryRunner,
   ): Promise<ApplicationEntity> {
+    if (
+      isDefined(data.universalIdentifier) &&
+      isRetiredApplicationUniversalIdentifier(data.universalIdentifier)
+    ) {
+      throw new ApplicationException(
+        `Application "${data.universalIdentifier}" not found.`,
+        ApplicationExceptionCode.APPLICATION_NOT_FOUND,
+      );
+    }
+
     const application = this.applicationRepository.create(data);
 
     if (queryRunner) {
@@ -576,6 +624,13 @@ export class ApplicationService {
   }
 
   async delete(universalIdentifier: string, workspaceId: string) {
+    if (isRetiredApplicationUniversalIdentifier(universalIdentifier)) {
+      throw new ApplicationException(
+        `Application "${universalIdentifier}" not found.`,
+        ApplicationExceptionCode.APPLICATION_NOT_FOUND,
+      );
+    }
+
     const application = await this.findByUniversalIdentifier({
       universalIdentifier,
       workspaceId,

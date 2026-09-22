@@ -59,7 +59,6 @@ const buildProvider = () => {
       tools.http_request as never,
       tools.send_email as never,
       tools.draft_email as never,
-      tools.create_calendar_event as never,
       tools.search_help_center as never,
       tools.code_interpreter as never,
       tools.navigate_app as never,

@@ -26,20 +26,10 @@ type MicrosoftGraphResourceConfig = Pick<
   notificationPath: string;
 };
 
-const MICROSOFT_GRAPH_RESOURCE_CONFIG_BY_CHANNEL_TYPE: Record<
-  WebhookSubscriptionChannelType,
-  MicrosoftGraphResourceConfig
-> = {
-  [WebhookSubscriptionChannelType.MESSAGING]: {
-    resource: '/me/messages',
-    changeType: 'created,updated',
-    notificationPath: 'webhooks/microsoft/messaging',
-  },
-  [WebhookSubscriptionChannelType.CALENDAR]: {
-    resource: '/me/events',
-    changeType: 'created,updated,deleted',
-    notificationPath: 'webhooks/microsoft/calendar',
-  },
+const MICROSOFT_MESSAGING_RESOURCE_CONFIG: MicrosoftGraphResourceConfig = {
+  resource: '/me/messages',
+  changeType: 'created,updated',
+  notificationPath: 'webhooks/microsoft/messaging',
 };
 
 @Injectable()
@@ -54,8 +44,9 @@ export class MicrosoftWebhookSubscriptionDriver implements WebhookSubscriptionDr
     channelType: WebhookSubscriptionChannelType,
     clientState: string,
   ): Promise<WebhookSubscriptionResult> {
-    const resourceConfig =
-      MICROSOFT_GRAPH_RESOURCE_CONFIG_BY_CHANNEL_TYPE[channelType];
+    this.assertMessagingChannel(channelType);
+
+    const resourceConfig = MICROSOFT_MESSAGING_RESOURCE_CONFIG;
     const graphClient =
       await this.microsoftOAuth2ClientProvider.getClient(connectedAccountId);
 
@@ -85,6 +76,8 @@ export class MicrosoftWebhookSubscriptionDriver implements WebhookSubscriptionDr
   async renewSubscription(
     context: WebhookSubscriptionContext,
   ): Promise<WebhookSubscriptionResult> {
+    this.assertMessagingChannel(context.channelType);
+
     const graphClient = await this.microsoftOAuth2ClientProvider.getClient(
       context.connectedAccountId,
     );
@@ -106,6 +99,8 @@ export class MicrosoftWebhookSubscriptionDriver implements WebhookSubscriptionDr
   }
 
   async deleteSubscription(context: WebhookSubscriptionContext): Promise<void> {
+    this.assertMessagingChannel(context.channelType);
+
     if (!isDefined(context.externalSubscriptionId)) {
       return;
     }
@@ -117,6 +112,17 @@ export class MicrosoftWebhookSubscriptionDriver implements WebhookSubscriptionDr
     await graphClient
       .api(`/subscriptions/${context.externalSubscriptionId}`)
       .delete();
+  }
+
+  private assertMessagingChannel(
+    channelType: WebhookSubscriptionChannelType,
+  ): void {
+    if (channelType === WebhookSubscriptionChannelType.CALENDAR) {
+      throw new WebhookSubscriptionDriverException(
+        'Calendar webhook subscriptions are no longer available',
+        WebhookSubscriptionDriverExceptionCode.UNSUPPORTED_PROVIDER,
+      );
+    }
   }
 
   private toResult(subscription: Subscription): WebhookSubscriptionResult {

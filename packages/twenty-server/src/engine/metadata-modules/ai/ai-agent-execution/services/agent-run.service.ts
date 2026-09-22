@@ -7,6 +7,7 @@ import {
 } from 'twenty-shared/application';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
@@ -49,7 +50,12 @@ export class AgentRunService {
       agent.applicationId,
     );
 
-    if (!application) {
+    if (
+      !application ||
+      !isSupportedApplicationUniversalIdentifier(
+        application.universalIdentifier,
+      )
+    ) {
       throw new NotFoundException(
         `Application ${agent.applicationId} not found for agent ${input.agentUniversalIdentifier}`,
       );

@@ -6,13 +6,11 @@ import { OnboardingResolver } from 'src/engine/core-modules/onboarding/onboardin
 import { OnboardingService } from 'src/engine/core-modules/onboarding/onboarding.service';
 import { UserVarsModule } from 'src/engine/core-modules/user/user-vars/user-vars.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { OnboardingInviteSuggestionsModule } from 'src/modules/onboarding-invite-suggestions/onboarding-invite-suggestions.module';
 
 @Module({
   imports: [
     BillingModule,
     UserVarsModule,
-    OnboardingInviteSuggestionsModule,
     TypeOrmModule.forFeature([WorkspaceEntity]),
   ],
   exports: [OnboardingService],

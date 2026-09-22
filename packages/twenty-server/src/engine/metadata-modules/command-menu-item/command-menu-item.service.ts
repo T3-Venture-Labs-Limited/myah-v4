@@ -5,6 +5,7 @@ import { type APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import {
   type ApplicationTranslationCatalogLoaderPayload,
@@ -53,7 +54,13 @@ export class CommandMenuItemService {
       );
 
     return Object.values(flatCommandMenuItemMaps.byUniversalIdentifier)
-      .filter(isDefined)
+      .filter(
+        (item): item is FlatCommandMenuItem =>
+          isDefined(item) &&
+          !isRetiredApplicationUniversalIdentifier(
+            item.applicationUniversalIdentifier,
+          ),
+      )
       .sort((a, b) => a.position - b.position)
       .map(fromFlatCommandMenuItemToCommandMenuItemDto);
   }
@@ -75,7 +82,12 @@ export class CommandMenuItemService {
       flatEntityMaps: flatCommandMenuItemMaps,
     });
 
-    if (!isDefined(flatCommandMenuItem)) {
+    if (
+      !isDefined(flatCommandMenuItem) ||
+      isRetiredApplicationUniversalIdentifier(
+        flatCommandMenuItem.applicationUniversalIdentifier,
+      )
+    ) {
       return null;
     }
 
@@ -197,6 +209,23 @@ export class CommandMenuItemService {
       },
     );
 
+    const existingFlatCommandMenuItem = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: input.id,
+      flatEntityMaps: existingFlatCommandMenuItemMaps,
+    });
+
+    if (
+      !isDefined(existingFlatCommandMenuItem) ||
+      isRetiredApplicationUniversalIdentifier(
+        existingFlatCommandMenuItem.applicationUniversalIdentifier,
+      )
+    ) {
+      throw new CommandMenuItemException(
+        'Command menu item not found',
+        CommandMenuItemExceptionCode.COMMAND_MENU_ITEM_NOT_FOUND,
+      );
+    }
+
     const flatCommandMenuItemToUpdate =
       fromUpdateCommandMenuItemInputToFlatCommandMenuItemToUpdateOrThrow({
         flatCommandMenuItemMaps: existingFlatCommandMenuItemMaps,
@@ -268,7 +297,12 @@ export class CommandMenuItemService {
       flatEntityMaps: existingFlatCommandMenuItemMaps,
     });
 
-    if (!isDefined(existingFlatCommandMenuItem)) {
+    if (
+      !isDefined(existingFlatCommandMenuItem) ||
+      isRetiredApplicationUniversalIdentifier(
+        existingFlatCommandMenuItem.applicationUniversalIdentifier,
+      )
+    ) {
       throw new CommandMenuItemException(
         'Command menu item not found',
         CommandMenuItemExceptionCode.COMMAND_MENU_ITEM_NOT_FOUND,
@@ -347,6 +381,23 @@ export class CommandMenuItemService {
         },
       );
 
+    const existingFlatCommandMenuItem = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: id,
+      flatEntityMaps: existingFlatCommandMenuItemMaps,
+    });
+
+    if (
+      !isDefined(existingFlatCommandMenuItem) ||
+      isRetiredApplicationUniversalIdentifier(
+        existingFlatCommandMenuItem.applicationUniversalIdentifier,
+      )
+    ) {
+      throw new CommandMenuItemException(
+        'Command menu item not found',
+        CommandMenuItemExceptionCode.COMMAND_MENU_ITEM_NOT_FOUND,
+      );
+    }
+
     const flatCommandMenuItemToDelete =
       fromDeleteCommandMenuItemInputToFlatCommandMenuItemOrThrow({
         flatCommandMenuItemMaps: existingFlatCommandMenuItemMaps,
@@ -416,7 +467,13 @@ export class CommandMenuItemService {
       );
 
     return Object.values(flatCommandMenuItemMaps.byUniversalIdentifier)
-      .filter(isDefined)
+      .filter(
+        (item): item is FlatCommandMenuItem =>
+          isDefined(item) &&
+          !isRetiredApplicationUniversalIdentifier(
+            item.applicationUniversalIdentifier,
+          ),
+      )
       .sort((a, b) => a.position - b.position);
   }
 
@@ -524,7 +581,12 @@ export class CommandMenuItemService {
       (item) => isDefined(item) && item.workflowVersionId === workflowVersionId,
     );
 
-    if (!isDefined(flatCommandMenuItem)) {
+    if (
+      !isDefined(flatCommandMenuItem) ||
+      isRetiredApplicationUniversalIdentifier(
+        flatCommandMenuItem.applicationUniversalIdentifier,
+      )
+    ) {
       return null;
     }
 

@@ -34,21 +34,11 @@ export const useCreateTool = () => {
       const newLogicFunction = result.response.data.createOneLogicFunction;
       enqueueSuccessSnackBar({ message: t`Tool created` });
 
-      const applicationId = newLogicFunction.applicationId;
-      if (isDefined(applicationId)) {
-        navigate(
-          getSettingsPath(SettingsPath.ApplicationLogicFunctionDetail, {
-            applicationId,
-            logicFunctionId: newLogicFunction.id,
-          }),
-        );
-      } else {
-        navigate(
-          getSettingsPath(SettingsPath.LogicFunctionDetail, {
-            logicFunctionId: newLogicFunction.id,
-          }),
-        );
-      }
+      navigate(
+        getSettingsPath(SettingsPath.LogicFunctionDetail, {
+          logicFunctionId: newLogicFunction.id,
+        }),
+      );
     } finally {
       setIsCreatingTool(false);
     }

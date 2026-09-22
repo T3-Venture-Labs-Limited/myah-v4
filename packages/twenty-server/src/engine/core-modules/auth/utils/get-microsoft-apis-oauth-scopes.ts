@@ -6,7 +6,6 @@ export const getMicrosoftApisOauthScopes = () => {
     'offline_access',
     'Mail.ReadWrite',
     'Mail.Send',
-    'Calendars.ReadWrite',
     'User.Read',
   ];
 

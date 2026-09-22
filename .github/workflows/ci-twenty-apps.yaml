@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       application:
-        description: 'App folder name to test (e.g. "myah-shopify"). Leave empty to test all apps.'
+        description: 'App folder name to test. Leave empty to test all apps.'
         required: false
         default: ''
         type: string
@@ -35,9 +35,13 @@ jobs:
 
       - name: Ensure no .github folder inside app folders
         run: |
-          offenders=$(find packages/twenty-apps/internal packages/twenty-apps/public -mindepth 2 -maxdepth 2 -type d -name .github)
+          offenders=$(find \
+            packages/twenty-apps/internal packages/twenty-apps/public \
+            -mindepth 2 -maxdepth 2 -type d -name .github
+          )
           if [ -n "$offenders" ]; then
-            echo "::error::Apps must not define their own .github folder. Offenders:"
+            echo "::error::Apps must not define their own .github folder."
+            echo "Offenders:"
             echo "$offenders"
             exit 1
           fi
@@ -45,7 +49,8 @@ jobs:
       - name: Detect changed files
         id: changed-files
         if: github.event_name != 'workflow_dispatch'
-        uses: tj-actions/changed-files@48d8f15b2aaa3d255ca5af3eba4870f807ce6b3c # v45.0.9
+        # v45.0.9
+        uses: tj-actions/changed-files@48d8f15b2aaa3d255ca5af3eba4870f807ce6b3c
         with:
           json: true
           escape_json: false
@@ -63,12 +68,17 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const path = require('path');
-          const roots = ['packages/twenty-apps/internal', 'packages/twenty-apps/public'];
+          const roots = [
+            'packages/twenty-apps/internal',
+            'packages/twenty-apps/public',
+          ];
           const eventName = process.env.EVENT_NAME;
           const changedFiles = JSON.parse(process.env.CHANGED_FILES || '[]');
           const changedApps = new Set();
           for (const file of changedFiles) {
-            const match = file.match(/^packages\/twenty-apps\/(?:internal|public)\/([^/]+)\//);
+            const match = file.match(
+              /^packages\/twenty-apps\/(?:internal|public)\/([^/]+)\//,
+            );
             if (match) changedApps.add(match[1]);
           }
           const requestedApp = (process.env.APPLICATION_INPUT || '').trim();
@@ -76,9 +86,14 @@ jobs:
             .filter((root) => fs.existsSync(root))
             .flatMap((root) =>
               fs.readdirSync(root, { withFileTypes: true })
-                .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
+                .filter(
+                  (entry) =>
+                    entry.isDirectory() && entry.name !== 'node_modules',
+                )
                 .map((entry) => entry.name)
-                .filter((name) => fs.existsSync(path.join(root, name, 'package.json')))
+                .filter((name) =>
+                  fs.existsSync(path.join(root, name, 'package.json')),
+                )
                 .filter((name) => {
                   if (eventName === 'workflow_dispatch') {
                     return requestedApp ? name === requestedApp : true;
@@ -87,18 +102,32 @@ jobs:
                 })
                 .map((name) => {
                   const appPath = path.join(root, name);
-                  const scripts = JSON.parse(fs.readFileSync(path.join(appPath, 'package.json'), 'utf8')).scripts || {};
+                  const packageJson = JSON.parse(
+                    fs.readFileSync(
+                      path.join(appPath, 'package.json'),
+                      'utf8',
+                    ),
+                  );
+                  const scripts = packageJson.scripts || {};
                   return {
                     name,
                     path: appPath,
                     hasTypecheck: Boolean(scripts.typecheck),
                     hasUnit: Boolean(scripts['test:unit']),
-                    hasIntegration: Boolean(scripts.test && scripts.test !== scripts['test:unit']),
+                    hasIntegration: Boolean(
+                      scripts.test && scripts.test !== scripts['test:unit'],
+                    ),
                   };
                 })
             );
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify(matrix)}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_apps=${matrix.length > 0}\n`);
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `matrix=${JSON.stringify(matrix)}\n`,
+          );
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `has_apps=${matrix.length > 0}\n`,
+          );
           NODE
 
   ci:
@@ -122,7 +151,8 @@ jobs:
         run: corepack enable
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        # v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: '.nvmrc'
           cache: yarn

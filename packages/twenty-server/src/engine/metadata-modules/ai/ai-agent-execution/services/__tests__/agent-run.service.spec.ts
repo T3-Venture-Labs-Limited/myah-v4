@@ -6,6 +6,10 @@ import { AgentAsyncExecutorService } from 'src/engine/metadata-modules/ai/ai-age
 import { AgentRunService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-run.service';
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
+import {
+  RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+  RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+} from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 describe('AgentRunService', () => {
   let service: AgentRunService;
@@ -26,7 +30,11 @@ describe('AgentRunService', () => {
   beforeEach(async () => {
     agentRepository = { findOne: jest.fn().mockResolvedValue(agent) };
     applicationService = {
-      findById: jest.fn().mockResolvedValue({ id: 'app-1' }),
+      findById: jest.fn().mockResolvedValue({
+        id: 'app-1',
+        universalIdentifier:
+          RETAINED_INSTAGRAM_APPLICATION_UNIVERSAL_IDENTIFIER,
+      }),
     };
     agentAsyncExecutorService = {
       executeAgent: jest.fn().mockResolvedValue({
@@ -90,7 +98,7 @@ describe('AgentRunService', () => {
         authContext: {
           type: 'application',
           workspace,
-          application: { id: 'app-1' },
+          application: expect.objectContaining({ id: 'app-1' }),
         },
       }),
     );
@@ -160,6 +168,23 @@ describe('AgentRunService', () => {
     ).rejects.toThrow(/not found/);
 
     expect(applicationService.findById).not.toHaveBeenCalled();
+    expect(agentAsyncExecutorService.executeAgent).not.toHaveBeenCalled();
+  });
+
+  it('rejects retired application agents before execution', async () => {
+    applicationService.findById.mockResolvedValue({
+      id: 'app-1',
+      universalIdentifier: RETIRED_BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+    });
+
+    await expect(
+      service.run({
+        workspace,
+        requestUserWorkspaceId: null,
+        input,
+      }),
+    ).rejects.toThrow(/not found/);
+
     expect(agentAsyncExecutorService.executeAgent).not.toHaveBeenCalled();
   });
 

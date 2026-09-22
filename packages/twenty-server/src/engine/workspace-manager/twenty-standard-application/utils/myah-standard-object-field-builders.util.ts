@@ -248,7 +248,9 @@ export const buildMyahBrandBrainLinkStandardFlatObjectMetadata = (
       description:
         'An explicit backlink or citation between Brand Brain pages.',
       icon: 'IconLink',
-      isSearchable: true,
+      isSearchable: false,
+      isUIEditable: false,
+      isUICreatable: false,
       labelIdentifierFieldMetadataName: 'name',
     },
   });
@@ -268,7 +270,9 @@ export const buildMyahBrandBrainPageStandardFlatObjectMetadata = (
       description:
         'A record-backed folder, page, Index, or Log entry for the Brand Brain.',
       icon: 'IconNotebook',
-      isSearchable: true,
+      isSearchable: false,
+      isUIEditable: false,
+      isUICreatable: false,
       labelIdentifierFieldMetadataName: 'title',
     },
   });
@@ -289,6 +293,8 @@ export const buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata = (
         'Dormant migration-safe proposal object retained for existing test workspaces; routine Brand Brain writes are direct agent updates.',
       icon: 'IconFilePencil',
       isSearchable: false,
+      isUIEditable: false,
+      isUICreatable: false,
       labelIdentifierFieldMetadataName: 'title',
     },
   });

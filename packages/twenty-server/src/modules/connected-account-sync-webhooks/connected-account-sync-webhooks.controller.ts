@@ -18,9 +18,7 @@ import { escapeHtml } from 'src/engine/core-modules/emailing-domain/utils/escape
 
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
-import { GoogleCalendarNotificationHandler } from 'src/modules/connected-account-sync-webhooks/drivers/google/google-calendar-notification.handler';
 import { GoogleMessagingNotificationHandler } from 'src/modules/connected-account-sync-webhooks/drivers/google/google-messaging-notification.handler';
-import { MicrosoftCalendarNotificationHandler } from 'src/modules/connected-account-sync-webhooks/drivers/microsoft/microsoft-calendar-notification.handler';
 import { MicrosoftMessagingNotificationHandler } from 'src/modules/connected-account-sync-webhooks/drivers/microsoft/microsoft-messaging-notification.handler';
 import { ConnectedAccountSyncWebhookApiExceptionFilter } from 'src/modules/connected-account-sync-webhooks/filters/connected-account-sync-webhook-api-exception.filter';
 import { type GooglePubSubPushMessage } from 'src/modules/connected-account-sync-webhooks/types/google-pubsub-push.type';
@@ -32,9 +30,7 @@ import { type MicrosoftGraphNotificationPayload } from 'src/modules/connected-ac
 export class ConnectedAccountSyncWebhooksController {
   constructor(
     private readonly googleMessagingNotificationHandler: GoogleMessagingNotificationHandler,
-    private readonly googleCalendarNotificationHandler: GoogleCalendarNotificationHandler,
     private readonly microsoftMessagingNotificationHandler: MicrosoftMessagingNotificationHandler,
-    private readonly microsoftCalendarNotificationHandler: MicrosoftCalendarNotificationHandler,
   ) {}
 
   @Post('webhooks/google/messaging')
@@ -46,20 +42,6 @@ export class ConnectedAccountSyncWebhooksController {
     await this.googleMessagingNotificationHandler.handle({
       body,
       authorizationHeader,
-    });
-  }
-
-  @Post('webhooks/google/calendar')
-  @HttpCode(HttpStatus.OK)
-  async handleGoogleCalendar(
-    @Headers('x-goog-channel-id') channelId: string | undefined,
-    @Headers('x-goog-resource-state') resourceState: string | undefined,
-    @Headers('x-goog-channel-token') channelToken: string | undefined,
-  ): Promise<void> {
-    await this.googleCalendarNotificationHandler.handle({
-      channelId,
-      resourceState,
-      channelToken,
     });
   }
 
@@ -75,22 +57,6 @@ export class ConnectedAccountSyncWebhooksController {
     }
 
     await this.microsoftMessagingNotificationHandler.handle(body.value ?? []);
-
-    return '';
-  }
-
-  @Post('webhooks/microsoft/calendar')
-  @HttpCode(HttpStatus.OK)
-  async handleMicrosoftCalendar(
-    @Body() body: MicrosoftGraphNotificationPayload,
-    @Query('validationToken') validationToken: string | undefined,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<string> {
-    if (isDefined(validationToken)) {
-      return this.respondToValidationHandshake(validationToken, response);
-    }
-
-    await this.microsoftCalendarNotificationHandler.handle(body.value ?? []);
 
     return '';
   }

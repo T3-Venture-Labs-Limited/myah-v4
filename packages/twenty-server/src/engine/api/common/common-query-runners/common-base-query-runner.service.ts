@@ -1,6 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { type PermissionFlagType } from 'twenty-shared/constants';
+import {
+  MYAH_STANDARD_OBJECTS,
+  STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
 
 import { QueryResultFieldValue } from 'src/engine/api/graphql/workspace-query-runner/factories/query-result-getters/interfaces/query-result-field-value';
 
@@ -85,6 +89,12 @@ const PROTECTED_DRAFT_MUTATION_NAMES: Partial<Record<CommonQueryNames, true>> =
     [CommonQueryNames.MERGE_MANY]: true,
   };
 
+const RETIRED_BRAND_BRAIN_OBJECT_UNIVERSAL_IDENTIFIERS = new Set<string>([
+  MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.brandBrainLink.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.brandBrainUpdateProposal.universalIdentifier,
+]);
+
 export const isProtectedInstagramDraftMutation = (
   operationName: CommonQueryNames,
   objectUniversalIdentifier: string,
@@ -92,6 +102,29 @@ export const isProtectedInstagramDraftMutation = (
   PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
   objectUniversalIdentifier ===
     INSTAGRAM_MESSAGE_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER;
+
+export const isRetiredBrandBrainMutation = (
+  operationName: CommonQueryNames,
+  objectUniversalIdentifier: string,
+) =>
+  PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
+  RETIRED_BRAND_BRAIN_OBJECT_UNIVERSAL_IDENTIFIERS.has(
+    objectUniversalIdentifier,
+  );
+
+const RETIRED_CALENDAR_OBJECT_UNIVERSAL_IDENTIFIERS = new Set<string>([
+  STANDARD_OBJECTS.calendarChannelEventAssociation.universalIdentifier,
+  STANDARD_OBJECTS.calendarEventParticipant.universalIdentifier,
+  STANDARD_OBJECTS.calendarEvent.universalIdentifier,
+  STANDARD_OBJECTS.callRecording.universalIdentifier,
+]);
+
+export const isRetiredCalendarMutation = (
+  operationName: CommonQueryNames,
+  objectUniversalIdentifier: string,
+) =>
+  PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
+  RETIRED_CALENDAR_OBJECT_UNIVERSAL_IDENTIFIERS.has(objectUniversalIdentifier);
 
 const containsProtectedMyahInboxReplyDraftField = (value: unknown): boolean => {
   if (Array.isArray(value)) {
@@ -345,6 +378,22 @@ export abstract class CommonBaseQueryRunnerService<
     args: unknown,
     objectUniversalIdentifier: string,
   ): void {
+    if (
+      isRetiredBrandBrainMutation(this.operationName, objectUniversalIdentifier)
+    ) {
+      throw new PermissionsException(
+        'Brand Brain records are read-only after feature retirement',
+        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
+      );
+    }
+    if (
+      isRetiredCalendarMutation(this.operationName, objectUniversalIdentifier)
+    ) {
+      throw new PermissionsException(
+        'Calendar and call-recording records are read-only after feature retirement',
+        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
+      );
+    }
     if (
       isProtectedInstagramDraftMutation(
         this.operationName,

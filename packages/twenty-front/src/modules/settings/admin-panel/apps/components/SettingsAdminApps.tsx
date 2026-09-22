@@ -13,15 +13,14 @@ import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { type ReactNode, useContext, useState } from 'react';
-import { assertUnreachable, getSettingsPath } from 'twenty-shared/utils';
-import { SettingsPath } from 'twenty-shared/types';
-import { IconChevronRight, IconPinned, IconRefresh } from 'twenty-ui/icon';
+import { type ReactNode, useState } from 'react';
+import { assertUnreachable } from 'twenty-shared/utils';
+import { IconPinned, IconRefresh } from 'twenty-ui/icon';
 import { H2Title } from 'twenty-ui/typography';
 import { Button, SearchInput } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { MenuItemToggle } from 'twenty-ui/navigation';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Tag } from 'twenty-ui/data-display';
 import {
   type ApplicationRegistrationFragmentFragment,
@@ -198,17 +197,10 @@ const SettingsAdminAppsTableRow = ({
   registration,
   getFormattedSource,
 }: SettingsAdminAppsTableRowProps) => {
-  const { theme } = useContext(ThemeContext);
-
   return (
     <TableRow
-      to={getSettingsPath(
-        SettingsPath.AdminPanelApplicationRegistrationDetail,
-        { applicationRegistrationId: registration.id },
-      )}
       gridAutoColumns={TABLE_GRID}
       mobileGridAutoColumns={TABLE_GRID_MOBILE}
-      isClickable
     >
       <StyledNameTableCell minWidth="0" overflow="hidden">
         <ApplicationDisplay
@@ -230,12 +222,7 @@ const SettingsAdminAppsTableRow = ({
           text={registration.isConfigured ? t`Yes` : t`No`}
         />
       </TableCell>
-      <TableCell align="right">
-        <IconChevronRight
-          size={theme.icon.size.md}
-          color={theme.font.color.tertiary}
-        />
-      </TableCell>
+      <TableCell />
     </TableRow>
   );
 };

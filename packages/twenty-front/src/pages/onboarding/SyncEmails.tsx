@@ -1,7 +1,5 @@
 import { clientConfigApiStatusState } from '@/client-config/states/clientConfigApiStatusState';
-import { isGoogleCalendarEnabledState } from '@/client-config/states/isGoogleCalendarEnabledState';
 import { isGoogleMessagingEnabledState } from '@/client-config/states/isGoogleMessagingEnabledState';
-import { isMicrosoftCalendarEnabledState } from '@/client-config/states/isMicrosoftCalendarEnabledState';
 import { isMicrosoftMessagingEnabledState } from '@/client-config/states/isMicrosoftMessagingEnabledState';
 import { onboardingConfigState } from '@/client-config/states/onboardingConfigState';
 import { OnboardingPageLoader } from '@/onboarding/components/OnboardingPageLoader';
@@ -14,10 +12,7 @@ import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomStat
 import { useCallback, useState } from 'react';
 import { AppPath, ConnectedAccountProvider } from 'twenty-shared/types';
 import { ImportContacts } from '~/pages/onboarding/ImportContacts';
-import {
-  CalendarChannelVisibility,
-  MessageChannelVisibility,
-} from '~/generated/graphql';
+import { MessageChannelVisibility } from '~/generated/graphql';
 
 export const SyncEmails = () => {
   const { triggerApisOAuth } = useTriggerApisOAuth();
@@ -31,17 +26,8 @@ export const SyncEmails = () => {
   const isMicrosoftMessagingEnabled = useAtomStateValue(
     isMicrosoftMessagingEnabledState,
   );
-  const isGoogleCalendarEnabled = useAtomStateValue(
-    isGoogleCalendarEnabledState,
-  );
-  const isMicrosoftCalendarEnabled = useAtomStateValue(
-    isMicrosoftCalendarEnabledState,
-  );
-
-  const isGoogleProviderEnabled =
-    isGoogleMessagingEnabled || isGoogleCalendarEnabled;
-  const isMicrosoftProviderEnabled =
-    isMicrosoftMessagingEnabled || isMicrosoftCalendarEnabled;
+  const isGoogleProviderEnabled = isGoogleMessagingEnabled;
+  const isMicrosoftProviderEnabled = isMicrosoftMessagingEnabled;
   const hasProviderEnabled =
     isGoogleProviderEnabled || isMicrosoftProviderEnabled;
   const isClientConfigLoaded = useAtomStateValue(
@@ -59,7 +45,6 @@ export const SyncEmails = () => {
       await triggerApisOAuth(provider, {
         redirectLocation: AppPath.Index,
         messageVisibility: MessageChannelVisibility.METADATA,
-        calendarVisibility: CalendarChannelVisibility.METADATA,
         skipMessageChannelConfiguration: true,
       });
     } catch (error) {

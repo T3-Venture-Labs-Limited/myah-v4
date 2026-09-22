@@ -4,11 +4,16 @@ import { isDefined } from 'twenty-shared/utils';
 import { ILike, IsNull } from 'typeorm';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { isSupportedApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
+import { type FlatApplicationCacheMaps } from 'src/engine/core-modules/application/types/flat-application-cache-maps.type';
 import { type CreateAgentInput } from 'src/engine/metadata-modules/ai/ai-agent/dtos/create-agent.input';
 import { type UpdateAgentInput } from 'src/engine/metadata-modules/ai/ai-agent/dtos/update-agent.input';
 import { fromCreateAgentInputToFlatAgent } from 'src/engine/metadata-modules/ai/ai-agent/utils/from-create-agent-input-to-flat-agent.util';
 import { fromUpdateAgentInputToFlatAgentToUpdate } from 'src/engine/metadata-modules/ai/ai-agent/utils/from-update-agent-input-to-flat-agent-to-update.util';
-import { FlatAgentWithRoleId } from 'src/engine/metadata-modules/flat-agent/types/flat-agent.type';
+import {
+  type FlatAgent,
+  type FlatAgentWithRoleId,
+} from 'src/engine/metadata-modules/flat-agent/types/flat-agent.type';
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
@@ -35,14 +40,19 @@ export class AgentService {
   ) {}
 
   async findManyAgents(workspaceId: string): Promise<FlatAgentWithRoleId[]> {
-    const { flatAgentMaps, flatRoleTargetByAgentIdMaps } =
+    const { flatAgentMaps, flatRoleTargetByAgentIdMaps, flatApplicationMaps } =
       await this.workspaceCacheService.getOrRecompute(workspaceId, [
         'flatAgentMaps',
         'flatRoleTargetByAgentIdMaps',
+        'flatApplicationMaps',
       ]);
 
     return Object.values(flatAgentMaps.byUniversalIdentifier)
-      .filter(isDefined)
+      .filter(
+        (agent): agent is FlatAgent =>
+          isDefined(agent) &&
+          !this.isRetiredAgent(agent.applicationId, flatApplicationMaps),
+      )
       .map((flatAgent) => {
         const roleId = flatRoleTargetByAgentIdMaps[flatAgent.id]?.roleId;
 
@@ -64,7 +74,7 @@ export class AgentService {
       where: { name },
     });
 
-    if (!agent) {
+    if (!agent || !(await this.isAgentEntityAvailable(agent))) {
       const identifier = `name "${name}"`;
 
       throw new AiException(
@@ -83,10 +93,11 @@ export class AgentService {
     workspaceId: string;
     id: string;
   }): Promise<FlatAgentWithRoleId> {
-    const { flatAgentMaps, flatRoleTargetByAgentIdMaps } =
+    const { flatAgentMaps, flatRoleTargetByAgentIdMaps, flatApplicationMaps } =
       await this.workspaceCacheService.getOrRecompute(workspaceId, [
         'flatAgentMaps',
         'flatRoleTargetByAgentIdMaps',
+        'flatApplicationMaps',
       ]);
 
     const flatAgent = findFlatEntityByIdInFlatEntityMaps({
@@ -94,7 +105,10 @@ export class AgentService {
       flatEntityMaps: flatAgentMaps,
     });
 
-    if (!isDefined(flatAgent)) {
+    if (
+      !isDefined(flatAgent) ||
+      this.isRetiredAgent(flatAgent.applicationId, flatApplicationMaps)
+    ) {
       throw new AiException(`Agent not found`, AiExceptionCode.AGENT_NOT_FOUND);
     }
 
@@ -126,6 +140,10 @@ export class AgentService {
 
     const resolvedFlatApplication =
       flatApplication ?? workspaceCustomFlatApplication;
+
+    this.assertApplicationIsAvailable(
+      resolvedFlatApplication.universalIdentifier,
+    );
 
     const { flatAgentToCreate, flatRoleTargetToCreate } =
       fromCreateAgentInputToFlatAgent({
@@ -196,12 +214,29 @@ export class AgentService {
         },
       );
 
-    const { flatRoleTargetByAgentIdMaps, flatAgentMaps, flatRoleMaps } =
-      await this.workspaceCacheService.getOrRecompute(workspaceId, [
-        'flatRoleTargetByAgentIdMaps',
-        'flatAgentMaps',
-        'flatRoleMaps',
-      ]);
+    const {
+      flatRoleTargetByAgentIdMaps,
+      flatAgentMaps,
+      flatRoleMaps,
+      flatApplicationMaps,
+    } = await this.workspaceCacheService.getOrRecompute(workspaceId, [
+      'flatRoleTargetByAgentIdMaps',
+      'flatAgentMaps',
+      'flatRoleMaps',
+      'flatApplicationMaps',
+    ]);
+
+    const existingAgent = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: input.id,
+      flatEntityMaps: flatAgentMaps,
+    });
+
+    if (
+      !isDefined(existingAgent) ||
+      this.isRetiredAgent(existingAgent.applicationId, flatApplicationMaps)
+    ) {
+      throw new AiException(`Agent not found`, AiExceptionCode.AGENT_NOT_FOUND);
+    }
 
     const {
       flatAgentToUpdate,
@@ -313,10 +348,11 @@ export class AgentService {
         },
       );
 
-    const { flatAgentMaps, flatRoleTargetByAgentIdMaps } =
+    const { flatAgentMaps, flatRoleTargetByAgentIdMaps, flatApplicationMaps } =
       await this.workspaceCacheService.getOrRecompute(workspaceId, [
         'flatAgentMaps',
         'flatRoleTargetByAgentIdMaps',
+        'flatApplicationMaps',
       ]);
 
     const agentsToDelete = ids
@@ -328,7 +364,12 @@ export class AgentService {
       )
       .filter(isDefined);
 
-    if (agentsToDelete.length === 0) {
+    if (
+      agentsToDelete.length === 0 ||
+      agentsToDelete.some((agent) =>
+        this.isRetiredAgent(agent.applicationId, flatApplicationMaps),
+      )
+    ) {
       return [];
     }
 
@@ -378,7 +419,7 @@ export class AgentService {
   ): Promise<AgentEntity[]> {
     const queryLower = query.toLowerCase();
 
-    return this.agentRepository.find(workspaceId, {
+    const agents = await this.agentRepository.find(workspaceId, {
       where: [
         { deletedAt: IsNull(), name: ILike(`%${queryLower}%`) },
         {
@@ -390,5 +431,41 @@ export class AgentService {
       take: options.limit,
       order: { name: 'ASC' },
     });
+    const availability = await Promise.all(
+      agents.map((agent) => this.isAgentEntityAvailable(agent)),
+    );
+
+    return agents.filter((_, index) => availability[index]);
+  }
+
+  private isRetiredAgent(
+    applicationId: string,
+    flatApplicationMaps: FlatApplicationCacheMaps,
+  ): boolean {
+    const application = flatApplicationMaps.byId[applicationId];
+
+    return (
+      isDefined(application) &&
+      !isSupportedApplicationUniversalIdentifier(
+        application.universalIdentifier,
+      )
+    );
+  }
+
+  private async isAgentEntityAvailable(agent: AgentEntity): Promise<boolean> {
+    const application = await this.applicationService.findById(
+      agent.applicationId,
+    );
+
+    return (
+      isDefined(application) &&
+      isSupportedApplicationUniversalIdentifier(application.universalIdentifier)
+    );
+  }
+
+  private assertApplicationIsAvailable(universalIdentifier: string): void {
+    if (!isSupportedApplicationUniversalIdentifier(universalIdentifier)) {
+      throw new AiException('Agent not found', AiExceptionCode.AGENT_NOT_FOUND);
+    }
   }
 }

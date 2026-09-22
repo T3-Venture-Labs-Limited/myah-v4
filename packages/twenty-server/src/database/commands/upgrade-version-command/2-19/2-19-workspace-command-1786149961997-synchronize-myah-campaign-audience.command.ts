@@ -11,7 +11,7 @@ import {
   MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS,
   MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
-import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 
 const audienceObjects = new Set<string>([
   MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
@@ -134,6 +134,7 @@ export class SynchronizeMyahCampaignAudienceCommand extends ActiveOrSuspendedWor
 
     const schemaName = getWorkspaceSchemaName(args.workspaceId);
 
+    // pi-lens-ignore: no-sql-in-code
     await args.dataSource.query(
       `
       UPDATE "${schemaName}"."campaignCreator" AS "campaignCreator"

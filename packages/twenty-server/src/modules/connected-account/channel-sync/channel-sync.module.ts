@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountMetadataModule } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.module';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
@@ -12,7 +11,7 @@ import { MessagingCommonModule } from 'src/modules/messaging/common/messaging-co
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CalendarChannelEntity, MessageChannelEntity]),
+    TypeOrmModule.forFeature([MessageChannelEntity]),
     ConnectedAccountMetadataModule,
     PermissionsModule,
     WorkspaceDataSourceModule,

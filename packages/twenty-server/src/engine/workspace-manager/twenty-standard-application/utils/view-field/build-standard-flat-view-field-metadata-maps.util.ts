@@ -29,8 +29,6 @@ import { computeStandardWorkflowVersionViewFields } from 'src/engine/workspace-m
 import { computeStandardWorkflowViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workflow-view-fields.util';
 import { computeStandardWorkspaceMemberViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workspace-member-view-fields.util';
 import {
-  computeMyahBrandBrainPageViewFields,
-  computeMyahBrandBrainUpdateProposalViewFields,
   computeMyahCampaignCreatorListViewFields,
   computeMyahCampaignCreatorViewFields,
   computeMyahCampaignViewFields,
@@ -72,8 +70,6 @@ const STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   workflowRun: computeStandardWorkflowRunViewFields,
   workflowVersion: computeStandardWorkflowVersionViewFields,
   workspaceMember: computeStandardWorkspaceMemberViewFields,
-  brandBrainPage: computeMyahBrandBrainPageViewFields,
-  brandBrainUpdateProposal: computeMyahBrandBrainUpdateProposalViewFields,
   campaignCreatorList: computeMyahCampaignCreatorListViewFields,
   campaign: computeMyahCampaignViewFields,
   campaignCreator: computeMyahCampaignCreatorViewFields,

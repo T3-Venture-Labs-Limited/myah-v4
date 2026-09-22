@@ -12,7 +12,6 @@ import { SidePanelEditColorOption } from '@/navigation-menu-item/edit/side-panel
 import { SidePanelEditLinkItemView } from '@/navigation-menu-item/edit/side-panel/components/SidePanelEditLinkItemView';
 import { SidePanelEditObjectViewBase } from '@/navigation-menu-item/edit/side-panel/components/SidePanelEditObjectViewBase';
 import { SidePanelEditOrganizeActions } from '@/navigation-menu-item/edit/side-panel/components/SidePanelEditOrganizeActions';
-import { SidePanelEditOwnerSection } from '@/navigation-menu-item/edit/side-panel/components/SidePanelEditOwnerSection';
 import { useNavigationMenuItemEditOrganizeActions } from '@/navigation-menu-item/edit/side-panel/hooks/useNavigationMenuItemEditOrganizeActions';
 import { getOrganizeActionsSelectableItemIds } from '@/navigation-menu-item/edit/side-panel/utils/getOrganizeActionsSelectableItemIds';
 import { SidePanelGroup } from '@/side-panel/components/SidePanelGroup';
@@ -195,7 +194,6 @@ export const SidePanelNavigationMenuItemEditPage = () => {
             onAddBefore={onAddBefore}
             onAddAfter={onAddAfter}
           />
-          <SidePanelEditOwnerSection />
         </SidePanelList>
       );
     default:

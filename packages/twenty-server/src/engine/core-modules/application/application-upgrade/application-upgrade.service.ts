@@ -14,6 +14,7 @@ import {
   ApplicationExceptionCode,
 } from 'src/engine/core-modules/application/application.exception';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 const npmPackageMetadataSchema = z.object({
   version: z.string(),
@@ -35,7 +36,12 @@ export class ApplicationUpgradeService {
   async checkForUpdates(
     appRegistration: ApplicationRegistrationEntity,
   ): Promise<string | null> {
-    if (appRegistration.sourceType !== ApplicationRegistrationSourceType.NPM) {
+    if (
+      isRetiredApplicationUniversalIdentifier(
+        appRegistration.universalIdentifier,
+      ) ||
+      appRegistration.sourceType !== ApplicationRegistrationSourceType.NPM
+    ) {
       return null;
     }
 
@@ -86,6 +92,14 @@ export class ApplicationUpgradeService {
     });
 
     for (const registration of npmRegistrations) {
+      if (
+        isRetiredApplicationUniversalIdentifier(
+          registration.universalIdentifier,
+        )
+      ) {
+        continue;
+      }
+
       await this.checkForUpdates(registration);
     }
   }

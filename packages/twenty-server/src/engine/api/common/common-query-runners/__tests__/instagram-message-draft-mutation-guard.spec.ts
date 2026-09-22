@@ -2,6 +2,7 @@ import {
   CommonBaseQueryRunnerService,
   isProtectedInstagramDraftMutation,
   isProtectedMyahInboxReplyDraftMutation,
+  isRetiredBrandBrainMutation,
 } from 'src/engine/api/common/common-query-runners/common-base-query-runner.service';
 import { type ObjectRecord } from 'twenty-shared/types';
 
@@ -131,6 +132,11 @@ const processedPayloadArgs = {
 } as CommonInput<UpdateOneQueryArgs>;
 
 const draftObjectUniversalIdentifier = '85762d24-541b-407f-9d6a-cdf89552c665';
+const retiredBrandBrainObjectUniversalIdentifiers = [
+  '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+  'f99ff6bc-3b56-4600-beb3-cfc2c23364f6',
+  'facac4a1-0a2f-469f-9f1f-81ef01f06578',
+];
 
 describe('isProtectedInstagramDraftMutation', () => {
   it.each([
@@ -204,6 +210,63 @@ describe('isProtectedInstagramDraftMutation', () => {
       ),
     ).toBe(false);
   });
+
+  it.each([
+    CommonQueryNames.CREATE_ONE,
+    CommonQueryNames.CREATE_MANY,
+    CommonQueryNames.UPDATE_ONE,
+    CommonQueryNames.UPDATE_MANY,
+    CommonQueryNames.DELETE_ONE,
+    CommonQueryNames.DELETE_MANY,
+    CommonQueryNames.DESTROY_ONE,
+    CommonQueryNames.DESTROY_MANY,
+    CommonQueryNames.RESTORE_ONE,
+    CommonQueryNames.RESTORE_MANY,
+    CommonQueryNames.MERGE_MANY,
+  ])('blocks retired Brand Brain %s operations', (operation) => {
+    for (const objectUniversalIdentifier of retiredBrandBrainObjectUniversalIdentifiers) {
+      expect(
+        isRetiredBrandBrainMutation(operation, objectUniversalIdentifier),
+      ).toBe(true);
+    }
+  });
+
+  it.each([
+    CommonQueryNames.FIND_ONE,
+    CommonQueryNames.FIND_MANY,
+    CommonQueryNames.FIND_DUPLICATES,
+    CommonQueryNames.GROUP_BY,
+  ])('preserves retired Brand Brain %s reads', (operation) => {
+    for (const objectUniversalIdentifier of retiredBrandBrainObjectUniversalIdentifiers) {
+      expect(
+        isRetiredBrandBrainMutation(operation, objectUniversalIdentifier),
+      ).toBe(false);
+    }
+  });
+
+  it.each(
+    retiredBrandBrainObjectUniversalIdentifiers.flatMap(
+      (objectUniversalIdentifier) =>
+        [false, true].map(
+          (inTransaction) =>
+            [objectUniversalIdentifier, inTransaction] as const,
+        ),
+    ),
+  )(
+    'blocks retired Brand Brain object %s writes through the transaction-envelope branch (transaction=%s)',
+    async (objectUniversalIdentifier, inTransaction) => {
+      const runner = buildProcessedPayloadRunner(
+        inTransaction,
+        objectUniversalIdentifier,
+      );
+
+      await expect(
+        runner.execute(processedPayloadArgs, messageThreadContext),
+      ).rejects.toThrow(
+        'Brand Brain records are read-only after feature retirement',
+      );
+    },
+  );
 
   it.each([false, true])(
     'blocks generated Instagram object writes through the %s transaction-envelope branch',

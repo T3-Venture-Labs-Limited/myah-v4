@@ -26,6 +26,7 @@ import { SynchronizeMyahCampaignAutomationMetadataCommand } from 'src/database/c
 import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619373-backfill-composio-instagram-history.command';
 import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
 import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/workspace-migration-runner.module';
+import { RetireShopifyConnectionsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790000000411-retire-shopify-connections.command';
 
 describe('V2_20_UpgradeVersionCommandModule', () => {
   it('directly imports the workspace migration runner for social-link cache invalidation', () => {
@@ -57,6 +58,15 @@ describe('V2_20_UpgradeVersionCommandModule', () => {
     expect(providers).toContain(
       SynchronizeMyahCampaignAutomationMetadataCommand,
     );
+  });
+
+  it('provides the Shopify connection retirement command', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      V2_20_UpgradeVersionCommandModule,
+    ) as unknown[];
+
+    expect(providers).toContain(RetireShopifyConnectionsCommand);
   });
 
   it('provides the Composio Instagram history cutover after app metadata sync', () => {
@@ -337,30 +347,35 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // Email provenance is the final append-only 2.20.0 workspace step,
-    // immediately after Instagram composer metadata.
+    // Retirement commands are the final append-only 2.20.0 workspace steps.
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
+      '2.20.0_RetireShopifyConnectionsCommand_1790000000411',
     );
     expect(sequence[sequence.length - 2]?.name).toBe(
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+      '2.20.0_RetireBrandBrainMetadataCommand_1790000000410',
     );
     expect(sequence[sequence.length - 3]?.name).toBe(
-      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     );
     expect(sequence[sequence.length - 4]?.name).toBe(
-      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
     );
     expect(sequence[sequence.length - 5]?.name).toBe(
-      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
     );
     expect(sequence[sequence.length - 6]?.name).toBe(
-      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
     );
     expect(sequence[sequence.length - 7]?.name).toBe(
-      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
     );
     expect(sequence[sequence.length - 8]?.name).toBe(
+      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
+    );
+    expect(sequence[sequence.length - 9]?.name).toBe(
+      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+    );
+    expect(sequence[sequence.length - 10]?.name).toBe(
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
     );
     const workspaceCommands = sequence
@@ -380,6 +395,8 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
       '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
       '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
+      '2.20.0_RetireBrandBrainMetadataCommand_1790000000410',
+      '2.20.0_RetireShopifyConnectionsCommand_1790000000411',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(

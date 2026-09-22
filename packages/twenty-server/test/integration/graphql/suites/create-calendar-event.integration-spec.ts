@@ -15,13 +15,8 @@ const CREATE_CALENDAR_EVENT_MUTATION = gql`
   }
 `;
 
-// Creating an actual event hits Google/Microsoft and cannot be integration-tested
-// without real OAuth + provider mocking. The auth + ownership + validation paths,
-// however, fail closed before any provider call — so we assert the mutation is
-// wired into the metadata schema and returns a structured failure (never a 500)
-// for an account that does not exist.
-describe('createCalendarEvent (metadata API) (e2e)', () => {
-  it('fails closed with a structured error when the connected account does not exist', async () => {
+describe('createCalendarEvent retirement (metadata API) (e2e)', () => {
+  it('does not expose the retired mutation', async () => {
     const response = await makeMetadataAPIRequest({
       query: CREATE_CALENDAR_EVENT_MUTATION,
       variables: {
@@ -34,13 +29,12 @@ describe('createCalendarEvent (metadata API) (e2e)', () => {
       },
     });
 
-    expect(response.body.errors).toBeUndefined();
-
-    const result = response.body.data.createCalendarEvent;
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('not found');
-    expect(result.iCalUid).toBeNull();
-    expect(result.conferenceLink).toBeNull();
+    expect(response.status).toBe(200);
+    expect(
+      response.body.errors
+        ?.map((error: { message: string }) => error.message)
+        .join('\n'),
+    ).toContain('Cannot query field "createCalendarEvent"');
+    expect(response.body.data).toBeUndefined();
   });
 });

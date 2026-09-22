@@ -10,7 +10,6 @@ import {
   type OrganizeActionsProps,
   SidePanelEditOrganizeActions,
 } from '@/navigation-menu-item/edit/side-panel/components/SidePanelEditOrganizeActions';
-import { SidePanelEditOwnerSection } from '@/navigation-menu-item/edit/side-panel/components/SidePanelEditOwnerSection';
 import { getOrganizeActionsSelectableItemIds } from '@/navigation-menu-item/edit/side-panel/utils/getOrganizeActionsSelectableItemIds';
 import { SidePanelGroup } from '@/side-panel/components/SidePanelGroup';
 import { SidePanelList } from '@/side-panel/components/SidePanelList';
@@ -116,7 +115,6 @@ export const SidePanelEditLinkItemView = ({
         showMoveToFolder={showMoveToFolder}
         onMoveToFolder={onOpenFolderPicker}
       />
-      <SidePanelEditOwnerSection applicationId={selectedItem.applicationId} />
     </SidePanelList>
   );
 };

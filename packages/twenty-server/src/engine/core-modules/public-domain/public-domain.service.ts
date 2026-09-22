@@ -7,6 +7,7 @@ import { Repository } from 'typeorm';
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
 import { PublicDomainDTO } from 'src/engine/core-modules/public-domain/dtos/public-domain.dto';
 import { PublicDomainEntity } from 'src/engine/core-modules/public-domain/public-domain.entity';
@@ -95,7 +96,10 @@ export class PublicDomainService {
       );
     }
 
-    if (!isDefined(application)) {
+    if (
+      !isDefined(application) ||
+      isRetiredApplicationUniversalIdentifier(application.universalIdentifier)
+    ) {
       throw new PublicDomainException(
         'Application not found in this workspace',
         PublicDomainExceptionCode.APPLICATION_NOT_FOUND,

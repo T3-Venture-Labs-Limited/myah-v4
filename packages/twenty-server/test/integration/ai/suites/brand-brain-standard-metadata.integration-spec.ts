@@ -7,13 +7,21 @@ import { deleteUser } from 'test/integration/graphql/utils/delete-user.util';
 import { getAuthTokensFromLoginToken } from 'test/integration/graphql/utils/get-auth-tokens-from-login-token.util';
 import { signUpInNewWorkspace } from 'test/integration/graphql/utils/sign-up-in-new-workspace.util';
 import { signUp } from 'test/integration/graphql/utils/sign-up.util';
-import { jestExpectToBeDefined } from 'test/utils/jest-expect-to-be-defined.util.test';
 import { isDefined } from 'twenty-shared/utils';
 
-type RoleRow = { id: string };
-type ObjectMetadataRow = { nameSingular: string };
+type RoleRow = {
+  canBeAssignedToUsers: boolean;
+  canBeAssignedToAgents: boolean;
+  canBeAssignedToApiKeys: boolean;
+};
+type ObjectMetadataRow = {
+  nameSingular: string;
+  isSearchable: boolean;
+  isUIEditable: boolean;
+  isUICreatable: boolean;
+};
 
-describe('Brand Brain standard metadata journey', () => {
+describe('Retired Brand Brain standard metadata journey', () => {
   let createdUserAccessToken: string | undefined;
 
   afterAll(async () => {
@@ -25,7 +33,7 @@ describe('Brand Brain standard metadata journey', () => {
     }
   });
 
-  it('provisions Brand Brain objects and role when activating a workspace', async () => {
+  it('preserves inert metadata without provisioning an active product surface', async () => {
     const uniqueId = randomUUID();
     const email = `brand-brain-${uniqueId}@example.com`;
 
@@ -67,15 +75,21 @@ describe('Brand Brain standard metadata journey', () => {
     });
 
     const [brandBrainRole] = (await global.testDataSource.query(
-      `SELECT id FROM core."role"
+      `SELECT "canBeAssignedToUsers", "canBeAssignedToAgents", "canBeAssignedToApiKeys"
+       FROM core."role"
        WHERE "workspaceId" = $1 AND "universalIdentifier" = $2`,
       [workspace.id, MYAH_BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER],
     )) as RoleRow[];
 
-    jestExpectToBeDefined(brandBrainRole);
+    expect(brandBrainRole).toEqual({
+      canBeAssignedToUsers: false,
+      canBeAssignedToAgents: false,
+      canBeAssignedToApiKeys: false,
+    });
 
     const brandBrainObjects = (await global.testDataSource.query(
-      `SELECT "nameSingular" FROM core."objectMetadata"
+      `SELECT "nameSingular", "isSearchable", "isUIEditable", "isUICreatable"
+       FROM core."objectMetadata"
        WHERE "workspaceId" = $1
          AND "nameSingular" = ANY($2)`,
       [
@@ -84,8 +98,27 @@ describe('Brand Brain standard metadata journey', () => {
       ],
     )) as ObjectMetadataRow[];
 
-    expect(
-      brandBrainObjects.map(({ nameSingular }) => nameSingular).sort(),
-    ).toEqual(['brandBrainLink', 'brandBrainPage', 'brandBrainUpdateProposal']);
+    expect(brandBrainObjects).toHaveLength(3);
+    expect(brandBrainObjects).toEqual(
+      expect.arrayContaining(
+        ['brandBrainLink', 'brandBrainPage', 'brandBrainUpdateProposal'].map(
+          (nameSingular) => ({
+            nameSingular,
+            isSearchable: false,
+            isUIEditable: false,
+            isUICreatable: false,
+          }),
+        ),
+      ),
+    );
+
+    const [{ count: navigationItemCount }] = (await global.testDataSource.query(
+      `SELECT COUNT(*)::int AS count
+       FROM core."navigationMenuItem"
+       WHERE "workspaceId" = $1 AND "universalIdentifier" = $2`,
+      [workspace.id, '43f7a291-b0a4-481d-a5e4-b557e1a8f65d'],
+    )) as { count: number }[];
+
+    expect(navigationItemCount).toBe(0);
   });
 });

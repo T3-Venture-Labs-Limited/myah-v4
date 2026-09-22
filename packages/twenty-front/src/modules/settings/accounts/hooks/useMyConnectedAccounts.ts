@@ -1,6 +1,5 @@
 import { type ConnectedAccount } from '@/accounts/types/ConnectedAccount';
 import { GET_MY_CONNECTED_ACCOUNTS } from '@/settings/accounts/graphql/queries/getMyConnectedAccounts';
-import { useMyCalendarChannels } from '@/settings/accounts/hooks/useMyCalendarChannels';
 import { useMyMessageChannels } from '@/settings/accounts/hooks/useMyMessageChannels';
 import { useApolloClient, useQuery } from '@apollo/client/react';
 import { useMemo } from 'react';
@@ -11,17 +10,14 @@ type CoreConnectedAccount = Omit<
   'messageChannels' | 'calendarChannels'
 >;
 
-const EMAIL_AND_CALENDAR_PROVIDERS: ReadonlySet<ConnectedAccountProvider> =
-  new Set([
-    ConnectedAccountProvider.GOOGLE,
-    ConnectedAccountProvider.MICROSOFT,
-    ConnectedAccountProvider.IMAP_SMTP_CALDAV,
-  ]);
+const EMAIL_PROVIDERS: ReadonlySet<ConnectedAccountProvider> = new Set([
+  ConnectedAccountProvider.GOOGLE,
+  ConnectedAccountProvider.MICROSOFT,
+  ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+]);
 
-// The personal accounts page is for email/calendar credentials only. SSO
-// providers (OIDC, SAML) and app-managed OAuth (APP) also live in
-// connectedAccount, but they're surfaced elsewhere — keep them off this
-// page by filtering to the email/calendar provider set.
+// SSO providers and app-managed OAuth live in connectedAccount too, but this
+// page only surfaces email credentials.
 export const useMyConnectedAccounts = () => {
   const apolloClient = useApolloClient();
 
@@ -33,30 +29,24 @@ export const useMyConnectedAccounts = () => {
 
   const { channels: messageChannels, loading: messageChannelsLoading } =
     useMyMessageChannels();
-  const { channels: calendarChannels, loading: calendarChannelsLoading } =
-    useMyCalendarChannels();
-
   const accounts = useMemo<ConnectedAccount[]>(() => {
     if (!data?.myConnectedAccounts) {
       return [];
     }
 
     return data.myConnectedAccounts
-      .filter((account) => EMAIL_AND_CALENDAR_PROVIDERS.has(account.provider))
+      .filter((account) => EMAIL_PROVIDERS.has(account.provider))
       .map((account) => ({
         ...account,
         messageChannels: messageChannels.filter(
           (channel) => channel.connectedAccountId === account.id,
         ),
-        calendarChannels: calendarChannels.filter(
-          (channel) => channel.connectedAccountId === account.id,
-        ),
+        calendarChannels: [],
       }));
-  }, [data, messageChannels, calendarChannels]);
+  }, [data, messageChannels]);
 
   return {
     accounts,
-    loading:
-      accountsLoading || messageChannelsLoading || calendarChannelsLoading,
+    loading: accountsLoading || messageChannelsLoading,
   };
 };

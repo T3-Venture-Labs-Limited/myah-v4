@@ -17,6 +17,7 @@ import { type CreateApplicationRegistrationVariableInput } from 'src/engine/core
 import { type UpdateApplicationRegistrationVariableInput } from 'src/engine/core-modules/application/application-registration-variable/dtos/update-application-registration-variable.input';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
 import { ApplicationRegistrationVariableDTO } from 'src/engine/core-modules/application/application-registration-variable/dtos/application-registration-variable.dto';
+import { isRetiredApplicationUniversalIdentifier } from 'src/engine/core-modules/application/constants/retired-application-universal-identifiers.constant';
 
 @Injectable()
 export class ApplicationRegistrationVariableService {
@@ -47,6 +48,8 @@ export class ApplicationRegistrationVariableService {
   async findVariablesWithObfuscatedValuesGlobal(
     applicationRegistrationId: string,
   ): Promise<ApplicationRegistrationVariableDTO[]> {
+    await this.assertRegistrationIsAvailable(applicationRegistrationId);
+
     const variables = await this.variableRepository.find({
       where: { applicationRegistrationId },
       order: { key: 'ASC' },
@@ -94,7 +97,11 @@ export class ApplicationRegistrationVariableService {
   async updateVariableGlobal(
     input: UpdateApplicationRegistrationVariableInput,
   ): Promise<ApplicationRegistrationVariableDTO> {
-    await this.findVariableOrThrow(input.id);
+    const variable = await this.findVariableOrThrow(input.id);
+
+    await this.assertRegistrationIsAvailable(
+      variable.applicationRegistrationId,
+    );
 
     const entity = await this.applyVariableUpdate(input);
 
@@ -119,6 +126,8 @@ export class ApplicationRegistrationVariableService {
     applicationRegistrationId: string,
     serverVariables: ServerVariables,
   ): Promise<void> {
+    await this.assertRegistrationIsAvailable(applicationRegistrationId);
+
     const declaredKeys = Object.keys(serverVariables);
 
     const existingVariables = await this.variableRepository.find({
@@ -296,6 +305,24 @@ export class ApplicationRegistrationVariableService {
     };
   }
 
+  private async assertRegistrationIsAvailable(
+    registrationId: string,
+  ): Promise<void> {
+    const registration = await this.applicationRegistrationRepository.findOne({
+      where: { id: registrationId },
+    });
+
+    if (
+      !registration ||
+      isRetiredApplicationUniversalIdentifier(registration.universalIdentifier)
+    ) {
+      throw new ApplicationRegistrationException(
+        `Application registration with id ${registrationId} not found`,
+        ApplicationRegistrationExceptionCode.APPLICATION_REGISTRATION_NOT_FOUND,
+      );
+    }
+  }
+
   private async assertRegistrationOwnedByWorkspace(
     registrationId: string,
     workspaceId: string,
@@ -304,7 +331,10 @@ export class ApplicationRegistrationVariableService {
       where: { id: registrationId, ownerWorkspaceId: workspaceId },
     });
 
-    if (!registration) {
+    if (
+      !registration ||
+      isRetiredApplicationUniversalIdentifier(registration.universalIdentifier)
+    ) {
       throw new ApplicationRegistrationException(
         `Application registration with id ${registrationId} not found`,
         ApplicationRegistrationExceptionCode.APPLICATION_REGISTRATION_NOT_FOUND,
