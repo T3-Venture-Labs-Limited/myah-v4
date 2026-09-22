@@ -1,19 +1,11 @@
-import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { SettingsDiscoveryHeroCard } from '@/settings/components/SettingsDiscoveryHeroCard';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import {
-  IconEye,
-  IconHierarchy2,
-  IconLink,
-  IconList,
-  IconPlus,
-} from 'twenty-ui/icon';
+import { IconEye, IconHierarchy2, IconLink, IconList } from 'twenty-ui/icon';
 import { H2Title } from 'twenty-ui/typography';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
@@ -28,7 +20,6 @@ export const SettingsObjects = () => {
   const { t } = useLingui();
 
   const { objectMetadataItems } = useFilteredObjectMetadataItems();
-  const isDDLLocked = useAtomStateValue(isDDLLockedState);
 
   const heroTabs = [
     {
@@ -54,26 +45,6 @@ export const SettingsObjects = () => {
   return (
     <SettingsPageLayout
       title={t`Data model`}
-      actionButton={
-        isDDLLocked ? (
-          <Button
-            Icon={IconPlus}
-            title={t`Add object`}
-            accent="brand"
-            size="small"
-            disabled
-          />
-        ) : (
-          <UndecoratedLink to={getSettingsPath(SettingsPath.NewObject)}>
-            <Button
-              Icon={IconPlus}
-              title={t`Add object`}
-              accent="brand"
-              size="small"
-            />
-          </UndecoratedLink>
-        )
-      }
       links={[
         {
           children: t`Workspace`,
@@ -95,7 +66,7 @@ export const SettingsObjects = () => {
         <Section>
           <H2Title
             title={t`Objects`}
-            description={t`Manage objects, fields and relationships`}
+            description={t`Inspect objects, fields and relationships`}
           />
           <SettingsObjectTable objectMetadataItems={objectMetadataItems} />
         </Section>

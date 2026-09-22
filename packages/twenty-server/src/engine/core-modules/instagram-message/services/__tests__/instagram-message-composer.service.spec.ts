@@ -276,7 +276,7 @@ const buildTransactionHarness = (
       expect(params).toEqual([expect.stringMatching(/^\d+ms$/)]);
     } else {
       expect(sql).toBe(
-        `LOCK TABLE "${getWorkspaceSchemaName(workspaceId)}"."creator" IN SHARE ROW EXCLUSIVE MODE`,
+        `LOCK TABLE "${getWorkspaceSchemaName(workspaceId)}"."creator", "${getWorkspaceSchemaName(workspaceId)}"."socialProfile" IN SHARE ROW EXCLUSIVE MODE`,
       );
       events.push('table-lock');
     }

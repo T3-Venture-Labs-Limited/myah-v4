@@ -13,6 +13,7 @@ import { FieldMetadataService } from 'src/engine/metadata-modules/field-metadata
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { PRODUCT_SCHEMA_WRITE_AUTHORITY } from 'src/engine/metadata-modules/utils/product-schema-write-authority.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 const WORKFLOW_RUN_UNIVERSAL_IDENTIFIER =
@@ -111,6 +112,7 @@ export class AddWorkflowRunStepLogsFieldCommand extends ActiveOrSuspendedWorkspa
         workspaceId,
         ownerFlatApplication: twentyStandardFlatApplication,
         isSystemBuild: true,
+        schemaWriteAuthority: PRODUCT_SCHEMA_WRITE_AUTHORITY,
       });
     } catch (error) {
       this.logger.error(

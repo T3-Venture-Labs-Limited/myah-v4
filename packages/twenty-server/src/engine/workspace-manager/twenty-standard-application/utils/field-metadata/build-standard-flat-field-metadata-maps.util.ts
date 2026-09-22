@@ -89,6 +89,7 @@ const STANDARD_FLAT_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   creatorListMember: buildMyahStandardFlatFieldMetadatas,
   creatorList: buildMyahStandardFlatFieldMetadatas,
   creator: buildMyahStandardFlatFieldMetadatas,
+  socialProfile: buildMyahStandardFlatFieldMetadatas,
   workspaceMember: buildWorkspaceMemberStandardFlatFieldMetadatas,
 } satisfies {
   [P in AllStandardObjectName]: StandardFieldBuilder<P>;

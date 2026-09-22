@@ -90,6 +90,19 @@ export const MYAH_CREATOR_PAGE_LAYOUT_CONFIG = {
           gridPosition: GRID_POSITIONS.FULL_WIDTH,
           position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
         },
+        socialProfiles: {
+          universalIdentifier: 'f05f2dfb-d625-4956-875a-c2626991a6a0',
+          title: 'Social profiles',
+          type: WidgetType.FIELD,
+          fieldUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.socialProfiles
+              .universalIdentifier,
+          viewUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.socialProfile.views.socialProfiles
+              .universalIdentifier,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: VERTICAL_LIST_LAYOUT_POSITIONS.SECOND,
+        },
       },
     },
     timeline: {

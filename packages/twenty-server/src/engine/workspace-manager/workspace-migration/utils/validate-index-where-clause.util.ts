@@ -3,6 +3,8 @@
 const ALLOWED_INDEX_WHERE_CLAUSES = new Set([
   '"deletedAt" IS NULL',
   '"deletedAt" IS NULL AND "isDefault" = true',
+  '"deletedAt" IS NULL AND NULLIF(BTRIM("platformAccountId"), \'\') IS NOT NULL',
+  '"deletedAt" IS NULL AND NULLIF(BTRIM("normalizedLocator"), \'\') IS NOT NULL',
 ]);
 
 export const validateAndReturnIndexWhereClause = (

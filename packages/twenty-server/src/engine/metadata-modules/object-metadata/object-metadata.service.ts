@@ -45,6 +45,10 @@ import {
 import { computeFlatDefaultRecordPageLayoutToCreate } from 'src/engine/metadata-modules/object-metadata/utils/compute-flat-default-record-page-layout-to-create.util';
 import { computeFlatRecordPageFieldsViewToCreate } from 'src/engine/metadata-modules/object-metadata/utils/compute-flat-record-page-fields-view-to-create.util';
 import { computeFlatViewFieldsToCreate } from 'src/engine/metadata-modules/object-metadata/utils/compute-flat-view-fields-to-create.util';
+import {
+  assertProductSchemaWriteAuthority,
+  type ProductSchemaWriteAuthority,
+} from 'src/engine/metadata-modules/utils/product-schema-write-authority.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
@@ -69,11 +73,15 @@ export class ObjectMetadataService extends TypeOrmQueryService<ObjectMetadataEnt
     updateObjectInput,
     workspaceId,
     ownerFlatApplication,
+    schemaWriteAuthority,
   }: {
     workspaceId: string;
     updateObjectInput: UpdateOneObjectInput;
     ownerFlatApplication?: FlatApplication;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatObjectMetadata> {
+    assertProductSchemaWriteAuthority(schemaWriteAuthority);
+
     const { workspaceCustomFlatApplication, twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
         { workspaceId },
@@ -268,12 +276,16 @@ export class ObjectMetadataService extends TypeOrmQueryService<ObjectMetadataEnt
     workspaceId,
     isSystemBuild = false,
     ownerFlatApplication,
+    schemaWriteAuthority,
   }: {
     deleteObjectInput: DeleteOneObjectInput;
     workspaceId: string;
     isSystemBuild?: boolean;
     ownerFlatApplication?: FlatApplication;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatObjectMetadata> {
+    assertProductSchemaWriteAuthority(schemaWriteAuthority);
+
     const deletedObjectMetadataDtos = await this.deleteManyObjectMetadatas({
       deleteObjectInputs: [deleteObjectInput],
       workspaceId,
@@ -467,11 +479,15 @@ export class ObjectMetadataService extends TypeOrmQueryService<ObjectMetadataEnt
     createObjectInput,
     workspaceId,
     ownerFlatApplication,
+    schemaWriteAuthority,
   }: {
     createObjectInput: CreateObjectInput;
     workspaceId: string;
     ownerFlatApplication?: FlatApplication;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatObjectMetadata> {
+    assertProductSchemaWriteAuthority(schemaWriteAuthority);
+
     const { workspaceCustomFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
         {

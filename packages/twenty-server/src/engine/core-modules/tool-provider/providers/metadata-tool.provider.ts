@@ -63,9 +63,16 @@ export class MetadataToolProvider implements ToolProvider {
   }
 
   private buildToolSet(context: ToolProviderContext): ToolSet {
+    const objectTools = this.objectMetadataToolsFactory.generateTools(
+      context.workspaceId,
+    );
+    const fieldTools = this.fieldMetadataToolsFactory.generateTools(
+      context.workspaceId,
+    );
+
     return {
-      ...this.objectMetadataToolsFactory.generateTools(context.workspaceId),
-      ...this.fieldMetadataToolsFactory.generateTools(context.workspaceId),
+      get_object_metadata: objectTools.get_object_metadata,
+      get_field_metadata: fieldTools.get_field_metadata,
     };
   }
 }

@@ -3,6 +3,7 @@ import { type ImportedStructuredRow } from './SpreadsheetImportImportedStructure
 
 export type SpreadsheetImportImportValidationResult = {
   validStructuredRows: ImportedStructuredRow[];
+  validStructuredRowIndexes: string[];
   invalidStructuredRows: ImportedStructuredRow[];
   allStructuredRows: (ImportedStructuredRow & ImportedStructuredRowMetadata)[];
 };

@@ -1,7 +1,8 @@
 import { type Edge, type Node } from '@xyflow/react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
-import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { useReadableObjectMetadataItems } from '@/object-metadata/hooks/useReadableObjectMetadataItems';
+import { getReadableDataModelOverviewItems } from '@/settings/data-model/graph-overview/utils/getReadableDataModelOverviewItems';
 import { isDefined } from 'twenty-shared/utils';
 import { isUndefinedOrNull } from '~/utils/isUndefinedOrNull';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -15,8 +16,11 @@ export const SettingsDataModelOverviewEffect = ({
   setEdges,
   setNodes,
 }: SettingsDataModelOverviewEffectProps) => {
-  const { activeNonSystemObjectMetadataItems: items } =
-    useFilteredObjectMetadataItems();
+  const { readableObjectMetadataItems } = useReadableObjectMetadataItems();
+  const items = useMemo(
+    () => getReadableDataModelOverviewItems(readableObjectMetadataItems),
+    [readableObjectMetadataItems],
+  );
 
   useEffect(() => {
     const loadDagreAndLayout = async () => {

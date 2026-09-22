@@ -11,6 +11,7 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { PRODUCT_SCHEMA_WRITE_AUTHORITY } from 'src/engine/metadata-modules/utils/product-schema-write-authority.util';
 import {
   SEED_APPLE_WORKSPACE_ID,
   SEED_YCOMBINATOR_WORKSPACE_ID,
@@ -236,6 +237,7 @@ export class DevSeederMetadataService {
     await this.objectMetadataService.createOneObject({
       createObjectInput: objectMetadataSeed,
       workspaceId,
+      schemaWriteAuthority: PRODUCT_SCHEMA_WRITE_AUTHORITY,
     });
   }
 
@@ -266,6 +268,7 @@ export class DevSeederMetadataService {
     await this.fieldMetadataService.createManyFields({
       createFieldInputs,
       workspaceId,
+      schemaWriteAuthority: PRODUCT_SCHEMA_WRITE_AUTHORITY,
     });
   }
 
@@ -361,6 +364,7 @@ export class DevSeederMetadataService {
 
     await this.fieldMetadataService.updateOneField({
       workspaceId,
+      schemaWriteAuthority: PRODUCT_SCHEMA_WRITE_AUTHORITY,
       updateFieldInput: {
         id: fieldId,
         ...(junctionConfig.label && { label: junctionConfig.label }),
@@ -428,6 +432,7 @@ export class DevSeederMetadataService {
     await this.fieldMetadataService.createManyFields({
       createFieldInputs,
       workspaceId,
+      schemaWriteAuthority: PRODUCT_SCHEMA_WRITE_AUTHORITY,
     });
   }
 
@@ -467,6 +472,7 @@ export class DevSeederMetadataService {
         },
       ],
       workspaceId,
+      schemaWriteAuthority: PRODUCT_SCHEMA_WRITE_AUTHORITY,
     });
   }
 

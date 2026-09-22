@@ -23,6 +23,10 @@ import { LOGIC_FUNCTION_DRIVER_FACTORY_TOKEN } from 'src/engine/core-modules/log
 import { type LogicFunctionDriverFactory } from 'src/engine/core-modules/logic-function/logic-function-drivers/logic-function-driver.factory';
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
+import {
+  assertProductSchemaWriteAuthority,
+  type ProductSchemaWriteAuthority,
+} from 'src/engine/metadata-modules/utils/product-schema-write-authority.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
@@ -49,15 +53,21 @@ export class ApplicationSyncService {
     manifest,
     applicationRegistrationId,
     dryRun = false,
+    schemaWriteAuthority,
   }: {
     workspaceId: string;
     manifest: Manifest;
     applicationRegistrationId?: string;
     dryRun?: boolean;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<{
     workspaceMigration: WorkspaceMigration;
     hasSchemaMetadataChanged: boolean;
   }> {
+    if (manifest.objects.length > 0 || manifest.fields.length > 0) {
+      assertProductSchemaWriteAuthority(schemaWriteAuthority);
+    }
+
     const ownerFlatApplication: FlatApplication = dryRun
       ? await this.findInstalledApplicationOrThrow({ workspaceId, manifest })
       : await this.syncApplication({
@@ -79,6 +89,7 @@ export class ApplicationSyncService {
             workspaceId,
             ownerFlatApplication,
             dryRun,
+            schemaWriteAuthority,
           },
         );
     } catch (error) {
@@ -180,19 +191,28 @@ export class ApplicationSyncService {
     applicationRegistrationId?: string;
   }): Promise<ApplicationEntity> {
     const name = manifest.application.displayName;
-    const packageJson = JSON.parse(
-      (
-        await streamToBuffer(
-          await this.fileStorageService.readFile({
-            applicationUniversalIdentifier:
-              manifest.application.universalIdentifier,
-            fileFolder: FileFolder.Dependencies,
-            resourcePath: 'package.json',
-            workspaceId,
-          }),
-        )
-      ).toString('utf-8'),
-    ) as PackageJson;
+    let packageJson: PackageJson;
+
+    try {
+      packageJson = JSON.parse(
+        (
+          await streamToBuffer(
+            await this.fileStorageService.readFile({
+              applicationUniversalIdentifier:
+                manifest.application.universalIdentifier,
+              fileFolder: FileFolder.Dependencies,
+              resourcePath: 'package.json',
+              workspaceId,
+            }),
+          )
+        ).toString('utf-8'),
+      ) as PackageJson;
+    } catch {
+      throw new ApplicationException(
+        'Application package.json is not valid JSON',
+        ApplicationExceptionCode.INVALID_INPUT,
+      );
+    }
 
     const application = await this.applicationService.findOneApplicationOrThrow(
       {
@@ -219,9 +239,11 @@ export class ApplicationSyncService {
   public async uninstallApplication({
     workspaceId,
     applicationUniversalIdentifier,
+    schemaWriteAuthority,
   }: {
     workspaceId: string;
     applicationUniversalIdentifier: string;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<WorkspaceMigration> {
     const application = await this.applicationService.findOneApplicationOrThrow(
       { universalIdentifier: applicationUniversalIdentifier, workspaceId },
@@ -256,6 +278,19 @@ export class ApplicationSyncService {
       fromAllFlatEntityMaps: applicationFromAllFlatEntityMaps,
       toAllUniversalFlatEntityMaps: createEmptyAllFlatEntityMaps(),
     });
+
+    if (
+      Object.keys(
+        applicationFromAllFlatEntityMaps.flatObjectMetadataMaps
+          .byUniversalIdentifier,
+      ).length > 0 ||
+      Object.keys(
+        applicationFromAllFlatEntityMaps.flatFieldMetadataMaps
+          .byUniversalIdentifier,
+      ).length > 0
+    ) {
+      assertProductSchemaWriteAuthority(schemaWriteAuthority);
+    }
 
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigrationFromTo(

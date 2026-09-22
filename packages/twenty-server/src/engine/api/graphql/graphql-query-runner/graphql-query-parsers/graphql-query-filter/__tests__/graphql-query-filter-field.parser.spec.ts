@@ -23,7 +23,7 @@ const buildFlatEntityMaps = <T extends SyncableFlatEntity>(
 });
 
 describe('GraphqlQueryFilterFieldParser', () => {
-  it('selects only the target identifier for a one-to-many EXISTS filter', () => {
+  it('uses a permission-aware EXISTS filter without multiplying root records', () => {
     const creatorObject = getFlatObjectMetadataMock({
       id: 'creator-object-id',
       universalIdentifier: 'creator-object-uid',
@@ -115,6 +115,12 @@ describe('GraphqlQueryFilterFieldParser', () => {
 
     expect(targetQueryBuilder.select).toHaveBeenCalledWith(
       'listMemberships_0.id',
+    );
+    expect(
+      targetQueryBuilder.validatePermissionsBeforeSerialization,
+    ).toHaveBeenCalled();
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'EXISTS (SELECT * FROM creator_list_member)',
     );
   });
 });

@@ -30,6 +30,7 @@ import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { type SocialProfileRecord } from 'src/modules/myah-creator-social-profile/types/social-profile-record.type';
 import {
   UnipileInstagramAccountBindingEntity,
   UnipileInstagramAccountBindingStatus,
@@ -208,6 +209,7 @@ export class InstagramMessageLocalAuthorityReaderService {
               composerInputDigest: input.binding.composerInputDigest,
             }
           : undefined,
+      rolePermissionConfig,
       approvalContext: {
         initiatorUserWorkspaceId: input.binding.initiatorUserWorkspaceId,
         threadId: input.binding.threadId,
@@ -247,6 +249,7 @@ export class InstagramMessageLocalAuthorityReaderService {
       snapshot: InstagramMessageIdentitySnapshot;
       composerInputDigest: string | null;
     };
+    rolePermissionConfig?: RolePermissionConfig;
     approvalContext: Pick<
       Extract<
         ExpectedActionBindingWithWorkspace,
@@ -260,12 +263,11 @@ export class InstagramMessageLocalAuthorityReaderService {
   }): Promise<InstagramMessageActionAuthority> {
     const draftKind =
       input.draft.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY';
-    const recipient = resolveInstagramRecipient({
-      instagramUsername: input.draft.creatorInstagramUsername,
-      instagramUrl: input.draft.creatorInstagramUrl,
-      instagramLink: {
-        primaryLinkUrl: input.draft.creatorInstagramLinkPrimaryLinkUrl,
-      },
+    const recipient = await this.resolveAuthorityRecipient({
+      workspaceId: input.workspace.id,
+      draft: input.draft,
+      snapshot: input.v3?.snapshot,
+      rolePermissionConfig: input.rolePermissionConfig,
     });
     const recipientProviderId = input.v3
       ? input.v3.snapshot.providerId
@@ -338,15 +340,7 @@ export class InstagramMessageLocalAuthorityReaderService {
         kind: draftKind,
         creatorRecordId: input.draft.creatorId,
         recipientUsername: recipient.normalizedUsername,
-        recipientSourceValues: recipient.sourceFields.map((field) => ({
-          field,
-          value:
-            field === 'instagramUsername'
-              ? (input.draft.creatorInstagramUsername ?? '')
-              : field === 'instagramUrl'
-                ? (input.draft.creatorInstagramUrl ?? '')
-                : (input.draft.creatorInstagramLinkPrimaryLinkUrl ?? ''),
-        })),
+        recipientSourceValues: recipient.sourceValues,
         conversationRecordId: input.draft.conversationId,
         providerConversationId: input.draft.providerConversationId,
         recipientProviderId,
@@ -367,6 +361,100 @@ export class InstagramMessageLocalAuthorityReaderService {
           composerInputDigest: input.v3.composerInputDigest,
         })
       : buildLegacyInstagramMessageActionAuthority(authorityInput);
+  }
+
+  private async resolveAuthorityRecipient(input: {
+    workspaceId: string;
+    draft: InstagramMessageAuthorityDraftRow;
+    snapshot?: InstagramMessageIdentitySnapshot;
+    rolePermissionConfig?: RolePermissionConfig;
+  }): Promise<{
+    normalizedUsername: string;
+    sourceValues: Array<{ field: string; value: string }>;
+  }> {
+    const profileId = input.snapshot?.recipientSourceValues.find(
+      ({ field }) => field === 'socialProfile.id',
+    )?.value;
+    if (!profileId) {
+      const legacy = resolveInstagramRecipient({
+        instagramUsername: input.draft.creatorInstagramUsername,
+        instagramUrl: input.draft.creatorInstagramUrl,
+        instagramLink: {
+          primaryLinkUrl: input.draft.creatorInstagramLinkPrimaryLinkUrl,
+        },
+      });
+      return {
+        normalizedUsername: legacy.normalizedUsername,
+        sourceValues: legacy.sourceFields.map((field) => ({
+          field,
+          value:
+            field === 'instagramUsername'
+              ? (input.draft.creatorInstagramUsername ?? '')
+              : field === 'instagramUrl'
+                ? (input.draft.creatorInstagramUrl ?? '')
+                : (input.draft.creatorInstagramLinkPrimaryLinkUrl ?? ''),
+        })),
+      };
+    }
+
+    if (!input.draft.creatorId) {
+      throw new Error('Instagram draft recipient is stale');
+    }
+    const creatorId = input.draft.creatorId;
+    const repository =
+      await this.globalWorkspaceOrmManager.getRepository<SocialProfileRecord>(
+        input.workspaceId,
+        'socialProfile',
+        input.rolePermissionConfig ?? { shouldBypassPermissionChecks: true },
+      );
+    const profile = await repository.findOne({
+      where: {
+        id: profileId,
+        creatorId,
+        platform: 'INSTAGRAM',
+        deletedAt: IsNull(),
+      },
+      select: {
+        id: true,
+        creatorId: true,
+        handle: true,
+        profileUrl: true,
+        platformAccountId: true,
+      },
+    });
+    if (!profile) throw new Error('Instagram draft recipient is stale');
+
+    const resolved = resolveInstagramRecipient({
+      instagramUsername: profile.handle,
+      instagramUrl: profile.profileUrl,
+      instagramLink: null,
+    });
+    const sourceValues = [
+      { field: 'socialProfile.id', value: profile.id },
+      ...(profile.handle
+        ? [{ field: 'socialProfile.handle', value: profile.handle }]
+        : []),
+      ...(profile.profileUrl
+        ? [{ field: 'socialProfile.profileUrl', value: profile.profileUrl }]
+        : []),
+      ...(profile.platformAccountId
+        ? [
+            {
+              field: 'socialProfile.platformAccountId',
+              value: profile.platformAccountId,
+            },
+          ]
+        : []),
+    ];
+    if (
+      !input.snapshot ||
+      JSON.stringify(input.snapshot.recipientSourceValues) !==
+        JSON.stringify(sourceValues)
+    ) {
+      throw new Error('Instagram draft recipient is stale');
+    }
+
+    return { normalizedUsername: resolved.normalizedUsername, sourceValues };
   }
 
   protected async assertNoLocalCurrentConversation(

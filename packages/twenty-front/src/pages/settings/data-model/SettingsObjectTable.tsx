@@ -1,8 +1,4 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
-import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
-import { useDeleteOneObjectMetadataItem } from '@/object-metadata/hooks/useDeleteOneObjectMetadataItem';
-import { useGetIsMetadataItemCustom } from '@/object-metadata/hooks/useGetIsMetadataItemCustom';
-import { useUpdateOneObjectMetadataItem } from '@/object-metadata/hooks/useUpdateOneObjectMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { useCombinedGetTotalCount } from '@/object-record/multiple-objects/hooks/useCombinedGetTotalCount';
@@ -15,7 +11,6 @@ import {
   SETTINGS_OBJECT_TABLE_ROW_MOBILE_MIN_WIDTH,
   StyledStickyFirstCell,
 } from '@/settings/data-model/object-details/components/SettingsObjectItemTableRowStyledComponents';
-import { SettingsObjectInactiveMenuDropDown } from '@/settings/data-model/objects/components/SettingsObjectInactiveMenuDropDown';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
@@ -72,19 +67,13 @@ export const SettingsObjectTable = ({
 }) => {
   const { theme } = useContext(ThemeContext);
   const { t } = useLingui();
-  const getIsMetadataItemCustom = useGetIsMetadataItemCustom();
 
   const isAdvancedModeEnabled = useAtomStateValue(isAdvancedModeEnabledState);
-  const isDDLLocked = useAtomStateValue(isDDLLockedState);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showDeactivated, setShowDeactivated] = useState(true);
   const [showSystemObjects, setShowSystemObjects] = useState(true);
   const shouldShowSystemObjects = isAdvancedModeEnabled && showSystemObjects;
-
-  const { deleteOneObjectMetadataItem } = useDeleteOneObjectMetadataItem();
-
-  const { updateOneObjectMetadataItem } = useUpdateOneObjectMetadataItem();
 
   const { totalCountByObjectMetadataItemNamePlural } =
     useCombinedGetTotalCount();
@@ -261,28 +250,7 @@ export const SettingsObjectTable = ({
                               stroke={theme.icon.stroke.sm}
                             />
                           </StyledIconChevronRightContainer>
-                        ) : isDDLLocked ? null : (
-                          <SettingsObjectInactiveMenuDropDown
-                            isCustomObject={getIsMetadataItemCustom(
-                              objectSettingsItem.objectMetadataItem,
-                            )}
-                            objectMetadataItemNamePlural={
-                              objectSettingsItem.objectMetadataItem.namePlural
-                            }
-                            onActivate={() =>
-                              updateOneObjectMetadataItem({
-                                idToUpdate:
-                                  objectSettingsItem.objectMetadataItem.id,
-                                updatePayload: { isActive: true },
-                              })
-                            }
-                            onDelete={() =>
-                              deleteOneObjectMetadataItem(
-                                objectSettingsItem.objectMetadataItem.id,
-                              )
-                            }
-                          />
-                        )
+                        ) : null
                       }
                       link={
                         isActive

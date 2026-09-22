@@ -36,6 +36,7 @@ import {
   computeMyahCampaignViewFields,
   computeMyahCreatorListViewFields,
   computeMyahCreatorViewFields,
+  computeMyahSocialProfileViewFields,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-myah-view-fields.util';
 import { type CreateStandardViewFieldArgs } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/create-standard-view-field-flat-metadata.util';
 
@@ -79,6 +80,7 @@ const STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   campaignCreator: computeMyahCampaignCreatorViewFields,
   creatorList: computeMyahCreatorListViewFields,
   creator: computeMyahCreatorViewFields,
+  socialProfile: computeMyahSocialProfileViewFields,
 } as const satisfies {
   [P in AllStandardObjectName]?: StandardViewFieldBuilder<P>;
 };

@@ -445,12 +445,79 @@ describe('Myah standard metadata contract', () => {
     ).toHaveProperty('d1319af0-eeb2-4ca3-8afc-31e66c8a4277');
   });
 
+  it('adds SocialProfile metadata without removing legacy Creator fields', () => {
+    const socialProfileObjectId = '48af2a1d-1903-5eeb-b216-d5c450f83e71';
+    const creatorSocialProfilesFieldId = 'c3f0a457-f701-534f-a5d9-33ab84bb8602';
+    const socialProfileObject =
+      result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+        socialProfileObjectId
+      ];
+    const socialProfileFields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (field) =>
+          field.objectMetadataUniversalIdentifier === socialProfileObjectId,
+      );
+
+    expect(socialProfileObject).toMatchObject({
+      nameSingular: 'socialProfile',
+      namePlural: 'socialProfiles',
+      labelIdentifierFieldMetadataUniversalIdentifier:
+        '5d1f7cf1-5611-55ab-b97c-14d44b584169',
+    });
+    expect(socialProfileFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'creator',
+          relationTargetObjectMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+          relationTargetFieldMetadataUniversalIdentifier:
+            creatorSocialProfilesFieldId,
+        }),
+        expect.objectContaining({ name: 'platform' }),
+        expect.objectContaining({ name: 'handle' }),
+        expect.objectContaining({ name: 'profileUrl' }),
+        expect.objectContaining({ name: 'platformAccountId' }),
+        expect.objectContaining({ name: 'normalizedLocator' }),
+        expect.objectContaining({ name: 'followerCount' }),
+        expect.objectContaining({ name: 'followerCountObservedAt' }),
+        expect.objectContaining({ name: 'followerCountSource' }),
+      ]),
+    );
+    expect(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+        creatorSocialProfilesFieldId
+      ],
+    ).toMatchObject({
+      name: 'socialProfiles',
+      relationTargetObjectMetadataUniversalIdentifier: socialProfileObjectId,
+    });
+    for (const indexId of [
+      '5ffa3128-36b2-5e8b-a7f4-825e7da5166a',
+      'ed043449-a8b8-5a45-8eb2-7f0b6c4485f3',
+      '6d3f977b-8e52-5417-8447-be9cd9427075',
+    ]) {
+      expect(
+        result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[indexId],
+      ).toBeDefined();
+    }
+    expect(MYAH_STANDARD_OBJECTS.creator.fields).toHaveProperty(
+      'instagramUsername',
+    );
+  });
+
   it('configures a full Creator record page through native fields and activity tabs', () => {
     const creatorRecordPageFieldsViewUniversalIdentifier =
       'fdbaccb5-56d4-4c36-98c7-0f5ab0b7cc1e';
     const fieldsWidget =
       result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
         '9b6cb66e-3a74-4c7a-9a52-481fb9497c2e'
+      ];
+    const socialProfilesWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        'f05f2dfb-d625-4956-875a-c2626991a6a0'
       ];
     const timelineWidget =
       result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
@@ -482,6 +549,15 @@ describe('Myah standard metadata contract', () => {
       configurationType: WidgetConfigurationType.FIELDS,
       viewUniversalIdentifier: creatorRecordPageFieldsViewUniversalIdentifier,
     });
+    expect(socialProfilesWidget?.universalConfiguration).toEqual({
+      configurationType: WidgetConfigurationType.FIELD,
+      fieldMetadataId:
+        MYAH_STANDARD_OBJECTS.creator.fields.socialProfiles.universalIdentifier,
+      fieldDisplayMode: FieldDisplayMode.TABLE,
+      viewId:
+        MYAH_STANDARD_OBJECTS.socialProfile.views.socialProfiles
+          .universalIdentifier,
+    });
     expect(timelineWidget?.universalConfiguration).toMatchObject({
       configurationType: WidgetConfigurationType.TIMELINE,
     });
@@ -511,11 +587,61 @@ describe('Myah standard metadata contract', () => {
         MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.creatorStatus.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creator.fields.socialProfiles.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
           .universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.tiktokUsername.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.youtubeUrl.universalIdentifier,
       ]),
+    );
+
+    const creatorTableFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (viewField) =>
+          viewField.viewUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.creator.views.viewa5abdae3.universalIdentifier,
+      );
+
+    expect(creatorTableFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.socialProfiles
+              .universalIdentifier,
+          isVisible: true,
+        }),
+      ]),
+    );
+
+    const socialProfileTableFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (viewField) =>
+          viewField.viewUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.socialProfile.views.socialProfiles
+            .universalIdentifier,
+      );
+
+    expect(socialProfileTableFields).toEqual(
+      expect.arrayContaining(
+        ['platform', 'handle', 'profileUrl', 'followerCount'].map((fieldName) =>
+          expect.objectContaining({
+            fieldMetadataUniversalIdentifier:
+              MYAH_STANDARD_OBJECTS.socialProfile.fields[
+                fieldName as
+                  | 'platform'
+                  | 'handle'
+                  | 'profileUrl'
+                  | 'followerCount'
+              ].universalIdentifier,
+          }),
+        ),
+      ),
     );
   });
 
@@ -1335,13 +1461,15 @@ describe('Myah standard metadata contract', () => {
           canSoftDeleteObjectRecords: true,
         }),
       ),
-      {
+      ...[
+        MYAH_STANDARD_OBJECTS.socialProfile.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+      ].map((objectMetadataUniversalIdentifier) => ({
         roleUniversalIdentifier: CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
-        objectMetadataUniversalIdentifier:
-          MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+        objectMetadataUniversalIdentifier,
         canUpdateObjectRecords: true,
         canSoftDeleteObjectRecords: false,
-      },
+      })),
       {
         roleUniversalIdentifier: CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
         objectMetadataUniversalIdentifier:

@@ -17,6 +17,29 @@ export type ExistingCreatorSocialProfile = {
   twitterLink?: { primaryLinkUrl?: string | null } | null;
 };
 
+export type CreatorImportCommitPlan = {
+  creator: Record<string, string> & { name: string };
+  profiles: Array<{
+    platform: string;
+    handle?: string;
+    profileUrl?: string;
+    followerCount?: number;
+    followerCountObservedAt?: string;
+    followerCountSource?: string;
+  }>;
+  note?: { title: string; markdown: string };
+};
+
+export type CreatorImportRowPreview = {
+  creatorFields: string[];
+  socialProfiles: Array<{
+    platform: string;
+    fields: string[];
+  }>;
+  supplementaryNoteFields: string[];
+  excludedFields: string[];
+};
+
 export type CreatorSpreadsheetImportSession = {
   spreadsheetImportFields: SpreadsheetImportFields;
   headerAliases: Readonly<Record<string, SpreadsheetImportHeaderAlias>>;
@@ -35,4 +58,6 @@ export type CreatorSpreadsheetImportSession = {
     existing: number;
     conflicts: number;
   };
+  getRowPreview: (row: ImportedStructuredRow) => CreatorImportRowPreview;
+  buildRowCommitPlan: (row: ImportedStructuredRow) => CreatorImportCommitPlan;
 };

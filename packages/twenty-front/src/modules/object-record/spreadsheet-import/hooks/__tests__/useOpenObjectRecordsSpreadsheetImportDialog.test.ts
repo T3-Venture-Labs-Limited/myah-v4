@@ -146,6 +146,82 @@ const companyMocks = [
     variableMatcher: () => true,
     result: mockResult,
   },
+  {
+    request: {
+      query: gql`
+        mutation CommitCreatorImport($input: CommitCreatorImportInput!) {
+          commitCreatorImport(input: $input) {
+            receiptId
+            creatorId
+            socialProfileIds
+            noteId
+            noteTargetId
+            replayed
+          }
+        }
+      `,
+      variables: {
+        input: {
+          attemptKey: COMPANY_ID,
+          operationKey: 'row-row-a',
+          creator: { name: 'Ada' },
+          profiles: [],
+        },
+      },
+    },
+    result: {
+      data: {
+        commitCreatorImport: {
+          receiptId: 'receipt-1',
+          creatorId: 'creator-1',
+          socialProfileIds: [],
+          noteId: null,
+          noteTargetId: null,
+          replayed: false,
+        },
+      },
+    },
+  },
+  ...[new Error('response lost'), null].map((error, index) => ({
+    request: {
+      query: gql`
+        mutation CommitCreatorImport($input: CommitCreatorImportInput!) {
+          commitCreatorImport(input: $input) {
+            receiptId
+            creatorId
+            socialProfileIds
+            noteId
+            noteTargetId
+            replayed
+          }
+        }
+      `,
+      variables: {
+        input: {
+          attemptKey: COMPANY_ID,
+          operationKey: 'row-row-retry',
+          creator: { name: 'Ada' },
+          profiles: [],
+        },
+      },
+    },
+    ...(error
+      ? { error }
+      : {
+          result: {
+            data: {
+              commitCreatorImport: {
+                receiptId: 'receipt-retry',
+                creatorId: 'creator-retry',
+                socialProfileIds: [],
+                noteId: null,
+                noteTargetId: null,
+                replayed: index > 0,
+              },
+            },
+          },
+        }),
+  })),
 ];
 
 const fakeCsv = () => {
@@ -174,6 +250,16 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
       beforeSubmitHook: jest.fn(),
       getSubmissionBlockReason: jest.fn(),
       getSummary: jest.fn(() => ({ existing: 0, conflicts: 0 })),
+      getRowPreview: jest.fn(() => ({
+        creatorFields: ['Name'],
+        socialProfiles: [],
+        supplementaryNoteFields: [],
+        excludedFields: [],
+      })),
+      buildRowCommitPlan: jest.fn(() => ({
+        creator: { name: 'Ada' },
+        profiles: [],
+      })),
     };
     mockBuildCreatorSpreadsheetImportSession.mockImplementation(
       () => mockCreatorSession,
@@ -253,6 +339,7 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
           employees: '0',
         },
       ],
+      validStructuredRowIndexes: ['cbc3985f-dde9-46d1-bae2-c124141700ac'],
       invalidStructuredRows: [],
       allStructuredRows: [
         {
@@ -283,7 +370,7 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     expect(recordToCreate).toHaveProperty('employees', 0);
   });
 
-  it('activates Creator-specific matching, preflight, and non-upsert submission', async () => {
+  it('activates Creator-specific matching, preflight, and durable row submission', async () => {
     (mockCreatorSession.getSummary as jest.Mock).mockReturnValue({
       existing: 2,
       conflicts: 1,
@@ -328,6 +415,7 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
       await options?.onSubmit(
         {
           validStructuredRows: [{ name: 'Ada' }],
+          validStructuredRowIndexes: ['row-a'],
           invalidStructuredRows: [{}, {}, {}],
           allStructuredRows: [{ name: 'Ada', __index: 'row-a' }],
         },
@@ -335,14 +423,41 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
       );
     });
 
-    expect(mockBatchCreateManyRecords).toHaveBeenCalledWith({
-      recordsToCreate: [{}],
-      upsert: false,
+    expect(mockBatchCreateManyRecords).not.toHaveBeenCalled();
+    expect(mockCreatorSession.buildRowCommitPlan).toHaveBeenCalledWith({
+      name: 'Ada',
     });
     expect(mockEnqueueSuccessSnackBar).toHaveBeenCalledWith({
       message:
         'Imported 1 creators. 2 already existed, 1 conflicted, and 1 had validation errors.',
     });
+  });
+
+  it('reuses the attempt and stable source-row identity after response loss', async () => {
+    const { result } = renderHook(
+      () =>
+        useOpenObjectRecordsSpreadsheetImportDialog('creator')
+          .openObjectRecordsSpreadsheetImportDialog,
+      { wrapper: Wrapper },
+    );
+
+    await act(async () => {
+      result.current();
+    });
+    const options = jotaiStore.get(spreadsheetImportDialogState.atom).options;
+    const validationResult = {
+      validStructuredRows: [{ name: 'Retry' }],
+      validStructuredRowIndexes: ['row-retry'],
+      invalidStructuredRows: [],
+      allStructuredRows: [{ name: 'Retry', __index: 'row-retry' }],
+    };
+
+    await expect(
+      options?.onSubmit(validationResult, fakeCsv()),
+    ).rejects.toThrow('response lost');
+    await expect(
+      options?.onSubmit(validationResult, fakeCsv()),
+    ).resolves.toBeUndefined();
   });
 
   it('skips the Creator mutation when every row already exists', async () => {
@@ -367,6 +482,7 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
       await options?.onSubmit(
         {
           validStructuredRows: [],
+          validStructuredRowIndexes: [],
           invalidStructuredRows: [{ instagram: 'existing' }],
           allStructuredRows: [{ instagram: 'existing', __index: 'row-a' }],
         },
