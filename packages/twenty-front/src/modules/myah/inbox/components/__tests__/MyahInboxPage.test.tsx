@@ -386,6 +386,12 @@ const contact = (
   creator: linked ? { id: `creator-${id}`, name: id } : null,
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel,
+  initialSelection: {
+    channel: latestChannel,
+    emailThreadId: latestChannel === 'EMAIL' ? 'thread-2' : null,
+    instagramConversationId:
+      latestChannel === 'INSTAGRAM' ? `conversation-${id}` : null,
+  },
   preview: `${id} preview`,
   sender: id,
   needsAttention: true,
@@ -1157,6 +1163,51 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(screen.queryByText(/Email actions/)).not.toBeInTheDocument();
   });
 
+  it('reapplies the recommendation through the draft barrier on explicit same-row reopen', async () => {
+    const { store } = renderPage();
+
+    await screen.findByText('Email composer thread-2');
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    flushWorkspace.mockClear();
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+    expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+      contactId: 'contact-1',
+      channel: 'EMAIL',
+      emailThreadId: 'thread-2',
+    });
+  });
+
+  it('keeps the manual channel when an explicit same-row reopen cannot flush drafts', async () => {
+    const { store } = renderPage();
+
+    await screen.findByText('Email composer thread-2');
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    flushWorkspace.mockResolvedValueOnce(false);
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+
+    expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+      contactId: 'contact-1',
+      channel: 'INSTAGRAM',
+      emailThreadId: null,
+    });
+  });
+
   it('retains a valid selected Contact on refresh and clears a removed one', async () => {
     const { store } = renderPage();
 
@@ -1282,6 +1333,33 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(
       screen.getByRole('option', { name: 'Select contact-1' }),
     ).toHaveFocus();
+  });
+
+  it('opens the current mobile conversation when recommendation reapply is draft-blocked', async () => {
+    isMobile = true;
+    const { store } = renderPage();
+
+    await screen.findByText('Selected: contact-1');
+    fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' }));
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Contacts' })),
+    );
+    flushWorkspace.mockResolvedValueOnce(false);
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+
+    expect(screen.getByRole('heading', { name: 'contact-1' })).toBeVisible();
+    expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+      contactId: 'contact-1',
+      channel: 'INSTAGRAM',
+    });
   });
 
   it('opens Creator context from the same mobile control in both channels', async () => {

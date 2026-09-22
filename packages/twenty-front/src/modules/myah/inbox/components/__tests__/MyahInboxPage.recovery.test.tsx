@@ -318,6 +318,12 @@ const contact = (
   creator: linked ? { id: `creator-${id}`, name: id } : null,
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel,
+  initialSelection: {
+    channel: latestChannel,
+    emailThreadId: latestChannel === 'EMAIL' ? 'thread-2' : null,
+    instagramConversationId:
+      latestChannel === 'INSTAGRAM' ? `conversation-${id}` : null,
+  },
   preview: `${id} preview`,
   sender: id,
   needsAttention: true,

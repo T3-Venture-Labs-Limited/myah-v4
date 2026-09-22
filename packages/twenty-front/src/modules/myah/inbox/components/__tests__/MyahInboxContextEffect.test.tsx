@@ -87,6 +87,11 @@ const contact = (
   creator,
   lastActivityAt: '2026-09-08T00:00:00Z',
   latestChannel: 'EMAIL',
+  initialSelection: {
+    channel: 'EMAIL',
+    emailThreadId: 'thread-2',
+    instagramConversationId: null,
+  },
   preview: null,
   sender: null,
   needsAttention: false,
