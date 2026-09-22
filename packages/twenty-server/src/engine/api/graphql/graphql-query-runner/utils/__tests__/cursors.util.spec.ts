@@ -3,6 +3,7 @@ import { FieldMetadataType, OrderByDirection } from 'twenty-shared/types';
 import { type ObjectRecordOrderBy } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
+import { RelationType } from 'src/engine/metadata-modules/field-metadata/interfaces/relation-type.interface';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { decodeCursor, encodeCursor } from '../cursors.util';
@@ -37,15 +38,24 @@ const fullNameField = buildMockField(
   'fullName',
   FieldMetadataType.FULL_NAME,
 );
+const noteField = {
+  ...buildMockField('note-id', 'note', FieldMetadataType.RELATION),
+  settings: {
+    relationType: RelationType.MANY_TO_ONE,
+    joinColumnName: 'noteId',
+  },
+} as FlatFieldMetadata;
 
 const flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata> = {
   byUniversalIdentifier: {
     'name-id': nameField,
     'fullname-id': fullNameField,
+    'note-id': noteField,
   },
   universalIdentifierById: {
     'name-id': 'name-id',
     'fullname-id': 'fullname-id',
+    'note-id': 'note-id',
   },
   universalIdentifiersByApplicationId: {},
 };
@@ -67,7 +77,7 @@ const flatObjectMetadata: FlatObjectMetadata = {
   icon: 'Icon123',
   createdAt: new Date(),
   updatedAt: new Date(),
-  fieldIds: ['name-id', 'fullname-id'],
+  fieldIds: ['name-id', 'fullname-id', 'note-id'],
   indexMetadataIds: [],
   viewIds: [],
   applicationId: null,
@@ -140,6 +150,25 @@ describe('encodeCursor', () => {
     expect(decoded).toEqual({
       fullName: { firstName: 'Katherine', lastName: 'Abbott' },
       id: 'abc',
+    });
+  });
+
+  it('should encode relation records for nested ordering', () => {
+    const record = {
+      id: 'note-target-id',
+      note: {
+        id: 'note-id',
+        title: 'Example note',
+        createdAt: '2026-09-22T05:56:05.787Z',
+      },
+    };
+    const orderBy = [{ note: { createdAt: OrderByDirection.DescNullsFirst } }];
+
+    const decoded = decodeCursor(callEncodeCursor(record, orderBy));
+
+    expect(decoded).toEqual({
+      note: record.note,
+      id: 'note-target-id',
     });
   });
 

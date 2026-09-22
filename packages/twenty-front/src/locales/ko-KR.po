@@ -15614,6 +15614,11 @@ msgstr ""
 msgid "Not synced"
 msgstr "동기화되지 않음"
 
+#. js-lingui-id: f8W9q0
+#: src/modules/activities/notes/components/NotesCard.tsx
+msgid "Notes couldn't be loaded"
+msgstr ""
+
 #. js-lingui-id: VngD1z
 #: src/pages/settings/applications/SettingsApplicationDetails.tsx
 msgid "Nothing to configure for this application"
@@ -16817,6 +16822,7 @@ msgid "Please reconnect your mailbox {mailboxHandle} to update your email aliase
 msgstr "이메일 별칭을 업데이트하려면 {mailboxHandle} 사서함을 다시 연결해 주세요:"
 
 #. js-lingui-id: CjNkdJ
+#: src/modules/activities/notes/components/NotesCard.tsx
 #: src/modules/error-handler/components/AppRootErrorFallback.tsx
 #: src/modules/error-handler/components/internal/AppErrorDisplay.tsx
 msgid "Please refresh the page."

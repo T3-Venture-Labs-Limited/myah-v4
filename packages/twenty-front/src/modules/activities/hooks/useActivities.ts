@@ -50,6 +50,7 @@ export const useActivities = <T extends Task | Note>({
     totalCountActivityTargets,
     fetchMoreActivityTargets,
     hasNextPage,
+    error,
   } = useActivityTargetsForTargetableObjects({
     objectNameSingular,
     targetableObjects,
@@ -93,5 +94,6 @@ export const useActivities = <T extends Task | Note>({
     totalCountActivities: totalCountActivityTargets,
     fetchMoreActivities,
     hasNextPage,
+    error,
   };
 };
