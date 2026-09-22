@@ -1383,6 +1383,38 @@ describe('useMyahInboxInstagramDraft', () => {
     expect(saveDraftMutation).not.toHaveBeenCalled();
   });
 
+  it('increments editorVersion only for authoritative body replacement', async () => {
+    loadDraftQuery.mockResolvedValue({
+      data: { instagramMessageDraft: persistedDraft },
+    });
+    const { result } = renderDraft('REPLY');
+    const beforeHydration = result.current.editorVersion;
+    await act(async () => Promise.resolve());
+    expect(result.current.editorVersion).toBeGreaterThan(beforeHydration);
+
+    const afterHydration = result.current.editorVersion;
+    act(() => result.current.setBody('Local edit'));
+    expect(result.current.editorVersion).toBe(afterHydration);
+
+    saveDraftMutation.mockResolvedValue({
+      data: {
+        saveInstagramMessageDraft: {
+          ...persistedDraft,
+          status: 'CONFLICT',
+          body: 'Authoritative conflict body',
+          revision: 5,
+        },
+      },
+    });
+    await act(async () => result.current.flush());
+    act(() => result.current.reloadConflict());
+    expect(result.current.editorVersion).toBeGreaterThan(afterHydration);
+
+    const afterConflictReload = result.current.editorVersion;
+    act(() => result.current.resetAfterSend());
+    expect(result.current.editorVersion).toBeGreaterThan(afterConflictReload);
+  });
+
   it('rotates to a fresh empty draft after a successful send', async () => {
     const { result } = renderDraft('REPLY');
     await act(async () => Promise.resolve());

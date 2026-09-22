@@ -2,7 +2,7 @@ import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMembe
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { Button } from 'twenty-ui/input';
 import { AppPath } from 'twenty-shared/types';
-import { getAppPath, isDefined } from 'twenty-shared/utils';
+import { getAppPath } from 'twenty-shared/utils';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
 import { getMyahInboxSafeEmailSubject } from '@/myah/inbox/components/MyahInboxEmailSubjectSeparator';
@@ -19,10 +19,8 @@ import {
 } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { useMyahInboxReplyDraft } from '@/myah/inbox/hooks/useMyahInboxReplyDraft';
 import { useMyahInboxReplyContextOptions } from '@/myah/inbox/hooks/useMyahInboxReplyContextOptions';
-import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignAgentTabUniversalIdentifier';
-import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
+import { getMyahInboxActiveCampaignAgentTabId } from '@/myah/inbox/utils/getMyahInboxActiveCampaignAgentTabId';
 import { pageLayoutsWithRelationsSelector } from '@/page-layout/states/pageLayoutsWithRelationsSelector';
-import { type PageLayout } from '@/page-layout/types/PageLayout';
 import { ReplyChannel, type ReplyContextInput } from '~/generated/graphql';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
@@ -43,8 +41,6 @@ const StyledReplyWorkspace = styled.section`
   padding: ${themeCssVariables.spacing[3]};
 `;
 
-const MYAH_REPLY_CARD_SURFACE = themeCssVariables.background.primary;
-
 // Rendered only when no shared draft can be loaded: the composer keeps its
 // normal surface and controls instead of printing status copy.
 const UNAVAILABLE_DRAFT_ENTRY: MyahInboxDraftAutosaveEntry = {
@@ -63,39 +59,10 @@ const UNAVAILABLE_DRAFT_ENTRY: MyahInboxDraftAutosaveEntry = {
   editorVersion: 0,
 };
 
-const StyledMainReplyWorkspace = styled(StyledReplyWorkspace)`
-  animation: myahReplyCardBorder 12s ease-in-out infinite alternate;
-  background:
-    linear-gradient(${MYAH_REPLY_CARD_SURFACE}, ${MYAH_REPLY_CARD_SURFACE})
-      padding-box,
-    linear-gradient(
-        120deg,
-        ${themeCssVariables.color.pink},
-        ${themeCssVariables.color.sky},
-        ${themeCssVariables.color.pink}
-      )
-      border-box;
-  background-size:
-    100% 100%,
-    200% 200%;
-  border-color: transparent;
-
-  @keyframes myahReplyCardBorder {
-    from {
-      background-position:
-        0 0,
-        0% 50%;
-    }
-    to {
-      background-position:
-        0 0,
-        100% 50%;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-  }
+const StyledMainReplyWorkspace = styled.section`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 `;
 
 const StyledComposerHeader = styled.div`
@@ -124,20 +91,7 @@ const getMainReplyDisplaySubject = (subject: string | null) => {
   return subjectWithoutReplyPrefixes || 'No subject';
 };
 
-const getActiveCampaignAgentTabId = (pageLayouts: PageLayout[]) => {
-  const campaignLayout = pageLayouts.find(
-    ({ deletedAt, universalIdentifier }) =>
-      !isDefined(deletedAt) &&
-      universalIdentifier ===
-        MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
-  );
-
-  return campaignLayout?.tabs.find(
-    ({ isActive, universalIdentifier }) =>
-      isActive &&
-      universalIdentifier === MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER,
-  )?.id;
-};
+const getActiveCampaignAgentTabId = getMyahInboxActiveCampaignAgentTabId;
 
 export type MyahInboxReplyWorkspaceProps = {
   thread: MyahInboxThread;
@@ -355,6 +309,7 @@ const MyahInboxReplyWorkspaceContent = ({
         entry={UNAVAILABLE_DRAFT_ENTRY}
         presentation={presentation}
         previewScope={`unavailable:${thread.id}`}
+        bodyAriaLabel="Shared reply draft"
         // The thread selector and its options stay withheld until a draft is
         // authorized; the container and its controls still render.
         onDraftChange={() => undefined}
@@ -415,6 +370,7 @@ const MyahInboxReplyWorkspaceContent = ({
             entry={draftEntry}
             presentation={presentation}
             previewScope={myahInboxDraftKeyId(draftKey)}
+            bodyAriaLabel="Shared reply draft"
             subject={subject}
             subjectOptions={
               presentation === 'main' ? subjectOptions : undefined

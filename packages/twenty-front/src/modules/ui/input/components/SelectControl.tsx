@@ -66,6 +66,7 @@ const StyledIconChevronDownWrapper = styled.div<{
 
 export type SelectControlProps = {
   selectedOption: SelectOption<string | number | boolean | null>;
+  ariaLabel?: string;
   isDisabled?: boolean;
   selectSizeVariant?: SelectSizeVariant;
   textAccent?: SelectControlTextAccent;
@@ -74,14 +75,20 @@ export type SelectControlProps = {
 
 export const SelectControl = ({
   selectedOption,
+  ariaLabel,
   isDisabled,
   selectSizeVariant,
   textAccent = 'default',
   hasRightElement,
 }: SelectControlProps) => {
   const { theme } = useContext(ThemeContext);
+  const hasDisabledComboboxSemantics = isDisabled && isDefined(ariaLabel);
   return (
     <StyledControlContainer
+      aria-disabled={isDisabled || undefined}
+      aria-expanded={hasDisabledComboboxSemantics ? false : undefined}
+      aria-label={hasDisabledComboboxSemantics ? ariaLabel : undefined}
+      role={hasDisabledComboboxSemantics ? 'combobox' : undefined}
       disabled={isDisabled}
       hasIcon={isDefined(selectedOption?.Icon)}
       selectSizeVariant={selectSizeVariant}

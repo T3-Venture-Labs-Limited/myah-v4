@@ -70,6 +70,7 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     subjectOptions,
     subjectValue,
     onSubjectChange,
+    bodyAriaLabel,
     campaignOptions,
     campaignValue,
     onCampaignChange,
@@ -87,6 +88,7 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     }>;
     subjectValue?: string;
     onSubjectChange?: (value: string) => void;
+    bodyAriaLabel?: string;
     campaignOptions?: Array<{ label: string; value: string }>;
     campaignValue?: string;
     onCampaignChange?: (value: string) => void;
@@ -101,6 +103,9 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
         }
       />
       {subject && <output data-testid="draft-subject">{subject}</output>}
+      {bodyAriaLabel && (
+        <output data-testid="draft-body-label">{bodyAriaLabel}</output>
+      )}
       {subjectOptions && subjectValue && onSubjectChange ? (
         <select
           aria-label="Reply subject"
@@ -317,32 +322,31 @@ const setup = (
 };
 
 describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
-  it('preserves the floating main card with its animated border and reduced-motion fallback', () => {
-    const source = readFileSync(
+  it('moves the finalized animated frame into the shared reply box without nesting a copied Email frame', () => {
+    const workspaceSource = readFileSync(
       resolve(
         process.cwd(),
         'packages/twenty-front/src/modules/myah/inbox/components/MyahInboxReplyWorkspace.tsx',
       ),
       'utf8',
     );
+    const replyBoxSource = readFileSync(
+      resolve(
+        process.cwd(),
+        'packages/twenty-front/src/modules/myah/inbox/components/MyahInboxReplyBox.tsx',
+      ),
+      'utf8',
+    );
 
-    const mainStyles = source.match(
-      /const StyledMainReplyWorkspace = styled\(StyledReplyWorkspace\)`([\s\S]*?)`;/,
-    )?.[1];
-    expect(mainStyles).toBeDefined();
-    expect(mainStyles).toContain(
+    expect(replyBoxSource).toContain(
       'animation: myahReplyCardBorder 12s ease-in-out infinite alternate;',
     );
-    expect(mainStyles).toContain('linear-gradient(');
-    expect(mainStyles).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(mainStyles).not.toContain('border: 0');
-    expect(source).toContain(
-      'const MYAH_REPLY_CARD_SURFACE = themeCssVariables.background.primary;',
-    );
-    expect(source).toContain(
-      'border: 1px solid ${themeCssVariables.border.color.light}',
-    );
-    expect(source).toContain("{presentation !== 'main' && (");
+    expect(replyBoxSource).toContain('${themeCssVariables.color.pink}');
+    expect(replyBoxSource).toContain('${themeCssVariables.color.sky}');
+    expect(replyBoxSource).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(workspaceSource).not.toContain('@keyframes myahReplyCardBorder');
+    expect(workspaceSource).not.toContain('linear-gradient(');
+    expect(workspaceSource).toContain("{presentation !== 'main' && (");
   });
 
   it('removes the main-only composer heading while preserving the default heading', async () => {
@@ -374,6 +378,14 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
       );
     },
   );
+
+  it('passes the recipient-independent Email body label through the reply-box adapter', async () => {
+    setup(false, 'main');
+    await completeRead();
+    expect(screen.getByTestId('draft-body-label')).toHaveTextContent(
+      'Shared reply draft',
+    );
+  });
 
   it('maps readable Campaign cards to the main subject selector', async () => {
     const onReplyTargetChange = jest.fn();

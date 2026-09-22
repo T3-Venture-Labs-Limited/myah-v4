@@ -9,13 +9,15 @@ import { MyahInboxRichDraftEditor } from '@/myah/inbox/components/MyahInboxRichD
 const mockDocToBlocks = jest.fn();
 
 jest.mock('@blocknote/core', () => ({
-  BlockNoteSchema: { create: jest.fn(() => ({})) },
+  BlockNoteSchema: {
+    create: jest.fn((options: Record<string, unknown>) => options),
+  },
   defaultBlockSpecs: {
     paragraph: {},
     bulletListItem: {},
     numberedListItem: {},
   },
-  defaultInlineContentSpecs: {},
+  defaultInlineContentSpecs: { text: {}, link: {} },
   defaultStyleSpecs: { bold: {}, italic: {}, underline: {}, strike: {} },
   docToBlocks: (...args: unknown[]) => mockDocToBlocks(...args),
 }));
@@ -41,7 +43,12 @@ const mockEditor = {
 };
 
 type RichEditorOptions = {
-  links: { isValidLink: (href: string) => boolean };
+  schema?: {
+    blockSpecs?: Record<string, unknown>;
+    inlineContentSpecs?: Record<string, unknown>;
+    styleSpecs?: Record<string, unknown>;
+  };
+  links?: { isValidLink: (href: string) => boolean };
   pasteHandler: (context: {
     event: { clipboardData: { getData: (type: string) => string } };
     editor: typeof mockEditor;
@@ -118,6 +125,7 @@ const renderEditor = ({
   autoFocus = false,
   onDraftChange = jest.fn(),
   presentation = 'default',
+  mode = 'rich',
 }: {
   body?: { markdown: string; blocknote: string | null };
   autoFocus?: boolean;
@@ -126,6 +134,7 @@ const renderEditor = ({
     blocknote: string | null;
   }) => void;
   presentation?: 'default' | 'main';
+  mode?: 'rich' | 'plain-text';
 } = {}) =>
   render(
     <MyahInboxRichDraftEditor
@@ -137,6 +146,7 @@ const renderEditor = ({
       focusId="workspace:thread:1"
       onDraftChange={onDraftChange}
       presentation={presentation}
+      mode={mode}
     />,
   );
 
@@ -258,7 +268,7 @@ describe('MyahInboxRichDraftEditor', () => {
     const options = (
       mockUseCreateBlockNote.mock.calls as unknown as Array<[RichEditorOptions]>
     ).at(-1)?.[0];
-    if (!options) throw new Error('BlockNote options were not captured');
+    if (!options?.links) throw new Error('Rich link options were not captured');
     expect(options.links.isValidLink('https://example.com')).toBe(true);
     const unsafeLink = ['java', 'script:alert(1)'].join('');
     expect(options.links.isValidLink(unsafeLink)).toBe(false);
@@ -425,6 +435,31 @@ describe('MyahInboxRichDraftEditor', () => {
       focusId: 'workspace:thread:1',
     });
     jest.useRealTimers();
+  });
+
+  it('uses a paragraph-only plain-text mode that emits no durable rich state', () => {
+    const onDraftChange = jest.fn();
+    renderEditor({ mode: 'plain-text', onDraftChange });
+
+    const options = (
+      mockUseCreateBlockNote.mock.calls as unknown as Array<[RichEditorOptions]>
+    ).at(-1)?.[0];
+    expect(Object.keys(options?.schema?.blockSpecs ?? {})).toEqual([
+      'paragraph',
+    ]);
+    expect(Object.keys(options?.schema?.inlineContentSpecs ?? {})).toEqual([
+      'text',
+    ]);
+    expect(Object.keys(options?.schema?.styleSpecs ?? {})).toEqual([]);
+    expect(options?.links).toBeUndefined();
+    expect(screen.queryByTestId('floating-toolbar')).not.toBeInTheDocument();
+
+    mockEditor.document = plainBlocks('plain text');
+    act(() => mockEditor.onChange.mock.calls.at(-1)[0](mockEditor));
+    expect(onDraftChange).toHaveBeenLastCalledWith({
+      markdown: 'plain text',
+      blocknote: null,
+    });
   });
 
   it('removes native formatting controls while locked', () => {

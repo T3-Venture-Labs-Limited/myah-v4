@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import {
   act,
   fireEvent,
@@ -22,11 +25,12 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
 }));
 jest.mock('twenty-ui/theme-constants', () => ({
   themeCssVariables: {
-    background: { transparent: { lighter: 'whitesmoke' } },
+    background: { primary: 'white', transparent: { lighter: 'whitesmoke' } },
     border: {
       color: { light: 'lightgray', medium: 'gray' },
-      radius: { sm: '4px' },
+      radius: { md: '8px', sm: '4px' },
     },
+    color: { pink: 'pink', sky: 'sky' },
     font: {
       color: {
         primary: 'black',
@@ -37,7 +41,7 @@ jest.mock('twenty-ui/theme-constants', () => ({
       size: { md: '16px', sm: '13px', xs: '11px' },
       weight: { regular: 400, semiBold: 600 },
     },
-    spacing: { 2: '8px', 3: '12px' },
+    spacing: { 2: '8px', 3: '12px', 6: '24px' },
   },
 }));
 
@@ -162,6 +166,14 @@ const MountedEditor = () => {
 };
 
 describe('MyahInboxDraftEditor execution-state masking', () => {
+  it('accepts an adapter-owned body label instead of inferring Email identity', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../MyahInboxDraftEditor.tsx'),
+      'utf8',
+    );
+    expect(source).toContain('bodyAriaLabel?: string;');
+  });
+
   beforeEach(() => {
     mockEditors.length = 0;
     jest
