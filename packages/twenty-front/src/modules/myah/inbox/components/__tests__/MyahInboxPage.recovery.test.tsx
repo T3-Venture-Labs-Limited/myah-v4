@@ -942,16 +942,16 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     );
     const summary = take('MyahInboxThreads');
     expect(summary.variables).toMatchObject({
-      threadId: 'thread-1',
+      threadId: 'thread-2',
       first: 1,
       expectedWorkspaceId: key.workspaceId,
     });
     await act(async () =>
       summary.resolve({
-        myahInboxThreads: { edges: [{ node: threads['thread-1'] }] },
+        myahInboxThreads: { edges: [{ node: threads['thread-2'] }] },
       }),
     );
-    await completeRead();
+    await completeRead('thread-2');
     for (const card of cards) {
       const request = take('MyahInboxContactEmailCardMessages');
       expect(request.variables).toMatchObject({
@@ -981,21 +981,21 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         }),
       );
     }
-    expect(screen.getByText('Email actions thread-1')).toBeVisible();
+    expect(screen.getByText('Email actions thread-2')).toBeVisible();
     expect(screen.getByText('Real body thread-2')).toBeVisible();
     expect(screen.queryByLabelText('Email thread')).toBeNull();
     expect(requests).toHaveLength(0);
-    await selectThread('thread-2');
-    const olderSummary = take('MyahInboxThreads');
-    expect(olderSummary.variables.threadId).toBe('thread-2');
+    await selectThread('thread-1');
+    const newerSummary = take('MyahInboxThreads');
+    expect(newerSummary.variables.threadId).toBe('thread-1');
     await act(async () =>
-      olderSummary.resolve({
-        myahInboxThreads: { edges: [{ node: threads['thread-2'] }] },
+      newerSummary.resolve({
+        myahInboxThreads: { edges: [{ node: threads['thread-1'] }] },
       }),
     );
-    await completeRead('thread-2');
+    await completeRead('thread-1');
     expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
-    expect(screen.getByText('Email actions thread-2')).toBeVisible();
+    expect(screen.getByText('Email actions thread-1')).toBeVisible();
   });
 
   it('revalidates the selected exact summary on thread activity but not ordinary message pagination', async () => {

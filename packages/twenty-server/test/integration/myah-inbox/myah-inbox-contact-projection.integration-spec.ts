@@ -7,6 +7,7 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { installMyahInboxInstagramMetadataBridge } from 'test/integration/myah-inbox/utils/install-myah-inbox-instagram-metadata-bridge.util';
 import {
   cleanupMyahInboxTask7Fixture,
   getDomainService,
@@ -183,6 +184,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
 
   beforeAll(async () => {
     token = APPLE_JANE_ADMIN_ACCESS_TOKEN;
+    await installMyahInboxInstagramMetadataBridge();
     fixture = await seedMyahInboxTask7Fixture({ operatorAccessToken: token });
   });
 
