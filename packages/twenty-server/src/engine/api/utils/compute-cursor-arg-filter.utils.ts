@@ -20,6 +20,7 @@ export const computeCursorArgFilter = (
   flatObjectMetadata: FlatObjectMetadata,
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
   isForwardPagination = true,
+  flatObjectMetadataMaps?: FlatEntityMaps<FlatObjectMetadata>,
 ): ObjectRecordFilter[] => {
   const cursorEntries = Object.entries(cursor)
     .map(([key, value]) => {
@@ -47,6 +48,7 @@ export const computeCursorArgFilter = (
         cursorValue,
         flatObjectMetadata,
         flatFieldMetadataMaps,
+        flatObjectMetadataMaps,
         orderBy,
         isForwardPagination: true,
         isEqualityCondition: true,
@@ -57,6 +59,7 @@ export const computeCursorArgFilter = (
         cursorValue,
         flatObjectMetadata,
         flatFieldMetadataMaps,
+        flatObjectMetadataMaps,
         orderBy,
         isForwardPagination,
       }),

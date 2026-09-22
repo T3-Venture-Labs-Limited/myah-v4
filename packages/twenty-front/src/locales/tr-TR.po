@@ -15614,6 +15614,11 @@ msgstr ""
 msgid "Not synced"
 msgstr "Senkronize edilmedi"
 
+#. js-lingui-id: f8W9q0
+#: src/modules/activities/notes/components/NotesCard.tsx
+msgid "Notes couldn't be loaded"
+msgstr ""
+
 #. js-lingui-id: VngD1z
 #: src/pages/settings/applications/SettingsApplicationDetails.tsx
 msgid "Nothing to configure for this application"
@@ -16817,6 +16822,7 @@ msgid "Please reconnect your mailbox {mailboxHandle} to update your email aliase
 msgstr "E-posta takma adlarınızı güncellemek için lütfen {mailboxHandle} posta kutunuza yeniden bağlanın:"
 
 #. js-lingui-id: CjNkdJ
+#: src/modules/activities/notes/components/NotesCard.tsx
 #: src/modules/error-handler/components/AppRootErrorFallback.tsx
 #: src/modules/error-handler/components/internal/AppErrorDisplay.tsx
 msgid "Please refresh the page."

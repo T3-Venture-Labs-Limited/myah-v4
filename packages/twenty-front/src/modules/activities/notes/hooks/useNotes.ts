@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react';
 
 import { useActivities } from '@/activities/hooks/useActivities';
 import { currentNotesQueryVariablesState } from '@/activities/notes/states/currentNotesQueryVariablesState';
-import { FIND_MANY_TIMELINE_ACTIVITIES_ORDER_BY } from '@/activities/timeline-activities/constants/FindManyTimelineActivitiesOrderBy';
 import { type Note } from '@/activities/types/Note';
 import {
   CoreObjectNameSingular,
@@ -17,7 +16,13 @@ export const useNotes = (targetableObject: ActivityTargetableObject) => {
   const notesQueryVariables = useMemo(
     () =>
       ({
-        orderBy: FIND_MANY_TIMELINE_ACTIVITIES_ORDER_BY,
+        orderBy: [
+          {
+            note: {
+              createdAt: 'DescNullsFirst',
+            },
+          },
+        ],
       }) as RecordGqlOperationVariables,
     [],
   );
@@ -28,6 +33,7 @@ export const useNotes = (targetableObject: ActivityTargetableObject) => {
     totalCountActivities,
     fetchMoreActivities,
     hasNextPage,
+    error,
   } = useActivities<Note>({
     objectNameSingular: CoreObjectNameSingular.Note,
     activityTargetsOrderByVariables: notesQueryVariables.orderBy ?? [{}],
@@ -55,5 +61,6 @@ export const useNotes = (targetableObject: ActivityTargetableObject) => {
     totalCountNotes: totalCountActivities,
     fetchMoreNotes: fetchMoreActivities,
     hasNextPage,
+    error,
   };
 };

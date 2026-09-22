@@ -1,6 +1,7 @@
 import { FieldMetadataType, OrderByDirection } from 'twenty-shared/types';
 
 import { GraphqlQueryRunnerException } from 'src/engine/api/graphql/graphql-query-runner/errors/graphql-query-runner.exception';
+import { RelationType } from 'src/engine/metadata-modules/field-metadata/interfaces/relation-type.interface';
 import { computeCursorArgFilter } from 'src/engine/api/utils/compute-cursor-arg-filter.utils';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
@@ -9,6 +10,7 @@ import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object
 describe('computeCursorArgFilter', () => {
   const workspaceId = 'workspace-id';
   const objectMetadataId = 'object-id';
+  const noteObjectMetadataId = 'note-object-id';
 
   const createMockField = (
     overrides: Partial<FlatFieldMetadata> & {
@@ -55,6 +57,33 @@ describe('computeCursorArgFilter', () => {
     label: 'Full Name',
   });
 
+  const idField = createMockField({
+    id: 'id-id',
+    type: FieldMetadataType.UUID,
+    name: 'id',
+    label: 'Id',
+  });
+
+  const noteField = createMockField({
+    id: 'note-id',
+    type: FieldMetadataType.RELATION,
+    name: 'note',
+    label: 'Note',
+    relationTargetObjectMetadataId: noteObjectMetadataId,
+    settings: {
+      relationType: RelationType.MANY_TO_ONE,
+      joinColumnName: 'noteId',
+    },
+  });
+
+  const noteCreatedAtField = createMockField({
+    id: 'note-created-at-id',
+    objectMetadataId: noteObjectMetadataId,
+    type: FieldMetadataType.DATE_TIME,
+    name: 'createdAt',
+    label: 'Created At',
+  });
+
   const buildFlatFieldMetadataMaps = (
     fields: FlatFieldMetadata[],
   ): FlatEntityMaps<FlatFieldMetadata> => ({
@@ -81,6 +110,9 @@ describe('computeCursorArgFilter', () => {
     nameField,
     ageField,
     fullNameField,
+    idField,
+    noteField,
+    noteCreatedAtField,
   ]);
 
   const flatObjectMetadata: FlatObjectMetadata = {
@@ -100,11 +132,35 @@ describe('computeCursorArgFilter', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     universalIdentifier: objectMetadataId,
-    fieldIds: ['name-id', 'age-id', 'fullname-id'],
+    fieldIds: ['name-id', 'age-id', 'fullname-id', 'id-id', 'note-id'],
     indexMetadataIds: [],
     viewIds: [],
     applicationId: null,
   } as unknown as FlatObjectMetadata;
+
+  const noteFlatObjectMetadata = {
+    ...flatObjectMetadata,
+    id: noteObjectMetadataId,
+    universalIdentifier: noteObjectMetadataId,
+    nameSingular: 'note',
+    namePlural: 'notes',
+    labelSingular: 'Note',
+    labelPlural: 'Notes',
+    targetTableName: 'note',
+    fieldIds: ['note-created-at-id'],
+  } as FlatObjectMetadata;
+
+  const flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata> = {
+    byUniversalIdentifier: {
+      [flatObjectMetadata.universalIdentifier]: flatObjectMetadata,
+      [noteFlatObjectMetadata.universalIdentifier]: noteFlatObjectMetadata,
+    },
+    universalIdentifierById: {
+      [flatObjectMetadata.id]: flatObjectMetadata.universalIdentifier,
+      [noteFlatObjectMetadata.id]: noteFlatObjectMetadata.universalIdentifier,
+    },
+    universalIdentifiersByApplicationId: {},
+  };
 
   describe('basic cursor filtering', () => {
     it('should return empty array when cursor is empty', () => {
@@ -169,6 +225,42 @@ describe('computeCursorArgFilter', () => {
       expect(result).toEqual([
         { name: { gt: 'John' } },
         { and: [{ name: { eq: 'John' } }, { age: { lt: 30 } }] },
+      ]);
+    });
+  });
+
+  describe('relation field handling', () => {
+    it('should compute cursor filters for nested relation ordering', () => {
+      const cursor = {
+        note: { createdAt: '2026-09-22T06:21:27.473Z' },
+        id: 'note-target-id',
+      };
+      const orderBy = [
+        {
+          note: {
+            createdAt: OrderByDirection.DescNullsFirst,
+          },
+        },
+        { id: OrderByDirection.AscNullsFirst },
+      ];
+
+      const result = computeCursorArgFilter(
+        cursor,
+        orderBy,
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+        true,
+        flatObjectMetadataMaps,
+      );
+
+      expect(result).toEqual([
+        { note: { createdAt: { lt: '2026-09-22T06:21:27.473Z' } } },
+        {
+          and: [
+            { note: { createdAt: { eq: '2026-09-22T06:21:27.473Z' } } },
+            { id: { gt: 'note-target-id' } },
+          ],
+        },
       ]);
     });
   });
