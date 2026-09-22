@@ -1,0 +1,265 @@
+import { validate } from 'class-validator';
+
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+  PermissionsExceptionMessage,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
+import {
+  CampaignMessageOverviewInput,
+  CampaignMessageOverviewView,
+} from 'src/modules/campaign-execution/dtos/campaign-message-overview.dto';
+import { CampaignMessageOverviewReaderService } from 'src/modules/campaign-execution/services/campaign-message-overview-reader.service';
+
+jest.mock(
+  'src/engine/twenty-orm/storage/orm-workspace-context.storage',
+  () => ({
+    getWorkspaceContext: () => ({
+      userWorkspaceRoleMap: new Map(),
+      apiKeyRoleMap: new Map(),
+    }),
+  }),
+);
+jest.mock(
+  'src/engine/twenty-orm/utils/resolve-role-permission-config.util',
+  () => ({ resolveRolePermissionConfig: () => ({ objectPermissions: {} }) }),
+);
+
+const workspaceId = '11111111-1111-4111-8111-111111111111';
+const campaignId = '22222222-2222-4222-8222-222222222222';
+const campaignCreatorId = '33333333-3333-4333-8333-333333333333';
+const creatorId = '44444444-4444-4444-8444-444444444444';
+const occurrenceId = '55555555-5555-4555-8555-555555555555';
+const generationId = '66666666-6666-4666-8666-666666666666';
+const workflowVersionId = '77777777-7777-4777-8777-777777777777';
+const messageId = '88888888-8888-4888-8888-888888888888';
+
+const authContext = {
+  type: 'system',
+  workspace: { id: workspaceId },
+} as WorkspaceAuthContext;
+
+const makeOrm = (messageThreadFind = jest.fn().mockResolvedValue([])) => {
+  const repositories = {
+    campaign: {
+      find: jest.fn().mockResolvedValue([{ id: campaignId, name: 'Launch' }]),
+    },
+    campaignCreator: {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: campaignCreatorId, campaignId, creatorId }]),
+    },
+    creator: {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: creatorId, name: 'Ada', email: 'ada@example.com' },
+        ]),
+    },
+    messageThread: { find: messageThreadFind },
+    message: { find: jest.fn().mockResolvedValue([]) },
+  };
+
+  return {
+    executeInWorkspaceContext: jest.fn((callback) => callback()),
+    getRepository: jest.fn((_workspaceId, name: keyof typeof repositories) =>
+      Promise.resolve(repositories[name]),
+    ),
+  };
+};
+
+const makeDataSource = (query: ReturnType<typeof jest.fn>) => ({
+  transaction: (callback: (value: { query: typeof query }) => unknown) =>
+    callback({ query }),
+});
+
+const makeSequences = () => ({
+  loadEmailByVersion: jest.fn().mockResolvedValue({
+    body: JSON.stringify({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Hi Ada, this is the scheduled message.' },
+          ],
+        },
+      ],
+    }),
+    subject: 'Scheduled partnership',
+  }),
+});
+
+describe('CampaignMessageOverviewReaderService', () => {
+  it('rejects malformed UUID filters and dates before they reach SQL', async () => {
+    const filters = Object.assign(new CampaignMessageOverviewInput(), {
+      campaignIds: ['not-a-uuid'],
+      dateFrom: 'not-a-date',
+    });
+
+    await expect(validate(filters)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ property: 'campaignIds' }),
+        expect.objectContaining({ property: 'dateFrom' }),
+      ]),
+    );
+  });
+
+  it('keeps readable queued rows without forecasts and exposes generation state', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          complete: false,
+          currentGenerationId: generationId,
+          generatedAt: new Date('2026-09-21T09:00:00.000Z'),
+          horizonEndsAt: new Date('2026-09-23T09:00:00.000Z'),
+          inputRevision: '8',
+          generationRevision: '7',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          attemptState: null,
+          campaignCreatorId,
+          campaignId,
+          connectedAccountId: null,
+          creatorId,
+          dueAt: new Date('2026-09-25T10:00:00.000Z'),
+          estimatedSendAt: null,
+          holdReason: null,
+          messageId,
+          occurrenceId,
+          occurrenceState: 'PENDING',
+          projectedMessageThreadId: null,
+          providerAcceptedAt: null,
+          safeOutcomeReason: null,
+          sortAt: new Date('2026-09-25T10:00:00.000Z'),
+          workflowVersionId,
+        },
+      ]);
+    const service = new CampaignMessageOverviewReaderService(
+      makeOrm() as never,
+      makeDataSource(query) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+    const filters = Object.assign(new CampaignMessageOverviewInput(), {
+      first: 50,
+      view: CampaignMessageOverviewView.SCHEDULED,
+    });
+
+    await expect(service.read({ authContext, filters })).resolves.toEqual(
+      expect.objectContaining({
+        nodes: [
+          expect.objectContaining({
+            campaignName: 'Launch',
+            creatorName: 'Ada',
+            estimatedSendAt: null,
+            occurrenceId,
+            preview: 'Hi Ada, this is the scheduled message.',
+            status: 'SCHEDULED',
+            subject: 'Scheduled partnership',
+          }),
+        ],
+        pageInfo: expect.objectContaining({
+          forecastComplete: false,
+          generationId,
+          refreshing: true,
+        }),
+      }),
+    );
+    expect(query.mock.calls[1][0]).toContain('LIMIT $11');
+    expect(query.mock.calls[1][1][10]).toBe(51);
+  });
+
+  it('does not expose an Inbox handoff for an unreadable projected thread', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          attemptState: 'ACCEPTED',
+          campaignCreatorId,
+          campaignId,
+          connectedAccountId: null,
+          creatorId,
+          dueAt: new Date('2026-09-21T10:00:00.000Z'),
+          estimatedSendAt: null,
+          holdReason: null,
+          occurrenceId,
+          occurrenceState: 'PENDING',
+          projectedMessageThreadId: '77777777-7777-4777-8777-777777777777',
+          providerAcceptedAt: new Date('2026-09-21T10:00:00.000Z'),
+          safeOutcomeReason: null,
+          sortAt: new Date('2026-09-21T10:00:00.000Z'),
+        },
+      ]);
+    const deniedThreadRead = jest
+      .fn()
+      .mockRejectedValue(
+        new PermissionsException(
+          PermissionsExceptionMessage.PERMISSION_DENIED,
+          PermissionsExceptionCode.PERMISSION_DENIED,
+        ),
+      );
+    const service = new CampaignMessageOverviewReaderService(
+      makeOrm(deniedThreadRead) as never,
+      makeDataSource(query) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+
+    await expect(
+      service.read({
+        authContext,
+        filters: new CampaignMessageOverviewInput(),
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        nodes: [
+          expect.objectContaining({
+            inboxContactId: null,
+            inboxThreadId: null,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('rejects a cursor from an older forecast generation', async () => {
+    const query = jest.fn().mockResolvedValueOnce([
+      {
+        complete: true,
+        currentGenerationId: generationId,
+        generatedAt: new Date('2026-09-21T09:00:00.000Z'),
+        horizonEndsAt: new Date('2026-09-23T09:00:00.000Z'),
+        inputRevision: '8',
+        generationRevision: '8',
+      },
+    ]);
+    const service = new CampaignMessageOverviewReaderService(
+      makeOrm() as never,
+      makeDataSource(query) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+    const after = Buffer.from(
+      JSON.stringify({
+        v: 1,
+        generationId: '77777777-7777-4777-8777-777777777777',
+        occurrenceId,
+        sortAt: '2026-09-21T10:00:00.000Z',
+      }),
+    ).toString('base64url');
+    const filters = Object.assign(new CampaignMessageOverviewInput(), {
+      after,
+    });
+
+    await expect(service.read({ authContext, filters })).rejects.toThrow(
+      'Campaign message overview changed; restart pagination',
+    );
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+});

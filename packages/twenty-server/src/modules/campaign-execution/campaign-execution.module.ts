@@ -4,6 +4,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CampaignActivationEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-activation.entity';
 import { CampaignEnrollmentEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-enrollment.entity';
 import { CampaignExecutionEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-execution.entity';
+import { CampaignForecastEntryEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-forecast-entry.entity';
+import { CampaignForecastGenerationEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-forecast-generation.entity';
+import { CampaignForecastHeadEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-forecast-head.entity';
 import { CampaignOccurrenceEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-occurrence.entity';
 import { CampaignOutboundRenderEntity } from 'src/engine/core-modules/campaign-execution/entities/campaign-outbound-render.entity';
 import { MailboxCapacityDayEntity } from 'src/engine/core-modules/campaign-execution/entities/mailbox-capacity-day.entity';
@@ -29,6 +32,10 @@ import {
   createProductionSuspendAwareClock,
   OutboundEmailDispatchTransactionAdapter,
 } from 'src/modules/campaign-execution/adapters/outbound-email-dispatch-runtime.adapter';
+import { CampaignForecastCandidateReaderService } from 'src/modules/campaign-execution/services/campaign-forecast-candidate-reader.service';
+import { CampaignMessageForecastService } from 'src/modules/campaign-execution/services/campaign-message-forecast.service';
+import { CampaignMessageOverviewRowService } from 'src/modules/campaign-execution/services/campaign-message-overview-row.service';
+import { CampaignForecastProjectionService } from 'src/modules/campaign-execution/services/campaign-forecast-projection.service';
 import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
@@ -40,6 +47,9 @@ import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/serv
       MailboxCapacityDayEntity,
       OutboundEmailAttemptEntity,
       CampaignExecutionEntity,
+      CampaignForecastHeadEntity,
+      CampaignForecastGenerationEntity,
+      CampaignForecastEntryEntity,
       CampaignActivationEntity,
       CampaignEnrollmentEntity,
       CampaignOccurrenceEntity,
@@ -52,6 +62,10 @@ import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/serv
     provideWorkspaceScopedRepository(OutboundEmailAttemptEntity),
     MailboxCapacityService,
     OutboundEmailAttemptService,
+    CampaignForecastCandidateReaderService,
+    CampaignMessageForecastService,
+    CampaignMessageOverviewRowService,
+    CampaignForecastProjectionService,
     CampaignTimelineEventWriterService,
     CampaignExecutionPersistenceAdapter,
     CampaignProgressionHistoryReaderAdapter,
@@ -90,6 +104,10 @@ import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/serv
     getWorkspaceScopedRepositoryToken(OutboundEmailAttemptEntity),
     MailboxCapacityService,
     OutboundEmailAttemptService,
+    CampaignForecastCandidateReaderService,
+    CampaignMessageForecastService,
+    CampaignMessageOverviewRowService,
+    CampaignForecastProjectionService,
     CampaignTimelineEventWriterService,
     CAMPAIGN_EXECUTION_PERSISTENCE_PORT,
     CAMPAIGN_EXECUTION_HISTORY_PORT,

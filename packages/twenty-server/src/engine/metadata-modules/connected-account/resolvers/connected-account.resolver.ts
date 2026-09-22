@@ -49,7 +49,7 @@ export class ConnectedAccountResolver {
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<ConnectedAccountPublicDTO> {
     const connectedAccount =
-      await this.connectedAccountSendingPolicyService.update({
+      await this.connectedAccountSendingPolicyService.updateRevisioned({
         ...input,
         workspaceId: workspace.id,
       });

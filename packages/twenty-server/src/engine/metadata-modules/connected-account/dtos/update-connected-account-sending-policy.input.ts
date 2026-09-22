@@ -23,4 +23,14 @@ export class UpdateConnectedAccountSendingPolicyInput {
   @Min(1)
   @Max(GRAPHQL_INT_MAX)
   minimumSendIntervalMs: number;
+
+  @Field(() => Int)
+  @IsInt()
+  @Min(1)
+  @Max(GRAPHQL_INT_MAX)
+  expectedRevision: number;
+
+  @Field(() => UUIDScalarType)
+  @IsUUID()
+  idempotencyKey: string;
 }

@@ -28,6 +28,11 @@ const MyahInboxPage = lazy(() =>
     default: module.MyahInboxPage,
   })),
 );
+const MyahCampaignMessagesPage = lazy(() =>
+  import('@/myah/campaign-messages/components/MyahCampaignMessagesPage').then(
+    (module) => ({ default: module.MyahCampaignMessagesPage }),
+  ),
+);
 
 const CREATOR_OBJECT_UNIVERSAL_IDENTIFIER =
   '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de';
@@ -110,6 +115,18 @@ export const MYAH_NAVIGATION_ROUTES = [
         kind: 'app-object',
         universalIdentifier: CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
       },
+    },
+  },
+  {
+    id: 'messages',
+    label: 'Campaign messages',
+    Icon: IconInbox,
+    group: 'campaign-operations',
+    entryPath: '/myah/messages',
+    availability: 'available',
+    destination: {
+      kind: 'myah-page',
+      Component: MyahCampaignMessagesPage,
     },
   },
   {

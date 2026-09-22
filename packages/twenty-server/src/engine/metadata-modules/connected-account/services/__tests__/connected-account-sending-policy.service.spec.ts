@@ -27,6 +27,8 @@ const buildConnectedAccount = (
     provider: 'google',
     dailySendLimit: 50,
     minimumSendIntervalMs: 300_000,
+    sendingPolicyRevision: 1,
+    sendingPolicyIdempotencyKey: null,
     archivedAt: null,
     accessToken: null,
     refreshToken: null,
@@ -39,6 +41,7 @@ describe('ConnectedAccount sending policy', () => {
     it.each([
       ['dailySendLimit', 50],
       ['minimumSendIntervalMs', 300_000],
+      ['sendingPolicyRevision', 1],
     ] as const)(
       'defines the non-null database default for %s',
       (property, value) => {
@@ -108,6 +111,8 @@ describe('ConnectedAccount sending policy', () => {
           connectedAccountId,
           dailySendLimit: GRAPHQL_INT_MAX,
           minimumSendIntervalMs: GRAPHQL_INT_MAX,
+          expectedRevision: 1,
+          idempotencyKey: 'b486cb28-c908-42f0-91ce-0e4a87a38592',
         },
       );
 
@@ -259,7 +264,7 @@ describe('ConnectedAccount sending policy', () => {
         minimumSendIntervalMs: 90_000,
       });
       const policyService = {
-        update: jest.fn().mockResolvedValue(updatedAccount),
+        updateRevisioned: jest.fn().mockResolvedValue(updatedAccount),
       };
       const resolver = new ConnectedAccountResolver(
         {} as never,
@@ -269,6 +274,8 @@ describe('ConnectedAccount sending policy', () => {
         connectedAccountId,
         dailySendLimit: 80,
         minimumSendIntervalMs: 90_000,
+        expectedRevision: 1,
+        idempotencyKey: 'b486cb28-c908-42f0-91ce-0e4a87a38592',
       };
 
       await expect(
@@ -280,7 +287,7 @@ describe('ConnectedAccount sending policy', () => {
         dailySendLimit: 80,
         minimumSendIntervalMs: 90_000,
       });
-      expect(policyService.update).toHaveBeenCalledWith({
+      expect(policyService.updateRevisioned).toHaveBeenCalledWith({
         ...input,
         workspaceId,
       });

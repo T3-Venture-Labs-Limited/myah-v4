@@ -132,6 +132,8 @@ import { AddUnipileInstagramTriageModeFastInstanceCommand } from 'src/database/c
 import { CreateInstagramActionBudgetFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619356-create-instagram-action-budget';
 import { AddInstagramDirectActionContextFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789307619359-add-instagram-direct-action-context';
 import { AddInstagramMessageV3SnapshotFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789633748004-add-instagram-message-v3-snapshot';
+import { CreateCampaignForecastProjectionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172618-create-campaign-forecast-projection';
+import { AddConnectedAccountSendingPolicyRevisionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172619-add-connected-account-sending-policy-revision';
 import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
 
 export const INSTANCE_COMMANDS = [
@@ -266,5 +268,7 @@ export const INSTANCE_COMMANDS = [
   CreateInstagramActionBudgetFastInstanceCommand,
   AddInstagramDirectActionContextFastInstanceCommand,
   AddInstagramMessageV3SnapshotFastInstanceCommand,
+  CreateCampaignForecastProjectionFastInstanceCommand,
+  AddConnectedAccountSendingPolicyRevisionFastInstanceCommand,
   InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
 ];

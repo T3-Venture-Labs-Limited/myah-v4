@@ -11,6 +11,8 @@ import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/ca
 import { WorkspaceCampaignCapacityTimeZoneModule } from 'src/engine/core-modules/myah/workspace-campaign-capacity-time-zone.module';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
+import { ConnectedAccountMetadataModule } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.module';
+import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
@@ -84,6 +86,7 @@ const twentyConfigService = {
     { provide: DataSource, useValue: dataSource },
     { provide: GlobalWorkspaceOrmManager, useValue: {} },
     { provide: PermissionsService, useValue: {} },
+    { provide: ConnectedAccountMetadataService, useValue: {} },
     { provide: MessageSuppressionService, useValue: {} },
     { provide: SentMessagePersistenceService, useValue: {} },
     { provide: MessagingMessageService, useValue: {} },
@@ -99,6 +102,7 @@ const twentyConfigService = {
     DataSource,
     GlobalWorkspaceOrmManager,
     PermissionsService,
+    ConnectedAccountMetadataService,
     MessageSuppressionService,
     SentMessagePersistenceService,
     MessagingMessageService,
@@ -153,6 +157,7 @@ describe('CampaignExecutionOrchestrationModule', () => {
       MessagingImportManagerModule,
       MessagingQueryHookModule,
       WorkspaceManyOrAllFlatEntityMapsCacheModule,
+      ConnectedAccountMetadataModule,
     ]);
   });
 
@@ -163,6 +168,8 @@ describe('CampaignExecutionOrchestrationModule', () => {
         CampaignExecutionOrchestrationModule,
       ],
     })
+      .overrideModule(ConnectedAccountMetadataModule)
+      .useModule(EmptyExternalInfrastructureModule)
       .overrideModule(EmailingModule)
       .useModule(EmptyExternalInfrastructureModule)
       .overrideModule(TwentyORMModule)

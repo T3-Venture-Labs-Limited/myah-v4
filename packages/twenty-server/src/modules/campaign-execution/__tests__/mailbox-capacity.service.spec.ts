@@ -1019,7 +1019,7 @@ describe('campaign capacity entity and module metadata', () => {
         OutboundEmailAttemptEntity,
       ]),
     );
-    expect(typeOrmImport.providers).toHaveLength(8);
+    expect(typeOrmImport.providers).toHaveLength(11);
   });
 });
 

@@ -6,6 +6,8 @@ import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/com
 import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
 import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
 import { CatchUpCampaignActivityControlMetadataWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748003-catch-up-campaign-activity-control-metadata.command';
+import { CreateCampaignForecastProjectionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172618-create-campaign-forecast-projection';
+import { AddConnectedAccountSendingPolicyRevisionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172619-add-connected-account-sending-policy-revision';
 import { RepairInstagramSecurityCutoverCommand } from 'src/database/commands/upgrade-version-command/2-20/repair-instagram-security-cutover.command';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -70,6 +72,15 @@ describe('V2_20_UpgradeVersionCommandModule', () => {
     );
     expect(providers).toContain(
       BackfillComposioInstagramHistoryWorkspaceCommand,
+    );
+  });
+
+  it('registers the Campaign forecast and sending-policy instance commands', () => {
+    expect(INSTANCE_COMMANDS).toEqual(
+      expect.arrayContaining([
+        CreateCampaignForecastProjectionFastInstanceCommand,
+        AddConnectedAccountSendingPolicyRevisionFastInstanceCommand,
+      ]),
     );
   });
 });

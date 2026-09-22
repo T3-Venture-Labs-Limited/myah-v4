@@ -1,4 +1,5 @@
 import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
+import { isCampaignMessageOverviewReturnTarget } from '@/myah/campaign-messages/types/CampaignMessageOverviewReturnTarget';
 import {
   useCallback,
   useContext,
@@ -54,6 +55,7 @@ import { styled } from '@linaria/react';
 import { IconInbox } from 'twenty-ui/icon';
 import { Button, SegmentedControl } from 'twenty-ui/input';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const StyledWorkspace = styled.div`
   display: grid;
@@ -167,6 +169,14 @@ const MyahInboxPageContent = ({
   workspaceId: string | null;
 }) => {
   const isMobile = useIsMobile();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const returnTarget = workspaceId
+    ? location.state?.campaignMessageOverviewReturnTarget
+    : null;
+  const canReturnToMessages =
+    workspaceId !== null &&
+    isCampaignMessageOverviewReturnTarget(returnTarget, workspaceId);
   const store = useStore();
   const [
     myahInboxPendingInstagramSelection,
@@ -902,7 +912,26 @@ const MyahInboxPageContent = ({
         <PageCardHeader
           icon={<IconInbox size={theme.icon.size.md} />}
           title="Inbox"
-          actionButton={<SidePanelToggleButton />}
+          actionButton={
+            <>
+              {canReturnToMessages ? (
+                <Button
+                  title="Return to Campaign messages"
+                  variant="secondary"
+                  size="small"
+                  onClick={async () => {
+                    if (!(await flushAffectedDrafts())) return;
+                    navigate(`${returnTarget.pathname}${returnTarget.search}`, {
+                      state: {
+                        campaignMessageOverviewReturnTarget: returnTarget,
+                      },
+                    });
+                  }}
+                />
+              ) : null}
+              <SidePanelToggleButton />
+            </>
+          }
         />
       }
     >
