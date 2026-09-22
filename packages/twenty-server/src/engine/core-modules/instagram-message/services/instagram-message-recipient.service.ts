@@ -28,6 +28,7 @@ import {
 } from 'src/modules/myah-unipile/services/unipile-instagram-projection.service';
 import { UnipileV1ClientService } from 'src/modules/myah-unipile/services/unipile-v1-client.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { type SocialProfileRecord } from 'src/modules/myah-creator-social-profile/types/social-profile-record.type';
 
 import {
   type InstagramComposerAuthenticatedContext,
@@ -348,6 +349,30 @@ export class InstagramMessageRecipientService {
         input.rolePermissionConfig,
       );
 
+    const socialProfile = await this.resolveCanonicalSocialProfile(input);
+    if (socialProfile) {
+      await input.beforeQuery?.();
+      const selected = await readableCreators.findOne(
+        {
+          where: { id: socialProfile.creatorId, deletedAt: IsNull() },
+          select: {
+            id: true,
+            instagramUsername: true,
+            instagramUrl: true,
+            instagramLinkPrimaryLinkUrl: true,
+          },
+        },
+        input.manager,
+      );
+      if (!selected) throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
+
+      input.recipient.creatorRecordId = socialProfile.creatorId;
+      input.recipient.normalizedHandle = socialProfile.normalizedHandle;
+      input.recipient.sourceValues = socialProfile.sourceValues;
+
+      return { ...selected, ...socialProfile };
+    }
+
     if (input.recipient.creatorRecordId) {
       await input.beforeQuery?.();
       const selected = await readableCreators.findOne(
@@ -404,6 +429,9 @@ export class InstagramMessageRecipientService {
     if (matchingIds.size > 1)
       throw new ComposerResolutionError('CREATOR_AMBIGUOUS');
     const [id] = matchingIds;
+    if (id) {
+      await this.assertNoCanonicalInstagramProfile(input, id);
+    }
     if (!id) {
       if (!(await this.canCreateCreator(readableCreators))) {
         throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
@@ -444,6 +472,158 @@ export class InstagramMessageRecipientService {
 
     input.recipient.sourceValues = resolved.sourceValues;
     return { ...readable, ...resolved };
+  }
+
+  private async resolveCanonicalSocialProfile(input: {
+    recipient: ReturnType<InstagramMessageRecipientService['assertRecipient']>;
+    manager?: WorkspaceEntityManager;
+    beforeQuery?: () => Promise<void>;
+    workspaceId: string;
+    rolePermissionConfig: InstagramComposerAuthenticatedContext['rolePermissionConfig'];
+  }): Promise<{
+    creatorId: string;
+    normalizedHandle: string;
+    sourceValues: Array<{ field: string; value: string }>;
+  } | null> {
+    const allProfiles =
+      await this.globalWorkspaceOrmManager.getRepository<SocialProfileRecord>(
+        input.workspaceId,
+        'socialProfile',
+        { shouldBypassPermissionChecks: true },
+      );
+    const readableProfiles =
+      await this.globalWorkspaceOrmManager.getRepository<SocialProfileRecord>(
+        input.workspaceId,
+        'socialProfile',
+        input.rolePermissionConfig,
+      );
+    await input.beforeQuery?.();
+    const profiles = await allProfiles.find(
+      {
+        where: {
+          platform: 'INSTAGRAM',
+          deletedAt: IsNull(),
+          ...(input.recipient.creatorRecordId
+            ? { creatorId: input.recipient.creatorRecordId }
+            : {
+                normalizedLocator: `handle:${input.recipient.normalizedHandle}`,
+              }),
+        },
+        select: {
+          id: true,
+          creatorId: true,
+          handle: true,
+          profileUrl: true,
+          platformAccountId: true,
+        },
+      },
+      input.manager,
+    );
+
+    await input.beforeQuery?.();
+    const readableCandidates = await readableProfiles.find(
+      {
+        where: {
+          platform: 'INSTAGRAM',
+          deletedAt: IsNull(),
+          ...(input.recipient.creatorRecordId
+            ? { creatorId: input.recipient.creatorRecordId }
+            : {
+                normalizedLocator: `handle:${input.recipient.normalizedHandle}`,
+              }),
+        },
+        select: {
+          id: true,
+          creatorId: true,
+          handle: true,
+          profileUrl: true,
+          platformAccountId: true,
+        },
+      },
+      input.manager,
+    );
+    if (
+      profiles.length !== readableCandidates.length ||
+      profiles.some(
+        ({ id }) => !readableCandidates.some((readable) => readable.id === id),
+      )
+    ) {
+      throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
+    }
+    if (profiles.length > 1) {
+      throw new ComposerResolutionError('CREATOR_AMBIGUOUS');
+    }
+    const [readable] = readableCandidates;
+    if (!readable) return null;
+
+    let normalizedHandle: string;
+    try {
+      normalizedHandle = resolveInstagramRecipient({
+        instagramUsername: readable.handle,
+        instagramUrl: readable.profileUrl,
+        instagramLink: null,
+      }).normalizedUsername;
+    } catch {
+      throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
+    }
+    if (
+      (!input.recipient.creatorRecordId &&
+        normalizedHandle !== input.recipient.normalizedHandle) ||
+      (input.recipient.creatorRecordId &&
+        readable.creatorId !== input.recipient.creatorRecordId)
+    ) {
+      throw new ComposerResolutionError('CONTEXT_CHANGED');
+    }
+
+    return {
+      creatorId: readable.creatorId,
+      normalizedHandle,
+      sourceValues: [
+        { field: 'socialProfile.id', value: readable.id },
+        ...(readable.handle
+          ? [{ field: 'socialProfile.handle', value: readable.handle }]
+          : []),
+        ...(readable.profileUrl
+          ? [{ field: 'socialProfile.profileUrl', value: readable.profileUrl }]
+          : []),
+        ...(readable.platformAccountId
+          ? [
+              {
+                field: 'socialProfile.platformAccountId',
+                value: readable.platformAccountId,
+              },
+            ]
+          : []),
+      ],
+    };
+  }
+
+  private async assertNoCanonicalInstagramProfile(
+    input: {
+      manager?: WorkspaceEntityManager;
+      beforeQuery?: () => Promise<void>;
+      workspaceId: string;
+    },
+    creatorId: string,
+  ): Promise<void> {
+    const profiles =
+      await this.globalWorkspaceOrmManager.getRepository<SocialProfileRecord>(
+        input.workspaceId,
+        'socialProfile',
+        { shouldBypassPermissionChecks: true },
+      );
+    await input.beforeQuery?.();
+    const existing = await profiles.find(
+      {
+        where: { creatorId, platform: 'INSTAGRAM', deletedAt: IsNull() },
+        select: { id: true },
+        take: 1,
+      },
+      input.manager,
+    );
+    if (existing.length > 0) {
+      throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
+    }
   }
 
   private async canCreateCreator(

@@ -17,6 +17,7 @@ const creatorId = '00000000-0000-4000-8000-000000000003';
 const accountId = '00000000-0000-4000-8000-000000000004';
 const conversationId = '00000000-0000-4000-8000-000000000005';
 const actorId = '00000000-0000-4000-8000-000000000006';
+const socialProfileId = '00000000-0000-4000-8000-000000000009';
 
 const buildHarness = () => {
   const draft: InstagramMessageAuthorityDraftRow = {
@@ -39,6 +40,15 @@ const buildHarness = () => {
     conversationLifecycle: 'ACTIVE',
     conversationInstagramAccountId: accountId,
     conversationCreatorId: creatorId,
+  };
+  const socialProfile = {
+    id: socialProfileId,
+    creatorId,
+    platform: 'INSTAGRAM',
+    handle: 'creator.name',
+    profileUrl: 'https://www.instagram.com/creator.name/',
+    platformAccountId: null,
+    deletedAt: null,
   };
   const account = {
     id: '00000000-0000-4000-8000-000000000007',
@@ -113,6 +123,7 @@ const buildHarness = () => {
               label: 'Sender',
               name: 'Sender',
             },
+            socialProfile,
           })[name as string],
       }),
     ),
@@ -133,7 +144,7 @@ const buildHarness = () => {
     } as never,
     client as never,
   );
-  return { service, client, draft, account, query, orm };
+  return { service, client, draft, socialProfile, account, query, orm };
 };
 
 const input = {
@@ -233,6 +244,7 @@ describe('InstagramMessageAuthorityReaderService fresh v3 cutover', () => {
 const buildSendHarness = async (
   kind: 'START_CHAT' | 'REPLY',
   composer = true,
+  canonicalProfile = false,
 ) => {
   const h = buildHarness();
   let authority = await h.service.createDirectAuthority(input);
@@ -272,6 +284,33 @@ const buildSendHarness = async (
       evidenceLinks: old.evidenceLinks.filter(
         ({ role }) => kind === 'REPLY' || role !== 'SOCIAL_CONVERSATION',
       ),
+    });
+  }
+  if (canonicalProfile) {
+    const old = authority.expectedActionBinding;
+    if (old.actionVersion !== 3) throw new Error('Fresh authority must be v3');
+    const recipientSourceValues = [
+      { field: 'socialProfile.id', value: h.socialProfile.id },
+      { field: 'socialProfile.handle', value: h.socialProfile.handle },
+      {
+        field: 'socialProfile.profileUrl',
+        value: h.socialProfile.profileUrl,
+      },
+    ];
+    h.draft.creatorInstagramUsername = null;
+    authority = buildInstagramMessageActionAuthority({
+      ...old,
+      draft: {
+        ...authority.canonicalGraph.draft,
+        recipientSourceValues,
+      },
+      account: authority.canonicalGraph.account,
+      instagramMessageSnapshot: {
+        ...old.instagramMessageSnapshot,
+        recipientSourceValues,
+      },
+      composerInputDigest: 'a'.repeat(64),
+      evidenceLinks: [...old.evidenceLinks],
     });
   }
   const binding = authority.expectedActionBinding;
@@ -449,6 +488,54 @@ describe('InstagramMessageSendService validated v3 dispatch and durable acceptan
       expect(h.budget.releaseStartTarget).not.toHaveBeenCalled();
     },
   );
+
+  it('dispatches a canonical SocialProfile binding through the real authority reader', async () => {
+    const h = await buildSendHarness('REPLY', true, true);
+
+    await expect(h.service.executeApproved(h.execute)).resolves.toMatchObject({
+      status: 'PROVIDER_ACCEPTED',
+    });
+    h.socialProfile.handle = 'renamed.after.acceptance';
+    h.socialProfile.profileUrl =
+      'https://www.instagram.com/renamed.after.acceptance/';
+    await expect(h.service.executeApproved(h.execute)).resolves.toMatchObject({
+      status: 'PROVIDER_ACCEPTED',
+    });
+    expect(h.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers canonical SocialProfile UNKNOWN receipts without re-resolution or resend', async () => {
+    const h = await buildSendHarness('REPLY', true, true);
+    h.request.mockImplementationOnce(async (_input, options) => {
+      await options.beforeDispatch();
+      throw new Error('provider response lost');
+    });
+
+    await expect(h.service.executeApproved(h.execute)).resolves.toMatchObject({
+      status: 'UNKNOWN',
+    });
+    h.socialProfile.handle = 'renamed.after.unknown';
+    h.socialProfile.profileUrl =
+      'https://www.instagram.com/renamed.after.unknown/';
+    await expect(h.service.executeApproved(h.execute)).resolves.toMatchObject({
+      status: 'UNKNOWN',
+    });
+    expect(h.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a canonical SocialProfile identity edit before provider dispatch', async () => {
+    const h = await buildSendHarness('REPLY', true, true);
+    h.budget.reserve.mockImplementation(async () => {
+      h.socialProfile.handle = 'renamed.creator';
+      h.socialProfile.profileUrl = 'https://www.instagram.com/renamed.creator/';
+      return { status: 'RESERVED', reservationId: 'reservation-id' };
+    });
+
+    await expect(h.service.executeApproved(h.execute)).resolves.toMatchObject({
+      status: 'BLOCKED',
+    });
+    expect(h.request).not.toHaveBeenCalled();
+  });
 
   it('routes an Inbox direct click through the real fresh v3 reader and generic direct context', async () => {
     const h = await buildSendHarness('REPLY', false);

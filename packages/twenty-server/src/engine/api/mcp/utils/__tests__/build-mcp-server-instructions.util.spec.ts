@@ -15,4 +15,24 @@ describe('buildMcpServerInstructions', () => {
     expect(instructions).not.toContain('Twenty CRM workspace');
     expect(instructions).not.toContain('Twenty primitives:');
   });
+
+  it('teaches the Creator model without advertising schema authoring', () => {
+    const instructions = buildMcpServerInstructions(
+      'creators, social_profiles, notes, note_targets',
+      'myah-creators',
+    );
+
+    expect(instructions).toContain('Creator is the canonical person record');
+    expect(instructions).toContain(
+      'SocialProfile stores per-platform identity and metrics',
+    );
+    expect(instructions).toContain('NoteTarget');
+    expect(instructions).toContain('get_object_metadata');
+    expect(instructions).toContain('get_field_metadata');
+    expect(instructions).not.toContain('person.companyId');
+    expect(instructions).not.toContain('create_object_metadata');
+    expect(instructions).not.toContain('update_object_metadata');
+    expect(instructions).not.toContain('delete_field_metadata');
+    expect(instructions).not.toContain('metadata tools without loading');
+  });
 });

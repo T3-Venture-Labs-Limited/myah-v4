@@ -131,7 +131,7 @@ export const SettingsDataModelOverviewObject = ({
         <StyledObjectName onMouseEnter={() => {}} onMouseLeave={() => {}}>
           <StyledObjectLinkContainer>
             <Link
-              to={getSettingsPath(SettingsPath.Objects, {
+              to={getSettingsPath(SettingsPath.ObjectDetail, {
                 objectNamePlural: objectMetadataItem.namePlural,
               })}
             >

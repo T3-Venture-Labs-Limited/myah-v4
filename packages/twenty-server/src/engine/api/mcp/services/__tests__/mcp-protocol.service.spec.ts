@@ -18,6 +18,7 @@ import { type McpToolAnnotations } from 'src/engine/api/mcp/types/mcp-tool-annot
 import { type FlatApiKey } from 'src/engine/core-modules/api-key/types/flat-api-key.type';
 import { ApiKeyRoleService } from 'src/engine/core-modules/api-key/services/api-key-role.service';
 import { EXECUTE_TOOL_TOOL_NAME } from 'src/engine/core-modules/tool-provider/tools/execute-tool.tool';
+import { GET_TOOL_CATALOG_TOOL_NAME } from 'src/engine/core-modules/tool-provider/tools/get-tool-catalog.tool';
 import { LEARN_TOOLS_TOOL_NAME } from 'src/engine/core-modules/tool-provider/tools/learn-tools.tool';
 import { LOAD_SKILL_TOOL_NAME } from 'src/engine/core-modules/tool-provider/tools/load-skill.tool';
 import { ToolRegistryService } from 'src/engine/core-modules/tool-provider/services/tool-registry.service';
@@ -45,6 +46,7 @@ describe('McpProtocolService', () => {
 
   const EXPECTED_MCP_TOOL_NAMES = [
     LEARN_TOOLS_TOOL_NAME,
+    GET_TOOL_CATALOG_TOOL_NAME,
     EXECUTE_TOOL_TOOL_NAME,
     LOAD_SKILL_TOOL_NAME,
     LIST_OBJECT_METADATA_NAMES_TOOL_NAME,
@@ -57,6 +59,7 @@ describe('McpProtocolService', () => {
     McpToolAnnotations
   > = {
     [LEARN_TOOLS_TOOL_NAME]: MCP_CLOSED_WORLD_READ_ONLY_TOOL_ANNOTATIONS,
+    [GET_TOOL_CATALOG_TOOL_NAME]: MCP_CLOSED_WORLD_READ_ONLY_TOOL_ANNOTATIONS,
     [EXECUTE_TOOL_TOOL_NAME]: MCP_EXECUTE_TOOL_ANNOTATIONS,
     [LOAD_SKILL_TOOL_NAME]: MCP_CLOSED_WORLD_READ_ONLY_TOOL_ANNOTATIONS,
     [LIST_OBJECT_METADATA_NAMES_TOOL_NAME]:
@@ -265,7 +268,7 @@ describe('McpProtocolService', () => {
       expect(result).toBeNull();
     });
 
-    it('should build a ToolSet with exactly 6 tools and pass it to executor for tools/call', async () => {
+    it('should rebuild the MCP ToolSet for tools/call', async () => {
       userRoleService.getRoleIdForUserWorkspace.mockResolvedValue(mockRoleId);
 
       const mockToolCallResponse = {
@@ -316,7 +319,7 @@ describe('McpProtocolService', () => {
       );
     });
 
-    it('should build a ToolSet with exactly 6 tools and pass it to executor for tools/list', async () => {
+    it('should rebuild the MCP ToolSet for client-initiated tools/list', async () => {
       userRoleService.getRoleIdForUserWorkspace.mockResolvedValue(mockRoleId);
 
       mcpToolExecutorService.handleToolsListing.mockReturnValue({

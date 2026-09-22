@@ -800,9 +800,10 @@ export class InstagramMessageComposerService {
     if (!/^workspace_[a-z0-9]+$/.test(schemaName)) {
       throw new Error('Instagram composer workspace schema is unavailable');
     }
-    const creatorTableLockSql = [
+    const identityTablesLockSql = [
       'LOCK TABLE',
-      `${dataSource.driver.escape(schemaName)}."creator"`,
+      `${dataSource.driver.escape(schemaName)}."creator",`,
+      `${dataSource.driver.escape(schemaName)}."socialProfile"`,
       'IN SHARE ROW EXCLUSIVE MODE',
     ].join(' ');
     const runner: WorkspaceQueryRunner = dataSource.createQueryRunner();
@@ -834,10 +835,10 @@ export class InstagramMessageComposerService {
             );
           };
           await beforeQuery();
-          // Ordinary Creator DML conflicts with this lock. The subsequent READ
-          // COMMITTED scan observes preceding writers; later writers wait until
-          // commit. This is not a permanent canonical uniqueness guarantee.
-          await runner.query(creatorTableLockSql);
+          // Ordinary Creator/SocialProfile DML conflicts with this lock. The
+          // subsequent READ COMMITTED scan observes preceding identity writers;
+          // later writers wait until commit.
+          await runner.query(identityTablesLockSql);
           await this.recipientService.assertCreatorMatchesUnderLock(
             input.graph,
             input.authenticatedContext,

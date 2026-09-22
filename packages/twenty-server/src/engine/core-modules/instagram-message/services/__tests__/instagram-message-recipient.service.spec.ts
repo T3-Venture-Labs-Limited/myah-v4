@@ -21,6 +21,16 @@ const creator = {
   instagramUrl: null,
   instagramLink: null,
 };
+const socialProfile = {
+  id: 'social-profile-id',
+  creatorId: creator.id,
+  platform: 'INSTAGRAM',
+  handle: 'creator.name',
+  profileUrl: 'https://www.instagram.com/creator.name/',
+  normalizedLocator: 'handle:creator.name',
+  platformAccountId: null,
+  deletedAt: null,
+};
 const account = {
   bindingId: 'binding-id',
   instagramAccountRecordId: 'account-record-id',
@@ -108,6 +118,8 @@ const buildHarness = (input?: {
   creatorInsertPermission?: CreatorInsertPermission;
   targetAvailable?: boolean | ((input: object) => boolean);
   profile?: object;
+  socialProfiles?: Array<Record<string, unknown>>;
+  readableSocialProfile?: Record<string, unknown> | null;
 }) => {
   const creatorPermissions = buildCreatorPermissions(
     input?.creatorInsertPermission ?? 'allowed',
@@ -123,6 +135,31 @@ const buildHarness = (input?: {
   };
   const internalCreatorRepository = {
     find: jest.fn().mockResolvedValue(input?.allCreators ?? [creator]),
+  };
+  const internalSocialProfileRepository = {
+    find: jest
+      .fn()
+      .mockImplementation(async ({ where }) =>
+        (input?.socialProfiles ?? []).filter(
+          (profile) =>
+            (!where.creatorId || profile.creatorId === where.creatorId) &&
+            (!where.normalizedLocator ||
+              profile.normalizedLocator === where.normalizedLocator),
+        ),
+      ),
+  };
+  const readableSocialProfileRepository = {
+    find: jest.fn().mockImplementation(async ({ where }) => {
+      if (input?.readableSocialProfile !== undefined) {
+        return input.readableSocialProfile ? [input.readableSocialProfile] : [];
+      }
+      return (input?.socialProfiles ?? []).filter(
+        (profile) =>
+          (!where.creatorId || profile.creatorId === where.creatorId) &&
+          (!where.normalizedLocator ||
+            profile.normalizedLocator === where.normalizedLocator),
+      );
+    }),
   };
   const internalConversationRepository = {
     find: jest
@@ -141,6 +178,12 @@ const buildHarness = (input?: {
           if (role === rolePermissionConfig) return creatorRepository;
           expect(role).toEqual({ shouldBypassPermissionChecks: true });
           return internalCreatorRepository;
+        }
+        if (objectName === 'socialProfile') {
+          if (role === rolePermissionConfig)
+            return readableSocialProfileRepository;
+          expect(role).toEqual({ shouldBypassPermissionChecks: true });
+          return internalSocialProfileRepository;
         }
         if (role === undefined)
           throw new Error(
@@ -234,6 +277,8 @@ const buildHarness = (input?: {
   return {
     creatorRepository,
     internalCreatorRepository,
+    internalSocialProfileRepository,
+    readableSocialProfileRepository,
     draftRepository,
     approvalService,
     budgetService,
@@ -297,6 +342,123 @@ describe('InstagramMessageRecipientService', () => {
     expect(harness.budgetService.reserve).not.toHaveBeenCalled();
     expect(harness.unipileClient.startChat).not.toHaveBeenCalled();
     expect(harness.unipileClient.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps an existing-thread reply on its selected canonical profile when another Instagram profile is added', async () => {
+    const harness = buildHarness({
+      socialProfiles: [
+        socialProfile,
+        {
+          ...socialProfile,
+          id: 'other-social-profile-id',
+          handle: 'other.creator',
+          profileUrl: 'https://www.instagram.com/other.creator/',
+          normalizedLocator: 'handle:other.creator',
+        },
+      ],
+      localChats: [
+        {
+          id: 'conversation-id',
+          providerConversationId: 'chat-id',
+          recipientIgsid: 'provider-messaging-id',
+          recipientUsername: 'creator.name',
+        },
+      ],
+      pages: [
+        {
+          chats: [
+            {
+              chatId: 'chat-id',
+              accountId: 'unipile-account-id',
+              type: 'ONE_TO_ONE',
+              attendeeProviderId: 'provider-messaging-id',
+            },
+          ],
+          nextCursor: null,
+        },
+      ],
+    });
+
+    await expect(
+      harness.service.prepare(
+        { recipient: { rawHandle: 'creator.name' } },
+        context,
+      ),
+    ).resolves.toMatchObject({
+      status: 'READY',
+      creatorRecordId: creator.id,
+      actionKind: 'REPLY',
+    });
+    expect(harness.unipileClient.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('requires explicit profile selection when a Creator has multiple Instagram profiles', async () => {
+    const harness = buildHarness({
+      socialProfiles: [
+        socialProfile,
+        {
+          ...socialProfile,
+          id: 'other-social-profile-id',
+          handle: 'other.creator',
+          profileUrl: 'https://www.instagram.com/other.creator/',
+          normalizedLocator: 'handle:other.creator',
+        },
+      ],
+    });
+
+    await expect(
+      harness.service.prepare(
+        { recipient: { creatorRecordId: creator.id } },
+        context,
+      ),
+    ).resolves.toEqual({ status: 'BLOCKED', code: 'CREATOR_AMBIGUOUS' });
+    expect(
+      harness.unipileClient.getInstagramMessagingProfile,
+    ).not.toHaveBeenCalled();
+    expect(harness.unipileClient.startChat).not.toHaveBeenCalled();
+    expect(harness.unipileClient.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to a stale legacy raw handle when canonical profiles exist', async () => {
+    const harness = buildHarness({
+      socialProfiles: [
+        {
+          ...socialProfile,
+          handle: 'renamed.creator',
+          profileUrl: 'https://www.instagram.com/renamed.creator/',
+          normalizedLocator: 'handle:renamed.creator',
+        },
+      ],
+    });
+
+    await expect(
+      harness.service.prepare(
+        { recipient: { rawHandle: 'creator.name' } },
+        context,
+      ),
+    ).resolves.toMatchObject({ status: 'BLOCKED' });
+    expect(
+      harness.unipileClient.getInstagramMessagingProfile,
+    ).not.toHaveBeenCalled();
+    expect(harness.unipileClient.startChat).not.toHaveBeenCalled();
+    expect(harness.unipileClient.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not reveal a restricted second profile through an ambiguity response', async () => {
+    const harness = buildHarness({
+      socialProfiles: [
+        socialProfile,
+        { ...socialProfile, id: 'restricted-profile-id' },
+      ],
+      readableSocialProfile: socialProfile,
+    });
+
+    await expect(
+      harness.service.prepare(
+        { recipient: { creatorRecordId: creator.id } },
+        context,
+      ),
+    ).resolves.toEqual({ status: 'BLOCKED', code: 'RECIPIENT_UNAVAILABLE' });
   });
 
   it.each([
@@ -890,9 +1052,39 @@ describe('InstagramMessageRecipientService canonical scan under write lock', () 
       },
       manager,
     );
-    expect(beforeQuery).toHaveBeenCalledTimes(2);
+    expect(beforeQuery).toHaveBeenCalledTimes(5);
     expect(h.unipileClient.getInstagramMessagingProfile).not.toHaveBeenCalled();
     expect(h.unipileClient.listChats).not.toHaveBeenCalled();
+  });
+
+  it('binds approval input to the canonical profile identity and rejects an edit before dispatch', async () => {
+    const h = buildHarness({ socialProfiles: [socialProfile] });
+    const graph = await h.service.resolve(preparation, context);
+
+    expect(graph.recipient.sourceValues).toEqual([
+      { field: 'socialProfile.id', value: socialProfile.id },
+      { field: 'socialProfile.handle', value: socialProfile.handle },
+      { field: 'socialProfile.profileUrl', value: socialProfile.profileUrl },
+    ]);
+
+    h.readableSocialProfileRepository.find.mockResolvedValueOnce([
+      {
+        ...socialProfile,
+        handle: 'renamed.creator',
+        profileUrl: 'https://www.instagram.com/renamed.creator/',
+        normalizedLocator: 'handle:renamed.creator',
+      },
+    ]);
+    await expect(
+      h.service.assertCreatorMatchesUnderLock(
+        graph,
+        context,
+        manager as never,
+        async () => undefined,
+      ),
+    ).rejects.toThrow('CONTEXT_CHANGED');
+    expect(h.unipileClient.sendMessage).not.toHaveBeenCalled();
+    expect(h.unipileClient.startChat).not.toHaveBeenCalled();
   });
 
   it('rejects a new match since preparation instead of adopting it', async () => {

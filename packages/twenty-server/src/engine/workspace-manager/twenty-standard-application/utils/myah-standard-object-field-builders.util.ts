@@ -526,6 +526,25 @@ export const buildMyahCampaignCreatorListSourceStandardFlatObjectMetadata = (
     },
   });
 
+export const buildMyahSocialProfileStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'socialProfile',
+    context: {
+      universalIdentifier: '48af2a1d-1903-5eeb-b216-d5c450f83e71',
+      nameSingular: 'socialProfile',
+      namePlural: 'socialProfiles',
+      labelSingular: 'Social Profile',
+      labelPlural: 'Social Profiles',
+      description: 'A social account owned by a Creator',
+      icon: 'IconUserCircle',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
 export const buildMyahCreatorStandardFlatObjectMetadata = (
   args: ObjectArgs,
 ): FlatObjectMetadata =>
@@ -3703,6 +3722,237 @@ export const buildMyahStandardFlatFieldMetadatas = ({
         }),
       };
 
+    case 'socialProfile':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Derived social profile label',
+            icon: 'IconUserCircle',
+            isNullable: false,
+            isUIEditable: false,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        creator: createStandardRelationFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'creator',
+            label: 'Creator',
+            description: 'Creator who owns this social profile',
+            icon: 'IconUserStar',
+            isNullable: false,
+            targetObjectName: 'creator',
+            targetFieldName: 'socialProfiles',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.RESTRICT,
+              joinColumnName: 'creatorId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        platform: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'platform',
+            type: FieldMetadataType.SELECT,
+            label: 'Platform',
+            description: 'Social platform',
+            icon: 'IconWorld',
+            isNullable: false,
+            options: [
+              {
+                id: '635e50f6-aced-52b7-9e6f-59c12703d0b5',
+                value: 'INSTAGRAM',
+                label: 'Instagram',
+                color: 'pink',
+                position: 0,
+              },
+              {
+                id: '181fb825-37d9-555b-8208-990d0fbc89b4',
+                value: 'TIKTOK',
+                label: 'TikTok',
+                color: 'gray',
+                position: 1,
+              },
+              {
+                id: 'aacb7cfd-7e10-5955-ac04-65b0091653cc',
+                value: 'YOUTUBE',
+                label: 'YouTube',
+                color: 'red',
+                position: 2,
+              },
+              {
+                id: 'ff65c9e4-2e95-5bc9-b3ce-507d23f16a72',
+                value: 'TWITTER',
+                label: 'Twitter / X',
+                color: 'blue',
+                position: 3,
+              },
+              {
+                id: 'bdab81b8-92a7-53d6-9f3b-00ed77757eb1',
+                value: 'TWITCH',
+                label: 'Twitch',
+                color: 'purple',
+                position: 4,
+              },
+              {
+                id: '58d06f50-bbf4-5c47-8158-83f973cfbc8b',
+                value: 'PATREON',
+                label: 'Patreon',
+                color: 'orange',
+                position: 5,
+              },
+            ],
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        handle: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'handle',
+            type: FieldMetadataType.TEXT,
+            label: 'Handle',
+            description: 'Platform account handle',
+            icon: 'IconAt',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        profileUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'profileUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'Profile URL',
+            description: 'Canonical profile URL',
+            icon: 'IconLink',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        normalizedLocator: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'normalizedLocator',
+            type: FieldMetadataType.TEXT,
+            label: 'Normalized locator',
+            description: 'Canonical account locator used for identity matching',
+            icon: 'IconFingerprint',
+            isSystem: true,
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        platformAccountId: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'platformAccountId',
+            type: FieldMetadataType.TEXT,
+            label: 'Platform account ID',
+            description: 'Stable platform account identifier',
+            icon: 'IconFingerprint',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        followerCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'followerCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'Follower count',
+            description: 'Observed follower or subscriber count',
+            icon: 'IconUsers',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        followerCountObservedAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'followerCountObservedAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'Follower count observed at',
+            description: 'Time the follower count was observed',
+            icon: 'IconCalendarClock',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        followerCountSource: createMyahStandardFieldFlatMetadata({
+          objectName: 'socialProfile',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'followerCountSource',
+            type: FieldMetadataType.TEXT,
+            label: 'Follower count source',
+            description: 'Source of the follower count observation',
+            icon: 'IconDatabase',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
     case 'creator':
       return {
         ...buildMyahBaseSystemFields({ objectName, ...args }),
@@ -5185,6 +5435,26 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        socialProfiles: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'socialProfiles',
+            label: 'Social profiles',
+            description: 'Social accounts owned by this Creator',
+            icon: 'IconUsers',
+            targetObjectName: 'socialProfile',
+            targetFieldName: 'creator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         listMemberships: createStandardRelationFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
@@ -5358,4 +5628,4 @@ export const buildMyahStandardFlatFieldMetadatas = ({
       return {};
   }
 };
-export const MYAH_RELATION_FIELD_COUNT = 38;
+export const MYAH_RELATION_FIELD_COUNT = 40;

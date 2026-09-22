@@ -26,6 +26,10 @@ export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
   outreachSequence: [],
   outreachStep: [],
   promotedAsset: [],
+  socialProfile: [
+    { name: 'name', type: FieldMetadataType.TEXT },
+    { name: 'handle', type: FieldMetadataType.TEXT },
+  ],
   calendarChannelEventAssociation: [
     { name: 'eventExternalId', type: FieldMetadataType.TEXT },
   ],

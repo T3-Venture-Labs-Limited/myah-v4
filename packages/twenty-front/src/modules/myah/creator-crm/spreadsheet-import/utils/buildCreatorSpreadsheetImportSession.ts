@@ -5,9 +5,12 @@ import {
 } from '@/myah/creator-crm/spreadsheet-import/utils/normalizeCreatorSocialProfileUrl';
 import {
   type CreatorImportClassification,
+  type CreatorImportCommitPlan,
+  type CreatorImportRowPreview,
   type CreatorSpreadsheetImportSession,
   type ExistingCreatorSocialProfile,
 } from '@/myah/creator-crm/spreadsheet-import/types/CreatorSpreadsheetImportSession';
+import { SpreadsheetColumnType } from '@/spreadsheet-import/types/SpreadsheetColumnType';
 import { type SpreadsheetImportFields } from '@/spreadsheet-import/types/SpreadsheetImportFields';
 import { type SpreadsheetImportHeaderAlias } from '@/spreadsheet-import/types/SpreadsheetImportHeaderProfile';
 import { type ImportedStructuredRow } from '@/spreadsheet-import/types/SpreadsheetImportImportedStructuredRow';
@@ -44,6 +47,7 @@ type HeaderDestinationKey = keyof typeof HEADER_DESTINATIONS;
 type CreatorFieldMetadata = {
   id: string;
   name: string;
+  label?: string;
 };
 
 type BuildCreatorSpreadsheetImportSessionArgs = {
@@ -134,6 +138,64 @@ const PROFILE_DESTINATION_KEYS = new Set<HeaderDestinationKey>([
   'youtube_link',
   'twitter_link',
 ]);
+
+const CREATOR_TARGET_FIELD_NAMES = new Set([
+  'name',
+  'email',
+  'phone',
+  'location',
+  'language',
+  'owner',
+  'source',
+  'sourceUrl',
+  'importSource',
+  'lastImportedAt',
+]);
+
+const SOCIAL_PROFILE_PREVIEW_CONFIG = [
+  {
+    platform: 'Instagram',
+    platformValue: 'INSTAGRAM',
+    urlFieldNames: ['instagramLink', 'instagramUrl'],
+    handleFieldNames: ['instagramUsername'],
+    observationFieldNames: ['instagramFollowerCount'],
+  },
+  {
+    platform: 'TikTok',
+    platformValue: 'TIKTOK',
+    urlFieldNames: ['tiktokLink', 'tiktokUrl'],
+    handleFieldNames: ['tiktokUsername'],
+    observationFieldNames: ['tiktokFollowerCount'],
+  },
+  {
+    platform: 'YouTube',
+    platformValue: 'YOUTUBE',
+    urlFieldNames: ['youtubeLink', 'youtubeUrl'],
+    handleFieldNames: ['youtubeCustomUrl'],
+    observationFieldNames: ['youtubeSubscriberCount'],
+  },
+  {
+    platform: 'Twitter/X',
+    platformValue: 'TWITTER',
+    urlFieldNames: ['twitterLink', 'twitterUrl'],
+    handleFieldNames: ['twitterUsername'],
+    observationFieldNames: ['twitterFollowerCount'],
+  },
+  {
+    platform: 'Twitch',
+    platformValue: 'TWITCH',
+    urlFieldNames: ['twitchUrl'],
+    handleFieldNames: ['twitchUsername'],
+    observationFieldNames: ['twitchTotalFollowers'],
+  },
+  {
+    platform: 'Patreon',
+    platformValue: 'PATREON',
+    urlFieldNames: ['patreonUrl'],
+    handleFieldNames: [],
+    observationFieldNames: [],
+  },
+] as const;
 
 export const buildCreatorSpreadsheetImportSession = ({
   availableFieldMetadataItems,
@@ -249,9 +311,27 @@ export const buildCreatorSpreadsheetImportSession = ({
       fieldMetadataById.get(field.fieldMetadataItemId)?.name ===
         'lastImportedAt' && !field.isCompositeSubField,
   );
+  const previewMetadataByFieldKey = new Map(
+    spreadsheetImportFields.flatMap((field) => {
+      const metadata = fieldMetadataById.get(field.fieldMetadataItemId);
+
+      return metadata
+        ? [
+            [
+              field.key,
+              {
+                name: metadata.name,
+                label: metadata.label ?? field.label,
+              },
+            ] as const,
+          ]
+        : [];
+    }),
+  );
 
   let existingCreatorIdsByIdentity = new Map<string, Set<string>>();
   let classificationsByRowId = new Map<string, CreatorImportClassification>();
+  let excludedHeadersByRowId = new Map<string, string[]>();
   const excludedConflictRowIds = new Set<string>();
   let rowIdSequence = 0;
   let shouldAddProvenance = false;
@@ -569,6 +649,7 @@ export const buildCreatorSpreadsheetImportSession = ({
     async (rows, rawRows, columns, activeHeaderProfileKey) => {
       recognizedMappingsByFieldKey.clear();
       classificationsByRowId = new Map();
+      excludedHeadersByRowId = new Map();
       excludedConflictRowIds.clear();
       hasRecognizedSocialIdentityMapping = false;
 
@@ -603,8 +684,23 @@ export const buildCreatorSpreadsheetImportSession = ({
           ...row,
           __index: row.__index ?? `creator-import-source-${rowIndex}`,
         };
+        const excludedHeaders: string[] = [];
 
         for (const column of columns) {
+          if (
+            column.type === SpreadsheetColumnType.ignored ||
+            column.type === SpreadsheetColumnType.matchedError
+          ) {
+            const rawValue = rawRows[rowIndex]?.[column.index];
+            if (
+              rawValue !== undefined &&
+              rawValue !== null &&
+              (typeof rawValue !== 'string' || rawValue.trim().length > 0)
+            ) {
+              excludedHeaders.push(column.header);
+            }
+          }
+
           if (
             !('value' in column) ||
             recognizedMappingsByFieldKey.get(column.value) !== 'gender' ||
@@ -619,6 +715,11 @@ export const buildCreatorSpreadsheetImportSession = ({
           }
         }
 
+        excludedHeadersByRowId.set(
+          String(preservedRow.__index),
+          excludedHeaders,
+        );
+
         return preservedRow;
       });
 
@@ -628,6 +729,190 @@ export const buildCreatorSpreadsheetImportSession = ({
 
       return normalizeRows(rowsWithPreservedSourceValues);
     };
+
+  const buildRowCommitPlan = (
+    row: ImportedStructuredRow,
+  ): CreatorImportCommitPlan => {
+    const populatedFields = new Map<string, { label: string; value: string }>();
+
+    for (const [fieldKey, value] of Object.entries(row)) {
+      const metadata = previewMetadataByFieldKey.get(fieldKey);
+      if (
+        metadata &&
+        value !== undefined &&
+        value !== null &&
+        String(value).trim().length > 0
+      ) {
+        populatedFields.set(metadata.name, {
+          label: metadata.label,
+          value: String(value).trim(),
+        });
+      }
+    }
+
+    const creator = Object.fromEntries(
+      [...populatedFields]
+        .filter(
+          ([name]) => CREATOR_TARGET_FIELD_NAMES.has(name) && name !== 'owner',
+        )
+        .map(([name, { value }]) => [name, value]),
+    );
+    if (!creator.name) throw new Error('Creator Name is required');
+
+    const consumedProfileFieldNames = new Set<string>();
+    const profiles = SOCIAL_PROFILE_PREVIEW_CONFIG.flatMap((config) => {
+      const handleCandidate = config.handleFieldNames
+        .map((name) => populatedFields.get(name)?.value)
+        .find((value) => value !== undefined);
+      const handleIsUrl = handleCandidate?.match(/^https?:\/\//u);
+      const profileUrl =
+        config.urlFieldNames
+          .map((name) => populatedFields.get(name)?.value)
+          .find((value) => value !== undefined) ??
+        (handleIsUrl ? handleCandidate : undefined);
+      const handle = handleIsUrl ? undefined : handleCandidate;
+
+      if (!profileUrl && !handle) return [];
+
+      [...config.urlFieldNames, ...config.handleFieldNames].forEach((name) =>
+        consumedProfileFieldNames.add(name),
+      );
+      const followerFieldName = config.observationFieldNames[0];
+      const followerValue = followerFieldName
+        ? populatedFields.get(followerFieldName)?.value
+        : undefined;
+      const followerCount = followerValue ? Number(followerValue) : undefined;
+      if (
+        followerFieldName &&
+        followerCount !== undefined &&
+        Number.isSafeInteger(followerCount) &&
+        followerCount >= 0
+      ) {
+        consumedProfileFieldNames.add(followerFieldName);
+      }
+
+      return [
+        {
+          platform: config.platformValue,
+          ...(handle ? { handle } : {}),
+          ...(profileUrl ? { profileUrl } : {}),
+          ...(followerCount !== undefined &&
+          Number.isSafeInteger(followerCount) &&
+          followerCount >= 0
+            ? { followerCount }
+            : {}),
+          ...(followerCount !== undefined &&
+          Number.isSafeInteger(followerCount) &&
+          followerCount >= 0
+            ? { followerCountSource: 'Spreadsheet import' }
+            : {}),
+        },
+      ];
+    });
+    const noteLines = [...populatedFields]
+      .filter(
+        ([name]) =>
+          !CREATOR_TARGET_FIELD_NAMES.has(name) &&
+          !consumedProfileFieldNames.has(name),
+      )
+      .map(([, { label, value }]) => `- **${label}**: ${value}`);
+
+    return {
+      creator: creator as Record<string, string> & { name: string },
+      profiles,
+      ...(noteLines.length > 0
+        ? {
+            note: {
+              title: 'Imported supplementary Creator context',
+              markdown: noteLines.join('\n'),
+            },
+          }
+        : {}),
+    };
+  };
+
+  const getRowPreview = (
+    row: ImportedStructuredRow,
+  ): CreatorImportRowPreview => {
+    const populatedFields = new Map<string, string>();
+    const excludedFields: string[] = [];
+
+    for (const [fieldKey, value] of Object.entries(row)) {
+      if (
+        fieldKey === '__index' ||
+        fieldKey === '__errors' ||
+        value === undefined ||
+        value === null ||
+        (typeof value === 'string' && value.trim().length === 0)
+      ) {
+        continue;
+      }
+
+      const metadata = previewMetadataByFieldKey.get(fieldKey);
+      if (metadata) {
+        populatedFields.set(metadata.name, metadata.label);
+      } else {
+        excludedFields.push(fieldKey);
+      }
+    }
+
+    const creatorFields = [...populatedFields]
+      .filter(
+        ([name]) => CREATOR_TARGET_FIELD_NAMES.has(name) && name !== 'owner',
+      )
+      .map(([, label]) => label);
+    const unsupportedCreatorFields = [...populatedFields]
+      .filter(([name]) => name === 'owner')
+      .map(([, label]) => label);
+    const consumedSocialProfileFieldNames = new Set<string>();
+    const socialProfiles = SOCIAL_PROFILE_PREVIEW_CONFIG.flatMap((config) => {
+      const identityFieldNames = [
+        ...config.urlFieldNames,
+        ...config.handleFieldNames,
+      ];
+      const hasIdentity = identityFieldNames.some((name) =>
+        populatedFields.has(name),
+      );
+
+      if (!hasIdentity) {
+        return [];
+      }
+
+      const fields = [
+        ...identityFieldNames,
+        ...config.observationFieldNames,
+      ].flatMap((name) => {
+        const label = populatedFields.get(name);
+        if (!label) {
+          return [];
+        }
+        consumedSocialProfileFieldNames.add(name);
+        return [label];
+      });
+
+      return [{ platform: config.platform, fields }];
+    });
+    const supplementaryNoteFields = [...populatedFields]
+      .filter(
+        ([name]) =>
+          !CREATOR_TARGET_FIELD_NAMES.has(name) &&
+          !consumedSocialProfileFieldNames.has(name),
+      )
+      .map(([, label]) => label);
+
+    return {
+      creatorFields,
+      socialProfiles,
+      supplementaryNoteFields,
+      excludedFields: [
+        ...new Set([
+          ...excludedFields,
+          ...unsupportedCreatorFields,
+          ...(excludedHeadersByRowId.get(String(row.__index)) ?? []),
+        ]),
+      ],
+    };
+  };
 
   return {
     spreadsheetImportFields,
@@ -666,5 +951,7 @@ export const buildCreatorSpreadsheetImportSession = ({
 
       return { existing, conflicts };
     },
+    getRowPreview,
+    buildRowCommitPlan,
   };
 };

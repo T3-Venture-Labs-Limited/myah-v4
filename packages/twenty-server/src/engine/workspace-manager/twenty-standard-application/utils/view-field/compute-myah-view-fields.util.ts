@@ -503,9 +503,17 @@ const creatorFields = [
   },
   {
     viewName: 'viewa5abdae3',
+    viewFieldName: 'socialProfiles',
+    fieldName: 'socialProfiles',
+    position: 5,
+    isVisible: true,
+    size: 220,
+  },
+  {
+    viewName: 'viewa5abdae3',
     viewFieldName: 'tiktokLink',
     fieldName: 'tiktokLink',
-    position: 5,
+    position: 6,
     isVisible: true,
     size: 180,
   },
@@ -513,7 +521,7 @@ const creatorFields = [
     viewName: 'viewa5abdae3',
     viewFieldName: 'instagramLink',
     fieldName: 'instagramLink',
-    position: 6,
+    position: 7,
     isVisible: true,
     size: 180,
   },
@@ -521,7 +529,7 @@ const creatorFields = [
     viewName: 'viewa5abdae3',
     viewFieldName: 'youtubeLink',
     fieldName: 'youtubeLink',
-    position: 7,
+    position: 8,
     isVisible: true,
     size: 180,
   },
@@ -529,7 +537,7 @@ const creatorFields = [
     viewName: 'viewa5abdae3',
     viewFieldName: 'twitterLink',
     fieldName: 'twitterLink',
-    position: 8,
+    position: 9,
     isVisible: true,
     size: 180,
   },
@@ -537,7 +545,7 @@ const creatorFields = [
     viewName: 'viewa5abdae3',
     viewFieldName: 'creatorStatus',
     fieldName: 'creatorStatus',
-    position: 9,
+    position: 10,
     isVisible: true,
     size: 140,
   },
@@ -545,7 +553,7 @@ const creatorFields = [
     viewName: 'viewa5abdae3',
     viewFieldName: 'source',
     fieldName: 'source',
-    position: 10,
+    position: 11,
     isVisible: true,
     size: 160,
   },
@@ -690,6 +698,14 @@ const creatorRecordPageFields = [
     position: 4,
     isVisible: true,
     size: 180,
+  },
+  {
+    viewName: 'creatorRecordPageFields',
+    viewFieldName: 'socialProfiles',
+    fieldName: 'socialProfiles',
+    position: 4.5,
+    isVisible: true,
+    size: 220,
   },
   {
     viewName: 'creatorRecordPageFields',
@@ -934,6 +950,48 @@ const campaignCreatorListFields = [
     size: 220,
   },
 ] satisfies readonly Spec<'campaignCreatorList', 'campaignCreatorLists'>[];
+const socialProfileFields = [
+  {
+    viewName: 'socialProfiles',
+    viewFieldName: 'name',
+    fieldName: 'name',
+    position: 0,
+    isVisible: true,
+    size: 220,
+  },
+  {
+    viewName: 'socialProfiles',
+    viewFieldName: 'platform',
+    fieldName: 'platform',
+    position: 1,
+    isVisible: true,
+    size: 140,
+  },
+  {
+    viewName: 'socialProfiles',
+    viewFieldName: 'handle',
+    fieldName: 'handle',
+    position: 2,
+    isVisible: true,
+    size: 180,
+  },
+  {
+    viewName: 'socialProfiles',
+    viewFieldName: 'profileUrl',
+    fieldName: 'profileUrl',
+    position: 3,
+    isVisible: true,
+    size: 240,
+  },
+  {
+    viewName: 'socialProfiles',
+    viewFieldName: 'followerCount',
+    fieldName: 'followerCount',
+    position: 4,
+    isVisible: true,
+    size: 150,
+  },
+] satisfies readonly Spec<'socialProfile', 'socialProfiles'>[];
 
 export const computeMyahViewFields = (
   args: Args,
@@ -952,6 +1010,7 @@ export const computeMyahViewFields = (
   ...buildForObject(args, 'creator', creatorFields),
   ...buildForObject(args, 'creator', creatorMetricsFields),
   ...buildForObject(args, 'creator', qualifiedCreatorsWithEmailFields),
+  ...buildForObject(args, 'socialProfile', socialProfileFields),
   ...buildForObject(args, 'campaign', campaignOperationsFields),
 });
 
@@ -1002,5 +1061,11 @@ export const computeMyahCreatorViewFields = (args: Args) =>
         key.startsWith('creatorview') ||
         key.startsWith('creatorcreatorMetrics') ||
         key.startsWith('creatorqualifiedCreatorsWithEmail'),
+    ),
+  );
+export const computeMyahSocialProfileViewFields = (args: Args) =>
+  Object.fromEntries(
+    Object.entries(computeMyahViewFields(args)).filter(([key]) =>
+      key.startsWith('socialProfilesocialProfiles'),
     ),
   );

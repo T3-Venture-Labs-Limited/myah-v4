@@ -23,6 +23,17 @@ const metadataItems = [
   ['twitter-id', 'twitterLink'],
   ['source-id', 'importSource'],
   ['imported-at-id', 'lastImportedAt'],
+  ['language-id', 'language'],
+  ['instagram-url-id', 'instagramUrl'],
+  ['instagram-username-id', 'instagramUsername'],
+  ['instagram-followers-id', 'instagramFollowerCount'],
+  ['instagram-engagement-id', 'instagramEngagementPercent'],
+  ['youtube-subscribers-id', 'youtubeSubscriberCount'],
+  ['twitch-url-id', 'twitchUrl'],
+  ['twitch-followers-id', 'twitchTotalFollowers'],
+  ['patreon-url-id', 'patreonUrl'],
+  ['notes-id', 'notes'],
+  ['owner-id', 'owner'],
 ].map(([id, name]) => ({ id, name }));
 
 const field = (
@@ -64,6 +75,17 @@ const spreadsheetImportFields = [
   field('twitter', 'twitter-id', 'primaryLinkUrl'),
   field('importSource', 'source-id'),
   field('lastImportedAt', 'imported-at-id'),
+  field('language', 'language-id'),
+  field('instagramUrl', 'instagram-url-id'),
+  field('instagramUsername', 'instagram-username-id'),
+  field('instagramFollowerCount', 'instagram-followers-id'),
+  field('instagramEngagementPercent', 'instagram-engagement-id'),
+  field('youtubeSubscriberCount', 'youtube-subscribers-id'),
+  field('twitchUrl', 'twitch-url-id'),
+  field('twitchTotalFollowers', 'twitch-followers-id'),
+  field('patreonUrl', 'patreon-url-id'),
+  field('notes', 'notes-id'),
+  field('owner', 'owner-id'),
 ];
 
 const influencerClubHeaders = [
@@ -190,6 +212,99 @@ describe('buildCreatorSpreadsheetImportSession', () => {
         'unexpected',
       ]),
     ).toBe(false);
+  });
+
+  it('previews one representative vendor row as Creator, profiles, note fields, and exclusions', async () => {
+    const session = createSession();
+    const [row] = await session.matchColumnsStepHook(
+      [
+        {
+          name: 'Ada',
+          email: 'ada@example.com',
+          language: 'English',
+          gender: 'FEMALE',
+          instagramUrl: 'https://instagram.com/ada',
+          instagramUsername: 'ada',
+          instagramFollowerCount: '1200',
+          instagramEngagementPercent: '4.2',
+          youtubeSubscriberCount: '800',
+          twitchUrl: 'https://twitch.tv/ada',
+          twitchTotalFollowers: '500',
+          patreonUrl: 'https://patreon.com/ada',
+          notes: 'Prefers email',
+          owner: 'unsupported-owner-id',
+        },
+      ],
+      [['preserve visibly']],
+      [
+        {
+          index: 0,
+          header: 'unsupported_vendor_column',
+          type: SpreadsheetColumnType.ignored,
+        },
+      ],
+      undefined,
+    );
+
+    expect(session.getRowPreview(row)).toEqual({
+      creatorFields: ['name', 'email', 'language'],
+      socialProfiles: [
+        {
+          platform: 'Instagram',
+          fields: [
+            'instagramUrl',
+            'instagramUsername',
+            'instagramFollowerCount',
+          ],
+        },
+        {
+          platform: 'Twitch',
+          fields: ['twitchUrl', 'twitchTotalFollowers'],
+        },
+        {
+          platform: 'Patreon',
+          fields: ['patreonUrl'],
+        },
+      ],
+      supplementaryNoteFields: [
+        'gender',
+        'instagramEngagementPercent',
+        'youtubeSubscriberCount',
+        'notes',
+      ],
+      excludedFields: ['owner', 'unsupported_vendor_column'],
+    });
+    expect(session.buildRowCommitPlan(row)).toEqual({
+      creator: {
+        name: 'Ada',
+        email: 'ada@example.com',
+        language: 'English',
+      },
+      profiles: [
+        {
+          platform: 'INSTAGRAM',
+          handle: 'ada',
+          profileUrl: 'https://instagram.com/ada',
+          followerCount: 1200,
+          followerCountSource: 'Spreadsheet import',
+        },
+        {
+          platform: 'TWITCH',
+          profileUrl: 'https://twitch.tv/ada',
+          followerCount: 500,
+          followerCountSource: 'Spreadsheet import',
+        },
+        {
+          platform: 'PATREON',
+          profileUrl: 'https://patreon.com/ada',
+        },
+      ],
+      note: {
+        title: 'Imported supplementary Creator context',
+        markdown:
+          '- **gender**: FEMALE\n- **instagramEngagementPercent**: 4.2\n- **youtubeSubscriberCount**: 800\n- **notes**: Prefers email',
+      },
+    });
   });
 
   it('normalizes only recognized mappings and adds exact-profile provenance', async () => {

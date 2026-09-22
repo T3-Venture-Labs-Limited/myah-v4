@@ -1,4 +1,6 @@
 import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
+import { CreateCreatorDataOperationReceiptsFastInstanceCommand } from './2-20-instance-command-fast-1789645911010-create-creator-data-operation-receipts';
+import { MigrateMyahCreatorSocialProfilesCommand } from './2-20-workspace-command-1789645911011-migrate-myah-creator-social-profiles.command';
 import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
 import { Module } from '@nestjs/common';
 import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
@@ -30,6 +32,7 @@ import { RepairOrphanedObjectNavigationCommandsCommand } from 'src/database/comm
 import { SynchronizeMyahCampaignSequenceAuthorizationMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789065794326-synchronize-myah-campaign-sequence-authorization-metadata.command';
 
 import { MigrateMyahCreatorSocialLinksService } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
+import { MigrateMyahCreatorSocialProfilesService } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-profiles.service';
 import { RemoveReplacedTwentyCrmMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302002-remove-replaced-twenty-crm-metadata.command';
 import { SynchronizeInstagramMessagePermissionsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619366-synchronize-instagram-message-permissions.command';
 import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
@@ -41,12 +44,14 @@ import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/work
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
 import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/workspace-migration-runner.module';
+import { MyahCreatorSocialProfileModule } from 'src/modules/myah-creator-social-profile/myah-creator-social-profile.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([FieldMetadataEntity]),
     ApplicationModule,
     MyahInboxContactTriageModule,
+    MyahCreatorSocialProfileModule,
     WorkspaceCacheModule,
     WorkspaceIteratorModule,
     WorkspaceMetadataVersionModule,
@@ -69,6 +74,8 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     SynchronizeMyahCampaignAccountMetadataCommand,
     SynchronizeCampaignSequenceMetadataCommand,
     MigrateMyahCreatorSocialLinksService,
+    MigrateMyahCreatorSocialProfilesService,
+    MigrateMyahCreatorSocialProfilesCommand,
     RemoveReplacedTwentyCrmMetadataCommand,
     SynchronizeInstagramMessagePermissionsCommand,
     InvalidateComposioInstagramAuthoritiesWorkspaceCommand,
@@ -83,6 +90,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     CatchUpCampaignActivityControlMetadataWorkspaceCommand,
     CreateMyahInboxReplyContextDraftsFastInstanceCommand,
     CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
+    CreateCreatorDataOperationReceiptsFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
     RefreshMyahAssistantSkillsWorkspaceCommand,
   ],

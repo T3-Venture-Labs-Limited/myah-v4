@@ -136,12 +136,12 @@ describe('Myah standard skills', () => {
       'language',
       'categories',
       'niches',
-      'notes',
-      'instagram',
-      'tiktok',
-      'youtube',
-      'twitter',
-      'twitch',
+      'SocialProfile owns per-platform identity',
+      'find_many_social_profiles',
+      'create_one_social_profile',
+      'update_one_social_profile',
+      'create_one_note',
+      'create_one_note_target with note and targetCreator',
       'listMemberships',
       'campaignCreators',
       'inboxThreads',
@@ -157,6 +157,11 @@ describe('Myah standard skills', () => {
         expect.stringContaining(fieldOrRelation),
       );
     }
+    expect(creators.content).not.toContain('person.companyId');
+    expect(creators.content).not.toContain('create_object_metadata');
+    expect(creators.content).not.toContain(
+      'Creator owns canonical identity, source, profile, social, and metric fields',
+    );
   });
 
   it('attaches an initial Creator List directly and gates only later changes through candidates', () => {

@@ -12,6 +12,7 @@ import {
   buildMyahCampaignStandardFlatObjectMetadata,
   buildMyahCreatorListMemberStandardFlatObjectMetadata,
   buildMyahCreatorStandardFlatObjectMetadata,
+  buildMyahSocialProfileStandardFlatObjectMetadata,
   buildMyahOfferStandardFlatObjectMetadata,
   buildMyahOutreachActionStandardFlatObjectMetadata,
   buildMyahOutreachSequenceStandardFlatObjectMetadata,
@@ -885,6 +886,7 @@ export const STANDARD_FLAT_OBJECT_METADATA_BUILDERS_BY_OBJECT_NAME = {
   creatorListMember: buildMyahCreatorListMemberStandardFlatObjectMetadata,
   creatorList: buildMyahCreatorListStandardFlatObjectMetadata,
   creator: buildMyahCreatorStandardFlatObjectMetadata,
+  socialProfile: buildMyahSocialProfileStandardFlatObjectMetadata,
 } satisfies {
   [P in AllStandardObjectName]: (
     args: Omit<CreateStandardObjectArgs<P>, 'context' | 'objectName'>,
