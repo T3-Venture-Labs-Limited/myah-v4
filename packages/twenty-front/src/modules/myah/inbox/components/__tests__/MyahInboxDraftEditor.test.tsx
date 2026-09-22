@@ -19,11 +19,12 @@ import {
 
 jest.mock('twenty-ui/theme-constants', () => ({
   themeCssVariables: {
-    background: { transparent: { lighter: 'whitesmoke' } },
+    background: { primary: 'white', transparent: { lighter: 'whitesmoke' } },
     border: {
       color: { light: 'lightgray', medium: 'gray' },
-      radius: { sm: '4px' },
+      radius: { md: '8px', sm: '4px' },
     },
+    color: { pink: 'pink', sky: 'sky' },
     font: {
       color: {
         primary: 'black',
@@ -275,6 +276,14 @@ const renderEditor = ({
   );
 
 describe('MyahInboxDraftEditor', () => {
+  it('adapts Email state through the shared reply-box seam', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../MyahInboxDraftEditor.tsx'),
+      'utf8',
+    );
+    expect(source).toContain('MyahInboxReplyBox');
+  });
+
   it('keeps the shared reply draft name accessible without a visible label', () => {
     renderEditor();
 
@@ -456,22 +465,14 @@ describe('MyahInboxDraftEditor', () => {
     ).toBeNull();
   });
 
-  it('shares a viewport-bounded hidden-scrollbar CSS rule between preview and the native main textarea', () => {
+  it('keeps the shared body and native main editor viewport-bounded with hidden scrollbars', () => {
     // JSDOM does not lay out Linaria CSS; guard the scroll contract separately from DOM behavior.
-    const source = readFileSync(
-      resolve(__dirname, '../MyahInboxDraftEditor.tsx'),
+    const replyBoxSource = readFileSync(
+      resolve(__dirname, '../MyahInboxReplyBox.tsx'),
       'utf8',
     );
-    const scrollStyles = source.match(
-      /const MAIN_REPLY_SCROLL_STYLES = `([\s\S]*?)`;/,
-    )?.[1];
-    expect(scrollStyles).toBeDefined();
-    expect(scrollStyles).toContain('max-height: min(240px, 40vh)');
-    expect(scrollStyles).toContain('overflow-y: auto');
-    expect(scrollStyles).toContain('scrollbar-width: none');
-    expect(scrollStyles).toMatch(/&::-webkit-scrollbar\s*\{\s*display: none/);
-    expect(source).toMatch(
-      /const StyledDraftPreview = styled\.div`[\s\S]*?\$\{MAIN_REPLY_SCROLL_STYLES\}/,
+    expect(replyBoxSource).toMatch(
+      /const StyledBody = styled\.div`[\s\S]*?max-height: min\(240px, 40vh\)[\s\S]*?overflow-y: auto[\s\S]*?scrollbar-width: none[\s\S]*?&::-webkit-scrollbar\s*\{\s*display: none/,
     );
     const richEditorSource = readFileSync(
       resolve(__dirname, '../MyahInboxRichDraftEditor.tsx'),
@@ -550,8 +551,8 @@ describe('MyahInboxDraftEditor', () => {
     );
     expect([...footer.children]).toEqual([
       replyActions,
-      subject.parentElement,
-      aiActions,
+      subject.parentElement?.parentElement,
+      aiActions.parentElement,
     ]);
 
     fireEvent.change(subject, { target: { value: 'thread-2' } });
@@ -559,14 +560,14 @@ describe('MyahInboxDraftEditor', () => {
     expect(screen.getAllByLabelText('Reply subject')).toHaveLength(1);
   });
 
-  it('uses main-only inherited email typography and a container-responsive balanced footer', () => {
-    const source = readFileSync(
-      resolve(__dirname, '../MyahInboxDraftEditor.tsx'),
+  it('uses shared inherited typography and a container-responsive balanced footer', () => {
+    const replyBoxSource = readFileSync(
+      resolve(__dirname, '../MyahInboxReplyBox.tsx'),
       'utf8',
     );
 
-    expect(source).toMatch(
-      /const StyledDraftPreview = styled\.div`[\s\S]*?font-size: \$\{themeCssVariables\.font\.size\.md\};[\s\S]*?line-height: inherit/,
+    expect(replyBoxSource).toMatch(
+      /const StyledPreview = styled\.div`[\s\S]*?font-size: \$\{themeCssVariables\.font\.size\.md\};[\s\S]*?line-height: inherit/,
     );
     const richEditorSource = readFileSync(
       resolve(__dirname, '../MyahInboxRichDraftEditor.tsx'),
@@ -575,14 +576,31 @@ describe('MyahInboxDraftEditor', () => {
     expect(richEditorSource).toMatch(
       /&\[data-main-reply-editor\] \.bn-editor \{[\s\S]*?line-height: inherit/,
     );
-    expect(source).toContain('&[data-main-reply-card] {');
-    expect(source).toContain('&[data-main-reply-actions] {');
-    expect(source).toContain('container-type: inline-size');
-    expect(source).toContain(
+    expect(replyBoxSource).toContain('container-type: inline-size');
+    expect(replyBoxSource).toContain(
       'grid-template-columns: repeat(2, minmax(0, 1fr))',
     );
-    expect(source).toContain('@container (max-width: 480px)');
-    expect(source).toContain("'repeat(3, minmax(0, 1fr))'");
+    expect(replyBoxSource).toContain('@container (max-width: 480px)');
+    expect(replyBoxSource).toContain(
+      'grid-template-columns: repeat(3, minmax(0, 1fr))',
+    );
+  });
+
+  it('renders the AI actions and center context through the shared channel-neutral components', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../MyahInboxDraftEditor.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain(
+      "import { MyahInboxReplyAiActions } from '@/myah/inbox/components/MyahInboxReplyAiActions';",
+    );
+    expect(source).toContain(
+      "import { StyledMyahInboxReplyCenterContext } from '@/myah/inbox/components/MyahInboxReplyCenterContext';",
+    );
+    expect(source).not.toMatch(/const StyledReplySubject = styled\.div/);
+    expect(source).not.toContain("ariaLabel: 'Thumbs up'");
+    expect(source).not.toContain('IconThumbUp');
   });
 
   it('keeps the main card as an inert draft preview until editing is requested', () => {
@@ -648,6 +666,26 @@ describe('MyahInboxDraftEditor', () => {
     expect(onDraftChange).not.toHaveBeenCalled();
   });
 
+  it('persists main Edit mode through the owning workspace callback', () => {
+    const onEditingChange = jest.fn();
+    render(
+      <MyahInboxDraftEditor
+        entry={cleanEntry}
+        onDraftChange={jest.fn()}
+        onRetry={jest.fn()}
+        onReloadConflict={jest.fn()}
+        actions={<button>Send reply</button>}
+        presentation="main"
+        onEditingChange={onEditingChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit reply' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done editing' }));
+
+    expect(onEditingChange.mock.calls).toEqual([[true], [false]]);
+  });
+
   it('reopens supported structured inline drafts with the rich adapter', () => {
     renderEditor({
       draftEntry: {
@@ -674,6 +712,27 @@ describe('MyahInboxDraftEditor', () => {
         localBody: { markdown: 'recover me', blocknote: '{"unknown":true}' },
       },
       onDraftChange,
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This formatted draft cannot be edited safely.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Use plain text' }));
+    expect(onDraftChange).toHaveBeenCalledWith({
+      markdown: 'recover me',
+      blocknote: null,
+    });
+  });
+
+  it('preserves explicit malformed-rich-body recovery in the main shared reply box', () => {
+    const onDraftChange = jest.fn();
+    renderEditor({
+      draftEntry: {
+        ...cleanEntry,
+        localBody: { markdown: 'recover me', blocknote: '{"unknown":true}' },
+      },
+      onDraftChange,
+      presentation: 'main',
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent(

@@ -204,6 +204,7 @@ export const Select = <Value extends SelectValue>({
       {isDisabled ? (
         <SelectControl
           selectedOption={controlSelectedOption}
+          ariaLabel={ariaLabel}
           isDisabled={isDisabled}
           selectSizeVariant={selectSizeVariant}
           hasRightElement={hasRightElement}

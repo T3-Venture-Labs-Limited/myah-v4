@@ -1,8 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { MyahInboxInstagramComposer } from '@/myah/inbox/components/MyahInboxInstagramComposer';
+import {
+  MyahInboxInstagramComposer,
+  type MyahInboxInstagramComposerProps,
+} from '@/myah/inbox/components/MyahInboxInstagramComposer';
 import { MyahInboxInstagramTimeline } from '@/myah/inbox/components/MyahInboxInstagramTimeline';
-import { useMyahInboxInstagramDraft } from '@/myah/inbox/hooks/useMyahInboxInstagramDraft';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { useMyahInboxCampaignAiGuidanceNavigation } from '@/myah/inbox/hooks/useMyahInboxCampaignAiGuidanceNavigation';
+import { useMyahInboxInstagramCampaignSelection } from '@/myah/inbox/hooks/useMyahInboxInstagramCampaignSelection';
+import {
+  useMyahInboxInstagramDraft,
+  type MyahInboxInstagramDraftFlushResult,
+} from '@/myah/inbox/hooks/useMyahInboxInstagramDraft';
 import { useMyahInboxInstagramSend } from '@/myah/inbox/hooks/useMyahInboxInstagramSend';
 import { useMyahInstagramConversation } from '@/myah/inbox/hooks/useMyahInstagramConversation';
 import {
@@ -21,7 +30,7 @@ const StyledPanel = styled.section<{ $scrollable?: boolean }>`
   min-height: 0;
   min-width: 0;
   overflow-y: ${({ $scrollable }) => ($scrollable ? 'auto' : 'hidden')};
-  padding: ${themeCssVariables.spacing[3]};
+  padding: ${themeCssVariables.spacing[2]};
 `;
 
 const StyledMessages = styled.section`
@@ -37,7 +46,10 @@ const StyledLatestMessagesAction = styled.div`
 `;
 
 // Bound the nonshrinking footer so short panels retain a message viewport.
-// Its own scroll region keeps errors and conflict recovery reachable.
+// Its own scroll region keeps errors and conflict recovery reachable. No
+// padding and a stable scrollbar gutter match Email's StyledReply container
+// in MyahInboxContactConversation.tsx so MyahInboxReplyBox receives the same
+// available width and an overflowing reply area cannot change card width.
 const StyledReplyArea = styled.section`
   box-sizing: border-box;
   display: flex;
@@ -46,7 +58,8 @@ const StyledReplyArea = styled.section`
   gap: ${themeCssVariables.spacing[2]};
   max-height: 60%;
   overflow-y: auto;
-  padding: ${themeCssVariables.spacing[1]};
+  padding: 0;
+  scrollbar-gutter: stable;
 
   > * {
     flex-shrink: 0;
@@ -71,6 +84,199 @@ const StyledStatus = styled.div`
   color: ${themeCssVariables.font.color.secondary};
   font-size: ${themeCssVariables.font.size.sm};
 `;
+
+const CREATOR_UNLINKED_CAMPAIGN_REASON =
+  'Link this Instagram conversation to a Creator to show Campaign context.';
+const CAMPAIGN_METADATA_UNAVAILABLE_REASON =
+  'Campaign context is unavailable because associated Campaigns could not be read.';
+const REQUIRED_CAMPAIGN_METADATA_NAMES = [
+  'campaignCreator',
+  'campaign',
+] as const;
+
+type MyahInboxInstagramComposerBaseProps = Omit<
+  MyahInboxInstagramComposerProps,
+  | 'campaignOptions'
+  | 'selectedCampaignId'
+  | 'onSelectCampaign'
+  | 'campaignUnavailableReason'
+  | 'onOpenAiGuidance'
+  | 'guidanceUnavailableReason'
+>;
+
+type MyahInboxInstagramComposerViewProps = {
+  composerProps: MyahInboxInstagramComposerBaseProps;
+  campaignOptions?: MyahInboxInstagramComposerProps['campaignOptions'];
+  selectedCampaignId?: string | null;
+  onSelectCampaign?: (campaignId: string) => void;
+  campaignUnavailableReason?: string | null;
+  onOpenAiGuidance?: () => void;
+  guidanceUnavailableReason?: string;
+};
+
+const MyahInboxInstagramComposerView = ({
+  composerProps,
+  campaignOptions,
+  selectedCampaignId,
+  onSelectCampaign,
+  campaignUnavailableReason,
+  onOpenAiGuidance,
+  guidanceUnavailableReason,
+}: MyahInboxInstagramComposerViewProps) => (
+  <MyahInboxInstagramComposer
+    username={composerProps.username}
+    body={composerProps.body}
+    channelState={composerProps.channelState}
+    provider={composerProps.provider}
+    error={composerProps.error}
+    disabled={composerProps.disabled}
+    sending={composerProps.sending}
+    editorVersion={composerProps.editorVersion}
+    previewScope={composerProps.previewScope}
+    conflict={composerProps.conflict}
+    onBodyChange={composerProps.onBodyChange}
+    onReviewAndSend={composerProps.onReviewAndSend}
+    onReloadConflict={composerProps.onReloadConflict}
+    campaignOptions={campaignOptions}
+    selectedCampaignId={selectedCampaignId}
+    onSelectCampaign={onSelectCampaign}
+    campaignUnavailableReason={campaignUnavailableReason}
+    onOpenAiGuidance={onOpenAiGuidance}
+    guidanceUnavailableReason={guidanceUnavailableReason}
+  />
+);
+
+type MyahInboxInstagramCampaignComposerProps = {
+  composerProps: MyahInboxInstagramComposerBaseProps;
+  workspaceId: string;
+  contactId: string;
+  conversationId: string;
+  creatorId: string | null;
+  flush: () => Promise<MyahInboxInstagramDraftFlushResult>;
+  isStillCurrentConversation: () => boolean;
+};
+
+type MyahInboxInstagramCampaignComposerAvailableProps =
+  MyahInboxInstagramCampaignComposerProps;
+
+const MyahInboxInstagramCampaignComposerAvailable = ({
+  composerProps,
+  workspaceId,
+  contactId,
+  conversationId,
+  creatorId,
+  flush,
+  isStillCurrentConversation,
+}: MyahInboxInstagramCampaignComposerAvailableProps) => {
+  const campaignSelection = useMyahInboxInstagramCampaignSelection({
+    workspaceId,
+    contactId,
+    conversationId,
+    creatorId,
+  });
+  const guidanceNavigation = useMyahInboxCampaignAiGuidanceNavigation();
+  // Re-checked after the guidance flush to catch selection drift during the
+  // await without moving Campaign state into the draft/send authority.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const selectedCampaignIdRef = useRef(campaignSelection.selectedCampaignId);
+  selectedCampaignIdRef.current = campaignSelection.selectedCampaignId;
+
+  const campaignSelectorUnavailableReason =
+    campaignSelection.status === 'unavailable'
+      ? campaignSelection.unavailableReason
+      : campaignSelection.status === 'loading'
+        ? 'Loading Campaign context…'
+        : null;
+  const guidanceUnavailableReason = !campaignSelection.selectedCampaignId
+    ? 'Select a Campaign to open AI guidance.'
+    : !guidanceNavigation.runtimeAgentTabId
+      ? 'Campaign AI guidance is unavailable because the active Agent tab could not be found.'
+      : undefined;
+
+  const handleOpenAiGuidance = () => {
+    const campaignId = campaignSelection.selectedCampaignId;
+    void guidanceNavigation.openGuidance({
+      campaignId,
+      flush: async () => {
+        const result = await flush();
+        return result.status === 'saved' || result.status === 'empty';
+      },
+      isStillCurrent: () =>
+        isStillCurrentConversation() &&
+        selectedCampaignIdRef.current === campaignId,
+    });
+  };
+
+  return (
+    <MyahInboxInstagramComposerView
+      composerProps={composerProps}
+      campaignOptions={
+        campaignSelection.status === 'ready' ? campaignSelection.options : []
+      }
+      selectedCampaignId={campaignSelection.selectedCampaignId}
+      onSelectCampaign={campaignSelection.onSelectCampaign}
+      campaignUnavailableReason={campaignSelectorUnavailableReason}
+      onOpenAiGuidance={
+        campaignSelection.selectedCampaignId &&
+        guidanceNavigation.runtimeAgentTabId
+          ? handleOpenAiGuidance
+          : undefined
+      }
+      guidanceUnavailableReason={guidanceUnavailableReason}
+    />
+  );
+};
+
+const MyahInboxInstagramCampaignComposer = ({
+  composerProps,
+  workspaceId,
+  contactId,
+  conversationId,
+  creatorId,
+  flush,
+  isStillCurrentConversation,
+}: MyahInboxInstagramCampaignComposerProps) => {
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const hasCampaignMetadata = REQUIRED_CAMPAIGN_METADATA_NAMES.every(
+    (nameSingular) =>
+      objectMetadataItems.some(
+        (objectMetadataItem) =>
+          objectMetadataItem.nameSingular === nameSingular,
+      ),
+  );
+
+  if (!creatorId) {
+    return (
+      <MyahInboxInstagramComposerView
+        composerProps={composerProps}
+        campaignUnavailableReason={CREATOR_UNLINKED_CAMPAIGN_REASON}
+        guidanceUnavailableReason="Select a Campaign to open AI guidance."
+      />
+    );
+  }
+
+  if (!hasCampaignMetadata) {
+    return (
+      <MyahInboxInstagramComposerView
+        composerProps={composerProps}
+        campaignUnavailableReason={CAMPAIGN_METADATA_UNAVAILABLE_REASON}
+        guidanceUnavailableReason="Select a Campaign to open AI guidance."
+      />
+    );
+  }
+
+  return (
+    <MyahInboxInstagramCampaignComposerAvailable
+      composerProps={composerProps}
+      workspaceId={workspaceId}
+      contactId={contactId}
+      conversationId={conversationId}
+      creatorId={creatorId}
+      flush={flush}
+      isStillCurrentConversation={isStillCurrentConversation}
+    />
+  );
+};
 
 type MyahInboxInstagramConversationReadOnlyProps = {
   conversation: MyahInboxContactInstagramConversation;
@@ -183,12 +389,13 @@ const MyahInboxInstagramReplyPanel = ({
   });
   const send = useMyahInboxInstagramSend({ draft });
   const [sendFeedback, setSendFeedback] = useState<string | null>(null);
-  // Moves conflict recovery focus to the actionable control.
-  // oxlint-disable-next-line twenty/no-state-useref
-  const conflictActionRef = useRef<HTMLButtonElement>(null);
   // Flushes the exact Instagram draft before the selected target unmounts.
   // oxlint-disable-next-line twenty/no-state-useref
   const flushRef = useRef(draft.flush);
+  // Re-checked after the guidance flush to catch target drift during the await.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const activeConversationIdRef = useRef(activeConversation?.id ?? null);
+  activeConversationIdRef.current = activeConversation?.id ?? null;
   // Keeps a reader at a rendered message rather than assuming page direction.
   // oxlint-disable-next-line twenty/no-state-useref
   const messagesRef = useRef<HTMLElement>(null);
@@ -228,12 +435,6 @@ const MyahInboxInstagramReplyPanel = ({
       flushDraft();
     };
   }, [contact.id, activeConversation?.id, workspaceId]);
-
-  useEffect(() => {
-    if (draft.conflict) {
-      conflictActionRef.current?.focus();
-    }
-  }, [draft.conflict]);
 
   const clearMessageAnchors = () => {
     pendingPageAnchorRef.current = null;
@@ -462,28 +663,41 @@ const MyahInboxInstagramReplyPanel = ({
             copy.
           </StyledStatus>
         ) : (
-          <MyahInboxInstagramComposer
-            username={username ?? contact.displayName}
-            body={draft.body}
-            channelState="READY"
-            provider={provider}
-            error={composerError}
-            disabled={
-              isUnlinkedReply ||
-              send.isBlocked ||
-              send.lockedUnknown ||
-              draft.status === 'conflict' ||
-              draft.status === 'loading' ||
-              draft.error === 'Could not load the saved Instagram draft.'
+          <MyahInboxInstagramCampaignComposer
+            workspaceId={workspaceId}
+            contactId={contact.id}
+            conversationId={activeConversation.id}
+            creatorId={contact.creator?.id ?? null}
+            flush={draft.flush}
+            isStillCurrentConversation={() =>
+              activeConversationIdRef.current === activeConversation.id
             }
-            sending={send.sending || draft.status === 'saving'}
-            onBodyChange={(body) => {
-              if (!send.lockedUnknown && !send.isBlocked) {
-                setSendFeedback(null);
-              }
-              draft.setBody(body);
+            composerProps={{
+              username: username ?? contact.displayName,
+              body: draft.body,
+              channelState: 'READY',
+              provider,
+              editorVersion: draft.editorVersion,
+              previewScope: activeConversation.id,
+              error: composerError,
+              conflict: draft.conflict,
+              onReloadConflict: draft.reloadConflict,
+              disabled:
+                isUnlinkedReply ||
+                send.isBlocked ||
+                send.lockedUnknown ||
+                draft.status === 'conflict' ||
+                draft.status === 'loading' ||
+                draft.error === 'Could not load the saved Instagram draft.',
+              sending: send.sending || draft.status === 'saving',
+              onBodyChange: (body) => {
+                if (!send.lockedUnknown && !send.isBlocked) {
+                  setSendFeedback(null);
+                }
+                draft.setBody(body);
+              },
+              onReviewAndSend: () => void handleSend(),
             }}
-            onReviewAndSend={() => void handleSend()}
           />
         )}
         {send.isBlocked ? (
@@ -501,15 +715,6 @@ const MyahInboxInstagramReplyPanel = ({
               '. Try again later.'
             )}
           </StyledStatus>
-        ) : null}
-        {draft.conflict ? (
-          <Button
-            ref={conflictActionRef}
-            title="Reload saved Instagram draft"
-            variant="secondary"
-            size="small"
-            onClick={draft.reloadConflict}
-          />
         ) : null}
       </StyledReplyArea>
     </StyledPanel>
