@@ -19,7 +19,11 @@ export const useOpenCampaignMessageOverviewPanel = () => {
       workspaceId: string;
       returnTarget: CampaignMessageOverviewReturnTarget;
     }) => {
-      store.set(campaignMessageOverviewSelectionState.atom, input);
+      store.set(campaignMessageOverviewSelectionState.atom, {
+        occurrenceId: input.row.occurrenceId,
+        workspaceId: input.workspaceId,
+        returnTarget: input.returnTarget,
+      });
       navigateSidePanelMenu({
         page: SidePanelPages.CampaignMessageOverview,
         pageTitle: input.row.sentAt ? 'Message details' : 'Message preview',

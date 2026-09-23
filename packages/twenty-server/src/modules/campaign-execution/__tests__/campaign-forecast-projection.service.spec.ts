@@ -1,6 +1,7 @@
 import { type EntityManager } from 'typeorm';
 
 import { CampaignForecastProjectionService } from 'src/modules/campaign-execution/services/campaign-forecast-projection.service';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 
 const input = {
   complete: false,
@@ -77,6 +78,30 @@ describe('CampaignForecastProjectionService', () => {
     await expect(service.publish(input, manager(query))).rejects.toThrow(
       'database unavailable',
     );
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects an old calculation after a policy-save invalidation advances its input revision', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { currentGenerationId: null, inputRevision: '5' },
+      ]);
+    const transactionManager = manager(query);
+
+    await new CampaignForecastInputInvalidationService().invalidateInTransaction(
+      { workspaceId: input.workspaceId },
+      transactionManager,
+    );
+
+    await expect(
+      service.publish(
+        { ...input, expectedInputRevision: 4 },
+        transactionManager,
+      ),
+    ).resolves.toEqual({ status: 'STALE_INPUT' });
+    expect(query.mock.calls[0][0]).toContain('campaignForecastHead');
     expect(query).toHaveBeenCalledTimes(2);
   });
 });

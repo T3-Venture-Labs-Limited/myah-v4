@@ -13,10 +13,11 @@ import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspac
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
+import { deriveCampaignMessageOverviewStatus } from 'src/modules/campaign-execution/services/campaign-message-overview-status';
 import {
   CampaignMessageOverviewDateBasis,
   type CampaignMessageOverviewConnectionDTO,
-  type CampaignMessageOverviewInput,
+  CampaignMessageOverviewInput,
   CampaignMessageOverviewView,
 } from 'src/modules/campaign-execution/dtos/campaign-message-overview.dto';
 
@@ -154,6 +155,19 @@ export class CampaignMessageOverviewReaderService {
     private readonly campaignSequences: CampaignSequenceService,
   ) {}
 
+  async readDetail(input: {
+    authContext: WorkspaceAuthContext;
+    occurrenceId: string;
+  }) {
+    const filters = Object.assign(new CampaignMessageOverviewInput(), {
+      first: 1,
+      occurrenceId: input.occurrenceId,
+    });
+    const result = await this.read({ authContext: input.authContext, filters });
+
+    return result.nodes[0] ?? null;
+  }
+
   async read(input: {
     authContext: WorkspaceAuthContext;
     filters: CampaignMessageOverviewInput;
@@ -260,7 +274,7 @@ export class CampaignMessageOverviewReaderService {
       const selectedCampaigns = input.filters.campaignIds?.length
         ? campaigns.filter(({ id }) => input.filters.campaignIds?.includes(id))
         : campaigns;
-      if (selectedCampaigns.length === 0) return this.empty();
+      if (selectedCampaigns.length === 0) return this.empty(campaigns);
 
       const campaignCreatorRows = await campaignCreatorRepository.find({
         select: { id: true, campaignId: true, creatorId: true },
@@ -327,7 +341,7 @@ export class CampaignMessageOverviewReaderService {
           canReadCreatorEmail
         );
       });
-      if (readableMemberships.length === 0) return this.empty();
+      if (readableMemberships.length === 0) return this.empty(campaigns);
 
       return this.coreDataSource.transaction(async (manager) => {
         const heads = rows<HeadRow>(
@@ -385,9 +399,12 @@ export class CampaignMessageOverviewReaderService {
                    OR ($16::boolean AND lower(COALESCE(attempt.recipient,'')) LIKE '%' || $14 || '%')))
               AND ($5::uuid[] IS NULL OR COALESCE(attempt."connectedAccountId",entry."connectedAccountId")=ANY($5::uuid[]))
               AND ($6::text[] IS NULL OR (CASE
-                    WHEN o.state='CANCELLED' THEN 'CANCELLED'
-                    WHEN o.state IN ('HELD','UNKNOWN') OR attempt."attemptState" IN ('UNKNOWN','BLOCKED')
-                      OR (attempt."attemptState"='ACCEPTED' AND (attempt."providerAcceptedAt" IS NULL OR attempt."projectedMessageThreadId" IS NULL)) THEN 'NEEDS_ATTENTION'
+                    WHEN o.state IN ('CANCELLED','SKIPPED') THEN 'CANCELLED'
+                    WHEN (o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED')
+                          AND (attempt."providerAcceptedAt" IS NULL OR attempt."projectedMessageThreadId" IS NULL))
+                      OR attempt."attemptState" IN ('RESERVED','PROCESSING','UNKNOWN','BLOCKED')
+                      OR (attempt."attemptState"='ACCEPTED'
+                          AND (attempt."providerAcceptedAt" IS NULL OR attempt."projectedMessageThreadId" IS NULL)) THEN 'NEEDS_ATTENTION'
                     WHEN attempt."attemptState"='ACCEPTED' AND attempt."providerAcceptedAt" IS NOT NULL THEN 'SENT'
                     ELSE 'SCHEDULED' END)=ANY($6::text[]))
               AND ($7::timestamptz IS NULL OR
@@ -395,6 +412,7 @@ export class CampaignMessageOverviewReaderService {
               AND ($8::timestamptz IS NULL OR
                 (CASE WHEN $12::text='SENT_AT' THEN attempt."providerAcceptedAt" ELSE entry."estimatedSendAt" END) < $8)
               AND ($9::timestamptz IS NULL OR (o."dueAt",o.id) < ($9::timestamptz,$10::uuid))
+              AND ($17::uuid IS NULL OR o.id=$17::uuid)
             ORDER BY o."dueAt" DESC,o.id DESC LIMIT $11`,
             [
               workspaceId,
@@ -414,6 +432,7 @@ export class CampaignMessageOverviewReaderService {
               search ?? null,
               canReadRenderedContent,
               canReadCreatorEmail,
+              input.filters.occurrenceId ?? null,
             ],
           ),
         );
@@ -530,23 +549,14 @@ export class CampaignMessageOverviewReaderService {
           const accepted =
             fact.attemptState === 'ACCEPTED' &&
             fact.providerAcceptedAt !== null;
-          const needsAttention =
-            fact.occurrenceState === 'HELD' ||
-            fact.occurrenceState === 'UNKNOWN' ||
-            fact.attemptState === 'UNKNOWN' ||
-            fact.attemptState === 'BLOCKED' ||
-            (fact.attemptState === 'ACCEPTED' &&
-              (fact.providerAcceptedAt === null ||
-                fact.projectedMessageThreadId === null));
+          const status = deriveCampaignMessageOverviewStatus({
+            ...fact,
+            providerAcceptedAt: fact.providerAcceptedAt
+              ? new Date(fact.providerAcceptedAt)
+              : null,
+          });
+          const needsAttention = status === 'NEEDS_ATTENTION';
           const authored = authoredContent.get(fact.occurrenceId);
-          const status =
-            fact.occurrenceState === 'CANCELLED'
-              ? 'CANCELLED'
-              : needsAttention
-                ? 'NEEDS_ATTENTION'
-                : accepted
-                  ? 'SENT'
-                  : 'SCHEDULED';
           return {
             occurrenceId: fact.occurrenceId,
             campaignId: fact.campaignId,
@@ -612,7 +622,7 @@ export class CampaignMessageOverviewReaderService {
         const last = page[page.length - 1];
         return {
           filterOptions: {
-            campaigns: selectedCampaigns.map(({ id, name }) => ({
+            campaigns: campaigns.map(({ id, name }) => ({
               id,
               name: name ?? 'Campaign',
             })),
@@ -677,10 +687,15 @@ export class CampaignMessageOverviewReaderService {
     return ids;
   }
 
-  private empty(): CampaignMessageOverviewConnectionDTO {
+  private empty(
+    campaigns: Array<{ id: string; name: string | null }> = [],
+  ): CampaignMessageOverviewConnectionDTO {
     return {
       filterOptions: {
-        campaigns: [],
+        campaigns: campaigns.map(({ id, name }) => ({
+          id,
+          name: name ?? 'Campaign',
+        })),
         connectedAccounts: [],
         connectedAccountIds: [],
       },

@@ -279,9 +279,13 @@ describe('ConnectedAccount sending policy', () => {
       };
 
       await expect(
-        resolver.updateConnectedAccountSendingPolicy(input, {
-          id: workspaceId,
-        } as WorkspaceEntity),
+        resolver.updateConnectedAccountSendingPolicy(
+          input,
+          {
+            id: workspaceId,
+          } as WorkspaceEntity,
+          '20202020-3333-4444-8888-333333333333',
+        ),
       ).resolves.toMatchObject({
         id: connectedAccountId,
         dailySendLimit: 80,
@@ -290,6 +294,7 @@ describe('ConnectedAccount sending policy', () => {
       expect(policyService.updateRevisioned).toHaveBeenCalledWith({
         ...input,
         workspaceId,
+        userWorkspaceId: '20202020-3333-4444-8888-333333333333',
       });
     });
   });

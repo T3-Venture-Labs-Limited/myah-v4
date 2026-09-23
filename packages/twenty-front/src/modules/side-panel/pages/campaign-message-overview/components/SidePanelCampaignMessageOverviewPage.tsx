@@ -1,9 +1,16 @@
+import { gql } from '@apollo/client';
+import { useQuery } from '@apollo/client/react';
+import { useEffect } from 'react';
+
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { campaignMessageOverviewSelectionState } from '@/myah/campaign-messages/states/campaignMessageOverviewSelectionState';
 import { useOpenMyahInboxConversation } from '@/myah/inbox/hooks/useOpenMyahInboxConversation';
 import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { SidePanelFooter } from '@/ui/layout/side-panel/components/SidePanelFooter';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useStore } from 'jotai';
+import { type CampaignMessageOverviewRow } from '@/myah/campaign-messages/types/CampaignMessageOverviewRow';
 import { styled } from '@linaria/react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -119,6 +126,40 @@ const StyledEvents = styled.ol`
   }
 `;
 
+const GET_CAMPAIGN_MESSAGE_OVERVIEW_DETAIL = gql`
+  query GetCampaignMessageOverviewDetail(
+    $input: CampaignMessageOverviewDetailInput!
+  ) {
+    campaignMessageOverviewDetail(input: $input) {
+      occurrenceId
+      campaignId
+      campaignName
+      creatorId
+      creatorName
+      recipient
+      subject
+      preview
+      sequenceStep
+      platform
+      status
+      estimatedSendAt
+      sentAt
+      eligibleAfter
+      connectedAccountId
+      connectedAccountLabel
+      senderIsEstimated
+      needsAttention
+      reason
+      inboxContactId
+      inboxThreadId
+    }
+  }
+`;
+
+type DetailData = {
+  campaignMessageOverviewDetail: CampaignMessageOverviewRow | null;
+};
+
 const displayTime = (value: string | null) =>
   value
     ? new Intl.DateTimeFormat(undefined, {
@@ -134,14 +175,44 @@ export const SidePanelCampaignMessageOverviewPage = () => {
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const { openMyahInboxConversation } = useOpenMyahInboxConversation();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
+  const { closeSidePanelMenu } = useSidePanelMenu();
+  const store = useStore();
+  const selectionIsCurrent =
+    campaignMessageOverviewSelection?.workspaceId === currentWorkspace?.id;
+  const detail = useQuery<DetailData>(GET_CAMPAIGN_MESSAGE_OVERVIEW_DETAIL, {
+    fetchPolicy: 'network-only',
+    pollInterval: 30_000,
+    skip: !selectionIsCurrent,
+    variables: {
+      input: {
+        occurrenceId: campaignMessageOverviewSelection?.occurrenceId ?? '',
+      },
+    },
+  });
+  const row = detail.data?.campaignMessageOverviewDetail;
 
-  if (
-    !campaignMessageOverviewSelection ||
-    campaignMessageOverviewSelection.workspaceId !== currentWorkspace?.id
-  ) {
+  useEffect(() => {
+    if (
+      !campaignMessageOverviewSelection ||
+      (selectionIsCurrent && detail.loading) ||
+      (selectionIsCurrent && row)
+    )
+      return;
+
+    store.set(campaignMessageOverviewSelectionState.atom, null);
+    void closeSidePanelMenu();
+  }, [
+    campaignMessageOverviewSelection,
+    closeSidePanelMenu,
+    detail.loading,
+    row,
+    selectionIsCurrent,
+    store,
+  ]);
+
+  if (!campaignMessageOverviewSelection || !selectionIsCurrent || !row) {
     return <p>Message details are unavailable in this workspace.</p>;
   }
-  const { row } = campaignMessageOverviewSelection;
   const normalizedStatus = row.status.replaceAll('_', ' ').toLowerCase();
   const statusLabel =
     normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);

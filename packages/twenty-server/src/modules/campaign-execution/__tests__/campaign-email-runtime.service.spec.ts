@@ -148,7 +148,7 @@ describe('CampaignEmailRuntimeService', () => {
       { ...ids, kind: 'PROCESSING' },
       { ...ids, kind: 'DEFINITELY_UNACCEPTED' },
       { ...ids, kind: 'UNKNOWN' },
-      { ...ids, kind: 'BLOCKED' },
+      { ...ids, id: ids.occurrenceId, kind: 'BLOCKED' },
       { ...ids, kind: 'PENDING' },
     ];
     const { service, query, orm, progression } = setup('PROJECTED', work);
@@ -207,6 +207,14 @@ describe('CampaignEmailRuntimeService', () => {
       'PENDING',
     ]);
     expect(orm.executeInWorkspaceContext).toHaveBeenCalledTimes(work.length);
+    expect(progression.holdOccurrenceInTransaction).toHaveBeenCalledWith(
+      ids.occurrenceId,
+      'DISPATCH_CONTRACT_CONFLICT',
+      expect.objectContaining({ queryRunner: expect.anything() }),
+    );
+    const blockedManager =
+      progression.holdOccurrenceInTransaction.mock.calls[0][2];
+    expect(blockedManager.queryRunner.manager).toBe(blockedManager);
     for (const call of orm.executeInWorkspaceContext.mock.calls)
       expect(call).toHaveLength(2);
   });

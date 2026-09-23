@@ -28,6 +28,7 @@ jest.mock(
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const campaignId = '22222222-2222-4222-8222-222222222222';
+const secondCampaignId = '22222222-2222-4222-8222-222222222223';
 const campaignCreatorId = '33333333-3333-4333-8333-333333333333';
 const creatorId = '44444444-4444-4444-8444-444444444444';
 const occurrenceId = '55555555-5555-4555-8555-555555555555';
@@ -171,7 +172,102 @@ describe('CampaignMessageOverviewReaderService', () => {
       }),
     );
     expect(query.mock.calls[1][0]).toContain('LIMIT $11');
+    expect(query.mock.calls[1][0]).toContain(
+      "IN ('CANCELLED','SKIPPED') THEN 'CANCELLED'",
+    );
+    expect(query.mock.calls[1][1][5]).toEqual(['SCHEDULED']);
     expect(query.mock.calls[1][1][10]).toBe(51);
+  });
+
+  it('retains all permitted Campaign options when selected Campaign A has no readable memberships', async () => {
+    const orm = makeOrm();
+    const campaignRepository = await orm.getRepository(workspaceId, 'campaign');
+    const campaignCreatorRepository = await orm.getRepository(
+      workspaceId,
+      'campaignCreator',
+    );
+    campaignRepository.find.mockResolvedValue([
+      { id: campaignId, name: 'Launch' },
+      { id: secondCampaignId, name: 'Follow-up' },
+    ]);
+    campaignCreatorRepository.find.mockResolvedValue([]);
+    const query = jest.fn();
+    const service = new CampaignMessageOverviewReaderService(
+      orm as never,
+      makeDataSource(query) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+    const filters = Object.assign(new CampaignMessageOverviewInput(), {
+      campaignIds: [campaignId],
+    });
+
+    await expect(service.read({ authContext, filters })).resolves.toEqual(
+      expect.objectContaining({
+        filterOptions: expect.objectContaining({
+          campaigns: [
+            { id: campaignId, name: 'Launch' },
+            { id: secondCampaignId, name: 'Follow-up' },
+          ],
+        }),
+      }),
+    );
+    expect(campaignCreatorRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { campaignId: expect.anything() } }),
+    );
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('classifies a SUCCEEDED occurrence without accepted evidence as Needs attention in the matching filter', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          attemptState: null,
+          authoredMessageIndex: 0,
+          campaignCreatorId,
+          campaignId,
+          connectedAccountId: null,
+          creatorId,
+          dueAt: new Date('2026-09-25T10:00:00.000Z'),
+          estimatedSendAt: null,
+          holdReason: null,
+          messageId,
+          occurrenceId,
+          occurrenceState: 'SUCCEEDED',
+          projectedMessageThreadId: null,
+          providerAcceptedAt: null,
+          safeOutcomeReason: null,
+          sortAt: new Date('2026-09-25T10:00:00.000Z'),
+          workflowVersionId,
+        },
+      ]);
+    const service = new CampaignMessageOverviewReaderService(
+      makeOrm() as never,
+      makeDataSource(query) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+    const filters = Object.assign(new CampaignMessageOverviewInput(), {
+      first: 50,
+      view: CampaignMessageOverviewView.NEEDS_ATTENTION,
+    });
+
+    await expect(service.read({ authContext, filters })).resolves.toEqual(
+      expect.objectContaining({
+        nodes: [
+          expect.objectContaining({
+            occurrenceId,
+            status: 'NEEDS_ATTENTION',
+          }),
+        ],
+      }),
+    );
+    expect(query.mock.calls[1][0]).toContain(
+      "o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED')",
+    );
+    expect(query.mock.calls[1][1][5]).toEqual(['NEEDS_ATTENTION']);
   });
 
   it('does not expose an Inbox handoff for an unreadable projected thread', async () => {
@@ -227,6 +323,100 @@ describe('CampaignMessageOverviewReaderService', () => {
       }),
     );
   });
+
+  it('reads one accessible occurrence through the same scoped hydration as the list', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          attemptState: null,
+          authoredMessageIndex: 0,
+          campaignCreatorId,
+          campaignId,
+          connectedAccountId: null,
+          creatorId,
+          dueAt: new Date('2026-09-21T10:00:00.000Z'),
+          estimatedSendAt: null,
+          holdReason: null,
+          messageId,
+          occurrenceId,
+          occurrenceState: 'PENDING',
+          projectedMessageThreadId: null,
+          providerAcceptedAt: null,
+          safeOutcomeReason: null,
+          sortAt: new Date('2026-09-21T10:00:00.000Z'),
+          workflowVersionId,
+        },
+      ]);
+    const service = new CampaignMessageOverviewReaderService(
+      makeOrm() as never,
+      makeDataSource(query) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+
+    await expect(
+      service.readDetail({ authContext, occurrenceId }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        occurrenceId,
+        subject: 'Scheduled partnership',
+      }),
+    );
+    expect(query.mock.calls[1][1][16]).toBe(occurrenceId);
+  });
+
+  it('returns null when the occurrence campaign is no longer readable', async () => {
+    const service = new CampaignMessageOverviewReaderService(
+      {
+        executeInWorkspaceContext: jest.fn((callback) => callback()),
+        getRepository: jest.fn().mockResolvedValue({
+          find: jest.fn().mockResolvedValue([]),
+        }),
+      } as never,
+      makeDataSource(jest.fn()) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+
+    await expect(
+      service.readDetail({ authContext, occurrenceId }),
+    ).resolves.toBe(null);
+  });
+
+  it.each([
+    [
+      'a different workspace occurrence',
+      '99999999-9999-4999-8999-999999999999',
+    ],
+    ['a missing occurrence', occurrenceId],
+  ])(
+    'returns null for %s without widening the workspace scope',
+    async (_label, requestedOccurrenceId) => {
+      const query = jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      const service = new CampaignMessageOverviewReaderService(
+        makeOrm() as never,
+        makeDataSource(query) as never,
+        {} as never,
+        makeSequences() as never,
+      );
+
+      await expect(
+        service.readDetail({
+          authContext,
+          occurrenceId: requestedOccurrenceId,
+        }),
+      ).resolves.toBe(null);
+      expect(query.mock.calls[1][0]).toContain('o."workspaceId"=$1');
+      expect(query.mock.calls[1][1]).toEqual(
+        expect.arrayContaining([workspaceId, requestedOccurrenceId]),
+      );
+    },
+  );
 
   it('rejects a cursor from an older forecast generation', async () => {
     const query = jest.fn().mockResolvedValueOnce([

@@ -24,9 +24,12 @@ import { MESSAGE_CHANNEL_DELETED_EVENT } from 'src/engine/metadata-modules/messa
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { type MessageChannelDeletedEvent } from 'src/engine/metadata-modules/message-channel/types/message-channel-deleted.type';
 import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 
 @Injectable()
 export class ConnectedAccountMetadataService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   private readonly logger = new Logger(ConnectedAccountMetadataService.name);
 
   constructor(
@@ -230,6 +233,10 @@ export class ConnectedAccountMetadataService {
           { isSyncEnabled: false },
         );
       }
+      await this.forecastInvalidation.invalidateInTransaction(
+        { workspaceId },
+        entityManager,
+      );
     });
 
     for (const connectedAccount of personalAccounts) {
@@ -292,6 +299,10 @@ export class ConnectedAccountMetadataService {
             id,
             workspaceId,
           });
+        await this.forecastInvalidation.invalidateInTransaction(
+          { workspaceId },
+          manager,
+        );
       });
     } catch (error) {
       if (error instanceof CampaignMailboxDeletionFenceError) {

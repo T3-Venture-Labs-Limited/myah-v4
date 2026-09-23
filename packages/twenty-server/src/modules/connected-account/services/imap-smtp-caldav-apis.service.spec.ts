@@ -67,6 +67,11 @@ describe('ImapSmtpCalDavAPIService', () => {
   const mockTransactionManagerQuery = jest.fn();
   const mockTransactionManager = {
     query: mockTransactionManagerQuery,
+    queryRunner: {
+      isReleased: false,
+      isTransactionActive: true,
+      query: mockTransactionManagerQuery,
+    },
     getRepository: jest.fn((entity) => {
       if (entity === ConnectedAccountEntity) {
         return {
@@ -576,6 +581,21 @@ describe('ImapSmtpCalDavAPIService', () => {
         visibility: 'user',
         authFailedAt: null,
       });
+
+      const invalidationCall = mockTransactionManagerQuery.mock.calls.find(
+        ([sql]) => String(sql).includes('campaignForecastHead'),
+      );
+      expect(invalidationCall).toEqual([
+        expect.stringContaining('campaignForecastHead'),
+        ['workspace-id', 'workspace:workspace-id'],
+      ]);
+      expect(
+        mockTransactionManagerSave.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockTransactionManagerQuery.mock.invocationCallOrder[
+          mockTransactionManagerQuery.mock.calls.indexOf(invalidationCall)
+        ],
+      );
 
       expect(
         mockCreateMessageChannelService.createMessageChannel,

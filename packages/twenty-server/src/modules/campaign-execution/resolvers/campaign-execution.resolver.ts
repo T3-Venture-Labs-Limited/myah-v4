@@ -29,7 +29,9 @@ import {
 import { CampaignActivityReaderService } from 'src/modules/campaign-execution/services/campaign-activity-reader.service';
 import {
   CampaignMessageOverviewConnectionDTO,
+  CampaignMessageOverviewDetailInput,
   CampaignMessageOverviewInput,
+  CampaignMessageOverviewRowDTO,
 } from 'src/modules/campaign-execution/dtos/campaign-message-overview.dto';
 import { CampaignMessageOverviewReaderService } from 'src/modules/campaign-execution/services/campaign-message-overview-reader.service';
 import { CampaignCreatorExclusionService } from 'src/modules/campaign-execution/services/campaign-creator-exclusion.service';
@@ -75,6 +77,18 @@ export class CampaignExecutionResolver {
     return this.messageOverviewReader.read({
       authContext: getWorkspaceAuthContext(),
       filters: input,
+    });
+  }
+
+  @Query(() => CampaignMessageOverviewRowDTO, { nullable: true })
+  campaignMessageOverviewDetail(
+    @Args('input') input: CampaignMessageOverviewDetailInput,
+  ): Promise<CampaignMessageOverviewRowDTO | null> {
+    if (!this.messageOverviewReader)
+      throw new Error('Campaign message overview is unavailable');
+    return this.messageOverviewReader.readDetail({
+      authContext: getWorkspaceAuthContext(),
+      occurrenceId: input.occurrenceId,
     });
   }
 

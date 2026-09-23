@@ -8,6 +8,7 @@ import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manage
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 import {
   CAMPAIGN_LIFECYCLE_ACTOR_PERMISSION_RESOLVER_PORT,
   CAMPAIGN_LIFECYCLE_WRITE_AUTHORIZATION_PORT,
@@ -628,6 +629,8 @@ const assertActiveTransactionManager = (manager: WorkspaceEntityManager) => {
 
 @Injectable()
 export class CampaignLifecycleTransactionService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @Inject(CAMPAIGN_LIFECYCLE_ACTOR_PERMISSION_RESOLVER_PORT)
@@ -750,7 +753,12 @@ export class CampaignLifecycleTransactionService {
               context,
             );
 
-            return operation(context);
+            const result = await operation(context);
+            await this.forecastInvalidation.invalidateInTransaction(
+              { workspaceId },
+              manager,
+            );
+            return result;
           },
         );
       },

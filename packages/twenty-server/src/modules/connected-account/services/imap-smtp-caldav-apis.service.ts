@@ -22,6 +22,7 @@ import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-chan
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 import {
   CalendarEventListFetchJob,
   type CalendarEventListFetchJobData,
@@ -56,6 +57,8 @@ export type UpsertConnectedAccountResult = {
 
 @Injectable()
 export class ImapSmtpCalDavAPIService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   private readonly logger = new Logger(ImapSmtpCalDavAPIService.name);
 
   constructor(
@@ -212,6 +215,11 @@ export class ImapSmtpCalDavAPIService {
             visibility,
             authFailedAt: null,
           });
+
+          await this.forecastInvalidation.invalidateInTransaction(
+            { workspaceId },
+            transactionManager,
+          );
 
           const messageChannelId =
             existingMessageChannel?.id ??

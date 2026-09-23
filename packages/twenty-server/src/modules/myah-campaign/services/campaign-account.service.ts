@@ -24,6 +24,7 @@ import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scope
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import { CampaignSenderReadinessService } from 'src/modules/myah-campaign/services/campaign-sender-readiness.service';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 import {
   type CampaignSenderCandidateReadiness,
   type CampaignSenderPoolSnapshot,
@@ -67,6 +68,8 @@ type CampaignAccountMutationContext = {
 
 @Injectable()
 export class CampaignAccountService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(ConnectedAccountEntity)
@@ -554,6 +557,10 @@ export class CampaignAccountService {
           campaignId,
           schemaName,
         });
+        await this.forecastInvalidation.invalidateInTransaction(
+          { workspaceId },
+          manager,
+        );
         const snapshot =
           await this.campaignSenderReadinessService.getCampaignEmailSenderPoolInTransaction(
             { workspaceId, campaignId },

@@ -7,22 +7,26 @@ import { ConnectedAccountSendingPolicyService } from 'src/engine/metadata-module
 
 const workspaceId = '20202020-1111-4444-8888-111111111111';
 const connectedAccountId = '20202020-2222-4444-8888-222222222222';
+const userWorkspaceId = '20202020-3333-4444-8888-333333333333';
 const idempotencyKey = 'b486cb28-c908-42f0-91ce-0e4a87a38592';
 
 const account = {
   id: connectedAccountId,
   workspaceId,
+  userWorkspaceId,
+  visibility: 'private',
   archivedAt: null,
   dailySendLimit: 50,
   minimumSendIntervalMs: 300_000,
   sendingPolicyRevision: 4,
   sendingPolicyIdempotencyKey: null,
-} as ConnectedAccountEntity;
+} as unknown as ConnectedAccountEntity;
 
 describe('ConnectedAccountSendingPolicyService revisioned update', () => {
   const query = jest.fn();
   const manager = {
     query,
+    queryRunner: { isReleased: false, isTransactionActive: true, query },
     transaction: jest.fn((callback) => callback(manager)),
   } as unknown as EntityManager;
   const repository = { manager } as Repository<ConnectedAccountEntity>;
@@ -42,6 +46,7 @@ describe('ConnectedAccountSendingPolicyService revisioned update', () => {
       if (sql.includes('SELECT * FROM core."connectedAccount"')) {
         return [{ ...account }];
       }
+      if (sql.includes('campaignForecastHead')) return [];
       if (sql.includes('UPDATE core."connectedAccount"')) {
         return [
           {
@@ -65,6 +70,7 @@ describe('ConnectedAccountSendingPolicyService revisioned update', () => {
         idempotencyKey,
         minimumSendIntervalMs: 300_000,
         workspaceId,
+        userWorkspaceId,
       }),
     ).resolves.toMatchObject({
       dailySendLimit: 75,
@@ -85,6 +91,9 @@ describe('ConnectedAccountSendingPolicyService revisioned update', () => {
     expect(
       sql.every((statement) => !statement.includes('mailboxCapacityDay')),
     ).toBe(true);
+    expect(sql).toEqual(
+      expect.arrayContaining([expect.stringContaining('campaignForecastHead')]),
+    );
   });
 
   it('guards minimum-spacing changes inside the transaction', async () => {
@@ -95,12 +104,34 @@ describe('ConnectedAccountSendingPolicyService revisioned update', () => {
       idempotencyKey,
       minimumSendIntervalMs: 120_000,
       workspaceId,
+      userWorkspaceId,
     });
 
     expect(spacingGuard.assertCanChange).toHaveBeenCalledWith(
       { connectedAccountId, workspaceId },
       manager,
     );
+  });
+
+  it('rejects another workspace member before changing policy', async () => {
+    await expect(
+      service.updateRevisioned({
+        connectedAccountId,
+        dailySendLimit: 75,
+        expectedRevision: 4,
+        idempotencyKey,
+        minimumSendIntervalMs: 300_000,
+        workspaceId,
+        userWorkspaceId: '20202020-4444-4444-8888-444444444444',
+      }),
+    ).rejects.toMatchObject({
+      code: ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_OWNERSHIP_VIOLATION,
+    });
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('UPDATE core."connectedAccount"'),
+      ),
+    ).toBe(false);
   });
 
   it('rejects a stale revision before changing policy', async () => {
@@ -112,6 +143,7 @@ describe('ConnectedAccountSendingPolicyService revisioned update', () => {
         idempotencyKey,
         minimumSendIntervalMs: 300_000,
         workspaceId,
+        userWorkspaceId,
       }),
     ).rejects.toMatchObject({
       code: ConnectedAccountExceptionCode.SENDING_POLICY_REVISION_CONFLICT,
@@ -148,6 +180,7 @@ describe('ConnectedAccountSendingPolicyService revisioned update', () => {
         idempotencyKey,
         minimumSendIntervalMs: 300_000,
         workspaceId,
+        userWorkspaceId,
       }),
     ).resolves.toMatchObject({ sendingPolicyRevision: 5 });
 

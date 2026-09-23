@@ -47,10 +47,12 @@ export class ConnectedAccountResolver {
   async updateConnectedAccountSendingPolicy(
     @Args('input') input: UpdateConnectedAccountSendingPolicyInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<ConnectedAccountPublicDTO> {
     const connectedAccount =
       await this.connectedAccountSendingPolicyService.updateRevisioned({
         ...input,
+        userWorkspaceId,
         workspaceId: workspace.id,
       });
 

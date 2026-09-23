@@ -33,6 +33,7 @@ import {
   OutboundEmailDispatchTransactionAdapter,
 } from 'src/modules/campaign-execution/adapters/outbound-email-dispatch-runtime.adapter';
 import { CampaignForecastCandidateReaderService } from 'src/modules/campaign-execution/services/campaign-forecast-candidate-reader.service';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 import { CampaignMessageForecastService } from 'src/modules/campaign-execution/services/campaign-message-forecast.service';
 import { CampaignMessageOverviewRowService } from 'src/modules/campaign-execution/services/campaign-message-overview-row.service';
 import { CampaignForecastProjectionService } from 'src/modules/campaign-execution/services/campaign-forecast-projection.service';
@@ -63,6 +64,7 @@ import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/serv
     MailboxCapacityService,
     OutboundEmailAttemptService,
     CampaignForecastCandidateReaderService,
+    CampaignForecastInputInvalidationService,
     CampaignMessageForecastService,
     CampaignMessageOverviewRowService,
     CampaignForecastProjectionService,
@@ -105,6 +107,7 @@ import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/serv
     MailboxCapacityService,
     OutboundEmailAttemptService,
     CampaignForecastCandidateReaderService,
+    CampaignForecastInputInvalidationService,
     CampaignMessageForecastService,
     CampaignMessageOverviewRowService,
     CampaignForecastProjectionService,

@@ -140,6 +140,61 @@ describe('MyahCampaignMessagesPage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('retains Campaign B after empty Campaign A and sends [A, B] with OR semantics', async () => {
+    const resultForCampaigns = (campaignIds?: string[]) => {
+      const result = queryResult();
+      result.data.campaignMessageOverview.filterOptions.campaigns = [
+        { id: 'campaign-a', name: 'Campaign A' },
+        { id: 'campaign-b', name: 'Campaign B' },
+      ];
+      if (campaignIds?.includes('campaign-a')) {
+        result.data.campaignMessageOverview.nodes = [];
+      }
+
+      return result;
+    };
+    mockUseQuery.mockImplementation(
+      (_query, options: { variables: { input: { campaignIds?: string[] } } }) =>
+        resultForCampaigns(options.variables.input.campaignIds),
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/myah/messages']}>
+        <MyahCampaignMessagesPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByLabelText('Campaign A'));
+    await waitFor(() =>
+      expect(mockUseQuery).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          variables: expect.objectContaining({
+            input: expect.objectContaining({ campaignIds: ['campaign-a'] }),
+          }),
+        }),
+      ),
+    );
+
+    expect(
+      screen.getByText('No permitted Campaign messages match these filters.'),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Campaign B')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Campaign B'));
+    await waitFor(() =>
+      expect(mockUseQuery).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          variables: expect.objectContaining({
+            input: expect.objectContaining({
+              campaignIds: ['campaign-a', 'campaign-b'],
+            }),
+          }),
+        }),
+      ),
+    );
+  });
+
   it('loads subsequent pages before restoring an Inbox return target', async () => {
     const result = queryResult();
     result.data.campaignMessageOverview.pageInfo.hasNextPage = true;

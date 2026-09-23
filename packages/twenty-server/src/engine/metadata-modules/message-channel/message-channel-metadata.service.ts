@@ -41,9 +41,12 @@ import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/worksp
 import { INBOUND_EMAIL_LOCAL_PART_PREFIX } from 'src/modules/messaging/message-import-manager/drivers/inbound-email/constants/inbound-email-local-part-prefix.constant';
 import { INBOUND_EMAIL_LOCAL_PART_RANDOM_BYTES } from 'src/modules/messaging/message-import-manager/drivers/inbound-email/constants/inbound-email-local-part-random-bytes.constant';
 import { getDomainFromEmail } from 'src/utils/get-domain-from-email';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 
 @Injectable()
 export class MessageChannelMetadataService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   constructor(
     @InjectRepository(MessageChannelEntity)
     private readonly repository: Repository<MessageChannelEntity>,
@@ -225,12 +228,25 @@ export class MessageChannelMetadataService {
     data: Partial<MessageChannelEntity>;
   }): Promise<MessageChannelDTO> {
     await this.assertGenericUpdateAllowed({ id, workspaceId });
-    await this.repository.update(
-      { id, workspaceId },
-      data as Record<string, unknown>,
-    );
-
-    return this.repository.findOneOrFail({ where: { id, workspaceId } });
+    if (data.isSyncEnabled === undefined) {
+      await this.repository.update(
+        { id, workspaceId },
+        data as Record<string, unknown>,
+      );
+      return this.repository.findOneOrFail({ where: { id, workspaceId } });
+    }
+    return this.repository.manager.transaction(async (manager) => {
+      await manager
+        .getRepository(MessageChannelEntity)
+        .update({ id, workspaceId }, data as Record<string, unknown>);
+      await this.forecastInvalidation.invalidateInTransaction(
+        { workspaceId },
+        manager,
+      );
+      return manager
+        .getRepository(MessageChannelEntity)
+        .findOneOrFail({ where: { id, workspaceId } });
+    });
   }
 
   private async assertGenericUpdateAllowed({
@@ -405,6 +421,10 @@ export class MessageChannelMetadataService {
             connectedAccountId,
             workspaceId,
           });
+        await this.forecastInvalidation.invalidateInTransaction(
+          { workspaceId },
+          manager,
+        );
       });
     } catch (error) {
       if (error instanceof CampaignMailboxDeletionFenceError)

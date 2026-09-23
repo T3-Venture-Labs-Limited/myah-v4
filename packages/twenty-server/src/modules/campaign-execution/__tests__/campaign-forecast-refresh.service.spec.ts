@@ -10,7 +10,7 @@ const occurrence = (campaign: string, suffix: string) => ({
   campaignId: campaign,
   dueAt: new Date('2026-09-21T10:00:00.000Z'),
   occurrenceId: `44444444-4444-4444-8444-${suffix}`,
-  pinnedConnectedAccountId: null,
+  pinnedConnectedAccountId: null as string | null,
   window: {
     endLocalTime: '17:00:00',
     startLocalTime: '09:00:00',
@@ -23,10 +23,15 @@ const buildHarness = (input?: {
   items?: ReturnType<typeof occurrence>[];
   zones?: Array<{ campaignId: string; campaignCapacityTimeZone: string }>;
   replyToThread?: boolean;
+  monotonicNow?: () => number;
+  pools?: Record<string, string[]>;
+  selectedHeads?: boolean;
+  sequencePlans?: Array<unknown>;
 }) => {
   const manager = {
     query: jest.fn((sql: string) => {
       if (sql.includes('campaignForecastHead')) {
+        if (input?.selectedHeads === false) return [];
         return [
           {
             inputRevision: '7',
@@ -71,29 +76,40 @@ const buildHarness = (input?: {
     publish: jest.fn().mockResolvedValue({ status: 'PUBLISHED' }),
   };
   const senders = {
-    getCampaignEmailSenderPoolInTransaction: jest.fn().mockResolvedValue({
-      mailboxes: [
-        {
-          bindingStatus: 'RESOLVED_BINDING',
-          connectedAccountId: accountId,
-          dailySendLimit: 50,
-          minimumSendIntervalMs: 300_000,
-          status: 'READY',
-        },
-      ],
-    }),
+    getCampaignEmailSenderPoolInTransaction: jest.fn(({ campaignId: id }) =>
+      Promise.resolve({
+        mailboxes: (input?.pools?.[id] ?? [accountId]).map(
+          (connectedAccountId) => ({
+            bindingStatus: 'RESOLVED_BINDING',
+            connectedAccountId,
+            dailySendLimit: 50,
+            minimumSendIntervalMs: 300_000,
+            status: 'READY',
+          }),
+        ),
+      }),
+    ),
   };
   const sequences = {
-    loadExecutionPlanInTransaction: jest.fn().mockResolvedValue({
-      kind: 'READY',
-      nodes: [
-        { channel: 'EMAIL', replyToThread: input?.replyToThread ?? false },
-      ],
-    }),
+    loadExecutionPlanInTransaction: jest.fn().mockImplementation(() =>
+      Promise.resolve(
+        input?.sequencePlans?.shift() ?? {
+          kind: 'READY',
+          nodes: [
+            { channel: 'EMAIL', replyToThread: input?.replyToThread ?? false },
+          ],
+        },
+      ),
+    ),
   };
   const service = new CampaignForecastRefreshService(
     {
       getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+        createQueryRunner: jest.fn(() => ({
+          connect: jest.fn(),
+          manager,
+          release: jest.fn(),
+        })),
         transaction: jest.fn((callback) => callback(manager)),
       }),
     } as never,
@@ -103,6 +119,7 @@ const buildHarness = (input?: {
     senders as never,
     sequences as never,
   );
+  if (input?.monotonicNow) service.setMonotonicNowForTest(input.monotonicNow);
 
   return { candidates, forecast, manager, projection, senders, service };
 };
@@ -179,6 +196,98 @@ describe('CampaignForecastRefreshService', () => {
 
     expect(forecast.forecast).toHaveBeenCalledWith(
       expect.objectContaining({ accounts: [] }),
+    );
+    expect(projection.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ complete: false }),
+      expect.anything(),
+    );
+  });
+
+  it('does not forecast a pinned follow-up through an account ready only in another Campaign', async () => {
+    const { forecast, projection, service } = buildHarness({
+      items: [
+        {
+          ...occurrence(campaignId, '444444444444'),
+          pinnedConnectedAccountId: accountId,
+        },
+        occurrence(secondCampaignId, '555555555555'),
+      ],
+      pools: { [campaignId]: [], [secondCampaignId]: [accountId] },
+      replyToThread: true,
+      zones: [
+        { campaignId, campaignCapacityTimeZone: 'UTC' },
+        { campaignId: secondCampaignId, campaignCapacityTimeZone: 'UTC' },
+      ],
+    });
+
+    await service.refreshStaleForecasts();
+
+    expect(forecast.forecast).toHaveBeenCalledWith(
+      expect.objectContaining({ occurrences: [] }),
+    );
+    expect(projection.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ complete: false }),
+      expect.anything(),
+    );
+  });
+
+  it('stops on its elapsed-time deadline and publishes incomplete coverage', async () => {
+    const now = jest.fn().mockReturnValueOnce(0).mockReturnValue(5_000);
+    const { candidates, forecast, projection, service } = buildHarness({
+      monotonicNow: now,
+    });
+
+    await service.refreshStaleForecasts();
+
+    expect(candidates.readPage).not.toHaveBeenCalled();
+    expect(forecast.forecast).toHaveBeenCalledWith(
+      expect.objectContaining({ occurrences: [] }),
+    );
+    expect(projection.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ complete: false }),
+      expect.anything(),
+    );
+  });
+
+  it('selects an aged current generation using the bounded rolling-age policy', async () => {
+    const { manager, service } = buildHarness();
+    await service.refreshStaleForecasts();
+    expect(manager.query.mock.calls[0][0]).toContain(
+      'generation."generatedAt" <= clock_timestamp()',
+    );
+    expect(
+      (manager.query.mock.calls[0] as unknown as [string, unknown[]])[1],
+    ).toEqual([10, 60_000]);
+  });
+
+  it('skips a fresh current generation without hydrating candidates or publishing', async () => {
+    const { candidates, projection, service } = buildHarness({
+      selectedHeads: false,
+    });
+    await service.refreshStaleForecasts();
+    expect(candidates.readPage).not.toHaveBeenCalled();
+    expect(projection.publish).not.toHaveBeenCalled();
+  });
+
+  it('excludes occurrences whose plans were not hydrated before the deadline', async () => {
+    const now = jest
+      .fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(1)
+      .mockReturnValueOnce(2)
+      .mockReturnValue(5_000);
+    const first = occurrence(campaignId, '444444444444');
+    const second = {
+      ...occurrence(secondCampaignId, '555555555555'),
+      workflowVersionId: '66666666-6666-4666-8666-666666666666',
+    };
+    const { forecast, projection, service } = buildHarness({
+      items: [first, second],
+      monotonicNow: now,
+    });
+    await service.refreshStaleForecasts();
+    expect(forecast.forecast).toHaveBeenCalledWith(
+      expect.objectContaining({ occurrences: [] }),
     );
     expect(projection.publish).toHaveBeenCalledWith(
       expect.objectContaining({ complete: false }),

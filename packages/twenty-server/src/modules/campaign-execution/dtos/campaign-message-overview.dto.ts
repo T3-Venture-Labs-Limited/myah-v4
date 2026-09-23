@@ -90,6 +90,16 @@ export class CampaignMessageOverviewInput {
   @IsOptional()
   @IsDateString()
   dateTo?: string;
+
+  // Internal reader scope used only by the single-occurrence detail query.
+  occurrenceId?: string;
+}
+
+@InputType()
+export class CampaignMessageOverviewDetailInput {
+  @Field(() => ID)
+  @IsUUID('4')
+  occurrenceId: string;
 }
 
 @ObjectType()

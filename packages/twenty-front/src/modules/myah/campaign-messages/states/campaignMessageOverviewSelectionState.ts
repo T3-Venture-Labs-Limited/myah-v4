@@ -1,9 +1,8 @@
-import { type CampaignMessageOverviewRow } from '@/myah/campaign-messages/types/CampaignMessageOverviewRow';
 import { type CampaignMessageOverviewReturnTarget } from '@/myah/campaign-messages/types/CampaignMessageOverviewReturnTarget';
 import { createAtomState } from '@/ui/utilities/state/jotai/utils/createAtomState';
 
 export const campaignMessageOverviewSelectionState = createAtomState<{
-  row: CampaignMessageOverviewRow;
+  occurrenceId: string;
   workspaceId: string;
   returnTarget: CampaignMessageOverviewReturnTarget;
 } | null>({

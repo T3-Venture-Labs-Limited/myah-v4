@@ -14,6 +14,8 @@ describe('MessagingRelaunchFailedMessageChannelJob', () => {
   let job: MessagingRelaunchFailedMessageChannelJob;
   let mockUpdate: jest.Mock;
   let mockFindOne: jest.Mock;
+  let mockTransaction: jest.Mock;
+  let query: jest.Mock;
 
   const workspaceId = 'workspace-id';
   const messageChannelId = 'message-channel-id';
@@ -21,6 +23,17 @@ describe('MessagingRelaunchFailedMessageChannelJob', () => {
   beforeEach(async () => {
     mockUpdate = jest.fn();
     mockFindOne = jest.fn();
+    query = jest.fn();
+    mockTransaction = jest.fn((operation) =>
+      operation({
+        getRepository: jest.fn(() => ({ update: mockUpdate })),
+        queryRunner: {
+          isReleased: false,
+          isTransactionActive: true,
+          query,
+        },
+      }),
+    );
 
     const providers: Provider[] = [
       MessagingRelaunchFailedMessageChannelJob,
@@ -36,6 +49,7 @@ describe('MessagingRelaunchFailedMessageChannelJob', () => {
         provide: getRepositoryToken(MessageChannelEntity),
         useValue: {
           findOne: mockFindOne,
+          manager: { transaction: mockTransaction },
           update: mockUpdate,
         },
       },
@@ -60,6 +74,7 @@ describe('MessagingRelaunchFailedMessageChannelJob', () => {
 
     await job.handle({ workspaceId, messageChannelId });
 
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
     expect(mockUpdate).toHaveBeenCalledWith(
       { id: messageChannelId, workspaceId },
       {
@@ -69,6 +84,10 @@ describe('MessagingRelaunchFailedMessageChannelJob', () => {
         throttleRetryAfter: null,
         syncStageStartedAt: null,
       },
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('campaignForecastHead'),
+      [workspaceId, `workspace:${workspaceId}`],
     );
   });
 });

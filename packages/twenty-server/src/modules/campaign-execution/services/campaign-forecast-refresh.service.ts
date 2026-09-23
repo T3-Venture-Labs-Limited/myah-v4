@@ -14,6 +14,8 @@ import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/typ
 const PAGE_SIZE = 500;
 const MAX_CANDIDATES = 1_000;
 const HORIZON_MS = 48 * 60 * 60 * 1_000;
+export const FORECAST_REFRESH_TIME_BUDGET_MS = 5_000;
+export const FORECAST_REFRESH_MAX_AGE_MS = 60_000;
 
 type StaleHead = {
   inputRevision: string;
@@ -37,6 +39,7 @@ const rows = <T>(value: unknown): T[] =>
 
 @Injectable()
 export class CampaignForecastRefreshService {
+  private monotonicNow: () => number = () => performance.now();
   constructor(
     private readonly orm: GlobalWorkspaceOrmManager,
     private readonly candidates: CampaignForecastCandidateReaderService,
@@ -46,6 +49,10 @@ export class CampaignForecastRefreshService {
     private readonly sequences: CampaignSequenceService,
   ) {}
 
+  setMonotonicNowForTest(clock: () => number): void {
+    this.monotonicNow = clock;
+  }
+
   async refreshStaleForecasts(limit = 10): Promise<void> {
     const dataSource = await this.orm.getGlobalWorkspaceDataSource();
     const stale = await dataSource.transaction((manager) =>
@@ -53,39 +60,54 @@ export class CampaignForecastRefreshService {
         `WITH active AS (
            SELECT DISTINCT "workspaceId" FROM core."campaignOccurrence"
             WHERE state IN ('PENDING','HELD','IN_FLIGHT','UNKNOWN')
-         ), selected AS (
-           SELECT active."workspaceId"
-             FROM active LEFT JOIN core."campaignForecastHead" head
-               ON head."workspaceId"=active."workspaceId"
-              AND head."scopeKey"='workspace:' || active."workspaceId"::text
-            ORDER BY head."updatedAt" NULLS FIRST,active."workspaceId" LIMIT $1
+         ), ensured AS (
+           INSERT INTO core."campaignForecastHead" ("workspaceId","scopeKey","inputRevision")
+           SELECT "workspaceId",'workspace:' || "workspaceId"::text,1 FROM active
+           ON CONFLICT ("workspaceId","scopeKey") DO NOTHING
+           RETURNING "workspaceId"
          )
-         INSERT INTO core."campaignForecastHead" ("workspaceId","scopeKey","inputRevision")
-         SELECT "workspaceId",'workspace:' || "workspaceId"::text,1 FROM selected
-         ON CONFLICT ("workspaceId","scopeKey") DO UPDATE
-           SET "inputRevision"=core."campaignForecastHead"."inputRevision"+1,
-               "updatedAt"=clock_timestamp()
-         RETURNING "workspaceId","scopeKey","inputRevision"::text AS "inputRevision"`,
-        [limit],
+         SELECT head."workspaceId",head."scopeKey",head."inputRevision"::text AS "inputRevision"
+           FROM core."campaignForecastHead" head
+           JOIN active ON active."workspaceId"=head."workspaceId"
+           LEFT JOIN core."campaignForecastGeneration" generation ON generation.id=head."currentGenerationId"
+          WHERE head."scopeKey"='workspace:' || head."workspaceId"::text
+            AND (generation.id IS NULL
+              OR generation."inputRevision" <> head."inputRevision"
+              OR generation."generatedAt" <= clock_timestamp() - ($2::integer * interval '1 millisecond'))
+          ORDER BY head."updatedAt" NULLS FIRST,head."workspaceId" LIMIT $1`,
+        [limit, FORECAST_REFRESH_MAX_AGE_MS],
       ),
     );
 
     for (const head of rows<StaleHead>(stale)) {
-      await dataSource.transaction((manager) => this.refresh(head, manager));
+      const runner = dataSource.createQueryRunner();
+      await runner.connect();
+      try {
+        const input = await this.refresh(head, runner.manager);
+        await dataSource.transaction((manager) =>
+          this.projection.publish(input, manager),
+        );
+      } finally {
+        await runner.release();
+      }
     }
   }
 
   private async refresh(
     head: StaleHead,
     manager: EntityManager,
-  ): Promise<void> {
+  ): Promise<Parameters<CampaignForecastProjectionService['publish']>[0]> {
     const generatedAt = new Date();
+    const deadline = this.monotonicNow() + FORECAST_REFRESH_TIME_BUDGET_MS;
     const horizonEndsAt = new Date(generatedAt.getTime() + HORIZON_MS);
     const occurrences = [];
     let cursor = null;
     let complete = true;
 
-    while (occurrences.length < MAX_CANDIDATES) {
+    while (
+      occurrences.length < MAX_CANDIDATES &&
+      this.monotonicNow() < deadline
+    ) {
       const page = await this.candidates.readPage(
         {
           cursor,
@@ -99,17 +121,25 @@ export class CampaignForecastRefreshService {
       cursor = page.nextCursor;
       if (cursor === null) break;
     }
-    if (cursor !== null) complete = false;
+    if (cursor !== null || this.monotonicNow() >= deadline) complete = false;
 
     const campaignIds = [
       ...new Set(occurrences.map(({ campaignId }) => campaignId)),
     ];
     const pools = new Map<string, ReadyCampaignSenderReadiness[]>();
     for (const campaignId of campaignIds) {
+      if (this.monotonicNow() >= deadline) {
+        complete = false;
+        break;
+      }
       const pool = await this.senders.getCampaignEmailSenderPoolInTransaction(
         { campaignId, workspaceId: head.workspaceId },
         manager as WorkspaceEntityManager,
       );
+      if (this.monotonicNow() >= deadline) {
+        complete = false;
+        break;
+      }
       pools.set(
         campaignId,
         pool.mailboxes.filter(
@@ -225,6 +255,10 @@ export class CampaignForecastRefreshService {
       >
     >();
     for (const occurrence of occurrences) {
+      if (this.monotonicNow() >= deadline) {
+        complete = false;
+        break;
+      }
       const key = `${occurrence.campaignId}:${occurrence.workflowVersionId}`;
       let plan = plans.get(key);
       if (plan === undefined) {
@@ -242,6 +276,10 @@ export class CampaignForecastRefreshService {
         plan.kind === 'READY'
           ? plan.nodes[occurrence.authoredMessageIndex]
           : undefined;
+      if (this.monotonicNow() >= deadline) {
+        complete = false;
+        break;
+      }
       replyByOccurrence.set(
         occurrence.occurrenceId,
         node?.channel === 'EMAIL' && node.replyToThread === true,
@@ -249,9 +287,23 @@ export class CampaignForecastRefreshService {
     }
     let hasUnforecastableThreadReply = false;
     const forecastOccurrences = occurrences.flatMap((occurrence) => {
+      if (
+        !pools.has(occurrence.campaignId) ||
+        !replyByOccurrence.has(occurrence.occurrenceId)
+      ) {
+        complete = false;
+        return [];
+      }
       const replyToThread =
         replyByOccurrence.get(occurrence.occurrenceId) === true;
-      if (replyToThread && occurrence.pinnedConnectedAccountId === null) {
+      const pinnedAccountReady = (pools.get(occurrence.campaignId) ?? []).some(
+        ({ connectedAccountId }) =>
+          connectedAccountId === occurrence.pinnedConnectedAccountId,
+      );
+      if (
+        replyToThread &&
+        (occurrence.pinnedConnectedAccountId === null || !pinnedAccountReady)
+      ) {
         hasUnforecastableThreadReply = true;
         return [];
       }
@@ -284,23 +336,20 @@ export class CampaignForecastRefreshService {
       occurrences: forecastOccurrences,
     });
 
-    await this.projection.publish(
-      {
-        complete:
-          complete &&
-          conflictingAccountIds.size === 0 &&
-          !hasUnforecastableThreadReply &&
-          result.coverage.complete,
-        entries: result.projections,
-        evaluatedCount: result.coverage.evaluatedCount,
-        expectedInputRevision: Number(head.inputRevision),
-        generatedAt: result.generatedAt,
-        generationId: randomUUID(),
-        horizonEndsAt: result.horizonEndsAt,
-        scopeKey: head.scopeKey,
-        workspaceId: head.workspaceId,
-      },
-      manager,
-    );
+    return {
+      complete:
+        complete &&
+        conflictingAccountIds.size === 0 &&
+        !hasUnforecastableThreadReply &&
+        result.coverage.complete,
+      entries: result.projections,
+      evaluatedCount: result.coverage.evaluatedCount,
+      expectedInputRevision: Number(head.inputRevision),
+      generatedAt: result.generatedAt,
+      generationId: randomUUID(),
+      horizonEndsAt: result.horizonEndsAt,
+      scopeKey: head.scopeKey,
+      workspaceId: head.workspaceId,
+    };
   }
 }

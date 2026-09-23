@@ -45,6 +45,28 @@ describe('CampaignExecutionResolver', () => {
     ).toEqual([ResolverValidationPipe]);
   });
 
+  it('forwards only the occurrence identity to the permission-aware detail reader', async () => {
+    const messageOverviewReader = {
+      readDetail: jest.fn().mockResolvedValue(null),
+    };
+    const detailResolver = new CampaignExecutionResolver(
+      service as never,
+      audienceReview as never,
+      undefined,
+      undefined,
+      messageOverviewReader as never,
+    );
+    const input = { occurrenceId: '10000000-0000-4000-8000-000000000001' };
+
+    await expect(
+      detailResolver.campaignMessageOverviewDetail(input),
+    ).resolves.toBe(null);
+    expect(messageOverviewReader.readDetail).toHaveBeenCalledWith({
+      authContext: { workspace: { id: 'workspace' } },
+      occurrenceId: input.occurrenceId,
+    });
+  });
+
   it('returns permission-scoped audience counts and identities without emails', async () => {
     audienceReview.preview.mockResolvedValue({
       campaignId: '10000000-0000-4000-8000-000000000001',

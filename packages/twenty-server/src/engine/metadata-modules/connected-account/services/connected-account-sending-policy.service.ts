@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, type Repository } from 'typeorm';
 
 import { campaignMailboxAdvisoryKeys } from 'src/engine/core-modules/campaign-execution/services/campaign-mailbox-deletion-fence.service';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 
 import {
   ConnectedAccountException,
@@ -31,6 +32,7 @@ type UpdateRevisionedConnectedAccountSendingPolicyParams =
   UpdateConnectedAccountSendingPolicyParams & {
     expectedRevision: number;
     idempotencyKey: string;
+    userWorkspaceId: string;
   };
 
 @Injectable()
@@ -39,6 +41,7 @@ export class ConnectedAccountSendingPolicyService {
     @InjectRepository(ConnectedAccountEntity)
     private readonly repository: Repository<ConnectedAccountEntity>,
     private readonly spacingGuard: ConnectedAccountSendingPolicySpacingGuardService = new ConnectedAccountSendingPolicySpacingGuardService(),
+    private readonly forecastInvalidation = new CampaignForecastInputInvalidationService(),
   ) {}
 
   async updateRevisioned({
@@ -48,6 +51,7 @@ export class ConnectedAccountSendingPolicyService {
     idempotencyKey,
     minimumSendIntervalMs,
     workspaceId,
+    userWorkspaceId,
   }: UpdateRevisionedConnectedAccountSendingPolicyParams): Promise<ConnectedAccountEntity> {
     this.assertValidPolicy(dailySendLimit, minimumSendIntervalMs);
 
@@ -86,6 +90,15 @@ export class ConnectedAccountSendingPolicyService {
         throw new ConnectedAccountException(
           `Connected account ${connectedAccountId} not found`,
           ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+        );
+      }
+      if (
+        account.visibility !== 'workspace' &&
+        account.userWorkspaceId !== userWorkspaceId
+      ) {
+        throw new ConnectedAccountException(
+          `Connected account ${connectedAccountId} does not belong to user workspace ${userWorkspaceId}`,
+          ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_OWNERSHIP_VIOLATION,
         );
       }
 
@@ -144,6 +157,11 @@ export class ConnectedAccountSendingPolicyService {
           ConnectedAccountExceptionCode.SENDING_POLICY_REVISION_CONFLICT,
         );
       }
+
+      await this.forecastInvalidation.invalidateInTransaction(
+        { workspaceId },
+        manager,
+      );
 
       return updated[0];
     });
