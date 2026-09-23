@@ -17,6 +17,7 @@ export const GET_MY_CONNECTED_ACCOUNTS = gql`
       visibility
       dailySendLimit
       minimumSendIntervalMs
+      sendingPolicyRevision
       lastCredentialsRefreshedAt
       connectionParameters {
         IMAP {

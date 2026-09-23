@@ -1730,6 +1730,7 @@ type ConnectedAccountPublicDTO {
   visibility: String!
   dailySendLimit: Int!
   minimumSendIntervalMs: Int!
+  sendingPolicyRevision: Int!
   createdAt: DateTime!
   updatedAt: DateTime!
   connectionParameters: PublicImapSmtpCaldavConnectionParameters
@@ -3214,6 +3215,62 @@ type CampaignExecutionMutationResultDTO {
   inFlightCount: Int
 }
 
+type CampaignMessageOverviewRowDTO {
+  occurrenceId: ID!
+  campaignId: ID!
+  campaignName: String!
+  creatorId: ID!
+  creatorName: String
+  recipient: String
+  subject: String
+  preview: String
+  sequenceStep: Int!
+  platform: String!
+  status: String!
+  estimatedSendAt: String
+  sentAt: String
+  eligibleAfter: String
+  connectedAccountId: ID
+  connectedAccountLabel: String
+  senderIsEstimated: Boolean!
+  needsAttention: Boolean!
+  reason: String
+  inboxContactId: String
+  inboxThreadId: ID
+}
+
+type CampaignMessageOverviewPageInfoDTO {
+  hasNextPage: Boolean!
+  endCursor: String
+  generationId: ID
+  generatedAt: String
+  horizonEndsAt: String
+  forecastComplete: Boolean!
+  refreshing: Boolean!
+}
+
+type CampaignMessageOverviewConnectedAccountOptionDTO {
+  id: ID!
+  label: String!
+}
+
+type CampaignMessageOverviewFilterOptionsDTO {
+  campaigns: [CampaignMessageOverviewCampaignOptionDTO!]!
+  connectedAccounts: [CampaignMessageOverviewConnectedAccountOptionDTO!]!
+  connectedAccountIds: [ID!]!
+}
+
+type CampaignMessageOverviewCampaignOptionDTO {
+  id: ID!
+  name: String!
+}
+
+type CampaignMessageOverviewConnectionDTO {
+  nodes: [CampaignMessageOverviewRowDTO!]!
+  pageInfo: CampaignMessageOverviewPageInfoDTO!
+  filterOptions: CampaignMessageOverviewFilterOptionsDTO!
+}
+
 type ChannelSyncSuccess {
   success: Boolean!
 }
@@ -3706,6 +3763,8 @@ type Query {
   lineChartData(input: LineChartDataInput!): LineChartData!
   barChartData(input: BarChartDataInput!): BarChartData!
   campaignActivity(input: CampaignActivityInput!): CampaignActivityConnectionDTO!
+  campaignMessageOverview(input: CampaignMessageOverviewInput!): CampaignMessageOverviewConnectionDTO!
+  campaignMessageOverviewDetail(input: CampaignMessageOverviewDetailInput!): CampaignMessageOverviewRowDTO
   campaignOutreachAudienceReview(campaignId: UUID!): CampaignOutreachAudienceReview!
   getAutoCompleteAddress(address: String!, token: String!, country: String, isFieldCity: Boolean): [AutocompleteResult!]!
   getAddressDetails(placeId: String!, token: String!): PlaceDetailsResult!
@@ -3843,6 +3902,34 @@ input CampaignActivityInput {
   campaignId: ID!
   first: Int! = 25
   after: String
+}
+
+input CampaignMessageOverviewInput {
+  first: Int! = 50
+  after: String
+  view: CampaignMessageOverviewView! = ALL
+  campaignIds: [ID!]
+  connectedAccountIds: [ID!]
+  search: String
+  dateBasis: CampaignMessageOverviewDateBasis
+  dateFrom: String
+  dateTo: String
+}
+
+enum CampaignMessageOverviewView {
+  ALL
+  SCHEDULED
+  SENT
+  NEEDS_ATTENTION
+}
+
+enum CampaignMessageOverviewDateBasis {
+  ESTIMATED_SEND
+  SENT_AT
+}
+
+input CampaignMessageOverviewDetailInput {
+  occurrenceId: ID!
 }
 
 input UsageAnalyticsInput {
@@ -4778,6 +4865,8 @@ input UpdateConnectedAccountSendingPolicyInput {
   connectedAccountId: UUID!
   dailySendLimit: Int!
   minimumSendIntervalMs: Int!
+  expectedRevision: Int
+  idempotencyKey: UUID
 }
 
 input ActivateWorkspaceInput {

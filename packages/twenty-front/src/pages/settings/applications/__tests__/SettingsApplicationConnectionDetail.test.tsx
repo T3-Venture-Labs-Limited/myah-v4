@@ -144,6 +144,7 @@ describe('SettingsApplicationConnectionDetail', () => {
           authFailedAt: null,
           dailySendLimit: 50,
           minimumSendIntervalMs: 300_000,
+          sendingPolicyRevision: 0,
           scopes: ['calendar.readonly'],
           handleAliases: [],
           lastSignedInAt: null,

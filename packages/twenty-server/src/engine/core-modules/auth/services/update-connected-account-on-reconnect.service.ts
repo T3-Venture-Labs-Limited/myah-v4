@@ -7,6 +7,7 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 
 export type UpdateConnectedAccountOnReconnectInput = {
   workspaceId: string;
@@ -19,6 +20,8 @@ export type UpdateConnectedAccountOnReconnectInput = {
 
 @Injectable()
 export class UpdateConnectedAccountOnReconnectService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly connectedAccountTokenEncryptionService: ConnectedAccountTokenEncryptionService,
@@ -62,6 +65,10 @@ export class UpdateConnectedAccountOnReconnectService {
             authFailedAt: null,
           },
         );
+      await this.forecastInvalidation.invalidateInTransaction(
+        { workspaceId },
+        input.transactionManager,
+      );
     }, authContext);
   }
 }

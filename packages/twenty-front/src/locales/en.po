@@ -20120,10 +20120,10 @@ msgstr "Sending email"
 msgid "Sending policy"
 msgstr "Sending policy"
 
-#. js-lingui-id: bQg2zw
+#. js-lingui-id: 1wRb7r
 #: src/modules/settings/accounts/components/SettingsAccountSendingPolicy.tsx
-msgid "Sending policy updated"
-msgstr "Sending policy updated"
+msgid "Sending policy saved. Campaign estimates are refreshing."
+msgstr "Sending policy saved. Campaign estimates are refreshing."
 
 #. js-lingui-id: asU5VT
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestExecutionResult.tsx

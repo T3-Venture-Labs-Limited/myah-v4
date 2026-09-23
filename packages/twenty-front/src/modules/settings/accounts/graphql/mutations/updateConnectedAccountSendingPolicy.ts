@@ -8,6 +8,7 @@ export const UPDATE_CONNECTED_ACCOUNT_SENDING_POLICY = gql`
       id
       dailySendLimit
       minimumSendIntervalMs
+      sendingPolicyRevision
     }
   }
 `;

@@ -12,6 +12,7 @@ import {
   within,
 } from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
+import { MemoryRouter } from 'react-router-dom';
 
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
@@ -539,6 +540,16 @@ const renderPage = (store = createStore()) => {
       <JotaiProvider store={store}>
         <MyahInboxPage />
       </JotaiProvider>,
+      {
+        wrapper: ({ children }) => (
+          <MemoryRouter
+            initialEntries={['/myah/inbox']}
+            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          >
+            {children}
+          </MemoryRouter>
+        ),
+      },
     ),
   };
 };

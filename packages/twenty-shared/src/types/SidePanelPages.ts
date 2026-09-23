@@ -30,4 +30,5 @@ export enum SidePanelPages {
   InstagramMessage = 'instagram-message',
   ComposeCampaign = 'compose-campaign',
   MyahInboxContext = 'myah-inbox-context',
+  CampaignMessageOverview = 'campaign-message-overview',
 }

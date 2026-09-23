@@ -252,6 +252,10 @@ const createHarness = (overrides?: {
               await pause('advisory-lock');
               return [];
             }
+            if (sql.startsWith('INSERT INTO core."campaignForecastHead"')) {
+              order.push('forecast-invalidation');
+              return [];
+            }
             throw new Error(`Unexpected SQL: ${sql}`);
           }),
           ...overrides?.queryRunner,
@@ -426,7 +430,12 @@ describe('CampaignLifecycleTransactionService', () => {
       'campaign-lock',
       'write-authorization',
       'operation',
+      'forecast-invalidation',
     ]);
+    expect(harness.queryRunner?.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('INSERT INTO core."campaignForecastHead"'),
+      [workspaceId, `workspace:${workspaceId}`],
+    );
   });
 
   it('resolves permissions server-side and encloses all datasource work in the snapshotted actor context', async () => {
@@ -880,6 +889,7 @@ describe('CampaignLifecycleTransactionService', () => {
 
         return { affected: 1, raw: [projected], records: [projected] };
       }
+      if (sql.startsWith('INSERT INTO core."campaignForecastHead"')) return [];
 
       throw new Error(`Unexpected SQL: ${sql}`);
     });
@@ -922,7 +932,11 @@ describe('CampaignLifecycleTransactionService', () => {
         revocationReason: 'CAMPAIGN_PAUSED',
       },
     });
-    expect(query).toHaveBeenCalledTimes(5);
+    expect(query).toHaveBeenCalledTimes(6);
+    expect(query).toHaveBeenLastCalledWith(
+      expect.stringContaining('INSERT INTO core."campaignForecastHead"'),
+      [workspaceId, `workspace:${workspaceId}`],
+    );
   });
 
   it.each([
