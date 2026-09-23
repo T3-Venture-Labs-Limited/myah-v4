@@ -1,7 +1,22 @@
+import { UseGuards } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import {
+  GraphQLSchemaBuilderModule,
+  GraphQLSchemaFactory,
+  Args,
+  Mutation,
+  Query,
+  Resolver,
+} from '@nestjs/graphql';
+
 import { validate } from 'class-validator';
+import { isInputObjectType, isNonNullType } from 'graphql';
 import { getMetadataArgsStorage, IsNull, type Repository } from 'typeorm';
 
 import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
+import { ErrorCode } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
+import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
+import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import {
   ConnectedAccountException,
@@ -36,7 +51,57 @@ const buildConnectedAccount = (
     ...overrides,
   }) as ConnectedAccountEntity;
 
+@Resolver()
+@UseGuards(WorkspaceAuthGuard, NoPermissionGuard)
+class SendingPolicyInputSchemaResolver {
+  @Query(() => Boolean)
+  policyAvailable() {
+    return true;
+  }
+
+  @Mutation(() => Boolean)
+  savePolicy(@Args('input') _input: UpdateConnectedAccountSendingPolicyInput) {
+    return true;
+  }
+}
+
 describe('ConnectedAccount sending policy', () => {
+  describe('GraphQL input compatibility', () => {
+    it('keeps revision and idempotency fields nullable on the existing mutation input', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [GraphQLSchemaBuilderModule],
+        providers: [SendingPolicyInputSchemaResolver],
+      }).compile();
+
+      try {
+        const schema = await moduleRef
+          .get(GraphQLSchemaFactory)
+          .create([SendingPolicyInputSchemaResolver]);
+        const inputType = schema.getType(
+          'UpdateConnectedAccountSendingPolicyInput',
+        );
+
+        expect(isInputObjectType(inputType)).toBe(true);
+        if (!isInputObjectType(inputType)) {
+          throw new Error('Missing sending policy input');
+        }
+        const fields = inputType.getFields();
+
+        expect(isNonNullType(fields.expectedRevision.type)).toBe(false);
+        expect(isNonNullType(fields.idempotencyKey.type)).toBe(false);
+        for (const field of [
+          'connectedAccountId',
+          'dailySendLimit',
+          'minimumSendIntervalMs',
+        ]) {
+          expect(isNonNullType(fields[field].type)).toBe(true);
+        }
+      } finally {
+        await moduleRef.close();
+      }
+    });
+  });
+
   describe('entity defaults', () => {
     it.each([
       ['dailySendLimit', 50],
@@ -99,6 +164,32 @@ describe('ConnectedAccount sending policy', () => {
         );
 
         await expect(validate(input)).resolves.toEqual(
+          expect.arrayContaining([expect.objectContaining({ property })]),
+        );
+      },
+    );
+
+    it.each([
+      ['expectedRevision', 0],
+      ['expectedRevision', 1.5],
+      ['expectedRevision', GRAPHQL_INT_MAX + 1],
+      ['idempotencyKey', 'not-a-uuid'],
+    ] as const)(
+      'rejects supplied invalid %s value',
+      async (property, value) => {
+        const input = Object.assign(
+          new UpdateConnectedAccountSendingPolicyInput(),
+          {
+            connectedAccountId,
+            dailySendLimit: 50,
+            minimumSendIntervalMs: 300_000,
+            expectedRevision: 1,
+            idempotencyKey: 'b486cb28-c908-42f0-91ce-0e4a87a38592',
+            [property]: value,
+          },
+        );
+
+        expect(await validate(input)).toEqual(
           expect.arrayContaining([expect.objectContaining({ property })]),
         );
       },
@@ -258,6 +349,46 @@ describe('ConnectedAccount sending policy', () => {
   });
 
   describe('resolver mutation', () => {
+    it.each([
+      ['both', {}],
+      ['revision', { idempotencyKey: 'b486cb28-c908-42f0-91ce-0e4a87a38592' }],
+      ['idempotency key', { expectedRevision: 1 }],
+      [
+        'null revision',
+        {
+          expectedRevision: null,
+          idempotencyKey: 'b486cb28-c908-42f0-91ce-0e4a87a38592',
+        },
+      ],
+      ['null idempotency key', { expectedRevision: 1, idempotencyKey: null }],
+    ])(
+      'rejects missing %s without writing policy',
+      async (_missing, credentials) => {
+        const policyService = { updateRevisioned: jest.fn() };
+        const resolver = new ConnectedAccountResolver(
+          {} as never,
+          policyService as never,
+        );
+
+        await expect(
+          resolver.updateConnectedAccountSendingPolicy(
+            {
+              connectedAccountId,
+              dailySendLimit: 80,
+              minimumSendIntervalMs: 90_000,
+              ...credentials,
+            } as UpdateConnectedAccountSendingPolicyInput,
+            { id: workspaceId } as WorkspaceEntity,
+            '20202020-3333-4444-8888-333333333333',
+          ),
+        ).rejects.toMatchObject({
+          extensions: { code: ErrorCode.BAD_USER_INPUT },
+          message: expect.stringMatching(/refresh|update/i),
+        });
+        expect(policyService.updateRevisioned).not.toHaveBeenCalled();
+      },
+    );
+
     it('returns the updated public policy values without checking account ownership', async () => {
       const updatedAccount = buildConnectedAccount({
         dailySendLimit: 80,

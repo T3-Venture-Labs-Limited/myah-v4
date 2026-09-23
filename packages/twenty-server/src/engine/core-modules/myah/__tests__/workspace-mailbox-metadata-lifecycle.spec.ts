@@ -9,7 +9,15 @@ import { ConnectedAccountExceptionCode } from 'src/engine/metadata-modules/conne
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { type WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 
-type TestManager = { update: jest.Mock; getRepository: jest.Mock };
+type TestManager = {
+  update: jest.Mock;
+  getRepository: jest.Mock;
+  queryRunner: {
+    isTransactionActive: boolean;
+    isReleased: boolean;
+    query: jest.Mock;
+  };
+};
 
 describe('workspace mailbox metadata lifecycle', () => {
   const myahAccount = {
@@ -28,6 +36,17 @@ describe('workspace mailbox metadata lifecycle', () => {
     workspaceId: 'workspace-id',
   } as ConnectedAccountEntity;
   const entityManager: TestManager = {
+    queryRunner: {
+      isTransactionActive: true,
+      isReleased: false,
+      query: jest.fn(async (sql: string, params: unknown[]) => {
+        if (!sql.startsWith('INSERT INTO core."campaignForecastHead"')) {
+          throw new Error(`Unexpected SQL: ${sql}`);
+        }
+        expect(params).toEqual(['workspace-id', 'workspace:workspace-id']);
+        return [];
+      }),
+    },
     update: jest.fn(),
     getRepository: jest.fn((entity) =>
       entity === ConnectedAccountEntity
@@ -101,6 +120,7 @@ describe('workspace mailbox metadata lifecycle', () => {
       id: myahAccount.id,
       workspaceId: 'workspace-id',
     });
+    expect(entityManager.queryRunner.query).toHaveBeenCalledTimes(1);
   });
 
   it('normalizes disappearance before guarded deletion', async () => {
@@ -176,5 +196,6 @@ describe('workspace mailbox metadata lifecycle', () => {
     expect(appOAuthRevokeService.revokeIfApp).toHaveBeenCalledWith(
       personalAccount,
     );
+    expect(entityManager.queryRunner.query).toHaveBeenCalledTimes(1);
   });
 });

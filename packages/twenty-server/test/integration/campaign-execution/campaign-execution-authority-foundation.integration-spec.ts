@@ -159,7 +159,11 @@ const readNormalizedCampaignCatalog = async (
       FROM pg_constraint con WHERE con.conrelid IN (SELECT oid FROM relations)),
     'indexes', (SELECT jsonb_agg(jsonb_build_array(i.indexrelid::regclass::text,
       pg_get_indexdef(i.indexrelid), i.indisvalid, i.indisready) ORDER BY i.indexrelid::regclass::text)
-      FROM pg_index i WHERE i.indrelid IN (SELECT oid FROM relations)),
+      FROM pg_index i WHERE i.indrelid IN (SELECT oid FROM relations)
+        -- These later MYAH-402 projection indexes are not owned by the
+        -- historical authority command under this down/up comparison.
+        AND i.indexrelid::regclass::text NOT IN
+          ('core."IDX_CO_FORECAST_PENDING"','core."IDX_CO_OVERVIEW"')),
     'triggers', (SELECT jsonb_agg(jsonb_build_array(t.tgname, pg_get_triggerdef(t.oid, true)) ORDER BY t.tgname)
       FROM pg_trigger t WHERE t.tgrelid IN (SELECT oid FROM relations) AND NOT t.tgisinternal),
     'functions', (SELECT jsonb_agg(pg_get_functiondef(p.oid) ORDER BY p.proname)

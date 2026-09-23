@@ -49,9 +49,19 @@ export class ConnectedAccountResolver {
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<ConnectedAccountPublicDTO> {
+    const { expectedRevision, idempotencyKey } = input;
+
+    if (expectedRevision == null || idempotencyKey == null) {
+      throw new UserInputError(
+        'Sending policy revision and idempotency key are required. Refresh the account and update your client before saving.',
+      );
+    }
+
     const connectedAccount =
       await this.connectedAccountSendingPolicyService.updateRevisioned({
         ...input,
+        expectedRevision,
+        idempotencyKey,
         userWorkspaceId,
         workspaceId: workspace.id,
       });

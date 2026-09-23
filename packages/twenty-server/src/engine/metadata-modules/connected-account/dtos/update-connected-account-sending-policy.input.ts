@@ -1,6 +1,6 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
 
-import { IsInt, IsUUID, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 
@@ -24,13 +24,15 @@ export class UpdateConnectedAccountSendingPolicyInput {
   @Max(GRAPHQL_INT_MAX)
   minimumSendIntervalMs: number;
 
-  @Field(() => Int)
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(GRAPHQL_INT_MAX)
-  expectedRevision: number;
+  expectedRevision?: number;
 
-  @Field(() => UUIDScalarType)
+  @Field(() => UUIDScalarType, { nullable: true })
+  @IsOptional()
   @IsUUID()
-  idempotencyKey: string;
+  idempotencyKey?: string;
 }

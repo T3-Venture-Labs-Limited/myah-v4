@@ -374,6 +374,9 @@ export class CampaignMessageOverviewReaderService {
               workspaceId,
               roleIds: [...roleIds].sort(),
               campaignIds: selectedCampaigns.map(({ id }) => id).sort(),
+              requestedCampaignIds: input.filters.campaignIds
+                ? [...input.filters.campaignIds].sort()
+                : null,
               membershipIds: readableMemberships.map(({ id }) => id).sort(),
               readableAccountIds:
                 readableConnectedAccountIds === null
@@ -381,6 +384,9 @@ export class CampaignMessageOverviewReaderService {
                   : [...readableConnectedAccountIds].sort(),
               accountIds:
                 accountFilter === null ? null : [...accountFilter].sort(),
+              requestedAccountIds: input.filters.connectedAccountIds
+                ? [...input.filters.connectedAccountIds].sort()
+                : null,
               canReadRenderedContent,
               canReadCreatorEmail,
               view: input.filters.view,

@@ -1383,6 +1383,7 @@ export interface ConnectedAccountPublicDTO {
     visibility: Scalars['String']
     dailySendLimit: Scalars['Int']
     minimumSendIntervalMs: Scalars['Int']
+    sendingPolicyRevision: Scalars['Int']
     createdAt: Scalars['DateTime']
     updatedAt: Scalars['DateTime']
     connectionParameters?: PublicImapSmtpCaldavConnectionParameters
@@ -2912,6 +2913,68 @@ export interface CampaignExecutionMutationResultDTO {
     __typename: 'CampaignExecutionMutationResultDTO'
 }
 
+export interface CampaignMessageOverviewRowDTO {
+    occurrenceId: Scalars['ID']
+    campaignId: Scalars['ID']
+    campaignName: Scalars['String']
+    creatorId: Scalars['ID']
+    creatorName?: Scalars['String']
+    recipient?: Scalars['String']
+    subject?: Scalars['String']
+    preview?: Scalars['String']
+    sequenceStep: Scalars['Int']
+    platform: Scalars['String']
+    status: Scalars['String']
+    estimatedSendAt?: Scalars['String']
+    sentAt?: Scalars['String']
+    eligibleAfter?: Scalars['String']
+    connectedAccountId?: Scalars['ID']
+    connectedAccountLabel?: Scalars['String']
+    senderIsEstimated: Scalars['Boolean']
+    needsAttention: Scalars['Boolean']
+    reason?: Scalars['String']
+    inboxContactId?: Scalars['String']
+    inboxThreadId?: Scalars['ID']
+    __typename: 'CampaignMessageOverviewRowDTO'
+}
+
+export interface CampaignMessageOverviewPageInfoDTO {
+    hasNextPage: Scalars['Boolean']
+    endCursor?: Scalars['String']
+    generationId?: Scalars['ID']
+    generatedAt?: Scalars['String']
+    horizonEndsAt?: Scalars['String']
+    forecastComplete: Scalars['Boolean']
+    refreshing: Scalars['Boolean']
+    __typename: 'CampaignMessageOverviewPageInfoDTO'
+}
+
+export interface CampaignMessageOverviewConnectedAccountOptionDTO {
+    id: Scalars['ID']
+    label: Scalars['String']
+    __typename: 'CampaignMessageOverviewConnectedAccountOptionDTO'
+}
+
+export interface CampaignMessageOverviewFilterOptionsDTO {
+    campaigns: CampaignMessageOverviewCampaignOptionDTO[]
+    connectedAccounts: CampaignMessageOverviewConnectedAccountOptionDTO[]
+    connectedAccountIds: Scalars['ID'][]
+    __typename: 'CampaignMessageOverviewFilterOptionsDTO'
+}
+
+export interface CampaignMessageOverviewCampaignOptionDTO {
+    id: Scalars['ID']
+    name: Scalars['String']
+    __typename: 'CampaignMessageOverviewCampaignOptionDTO'
+}
+
+export interface CampaignMessageOverviewConnectionDTO {
+    nodes: CampaignMessageOverviewRowDTO[]
+    pageInfo: CampaignMessageOverviewPageInfoDTO
+    filterOptions: CampaignMessageOverviewFilterOptionsDTO
+    __typename: 'CampaignMessageOverviewConnectionDTO'
+}
+
 export interface ChannelSyncSuccess {
     success: Scalars['Boolean']
     __typename: 'ChannelSyncSuccess'
@@ -3351,6 +3414,8 @@ export interface Query {
     lineChartData: LineChartData
     barChartData: BarChartData
     campaignActivity: CampaignActivityConnectionDTO
+    campaignMessageOverview: CampaignMessageOverviewConnectionDTO
+    campaignMessageOverviewDetail?: CampaignMessageOverviewRowDTO
     campaignOutreachAudienceReview: CampaignOutreachAudienceReview
     getAutoCompleteAddress: AutocompleteResult[]
     getAddressDetails: PlaceDetailsResult
@@ -3360,6 +3425,10 @@ export interface Query {
 }
 
 export type EventLogTable = 'WORKSPACE_EVENT' | 'PAGEVIEW' | 'OBJECT_EVENT' | 'USAGE_EVENT' | 'APPLICATION_LOG'
+
+export type CampaignMessageOverviewView = 'ALL' | 'SCHEDULED' | 'SENT' | 'NEEDS_ATTENTION'
+
+export type CampaignMessageOverviewDateBasis = 'ESTIMATED_SEND' | 'SENT_AT'
 
 export type UsageOperationType = 'AI_CHAT_TOKEN' | 'AI_WORKFLOW_TOKEN' | 'WORKFLOW_EXECUTION' | 'CODE_EXECUTION' | 'WEB_SEARCH' | 'CALL_RECORDING' | 'EMAIL_SEND'
 
@@ -5075,6 +5144,7 @@ export interface ConnectedAccountPublicDTOGenqlSelection{
     visibility?: boolean | number
     dailySendLimit?: boolean | number
     minimumSendIntervalMs?: boolean | number
+    sendingPolicyRevision?: boolean | number
     createdAt?: boolean | number
     updatedAt?: boolean | number
     connectionParameters?: PublicImapSmtpCaldavConnectionParametersGenqlSelection
@@ -6719,6 +6789,74 @@ export interface CampaignExecutionMutationResultDTOGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface CampaignMessageOverviewRowDTOGenqlSelection{
+    occurrenceId?: boolean | number
+    campaignId?: boolean | number
+    campaignName?: boolean | number
+    creatorId?: boolean | number
+    creatorName?: boolean | number
+    recipient?: boolean | number
+    subject?: boolean | number
+    preview?: boolean | number
+    sequenceStep?: boolean | number
+    platform?: boolean | number
+    status?: boolean | number
+    estimatedSendAt?: boolean | number
+    sentAt?: boolean | number
+    eligibleAfter?: boolean | number
+    connectedAccountId?: boolean | number
+    connectedAccountLabel?: boolean | number
+    senderIsEstimated?: boolean | number
+    needsAttention?: boolean | number
+    reason?: boolean | number
+    inboxContactId?: boolean | number
+    inboxThreadId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignMessageOverviewPageInfoDTOGenqlSelection{
+    hasNextPage?: boolean | number
+    endCursor?: boolean | number
+    generationId?: boolean | number
+    generatedAt?: boolean | number
+    horizonEndsAt?: boolean | number
+    forecastComplete?: boolean | number
+    refreshing?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignMessageOverviewConnectedAccountOptionDTOGenqlSelection{
+    id?: boolean | number
+    label?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignMessageOverviewFilterOptionsDTOGenqlSelection{
+    campaigns?: CampaignMessageOverviewCampaignOptionDTOGenqlSelection
+    connectedAccounts?: CampaignMessageOverviewConnectedAccountOptionDTOGenqlSelection
+    connectedAccountIds?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignMessageOverviewCampaignOptionDTOGenqlSelection{
+    id?: boolean | number
+    name?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignMessageOverviewConnectionDTOGenqlSelection{
+    nodes?: CampaignMessageOverviewRowDTOGenqlSelection
+    pageInfo?: CampaignMessageOverviewPageInfoDTOGenqlSelection
+    filterOptions?: CampaignMessageOverviewFilterOptionsDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface ChannelSyncSuccessGenqlSelection{
     success?: boolean | number
     __typename?: boolean | number
@@ -7197,6 +7335,8 @@ export interface QueryGenqlSelection{
     lineChartData?: (LineChartDataGenqlSelection & { __args: {input: LineChartDataInput} })
     barChartData?: (BarChartDataGenqlSelection & { __args: {input: BarChartDataInput} })
     campaignActivity?: (CampaignActivityConnectionDTOGenqlSelection & { __args: {input: CampaignActivityInput} })
+    campaignMessageOverview?: (CampaignMessageOverviewConnectionDTOGenqlSelection & { __args: {input: CampaignMessageOverviewInput} })
+    campaignMessageOverviewDetail?: (CampaignMessageOverviewRowDTOGenqlSelection & { __args: {input: CampaignMessageOverviewDetailInput} })
     campaignOutreachAudienceReview?: (CampaignOutreachAudienceReviewGenqlSelection & { __args: {campaignId: Scalars['UUID']} })
     getAutoCompleteAddress?: (AutocompleteResultGenqlSelection & { __args: {address: Scalars['String'], token: Scalars['String'], country?: (Scalars['String'] | null), isFieldCity?: (Scalars['Boolean'] | null)} })
     getAddressDetails?: (PlaceDetailsResultGenqlSelection & { __args: {placeId: Scalars['String'], token: Scalars['String']} })
@@ -7257,6 +7397,10 @@ export interface LineChartDataInput {objectMetadataId: Scalars['UUID'],configura
 export interface BarChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
 
 export interface CampaignActivityInput {campaignId: Scalars['ID'],first: Scalars['Int'],after?: (Scalars['String'] | null)}
+
+export interface CampaignMessageOverviewInput {first: Scalars['Int'],after?: (Scalars['String'] | null),view: CampaignMessageOverviewView,campaignIds?: (Scalars['ID'][] | null),connectedAccountIds?: (Scalars['ID'][] | null),search?: (Scalars['String'] | null),dateBasis?: (CampaignMessageOverviewDateBasis | null),dateFrom?: (Scalars['String'] | null),dateTo?: (Scalars['String'] | null)}
+
+export interface CampaignMessageOverviewDetailInput {occurrenceId: Scalars['ID']}
 
 export interface UsageAnalyticsInput {periodStart?: (Scalars['DateTime'] | null),periodEnd?: (Scalars['DateTime'] | null),userWorkspaceId?: (Scalars['String'] | null),operationTypes?: (UsageOperationType[] | null)}
 
@@ -7773,7 +7917,7 @@ export interface DeleteApprovedAccessDomainInput {id: Scalars['UUID']}
 
 export interface ValidateApprovedAccessDomainInput {validationToken: Scalars['String'],approvedAccessDomainId: Scalars['UUID']}
 
-export interface UpdateConnectedAccountSendingPolicyInput {connectedAccountId: Scalars['UUID'],dailySendLimit: Scalars['Int'],minimumSendIntervalMs: Scalars['Int']}
+export interface UpdateConnectedAccountSendingPolicyInput {connectedAccountId: Scalars['UUID'],dailySendLimit: Scalars['Int'],minimumSendIntervalMs: Scalars['Int'],expectedRevision?: (Scalars['Int'] | null),idempotencyKey?: (Scalars['UUID'] | null)}
 
 export interface ActivateWorkspaceInput {
 /** Deprecated: the workspace name is set at creation (signUpInNewWorkspace) and this field is ignored during activation. Kept for backward compatibility. */
@@ -10187,6 +10331,54 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
 
 
 
+    const CampaignMessageOverviewRowDTO_possibleTypes: string[] = ['CampaignMessageOverviewRowDTO']
+    export const isCampaignMessageOverviewRowDTO = (obj?: { __typename?: any } | null): obj is CampaignMessageOverviewRowDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignMessageOverviewRowDTO"')
+      return CampaignMessageOverviewRowDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignMessageOverviewPageInfoDTO_possibleTypes: string[] = ['CampaignMessageOverviewPageInfoDTO']
+    export const isCampaignMessageOverviewPageInfoDTO = (obj?: { __typename?: any } | null): obj is CampaignMessageOverviewPageInfoDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignMessageOverviewPageInfoDTO"')
+      return CampaignMessageOverviewPageInfoDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignMessageOverviewConnectedAccountOptionDTO_possibleTypes: string[] = ['CampaignMessageOverviewConnectedAccountOptionDTO']
+    export const isCampaignMessageOverviewConnectedAccountOptionDTO = (obj?: { __typename?: any } | null): obj is CampaignMessageOverviewConnectedAccountOptionDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignMessageOverviewConnectedAccountOptionDTO"')
+      return CampaignMessageOverviewConnectedAccountOptionDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignMessageOverviewFilterOptionsDTO_possibleTypes: string[] = ['CampaignMessageOverviewFilterOptionsDTO']
+    export const isCampaignMessageOverviewFilterOptionsDTO = (obj?: { __typename?: any } | null): obj is CampaignMessageOverviewFilterOptionsDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignMessageOverviewFilterOptionsDTO"')
+      return CampaignMessageOverviewFilterOptionsDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignMessageOverviewCampaignOptionDTO_possibleTypes: string[] = ['CampaignMessageOverviewCampaignOptionDTO']
+    export const isCampaignMessageOverviewCampaignOptionDTO = (obj?: { __typename?: any } | null): obj is CampaignMessageOverviewCampaignOptionDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignMessageOverviewCampaignOptionDTO"')
+      return CampaignMessageOverviewCampaignOptionDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CampaignMessageOverviewConnectionDTO_possibleTypes: string[] = ['CampaignMessageOverviewConnectionDTO']
+    export const isCampaignMessageOverviewConnectionDTO = (obj?: { __typename?: any } | null): obj is CampaignMessageOverviewConnectionDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignMessageOverviewConnectionDTO"')
+      return CampaignMessageOverviewConnectionDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
     const ChannelSyncSuccess_possibleTypes: string[] = ['ChannelSyncSuccess']
     export const isChannelSyncSuccess = (obj?: { __typename?: any } | null): obj is ChannelSyncSuccess => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isChannelSyncSuccess"')
@@ -11165,6 +11357,18 @@ export const enumEventLogTable = {
    OBJECT_EVENT: 'OBJECT_EVENT' as const,
    USAGE_EVENT: 'USAGE_EVENT' as const,
    APPLICATION_LOG: 'APPLICATION_LOG' as const
+}
+
+export const enumCampaignMessageOverviewView = {
+   ALL: 'ALL' as const,
+   SCHEDULED: 'SCHEDULED' as const,
+   SENT: 'SENT' as const,
+   NEEDS_ATTENTION: 'NEEDS_ATTENTION' as const
+}
+
+export const enumCampaignMessageOverviewDateBasis = {
+   ESTIMATED_SEND: 'ESTIMATED_SEND' as const,
+   SENT_AT: 'SENT_AT' as const
 }
 
 export const enumUsageOperationType = {

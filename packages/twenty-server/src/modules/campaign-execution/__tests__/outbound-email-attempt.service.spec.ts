@@ -2428,6 +2428,7 @@ const createStatefulCompositionHarness = (options?: {
   const attempts = new Map<string, OutboundEmailAttemptReceipt>();
   const clocks = new Map<string, StatefulClock>();
   const days = new Map<string, StatefulDay>();
+  let forecastRevision = 0;
   const calls: Array<{
     params: unknown[];
     sql: string;
@@ -2531,6 +2532,11 @@ const createStatefulCompositionHarness = (options?: {
     ): Promise<unknown> => {
       calls.push({ params: clone(params), sql, structured });
 
+      if (sql.startsWith('INSERT INTO core."campaignForecastHead"')) {
+        expect(params).toEqual([ids.workspace, `workspace:${ids.workspace}`]);
+        forecastRevision += 1;
+        return [];
+      }
       if (sql.includes('pg_advisory_xact_lock')) return [{ locked: true }];
 
       if (sql.includes('INSERT INTO "core"."mailboxDispatchClock"')) {
@@ -2816,6 +2822,7 @@ const createStatefulCompositionHarness = (options?: {
     attempts: clone([...attempts.entries()]),
     clocks: clone([...clocks.entries()]),
     days: clone([...days.entries()]),
+    forecastRevision,
   });
   const transaction = async <Result>(work: () => Promise<Result>) => {
     const before = snapshot();
@@ -2826,6 +2833,7 @@ const createStatefulCompositionHarness = (options?: {
       attempts.clear();
       clocks.clear();
       days.clear();
+      forecastRevision = before.forecastRevision;
       for (const [key, value] of before.attempts) attempts.set(key, value);
       for (const [key, value] of before.clocks) clocks.set(key, value);
       for (const [key, value] of before.days) days.set(key, value);
@@ -3052,6 +3060,9 @@ const expectedStatefulAttemptInsertParams = (
 
 const statefulSqlLabel = (sql: string): string => {
   if (sql.includes('pg_advisory')) return 'attempt-fence';
+  if (sql.startsWith('INSERT INTO core."campaignForecastHead"')) {
+    return 'forecast-invalidation';
+  }
   if (sql.includes('FROM "core"."outboundEmailAttempt"')) {
     return 'attempt-lock';
   }
@@ -3187,6 +3198,11 @@ describe('real-service stateful Task4B composition', () => {
             new Date(reservedAt.getTime() + 300_000),
           ],
           structured: true,
+        },
+        {
+          label: 'forecast-invalidation',
+          params: [ids.workspace, `workspace:${ids.workspace}`],
+          structured: undefined,
         },
         {
           label: 'attempt-lock',
