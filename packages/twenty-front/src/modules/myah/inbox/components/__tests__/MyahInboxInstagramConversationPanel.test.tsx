@@ -156,6 +156,11 @@ const contact = (
   creator: { id: 'creator-1', name: 'Ada' },
   lastActivityAt: '2026-09-05T10:00:00.000Z',
   latestChannel: 'INSTAGRAM',
+  initialSelection: {
+    channel: 'INSTAGRAM',
+    emailThreadId: null,
+    instagramConversationId: null,
+  },
   preview: null,
   sender: null,
   needsAttention: false,

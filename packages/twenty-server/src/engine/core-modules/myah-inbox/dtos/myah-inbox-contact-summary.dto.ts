@@ -112,6 +112,18 @@ export class MyahInboxContactTriageSummary {
   identityGeneration: string | null;
 }
 
+@ObjectType('MyahInboxContactInitialSelection')
+export class MyahInboxContactInitialSelection {
+  @Field(() => MyahInboxContactLatestChannel)
+  channel: MyahInboxContactLatestChannel;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  emailThreadId: string | null;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  instagramConversationId: string | null;
+}
+
 @ObjectType('MyahInboxContactSummary')
 export class MyahInboxContactSummary {
   @Field(() => String)
@@ -134,6 +146,9 @@ export class MyahInboxContactSummary {
 
   @Field(() => MyahInboxContactLatestChannel)
   latestChannel: MyahInboxContactLatestChannel;
+
+  @Field(() => MyahInboxContactInitialSelection)
+  initialSelection: MyahInboxContactInitialSelection;
 
   @Field(() => String, { nullable: true })
   preview: string | null;

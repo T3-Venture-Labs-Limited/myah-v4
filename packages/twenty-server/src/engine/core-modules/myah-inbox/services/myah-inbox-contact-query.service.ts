@@ -89,6 +89,9 @@ type ContactRaw = {
   lastActivityAt: Date | string;
   activityCursorTimestamp: string;
   latestChannel: MyahInboxContactLatestChannel;
+  initialChannel: MyahInboxContactLatestChannel;
+  initialEmailThreadId: string | null;
+  initialInstagramConversationId: string | null;
   displayName: string | null;
   creatorId: string | null;
   creatorName: string | null;
@@ -517,8 +520,21 @@ visible_email_messages AS (
     message.subject,
     message.text,
     message.visibility,
+    email_association.direction,
     sender.handle AS sender
   FROM readable_messages message
+  INNER JOIN LATERAL (
+    SELECT association.direction
+    FROM "${workspaceSchemaName}"."messageChannelMessageAssociation" association
+    INNER JOIN core."messageChannel" channel
+      ON channel.id = association."messageChannelId"
+     AND channel."workspaceId" = ${emailChannelWorkspace}
+    WHERE association."messageId" = message.id
+      AND association."deletedAt" IS NULL
+      AND channel.type::text = ANY(${emailChannelTypes}::text[])
+    ORDER BY (association.direction = 'INCOMING') DESC, association.id
+    LIMIT 1
+  ) email_association ON TRUE
   LEFT JOIN LATERAL (
     SELECT participant.handle
     FROM readable_participants participant
@@ -529,16 +545,6 @@ visible_email_messages AS (
   ) sender ON TRUE
   WHERE message."receivedAt" IS NOT NULL
     AND message.visibility <> ${hidden}
-    AND EXISTS (
-      SELECT 1
-      FROM "${workspaceSchemaName}"."messageChannelMessageAssociation" association
-      INNER JOIN core."messageChannel" channel
-        ON channel.id = association."messageChannelId"
-       AND channel."workspaceId" = ${emailChannelWorkspace}
-      WHERE association."messageId" = message.id
-        AND association."deletedAt" IS NULL
-        AND channel.type::text = ANY(${emailChannelTypes}::text[])
-    )
 ),
 latest_email_by_thread AS (
   SELECT DISTINCT ON (message."messageThreadId")
@@ -563,6 +569,14 @@ latest_email_by_thread AS (
   FROM visible_email_messages message
   ORDER BY message."messageThreadId", message."receivedAt" DESC, message.id DESC
 ),
+latest_inbound_email_by_thread AS (
+  SELECT DISTINCT ON (message."messageThreadId")
+    message."messageThreadId",
+    message."receivedAt" AS "inboundAt"
+  FROM visible_email_messages message
+  WHERE message.direction = 'INCOMING'
+  ORDER BY message."messageThreadId", message."receivedAt" DESC, message.id DESC
+),
 latest_instagram_by_conversation AS (
   SELECT DISTINCT ON (message."conversationId")
     message.id,
@@ -573,6 +587,14 @@ latest_instagram_by_conversation AS (
   FROM readable_social_messages message
   ORDER BY message."conversationId", COALESCE(message."providerCreatedAt", message."createdAt") DESC, message.id DESC
 ),
+latest_inbound_instagram_by_conversation AS (
+  SELECT DISTINCT ON (message."conversationId")
+    message."conversationId",
+    COALESCE(message."providerCreatedAt", message."createdAt") AS "inboundAt"
+  FROM readable_social_messages message
+  WHERE message.direction = 'INBOUND'
+  ORDER BY message."conversationId", COALESCE(message."providerCreatedAt", message."createdAt") DESC, message.id DESC
+),
 email_source_rows AS (
   SELECT
     CASE WHEN creator.id IS NULL THEN 'email-thread' ELSE 'creator' END AS "identityKind",
@@ -580,6 +602,7 @@ email_source_rows AS (
     'EMAIL' AS "sourceKind",
     CONCAT('EMAIL:', thread.id) AS "sourceOrderingKey",
     latest."activityAt",
+    inbound."inboundAt",
     latest.preview,
     latest.sender,
     thread.id AS "emailThreadId",
@@ -601,6 +624,8 @@ email_source_rows AS (
   FROM readable_threads thread
   INNER JOIN latest_email_by_thread latest
     ON latest."messageThreadId" = thread.id
+  LEFT JOIN latest_inbound_email_by_thread inbound
+    ON inbound."messageThreadId" = thread.id
   LEFT JOIN readable_creators creator ON creator.id = thread."creatorId"
 ),
 instagram_source_rows AS (
@@ -610,6 +635,7 @@ instagram_source_rows AS (
     'INSTAGRAM' AS "sourceKind",
     CONCAT('INSTAGRAM:', conversation.id) AS "sourceOrderingKey",
     COALESCE(latest."activityAt", conversation."updatedAt", conversation."createdAt") AS "activityAt",
+    inbound."inboundAt",
     latest.preview,
     COALESCE(conversation."recipientUsername", conversation."recipientDisplayName") AS sender,
     NULL::uuid AS "emailThreadId",
@@ -631,6 +657,8 @@ instagram_source_rows AS (
   FROM readable_social_conversations conversation
   LEFT JOIN latest_instagram_by_conversation latest
     ON latest."conversationId" = conversation.id
+  LEFT JOIN latest_inbound_instagram_by_conversation inbound
+    ON inbound."conversationId" = conversation.id
   LEFT JOIN readable_creators creator ON creator.id = conversation."creatorId"
 ),
 all_source_rows AS (
@@ -736,6 +764,15 @@ latest_source AS (
    AND eligible."identityRecordId" = source."identityRecordId"
   ORDER BY source."identityKind", source."identityRecordId", source."activityAt" DESC, source."sourceOrderingKey" DESC
 ),
+latest_inbound_source AS (
+  SELECT DISTINCT ON (source."identityKind", source."identityRecordId") source.*
+  FROM effective_source_rows source
+  INNER JOIN eligible_contacts eligible
+    ON eligible."identityKind" = source."identityKind"
+   AND eligible."identityRecordId" = source."identityRecordId"
+  WHERE source."inboundAt" IS NOT NULL
+  ORDER BY source."identityKind", source."identityRecordId", source."inboundAt" DESC, source."sourceOrderingKey" DESC
+),
 email_aggregation AS (
   SELECT
     source."identityKind",
@@ -780,6 +817,20 @@ contact AS (
     CONCAT(latest."identityKind", ':', latest."identityRecordId") AS "orderingKey",
     latest."activityAt" AS "lastActivityAt",
     latest."sourceKind" AS "latestChannel",
+    COALESCE(inbound."sourceKind", latest."sourceKind") AS "initialChannel",
+    CASE
+      WHEN COALESCE(inbound."sourceKind", latest."sourceKind") = 'EMAIL'
+        THEN COALESCE(inbound."emailThreadId", latest."emailThreadId")
+      ELSE NULL::uuid
+    END AS "initialEmailThreadId",
+    CASE
+      WHEN COALESCE(inbound."sourceKind", latest."sourceKind") = 'INSTAGRAM'
+        AND JSONB_ARRAY_LENGTH(COALESCE(instagram."instagramConversations", '[]'::jsonb)) = 1
+        AND COALESCE(inbound."instagramConversationId", latest."instagramConversationId") =
+          (instagram."instagramConversations"->0->>'id')::uuid
+        THEN COALESCE(inbound."instagramConversationId", latest."instagramConversationId")
+      ELSE NULL::uuid
+    END AS "initialInstagramConversationId",
     COALESCE(
       latest."creatorName",
       latest."recipientDisplayName",
@@ -804,6 +855,9 @@ contact AS (
     COALESCE(instagram."instagramNeedsAttention", FALSE) AS "instagramNeedsAttention",
     COALESCE(instagram."instagramConversations", '[]'::jsonb) AS "instagramConversations"
   FROM latest_source latest
+  LEFT JOIN latest_inbound_source inbound
+    ON inbound."identityKind" = latest."identityKind"
+   AND inbound."identityRecordId" = latest."identityRecordId"
   LEFT JOIN email_aggregation email
     ON email."identityKind" = latest."identityKind"
    AND email."identityRecordId" = latest."identityRecordId"
@@ -930,6 +984,11 @@ ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderi
       instagramUsername: row.creatorInstagramUsername,
       lastActivityAt,
       latestChannel: row.latestChannel,
+      initialSelection: {
+        channel: row.initialChannel,
+        emailThreadId: row.initialEmailThreadId,
+        instagramConversationId: row.initialInstagramConversationId,
+      },
       preview: row.preview,
       sender: row.sender,
       needsAttention: row.triageIsAvailable

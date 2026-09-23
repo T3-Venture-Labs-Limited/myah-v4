@@ -57,6 +57,11 @@ const contact: MyahInboxContact = {
   creator: { id: 'creator-1', name: 'Ada Creator' },
   lastActivityAt: '2026-07-24T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
+  initialSelection: {
+    channel: 'INSTAGRAM',
+    emailThreadId: null,
+    instagramConversationId: null,
+  },
   preview: 'Can we move the launch to Friday?',
   sender: '@ada',
   needsAttention: true,

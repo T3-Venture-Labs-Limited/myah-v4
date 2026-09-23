@@ -61,6 +61,9 @@ const rawRows = [
     lastActivityAt: '2026-09-05T12:00:00.000Z',
     activityCursorTimestamp: '2026-09-05T12:00:00.000000Z',
     latestChannel: 'INSTAGRAM',
+    initialChannel: 'EMAIL',
+    initialEmailThreadId: emailThreadAId,
+    initialInstagramConversationId: null,
     displayName: 'Creator One',
     creatorId,
     creatorName: 'Creator One',
@@ -101,6 +104,9 @@ const rawRows = [
     lastActivityAt: '2026-09-05T10:00:00.000Z',
     activityCursorTimestamp: '2026-09-05T10:00:00.000000Z',
     latestChannel: 'EMAIL',
+    initialChannel: 'EMAIL',
+    initialEmailThreadId: emailThreadAId,
+    initialInstagramConversationId: null,
     displayName: 'unmatched@example.com',
     creatorId: null,
     creatorName: null,
@@ -120,6 +126,9 @@ const rawRows = [
     lastActivityAt: '2026-09-05T09:00:00.000Z',
     activityCursorTimestamp: '2026-09-05T09:00:00.000000Z',
     latestChannel: 'INSTAGRAM',
+    initialChannel: 'INSTAGRAM',
+    initialEmailThreadId: null,
+    initialInstagramConversationId: instagramAId,
     displayName: '@unmatched.creator',
     creatorId: null,
     creatorName: null,
@@ -418,6 +427,11 @@ describe('MyahInboxContactQueryService', () => {
             displayName: 'Creator One',
             creator: { id: creatorId, name: 'Creator One' },
             latestChannel: 'INSTAGRAM',
+            initialSelection: {
+              channel: 'EMAIL',
+              emailThreadId: emailThreadAId,
+              instagramConversationId: null,
+            },
             preview: 'Latest Instagram reply',
             needsAttention: true,
             email: {
@@ -798,6 +812,21 @@ describe('MyahInboxContactQueryService', () => {
     expect(sql).toContain('visible_email_messages AS');
     expect(sql).toContain('email_visibility(message.id)');
     expect(sql).toMatch(/message\.visibility <> \$\d+/);
+    expect(sql).toContain('association.direction');
+    expect(sql).toContain(
+      "ORDER BY (association.direction = 'INCOMING') DESC, association.id",
+    );
+    expect(sql).toContain('latest_inbound_email_by_thread AS');
+    expect(sql).toContain("WHERE message.direction = 'INCOMING'");
+    expect(sql).toContain('latest_inbound_instagram_by_conversation AS');
+    expect(sql).toContain("WHERE message.direction = 'INBOUND'");
+    expect(sql).toContain('latest_inbound_source AS');
+    expect(sql).toContain(
+      'ORDER BY source."identityKind", source."identityRecordId", source."inboundAt" DESC, source."sourceOrderingKey" DESC',
+    );
+    expect(sql).toContain(
+      'COALESCE(inbound."sourceKind", latest."sourceKind") AS "initialChannel"',
+    );
     expect(sql).toContain('UNION ALL');
     expect(sql).toContain('all_source_rows');
     expect(sql).toContain('eligible_contacts');
@@ -813,6 +842,7 @@ describe('MyahInboxContactQueryService', () => {
     expect(sql).toContain(
       'COALESCE(latest."activityAt", conversation."updatedAt", conversation."createdAt")',
     );
+    expect(sql).toContain('latest."sourceKind" AS "latestChannel"');
     expect(sql).toContain('BOOL_OR(source."instagramDirection" = \'INBOUND\')');
     expect(sql).toContain(
       'source."effectiveSnoozedUntil" <= CURRENT_TIMESTAMP',

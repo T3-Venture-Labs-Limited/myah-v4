@@ -95,6 +95,11 @@ const dualContact: MyahInboxContact = {
   creator: { id: 'creator-ada', name: 'Ada Okafor' },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
+  initialSelection: {
+    channel: 'INSTAGRAM',
+    emailThreadId: null,
+    instagramConversationId: 'instagram-ada',
+  },
   preview: 'The revised rate works for me.',
   sender: '@ada.creates',
   needsAttention: true,

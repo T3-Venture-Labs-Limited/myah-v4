@@ -47,6 +47,11 @@ const contact = (id: string): MyahInboxContact => ({
   creator: { id: `creator-${id}`, name: id },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'EMAIL',
+  initialSelection: {
+    channel: 'EMAIL',
+    emailThreadId: `thread-${id}`,
+    instagramConversationId: null,
+  },
   preview: 'Hello',
   sender: 'Ada',
   needsAttention: true,

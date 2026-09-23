@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import gql from 'graphql-tag';
 
@@ -5,6 +7,7 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { installMyahInboxInstagramMetadataBridge } from 'test/integration/myah-inbox/utils/install-myah-inbox-instagram-metadata-bridge.util';
 import {
   cleanupMyahInboxTask7Fixture,
   getDomainService,
@@ -23,6 +26,11 @@ const contactsQuery = gql`
           displayName
           lastActivityAt
           latestChannel
+          initialSelection {
+            channel
+            emailThreadId
+            instagramConversationId
+          }
           preview
           needsAttention
           creator {
@@ -107,6 +115,13 @@ const linkContactMutation = gql`
 type ContactNode = {
   id: string;
   identityKind: string;
+  lastActivityAt: string;
+  latestChannel: 'EMAIL' | 'INSTAGRAM';
+  initialSelection: {
+    channel: 'EMAIL' | 'INSTAGRAM';
+    emailThreadId: string | null;
+    instagramConversationId: string | null;
+  };
   creator: { id: string; name: string | null } | null;
   email: {
     threadCount: number;
@@ -169,6 +184,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
 
   beforeAll(async () => {
     token = APPLE_JANE_ADMIN_ACCESS_TOKEN;
+    await installMyahInboxInstagramMetadataBridge();
     fixture = await seedMyahInboxTask7Fixture({ operatorAccessToken: token });
   });
 
@@ -218,6 +234,270 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       identityKind: 'CREATOR',
       creator: { id: fixture.creatorId },
     });
+  });
+
+  it('recommends the latest readable inbound source without changing latest activity', async () => {
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    const marker = `MYAH357-${randomUUID()}`;
+    const conversationId = randomUUID();
+    const secondConversationId = randomUUID();
+    const instagramMessageId = randomUUID();
+    const outboundMessageId = randomUUID();
+    const outboundAssociationId = randomUUID();
+    const oppositeDirectionAssociationId =
+      '00000000-0000-0000-0000-000000000357';
+    // pi-lens-ignore: sql-injection
+    const sourceRows = await global.testDataSource.query<
+      Array<{
+        messageId: string;
+        threadId: string;
+        associationId: string | null;
+        channelId: string | null;
+        direction: string | null;
+        receivedAt: string;
+        subject: string | null;
+        text: string | null;
+      }>
+    >(
+      `SELECT message.id AS "messageId", message."messageThreadId" AS "threadId",
+        association.id AS "associationId", association."messageChannelId" AS "channelId",
+        association.direction::text, message."receivedAt", message.subject, message.text
+       FROM "${schema}".message message
+       LEFT JOIN "${schema}"."messageChannelMessageAssociation" association
+         ON association."messageId" = message.id
+       WHERE message."messageThreadId" = ANY($1::uuid[])`,
+      [
+        [
+          fixture.threadIds.tiedLinked,
+          fixture.threadIds.tiedUnlinked,
+          fixture.threadIds.sharedFallback,
+        ],
+      ],
+    );
+    const linked = sourceRows.find(
+      ({ threadId }) => threadId === fixture.threadIds.tiedLinked,
+    );
+    const unlinked = sourceRows.find(
+      ({ threadId }) => threadId === fixture.threadIds.tiedUnlinked,
+    );
+    const hidden = sourceRows.find(
+      ({ subject }) => subject === fixture.markers.hiddenSubject,
+    );
+
+    expect(linked).toBeDefined();
+    expect(unlinked).toBeDefined();
+    expect(hidden).toBeDefined();
+
+    try {
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `UPDATE "${schema}".message
+         SET "receivedAt" = '2099-10-05T11:00:00Z', subject = $2, text = $2
+         WHERE id = $1::uuid`,
+        [linked!.messageId, marker],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `UPDATE "${schema}"."messageChannelMessageAssociation"
+         SET direction = 'INCOMING' WHERE id = $1::uuid`,
+        [linked!.associationId],
+      );
+      // A message may be associated with multiple workspace mailboxes. Keep the
+      // incoming association authoritative even when an outgoing row sorts first.
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `INSERT INTO "${schema}"."messageChannelMessageAssociation"
+          (id, "messageId", "messageChannelId", direction)
+         VALUES ($1, $2, $3, 'OUTGOING')`,
+        [oppositeDirectionAssociationId, linked!.messageId, hidden!.channelId!],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `INSERT INTO "${schema}".message
+          (id, "messageThreadId", "receivedAt", subject, text)
+         VALUES ($1, $2, '2099-10-05T12:00:00Z', $3, $3)`,
+        [outboundMessageId, fixture.threadIds.tiedLinked, marker],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `INSERT INTO "${schema}"."messageChannelMessageAssociation"
+          (id, "messageId", "messageChannelId", direction)
+         VALUES ($1, $2, $3, 'OUTGOING')`,
+        [outboundAssociationId, outboundMessageId, linked!.channelId!],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `UPDATE "${schema}".message
+         SET "receivedAt" = '2099-10-05T13:00:00Z', subject = $2, text = $2
+         WHERE id = $1::uuid`,
+        [unlinked!.messageId, marker],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `UPDATE "${schema}"."messageChannelMessageAssociation"
+         SET direction = 'OUTGOING' WHERE id = $1::uuid`,
+        [unlinked!.associationId],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `UPDATE "${schema}".message
+         SET "receivedAt" = '2099-10-05T15:00:00Z', subject = $2, text = $2
+         WHERE id = $1::uuid`,
+        [hidden!.messageId, marker],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `INSERT INTO "${schema}"."_myahSocialConversation"
+          (id, provider, lifecycle, "providerConversationId", "recipientUsername",
+           "recipientDisplayName", "creatorId", "createdAt", "updatedAt",
+           "createdBySource", "createdByName", "createdByContext",
+           "updatedBySource", "updatedByName", "updatedByContext")
+         VALUES ($1, 'UNIPILE', 'ACTIVE', $2, $3, $3, $4,
+           '2099-10-05T10:00:00Z', '2099-10-05T10:00:00Z',
+           'SYSTEM', 'System', '{}'::jsonb, 'SYSTEM', 'System', '{}'::jsonb)`,
+        [
+          conversationId,
+          `provider-${conversationId}`,
+          marker,
+          fixture.creatorId,
+        ],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `INSERT INTO "${schema}"."_myahSocialMessage"
+          (id, text, direction, provider, "providerMessageId",
+           "providerCreatedAt", "conversationId", "createdAt",
+           "createdBySource", "createdByName", "createdByContext",
+           "updatedBySource", "updatedByName", "updatedByContext")
+         VALUES ($1, $2, 'INBOUND', 'UNIPILE', $3,
+           '2099-10-05T10:00:00Z', $4, '2099-10-05T10:00:00Z',
+           'SYSTEM', 'System', '{}'::jsonb, 'SYSTEM', 'System', '{}'::jsonb)`,
+        [
+          instagramMessageId,
+          marker,
+          `message-${instagramMessageId}`,
+          conversationId,
+        ],
+      );
+
+      const beforeTie = await fetchContacts(token, {
+        first: 20,
+        search: marker,
+      });
+      const creatorBeforeTie = beforeTie.edges.find(
+        ({ node }) => node.creator?.id === fixture.creatorId,
+      )?.node;
+      const noInbound = beforeTie.edges.find(
+        ({ node }) => node.identityKind === 'EMAIL_THREAD',
+      )?.node;
+
+      expect(creatorBeforeTie).toMatchObject({
+        latestChannel: 'EMAIL',
+        lastActivityAt: '2099-10-05T12:00:00.000Z',
+        initialSelection: {
+          channel: 'EMAIL',
+          emailThreadId: fixture.threadIds.tiedLinked,
+          instagramConversationId: null,
+        },
+      });
+      expect(noInbound?.initialSelection).toEqual({
+        channel: 'EMAIL',
+        emailThreadId: fixture.threadIds.tiedUnlinked,
+        instagramConversationId: null,
+      });
+
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `UPDATE "${schema}"."_myahSocialMessage"
+         SET "providerCreatedAt" = '2099-10-05T11:00:00Z'
+         WHERE id = $1`,
+        [instagramMessageId],
+      );
+      const tied = await fetchContacts(token, { first: 20, search: marker });
+      const tiedCreator = tied.edges.find(
+        ({ node }) => node.creator?.id === fixture.creatorId,
+      )?.node;
+
+      expect(tiedCreator).toMatchObject({
+        latestChannel: 'EMAIL',
+        lastActivityAt: '2099-10-05T12:00:00.000Z',
+        initialSelection: {
+          channel: 'INSTAGRAM',
+          emailThreadId: null,
+          instagramConversationId: conversationId,
+        },
+      });
+
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `INSERT INTO "${schema}"."_myahSocialConversation"
+          (id, provider, lifecycle, "providerConversationId", "recipientUsername",
+           "recipientDisplayName", "creatorId", "createdAt", "updatedAt",
+           "createdBySource", "createdByName", "createdByContext",
+           "updatedBySource", "updatedByName", "updatedByContext")
+         VALUES ($1, 'UNIPILE', 'ACTIVE', $2, $3, $3, $4,
+           '2099-10-05T09:00:00Z', '2099-10-05T09:00:00Z',
+           'SYSTEM', 'System', '{}'::jsonb, 'SYSTEM', 'System', '{}'::jsonb)`,
+        [
+          secondConversationId,
+          `provider-${secondConversationId}`,
+          marker,
+          fixture.creatorId,
+        ],
+      );
+      const ambiguous = await fetchContacts(token, {
+        first: 20,
+        search: marker,
+      });
+      const ambiguousCreator = ambiguous.edges.find(
+        ({ node }) => node.creator?.id === fixture.creatorId,
+      )?.node;
+
+      expect(ambiguousCreator?.initialSelection).toEqual({
+        channel: 'INSTAGRAM',
+        emailThreadId: null,
+        instagramConversationId: null,
+      });
+    } finally {
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `DELETE FROM "${schema}"."_myahSocialMessage" WHERE id = $1`,
+        [instagramMessageId],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `DELETE FROM "${schema}"."_myahSocialConversation"
+         WHERE id = ANY($1::uuid[])`,
+        [[conversationId, secondConversationId]],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `DELETE FROM "${schema}"."messageChannelMessageAssociation"
+         WHERE id = ANY($1::uuid[])`,
+        [[outboundAssociationId, oppositeDirectionAssociationId]],
+      );
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `DELETE FROM "${schema}".message WHERE id = $1`,
+        [outboundMessageId],
+      );
+      for (const row of [linked!, unlinked!, hidden!]) {
+        // pi-lens-ignore: sql-injection
+        await global.testDataSource.query(
+          `UPDATE "${schema}".message
+           SET "receivedAt" = $1, subject = $2, text = $3 WHERE id = $4`,
+          [row.receivedAt, row.subject, row.text, row.messageId],
+        );
+        if (row.associationId) {
+          // pi-lens-ignore: sql-injection
+          await global.testDataSource.query(
+            `UPDATE "${schema}"."messageChannelMessageAssociation"
+             SET direction = $1 WHERE id = $2`,
+            [row.direction, row.associationId],
+          );
+        }
+      }
+    }
   });
 
   it('returns one chronological visibility-safe native Message connection across linked threads', async () => {
