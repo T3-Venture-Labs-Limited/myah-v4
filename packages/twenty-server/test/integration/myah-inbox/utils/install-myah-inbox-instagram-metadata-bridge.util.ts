@@ -46,6 +46,47 @@ const socialMessageFields = [
   ['80670f08-59e0-4f45-9058-e7221d66b95f', 'conversationId', 'UUID'],
 ] as const;
 
+// Keep SELECT metadata schema-valid because integration shards share this workspace.
+const selectOptionValuesByFieldUniversalIdentifier: Record<
+  string,
+  ReadonlyArray<
+    readonly [id: string, value: string, label: string, color: string]
+  >
+> = {
+  '99cbc07b-138a-4d0a-b9f3-05d0be9e46b3': [
+    [
+      'e161e884-2f21-44ad-a6ac-5e221a0c1cee',
+      'COMPOSIO_HISTORY',
+      'Composio history',
+      'purple',
+    ],
+    ['5dcd0095-ae5f-431a-8fe2-d5d0e22c98ce', 'UNIPILE', 'Unipile', 'blue'],
+  ],
+  '74b47e38-60ec-4f11-8c23-4e622b7d3045': [
+    ['f0dec157-630f-46d0-ba8a-678f9082d2f9', 'ACTIVE', 'Active', 'green'],
+    [
+      '4845c0dc-5892-46dc-9682-b008c6f6070f',
+      'HISTORICAL',
+      'Historical',
+      'gray',
+    ],
+  ],
+  '882c38ea-7464-4d2f-9dab-8468e14814ad': [
+    ['13d27078-c7bc-40b1-ae19-1ddbbfe15642', 'INBOUND', 'Inbound', 'green'],
+    ['34847dd8-c965-43b1-b979-572a0830b97f', 'OUTBOUND', 'Outbound', 'blue'],
+    ['9b7e22a4-21f8-4379-8b1f-549a0a802434', 'UNKNOWN', 'Unknown', 'gray'],
+  ],
+  'b421f20f-363c-4ce5-af0a-b4dcede88e9f': [
+    [
+      'e177ebaf-239f-4b44-aa9d-4f4358a1d244',
+      'COMPOSIO_HISTORY',
+      'Composio history',
+      'purple',
+    ],
+    ['8f616732-93b5-4a23-9f2a-bcb4d47931e4', 'UNIPILE', 'Unipile', 'blue'],
+  ],
+};
+
 type WorkspaceCacheService = {
   invalidateAndRecompute: (
     workspaceId: string,
@@ -245,15 +286,26 @@ export const installMyahInboxInstagramMetadataBridge =
           [universalIdentifier, name, type],
         ] of fields.entries()) {
           const id = `${idPrefix}${String(index).padStart(2, '0')}`;
+          const options = selectOptionValuesByFieldUniversalIdentifier[
+            universalIdentifier
+          ]?.map(([id, value, label, color], position) => ({
+            id,
+            value,
+            label,
+            position,
+            color,
+          }));
+
           await manager.query(
             `INSERT INTO core."fieldMetadata" (
             id, "objectMetadataId", "workspaceId", "applicationId", "universalIdentifier",
-            type, name, label, "isActive", "isSystem", "isSystemSideEffect", "isUIReadOnly",
+            type, name, label, options, "isActive", "isSystem", "isSystemSideEffect", "isUIReadOnly",
             "isUIEditable", "isNullable", "isLabelSyncedWithName"
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, true, false, false, false, true, true, false)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8::jsonb, true, false, false, false, true, true, false)
           ON CONFLICT ("workspaceId", "universalIdentifier") DO UPDATE
            SET type = EXCLUDED.type, name = EXCLUDED.name, label = EXCLUDED.label,
-               settings = NULL, "relationTargetObjectMetadataId" = NULL,
+               options = EXCLUDED.options, settings = NULL,
+               "relationTargetObjectMetadataId" = NULL,
                "relationTargetFieldMetadataId" = NULL`,
             [
               id,
@@ -263,6 +315,7 @@ export const installMyahInboxInstagramMetadataBridge =
               universalIdentifier,
               type,
               name,
+              options ? JSON.stringify(options) : null,
             ],
           );
         }
