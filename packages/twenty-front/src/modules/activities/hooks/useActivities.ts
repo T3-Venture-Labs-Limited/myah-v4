@@ -70,7 +70,7 @@ export const useActivities = <T extends Task | Note>({
     const result = await fetchMoreActivityTargets();
 
     if (!isDefined(result?.data)) {
-      return [];
+      return undefined;
     }
 
     const activityTargets = getRecordsFromRecordConnection<
