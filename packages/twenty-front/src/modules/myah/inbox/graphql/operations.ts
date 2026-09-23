@@ -135,6 +135,11 @@ const MYAH_INBOX_CONTACT_FIELDS = gql`
     instagramUsername
     lastActivityAt
     latestChannel
+    initialSelection {
+      channel
+      emailThreadId
+      instagramConversationId
+    }
     preview
     sender
     needsAttention

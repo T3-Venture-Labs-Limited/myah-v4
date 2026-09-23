@@ -50,6 +50,7 @@ export type MyahInboxInstagramDraft = {
   conflict: MyahInboxInstagramDraftConflict | null;
   error: string | null;
   executionLocked: boolean;
+  editorVersion: number;
   setBody: (body: string) => void;
   flush: () => Promise<MyahInboxInstagramDraftFlushResult>;
   reloadConflict: () => void;
@@ -145,6 +146,7 @@ export const useMyahInboxInstagramDraft = ({
   const [error, setError] = useState<string | null>(null);
   const [executionLocked, setExecutionLocked] = useState(false);
   const [dirty, setDirty] = useState(initialSnapshot?.dirty ?? false);
+  const [editorVersion, setEditorVersion] = useState(0);
   // oxlint-disable-next-line twenty/no-state-useref
   const bodyRef = useRef(body);
   // oxlint-disable-next-line twenty/no-state-useref
@@ -182,6 +184,7 @@ export const useMyahInboxInstagramDraft = ({
     bodyRef.current = nextBody;
     revisionRef.current = nextRevision;
     setBodyState(nextBody);
+    setEditorVersion((version) => version + 1);
     setRevision(nextRevision);
     setStatus(scope ? 'loading' : 'saved');
     setConflict(null);
@@ -229,6 +232,7 @@ export const useMyahInboxInstagramDraft = ({
           if (!hasLocalEdits) {
             bodyRef.current = serverDraft.body;
             setBodyState(serverDraft.body);
+            setEditorVersion((version) => version + 1);
           }
         }
         lifetime.hydrated = true;
@@ -454,6 +458,7 @@ export const useMyahInboxInstagramDraft = ({
     bodyRef.current = conflict.body;
     revisionRef.current = conflict.revision;
     setBodyState(conflict.body);
+    setEditorVersion((version) => version + 1);
     setRevision(conflict.revision);
     setConflict(null);
     setStatus('saved');
@@ -477,6 +482,7 @@ export const useMyahInboxInstagramDraft = ({
     bodyRef.current = '';
     revisionRef.current = 0;
     setBodyState('');
+    setEditorVersion((version) => version + 1);
     setRevision(0);
     setStatus('saved');
     setConflict(null);
@@ -496,6 +502,7 @@ export const useMyahInboxInstagramDraft = ({
     conflict,
     error,
     executionLocked,
+    editorVersion,
     setBody,
     flush: save,
     reloadConflict,

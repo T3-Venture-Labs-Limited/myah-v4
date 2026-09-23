@@ -180,6 +180,7 @@ describe('MyahInboxReplyContextDraftService', () => {
       'next',
       null,
       null,
+      false,
       2,
       row.id,
     ]);
@@ -200,11 +201,37 @@ describe('MyahInboxReplyContextDraftService', () => {
         body: null,
       }),
     ).resolves.toEqual({ status: 'SAVED', revision: 3, body: null });
+    expect(query.mock.calls[2][0]).toContain('WHEN $11::boolean THEN NULL');
     expect(query.mock.calls[2][0]).toContain(
-      'WHEN $10::varchar IS NULL THEN "proposalContextFingerprint"',
+      'ELSE "reviewedContextFingerprint"',
     );
+    expect(query.mock.calls[2][1][10]).toBe(false);
+  });
+
+  it('clears proposal and review acknowledgement when requested', async () => {
+    const cleared = {
+      ...row,
+      revision: 3,
+      proposalContextFingerprint: null,
+      reviewedContextFingerprint: null,
+    };
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([row])
+      .mockResolvedValueOnce([[cleared], 1]);
+
+    await expect(
+      createService(query).save({
+        ...identity,
+        expectedRevision: 2,
+        body: { markdown: 'chat edit', blocknote: null },
+        clearContextAcknowledgement: true,
+      }),
+    ).resolves.toMatchObject({ status: 'SAVED', revision: 3 });
+    expect(query.mock.calls[2][1][10]).toBe(true);
     expect(query.mock.calls[2][0]).toContain(
-      'WHEN $10::varchar IS NULL THEN "reviewedContextFingerprint"',
+      'WHEN $10::varchar IS NOT NULL OR $11::boolean THEN NULL',
     );
   });
 

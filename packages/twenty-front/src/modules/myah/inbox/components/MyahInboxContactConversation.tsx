@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
-import { Button } from 'twenty-ui/input';
+import { IconInfoCircle } from 'twenty-ui/icon';
+import { Button, IconButton } from 'twenty-ui/input';
 import {
   getMyahInboxOutreachCards,
   MyahInboxEmailOutreachHistory,
@@ -20,6 +21,7 @@ import { MyahInboxReplyWorkspace } from '@/myah/inbox/components/MyahInboxReplyW
 import { MyahInboxThreadActions } from '@/myah/inbox/components/MyahInboxThreadActions';
 import type { useMyahInboxEmailHistory } from '@/myah/inbox/hooks/useMyahInboxEmailHistory';
 import type { useMyahInboxSelectedEmailThread } from '@/myah/inbox/hooks/useMyahInboxSelectedEmailThread';
+import { useOpenMyahInboxContextInSidePanel } from '@/myah/inbox/hooks/useOpenMyahInboxContextInSidePanel';
 import {
   type MyahInboxChannel,
   type MyahInboxContact,
@@ -112,6 +114,8 @@ export const MyahInboxContactConversation = ({
   onThreadUpdated,
   onUpdateFailed,
 }: MyahInboxContactConversationProps) => {
+  const { openMyahInboxContextInSidePanel } =
+    useOpenMyahInboxContextInSidePanel();
   const canStartInstagram = Boolean(
     contact.creator && contact.instagramUsername,
   );
@@ -165,6 +169,13 @@ export const MyahInboxContactConversation = ({
         onTriageUpdated={onActivity}
         actions={
           <>
+            <IconButton
+              Icon={IconInfoCircle}
+              ariaLabel="Creator context"
+              onClick={openMyahInboxContextInSidePanel}
+              size="small"
+              variant="tertiary"
+            />
             {!contact.creator ? (
               <MyahInboxContactLinkAction
                 contactId={contact.id}

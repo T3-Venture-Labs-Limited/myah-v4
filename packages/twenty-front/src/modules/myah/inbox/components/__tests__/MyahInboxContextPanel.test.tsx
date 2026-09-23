@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 
 import { MyahInboxContextPanel } from '@/myah/inbox/components/MyahInboxContextPanel';
-import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { useIsInSidePanelOrThrow } from '@/ui/layout/side-panel/contexts/SidePanelContext';
 
 function MockTasksCardWithSidePanelContext() {
@@ -88,19 +87,11 @@ jest.mock('twenty-ui/theme-constants', () => ({
   },
 }));
 
-const linkedThread: MyahInboxThread = {
-  id: 'thread-1',
-  lastActivityAt: '2026-07-29T12:00:00.000Z',
-  subject: 'Spring launch partnership',
-  lastMessagePreview: 'I would love to hear more.',
-  lastMessageSender: 'Ada Creator',
-  creator: { id: 'creator-1', name: 'Ada Creator' },
-  campaign: { id: 'campaign-1', name: 'Spring launch' },
-};
+const linkedCreator = { id: 'creator-1', name: 'Ada Creator' };
 
 describe('MyahInboxContextPanel', () => {
-  it('renders linked Creator context without singleton Campaign context', () => {
-    render(<MyahInboxContextPanel thread={linkedThread} />);
+  it('renders the exact shared Creator context tabs without thread authority', () => {
+    render(<MyahInboxContextPanel creator={linkedCreator} />);
 
     expect(
       screen.getByText('native creator creator-1 default-tab-only'),
@@ -108,17 +99,20 @@ describe('MyahInboxContextPanel', () => {
     expect(
       screen.queryByRole('button', { name: 'Open Creator' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Creator' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Timeline' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Tasks' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Notes' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Creator',
+      'Timeline',
+      'Tasks',
+      'Notes',
+    ]);
+    expect(screen.getByRole('tablist')).toHaveAccessibleName('Creator context');
     expect(
       screen.queryByRole('tab', { name: 'Campaign' }),
     ).not.toBeInTheDocument();
   });
 
-  it('gives the Inbox context root the full native drawer height', () => {
-    render(<MyahInboxContextPanel thread={linkedThread} />);
+  it('gives the Creator context root the full native drawer height', () => {
+    render(<MyahInboxContextPanel creator={linkedCreator} />);
 
     const root = screen.getByRole('tablist').parentElement;
 
@@ -127,7 +121,7 @@ describe('MyahInboxContextPanel', () => {
   });
 
   it('keeps activity in the linked Creator context', () => {
-    render(<MyahInboxContextPanel thread={linkedThread} />);
+    render(<MyahInboxContextPanel creator={linkedCreator} />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Timeline' }));
     expect(screen.getByText('Creator timeline')).toBeInTheDocument();
@@ -140,11 +134,7 @@ describe('MyahInboxContextPanel', () => {
   });
 
   it('keeps unlinked Creator and activity states explicit', () => {
-    render(
-      <MyahInboxContextPanel
-        thread={{ ...linkedThread, creator: null, campaign: null }}
-      />,
-    );
+    render(<MyahInboxContextPanel creator={null} />);
 
     expect(
       screen.getByText(/No Creator linked\. Use the Creator action/),
@@ -157,12 +147,12 @@ describe('MyahInboxContextPanel', () => {
   });
 });
 
-it('keeps the current tab while same-thread data changes', () => {
-  const view = render(<MyahInboxContextPanel thread={linkedThread} />);
+it('keeps the current tab while same-contact Creator data changes', () => {
+  const view = render(<MyahInboxContextPanel creator={linkedCreator} />);
   fireEvent.click(screen.getByRole('tab', { name: 'Timeline' }));
   view.rerender(
     <MyahInboxContextPanel
-      thread={{ ...linkedThread, subject: 'Changed subject' }}
+      creator={{ ...linkedCreator, name: 'Updated Creator' }}
     />,
   );
 

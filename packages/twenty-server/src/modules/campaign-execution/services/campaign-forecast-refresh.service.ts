@@ -81,12 +81,22 @@ export class CampaignForecastRefreshService {
 
     for (const head of rows<StaleHead>(stale)) {
       const runner = dataSource.createQueryRunner();
-      await runner.connect();
+      let planningTransactionActive = false;
       try {
+        await runner.connect();
+        await runner.startTransaction();
+        planningTransactionActive = true;
         const input = await this.refresh(head, runner.manager);
+        await runner.commitTransaction();
+        planningTransactionActive = false;
+        // Publication is a separate revision-checked transaction: planning never
+        // writes authoritative execution state or extends its read transaction.
         await dataSource.transaction((manager) =>
           this.projection.publish(input, manager),
         );
+      } catch (error) {
+        if (planningTransactionActive) await runner.rollbackTransaction();
+        throw error;
       } finally {
         await runner.release();
       }

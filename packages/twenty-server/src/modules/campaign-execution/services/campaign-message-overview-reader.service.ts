@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
 
@@ -10,6 +11,7 @@ import {
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
@@ -59,6 +61,7 @@ type OverviewFact = {
   projectedMessageThreadId: string | null;
   providerAcceptedAt: Date | string | null;
   recipient: string | null;
+  visibilityRank: number;
   renderSubject: string | null;
   renderText: string | null;
   safeOutcomeReason: string | null;
@@ -72,8 +75,9 @@ const MAX_PERMISSION_MEMBERSHIPS = 5_000;
 type Cursor = {
   generationId: string | null;
   occurrenceId: string;
+  scope: string;
   sortAt: string;
-  v: 1;
+  v: 2;
 };
 
 const rows = <T>(value: unknown): T[] =>
@@ -133,8 +137,9 @@ const decodeCursor = (value: string | undefined): Cursor | null => {
       Buffer.from(value, 'base64url').toString('utf8'),
     ) as Partial<Cursor>;
     if (
-      cursor.v !== 1 ||
+      cursor.v !== 2 ||
       !('generationId' in cursor) ||
+      typeof cursor.scope !== 'string' ||
       typeof cursor.occurrenceId !== 'string' ||
       typeof cursor.sortAt !== 'string' ||
       !Number.isFinite(new Date(cursor.sortAt).getTime())
@@ -255,8 +260,12 @@ export class CampaignMessageOverviewReaderService {
             take: 1,
           });
         } catch (error) {
+          // Integration and queue entry points may load the exception class
+          // through different module instances; the stable code is the contract.
           if (
-            !(error instanceof PermissionsException) ||
+            !error ||
+            typeof error !== 'object' ||
+            !('code' in error) ||
             error.code !== PermissionsExceptionCode.PERMISSION_DENIED
           )
             throw error;
@@ -320,11 +329,9 @@ export class CampaignMessageOverviewReaderService {
             const campaign = campaignById.get(membership.campaignId);
             const creator = creatorById.get(membership.creatorId);
             if (!campaign || !creator || !search) return false;
-            return [
-              campaign.name,
-              creator.name,
-              canReadCreatorEmail ? creator.email : null,
-            ].some((value) => value?.toLocaleLowerCase().includes(search));
+            return [campaign.name, creator.name].some((value) =>
+              value?.toLocaleLowerCase().includes(search),
+            );
           })
           .map(({ id }) => id),
       );
@@ -337,13 +344,17 @@ export class CampaignMessageOverviewReaderService {
         return (
           !search ||
           nameMatchingMembershipIds.has(membership.id) ||
-          canReadRenderedContent ||
-          canReadCreatorEmail
+          canReadRenderedContent
         );
       });
       if (readableMemberships.length === 0) return this.empty(campaigns);
 
       return this.coreDataSource.transaction(async (manager) => {
+        // Only this transaction's connection resolves the two authored workflow
+        // tables; parameterize the workspace schema rather than interpolating SQL.
+        await manager.query(`SELECT set_config('search_path',$1,true)`, [
+          getWorkspaceSchemaName(workspaceId),
+        ]);
         const heads = rows<HeadRow>(
           await manager.query(
             `SELECT head."inputRevision"::text AS "inputRevision",head."currentGenerationId",
@@ -357,8 +368,41 @@ export class CampaignMessageOverviewReaderService {
         );
         const head = heads.length === 1 ? heads[0] : undefined;
         const generationId = head?.currentGenerationId ?? null;
+        const scope = createHash('sha256')
+          .update(
+            JSON.stringify({
+              workspaceId,
+              roleIds: [...roleIds].sort(),
+              campaignIds: selectedCampaigns.map(({ id }) => id).sort(),
+              membershipIds: readableMemberships.map(({ id }) => id).sort(),
+              readableAccountIds:
+                readableConnectedAccountIds === null
+                  ? null
+                  : [...readableConnectedAccountIds].sort(),
+              accountIds:
+                accountFilter === null ? null : [...accountFilter].sort(),
+              canReadRenderedContent,
+              canReadCreatorEmail,
+              view: input.filters.view,
+              search: search ?? null,
+              dateBasis:
+                input.filters.dateBasis ??
+                CampaignMessageOverviewDateBasis.ESTIMATED_SEND,
+              dateFrom: input.filters.dateFrom
+                ? new Date(input.filters.dateFrom).toISOString()
+                : null,
+              dateTo: input.filters.dateTo
+                ? new Date(input.filters.dateTo).toISOString()
+                : null,
+              occurrenceId: input.filters.occurrenceId ?? null,
+            }),
+          )
+          .digest('hex');
         const cursor = decodeCursor(input.filters.after);
-        if (cursor && cursor.generationId !== generationId)
+        if (
+          cursor &&
+          (cursor.generationId !== generationId || cursor.scope !== scope)
+        )
           throw new Error(
             'Campaign message overview changed; restart pagination',
           );
@@ -371,18 +415,19 @@ export class CampaignMessageOverviewReaderService {
               : input.filters.view === CampaignMessageOverviewView.SCHEDULED
                 ? ['SCHEDULED']
                 : ['NEEDS_ATTENTION'];
-        const facts = rows<OverviewFact>(
-          await manager.query(
-            `SELECT o.id AS "occurrenceId",o."campaignId",o."workflowVersionId",o."messageId",o."authoredMessageIndex",o.state AS "occurrenceState",o."dueAt",o."holdReason",
+        // Both list/detail and options use this authorization projection before
+        // any search, keyset limit or DISTINCT. Cursor access changes are
+        // rechecked here even when no channel-policy revision exists to reject it.
+        const scopedSql = `SELECT o.id AS "occurrenceId",o."campaignId",o."workflowVersionId",o."messageId",o."authoredMessageIndex",o.state AS "occurrenceState",o."dueAt",o."holdReason",
                   enrollment."campaignCreatorId",enrollment."creatorId",entry."estimatedSendAt",
                   attempt."attemptState",attempt."providerAcceptedAt",COALESCE(attempt."connectedAccountId",entry."connectedAccountId") AS "connectedAccountId",
                   attempt."projectedMessageId",attempt."projectedMessageThreadId",attempt."safeOutcomeReason",
-                  attempt.recipient,attempt."renderSubject",attempt."renderText",o."dueAt" AS "sortAt"
+                  attempt.recipient,attempt."renderSubject",attempt."renderText",visibility.rank AS "visibilityRank",o."dueAt" AS "sortAt"
              FROM core."campaignOccurrence" o
              JOIN core."campaignEnrollment" enrollment ON enrollment.id=o."enrollmentId" AND enrollment."workspaceId"=o."workspaceId"
              LEFT JOIN core."campaignForecastEntry" entry ON entry."generationId"=$4 AND entry."occurrenceId"=o.id
              LEFT JOIN LATERAL (
-               SELECT a."attemptState",a."providerAcceptedAt",a."connectedAccountId",a."projectedMessageId",a."projectedMessageThreadId",a."safeOutcomeReason",
+               SELECT a."attemptState",a."providerAcceptedAt",a."connectedAccountId",a."messageChannelId",a."projectedMessageId",a."projectedMessageThreadId",a."safeOutcomeReason",
                       a."normalizedRecipient" AS recipient,render.subject AS "renderSubject",render.text AS "renderText"
                  FROM core."outboundEmailAttempt" a
                  LEFT JOIN core."campaignOutboundRender" render
@@ -390,17 +435,111 @@ export class CampaignMessageOverviewReaderService {
                 WHERE a."workspaceId"=o."workspaceId" AND a."occurrenceId"=o.id AND a.source='CAMPAIGN_SEQUENCE'
                 ORDER BY (a."attemptState"='ACCEPTED') DESC,a."attemptNumber" DESC LIMIT 1
              ) attempt ON TRUE
+             -- Projected messages use the same maximum-across-associations tier as
+             -- MessageVisibilityPolicyService. Never fall back to an attempt if
+             -- a projected association is missing. Forecast accounts are not grants.
+             LEFT JOIN LATERAL (
+               SELECT CASE WHEN account."userWorkspaceId"=$18::uuid THEN 3
+                           WHEN channel.visibility='SHARE_EVERYTHING' THEN 3
+                           WHEN channel.visibility='SUBJECT' THEN 2
+                           WHEN channel.visibility='METADATA' THEN 1 ELSE 0 END AS rank
+                 FROM "messageChannelMessageAssociation" association
+                 JOIN core."messageChannel" channel ON channel.id=association."messageChannelId"
+                   AND channel."workspaceId"=o."workspaceId"
+                 JOIN core."connectedAccount" account ON account.id=channel."connectedAccountId"
+                   AND account."workspaceId"=o."workspaceId"
+                WHERE association."messageId"=attempt."projectedMessageId"
+                  AND association."deletedAt" IS NULL
+                ORDER BY rank DESC LIMIT 1
+             ) projectedVisibility ON TRUE
+             LEFT JOIN LATERAL (
+               SELECT CASE WHEN account."userWorkspaceId"=$18::uuid THEN 3
+                           WHEN channel.visibility='SHARE_EVERYTHING' THEN 3
+                           WHEN channel.visibility='SUBJECT' THEN 2
+                           WHEN channel.visibility='METADATA' THEN 1 ELSE 0 END AS rank
+                 FROM core."messageChannel" channel
+                 JOIN core."connectedAccount" account ON account.id=channel."connectedAccountId"
+                   AND account."workspaceId"=o."workspaceId"
+                WHERE channel.id=attempt."messageChannelId"
+                  AND channel."workspaceId"=o."workspaceId"
+                  AND channel."connectedAccountId"=attempt."connectedAccountId"
+                  AND attempt."projectedMessageId" IS NULL
+                  AND attempt."attemptState" IS DISTINCT FROM 'ACCEPTED'
+             ) assignedVisibility ON TRUE
+             CROSS JOIN LATERAL (
+               SELECT CASE WHEN attempt."projectedMessageId" IS NOT NULL
+                             THEN COALESCE(projectedVisibility.rank,0)
+                           WHEN attempt."attemptState"='ACCEPTED' THEN 0
+                           WHEN attempt."connectedAccountId" IS NULL THEN 1
+                           ELSE COALESCE(assignedVisibility.rank,0) END AS rank
+             ) visibility
+             LEFT JOIN LATERAL (
+               SELECT email->>'subject' AS subject,email->>'body' AS body
+                 FROM "workflow" workflow
+                 JOIN "workflowVersion" version
+                   ON version."workflowId"=workflow.id AND version.id=o."workflowVersionId"
+                 CROSS JOIN LATERAL jsonb_array_elements(
+                   CASE WHEN jsonb_typeof(version."campaignSequence"->'messages')='array'
+                     THEN version."campaignSequence"->'messages' ELSE '[]'::jsonb END
+                 ) email
+                WHERE $15::boolean AND $14::text IS NOT NULL
+                  AND attempt."attemptState" IS DISTINCT FROM 'ACCEPTED'
+                  AND visibility.rank >= 2
+                  AND workflow."outreachCampaignId"=o."campaignId"
+                  AND workflow."deletedAt" IS NULL AND version."deletedAt" IS NULL
+                  AND email->>'id'=o."messageId"::text AND email->>'channel'='EMAIL'
+                LIMIT 1
+             ) authored ON TRUE
             WHERE o."workspaceId"=$1
               AND o."campaignId"=ANY($2::uuid[])
               AND enrollment."campaignCreatorId"=ANY($3::uuid[])
+`;
+        const scopedParameters = [
+          workspaceId,
+          selectedCampaigns.map(({ id }) => id),
+          readableMemberships.map(({ id }) => id),
+          generationId,
+          accountFilter,
+          statuses,
+          input.filters.dateFrom ?? null,
+          input.filters.dateTo ?? null,
+          cursor?.sortAt ?? null,
+          cursor?.occurrenceId ?? null,
+          input.filters.first + 1,
+          input.filters.dateBasis ??
+            CampaignMessageOverviewDateBasis.ESTIMATED_SEND,
+          search ? [...nameMatchingMembershipIds] : null,
+          search ?? null,
+          canReadRenderedContent,
+          canReadCreatorEmail,
+          input.filters.occurrenceId ?? null,
+          input.authContext.type === 'user'
+            ? input.authContext.userWorkspaceId
+            : null,
+        ];
+        const factSql = scopedSql.concat(`
+              AND visibility.rank > 0
               AND ($14::text IS NULL OR enrollment."campaignCreatorId"=ANY($13::uuid[])
-                   OR ($15::boolean AND (lower(COALESCE(attempt."renderSubject",'')) LIKE '%' || $14 || '%'
-                                         OR lower(COALESCE(attempt."renderText",'')) LIKE '%' || $14 || '%')
-                   OR ($16::boolean AND lower(COALESCE(attempt.recipient,'')) LIKE '%' || $14 || '%')))
+                   OR ($15::boolean AND ((visibility.rank >= 2 AND lower(COALESCE(attempt."renderSubject",'')) LIKE '%' || $14 || '%')
+                                         OR (visibility.rank >= 3 AND lower(COALESCE(attempt."renderText",'')) LIKE '%' || $14 || '%')
+                                         OR (visibility.rank >= 2 AND attempt."renderSubject" IS NULL AND lower(COALESCE(authored.subject,'')) LIKE '%' || $14 || '%')
+                                         OR (visibility.rank >= 3 AND attempt."renderText" IS NULL AND CASE WHEN (CASE WHEN pg_input_is_valid(authored.body,'jsonb')
+                                                    THEN authored.body::jsonb->>'type'='doc' ELSE false END)
+                                                   THEN EXISTS (
+                                                     SELECT 1 FROM jsonb_path_query(authored.body::jsonb,'$.content.**.text') text_node
+                                                      WHERE lower(text_node #>> '{}') LIKE '%' || $14 || '%'
+                                                     UNION ALL
+                                                     SELECT 1 FROM jsonb_path_query(authored.body::jsonb,'$.content.**.attrs.variable') variable_node
+                                                      WHERE lower(variable_node #>> '{}') LIKE '%' || $14 || '%'
+                                                   )
+                                                   ELSE lower(COALESCE(authored.body,'')) LIKE '%' || $14 || '%'
+                                              END) )
+                   OR ($15::boolean AND $16::boolean AND visibility.rank >= 3 AND lower(COALESCE(attempt.recipient,'')) LIKE '%' || $14 || '%')))
               AND ($5::uuid[] IS NULL OR COALESCE(attempt."connectedAccountId",entry."connectedAccountId")=ANY($5::uuid[]))
               AND ($6::text[] IS NULL OR (CASE
                     WHEN o.state IN ('CANCELLED','SKIPPED') THEN 'CANCELLED'
-                    WHEN (o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED')
+                    WHEN o.state IN ('HELD','UNKNOWN','IN_FLIGHT')
+                      OR (o.state='SUCCEEDED'
                           AND (attempt."providerAcceptedAt" IS NULL OR attempt."projectedMessageThreadId" IS NULL))
                       OR attempt."attemptState" IN ('RESERVED','PROCESSING','UNKNOWN','BLOCKED')
                       OR (attempt."attemptState"='ACCEPTED'
@@ -413,28 +552,9 @@ export class CampaignMessageOverviewReaderService {
                 (CASE WHEN $12::text='SENT_AT' THEN attempt."providerAcceptedAt" ELSE entry."estimatedSendAt" END) < $8)
               AND ($9::timestamptz IS NULL OR (o."dueAt",o.id) < ($9::timestamptz,$10::uuid))
               AND ($17::uuid IS NULL OR o.id=$17::uuid)
-            ORDER BY o."dueAt" DESC,o.id DESC LIMIT $11`,
-            [
-              workspaceId,
-              selectedCampaigns.map(({ id }) => id),
-              readableMemberships.map(({ id }) => id),
-              generationId,
-              accountFilter,
-              statuses,
-              input.filters.dateFrom ?? null,
-              input.filters.dateTo ?? null,
-              cursor?.sortAt ?? null,
-              cursor?.occurrenceId ?? null,
-              input.filters.first + 1,
-              input.filters.dateBasis ??
-                CampaignMessageOverviewDateBasis.ESTIMATED_SEND,
-              search ? [...nameMatchingMembershipIds] : null,
-              search ?? null,
-              canReadRenderedContent,
-              canReadCreatorEmail,
-              input.filters.occurrenceId ?? null,
-            ],
-          ),
+            ORDER BY o."dueAt" DESC,o.id DESC LIMIT $11`);
+        const facts = rows<OverviewFact>(
+          await manager.query(factSql, scopedParameters),
         );
         const accountLabels = new Map(
           rows<{ id: string; label: string }>(
@@ -451,29 +571,31 @@ export class CampaignMessageOverviewReaderService {
             ),
           ).map(({ id, label }) => [id, label]),
         );
+        // Only three fixed placeholders differ between the two static query
+        // shapes; every runtime value is passed separately to manager.query.
+        const optionScopeSql = scopedSql
+          .replace(/\$18/g, '$7')
+          .replace(/\$15/g, '$6')
+          .replace(/\$14/g, '$5');
+        const optionSql =
+          'SELECT DISTINCT scoped."connectedAccountId" FROM ('.concat(
+            optionScopeSql,
+            ` AND visibility.rank > 0) scoped
+              WHERE scoped."connectedAccountId" IS NOT NULL
+              ORDER BY scoped."connectedAccountId"`,
+          );
         const accountOptions = rows<{ connectedAccountId: string }>(
-          await manager.query(
-            `SELECT DISTINCT COALESCE(attempt."connectedAccountId",entry."connectedAccountId") AS "connectedAccountId"
-               FROM core."campaignOccurrence" o
-               JOIN core."campaignEnrollment" enrollment ON enrollment.id=o."enrollmentId" AND enrollment."workspaceId"=o."workspaceId"
-               LEFT JOIN core."campaignForecastEntry" entry ON entry."generationId"=$4 AND entry."occurrenceId"=o.id
-               LEFT JOIN LATERAL (
-                 SELECT a."connectedAccountId"
-                   FROM core."outboundEmailAttempt" a
-                  WHERE a."workspaceId"=o."workspaceId" AND a."occurrenceId"=o.id AND a.source='CAMPAIGN_SEQUENCE'
-                  ORDER BY (a."attemptState"='ACCEPTED') DESC,a."attemptNumber" DESC LIMIT 1
-               ) attempt ON TRUE
-              WHERE o."workspaceId"=$1 AND o."campaignId"=ANY($2::uuid[])
-                AND enrollment."campaignCreatorId"=ANY($3::uuid[])
-                AND COALESCE(attempt."connectedAccountId",entry."connectedAccountId") IS NOT NULL
-              ORDER BY "connectedAccountId"`,
-            [
-              workspaceId,
-              selectedCampaigns.map(({ id }) => id),
-              readableMemberships.map(({ id }) => id),
-              generationId,
-            ],
-          ),
+          await manager.query(optionSql, [
+            workspaceId,
+            selectedCampaigns.map(({ id }) => id),
+            readableMemberships.map(({ id }) => id),
+            generationId,
+            null, // options do not search or hydrate authored content
+            false,
+            input.authContext.type === 'user'
+              ? input.authContext.userWorkspaceId
+              : null,
+          ]),
         );
         const page = facts.slice(0, input.filters.first);
         const projectedThreadIds = page
@@ -514,6 +636,7 @@ export class CampaignMessageOverviewReaderService {
           for (const fact of page) {
             if (
               fact.attemptState === 'ACCEPTED' ||
+              fact.visibilityRank < 2 ||
               typeof fact.workflowVersionId !== 'string' ||
               typeof fact.messageId !== 'string'
             )
@@ -563,19 +686,24 @@ export class CampaignMessageOverviewReaderService {
             campaignName: campaignById.get(fact.campaignId)?.name ?? 'Campaign',
             creatorId: fact.creatorId,
             creatorName: creatorById.get(fact.creatorId)?.name ?? null,
-            recipient: canReadCreatorEmail
-              ? (fact.recipient ??
-                creatorById.get(fact.creatorId)?.email ??
-                null)
-              : null,
-            subject: canReadRenderedContent
-              ? (fact.renderSubject ?? authored?.subject ?? null)
-              : null,
-            preview: canReadRenderedContent
-              ? (fact.renderText ?? authored?.body ?? '')
-                  .trim()
-                  .slice(0, 240) || null
-              : null,
+            recipient:
+              canReadRenderedContent &&
+              canReadCreatorEmail &&
+              fact.visibilityRank >= 3
+                ? (fact.recipient ??
+                  creatorById.get(fact.creatorId)?.email ??
+                  null)
+                : null,
+            subject:
+              canReadRenderedContent && fact.visibilityRank >= 2
+                ? (fact.renderSubject ?? authored?.subject ?? null)
+                : null,
+            preview:
+              canReadRenderedContent && fact.visibilityRank >= 3
+                ? (fact.renderText ?? authored?.body ?? '')
+                    .trim()
+                    .slice(0, 240) || null
+                : null,
             sequenceStep: fact.authoredMessageIndex + 1,
             platform: 'Email',
             status,
@@ -644,8 +772,9 @@ export class CampaignMessageOverviewReaderService {
             endCursor:
               facts.length > input.filters.first && last
                 ? encodeCursor({
-                    v: 1,
+                    v: 2,
                     generationId,
+                    scope,
                     occurrenceId: last.occurrenceId,
                     sortAt: iso(last.sortAt) as string,
                   })

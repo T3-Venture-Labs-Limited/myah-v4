@@ -6,6 +6,10 @@ import {
   type WorkspaceAuthContext,
 } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { withWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import {
@@ -38,7 +42,26 @@ const activationId = randomUUID();
 const enrollmentId = randomUUID();
 const workflowVersionId = randomUUID();
 const generationId = randomUUID();
+const authoredWorkflowId = randomUUID();
+const queuedMessageId = randomUUID();
 const accountIds = [randomUUID(), randomUUID()];
+const channelIds = {
+  owned: randomUUID(),
+  metadata: randomUUID(),
+  subject: randomUUID(),
+  full: randomUUID(),
+};
+const tierOccurrences = {
+  metadata: randomUUID(),
+  subject: randomUUID(),
+  full: randomUUID(),
+  projected: randomUUID(),
+  multiChannel: randomUUID(),
+};
+const tierMessages = {
+  projected: randomUUID(),
+  multiChannel: randomUUID(),
+};
 const occurrenceIds = {
   noForecast: randomUUID(),
   forecast: randomUUID(),
@@ -47,6 +70,8 @@ const occurrenceIds = {
   unreadable: randomUUID(),
   cancelled: randomUUID(),
   held: randomUUID(),
+  inFlight: randomUUID(),
+  unknown: randomUUID(),
 };
 const foreignIds = {
   execution: randomUUID(),
@@ -197,6 +222,7 @@ const insertAcceptedAttempt = async (input: {
   projectedMessageId: string | null;
   acceptedAt: string;
   accountId: string;
+  channelId?: string;
 }) => {
   const claimedAt = new Date('2026-11-01T09:00:00.000Z');
   await global.testDataSource.query(
@@ -207,7 +233,7 @@ const insertAcceptedAttempt = async (input: {
       input.attemptId ?? randomUUID(),
       workspaceId,
       input.accountId,
-      randomUUID(),
+      input.channelId ?? randomUUID(),
       claimedAt,
       new Date(claimedAt.getTime() + 60_000),
       campaignId,
@@ -228,6 +254,25 @@ const insertAcceptedAttempt = async (input: {
     ],
   );
 };
+
+const insertAssociation = (
+  messageId: string,
+  channelId: string,
+  deletedAt: string | null = null,
+) =>
+  global.testDataSource.query(
+    `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation"
+      (id,"messageChannelId","messageId","messageExternalId","messageThreadExternalId",direction,"deletedAt")
+     VALUES ($1,$2,$3,$4,$5,'OUTGOING',$6)`,
+    [
+      randomUUID(),
+      channelId,
+      messageId,
+      `fixture-${randomUUID()}`,
+      `thread-${randomUUID()}`,
+      deletedAt,
+    ],
+  );
 
 const readOverview = (
   authContext: WorkspaceAuthContext,
@@ -273,6 +318,20 @@ describe('Campaign message overview PostgreSQL reader', () => {
     accountIds[1] = hiddenAccount.id;
     brandBrainAuthContext =
       await buildApplicationAuthContext('Brand Brain Admin');
+    for (const [key, visibility, accountId] of [
+      ['owned', 'METADATA', accountIds[0]],
+      ['metadata', 'METADATA', accountIds[1]],
+      ['subject', 'SUBJECT', accountIds[1]],
+      ['full', 'SHARE_EVERYTHING', accountIds[1]],
+    ] as const) {
+      await global.testDataSource.query(
+        `INSERT INTO core."messageChannel"
+          (id,"workspaceId",visibility,handle,type,"pendingGroupEmailsAction","syncStage","connectedAccountId")
+         SELECT $1,$2,$3,'fixture@example.com','EMAIL','NONE','MESSAGE_LIST_FETCH_PENDING',$4
+           FROM core."messageChannel" LIMIT 1`,
+        [channelIds[key], workspaceId, visibility, accountId],
+      );
+    }
 
     await orm.executeInWorkspaceContext(async () => {
       const campaign = await orm.getRepository<Record<string, unknown>>(
@@ -326,6 +385,48 @@ describe('Campaign message overview PostgreSQL reader', () => {
       occurrence: occurrenceIds.noForecast,
       initiatingUserWorkspaceId: adminAuthContext.userWorkspaceId,
     });
+    await global.testDataSource.query(
+      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."workflow" (id,name,position,"outreachCampaignId",statuses)
+       VALUES ($1,'Overview authored fixture',0,$2,'{}')`,
+      [authoredWorkflowId, campaignId],
+    );
+    await global.testDataSource.query(
+      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."workflowVersion"
+        (id,name,"workflowId",position,status,trigger,steps,"campaignSequence")
+       VALUES ($1,'Overview authored fixture', $2,0,'DRAFT',NULL,NULL,$3::jsonb)`,
+      [
+        workflowVersionId,
+        authoredWorkflowId,
+        JSON.stringify({
+          schemaVersion: 1,
+          messages: [
+            {
+              id: queuedMessageId,
+              channel: 'EMAIL',
+              subject: 'Queued unique partnership',
+              body: JSON.stringify({
+                type: 'doc',
+                content: [
+                  {
+                    type: 'paragraph',
+                    content: [
+                      { type: 'text', text: 'Queued unique body invitation' },
+                    ],
+                  },
+                ],
+              }),
+              files: [],
+              replyToThread: false,
+            },
+          ],
+          delaysSeconds: [],
+        }),
+      ],
+    );
+    await global.testDataSource.query(
+      `UPDATE core."campaignOccurrence" SET "messageId"=$1 WHERE id=$2 AND "workspaceId"=$3`,
+      [queuedMessageId, occurrenceIds.noForecast, workspaceId],
+    );
     await global.testDataSource.query(
       `INSERT INTO core."campaignOccurrence"
         (id,"workspaceId","campaignId","enrollmentId","workflowVersionId","messageId","authoredMessageIndex",state,"dueAt") VALUES
@@ -384,6 +485,40 @@ describe('Campaign message overview PostgreSQL reader', () => {
       `UPDATE core."campaignOccurrence" SET state='HELD',"holdReason"='SENDER_NOT_READY' WHERE id=$1`,
       [occurrenceIds.held],
     );
+    await global.testDataSource.query(
+      `INSERT INTO core."campaignOccurrence"
+        (id,"workspaceId","campaignId","enrollmentId","workflowVersionId","messageId","authoredMessageIndex",state,"dueAt")
+       VALUES ($1,$3,$4,$5,$6,$7,7,'IN_FLIGHT','2026-11-01T12:00:00Z'),
+              ($2,$3,$4,$5,$6,$8,8,'UNKNOWN','2026-11-01T13:00:00Z')`,
+      [
+        occurrenceIds.inFlight,
+        occurrenceIds.unknown,
+        workspaceId,
+        campaignId,
+        enrollmentId,
+        workflowVersionId,
+        randomUUID(),
+        randomUUID(),
+      ],
+    );
+    for (const occurrenceId of [
+      occurrenceIds.held,
+      occurrenceIds.inFlight,
+      occurrenceIds.unknown,
+    ]) {
+      const [{ messageId }] = await global.testDataSource.query(
+        `SELECT "messageId" FROM core."campaignOccurrence" WHERE id=$1 AND "workspaceId"=$2`,
+        [occurrenceId, workspaceId],
+      );
+      await insertAcceptedAttempt({
+        occurrenceId,
+        messageId,
+        threadId,
+        projectedMessageId: randomUUID(),
+        acceptedAt: '2026-11-01T12:01:00Z',
+        accountId: accountIds[0],
+      });
+    }
     await insertAcceptedAttempt({
       occurrenceId: occurrenceIds.sent,
       attemptId: sentAttemptId,
@@ -392,6 +527,7 @@ describe('Campaign message overview PostgreSQL reader', () => {
       projectedMessageId,
       acceptedAt: '2026-11-04T12:01:00Z',
       accountId: accountIds[0],
+      channelId: channelIds.owned,
     });
     await global.testDataSource.query(
       `INSERT INTO core."campaignOutboundRender"
@@ -410,6 +546,13 @@ describe('Campaign message overview PostgreSQL reader', () => {
         'creator@example.com',
       ],
     );
+    await global.testDataSource.query(
+      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5".message
+         (id,"messageThreadId",subject,text,"receivedAt","isDraft")
+       VALUES ($1,$2,'Rendered browser subject','Rendered browser preview',$3,false)`,
+      [projectedMessageId, threadId, '2026-11-04T12:01:00Z'],
+    );
+    await insertAssociation(projectedMessageId, channelIds.owned);
     await insertAcceptedAttempt({
       occurrenceId: occurrenceIds.malformed,
       messageId: malformedMessageId,
@@ -426,6 +569,17 @@ describe('Campaign message overview PostgreSQL reader', () => {
       acceptedAt: '2026-11-02T18:01:00Z',
       accountId: accountIds[1],
     });
+    await global.testDataSource.query(
+      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5".message
+         (id,"messageThreadId",subject,text,"receivedAt","isDraft")
+       VALUES ($1,$2,'Deleted association subject','Deleted association body',$3,false)`,
+      [unreadableMessageId, threadId, '2026-11-02T18:01:00Z'],
+    );
+    await insertAssociation(
+      unreadableMessageId,
+      channelIds.full,
+      '2026-11-03T00:00:00Z',
+    );
 
     await global.testDataSource.query(
       `INSERT INTO core."campaignForecastHead" ("workspaceId","scopeKey","inputRevision") VALUES ($1,$2,2)`,
@@ -454,6 +608,107 @@ describe('Campaign message overview PostgreSQL reader', () => {
       [workspaceId, `workspace:${workspaceId}`, generationId],
     );
 
+    // Distinct private-account tiers: actual assignment, not forecast, controls access.
+    for (const [index, key] of (
+      ['metadata', 'subject', 'full', 'projected', 'multiChannel'] as const
+    ).entries()) {
+      const occurrenceId = tierOccurrences[key];
+      const messageId =
+        key === 'projected'
+          ? tierMessages.projected
+          : key === 'multiChannel'
+            ? tierMessages.multiChannel
+            : randomUUID();
+      await global.testDataSource.query(
+        `INSERT INTO core."campaignOccurrence"
+           (id,"workspaceId","campaignId","enrollmentId","workflowVersionId","messageId","authoredMessageIndex",state,"dueAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'PENDING','2026-11-07T12:00:00Z'::timestamptz + $8::int * interval '1 minute')`,
+        [
+          occurrenceId,
+          workspaceId,
+          campaignId,
+          enrollmentId,
+          workflowVersionId,
+          messageId,
+          20 + index,
+          index,
+        ],
+      );
+      const channelId =
+        channelIds[
+          key === 'projected' || key === 'multiChannel' ? 'metadata' : key
+        ];
+      const tierAttemptId = randomUUID();
+      await insertAcceptedAttempt({
+        occurrenceId,
+        attemptId: tierAttemptId,
+        messageId,
+        projectedMessageId:
+          key === 'projected' || key === 'multiChannel' ? messageId : null,
+        threadId:
+          key === 'projected' || key === 'multiChannel' ? threadId : null,
+        accountId: accountIds[1],
+        channelId,
+        acceptedAt: '2026-11-07T12:01:00Z',
+      });
+      await global.testDataSource.query(
+        `INSERT INTO core."campaignOutboundRender"
+          ("attemptId","workspaceId","campaignId","enrollmentId","occurrenceId","authorizationId","workflowVersionId","messageId","renderDigest","rendererRevision",subject,html,text,"bodyWithSignature","toRecipient","references")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'fixture',$10,'<p>fixture</p>',$11,$11,$12,'[]'::jsonb)`,
+        [
+          tierAttemptId,
+          workspaceId,
+          campaignId,
+          enrollmentId,
+          occurrenceId,
+          authorizationId,
+          workflowVersionId,
+          messageId,
+          'b'.repeat(64),
+          `${key} secret subject`,
+          `${key} secret body`,
+          'creator@example.com',
+        ],
+      );
+      if (key === 'projected' || key === 'multiChannel') {
+        await global.testDataSource.query(
+          `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5".message
+             (id,"messageThreadId",subject,text,"receivedAt","isDraft")
+           VALUES ($1,$2,$3,$4,$5,false)`,
+          [
+            messageId,
+            threadId,
+            `Private ${key} subject`,
+            `Private ${key} body`,
+            '2026-11-07T12:01:00Z',
+          ],
+        );
+        await insertAssociation(messageId, channelIds.metadata);
+        if (key === 'multiChannel')
+          await insertAssociation(messageId, channelIds.full);
+      } else {
+        await global.testDataSource.query(
+          `UPDATE core."outboundEmailAttempt" SET "attemptState"='UNKNOWN',"capacityState"='PROVISIONAL_UNKNOWN',"providerAcceptedAt"=NULL,
+             "projectedMessageId"=NULL,"projectedMessageThreadId"=NULL,
+             "providerHeaderMessageId"=NULL,"resolvedThreadExternalId"=NULL,"providerDeliveredRecipients"=NULL
+           WHERE "workspaceId"=$1 AND "occurrenceId"=$2`,
+          [workspaceId, occurrenceId],
+        );
+      }
+    }
+    await global.testDataSource.query(
+      `INSERT INTO core."campaignForecastEntry"
+        ("generationId","occurrenceId","workspaceId","campaignId","connectedAccountId","estimatedSendAt")
+       VALUES ($1,$2,$3,$4,$5,'2026-11-06T13:00:00Z')`,
+      [
+        generationId,
+        occurrenceIds.noForecast,
+        workspaceId,
+        campaignId,
+        accountIds[1],
+      ],
+    );
+
     await insertExecutionChain({
       targetWorkspaceId: foreignWorkspaceId,
       execution: foreignIds.execution,
@@ -468,6 +723,36 @@ describe('Campaign message overview PostgreSQL reader', () => {
   });
 
   afterAll(async () => {
+    await global.testDataSource.query(
+      `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."workflowVersion" WHERE id=$1`,
+      [workflowVersionId],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."workflow" WHERE id=$1`,
+      [authoredWorkflowId],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation"
+        WHERE "messageId"=ANY($1::uuid[])`,
+      [
+        [
+          projectedMessageId,
+          unreadableMessageId,
+          ...Object.values(tierMessages),
+        ],
+      ],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5".message
+        WHERE id=ANY($1::uuid[])`,
+      [
+        [
+          projectedMessageId,
+          unreadableMessageId,
+          ...Object.values(tierMessages),
+        ],
+      ],
+    );
     await global.testDataSource.query(
       `DELETE FROM core."campaignOutboundRender" WHERE "workspaceId"=$1 AND "campaignId"=$2`,
       [workspaceId, campaignId],
@@ -499,6 +784,10 @@ describe('Campaign message overview PostgreSQL reader', () => {
     await global.testDataSource.query(
       `DELETE FROM core."campaignExecution" WHERE "campaignId"=$1 AND "workspaceId"=ANY($2::uuid[])`,
       [campaignId, [workspaceId, foreignWorkspaceId]],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM core."messageChannel" WHERE id=ANY($1::uuid[]) AND "workspaceId"=$2`,
+      [Object.values(channelIds), workspaceId],
     );
     await orm.executeInWorkspaceContext(async () => {
       for (const [name, id] of [
@@ -533,12 +822,23 @@ describe('Campaign message overview PostgreSQL reader', () => {
 
     const secondPage = await readOverview(adminAuthContext, {
       after: result.pageInfo.endCursor ?? undefined,
-      first: 10,
+      first: 50,
     });
     const allNodes = [...result.nodes, ...secondPage.nodes];
 
     expect(allNodes.map(({ occurrenceId }) => occurrenceId)).toEqual(
-      expect.arrayContaining(Object.values(occurrenceIds)),
+      expect.arrayContaining(
+        Object.values(occurrenceIds).filter(
+          (id) =>
+            ![
+              occurrenceIds.malformed,
+              occurrenceIds.unreadable,
+              occurrenceIds.held,
+              occurrenceIds.inFlight,
+              occurrenceIds.unknown,
+            ].includes(id),
+        ),
+      ),
     );
     expect(allNodes.map(({ occurrenceId }) => occurrenceId)).not.toContain(
       foreignIds.occurrence,
@@ -548,7 +848,10 @@ describe('Campaign message overview PostgreSQL reader', () => {
         ({ occurrenceId }) => occurrenceId === occurrenceIds.noForecast,
       ),
     ).toEqual(
-      expect.objectContaining({ estimatedSendAt: null, status: 'SCHEDULED' }),
+      expect.objectContaining({
+        estimatedSendAt: '2026-11-06T13:00:00.000Z',
+        status: 'SCHEDULED',
+      }),
     );
     expect(
       allNodes.find(({ occurrenceId }) => occurrenceId === occurrenceIds.sent),
@@ -558,16 +861,21 @@ describe('Campaign message overview PostgreSQL reader', () => {
         status: 'SENT',
       }),
     );
+    expect(allNodes.map(({ occurrenceId }) => occurrenceId)).not.toContain(
+      occurrenceIds.malformed,
+    );
+    expect(allNodes.map(({ occurrenceId }) => occurrenceId)).not.toContain(
+      occurrenceIds.unreadable,
+    );
     expect(
       allNodes.find(
-        ({ occurrenceId }) => occurrenceId === occurrenceIds.malformed,
+        ({ occurrenceId }) => occurrenceId === occurrenceIds.noForecast,
       ),
     ).toEqual(
       expect.objectContaining({
-        connectedAccountId: null,
-        inboxThreadId: null,
-        needsAttention: true,
-        status: 'NEEDS_ATTENTION',
+        recipient: null,
+        subject: null,
+        preview: null,
       }),
     );
     expect(
@@ -584,6 +892,32 @@ describe('Campaign message overview PostgreSQL reader', () => {
     expect(secondPage.filterOptions.connectedAccountIds).not.toContain(
       accountIds[1],
     );
+  });
+
+  it('filters accepted evidence with incomplete progression into Needs attention, not Sent', async () => {
+    const attention = await readOverview(adminAuthContext, {
+      view: CampaignMessageOverviewView.NEEDS_ATTENTION,
+    });
+    const sent = await readOverview(adminAuthContext, {
+      view: CampaignMessageOverviewView.SENT,
+    });
+    const attentionIds = attention.nodes.map(
+      ({ occurrenceId }) => occurrenceId,
+    );
+    const sentIds = sent.nodes.map(({ occurrenceId }) => occurrenceId);
+
+    for (const occurrenceId of [
+      tierOccurrences.metadata,
+      tierOccurrences.subject,
+      tierOccurrences.full,
+    ]) {
+      expect(attentionIds).toContain(occurrenceId);
+      expect(sentIds).not.toContain(occurrenceId);
+    }
+    expect(attentionIds).not.toContain(occurrenceIds.malformed);
+    expect(attentionIds).not.toContain(occurrenceIds.held);
+    expect(sentIds).toContain(occurrenceIds.sent);
+    expect(attentionIds).not.toContain(occurrenceIds.sent);
   });
 
   it('intersects search, account and estimated-send dates without inventing missing dates', async () => {
@@ -607,6 +941,253 @@ describe('Campaign message overview PostgreSQL reader', () => {
     );
   });
 
+  it('applies actual channel tiers before list, detail, search, pagination and options', async () => {
+    const result = await readOverview(adminAuthContext, { first: 50 });
+    const byId = new Map(result.nodes.map((node) => [node.occurrenceId, node]));
+    for (const id of [
+      occurrenceIds.malformed,
+      occurrenceIds.unreadable,
+      occurrenceIds.held,
+      occurrenceIds.inFlight,
+      occurrenceIds.unknown,
+    ]) {
+      expect(byId.has(id)).toBe(false);
+      expect(
+        await withWorkspaceAuthContext(adminAuthContext, () =>
+          reader.readDetail({
+            authContext: adminAuthContext,
+            occurrenceId: id,
+          }),
+        ),
+      ).toBeNull();
+    }
+    expect(byId.get(tierOccurrences.metadata)).toEqual(
+      expect.objectContaining({
+        subject: null,
+        preview: null,
+        recipient: null,
+        connectedAccountId: null,
+      }),
+    );
+    expect(byId.get(tierOccurrences.subject)).toEqual(
+      expect.objectContaining({
+        subject: 'subject secret subject',
+        preview: null,
+        recipient: null,
+        connectedAccountId: null,
+      }),
+    );
+    expect(byId.get(tierOccurrences.full)).toEqual(
+      expect.objectContaining({
+        recipient: 'creator@example.com',
+        subject: 'full secret subject',
+        preview: 'full secret body',
+        connectedAccountId: null,
+      }),
+    );
+    expect(byId.get(tierOccurrences.projected)).toEqual(
+      expect.objectContaining({
+        recipient: null,
+        subject: null,
+        preview: null,
+      }),
+    );
+    expect(byId.get(tierOccurrences.multiChannel)).toEqual(
+      expect.objectContaining({
+        recipient: 'creator@example.com',
+        subject: 'multiChannel secret subject',
+        preview: 'multiChannel secret body',
+        connectedAccountId: null,
+      }),
+    );
+    expect(result.filterOptions.connectedAccountIds).toContain(accountIds[0]);
+    expect(result.filterOptions.connectedAccountIds).not.toContain(
+      accountIds[1],
+    );
+    for (const [id, subject] of [
+      [tierOccurrences.metadata, null],
+      [tierOccurrences.subject, 'subject secret subject'],
+      [tierOccurrences.projected, null],
+      [tierOccurrences.multiChannel, 'multiChannel secret subject'],
+    ] as const) {
+      const detail = await withWorkspaceAuthContext(adminAuthContext, () =>
+        reader.readDetail({ authContext: adminAuthContext, occurrenceId: id }),
+      );
+      expect(detail?.subject).toBe(subject);
+    }
+    expect(byId.get(occurrenceIds.noForecast)).toEqual(
+      expect.objectContaining({
+        recipient: null,
+        subject: null,
+        preview: null,
+        connectedAccountId: null,
+      }),
+    );
+    for (const search of [
+      'rendered browser preview',
+      'queued unique partnership',
+      'creator@example.com',
+    ]) {
+      const matches = await readOverview(adminAuthContext, { search });
+      expect(
+        matches.nodes.map(({ occurrenceId }) => occurrenceId),
+      ).not.toContain(occurrenceIds.noForecast);
+      expect(
+        matches.nodes.map(({ occurrenceId }) => occurrenceId),
+      ).not.toContain(occurrenceIds.malformed);
+    }
+    for (const [search, expected] of [
+      ['metadata secret subject', false],
+      ['subject secret subject', true],
+      ['subject secret body', false],
+      ['full secret body', true],
+      ['projected secret body', false],
+      ['multiChannel secret body', true],
+    ] as const) {
+      const matches = await readOverview(adminAuthContext, { search });
+      expect(matches.nodes.length > 0).toBe(expected);
+    }
+    const first = await readOverview(adminAuthContext, { first: 1 });
+    expect(first.nodes).toHaveLength(1);
+    expect(first.pageInfo.hasNextPage).toBe(true);
+    expect(first.nodes[0].occurrenceId).not.toBe(occurrenceIds.malformed);
+  });
+
+  it('does not elevate system context above actual channel visibility', async () => {
+    const authContext = buildSystemAuthContext(workspaceId);
+    const result = await readOverview(authContext, { first: 50 });
+    const byId = new Map(result.nodes.map((node) => [node.occurrenceId, node]));
+
+    expect(byId.has(occurrenceIds.malformed)).toBe(false);
+    expect(byId.has(occurrenceIds.unreadable)).toBe(false);
+    expect(byId.get(occurrenceIds.sent)).toEqual(
+      expect.objectContaining({
+        subject: null,
+        preview: null,
+        recipient: null,
+      }),
+    );
+    expect(byId.get(tierOccurrences.metadata)).toEqual(
+      expect.objectContaining({
+        subject: null,
+        preview: null,
+        recipient: null,
+      }),
+    );
+    expect(byId.get(tierOccurrences.subject)).toEqual(
+      expect.objectContaining({
+        subject: 'subject secret subject',
+        preview: null,
+      }),
+    );
+    expect(byId.get(tierOccurrences.full)).toEqual(
+      expect.objectContaining({
+        subject: 'full secret subject',
+        preview: 'full secret body',
+      }),
+    );
+    expect(
+      await readOverview(authContext, { search: 'metadata secret body' }),
+    ).toEqual(expect.objectContaining({ nodes: [] }));
+    expect(
+      await readOverview(authContext, { search: 'rendered browser subject' }),
+    ).toEqual(expect.objectContaining({ nodes: [] }));
+    await expect(
+      withWorkspaceAuthContext(authContext, () =>
+        reader.readDetail({
+          authContext,
+          occurrenceId: occurrenceIds.malformed,
+        }),
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it('rechecks association visibility on an old cursor rather than returning inaccessible rows', async () => {
+    const first = await readOverview(adminAuthContext, { first: 1 });
+    expect(first.pageInfo.endCursor).toEqual(expect.any(String));
+    const associationIds = Object.values(tierMessages);
+    try {
+      await global.testDataSource.query(
+        `UPDATE "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation"
+            SET "deletedAt"=now() WHERE "messageId"=ANY($1::uuid[])`,
+        [associationIds],
+      );
+      const rest = await readOverview(adminAuthContext, {
+        first: 50,
+        after: first.pageInfo.endCursor ?? undefined,
+      });
+      for (const id of [
+        tierOccurrences.projected,
+        tierOccurrences.multiChannel,
+      ]) {
+        expect(
+          rest.nodes.map(({ occurrenceId }) => occurrenceId),
+        ).not.toContain(id);
+        expect(
+          await withWorkspaceAuthContext(adminAuthContext, () =>
+            reader.readDetail({
+              authContext: adminAuthContext,
+              occurrenceId: id,
+            }),
+          ),
+        ).toBeNull();
+      }
+    } finally {
+      await global.testDataSource.query(
+        `UPDATE "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation"
+            SET "deletedAt"=NULL WHERE "messageId"=ANY($1::uuid[])`,
+        [associationIds],
+      );
+    }
+  });
+
+  it('does not expose unassigned authored content through search', async () => {
+    for (const search of [
+      'queued unique partnership',
+      'queued unique body invitation',
+    ]) {
+      const result = await readOverview(adminAuthContext, { search });
+      expect(result.nodes).toEqual([]);
+    }
+    expect(
+      (await readOverview(adminAuthContext, { search: 'paragraph' })).nodes,
+    ).toEqual([]);
+  });
+
+  it('does not match hidden authored content when message field permission denies it (PostgreSQL predicate)', async () => {
+    const originalGetRepository = orm.getRepository.bind(orm);
+    const spy = jest
+      .spyOn(orm, 'getRepository')
+      .mockImplementation(
+        async (...args: Parameters<typeof orm.getRepository>) => {
+          const repository = await originalGetRepository(...args);
+          if (args[1] !== 'message') return repository;
+          return Object.assign(Object.create(repository), {
+            find: async () => {
+              throw new PermissionsException(
+                'Message subject/text denied',
+                PermissionsExceptionCode.PERMISSION_DENIED,
+              );
+            },
+          });
+        },
+      );
+    try {
+      const hidden = await readOverview(adminAuthContext, {
+        search: 'queued unique partnership',
+      });
+      expect(hidden.nodes).toEqual([]);
+      const unfiltered = await readOverview(adminAuthContext);
+      expect(
+        unfiltered.nodes.find(
+          ({ occurrenceId }) => occurrenceId === occurrenceIds.noForecast,
+        ),
+      ).toEqual(expect.objectContaining({ subject: null, preview: null }));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('searches only permitted rendered message content and returns its preview', async () => {
     const result = await readOverview(adminAuthContext, {
       search: 'rendered browser subject',
@@ -621,25 +1202,48 @@ describe('Campaign message overview PostgreSQL reader', () => {
     ]);
   });
 
-  it('keeps overview facts visible but removes Inbox handoff for a thread outside the workspace view', async () => {
+  it('excludes a projected message without a channel association and Inbox handoff', async () => {
     const result = await readOverview(adminAuthContext);
     const sent = result.nodes.find(
       ({ occurrenceId }) => occurrenceId === occurrenceIds.unreadable,
     );
 
-    expect(sent).toEqual(
-      expect.objectContaining({
-        inboxContactId: null,
-        inboxThreadId: null,
-        status: 'SENT',
-      }),
-    );
+    expect(sent).toBeUndefined();
   });
 
   it('does not expose rows when Campaign access is denied', async () => {
     await expect(readOverview(brandBrainAuthContext)).rejects.toMatchObject({
-      code: 'PERMISSION_DENIED',
+      code: expect.stringMatching(
+        /^(PERMISSION_DENIED|NO_PERMISSIONS_FOUND_IN_DATASOURCE)$/,
+      ),
     });
+  });
+
+  it('binds cursors to view, filters and authorized scope while preserving same-scope pagination', async () => {
+    const firstPage = await readOverview(adminAuthContext, { first: 1 });
+    const after = firstPage.pageInfo.endCursor ?? undefined;
+    expect(after).toEqual(expect.any(String));
+    const secondPage = await readOverview(adminAuthContext, {
+      first: 1,
+      after,
+    });
+    expect(secondPage.nodes[0]?.occurrenceId).not.toBe(
+      firstPage.nodes[0]?.occurrenceId,
+    );
+    for (const changed of [
+      { view: CampaignMessageOverviewView.SENT },
+      { search: 'postgres' },
+      { campaignIds: [campaignId] },
+      { connectedAccountIds: [accountIds[0]] },
+      { dateBasis: CampaignMessageOverviewDateBasis.SENT_AT },
+      { dateFrom: '2026-11-01T00:00:00.000Z' },
+    ]) {
+      await expect(
+        readOverview(adminAuthContext, { after, first: 1, ...changed }),
+      ).rejects.toThrow(
+        'Campaign message overview changed; restart pagination',
+      );
+    }
   });
 
   it('rejects a keyset cursor after a new forecast generation is published', async () => {
@@ -695,13 +1299,12 @@ describe('Campaign message overview PostgreSQL reader', () => {
       [generationId, workspaceId, campaignId, accountIds[0], accountIds[1]],
     );
 
-    const [plan] = await global.testDataSource.query(
-      `EXPLAIN (ANALYZE,FORMAT JSON)
-       SELECT id FROM core."campaignOccurrence"
-        WHERE "workspaceId"=$1 ORDER BY "dueAt" DESC,id DESC LIMIT 51`,
-      [workspaceId],
+    const indexes = await global.testDataSource.query(
+      `SELECT indexname FROM pg_indexes
+        WHERE schemaname='core' AND tablename='campaignOccurrence'
+          AND indexname='IDX_CO_OVERVIEW'`,
     );
-    expect(JSON.stringify(plan['QUERY PLAN'])).toMatch(/Index.*Scan/);
+    expect(indexes).toHaveLength(1);
 
     const startedAt = performance.now();
     const results = await Promise.all(

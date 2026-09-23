@@ -67,6 +67,27 @@ describe('campaign message overview status', () => {
     ).toBe('CANCELLED');
   });
 
+  it('classifies accepted evidence on an in-flight occurrence as attention rather than Sent', () => {
+    const status = deriveCampaignMessageOverviewStatus({
+      attemptState: 'ACCEPTED',
+      occurrenceState: 'IN_FLIGHT',
+      projectedMessageThreadId: 'thread',
+      providerAcceptedAt: new Date('2026-09-21T10:00:00Z'),
+    });
+
+    expect(['NEEDS_ATTENTION']).toContain(status);
+    expect(['SENT']).not.toContain(status);
+
+    const sql = campaignMessageOverviewStatusSql();
+
+    expect(sql).toMatch(
+      /WHEN o\.state IN \('HELD','UNKNOWN','IN_FLIGHT'\)\s+OR \(o\.state='SUCCEEDED'\s+AND \(attempt\."providerAcceptedAt" IS NULL OR attempt\."projectedMessageThreadId" IS NULL\)\)/,
+    );
+    expect(sql.indexOf("THEN 'NEEDS_ATTENTION'")).toBeLessThan(
+      sql.indexOf("THEN 'SENT'"),
+    );
+  });
+
   it('uses identical terminal and malformed-occurrence classifications in SQL', () => {
     expect(campaignMessageOverviewStatusSql()).toContain(
       "IN ('RESERVED','PROCESSING','UNKNOWN','BLOCKED')",
@@ -74,9 +95,7 @@ describe('campaign message overview status', () => {
     expect(campaignMessageOverviewStatusSql()).toContain(
       "IN ('CANCELLED','SKIPPED') THEN 'CANCELLED'",
     );
-    expect(campaignMessageOverviewStatusSql()).toContain(
-      "o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED')",
-    );
+    expect(campaignMessageOverviewStatusSql()).toContain("o.state='SUCCEEDED'");
     expect(campaignMessageOverviewStatusSql()).toContain(
       'attempt."attemptState"=\'ACCEPTED\'',
     );

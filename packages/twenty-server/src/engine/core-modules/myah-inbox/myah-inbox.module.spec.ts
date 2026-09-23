@@ -14,6 +14,7 @@ import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
 import { MyahInboxReplyContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
 import { MyahInboxReplyContextDraftService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-draft.service';
+import { MyahInboxReplyContextOptionsService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-options.service';
 import { MyahInboxReplyApprovedExecutionService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-approved-execution.service';
 import { MyahInboxModule } from 'src/engine/core-modules/myah-inbox/myah-inbox.module';
 import { MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-reply-execution-service.token';
@@ -56,6 +57,7 @@ describe('MyahInboxModule', () => {
         { provide: MyahInboxQueryService, useValue: {} },
         { provide: MyahInboxReplyContextService, useValue: {} },
         { provide: MyahInboxReplyContextDraftService, useValue: {} },
+        { provide: MyahInboxReplyContextOptionsService, useValue: {} },
         { provide: DataSource, useValue: {} },
         { provide: MyahInboxReplyAuthorityContextService, useValue: {} },
         { provide: ManagedEmailCampaignEligibilityService, useValue: {} },

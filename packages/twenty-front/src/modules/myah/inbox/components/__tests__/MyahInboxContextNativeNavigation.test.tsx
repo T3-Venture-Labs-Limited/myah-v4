@@ -32,8 +32,8 @@ import {
 } from 'react-router-dom';
 import { myahInboxContextState } from '@/myah/inbox/states/myahInboxContextState';
 import { MyahInboxContextEffect } from '@/myah/inbox/components/MyahInboxContextEffect';
-import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { useOpenMyahInboxContextInSidePanel } from '@/myah/inbox/hooks/useOpenMyahInboxContextInSidePanel';
+import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 import { useMyahInboxDraftAutosaveController } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
@@ -159,16 +159,11 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
 }));
 
 const key = draftKeyFixture('workspace-1', 'thread-1');
-const first: MyahInboxThread = {
-  id: key.deliveryTargetId,
-  lastActivityAt: '2026-09-08T00:00:00Z',
-  subject: 'First',
-  lastMessagePreview: null,
-  lastMessageSender: null,
+const first = {
+  id: 'contact-1',
   creator: { id: 'creator-1', name: 'First Creator' },
-  campaign: null,
-};
-const second: MyahInboxThread = { ...first, id: 'thread-2' };
+} as MyahInboxContact;
+const second = { ...first, id: 'contact-2' };
 const drain = async () => {
   await act(async () => {
     await Promise.resolve();
@@ -204,7 +199,7 @@ const ReopenSameInboxInstance = () => {
       onClick={() =>
         navigateSidePanelMenu({
           page: SidePanelPages.MyahInboxContext,
-          pageTitle: 'Conversation details',
+          pageTitle: 'Creator context',
           pageIcon: IconInfoCircle,
           pageId: store.get(sidePanelPageInfoState.atom).instanceId,
           resetNavigationStack: true,
@@ -241,7 +236,7 @@ const OpenCompetingPanel = () => {
     </button>
   );
 };
-const Harness = ({ thread }: { thread: MyahInboxThread }) => {
+const Harness = ({ contact }: { contact: MyahInboxContact }) => {
   const { authorizeTarget, beginTargetRead, invalidateTarget, updateDraft } =
     useMyahInboxDraftAutosaveController();
   const entry = useAtomValue(myahInboxDraftAutosaveFamilyState.atomFamily(key));
@@ -265,7 +260,7 @@ const Harness = ({ thread }: { thread: MyahInboxThread }) => {
   }, [authorizeTarget, beginTargetRead, invalidateTarget]);
   return (
     <>
-      <MyahInboxContextEffect workspaceId={key.workspaceId} thread={thread} />
+      <MyahInboxContextEffect workspaceId={key.workspaceId} contact={contact} />
       <input
         aria-label="Real autosave probe"
         value={entry?.localBody.markdown ?? ''}
@@ -340,7 +335,7 @@ it.each([true, false])(
         >
           <StrictMode>
             {routeCloseFirst && <NativeRouteEntryCloseEffect />}
-            <Harness thread={first} />
+            <Harness contact={first} />
             {!routeCloseFirst && <NativeRouteEntryCloseEffect />}
           </StrictMode>
         </MemoryRouter>
@@ -371,7 +366,9 @@ it.each([true, false])(
     expect(store.get(sidePanelPageState.atom)).toBe(
       SidePanelPages.MyahInboxContext,
     );
-    expect(store.get(sidePanelPageInfoState.atom).title).toBe('Inbox context');
+    expect(store.get(sidePanelPageInfoState.atom).title).toBe(
+      'Creator context',
+    );
     expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(1);
     expect(mockPush).toHaveBeenCalledTimes(1);
     await drain();
@@ -390,7 +387,7 @@ it('preserves the AskAI route-close exception and suppression after native close
         initialEntries={['/myah/inbox']}
       >
         <NativeRouteEntryCloseEffect />
-        <Harness thread={first} />
+        <Harness contact={first} />
       </MemoryRouter>
     </Provider>,
   );
@@ -413,13 +410,13 @@ it('preserves the AskAI route-close exception and suppression after native close
 
 it('uses real native navigation once and preserves stack/focus on context synchronization', async () => {
   const store = createStore();
-  const tree = (thread: MyahInboxThread) => (
+  const tree = (contact: MyahInboxContact) => (
     <Provider store={store}>
       <MemoryRouter
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         initialEntries={['/myah/inbox']}
       >
-        <Harness thread={thread} />
+        <Harness contact={contact} />
       </MemoryRouter>
     </Provider>
   );
@@ -429,7 +426,7 @@ it('uses real native navigation once and preserves stack/focus on context synchr
   expect(store.get(sidePanelPageState.atom)).toBe(
     SidePanelPages.MyahInboxContext,
   );
-  expect(store.get(sidePanelPageInfoState.atom).title).toBe('Inbox context');
+  expect(store.get(sidePanelPageInfoState.atom).title).toBe('Creator context');
   const stack = store.get(sidePanelNavigationStackState.atom);
   expect(stack).toHaveLength(1);
   expect(mockPush).toHaveBeenCalledTimes(1);
@@ -459,7 +456,7 @@ it('does not remount or prematurely save the real draft on close/reopen and resi
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         initialEntries={['/myah/inbox']}
       >
-        <Harness thread={first} />
+        <Harness contact={first} />
       </MemoryRouter>
     </Provider>
   );
@@ -525,7 +522,7 @@ const setupNativeShell = (
               <Route element={<MainAppLayoutWithSidePanel />}>
                 <Route
                   path="/myah/inbox"
-                  element={<Harness thread={first} />}
+                  element={<Harness contact={first} />}
                 />
                 <Route
                   path="/myah/creators"

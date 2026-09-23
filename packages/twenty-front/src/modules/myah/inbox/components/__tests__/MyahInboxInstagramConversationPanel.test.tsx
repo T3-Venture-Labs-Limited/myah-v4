@@ -16,6 +16,13 @@ const flush = jest.fn().mockResolvedValue({ status: 'saved', revision: 1 });
 const mockUseDraft = jest.fn();
 const mockUseConversation = jest.fn();
 const mockUseSend = jest.fn();
+const mockUseCampaignSelection = jest.fn();
+const mockUseGuidanceNavigation = jest.fn();
+const mockUseObjectMetadataItems = jest.fn();
+
+jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
+  useObjectMetadataItems: () => mockUseObjectMetadataItems(),
+}));
 
 jest.mock('@/myah/inbox/hooks/useMyahInboxInstagramDraft', () => ({
   useMyahInboxInstagramDraft: (...args: unknown[]) => mockUseDraft(...args),
@@ -30,22 +37,78 @@ jest.mock('@/myah/inbox/hooks/useMyahInstagramConversation', () => ({
     mockUseConversation(...args),
 }));
 
+jest.mock('@/myah/inbox/hooks/useMyahInboxInstagramCampaignSelection', () => ({
+  useMyahInboxInstagramCampaignSelection: (...args: unknown[]) =>
+    mockUseCampaignSelection(...args),
+}));
+
+jest.mock(
+  '@/myah/inbox/hooks/useMyahInboxCampaignAiGuidanceNavigation',
+  () => ({
+    useMyahInboxCampaignAiGuidanceNavigation: (...args: unknown[]) =>
+      mockUseGuidanceNavigation(...args),
+  }),
+);
+
 jest.mock('@/myah/inbox/components/MyahInboxInstagramComposer', () => ({
   MyahInboxInstagramComposer: ({
     username,
     disabled,
     error,
+    conflict,
+    onReloadConflict,
     onReviewAndSend,
+    campaignOptions,
+    selectedCampaignId,
+    onSelectCampaign,
+    campaignUnavailableReason,
+    onOpenAiGuidance,
+    guidanceUnavailableReason,
   }: {
     username: string;
     disabled: boolean;
     error: string | null;
+    conflict?: { revision: number; body: string } | null;
+    onReloadConflict?: () => void;
     onReviewAndSend: () => void;
+    campaignOptions?: Array<{ value: string; label: string }>;
+    selectedCampaignId?: string | null;
+    onSelectCampaign?: (value: string) => void;
+    campaignUnavailableReason?: string | null;
+    onOpenAiGuidance?: () => void;
+    guidanceUnavailableReason?: string;
   }) => (
     <div>
       Composer {username} {disabled ? 'disabled' : 'ready'}
       <button onClick={onReviewAndSend}>Review and send</button>
       {error ? <span>{error}</span> : null}
+      {conflict ? (
+        <div data-testid="shared-conflict" role="alert" tabIndex={-1}>
+          <button onClick={onReloadConflict}>
+            Reload saved Instagram draft
+          </button>
+        </div>
+      ) : null}
+      <div data-testid="campaign-context-fixture">
+        {campaignUnavailableReason ??
+          `${selectedCampaignId ?? 'none'}:${(campaignOptions ?? [])
+            .map((option) => option.value)
+            .join(',')}`}
+      </div>
+      {onSelectCampaign && (
+        <button onClick={() => onSelectCampaign('campaign-b')}>
+          Choose campaign-b
+        </button>
+      )}
+      <button
+        disabled={!onOpenAiGuidance}
+        aria-disabled={
+          Boolean(guidanceUnavailableReason || !onOpenAiGuidance) || undefined
+        }
+        onClick={onOpenAiGuidance}
+      >
+        Open AI guidance
+      </button>
     </div>
   ),
 }));
@@ -93,6 +156,11 @@ const contact = (
   creator: { id: 'creator-1', name: 'Ada' },
   lastActivityAt: '2026-09-05T10:00:00.000Z',
   latestChannel: 'INSTAGRAM',
+  initialSelection: {
+    channel: 'INSTAGRAM',
+    emailThreadId: null,
+    instagramConversationId: null,
+  },
   preview: null,
   sender: null,
   needsAttention: false,
@@ -138,6 +206,12 @@ const conversation = (
 describe('MyahInboxInstagramConversationPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseObjectMetadataItems.mockReturnValue({
+      objectMetadataItems: [
+        { nameSingular: 'campaignCreator' },
+        { nameSingular: 'campaign' },
+      ],
+    });
     mockUseConversation.mockReturnValue({
       messages: [],
       loading: false,
@@ -163,6 +237,18 @@ describe('MyahInboxInstagramConversationPanel', () => {
       flush,
       reloadConflict: jest.fn(),
       resetAfterSend: jest.fn(),
+    });
+    mockUseCampaignSelection.mockReturnValue({
+      status: 'unavailable',
+      options: [],
+      selectedCampaignId: null,
+      onSelectCampaign: jest.fn(),
+      unavailableReason:
+        'Link this Instagram conversation to a Creator to show Campaign context.',
+    });
+    mockUseGuidanceNavigation.mockReturnValue({
+      runtimeAgentTabId: undefined,
+      openGuidance: jest.fn(),
     });
   });
 
@@ -261,13 +347,15 @@ describe('MyahInboxInstagramConversationPanel', () => {
     ).toBeVisible();
     expect(within(messages).queryByText(/Composer/)).not.toBeInTheDocument();
     expect(within(reply).getByText('Composer ada disabled')).toBeVisible();
-    expect(within(reply).getByRole('alert')).toHaveTextContent(
-      'temporarily blocked',
+    expect(within(reply).getByText(/temporarily blocked/)).toHaveAttribute(
+      'role',
+      'alert',
     );
-    const recovery = within(reply).getByRole('button', {
+    const sharedConflict = within(reply).getByTestId('shared-conflict');
+    const recovery = within(sharedConflict).getByRole('button', {
       name: 'Reload saved Instagram draft',
     });
-    expect(recovery).toHaveFocus();
+    expect(sharedConflict).toHaveAttribute('tabindex', '-1');
     fireEvent.click(recovery);
     expect(reloadConflict).toHaveBeenCalledTimes(1);
 
@@ -283,6 +371,180 @@ describe('MyahInboxInstagramConversationPanel', () => {
     expect(source).toMatch(
       /const StyledReplyArea[^`]+`[^`]*flex-shrink: 0;[^`]*max-height: 60%;[^`]*overflow-y: auto;/,
     );
+  });
+
+  it('aligns the Instagram reply gutter with Email so MyahInboxReplyBox receives the same available width', () => {
+    // Deterministic static geometry proof: JSDOM does not lay out Linaria CSS,
+    // so this asserts the same scrollbar-independent-width strategy Email's
+    // StyledReply already uses, matching the shared card width requirement.
+    // Live pixel-rectangle geometry is proven separately in authenticated
+    // browser acceptance (Tasks 10.1/10.2).
+    const source = readFileSync(
+      `${__dirname}/../MyahInboxInstagramConversationPanel.tsx`,
+      'utf8',
+    );
+    const styledPanelBlock = source.match(
+      /const StyledPanel = styled\.section[^`]*`([\s\S]*?)`;/,
+    )?.[1];
+    const styledReplyAreaBlock = source.match(
+      /const StyledReplyArea = styled\.section`([\s\S]*?)`;/,
+    )?.[1];
+    expect(styledPanelBlock).toContain(
+      'padding: ${themeCssVariables.spacing[2]}',
+    );
+    expect(styledReplyAreaBlock).toBeDefined();
+    expect(styledReplyAreaBlock).toContain('scrollbar-gutter: stable');
+    expect(styledReplyAreaBlock).not.toMatch(
+      /padding: \$\{themeCssVariables\.spacing\[\d+\]\}/,
+    );
+
+    const emailReplyContainerSource = readFileSync(
+      `${__dirname}/../MyahInboxContactConversation.tsx`,
+      'utf8',
+    );
+    const styledReplyBlock = emailReplyContainerSource.match(
+      /const StyledReply = styled\.section`([\s\S]*?)`;/,
+    )?.[1];
+    expect(styledReplyBlock).toBeDefined();
+    expect(styledReplyBlock).toContain(
+      'margin: 0 ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[2]}',
+    );
+    expect(styledReplyBlock).toContain('scrollbar-gutter: stable');
+    expect(styledReplyBlock).not.toMatch(
+      /padding: \$\{themeCssVariables\.spacing\[\d+\]\}/,
+    );
+  });
+
+  it('fails closed before reading Campaign records when object metadata is missing', () => {
+    mockUseObjectMetadataItems.mockReturnValue({ objectMetadataItems: [] });
+
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: true,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+
+    expect(mockUseCampaignSelection).not.toHaveBeenCalled();
+    expect(screen.getByTestId('campaign-context-fixture')).toHaveTextContent(
+      'Campaign context is unavailable because associated Campaigns could not be read.',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Open AI guidance' }),
+    ).toBeDisabled();
+  });
+
+  it('passes Campaign selection state through to the composer and threads the choice back to the hook', () => {
+    const onSelectCampaign = jest.fn();
+    mockUseCampaignSelection.mockReturnValue({
+      status: 'ready',
+      options: [
+        { value: 'campaign-a', label: 'Alpha' },
+        { value: 'campaign-b', label: 'Beta' },
+      ],
+      selectedCampaignId: 'campaign-a',
+      onSelectCampaign,
+      unavailableReason: null,
+    });
+
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+
+    expect(mockUseCampaignSelection).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      contactId: 'contact-1',
+      conversationId: 'conversation-1',
+      creatorId: 'creator-1',
+    });
+    expect(screen.getByTestId('campaign-context-fixture')).toHaveTextContent(
+      'campaign-a:campaign-a,campaign-b',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose campaign-b' }));
+    expect(onSelectCampaign).toHaveBeenCalledWith('campaign-b');
+  });
+
+  it('opens AI guidance only with a selected Campaign and an active Agent tab, flushing and re-checking before navigating', async () => {
+    const openGuidance = jest.fn().mockResolvedValue(undefined);
+    mockUseCampaignSelection.mockReturnValue({
+      status: 'ready',
+      options: [{ value: 'campaign-a', label: 'Alpha' }],
+      selectedCampaignId: 'campaign-a',
+      onSelectCampaign: jest.fn(),
+      unavailableReason: null,
+    });
+    mockUseGuidanceNavigation.mockReturnValue({
+      runtimeAgentTabId: 'agent-tab-1',
+      openGuidance,
+    });
+
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+
+    const guidanceButton = screen.getByRole('button', {
+      name: 'Open AI guidance',
+    });
+    expect(guidanceButton).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(guidanceButton);
+
+    expect(openGuidance).toHaveBeenCalledTimes(1);
+    const call = openGuidance.mock.calls[0][0];
+    expect(call.campaignId).toBe('campaign-a');
+    expect(call.isStillCurrent()).toBe(true);
+    await expect(call.flush()).resolves.toBe(true);
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables AI guidance without a selected Campaign or an active Agent tab', () => {
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Open AI guidance' }),
+    ).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('opens the active timeline at the latest message without moving an older-page reader', () => {

@@ -42,7 +42,7 @@ export class CreateCampaignForecastProjectionFastInstanceCommand implements Fast
       `CREATE INDEX "IDX_CFG_SCOPE_CREATED" ON core."campaignForecastGeneration" ("workspaceId","scopeKey","generatedAt",id)`,
     );
     await queryRunner.query(
-      `ALTER TABLE core."campaignForecastHead" ADD CONSTRAINT "FK_CFH_CURRENT_GENERATION" FOREIGN KEY ("workspaceId","scopeKey","currentGenerationId") REFERENCES core."campaignForecastGeneration"("workspaceId","scopeKey",id) ON DELETE SET NULL`,
+      `ALTER TABLE core."campaignForecastHead" ADD CONSTRAINT "FK_CFH_CURRENT_GENERATION" FOREIGN KEY ("workspaceId","scopeKey","currentGenerationId") REFERENCES core."campaignForecastGeneration"("workspaceId","scopeKey",id) ON DELETE SET NULL ("currentGenerationId")`,
     );
     await queryRunner.query(`CREATE TABLE core."campaignForecastEntry" (
       "generationId" uuid NOT NULL,

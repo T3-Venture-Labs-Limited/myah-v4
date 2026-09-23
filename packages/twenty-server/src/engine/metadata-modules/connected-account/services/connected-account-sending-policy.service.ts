@@ -37,11 +37,13 @@ type UpdateRevisionedConnectedAccountSendingPolicyParams =
 
 @Injectable()
 export class ConnectedAccountSendingPolicyService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
+
   constructor(
     @InjectRepository(ConnectedAccountEntity)
     private readonly repository: Repository<ConnectedAccountEntity>,
     private readonly spacingGuard: ConnectedAccountSendingPolicySpacingGuardService = new ConnectedAccountSendingPolicySpacingGuardService(),
-    private readonly forecastInvalidation = new CampaignForecastInputInvalidationService(),
   ) {}
 
   async updateRevisioned({

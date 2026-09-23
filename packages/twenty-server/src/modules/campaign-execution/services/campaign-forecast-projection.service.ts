@@ -29,6 +29,7 @@ type PublishInput = {
 
 type ProjectionHeadRow = {
   currentGenerationId: string | null;
+  currentGeneratedAt: Date | null;
   inputRevision: string;
 };
 
@@ -47,9 +48,12 @@ export class CampaignForecastProjectionService {
 
     const heads = rows<ProjectionHeadRow>(
       await queryRunner.query(
-        `SELECT "inputRevision","currentGenerationId"
-           FROM core."campaignForecastHead"
-          WHERE "workspaceId"=$1 AND "scopeKey"=$2 FOR UPDATE`,
+        `SELECT head."inputRevision",head."currentGenerationId",
+                generation."generatedAt" AS "currentGeneratedAt"
+           FROM core."campaignForecastHead" head
+           LEFT JOIN core."campaignForecastGeneration" generation
+             ON generation.id=head."currentGenerationId"
+          WHERE head."workspaceId"=$1 AND head."scopeKey"=$2 FOR UPDATE OF head`,
         [input.workspaceId, input.scopeKey],
       ),
     );
@@ -58,7 +62,14 @@ export class CampaignForecastProjectionService {
     if (
       head === undefined ||
       heads.length !== 1 ||
-      Number(head.inputRevision) !== input.expectedInputRevision
+      Number(head.inputRevision) !== input.expectedInputRevision ||
+      (head.currentGenerationId !== null &&
+        (head.currentGeneratedAt === null ||
+          input.generatedAt.getTime() <
+            new Date(head.currentGeneratedAt).getTime() ||
+          (input.generatedAt.getTime() ===
+            new Date(head.currentGeneratedAt).getTime() &&
+            input.generationId <= head.currentGenerationId)))
     ) {
       return { status: 'STALE_INPUT' as const };
     }
@@ -119,7 +130,9 @@ export class CampaignForecastProjectionService {
         WHERE id IN (
           SELECT id FROM core."campaignForecastGeneration"
            WHERE "workspaceId"=$1 AND "scopeKey"=$2
-           ORDER BY "generatedAt" DESC,id DESC OFFSET 2
+             AND id <> (SELECT "currentGenerationId" FROM core."campaignForecastHead"
+                         WHERE "workspaceId"=$1 AND "scopeKey"=$2)
+           ORDER BY "generatedAt" DESC,id DESC OFFSET 1
         )`,
       [input.workspaceId, input.scopeKey],
     );

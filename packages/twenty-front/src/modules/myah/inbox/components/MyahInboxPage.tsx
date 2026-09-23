@@ -56,6 +56,7 @@ import { IconInbox } from 'twenty-ui/icon';
 import { Button, SegmentedControl } from 'twenty-ui/input';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { isDeeplyEqual } from '~/utils/isDeeplyEqual';
 
 const StyledWorkspace = styled.div`
   display: grid;
@@ -655,28 +656,35 @@ const MyahInboxPageContent = ({
       return;
     }
 
-    if (contactId === currentSelection.contactId) {
-      if (isMobile && options?.openConversation) {
-        setMobilePanel('conversation');
-      }
-      return;
-    }
-
     const contact = contacts.contacts.find(({ id }) => id === contactId);
 
     if (!contact) {
       return;
     }
 
-    if (!(await flushAffectedDrafts())) return;
+    const recommendedSelection = getMyahInboxContactSelection({
+      workspaceId,
+      contact,
+      previousSelection: null,
+    });
+    const isExplicitReopen =
+      contactId === currentSelection.contactId && options?.openConversation;
+
+    if (contactId === currentSelection.contactId && !isExplicitReopen) {
+      return;
+    }
+
+    if (
+      !isDeeplyEqual(recommendedSelection, currentSelection) &&
+      !(await flushAffectedDrafts())
+    ) {
+      if (isExplicitReopen && isMobile) {
+        setMobilePanel('conversation');
+      }
+      return;
+    }
     setRetainedContact(contact);
-    commitContactSelection(
-      getMyahInboxContactSelection({
-        workspaceId,
-        contact,
-        previousSelection: null,
-      }),
-    );
+    commitContactSelection(recommendedSelection);
 
     if (isMobile && options?.openConversation) {
       setMobilePanel('conversation');
@@ -937,7 +945,7 @@ const MyahInboxPageContent = ({
     >
       <MyahInboxContextEffect
         workspaceId={workspaceId}
-        thread={selectedThread.thread}
+        contact={selectedContact}
       />
       {pendingDestination ? (
         <StyledSelectionStatus role="status" aria-live="polite">

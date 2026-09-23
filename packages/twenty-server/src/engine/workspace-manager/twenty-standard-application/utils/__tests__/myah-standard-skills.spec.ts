@@ -71,12 +71,32 @@ describe('Myah standard skills', () => {
       expect.stringContaining('request_approval'),
     );
     expect(myahInbox.content).toEqual(
+      expect.stringContaining('list_myah_inbox_reply_contexts'),
+    );
+    expect(myahInbox.content).toEqual(
       expect.stringContaining(
-        'Before saving, call get_myah_inbox_reply_send_readiness and use its exact numeric revision',
+        'Choose one exact Campaign ID or available General',
       ),
     );
     expect(myahInbox.content).toEqual(
-      expect.stringContaining('body: { markdown: string, blocknote: null }'),
+      expect.stringContaining(
+        'never infer a context from the UI, conversation, chronology, default context, or Campaign name',
+      ),
+    );
+    expect(myahInbox.content).toEqual(
+      expect.stringContaining(
+        'messageThreadId, replyContext, expectedContextFingerprint, expectedRevision, and body: { markdown: string, blocknote: null }',
+      ),
+    );
+    expect(myahInbox.content).toEqual(
+      expect.stringContaining(
+        'After either a Campaign or General save, read back the same selected context',
+      ),
+    );
+    expect(myahInbox.content).toEqual(
+      expect.stringContaining(
+        'Do not continue into get_myah_inbox_reply_send_readiness or send_myah_inbox_reply',
+      ),
     );
     expect(myahInbox.content).toEqual(
       expect.stringContaining(

@@ -72,7 +72,12 @@ const makeOrm = (messageThreadFind = jest.fn().mockResolvedValue([])) => {
 
 const makeDataSource = (query: ReturnType<typeof jest.fn>) => ({
   transaction: (callback: (value: { query: typeof query }) => unknown) =>
-    callback({ query }),
+    callback({
+      query: ((sql: string, ...args: unknown[]) =>
+        sql.startsWith('SELECT set_config(')
+          ? Promise.resolve([])
+          : query(sql, ...args)) as typeof query,
+    }),
 });
 
 const makeSequences = () => ({
@@ -159,9 +164,10 @@ describe('CampaignMessageOverviewReaderService', () => {
             creatorName: 'Ada',
             estimatedSendAt: null,
             occurrenceId,
-            preview: 'Hi Ada, this is the scheduled message.',
+            preview: null,
+            recipient: null,
             status: 'SCHEDULED',
-            subject: 'Scheduled partnership',
+            subject: null,
           }),
         ],
         pageInfo: expect.objectContaining({
@@ -264,10 +270,66 @@ describe('CampaignMessageOverviewReaderService', () => {
         ],
       }),
     );
-    expect(query.mock.calls[1][0]).toContain(
-      "o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED')",
-    );
+    expect(query.mock.calls[1][0]).toContain("o.state='SUCCEEDED'");
     expect(query.mock.calls[1][1][5]).toEqual(['NEEDS_ATTENTION']);
+  });
+
+  it('keeps accepted evidence on an IN_FLIGHT occurrence in Needs attention, not Sent', async () => {
+    const acceptedAt = new Date('2026-09-21T10:00:00.000Z');
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          attemptState: 'ACCEPTED',
+          authoredMessageIndex: 0,
+          campaignCreatorId,
+          campaignId,
+          connectedAccountId: null,
+          creatorId,
+          dueAt: acceptedAt,
+          estimatedSendAt: null,
+          holdReason: null,
+          messageId,
+          occurrenceId,
+          occurrenceState: 'IN_FLIGHT',
+          projectedMessageThreadId: '99999999-9999-4999-8999-999999999999',
+          providerAcceptedAt: acceptedAt,
+          safeOutcomeReason: null,
+          sortAt: acceptedAt,
+          workflowVersionId,
+        },
+      ]);
+    const service = new CampaignMessageOverviewReaderService(
+      makeOrm() as never,
+      makeDataSource(query) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+    const filters = Object.assign(new CampaignMessageOverviewInput(), {
+      view: CampaignMessageOverviewView.NEEDS_ATTENTION,
+    });
+
+    const result = await service.read({ authContext, filters });
+
+    expect(result.nodes).toEqual([
+      expect.objectContaining({
+        occurrenceId,
+        status: 'NEEDS_ATTENTION',
+        needsAttention: true,
+        sentAt: acceptedAt.toISOString(),
+      }),
+    ]);
+    expect(query.mock.calls[1][1][5]).toEqual(['NEEDS_ATTENTION']);
+    // The production WHERE predicate must classify this state before the accepted Sent arm.
+    const sql = query.mock.calls[1][0] as string;
+
+    expect(sql).toMatch(
+      /WHEN o\.state IN \('HELD','UNKNOWN','IN_FLIGHT'\)\s+OR \(o\.state='SUCCEEDED'\s+AND \(attempt\."providerAcceptedAt" IS NULL OR attempt\."projectedMessageThreadId" IS NULL\)\)/,
+    );
+    expect(sql.indexOf("THEN 'NEEDS_ATTENTION'")).toBeLessThan(
+      sql.indexOf("THEN 'SENT'"),
+    );
   });
 
   it('does not expose an Inbox handoff for an unreadable projected thread', async () => {
@@ -361,7 +423,8 @@ describe('CampaignMessageOverviewReaderService', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         occurrenceId,
-        subject: 'Scheduled partnership',
+        subject: null,
+        recipient: null,
       }),
     );
     expect(query.mock.calls[1][1][16]).toBe(occurrenceId);
@@ -437,7 +500,8 @@ describe('CampaignMessageOverviewReaderService', () => {
     );
     const after = Buffer.from(
       JSON.stringify({
-        v: 1,
+        v: 2,
+        scope: 'previous-authorized-scope',
         generationId: '77777777-7777-4777-8777-777777777777',
         occurrenceId,
         sortAt: '2026-09-21T10:00:00.000Z',

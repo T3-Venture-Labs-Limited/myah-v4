@@ -4,8 +4,8 @@ import { createStore, Provider } from 'jotai';
 import { StrictMode, useEffect, type useState as ReactUseState } from 'react';
 import { MemoryRouter, Routes, Route, Link } from 'react-router-dom';
 import { MyahInboxContextEffect } from '@/myah/inbox/components/MyahInboxContextEffect';
-import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { useOpenMyahInboxContextInSidePanel } from '@/myah/inbox/hooks/useOpenMyahInboxContextInSidePanel';
+import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 import { myahInboxContextState } from '@/myah/inbox/states/myahInboxContextState';
 import {
   EMPTY_MYAH_INBOX_CONTACT_SELECTION,
@@ -57,41 +57,86 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => {
   };
 });
 jest.mock('@/myah/inbox/components/MyahInboxContextPanel', () => ({
-  MyahInboxContextPanel: ({ thread }: { thread: MyahInboxThread }) => {
+  MyahInboxContextPanel: ({
+    creator,
+  }: {
+    creator: MyahInboxContact['creator'];
+  }) => {
     const { useState } = jest.requireActual<{ useState: typeof ReactUseState }>(
       'react',
     );
     const [tab, setTab] = useState('Creator');
     return (
       <>
-        <button onClick={() => setTab('Campaign')}>
-          Context Campaign probe
-        </button>
+        <button onClick={() => setTab('Notes')}>Context Notes probe</button>
         <output aria-label="Context tab">{tab}</output>
-        <output aria-label="Live context">
-          {thread.id}:{thread.creator?.id ?? 'unlinked'}:
-          {thread.campaign?.id ?? 'unlinked'}
-        </output>
+        <output aria-label="Live context">{creator?.id ?? 'unlinked'}</output>
       </>
     );
   },
 }));
 
-const first: MyahInboxThread = {
-  id: 'thread-1',
+const contact = (
+  id: string,
+  creator: MyahInboxContact['creator'],
+): MyahInboxContact => ({
+  id,
+  identityKind: creator ? 'CREATOR' : 'EMAIL_THREAD',
+  displayName: creator?.name ?? 'Unlinked contact',
+  instagramUsername: creator ? `${id}.ig` : null,
+  creator,
   lastActivityAt: '2026-09-08T00:00:00Z',
-  subject: 'First',
-  lastMessagePreview: null,
-  lastMessageSender: null,
-  creator: { id: 'creator-1', name: 'First Creator' },
-  campaign: { id: 'campaign-1', name: 'First Campaign' },
-};
-const second: MyahInboxThread = {
-  ...first,
-  id: 'thread-2',
-  creator: { id: 'creator-2', name: 'Second Creator' },
-  campaign: { id: 'campaign-2', name: 'Second Campaign' },
-};
+  latestChannel: 'EMAIL',
+  initialSelection: {
+    channel: 'EMAIL',
+    emailThreadId: 'thread-2',
+    instagramConversationId: null,
+  },
+  preview: null,
+  sender: null,
+  needsAttention: false,
+  triage: {
+    isAvailable: true,
+    inboxOwnerId: null,
+    inboxState: null,
+    snoozedUntil: null,
+    revision: 1,
+    identityGeneration: '1',
+  },
+  email: {
+    isAvailable: true,
+    threadCount: 2,
+    threadIds: ['thread-1', 'thread-2'],
+    latestThreadId: 'thread-2',
+    needsAttention: false,
+  },
+  instagram: {
+    isAvailable: true,
+    state: 'READY',
+    needsAttention: false,
+    conversations: [
+      {
+        id: `conversation-${id}`,
+        providerConversationId: `provider-${id}`,
+        recipientUsername: `${id}.ig`,
+        provider: 'UNIPILE',
+        lifecycle: 'ACTIVE',
+        recipientDisplayName: creator?.name ?? null,
+        lastActivityAt: '2026-09-08T00:00:00Z',
+        latestDirection: 'INBOUND',
+      },
+    ],
+  },
+});
+
+const first = contact('contact-1', {
+  id: 'creator-1',
+  name: 'First Creator',
+});
+const second = contact('contact-2', {
+  id: 'creator-2',
+  name: 'Second Creator',
+});
 const drain = async () => {
   await act(async () => {
     await Promise.resolve();
@@ -120,29 +165,44 @@ const RouteCloseEffect = () => {
   }, []);
   return null;
 };
+type Selection = {
+  channel?: 'EMAIL' | 'INSTAGRAM';
+  emailThreadId?: string | null;
+};
+
 const setup = ({
   store = createStore(),
-  thread = first as MyahInboxThread | null,
+  selectedContact = first as MyahInboxContact | null,
+  selection = {},
   initialPage,
   routeClose = false,
   routeCloseFirst = false,
   strict = false,
 }: {
   store?: ReturnType<typeof createStore>;
-  thread?: MyahInboxThread | null;
+  selectedContact?: MyahInboxContact | null;
+  selection?: Selection;
   initialPage?: SidePanelPages;
   routeClose?: boolean;
   routeCloseFirst?: boolean;
   strict?: boolean;
 } = {}) => {
-  const select = (value: MyahInboxThread | null) => {
+  const select = (value: MyahInboxContact | null, next: Selection = {}) => {
+    const channel = value ? (next.channel ?? 'EMAIL') : null;
     store.set(myahInboxContactSelectionState.atom, {
       ...EMPTY_MYAH_INBOX_CONTACT_SELECTION,
       workspaceId: mockWorkspaceId,
-      emailThreadId: value?.id ?? null,
+      contactId: value?.id ?? null,
+      channel,
+      emailThreadId:
+        channel === 'EMAIL' ? (next.emailThreadId ?? 'thread-1') : null,
+      instagramConversationId:
+        channel === 'INSTAGRAM'
+          ? (value?.instagram.conversations[0]?.id ?? null)
+          : null,
     });
   };
-  select(thread);
+  select(selectedContact, selection);
   mockNavigate.mockImplementation(
     (params: {
       page: SidePanelPages;
@@ -172,12 +232,12 @@ const setup = ({
     store.set(sidePanelPageState.atom, initialPage);
     store.set(isSidePanelOpenedState.atom, true);
   }
-  const tree = (value: MyahInboxThread | null) => {
+  const tree = (value: MyahInboxContact | null) => {
     const content = (
       <>
         {routeClose && routeCloseFirst && <RouteCloseEffect />}
         <input aria-label="Composer probe" defaultValue="Unsaved text" />
-        <MyahInboxContextEffect workspaceId={mockWorkspaceId} thread={value} />
+        <MyahInboxContextEffect workspaceId={mockWorkspaceId} contact={value} />
         <Details />
         <Drawer />
         {routeClose && !routeCloseFirst && <RouteCloseEffect />}
@@ -194,13 +254,13 @@ const setup = ({
       </Provider>
     );
   };
-  const view = render(tree(thread));
+  const view = render(tree(selectedContact));
   return {
     store,
     ...view,
-    update: (value: MyahInboxThread | null) => {
+    update: (value: MyahInboxContact | null, next: Selection = {}) => {
       act(() => {
-        select(value);
+        select(value, next);
         view.rerender(tree(value));
       });
     },
@@ -227,25 +287,40 @@ beforeEach(() => {
   mockWorkspaceId = 'workspace-1';
 });
 
-it('publishes current links and clears its owned context on unmount', async () => {
+it('publishes current contact context and clears its owned context on unmount', async () => {
   mockWide = false;
   const view = setup();
   fireEvent.click(screen.getByRole('button', { name: 'Conversation details' }));
-  expect(screen.getByLabelText('Live context')).toHaveTextContent(
-    'thread-1:creator-1:campaign-1',
-  );
+  expect(screen.getByLabelText('Live context')).toHaveTextContent('creator-1');
   view.update(second);
-  expect(screen.getByLabelText('Live context')).toHaveTextContent(
-    'thread-2:creator-2:campaign-2',
-  );
-  view.update({ ...second, creator: null, campaign: null });
-  expect(screen.getByLabelText('Live context')).toHaveTextContent(
-    'thread-2:unlinked:unlinked',
-  );
+  expect(screen.getByLabelText('Live context')).toHaveTextContent('creator-2');
+  view.update(contact('contact-2', null));
+  expect(screen.getByLabelText('Live context')).toHaveTextContent('unlinked');
   expect(mockNavigate).toHaveBeenCalledTimes(1);
   view.unmount();
   await drain();
   expect(view.store.get(myahInboxContextState.atom)).toBeNull();
+});
+
+it('publishes the same Creator context for Instagram without an Email thread', () => {
+  mockWide = false;
+  setup({ selection: { channel: 'INSTAGRAM' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Conversation details' }));
+
+  expect(screen.getByLabelText('Live context')).toHaveTextContent('creator-1');
+});
+
+it('auto-opens wide Creator context for an unlinked Instagram contact', async () => {
+  setup({
+    selectedContact: contact('instagram-only', null),
+    selection: { channel: 'INSTAGRAM' },
+  });
+
+  await drain();
+
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText('Live context')).toHaveTextContent('unlinked');
 });
 
 it('masks mismatched selection/workspace before publication updates', async () => {
@@ -256,7 +331,7 @@ it('masks mismatched selection/workspace before publication updates', async () =
   act(() => {
     view.store.set(myahInboxContactSelectionState.atom, {
       ...view.store.get(myahInboxContactSelectionState.atom),
-      emailThreadId: second.id,
+      contactId: second.id,
     });
   });
   expect(screen.queryByLabelText('Live context')).not.toBeInTheDocument();
@@ -274,11 +349,13 @@ it('masks mismatched selection/workspace before publication updates', async () =
     'workspace-2-creator',
   );
   view.update(null);
-  expect(screen.getByText('No conversation selected.')).toBeVisible();
+  expect(
+    screen.getByText('Select a contact to view Creator context.'),
+  ).toBeVisible();
 });
 
-it('opens once after delayed selection and never navigates on link updates', async () => {
-  const view = setup({ thread: null });
+it('opens once after delayed selection and never navigates on contact updates', async () => {
+  const view = setup({ selectedContact: null });
   await drain();
   expect(mockNavigate).not.toHaveBeenCalled();
   view.update(first);
@@ -396,7 +473,7 @@ it('defaults again on a fresh visit within the same application store', async ()
 
   // Preserve the application store and all its atoms, including any faulty
   // global dismissal preference; only the Inbox visit is newly mounted.
-  const freshVisit = setup({ store, thread: second });
+  const freshVisit = setup({ store, selectedContact: second });
   await drain();
   expect(freshVisit.store).toBe(store);
   expect(store.get(isSidePanelOpenedState.atom)).toBe(true);
@@ -503,15 +580,29 @@ it.each([
   },
 );
 
-it('keeps same-thread tab state but resets to Creator for another thread', async () => {
+it('keys tab lifetime to workspace and contact rather than channel or Email thread', async () => {
   const view = setup();
   await drain();
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Context Campaign probe' }),
+  fireEvent.click(screen.getByRole('button', { name: 'Context Notes probe' }));
+
+  view.update(
+    { ...first, creator: { ...first.creator!, name: 'Updated Creator' } },
+    { channel: 'INSTAGRAM' },
   );
-  view.update({ ...first, campaign: null });
-  expect(screen.getByLabelText('Context tab')).toHaveTextContent('Campaign');
-  view.update(second);
+  expect(screen.getByLabelText('Context tab')).toHaveTextContent('Notes');
+
+  view.update(first, { channel: 'EMAIL', emailThreadId: 'thread-2' });
+  expect(screen.getByLabelText('Context tab')).toHaveTextContent('Notes');
+
+  view.update(null);
+  expect(
+    screen.getByText('Select a contact to view Creator context.'),
+  ).toBeVisible();
+  view.update(first, { channel: 'INSTAGRAM' });
+  expect(screen.getByLabelText('Context tab')).toHaveTextContent('Creator');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Context Notes probe' }));
+  view.update(second, { channel: 'INSTAGRAM' });
   expect(screen.getByLabelText('Context tab')).toHaveTextContent('Creator');
   expect(mockNavigate).toHaveBeenCalledTimes(1);
 });
@@ -539,7 +630,7 @@ it('does not retain context across a route exit even with drawer reader retained
             element={
               <MyahInboxContextEffect
                 workspaceId="workspace-1"
-                thread={first}
+                contact={first}
               />
             }
           />

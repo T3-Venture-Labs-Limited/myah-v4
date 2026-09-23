@@ -97,5 +97,77 @@ describe('2.20 Campaign forecast projection commands (postgres)', () => {
     ).resolves.toEqual([
       { sendingPolicyRevision: 1, sendingPolicyIdempotencyKey: null },
     ]);
+
+    const secondId = randomUUID();
+    const thirdId = randomUUID();
+    const base = {
+      complete: true,
+      entries: [],
+      evaluatedCount: 0,
+      expectedInputRevision: 1,
+      horizonEndsAt: new Date('2026-11-03T11:00:00.123Z'),
+      scopeKey: `workspace:${workspaceId}`,
+      workspaceId,
+    };
+    await expect(
+      service.publish(
+        {
+          ...base,
+          generatedAt: new Date('2026-11-01T10:00:00.123Z'),
+          generationId: secondId,
+        },
+        runner.manager,
+      ),
+    ).resolves.toEqual({ generationId: secondId, status: 'PUBLISHED' });
+    await expect(
+      service.publish(
+        {
+          ...base,
+          generatedAt: new Date('2026-11-01T11:00:00.123Z'),
+          generationId: thirdId,
+        },
+        runner.manager,
+      ),
+    ).resolves.toEqual({ generationId: thirdId, status: 'PUBLISHED' });
+    await expect(
+      runner.query(
+        `SELECT id FROM core."campaignForecastGeneration" WHERE "workspaceId"=$1 ORDER BY "generatedAt"`,
+        [workspaceId],
+      ),
+    ).resolves.toEqual([{ id: secondId }, { id: thirdId }]);
+    await expect(
+      service.publish(
+        {
+          ...base,
+          generatedAt: new Date('2026-11-01T09:30:00.123Z'),
+          generationId: randomUUID(),
+        },
+        runner.manager,
+      ),
+    ).resolves.toEqual({ status: 'STALE_INPUT' });
+    await expect(
+      runner.query(
+        `SELECT "currentGenerationId" FROM core."campaignForecastHead" WHERE "workspaceId"=$1`,
+        [workspaceId],
+      ),
+    ).resolves.toEqual([{ currentGenerationId: thirdId }]);
+
+    // PostgreSQL must null only the nullable FK column, not the head identity.
+    await runner.query(
+      `DELETE FROM core."campaignForecastGeneration" WHERE id=$1`,
+      [thirdId],
+    );
+    await expect(
+      runner.query(
+        `SELECT "workspaceId","scopeKey","currentGenerationId" FROM core."campaignForecastHead" WHERE "workspaceId"=$1`,
+        [workspaceId],
+      ),
+    ).resolves.toEqual([
+      {
+        workspaceId,
+        scopeKey: `workspace:${workspaceId}`,
+        currentGenerationId: null,
+      },
+    ]);
   });
 });

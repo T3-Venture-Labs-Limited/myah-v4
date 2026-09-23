@@ -48,8 +48,9 @@ export const campaignMessageOverviewStatusSql = (
   projectedMessageThreadId = 'attempt."projectedMessageThreadId"',
 ): string => `CASE
   WHEN ${occurrenceState} IN ('CANCELLED','SKIPPED') THEN 'CANCELLED'
-  WHEN ${occurrenceState} IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED')
-       AND (${providerAcceptedAt} IS NULL OR ${projectedMessageThreadId} IS NULL)
+  WHEN ${occurrenceState} IN ('HELD','UNKNOWN','IN_FLIGHT')
+    OR (${occurrenceState}='SUCCEEDED'
+        AND (${providerAcceptedAt} IS NULL OR ${projectedMessageThreadId} IS NULL))
     OR ${attemptState} IN ('RESERVED','PROCESSING','UNKNOWN','BLOCKED')
     OR (${attemptState}='ACCEPTED' AND (${providerAcceptedAt} IS NULL OR ${projectedMessageThreadId} IS NULL)) THEN 'NEEDS_ATTENTION'
   WHEN ${attemptState}='ACCEPTED' AND ${providerAcceptedAt} IS NOT NULL THEN 'SENT'

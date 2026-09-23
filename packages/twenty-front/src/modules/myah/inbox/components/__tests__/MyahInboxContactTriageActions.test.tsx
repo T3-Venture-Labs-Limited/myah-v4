@@ -149,6 +149,11 @@ const contact = (isAvailable = true): MyahInboxContact => ({
   creator: { id: 'creator-1', name: 'Ada' },
   lastActivityAt: '2026-09-15T10:00:00.000Z',
   latestChannel: 'EMAIL',
+  initialSelection: {
+    channel: 'EMAIL',
+    emailThreadId: 'thread-1',
+    instagramConversationId: null,
+  },
   preview: 'Hello',
   sender: 'Ada',
   needsAttention: true,

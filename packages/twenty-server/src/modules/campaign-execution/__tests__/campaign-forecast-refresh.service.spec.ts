@@ -1,4 +1,5 @@
 import { CampaignForecastRefreshService } from 'src/modules/campaign-execution/services/campaign-forecast-refresh.service';
+import { CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const campaignId = '22222222-2222-4222-8222-222222222222';
@@ -28,7 +29,30 @@ const buildHarness = (input?: {
   selectedHeads?: boolean;
   sequencePlans?: Array<unknown>;
 }) => {
+  const runner = {
+    isTransactionActive: false,
+    isReleased: false,
+    connect: jest.fn(),
+    query: jest.fn().mockResolvedValue([]),
+    startTransaction: jest.fn(),
+    commitTransaction: jest.fn(),
+    rollbackTransaction: jest.fn(),
+    release: jest.fn(),
+  };
+  runner.startTransaction.mockImplementation(() => {
+    runner.isTransactionActive = true;
+  });
+  runner.commitTransaction.mockImplementation(() => {
+    runner.isTransactionActive = false;
+  });
+  runner.rollbackTransaction.mockImplementation(() => {
+    runner.isTransactionActive = false;
+  });
+  runner.release.mockImplementation(() => {
+    runner.isReleased = true;
+  });
   const manager = {
+    queryRunner: runner,
     query: jest.fn((sql: string) => {
       if (sql.includes('campaignForecastHead')) {
         if (input?.selectedHeads === false) return [];
@@ -73,7 +97,11 @@ const buildHarness = (input?: {
   };
   const forecast = { forecast: jest.fn().mockReturnValue(forecastResult) };
   const projection = {
-    publish: jest.fn().mockResolvedValue({ status: 'PUBLISHED' }),
+    publish: jest.fn().mockImplementation(async () => {
+      if (runner.isTransactionActive)
+        throw new Error('Planning transaction still active at publication');
+      return { status: 'PUBLISHED' };
+    }),
   };
   const senders = {
     getCampaignEmailSenderPoolInTransaction: jest.fn(({ campaignId: id }) =>
@@ -90,26 +118,36 @@ const buildHarness = (input?: {
       }),
     ),
   };
+  const realSequenceGuard = Object.create(
+    CampaignSequenceService.prototype,
+  ) as CampaignSequenceService;
   const sequences = {
-    loadExecutionPlanInTransaction: jest.fn().mockImplementation(() =>
-      Promise.resolve(
-        input?.sequencePlans?.shift() ?? {
-          kind: 'READY',
-          nodes: [
-            { channel: 'EMAIL', replyToThread: input?.replyToThread ?? false },
-          ],
-        },
-      ),
-    ),
+    loadExecutionPlanInTransaction: jest
+      .fn()
+      .mockImplementation(async (args, workspaceManager) => {
+        // Exercise the production guard on the supplied query runner. An absent
+        // campaign stops the real loader before material hydration in this unit fixture.
+        await realSequenceGuard.loadExecutionPlanInTransaction(
+          args,
+          workspaceManager,
+        );
+        return (
+          input?.sequencePlans?.shift() ?? {
+            kind: 'READY',
+            nodes: [
+              {
+                channel: 'EMAIL',
+                replyToThread: input?.replyToThread ?? false,
+              },
+            ],
+          }
+        );
+      }),
   };
   const service = new CampaignForecastRefreshService(
     {
       getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
-        createQueryRunner: jest.fn(() => ({
-          connect: jest.fn(),
-          manager,
-          release: jest.fn(),
-        })),
+        createQueryRunner: jest.fn(() => Object.assign(runner, { manager })),
         transaction: jest.fn((callback) => callback(manager)),
       }),
     } as never,
@@ -121,13 +159,28 @@ const buildHarness = (input?: {
   );
   if (input?.monotonicNow) service.setMonotonicNowForTest(input.monotonicNow);
 
-  return { candidates, forecast, manager, projection, senders, service };
+  return {
+    candidates,
+    forecast,
+    manager,
+    projection,
+    runner,
+    senders,
+    service,
+  };
 };
 
 describe('CampaignForecastRefreshService', () => {
   it('refreshes one stale workspace scope with bounded shared-pool input', async () => {
-    const { candidates, forecast, manager, projection, senders, service } =
-      buildHarness();
+    const {
+      candidates,
+      forecast,
+      manager,
+      projection,
+      runner,
+      senders,
+      service,
+    } = buildHarness();
 
     await service.refreshStaleForecasts();
 
@@ -155,6 +208,9 @@ describe('CampaignForecastRefreshService', () => {
         ],
       }),
     );
+    expect(runner.startTransaction).toHaveBeenCalledTimes(1);
+    expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
+    expect(runner.release).toHaveBeenCalledTimes(1);
     expect(projection.publish).toHaveBeenCalledWith(
       expect.objectContaining({
         complete: true,
@@ -164,6 +220,18 @@ describe('CampaignForecastRefreshService', () => {
       }),
       manager,
     );
+  });
+
+  it('rolls back and releases the planning transaction on failure without publishing', async () => {
+    const { candidates, projection, runner, service } = buildHarness();
+    candidates.readPage.mockRejectedValueOnce(new Error('planning failed'));
+
+    await expect(service.refreshStaleForecasts()).rejects.toThrow(
+      'planning failed',
+    );
+    expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(runner.release).toHaveBeenCalledTimes(1);
+    expect(projection.publish).not.toHaveBeenCalled();
   });
 
   it('publishes incomplete when a threaded follow-up has no accepted sender binding', async () => {

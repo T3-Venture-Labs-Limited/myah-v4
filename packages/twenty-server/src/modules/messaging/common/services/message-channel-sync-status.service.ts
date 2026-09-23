@@ -34,6 +34,9 @@ import {
 
 @Injectable()
 export class MessageChannelSyncStatusService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
+
   constructor(
     @InjectCacheStorage(CacheStorageNamespace.ModuleMessaging)
     private readonly cacheStorage: CacheStorageService,
@@ -49,7 +52,6 @@ export class MessageChannelSyncStatusService {
     private readonly accountsToReconnectService: AccountsToReconnectService,
     private readonly messageChannelSyncLockService: MessageChannelSyncLockService,
     private readonly metricsService: MetricsService,
-    private readonly forecastInvalidation = new CampaignForecastInputInvalidationService(),
   ) {}
 
   public async markAsMessagesListFetchPending(
