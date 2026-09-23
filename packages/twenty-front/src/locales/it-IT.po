@@ -12802,6 +12802,11 @@ msgstr ""
 msgid "Load more"
 msgstr "Carica altro"
 
+#. js-lingui-id: 7IGbBk
+#: src/modules/activities/tasks/components/TaskGroups.tsx
+msgid "Load more tasks"
+msgstr ""
+
 #. js-lingui-id: CZGQgK
 #: src/modules/ai/utils/tool-display/get-tool-display-message.ts
 msgid "Loaded {formattedNames}"
@@ -16823,6 +16828,7 @@ msgstr "Riconnetti la tua casella di posta {mailboxHandle} per aggiornare i tuoi
 
 #. js-lingui-id: CjNkdJ
 #: src/modules/activities/notes/components/NotesCard.tsx
+#: src/modules/activities/tasks/components/TaskGroups.tsx
 #: src/modules/error-handler/components/AppRootErrorFallback.tsx
 #: src/modules/error-handler/components/internal/AppErrorDisplay.tsx
 msgid "Please refresh the page."
@@ -18678,6 +18684,11 @@ msgstr ""
 #. js-lingui-id: GDLrrG
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Retry domain search"
+msgstr ""
+
+#. js-lingui-id: PFjCCZ
+#: src/modules/activities/tasks/components/TaskGroups.tsx
+msgid "Retry loading tasks"
 msgstr ""
 
 #. js-lingui-id: 1m7tLS
@@ -21646,6 +21657,11 @@ msgstr "Titolo dell'attività"
 #: src/modules/activities/notes/components/NoteTile.tsx
 msgid "Task Title"
 msgstr "Titolo dell'attività"
+
+#. js-lingui-id: huOfQH
+#: src/modules/activities/tasks/components/TaskGroups.tsx
+msgid "Tasks couldn't be loaded"
+msgstr ""
 
 #. js-lingui-id: BVtdal
 #: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
