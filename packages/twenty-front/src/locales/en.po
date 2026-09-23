@@ -12820,6 +12820,11 @@ msgstr "Load balanced"
 msgid "Load more"
 msgstr "Load more"
 
+#. js-lingui-id: 7IGbBk
+#: src/modules/activities/tasks/components/TaskGroups.tsx
+msgid "Load more tasks"
+msgstr "Load more tasks"
+
 #. js-lingui-id: CZGQgK
 #: src/modules/ai/utils/tool-display/get-tool-display-message.ts
 msgid "Loaded {formattedNames}"
@@ -16841,6 +16846,7 @@ msgstr "Please reconnect your mailbox {mailboxHandle} to update your email alias
 
 #. js-lingui-id: CjNkdJ
 #: src/modules/activities/notes/components/NotesCard.tsx
+#: src/modules/activities/tasks/components/TaskGroups.tsx
 #: src/modules/error-handler/components/AppRootErrorFallback.tsx
 #: src/modules/error-handler/components/internal/AppErrorDisplay.tsx
 msgid "Please refresh the page."
@@ -18697,6 +18703,11 @@ msgstr "Retry DNS verification"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Retry domain search"
 msgstr "Retry domain search"
+
+#. js-lingui-id: PFjCCZ
+#: src/modules/activities/tasks/components/TaskGroups.tsx
+msgid "Retry loading tasks"
+msgstr "Retry loading tasks"
 
 #. js-lingui-id: 1m7tLS
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -21664,6 +21675,11 @@ msgstr "Task title"
 #: src/modules/activities/notes/components/NoteTile.tsx
 msgid "Task Title"
 msgstr "Task Title"
+
+#. js-lingui-id: huOfQH
+#: src/modules/activities/tasks/components/TaskGroups.tsx
+msgid "Tasks couldn't be loaded"
+msgstr "Tasks couldn't be loaded"
 
 #. js-lingui-id: BVtdal
 #: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
