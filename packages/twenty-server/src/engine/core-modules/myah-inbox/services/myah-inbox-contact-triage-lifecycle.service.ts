@@ -112,11 +112,13 @@ export class MyahInboxContactTriageLifecycleService {
     manager,
     verify,
     mutate,
+    coveredCreatorIds,
   }: {
     workspaceId: string;
     sourceType: MyahInboxSourceType;
     sourceRecordIds: string[];
     nextCreatorIds?: string[];
+    coveredCreatorIds?: string[];
     manager: WorkspaceEntityManager;
     verify?: () => Promise<void>;
     mutate: () => Promise<T>;
@@ -139,6 +141,12 @@ export class MyahInboxContactTriageLifecycleService {
       ...anticipatedSources.map((source) => source.creatorId),
       ...nextCreatorIds,
     ].filter((creatorId): creatorId is string => creatorId !== null);
+    if (coveredCreatorIds !== undefined) {
+      this.assertCreatorMutationLockCoverage({
+        anticipatedCreatorIds: anchorCreatorIds,
+        coveredCreatorIds,
+      });
+    }
 
     return this.withCreatorMutationLocksInTransaction({
       creatorIds: anchorCreatorIds,
@@ -183,6 +191,25 @@ export class MyahInboxContactTriageLifecycleService {
         return result;
       },
     });
+  }
+
+  assertCreatorMutationLockCoverage({
+    anticipatedCreatorIds,
+    coveredCreatorIds,
+  }: {
+    anticipatedCreatorIds: string[];
+    coveredCreatorIds: string[];
+  }): void {
+    const covered = new Set(coveredCreatorIds);
+    const uncovered = [...new Set(anticipatedCreatorIds)].filter(
+      (creatorId) => !covered.has(creatorId),
+    );
+
+    if (uncovered.length > 0) {
+      throw new ConflictException(
+        'Inbox Creator lock coverage changed before source mutation',
+      );
+    }
   }
 
   async reconcilePreparedSourcesInTransaction({

@@ -75,10 +75,17 @@ export type MyahInboxEmailHistoryState = {
   incrementalFailure: IncrementalFailure | undefined;
 };
 
+type CardRef = Pick<MyahInboxEmailCardFieldsFragment, 'threadId' | 'anchorKey'>;
+const groupId = ({ threadId, anchorKey }: CardRef) =>
+  `${threadId}\u0000${anchorKey}`;
+const refsFor = (cards: CardRef[]): CardRef[] => [
+  ...new Map(cards.map((card) => [groupId(card), card])).values(),
+];
+
 type ReplayPlan = {
   historyRebased: boolean;
-  threadIds: string[];
-  detachedThreadIds: string[];
+  groups: CardRef[];
+  detachedGroups: CardRef[];
   cardPageBudget: number;
   segments: Pick<
     MyahInboxEmailCardSegment,
@@ -87,7 +94,7 @@ type ReplayPlan = {
   windows: (Pick<
     MyahInboxEmailMessageWindow,
     'id' | 'snapshot' | 'threadId' | 'requests' | 'anchorMessageId'
-  > & { messageIds: string[] })[];
+  > & { anchorKey: string; rootMessageId: string; messageIds: string[] })[];
 };
 
 // Local, cacheless history. Cursors are replayed verbatim, never decoded or moved
@@ -177,13 +184,20 @@ export class MyahInboxEmailHistoryStore {
     threadId: string,
     snapshot: string,
     cursor?: string,
+    anchorKey?: string,
   ) {
     const data = await this.query<
       MyahInboxContactEmailCardMessagesQuery,
       MyahInboxContactEmailCardMessagesQueryVariables
     >(
       GET_MYAH_INBOX_CONTACT_EMAIL_CARD_MESSAGES,
-      { ...this.scope(), threadId, snapshot, ...(cursor ? { cursor } : {}) },
+      {
+        ...this.scope(),
+        threadId,
+        snapshot,
+        anchorKey,
+        ...(cursor ? { cursor } : {}),
+      },
       signal,
     );
     return data.myahInboxContactEmailCardMessages;
@@ -203,11 +217,18 @@ export class MyahInboxEmailHistoryStore {
     );
     return data.myahInboxContactEmailMessageLocation;
   }
-  private async queryCard(signal: AbortSignal, threadId: string) {
+  private async queryCard(
+    signal: AbortSignal,
+    { threadId, anchorKey }: CardRef,
+  ) {
     const data = await this.query<
       MyahInboxContactEmailCardQuery,
       MyahInboxContactEmailCardQueryVariables
-    >(GET_MYAH_INBOX_CONTACT_EMAIL_CARD, { ...this.scope(), threadId }, signal);
+    >(
+      GET_MYAH_INBOX_CONTACT_EMAIL_CARD,
+      { ...this.scope(), threadId, anchorKey },
+      signal,
+    );
     return data.myahInboxContactEmailCard;
   }
   private window(
@@ -232,6 +253,7 @@ export class MyahInboxEmailHistoryStore {
     work: (signal: AbortSignal) => Promise<MyahInboxEmailHistoryState>,
     recover = false,
     incrementalFailure?: IncrementalFailure,
+    quiet = false,
   ) {
     if (
       !this.active ||
@@ -246,12 +268,13 @@ export class MyahInboxEmailHistoryStore {
       return;
     const operation = new AbortController();
     this.operation = operation;
-    this.publish({
-      ...this.state,
-      loading: true,
-      error: undefined,
-      incrementalFailure: undefined,
-    });
+    if (!quiet)
+      this.publish({
+        ...this.state,
+        loading: true,
+        error: undefined,
+        incrementalFailure: undefined,
+      });
     try {
       const state = await work(operation.signal);
       if (this.operation === operation) {
@@ -355,24 +378,35 @@ export class MyahInboxEmailHistoryStore {
       false,
       { kind: 'older-cards', segmentId },
     );
-  openCard = (segmentId: string, threadId: string) =>
+  openCard = (segmentId: string, threadId: string, anchorKey?: string) =>
     this.run(async (signal) => {
       const segment = this.state.segments.find(({ id }) => id === segmentId);
       const card = segment?.pages
         .flatMap((page) => page.cards)
-        .find((card) => card.threadId === threadId);
+        .find(
+          (card) =>
+            card.threadId === threadId &&
+            (!anchorKey || card.anchorKey === anchorKey),
+        );
       if (
         !segment ||
         !card ||
         this.state.windows.some(
           (window) =>
             window.threadId === threadId &&
+            window.card.anchorKey === card.anchorKey &&
             window.snapshot === segment.snapshot &&
             !window.requests[0].messageId,
         )
       )
         return this.state;
-      const page = await this.queryMessages(signal, threadId, segment.snapshot);
+      const page = await this.queryMessages(
+        signal,
+        threadId,
+        segment.snapshot,
+        undefined,
+        card.anchorKey,
+      );
       return {
         ...this.state,
         windows: [
@@ -381,16 +415,19 @@ export class MyahInboxEmailHistoryStore {
         ],
       };
     });
-  openDetachedCard = (threadId: string) =>
+  openDetachedCard = (threadId: string, anchorKey?: string) =>
     this.run(async (signal) => {
       const projection = this.state.detachedCards.find(
-        ({ card }) => card.threadId === threadId,
+        ({ card }) =>
+          card.threadId === threadId &&
+          (!anchorKey || card.anchorKey === anchorKey),
       );
       if (
         !projection ||
         this.state.windows.some(
           (window) =>
             window.threadId === threadId &&
+            window.card.anchorKey === projection.card.anchorKey &&
             window.snapshot === projection.snapshot &&
             !window.requests[0].messageId,
         )
@@ -400,6 +437,8 @@ export class MyahInboxEmailHistoryStore {
         signal,
         threadId,
         projection.snapshot,
+        undefined,
+        projection.card.anchorKey,
       );
       return {
         ...this.state,
@@ -439,6 +478,7 @@ export class MyahInboxEmailHistoryStore {
           window.threadId,
           window.snapshot,
           cursor,
+          window.card.anchorKey,
         );
         return {
           ...this.state,
@@ -467,40 +507,42 @@ export class MyahInboxEmailHistoryStore {
       : this.loadMessages(failure.windowId, failure.direction);
   };
   private plan(): ReplayPlan {
-    const refreshThreadIds = this.state.segments
+    const refreshCards = this.state.segments
       .filter((segment) => segment.origin === 'refresh')
-      .flatMap((segment) =>
-        segment.pages.flatMap((page) =>
-          page.cards.map((card) => card.threadId as string),
-        ),
-      );
+      .flatMap((segment) => segment.pages.flatMap((page) => page.cards));
+    const segmentCards = this.state.segments.flatMap((segment) =>
+      segment.pages.flatMap((page) => page.cards),
+    );
+    const windowCards = this.state.windows.map(({ card }) => card);
+    const detachedCards = this.state.detachedCards.map(({ card }) => card);
+    const knownThreads = new Set(
+      [...segmentCards, ...windowCards, ...detachedCards].map(
+        (card) => card.threadId,
+      ),
+    );
     return {
       historyRebased: this.state.historyRebased,
       cardPageBudget: this.state.cardPageBudget,
       // Discovery pages have no user-owned cursor to replay, but their cards
       // remain recoverable through current projections.
-      detachedThreadIds: [
-        ...new Set([
-          ...this.state.detachedCards.map(
-            ({ card }) => card.threadId as string,
+      detachedGroups: refsFor([...detachedCards, ...refreshCards]),
+      groups: refsFor([
+        ...segmentCards,
+        ...windowCards,
+        ...detachedCards,
+        ...this.state.segments.flatMap((segment) =>
+          segment.pages.flatMap((page) =>
+            page.latestThreadId && !knownThreads.has(page.latestThreadId)
+              ? [
+                  {
+                    threadId: page.latestThreadId,
+                    anchorKey: `legacy:${page.latestThreadId}`,
+                  },
+                ]
+              : [],
           ),
-          ...refreshThreadIds,
-        ]),
-      ],
-      threadIds: [
-        ...new Set<string>([
-          ...this.state.segments.flatMap((segment) =>
-            segment.pages.flatMap((page) => [
-              ...page.cards.map((card) => card.threadId as string),
-              ...(page.latestThreadId ? [page.latestThreadId as string] : []),
-            ]),
-          ),
-          ...this.state.windows.map((window) => window.threadId),
-          ...this.state.detachedCards.map(
-            ({ card }) => card.threadId as string,
-          ),
-        ]),
-      ],
+        ),
+      ]),
       segments: this.state.segments
         .filter((segment) => segment.origin === 'retained')
         .map(({ id, origin, snapshot, requests }) => ({
@@ -510,10 +552,20 @@ export class MyahInboxEmailHistoryStore {
           requests,
         })),
       windows: this.state.windows.map(
-        ({ id, snapshot, threadId, requests, anchorMessageId, pages }) => ({
+        ({
           id,
           snapshot,
           threadId,
+          card,
+          requests,
+          anchorMessageId,
+          pages,
+        }) => ({
+          id,
+          snapshot,
+          threadId,
+          anchorKey: card.anchorKey,
+          rootMessageId: card.rootMessageId,
           requests,
           anchorMessageId,
           messageIds: [
@@ -529,8 +581,22 @@ export class MyahInboxEmailHistoryStore {
       ),
     };
   }
-  refresh = () => {
+  refresh = () => this.rebuild(false);
+  // Background arrival: re-authorize every retained card/window against current
+  // permissions without masking rendered history. Only failure masks (fail closed).
+  ambientRefresh = () => {
+    if (this.operation || this.state.status !== 'ready') return;
+    return this.rebuild(true);
+  };
+  private rebuild(ambient: boolean) {
     const plan = this.recovery ?? this.plan();
+    if (ambient)
+      return this.run(
+        (signal) => this.replay(signal, plan),
+        true,
+        undefined,
+        true,
+      );
     this.cancel();
     this.recovery = plan;
     this.publish({
@@ -542,173 +608,201 @@ export class MyahInboxEmailHistoryStore {
       error: undefined,
       incrementalFailure: undefined,
     });
-    return this.run(async (signal) => {
-      const projections = new Map(
-        await Promise.all(
-          plan.threadIds.map(
-            async (threadId) =>
-              [threadId, await this.queryCard(signal, threadId)] as const,
+    return this.run((signal) => this.replay(signal, plan), true);
+  }
+  // ponytail: each ambient tick replays every retained page/window; bounded by
+  // what the user loaded. Add server-side retained-set checks if this grows.
+  private replay = async (
+    signal: AbortSignal,
+    plan: ReplayPlan,
+  ): Promise<MyahInboxEmailHistoryState> => {
+    const projections = new Map(
+      await Promise.all(
+        plan.groups.map(
+          async (ref) =>
+            [groupId(ref), await this.queryCard(signal, ref)] as const,
+        ),
+      ),
+    );
+    const segments: MyahInboxEmailCardSegment[] = [];
+    for (const segment of plan.segments) {
+      const pages: CardPage[] = [];
+      for (const cursor of segment.requests) {
+        const page = await this.queryCards(signal, segment.snapshot, cursor);
+        pages.push({
+          ...page,
+          cards: page.cards.flatMap((card) => {
+            if (!projections.has(groupId(card))) return [card];
+            const projection = projections.get(groupId(card))?.card;
+            return projection ? [projection] : [];
+          }),
+          latestThreadId:
+            page.latestThreadId &&
+            plan.groups.some((ref) => ref.threadId === page.latestThreadId) &&
+            !plan.groups.some(
+              (ref) =>
+                ref.threadId === page.latestThreadId &&
+                projections.get(groupId(ref))?.card != null,
+            )
+              ? null
+              : page.latestThreadId,
+        });
+      }
+      segments.push({
+        ...segment,
+        pages,
+        olderCursor: pages.at(-1)?.olderCursor ?? null,
+      });
+    }
+    const rootChanged = plan.windows.some((window) => {
+      const card = projections.get(groupId(window))?.card;
+      return card && card.rootMessageId !== window.rootMessageId;
+    });
+    const recoveryFresh = rootChanged ? await this.queryCards(signal) : null;
+    const windows: MyahInboxEmailMessageWindow[] = [];
+    const missingMessageIds: string[] = [];
+    for (const window of plan.windows) {
+      const card = projections.get(groupId(window))?.card;
+      if (!card) continue;
+      const changed = card.rootMessageId !== window.rootMessageId;
+      const snapshot = changed ? recoveryFresh!.snapshot : window.snapshot;
+      const restored: MyahInboxEmailMessageWindow[] = [];
+      const covered = new Set<string>();
+      const retain = (
+        page: MyahInboxEmailMessagePageFieldsFragment,
+        request: MessageRequest,
+      ) => {
+        restored.push(this.window(card, snapshot, page, request));
+        for (const message of [page.root, ...page.messages])
+          covered.add(message.id as string);
+      };
+      if (changed) {
+        const page = await this.queryMessages(
+          signal,
+          window.threadId,
+          snapshot,
+          undefined,
+          window.anchorKey,
+        );
+        retain(page, {});
+      }
+      for (const request of changed ? [] : window.requests) {
+        const page = request.messageId
+          ? (await this.queryLocation(signal, request.messageId, snapshot))
+              ?.page
+          : await this.queryMessages(
+              signal,
+              window.threadId,
+              snapshot,
+              request.cursor,
+              window.anchorKey,
+            );
+        if (!page) {
+          if (request.messageId) missingMessageIds.push(request.messageId);
+          continue;
+        }
+        // Snapshots freeze card starts, not replies. Replayed pages may no
+        // longer touch, so each keeps both navigable frontiers independently.
+        retain(page, request);
+      }
+      // Restore only displaced displayed IDs, anchor first. Location pages
+      // end at their target, so visit the remaining IDs newest-first.
+      for (const messageId of [
+        ...(window.anchorMessageId ? [window.anchorMessageId] : []),
+        ...[...window.messageIds].reverse(),
+      ]) {
+        if (covered.has(messageId) || missingMessageIds.includes(messageId))
+          continue;
+        const location = await this.queryLocation(signal, messageId, snapshot);
+        if (!location) {
+          missingMessageIds.push(messageId);
+          continue;
+        }
+        retain(location.page, { messageId });
+      }
+      const anchored = restored.find((next) =>
+        next.pages.some((page) =>
+          [page.root, ...page.messages].some(
+            (message) => message.id === window.anchorMessageId,
           ),
         ),
       );
-      const segments: MyahInboxEmailCardSegment[] = [];
-      for (const segment of plan.segments) {
-        const pages: CardPage[] = [];
-        for (const cursor of segment.requests) {
-          const page = await this.queryCards(signal, segment.snapshot, cursor);
-          pages.push({
-            ...page,
-            cards: page.cards.flatMap((card) => {
-              if (!projections.has(card.threadId)) return [card];
-              const projection = projections.get(card.threadId)?.card;
-              return projection ? [projection] : [];
-            }),
-            latestThreadId:
-              !projections.has(page.latestThreadId) ||
-              projections.get(page.latestThreadId)?.card
-                ? page.latestThreadId
-                : null,
-          });
-        }
-        segments.push({
-          ...segment,
-          pages,
-          olderCursor: pages.at(-1)?.olderCursor ?? null,
-        });
+      const primary = anchored ?? restored.at(0);
+      if (primary) {
+        primary.id = window.id;
+        if (anchored) primary.anchorMessageId = window.anchorMessageId;
       }
-      const windows: MyahInboxEmailMessageWindow[] = [];
-      const missingMessageIds: string[] = [];
-      for (const window of plan.windows) {
-        const card = projections.get(window.threadId)?.card;
-        if (!card) continue;
-        const restored: MyahInboxEmailMessageWindow[] = [];
-        const covered = new Set<string>();
-        const retain = (
-          page: MyahInboxEmailMessagePageFieldsFragment,
-          request: MessageRequest,
-        ) => {
-          restored.push(this.window(card, window.snapshot, page, request));
-          for (const message of [page.root, ...page.messages])
-            covered.add(message.id as string);
-        };
-        for (const request of window.requests) {
-          const page = request.messageId
-            ? (
-                await this.queryLocation(
-                  signal,
-                  request.messageId,
-                  window.snapshot,
-                )
-              )?.page
-            : await this.queryMessages(
-                signal,
-                window.threadId,
-                window.snapshot,
-                request.cursor,
-              );
-          if (!page) {
-            if (request.messageId) missingMessageIds.push(request.messageId);
-            continue;
-          }
-          // Snapshots freeze card starts, not replies. Replayed pages may no
-          // longer touch, so each keeps both navigable frontiers independently.
-          retain(page, request);
-        }
-        // Restore only displaced displayed IDs, anchor first. Location pages
-        // end at their target, so visit the remaining IDs newest-first.
-        for (const messageId of [
-          ...(window.anchorMessageId ? [window.anchorMessageId] : []),
-          ...[...window.messageIds].reverse(),
-        ]) {
-          if (covered.has(messageId) || missingMessageIds.includes(messageId))
-            continue;
-          const location = await this.queryLocation(
-            signal,
-            messageId,
-            window.snapshot,
-          );
-          if (!location) {
-            missingMessageIds.push(messageId);
-            continue;
-          }
-          retain(location.page, { messageId });
-        }
-        const anchored = restored.find((next) =>
-          next.pages.some((page) =>
-            [page.root, ...page.messages].some(
-              (message) => message.id === window.anchorMessageId,
-            ),
-          ),
+      windows.push(...restored);
+    }
+    const fresh = recoveryFresh ?? (await this.queryCards(signal));
+    const freshCards = new Map(
+      fresh.cards.map((card) => [groupId(card), card]),
+    );
+    for (const segment of segments)
+      for (const page of segment.pages)
+        page.cards = page.cards.map(
+          (card) => freshCards.get(groupId(card)) ?? card,
         );
-        const primary = anchored ?? restored.at(0);
-        if (primary) {
-          primary.id = window.id;
-          if (anchored) primary.anchorMessageId = window.anchorMessageId;
-        }
-        windows.push(...restored);
-      }
-      const fresh = await this.queryCards(signal);
-      const cardIdentity = (card: MyahInboxEmailCardFieldsFragment) =>
-        `${card.threadId}\u0000${card.rootMessageId}\u0000${card.startTimestamp}`;
-      const knownCards = new Set([
-        ...segments.flatMap((segment) =>
-          segment.pages.flatMap((page) => page.cards.map(cardIdentity)),
-        ),
-        ...plan.detachedThreadIds.flatMap((threadId) => {
-          const projection = projections.get(threadId)?.card;
-          return projection ? [cardIdentity(projection)] : [];
-        }),
-      ]);
-      // Fresh snapshots may order a backfilled root behind an unchanged head.
-      // Bound only automatic work by explicit pagination, never by prior
-      // refresh requests. A non-null fresh cursor is always an honest frontier.
-      const freshPages = [fresh];
-      const freshRequests: (string | undefined)[] = [undefined];
-      let page = fresh;
-      let hasNovelCard = false;
-      while (true) {
-        hasNovelCard ||= page.cards.some(
-          (card) => !knownCards.has(cardIdentity(card)),
-        );
-        if (hasNovelCard || !page.olderCursor) break;
-        if (freshPages.length >= Math.max(1, plan.cardPageBudget)) break;
-        freshRequests.push(page.olderCursor);
-        page = await this.queryCards(signal, fresh.snapshot, page.olderCursor);
-        freshPages.push(page);
-      }
-      const emptyRecovery =
-        plan.segments.length === 0 &&
-        plan.threadIds.length === 0 &&
-        plan.windows.length === 0;
-      // An exhausted, entirely known discovery prefix needs no frontier. The
-      // empty StrictMode recovery is an initial retained baseline instead.
-      if (emptyRecovery || hasNovelCard || page.olderCursor) {
-        segments.unshift({
-          id: `segment-${++this.nextId}`,
-          origin: emptyRecovery ? 'retained' : 'refresh',
-          snapshot: fresh.snapshot,
-          pages: freshPages,
-          requests: freshRequests,
-          olderCursor: page.olderCursor ?? null,
-        });
-      }
-      const detachedCards = plan.detachedThreadIds.flatMap((threadId) => {
-        const projection = projections.get(threadId);
-        return projection?.card
-          ? [{ snapshot: projection.snapshot, card: projection.card }]
-          : [];
+    const cardIdentity = groupId;
+    const knownCards = new Set([
+      ...segments.flatMap((segment) =>
+        segment.pages.flatMap((page) => page.cards.map(cardIdentity)),
+      ),
+      ...plan.detachedGroups.flatMap((ref) => {
+        const projection = projections.get(groupId(ref))?.card;
+        return projection ? [cardIdentity(projection)] : [];
+      }),
+    ]);
+    // Fresh snapshots may order a backfilled root behind an unchanged head.
+    // Bound only automatic work by explicit pagination, never by prior
+    // refresh requests. A non-null fresh cursor is always an honest frontier.
+    const freshPages = [fresh];
+    const freshRequests: (string | undefined)[] = [undefined];
+    let page = fresh;
+    let hasNovelCard = false;
+    while (true) {
+      hasNovelCard ||= page.cards.some(
+        (card) => !knownCards.has(cardIdentity(card)),
+      );
+      if (hasNovelCard || !page.olderCursor) break;
+      if (freshPages.length >= Math.max(1, plan.cardPageBudget)) break;
+      freshRequests.push(page.olderCursor);
+      page = await this.queryCards(signal, fresh.snapshot, page.olderCursor);
+      freshPages.push(page);
+    }
+    const emptyRecovery =
+      plan.segments.length === 0 &&
+      plan.groups.length === 0 &&
+      plan.windows.length === 0;
+    // An exhausted, entirely known discovery prefix needs no frontier. The
+    // empty StrictMode recovery is an initial retained baseline instead.
+    if (emptyRecovery || hasNovelCard || page.olderCursor) {
+      segments.unshift({
+        id: `segment-${++this.nextId}`,
+        origin: emptyRecovery ? 'retained' : 'refresh',
+        snapshot: fresh.snapshot,
+        pages: freshPages,
+        requests: freshRequests,
+        olderCursor: page.olderCursor ?? null,
       });
-      return {
-        ...this.state,
-        segments,
-        windows,
-        detachedCards,
-        missingMessageIds,
-        historyRebased: plan.historyRebased,
-        cardPageBudget: plan.cardPageBudget,
-      };
-    }, true);
+    }
+    const detachedCards = plan.detachedGroups.flatMap((ref) => {
+      const projection = projections.get(groupId(ref));
+      return projection?.card
+        ? [{ snapshot: projection.snapshot, card: projection.card }]
+        : [];
+    });
+    return {
+      ...this.state,
+      segments,
+      windows,
+      detachedCards,
+      missingMessageIds,
+      historyRebased: plan.historyRebased,
+      cardPageBudget: plan.cardPageBudget,
+    };
   };
+
   setReadingAnchor = (windowId: string, messageId: string) => {
     this.publish({
       ...this.state,
@@ -741,9 +835,9 @@ export class MyahInboxEmailHistoryStore {
       const fresh = await this.queryCards(signal);
       const projections = new Map(
         await Promise.all(
-          plan.threadIds.map(
-            async (threadId) =>
-              [threadId, await this.queryCard(signal, threadId)] as const,
+          plan.groups.map(
+            async (ref) =>
+              [groupId(ref), await this.queryCard(signal, ref)] as const,
           ),
         ),
       );
@@ -755,7 +849,7 @@ export class MyahInboxEmailHistoryStore {
       const windows: MyahInboxEmailMessageWindow[] = [];
       const missingMessageIds: string[] = [];
       for (const window of plan.windows) {
-        if (!projections.get(window.threadId)?.card) continue;
+        if (!projections.get(groupId(window))?.card) continue;
         const covered = new Set<string>();
         let restored = false;
         // Re-locate only previously displayed IDs, never crawl intervening history.
@@ -789,11 +883,13 @@ export class MyahInboxEmailHistoryStore {
             covered.add(message.id as string);
         }
         if (!restored && !window.messageIds.length && !window.anchorMessageId) {
-          const projection = projections.get(window.threadId)!;
+          const projection = projections.get(groupId(window))!;
           const page = await this.queryMessages(
             signal,
             window.threadId,
             fresh.snapshot,
+            undefined,
+            window.anchorKey,
           );
           windows.push({
             ...this.window(projection.card!, fresh.snapshot, page, {}),

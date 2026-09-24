@@ -18,6 +18,7 @@ import {
 
 const card = (threadId: string): MyahInboxEmailCardFieldsFragment => ({
   threadId,
+  anchorKey: `legacy:${threadId}`,
   rootMessageId: `${threadId}-root`,
   startTimestamp: '2026-09-01T00:00:00.000001Z',
   subject: `Subject ${threadId}`,
@@ -57,6 +58,7 @@ const page = (
   threadId = 't9',
 ) => ({
   threadId,
+  anchorKey: `legacy:${threadId}`,
   root: message(`${threadId}-root`, threadId),
   messages: ids.map((id) => message(id, threadId)),
   olderCursor,
@@ -118,6 +120,189 @@ const respond = async (request: Request, data: Record<string, unknown>) => {
 };
 
 describe('useMyahInboxEmailHistory', () => {
+  it('projects each retained group independently when two sends share a native thread', async () => {
+    const { hook, requests } = setup();
+    const sibling = (anchorKey: string) => ({
+      ...card('t9'),
+      anchorKey,
+      rootMessageId: `${anchorKey}-root`,
+    });
+    const siblings = [sibling('attempt:one'), sibling('attempt:two')];
+    await respond(requests[0], {
+      myahInboxContactEmailCards: {
+        ...cards([]).myahInboxContactEmailCards,
+        cards: siblings,
+      },
+    });
+    act(() => {
+      void hook.result.current.refresh();
+    });
+    await waitFor(() => expect(requests).toHaveLength(3));
+    expect(
+      requests.slice(1, 3).map((request) => request.variables.anchorKey),
+    ).toEqual(['attempt:one', 'attempt:two']);
+    for (const [index, projection] of requests.slice(1, 3).entries())
+      await respond(projection, {
+        myahInboxContactEmailCard: {
+          snapshot: 'current',
+          card: siblings[index],
+        },
+      });
+    await waitFor(() => expect(requests).toHaveLength(4));
+    await respond(requests[3], {
+      myahInboxContactEmailCards: {
+        ...cards([], 'snapshot-1').myahInboxContactEmailCards,
+        cards: siblings,
+      },
+    });
+    await waitFor(() => expect(requests).toHaveLength(5));
+    await respond(requests[4], cards([], 'fresh'));
+    expect(
+      hook.result.current.segments.flatMap((segment) =>
+        segment.pages.flatMap((page) =>
+          page.cards.map((item) => item.anchorKey),
+        ),
+      ),
+    ).toEqual(['attempt:one', 'attempt:two']);
+  });
+  it('reauthorizes the retained set in the background, drops a revoked older message and masks only on failure', async () => {
+    const { hook, requests } = setup();
+    await respond(requests[0], cards(['t9']));
+    act(() => {
+      void hook.result.current.openCard(
+        hook.result.current.segments[0].id,
+        't9',
+      );
+    });
+    await waitFor(() => expect(requests).toHaveLength(2));
+    await respond(requests[1], {
+      myahInboxContactEmailCardMessages: page(['m1', 'm2']),
+    });
+    act(() => {
+      void hook.result.current.ambientRefresh();
+    });
+    // No routine teardown: rendered history stays while it is re-authorized.
+    expect(hook.result.current).toMatchObject({
+      status: 'ready',
+      loading: false,
+    });
+    expect(hook.result.current.windows).toHaveLength(1);
+    await waitFor(() => expect(requests).toHaveLength(3));
+    await respond(requests[2], {
+      myahInboxContactEmailCard: { snapshot: 'current', card: card('t9') },
+    });
+    await waitFor(() => expect(requests).toHaveLength(4));
+    await respond(requests[3], cards(['t9']));
+    await waitFor(() => expect(requests).toHaveLength(5));
+    // Older m1 lost access and no new mail arrived.
+    await respond(requests[4], {
+      myahInboxContactEmailCardMessages: page(['m2']),
+    });
+    await waitFor(() => expect(requests).toHaveLength(6));
+    expect(requests[5].variables.messageId).toBe('m1');
+    await respond(requests[5], { myahInboxContactEmailMessageLocation: null });
+    await waitFor(() => expect(requests).toHaveLength(7));
+    await respond(requests[6], cards(['t9']));
+    expect(hook.result.current.status).toBe('ready');
+    expect(
+      hook.result.current.windows.flatMap((window) =>
+        window.pages.flatMap((item) => item.messages.map(({ id }) => id)),
+      ),
+    ).toEqual(['m2']);
+
+    act(() => {
+      void hook.result.current.ambientRefresh();
+    });
+    await waitFor(() => expect(requests).toHaveLength(8));
+    await act(async () => requests[7].reject(new Error('Unavailable')));
+    expect(hook.result.current).toMatchObject({
+      status: 'needs-rebase',
+      windows: [],
+      segments: [],
+    });
+  });
+
+  it('recovers a PENDING group on a fresh snapshot when its exact parent becomes readable', async () => {
+    const { hook, requests } = setup();
+    const pending = {
+      ...card('t9'),
+      anchorKey: 'attempt:one',
+      rootMessageId: 'reply-1',
+      historyBasis: 'PENDING',
+    };
+    const exact = {
+      ...pending,
+      rootMessageId: 'send-1',
+      historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+    };
+    const responsePage = {
+      ...page([], null, null, 't9'),
+      anchorKey: 'attempt:one',
+      root: message('reply-1', 't9'),
+    };
+    await respond(requests[0], {
+      myahInboxContactEmailCards: {
+        ...cards([]).myahInboxContactEmailCards,
+        cards: [pending],
+      },
+    });
+    act(() => {
+      void hook.result.current.openCard(
+        hook.result.current.segments[0].id,
+        't9',
+        pending.anchorKey,
+      );
+    });
+    await waitFor(() => expect(requests).toHaveLength(2));
+    await respond(requests[1], {
+      myahInboxContactEmailCardMessages: responsePage,
+    });
+    act(() => {
+      void hook.result.current.refresh();
+    });
+    await waitFor(() => expect(requests).toHaveLength(3));
+    await respond(requests[2], {
+      myahInboxContactEmailCard: { snapshot: 'current', card: exact },
+    });
+    await waitFor(() => expect(requests).toHaveLength(4));
+    await respond(requests[3], {
+      myahInboxContactEmailCards: {
+        ...cards([]).myahInboxContactEmailCards,
+        cards: [pending],
+      },
+    });
+    await waitFor(() => expect(requests).toHaveLength(5));
+    expect(requests[4].name).toBe('MyahInboxContactEmailCards');
+    expect(requests[4].variables.snapshot).toBeUndefined();
+    await respond(requests[4], {
+      myahInboxContactEmailCards: {
+        ...cards([], 'current').myahInboxContactEmailCards,
+        cards: [exact],
+      },
+    });
+    await waitFor(() => expect(requests).toHaveLength(6));
+    expect(requests[5].variables).toMatchObject({
+      threadId: 't9',
+      anchorKey: 'attempt:one',
+      snapshot: 'current',
+    });
+    expect(requests[5].variables.cursor).toBeUndefined();
+    await respond(requests[5], {
+      myahInboxContactEmailCardMessages: {
+        ...responsePage,
+        root: message('send-1', 't9'),
+        messages: [message('reply-1', 't9')],
+      },
+    });
+    expect(hook.result.current.windows).toHaveLength(1);
+    expect(hook.result.current.windows[0].pages[0]).toMatchObject({
+      root: { id: 'send-1' },
+      messages: [{ id: 'reply-1' }],
+    });
+    expect(
+      hook.result.current.segments[0].pages[0].cards[0].rootMessageId,
+    ).toBe('send-1');
+  });
   it('keeps replay frontiers navigable and re-locates replies displaced by a moving tail', async () => {
     const { hook, requests } = setup();
     const ids = (first: number, last: number) =>
@@ -1746,7 +1931,7 @@ describe('useMyahInboxEmailHistory', () => {
     });
   });
 
-  it('treats a thread with a different root provenance as novel during fresh reconciliation', async () => {
+  it('updates the same group when the display root changes during fresh reconciliation', async () => {
     const { hook, requests } = setup();
     await respond(requests.shift()!, cards(['t1'], 'snapshot-1'));
     act(() => {
@@ -1771,13 +1956,11 @@ describe('useMyahInboxEmailHistory', () => {
         ],
       },
     });
-    expect(
-      hook.result.current.segments.find(
-        (segment) => segment.origin === 'refresh',
-      )?.pages[0].cards,
-    ).toEqual([
+    expect(hook.result.current.segments).toHaveLength(1);
+    expect(hook.result.current.segments[0].pages[0].cards).toEqual([
       expect.objectContaining({
         threadId: 't1',
+        anchorKey: 'legacy:t1',
         rootMessageId: 't1-restarted-root',
       }),
     ]);

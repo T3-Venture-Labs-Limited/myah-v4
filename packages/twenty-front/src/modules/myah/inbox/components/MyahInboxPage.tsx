@@ -120,6 +120,21 @@ const StyledMobilePanel = styled.div`
 
 type MobilePanel = 'contacts' | 'conversation';
 
+// Owner-approved ambient arrival interval while the Inbox tab is visible.
+const MYAH_INBOX_AMBIENT_ARRIVAL_MS = 30_000;
+// Full retained-set re-authorization bound when nothing visibly changed.
+const MYAH_INBOX_FULL_REAUTHORIZATION_MS = 5 * 60_000;
+
+// Readable-response signature of a contact row; changes when a creator replies.
+const getMyahInboxContactSignature = (contact: MyahInboxContact | null) =>
+  contact
+    ? JSON.stringify([
+        contact.lastActivityAt,
+        contact.preview,
+        contact.triage.revision,
+      ])
+    : null;
+
 export const MyahInboxPage = () => {
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const workspaceId = currentWorkspace?.id ?? null;
@@ -215,6 +230,30 @@ const MyahInboxPageContent = ({
   );
   const [draftAuthorizationGeneration, setDraftAuthorizationGeneration] =
     useState(0);
+  // Background arrival ticks: metadata-only draft rereads, never a reauthorization.
+  const [draftArrivalEpoch, setDraftArrivalEpoch] = useState(0);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const ambientArrivalInFlightRef = useRef(false);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const ambientArrivalRef = useRef<(() => Promise<void>) | null>(null);
+  // Last full history/draft re-authorization for the selected contact.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const fullReauthorizationRef = useRef<{
+    contactId: string | null;
+    at: number;
+  }>({ contactId: null, at: 0 });
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible')
+        void ambientArrivalRef.current?.();
+    };
+    const interval = setInterval(tick, MYAH_INBOX_AMBIENT_ARRIVAL_MS);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, []);
   const [restoringPreservedSelection, setRestoringPreservedSelection] =
     useState(() => Boolean(preservedReturnSelectionRef.current?.contactId));
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('contacts');
@@ -795,6 +834,56 @@ const MyahInboxPageContent = ({
     }
   };
 
+  // Ambient arrival (visible tab only): re-authorizes the retained list,
+  // history and draft metadata without changing selection or masking content.
+  const runAmbientArrival = async () => {
+    if (!workspaceId || ambientArrivalInFlightRef.current) return;
+    ambientArrivalInFlightRef.current = true;
+    const generation = selectionGenerationRef.current;
+    const selection = currentSelection;
+    try {
+      const result = await contacts.ambientRefresh(selection.contactId);
+      if (
+        result.status !== 'success' ||
+        workspaceRef.current !== workspaceId ||
+        selectionGenerationRef.current !== generation
+      )
+        return;
+      if (selection.contactId && !result.selectedContact) {
+        invalidateWorkspace(workspaceId);
+        setRetainedContact(null);
+        commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
+        return;
+      }
+      if (result.selectedContact) setRetainedContact(result.selectedContact);
+      // A newly opened contact was just loaded authoritatively.
+      const now = Date.now();
+      if (fullReauthorizationRef.current.contactId !== selection.contactId)
+        fullReauthorizationRef.current = {
+          contactId: selection.contactId,
+          at: now,
+        };
+      const changed =
+        getMyahInboxContactSignature(result.selectedContact) !==
+        getMyahInboxContactSignature(selectedContact);
+      if (
+        !changed &&
+        now - fullReauthorizationRef.current.at <
+          MYAH_INBOX_FULL_REAUTHORIZATION_MS
+      )
+        return;
+      fullReauthorizationRef.current = {
+        contactId: selection.contactId,
+        at: now,
+      };
+      if (selection.channel === 'EMAIL') await email.ambientRefresh();
+      setDraftArrivalEpoch((epoch) => epoch + 1);
+    } finally {
+      ambientArrivalInFlightRef.current = false;
+    }
+  };
+  ambientArrivalRef.current = runAmbientArrival;
+
   const handleFiltersChange = async (nextFilters: MyahInboxFilters) => {
     cancelPendingDestination();
     if (!(await flushAffectedDrafts())) return;
@@ -877,6 +966,7 @@ const MyahInboxPageContent = ({
         selectionChannel={currentSelection.channel}
         selectedEmailThreadId={currentSelection.emailThreadId}
         draftScopeGeneration={`${workspaceId}:${currentSelection.contactId}:${draftAuthorizationGeneration}`}
+        draftArrivalEpoch={draftArrivalEpoch}
         draftScopeAvailable={
           email.status === 'ready' &&
           !contacts.isRefreshing &&

@@ -80,36 +80,48 @@ describe('Campaign reply PostgreSQL query', () => {
             'WorkspaceEntityManager',
           );
           expect(runner.manager.queryRunner).toBe(runner);
+          // UUID-derived workspace schema identifier; values remain bound.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}"."campaign" (id,name) VALUES ($1,'MYAH-400')`,
             [campaignId],
           );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}"."creator" (id,name) VALUES ($1,'MYAH-400 Creator')`,
             [creatorId],
           );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}"."campaignCreator" (id,"campaignId","creatorId",stage)
              VALUES ($1,$2,$3,'CONTACTED')`,
             [campaignCreatorId, campaignId, creatorId],
           );
-          const query = jest.spyOn(runner, 'query').mockResolvedValueOnce([
-            {
-              workspaceId,
-              campaignId,
-              enrollmentId: randomUUID(),
-              authorizationId: randomUUID(),
-              authorizationGeneration: 1,
-              activationId: randomUUID(),
-              workflowVersionId: randomUUID(),
-              occurrenceId: randomUUID(),
-              connectedAccountId: randomUUID(),
-              messageChannelId: randomUUID(),
-              attemptId: randomUUID(),
-              campaignCreatorId,
-              creatorId,
-            },
-          ]);
+          const actualQuery = runner.query.bind(runner);
+          const query = jest
+            .spyOn(runner, 'query')
+            .mockImplementation(async (sql: string, parameters?: unknown[]) =>
+              sql.includes('FROM core."outboundEmailAttempt"') &&
+              sql.includes("e.state='ACTIVE'")
+                ? [
+                    {
+                      workspaceId,
+                      campaignId,
+                      enrollmentId: randomUUID(),
+                      authorizationId: randomUUID(),
+                      authorizationGeneration: 1,
+                      activationId: randomUUID(),
+                      workflowVersionId: randomUUID(),
+                      occurrenceId: randomUUID(),
+                      connectedAccountId: randomUUID(),
+                      messageChannelId: randomUUID(),
+                      attemptId: randomUUID(),
+                      campaignCreatorId,
+                      creatorId,
+                    },
+                  ]
+                : actualQuery(sql, parameters),
+            );
 
           await expect(
             service.reconcileInboundMessageInTransaction(
@@ -119,11 +131,13 @@ describe('Campaign reply PostgreSQL query', () => {
                 threadExternalId: 'matched-thread',
                 fromHandle: 'sender@example.com',
                 inboundEvidenceId: randomUUID(),
+                inboundMessageThreadId: randomUUID(),
               },
               runner.manager,
             ),
           ).resolves.toBeUndefined();
 
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           const [creator] = await runner.query(
             `SELECT stage FROM "${schemaName}"."campaignCreator" WHERE id=$1`,
             [campaignCreatorId],
@@ -178,6 +192,7 @@ describe('Campaign reply PostgreSQL query', () => {
       'GlobalWorkspaceOrmManager',
     );
     const service = new CampaignReplyService(new CampaignProgressionService());
+    const inboundThreadId = randomUUID();
 
     await orm.executeInWorkspaceContext(
       async () => {
@@ -199,14 +214,18 @@ describe('Campaign reply PostgreSQL query', () => {
           );
           expect(routing).toBeDefined();
 
+          // UUID-derived workspace schema identifier; values remain bound.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}".campaign (id,name) VALUES ($1,'MYAH-400'),($2,'MYAH-400 control')`,
             [ids.campaign, ids.controlCampaign],
           );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}".creator (id,name) VALUES ($1,'MYAH-400 Creator')`,
             [ids.creator],
           );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}"."campaignCreator" (id,"campaignId","creatorId",stage)
              VALUES ($1,$2,$3,'CONTACTED'),($4,$5,$3,'CONTACTED')`,
@@ -326,6 +345,7 @@ describe('Campaign reply PostgreSQL query', () => {
               threadExternalId: 'matched-thread',
               fromHandle: 'creator@example.com',
               inboundEvidenceId: ids.evidence,
+              inboundMessageThreadId: inboundThreadId,
             },
             runner.manager,
           );
@@ -360,6 +380,7 @@ describe('Campaign reply PostgreSQL query', () => {
               terminalReason: 'ENROLLMENT_REPLIED',
             },
           ]);
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           const creators = await runner.query(
             `SELECT id,stage FROM "${schemaName}"."campaignCreator" WHERE id=ANY($1::uuid[]) ORDER BY id`,
             [[ids.campaignCreator, ids.controlCampaignCreator]],
@@ -383,6 +404,7 @@ describe('Campaign reply PostgreSQL query', () => {
               threadExternalId: 'matched-thread',
               fromHandle: 'creator@example.com',
               inboundEvidenceId: ids.evidence,
+              inboundMessageThreadId: inboundThreadId,
             },
             runner.manager,
           );
@@ -400,6 +422,8 @@ describe('Campaign reply PostgreSQL query', () => {
       { lite: true },
     );
 
+    // UUID-derived workspace schema identifier; values remain bound.
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     const [rolledBack] = await global.testDataSource.query(
       `SELECT
        (SELECT count(*)::int FROM core."campaignEnrollment" WHERE id=$1) enrollments,
@@ -426,6 +450,7 @@ describe('Campaign reply PostgreSQL query', () => {
             threadExternalId: 'ordinary-thread',
             fromHandle: 'sender@example.com',
             inboundEvidenceId: randomUUID(),
+            inboundMessageThreadId: randomUUID(),
           },
           runner.manager as never,
         ),

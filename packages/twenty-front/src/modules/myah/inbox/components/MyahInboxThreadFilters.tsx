@@ -42,7 +42,7 @@ const StyledFilterMenu = styled.div`
 `;
 
 const STATE_OPTIONS = [
-  { label: 'Needs reply', value: 'NEEDS_REPLY' },
+  { label: 'New message', value: 'NEEDS_REPLY' },
   { label: 'Waiting on creator', value: 'WAITING_ON_CREATOR' },
   { label: 'Snoozed', value: 'SNOOZED' },
   { label: 'Closed', value: 'CLOSED' },

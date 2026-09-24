@@ -8,6 +8,7 @@ import { SecretEncryptionRotationModule } from 'src/database/commands/secret-enc
 import { GenerateInstanceCommandCommand } from 'src/database/commands/generate-instance-command.command';
 import { InstallPreInstalledAppsCommand } from 'src/database/commands/install-pre-installed-apps.command';
 import { ManagedEmailAttachPilotWorkspaceCommand } from 'src/database/commands/managed-email-attach-pilot-workspace.command';
+import { MyahInboxBackfillCampaignReplyEvidenceCommand } from 'src/database/commands/myah-inbox-backfill-campaign-reply-evidence.command';
 import { InstanceCommandGenerationService } from 'src/database/commands/instance-command-generation.service';
 import { ListOrphanedWorkspaceEntitiesCommand } from 'src/database/commands/list-and-delete-orphaned-workspace-entities.command';
 import { ConfirmationQuestion } from 'src/database/commands/questions/confirmation.question';
@@ -17,6 +18,7 @@ import { UpgradeVersionCommandModule } from 'src/database/commands/upgrade-versi
 import { WorkspaceExportModule } from 'src/database/commands/workspace-export/workspace-export.module';
 import { TypeORMModule } from 'src/database/typeorm/typeorm.module';
 import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
+import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
 import { GenerateApiKeyCommand } from 'src/engine/core-modules/api-key/commands/generate-api-key.command';
 import { MarketplaceModule } from 'src/engine/core-modules/application/application-marketplace/marketplace.module';
@@ -96,6 +98,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     CustomerAccountModule,
     MyahModule,
     CampaignExecutionOrchestrationModule,
+    MyahInboxContactTriageModule,
     EventLogEmitterModule,
     FeatureFlagModule,
     WorkspaceCleanerModule,
@@ -133,6 +136,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     RebuildApplicationDefaultDepsCommand,
     InstallPreInstalledAppsCommand,
     ManagedEmailAttachPilotWorkspaceCommand,
+    MyahInboxBackfillCampaignReplyEvidenceCommand,
     provideWorkspaceScopedRepository(RoleEntity),
   ],
 })

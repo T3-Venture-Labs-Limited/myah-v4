@@ -3,9 +3,15 @@ import { randomUUID } from 'node:crypto';
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import gql from 'graphql-tag';
 
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 
+import {
+  cleanupCampaignFixture,
+  createCampaignFixtureIds,
+  seedCampaignFixture,
+} from 'test/integration/campaign-execution/utils/campaign-reply-evidence-fixture.util';
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import { installMyahInboxInstagramMetadataBridge } from 'test/integration/myah-inbox/utils/install-myah-inbox-instagram-metadata-bridge.util';
 import {
@@ -106,6 +112,49 @@ const emailMessagesQuery = gql`
   }
 `;
 
+const emailCardsQuery = gql`
+  query ProjectionEmailCards($contactId: String!, $expectedWorkspaceId: UUID!) {
+    myahInboxContactEmailCards(
+      contactId: $contactId
+      expectedWorkspaceId: $expectedWorkspaceId
+    ) {
+      snapshot
+      cards {
+        threadId
+        anchorKey
+        rootMessageId
+        historyBasis
+      }
+    }
+  }
+`;
+
+const emailCardMessagesQuery = gql`
+  query ProjectionEmailCardMessages(
+    $contactId: String!
+    $expectedWorkspaceId: UUID!
+    $threadId: UUID!
+    $anchorKey: String
+    $snapshot: String!
+  ) {
+    myahInboxContactEmailCardMessages(
+      contactId: $contactId
+      expectedWorkspaceId: $expectedWorkspaceId
+      threadId: $threadId
+      anchorKey: $anchorKey
+      snapshot: $snapshot
+    ) {
+      anchorKey
+      root {
+        id
+      }
+      messages {
+        id
+      }
+    }
+  }
+`;
+
 const linkContactMutation = gql`
   mutation LinkContact($input: LinkMyahInboxContactCreatorInput!) {
     linkMyahInboxContactCreator(input: $input)
@@ -181,15 +230,492 @@ const fetchEmailMessages = async (
 describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
   let fixture: MyahInboxTask7Fixture;
   let token: string;
+  let seededEvidenceIds: string[] = [];
 
   beforeAll(async () => {
     token = APPLE_JANE_ADMIN_ACCESS_TOKEN;
     await installMyahInboxInstagramMetadataBridge();
     fixture = await seedMyahInboxTask7Fixture({ operatorAccessToken: token });
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    // Give the legacy projection fixture explicit qualifying response proof.
+    // These are isolated test rows, not assertions about a real Campaign send.
+    // pi-lens-ignore: sql-injection
+    const seeded = await global.testDataSource.query<
+      Array<{ inboundMessageId: string }>
+    >(
+      `INSERT INTO core."myahCampaignReplyEvidence"
+         ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification")
+       SELECT $1, message.id, association."messageChannelId", $2, $3, 'THREAD'
+       FROM "${schema}".message message
+       JOIN "${schema}"."messageChannelMessageAssociation" association
+         ON association."messageId"=message.id
+       WHERE message."messageThreadId"=ANY($4::uuid[]) AND message."isDraft"=false
+         AND association."deletedAt" IS NULL AND association.direction='INCOMING'
+       ON CONFLICT ("workspaceId","inboundMessageId") DO NOTHING
+       RETURNING "inboundMessageId"`,
+      [
+        SEED_APPLE_WORKSPACE_ID,
+        randomUUID(),
+        randomUUID(),
+        Object.values(fixture.threadIds),
+      ],
+    );
+    seededEvidenceIds = seeded.map((row) => row.inboundMessageId);
   });
 
   afterAll(async () => {
+    await global.testDataSource.query(
+      `DELETE FROM core."myahCampaignReplyEvidence"
+       WHERE "workspaceId"=$1 AND "inboundMessageId"=ANY($2::uuid[])`,
+      [SEED_APPLE_WORKSPACE_ID, seededEvidenceIds],
+    );
     await cleanupMyahInboxTask7Fixture({ operatorAccessToken: token });
+  });
+
+  it('keeps pending-only Email out of default contacts until resolved evidence commits, preserving exact history', async () => {
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    // pi-lens-ignore: sql-injection
+    const [source] = await global.testDataSource.query<Array<{ id: string }>>(
+      `SELECT id FROM "${schema}".message WHERE "messageThreadId"=$1 LIMIT 1`,
+      [fixture.threadIds.tiedUnlinked],
+    );
+    expect(source).toBeDefined();
+    const initial = await fetchContacts(token, {
+      first: 20,
+      search: fixture.markers.tied,
+    });
+    const exactId = initial.edges.find(
+      ({ node }) => node.identityKind === 'EMAIL_THREAD',
+    )?.node.id;
+    expect(exactId).toBeDefined();
+    const [evidence] = await global.testDataSource.query<
+      Array<{
+        campaignId: string;
+        enrollmentId: string;
+        messageChannelId: string;
+        createdAt: Date;
+      }>
+    >(
+      `SELECT "campaignId","enrollmentId","messageChannelId","createdAt"
+       FROM core."myahCampaignReplyEvidence"
+       WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
+      [SEED_APPLE_WORKSPACE_ID, source.id],
+    );
+    expect(evidence).toBeDefined();
+    await global.testDataSource.query(
+      `DELETE FROM core."myahCampaignReplyEvidence"
+       WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
+      [SEED_APPLE_WORKSPACE_ID, source.id],
+    );
+    try {
+      await global.testDataSource.query(
+        `INSERT INTO core."myahCampaignReplyPending"
+          ("workspaceId","messageId","messageThreadId","messageChannelId","threadExternalId","normalizedSender")
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [
+          SEED_APPLE_WORKSPACE_ID,
+          source.id,
+          fixture.threadIds.tiedUnlinked,
+          evidence.messageChannelId,
+          'projection-fixture-pending',
+          'pending@example.test',
+        ],
+      );
+      const filtered = await fetchContacts(token, {
+        first: 20,
+        search: fixture.markers.tied,
+      });
+      expect(
+        filtered.edges.some(({ node }) => node.identityKind === 'EMAIL_THREAD'),
+      ).toBe(false);
+      const detail = await makeGraphqlAPIRequest(
+        { query: contactDetailQuery, variables: { contactId: exactId } },
+        token,
+      );
+      expect(detail.body.errors).toBeUndefined();
+      expect(detail.body.data.myahInboxContact).toMatchObject({
+        id: exactId,
+        identityKind: 'EMAIL_THREAD',
+      });
+      await global.testDataSource.transaction(async (manager) => {
+        await manager.query(
+          `DELETE FROM core."myahCampaignReplyPending" WHERE "workspaceId"=$1 AND "messageId"=$2`,
+          [SEED_APPLE_WORKSPACE_ID, source.id],
+        );
+        await manager.query(
+          `INSERT INTO core."myahCampaignReplyEvidence"
+            ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification","createdAt")
+           VALUES ($1,$2,$3,$4,$5,'THREAD',$6)`,
+          [
+            SEED_APPLE_WORKSPACE_ID,
+            source.id,
+            evidence.messageChannelId,
+            evidence.campaignId,
+            evidence.enrollmentId,
+            evidence.createdAt,
+          ],
+        );
+      });
+      const resolved = await fetchContacts(token, {
+        first: 20,
+        search: fixture.markers.tied,
+      });
+      expect(resolved.edges.some(({ node }) => node.id === exactId)).toBe(true);
+    } finally {
+      await global.testDataSource.query(
+        `DELETE FROM core."myahCampaignReplyPending" WHERE "workspaceId"=$1 AND "messageId"=$2`,
+        [SEED_APPLE_WORKSPACE_ID, source.id],
+      );
+      await global.testDataSource.query(
+        `INSERT INTO core."myahCampaignReplyEvidence"
+          ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification","createdAt")
+         VALUES ($1,$2,$3,$4,$5,'THREAD',$6) ON CONFLICT ("workspaceId","inboundMessageId") DO NOTHING`,
+        [
+          SEED_APPLE_WORKSPACE_ID,
+          source.id,
+          evidence.messageChannelId,
+          evidence.campaignId,
+          evidence.enrollmentId,
+          evidence.createdAt,
+        ],
+      );
+    }
+  });
+
+  it('promotes a recorded THREAD reply into its proven accepted-send group and resolves the PENDING root in place', async () => {
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    const ids = createCampaignFixtureIds();
+    const threadId = fixture.threadIds.tiedLinked;
+    const firstReplyId = '21270000-2001-4000-8000-000000000001';
+    const [secondReplyId, sendId] = [randomUUID(), randomUUID()];
+    const insertedMessageIds = [secondReplyId, sendId];
+    const contactVariables = {
+      contactId: encodeMyahInboxContactId({
+        workspaceId: SEED_APPLE_WORKSPACE_ID,
+        identity: { kind: 'creator', recordId: fixture.creatorId },
+      }),
+      expectedWorkspaceId: SEED_APPLE_WORKSPACE_ID,
+    };
+    const readCards = async () => {
+      const response = await makeGraphqlAPIRequest(
+        { query: emailCardsQuery, variables: contactVariables },
+        token,
+      );
+      expect(response.body.errors).toBeUndefined();
+
+      return response.body.data.myahInboxContactEmailCards as {
+        snapshot: string;
+        cards: Array<{
+          threadId: string;
+          anchorKey: string;
+          rootMessageId: string;
+          historyBasis: string;
+        }>;
+      };
+    };
+    const readMessages = (anchorKey: string, snapshot: string) =>
+      makeGraphqlAPIRequest(
+        {
+          query: emailCardMessagesQuery,
+          variables: { ...contactVariables, threadId, anchorKey, snapshot },
+        },
+        token,
+      );
+    const [original] = await global.testDataSource.query<
+      Array<Record<string, unknown>>
+    >(
+      `SELECT * FROM core."myahCampaignReplyEvidence" WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
+      [SEED_APPLE_WORKSPACE_ID, firstReplyId],
+    );
+    const runner = global.testDataSource.createQueryRunner();
+    await runner.connect();
+    try {
+      await runner.startTransaction();
+      const [channel] = await runner.query(
+        `SELECT "connectedAccountId" FROM core."messageChannel" WHERE id=$1`,
+        ['21270000-5001-4000-8000-000000000001'],
+      );
+      const routing = {
+        channelId: '21270000-5001-4000-8000-000000000001',
+        accountId: channel.connectedAccountId,
+        sender: 'operator@example.test',
+        userWorkspaceId: (
+          await runner.query(
+            `SELECT id FROM core."userWorkspace" WHERE "workspaceId"=$1 LIMIT 1`,
+            [SEED_APPLE_WORKSPACE_ID],
+          )
+        )[0].id,
+      };
+      await seedCampaignFixture(runner, {
+        ids,
+        workspaceId: SEED_APPLE_WORKSPACE_ID,
+        schemaName: schema,
+        routing,
+        secondEnrollmentId: ids.enrollmentA,
+        threadExternalId: 'task7-tied-linked-thread',
+        recipient: fixture.markers.senderEmail.toLowerCase(),
+      });
+      // Only attempt A was accepted, before either reply arrived.
+      await runner.query(
+        `UPDATE core."outboundEmailAttempt" SET "providerAcceptedAt"='2000-01-01'
+         WHERE "attemptId"=$1`,
+        [ids.attemptA],
+      );
+      await runner.query(
+        `UPDATE core."outboundEmailAttempt" SET "attemptState"='DEFINITELY_UNACCEPTED', "capacityState"='RELEASED'
+         WHERE "attemptId"=$1`,
+        [ids.attemptB],
+      );
+      for (const [messageId, receivedAt, direction] of [
+        [secondReplyId, '2099-07-24T12:30:00.000Z', 'INCOMING'],
+        [sendId, '2099-07-24T11:59:00.000Z', 'OUTGOING'],
+      ]) {
+        // pi-lens-ignore: sql-injection, no-sql-in-code
+        await runner.query(
+          `INSERT INTO "${schema}".message (id,"messageThreadId","receivedAt",subject,text,"isDraft")
+           VALUES ($1,$2,$3,$4,'promotion body',false)`,
+          [
+            messageId,
+            threadId,
+            receivedAt,
+            `${fixture.markers.tied} promotion`,
+          ],
+        );
+        // pi-lens-ignore: sql-injection, no-sql-in-code
+        await runner.query(
+          `INSERT INTO "${schema}"."messageChannelMessageAssociation"
+             (id,"messageId","messageChannelId","messageExternalId","messageThreadExternalId",direction)
+           VALUES ($1,$2,$3,$4,'task7-tied-linked-thread',$5)`,
+          [
+            randomUUID(),
+            messageId,
+            routing.channelId,
+            `promotion-${messageId}`,
+            direction,
+          ],
+        );
+        // pi-lens-ignore: sql-injection, no-sql-in-code
+        await runner.query(
+          `INSERT INTO "${schema}"."messageParticipant" (id,"messageId",role,handle)
+           VALUES ($1,$2,'FROM',$3)`,
+          [
+            randomUUID(),
+            messageId,
+            direction === 'INCOMING'
+              ? fixture.markers.senderEmail
+              : 'operator@example.test',
+          ],
+        );
+      }
+      await runner.query(
+        `DELETE FROM core."myahCampaignReplyEvidence" WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
+        [SEED_APPLE_WORKSPACE_ID, firstReplyId],
+      );
+      // A historical THREAD record, then later EXACT proof for the same send.
+      await runner.query(
+        `INSERT INTO core."myahCampaignReplyEvidence"
+           ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification","matchedAttemptId")
+         VALUES ($1,$2,$4,$5,$6,'THREAD',NULL),($1,$3,$4,$5,$6,'EXACT',$7)`,
+        [
+          SEED_APPLE_WORKSPACE_ID,
+          firstReplyId,
+          secondReplyId,
+          routing.channelId,
+          ids.campaign,
+          ids.enrollmentA,
+          ids.attemptA,
+        ],
+      );
+      await runner.commitTransaction();
+
+      const anchorKey = `attempt:${ids.attemptA}`;
+      const pending = await readCards();
+      expect(
+        pending.cards.filter((card) => card.threadId === threadId),
+      ).toEqual([
+        expect.objectContaining({ anchorKey, historyBasis: 'PENDING' }),
+      ]);
+      const pendingPage = await readMessages(anchorKey, pending.snapshot);
+      expect(pendingPage.body.errors).toBeUndefined();
+      const { root, messages } =
+        pendingPage.body.data.myahInboxContactEmailCardMessages;
+      const shown = [root, ...messages].map(({ id }: { id: string }) => id);
+      expect(shown.filter((id) => id === firstReplyId)).toHaveLength(1);
+      expect(shown.filter((id) => id === secondReplyId)).toHaveLength(1);
+      const contacts = await fetchContacts(token, { first: 50 });
+      expect(
+        contacts.edges.filter(
+          ({ node }) => node.creator?.id === fixture.creatorId,
+        ),
+      ).toHaveLength(1);
+
+      // The accepted send becomes readable: same group, new root, old snapshot invalid.
+      await global.testDataSource.query(
+        `UPDATE core."outboundEmailAttempt" SET "projectedMessageId"=$2,"projectedMessageThreadId"=$3
+         WHERE "attemptId"=$1`,
+        [ids.attemptA, sendId, threadId],
+      );
+      const stale = await readMessages(anchorKey, pending.snapshot);
+      expect(stale.body.errors?.[0].message).toContain(
+        'Inbox history changed; reload history',
+      );
+      const resolved = await readCards();
+      expect(
+        resolved.cards.filter((card) => card.threadId === threadId),
+      ).toEqual([
+        expect.objectContaining({
+          anchorKey,
+          rootMessageId: sendId,
+          historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+        }),
+      ]);
+    } finally {
+      if (runner.isTransactionActive) await runner.rollbackTransaction();
+      await runner.startTransaction();
+      try {
+        await runner.query(
+          `DELETE FROM core."myahCampaignReplyEvidence" WHERE "workspaceId"=$1 AND "inboundMessageId"=ANY($2::uuid[])`,
+          [SEED_APPLE_WORKSPACE_ID, [firstReplyId, secondReplyId]],
+        );
+        if (original)
+          await runner.query(
+            `INSERT INTO core."myahCampaignReplyEvidence"
+               ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification","createdAt")
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [
+              original.workspaceId,
+              original.inboundMessageId,
+              original.messageChannelId,
+              original.campaignId,
+              original.enrollmentId,
+              original.classification,
+              original.createdAt,
+            ],
+          );
+        for (const table of [
+          'messageParticipant',
+          'messageChannelMessageAssociation',
+        ])
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          await runner.query(
+            `DELETE FROM "${schema}"."${table}" WHERE "messageId"=ANY($1::uuid[])`,
+            [insertedMessageIds],
+          );
+        // pi-lens-ignore: sql-injection, no-sql-in-code
+        await runner.query(
+          `DELETE FROM "${schema}".message WHERE id=ANY($1::uuid[])`,
+          [insertedMessageIds],
+        );
+        await cleanupCampaignFixture(runner, {
+          ids,
+          workspaceId: SEED_APPLE_WORKSPACE_ID,
+          schemaName: schema,
+        });
+        await runner.commitTransaction();
+      } catch (error) {
+        await runner.rollbackTransaction();
+        throw error;
+      } finally {
+        await runner.release();
+      }
+    }
+  });
+
+  it('does not add or reorder a contact through hidden inbound evidence', async () => {
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    // pi-lens-ignore: sql-injection
+    const [hidden] = await global.testDataSource.query<
+      Array<{
+        id: string;
+        channelId: string;
+      }>
+    >(
+      `SELECT message.id,
+         (SELECT channel.id FROM core."messageChannel" channel
+           WHERE channel."workspaceId"=$2 AND channel.type='EMAIL' LIMIT 1) AS "channelId"
+       FROM "${schema}".message message WHERE message.subject=$1`,
+      [fixture.markers.hiddenSubject, SEED_APPLE_WORKSPACE_ID],
+    );
+    expect(hidden).toBeDefined();
+    const before = await fetchContacts(token, {
+      first: 20,
+      search: fixture.markers.sharedSubject,
+    });
+    try {
+      await global.testDataSource.query(
+        `INSERT INTO core."myahCampaignReplyEvidence"
+          ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification")
+         VALUES ($1,$2,$3,$4,$5,'THREAD')`,
+        [
+          SEED_APPLE_WORKSPACE_ID,
+          hidden.id,
+          hidden.channelId,
+          randomUUID(),
+          randomUUID(),
+        ],
+      );
+      expect(
+        await fetchContacts(token, {
+          first: 20,
+          search: fixture.markers.sharedSubject,
+        }),
+      ).toEqual(before);
+      expect(
+        (
+          await fetchContacts(token, {
+            first: 20,
+            search: fixture.markers.hiddenSubject,
+          })
+        ).edges,
+      ).toEqual([]);
+    } finally {
+      await global.testDataSource.query(
+        `DELETE FROM core."myahCampaignReplyEvidence"
+         WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
+        [SEED_APPLE_WORKSPACE_ID, hidden.id],
+      );
+    }
+  });
+
+  it('does not use a null-timestamp inbound proof to order default Email contacts', async () => {
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    // pi-lens-ignore: sql-injection
+    const [source] = await global.testDataSource.query<
+      Array<{
+        id: string;
+        receivedAt: Date;
+      }>
+    >(
+      `SELECT id,"receivedAt" FROM "${schema}".message
+       WHERE "messageThreadId"=$1 AND subject ILIKE $2 LIMIT 1`,
+      [fixture.threadIds.tiedLinked, `%${fixture.markers.tied}%`],
+    );
+    expect(source).toBeDefined();
+    try {
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `UPDATE "${schema}".message SET "receivedAt"=NULL WHERE id=$1`,
+        [source.id],
+      );
+      const list = await fetchContacts(token, {
+        first: 20,
+        search: fixture.markers.tied,
+      });
+      expect(
+        list.edges.some(({ node }) => node.creator?.id === fixture.creatorId),
+      ).toBe(false);
+      expect(
+        list.edges.some(({ node }) =>
+          node.email.threadIds.includes(fixture.threadIds.tiedUnlinked),
+        ),
+      ).toBe(true);
+    } finally {
+      // pi-lens-ignore: sql-injection
+      await global.testDataSource.query(
+        `UPDATE "${schema}".message SET "receivedAt"=$2 WHERE id=$1`,
+        [source.id, source.receivedAt],
+      );
+    }
   });
 
   it('groups readable linked threads once, keeps unmatched Email exact, and emits stable opaque cursors', async () => {
@@ -236,7 +762,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
     });
   });
 
-  it('recommends the latest readable inbound source without changing latest activity', async () => {
+  it('orders responding Email by latest readable incoming without changing Instagram ordering', async () => {
     const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
     const marker = `MYAH357-${randomUUID()}`;
     const conversationId = randomUUID();
@@ -393,18 +919,14 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
 
       expect(creatorBeforeTie).toMatchObject({
         latestChannel: 'EMAIL',
-        lastActivityAt: '2099-10-05T12:00:00.000Z',
+        lastActivityAt: '2099-10-05T11:00:00.000Z',
         initialSelection: {
           channel: 'EMAIL',
           emailThreadId: fixture.threadIds.tiedLinked,
           instagramConversationId: null,
         },
       });
-      expect(noInbound?.initialSelection).toEqual({
-        channel: 'EMAIL',
-        emailThreadId: fixture.threadIds.tiedUnlinked,
-        instagramConversationId: null,
-      });
+      expect(noInbound).toBeUndefined();
 
       // pi-lens-ignore: sql-injection
       await global.testDataSource.query(
@@ -419,8 +941,8 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       )?.node;
 
       expect(tiedCreator).toMatchObject({
-        latestChannel: 'EMAIL',
-        lastActivityAt: '2099-10-05T12:00:00.000Z',
+        latestChannel: 'INSTAGRAM',
+        lastActivityAt: '2099-10-05T11:00:00.000Z',
         initialSelection: {
           channel: 'INSTAGRAM',
           emailThreadId: null,

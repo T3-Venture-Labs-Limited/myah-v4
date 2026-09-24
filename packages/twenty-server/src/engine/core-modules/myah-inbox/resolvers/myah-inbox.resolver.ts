@@ -42,6 +42,7 @@ import {
   MYAH_INBOX_REPLY_CONTEXT_DRAFT_READER,
   MyahInboxReplyContextService,
   toDraftExecutionState,
+  toDraftIncomingState,
   toResolvedReplyContextDto,
   type MyahInboxReplyContextDraftReader,
 } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
@@ -198,6 +199,17 @@ export class MyahInboxResolver {
         requiredContextReadable,
         hasReadableBody: body !== null,
       }),
+      incomingState:
+        requiredContextReadable && body !== null
+          ? toDraftIncomingState(
+              snapshot?.authoredIncomingBaseline,
+              resolved.incomingBaseline,
+            )
+          : null,
+      bodyEdited:
+        requiredContextReadable && body !== null
+          ? snapshot?.bodyProvenance !== 'PROPOSAL'
+          : null,
     };
   }
 

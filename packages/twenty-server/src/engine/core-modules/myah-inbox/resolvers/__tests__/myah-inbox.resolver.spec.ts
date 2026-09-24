@@ -200,6 +200,72 @@ describe('MyahInboxResolver', () => {
     expect(readEmailDraft).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['A', 'PROPOSAL', 'A', 'CURRENT', false],
+    ['A', 'PROPOSAL', 'B', 'STALE', false],
+    ['A', 'EDITED', 'B', 'STALE', true],
+    [null, null, 'B', 'UNKNOWN', true],
+  ])(
+    'derives incoming staleness from the authored baseline %s/%s against %s',
+    async (authored, provenance, current, incomingState, bodyEdited) => {
+      const testWorkspace = { id: '20202020-0b5c-4178-bed7-d371f6411ea9' };
+      jest.mocked(getWorkspaceAuthContext).mockReturnValue({
+        ...userAuthContext,
+        workspace: testWorkspace,
+      } as never);
+      const threadId = '20202020-0b5c-4178-bed7-d371f6411eaa';
+      const resolver = new MyahInboxResolver(
+        {} as never,
+        {} as never,
+        {} as never,
+        {
+          resolveForRead: jest.fn().mockResolvedValue({
+            target: {
+              channel: 'EMAIL',
+              deliveryTargetId: threadId,
+              contactAnchor: { kind: 'EMAIL_THREAD', id: threadId },
+              creatorId: null,
+            },
+            selected: { kind: 'GENERAL' },
+            state: 'READY',
+            contextFingerprint: 'f'.repeat(64),
+            incomingBaseline: current,
+            threadCampaign: { state: 'UNASSOCIATED' },
+          }),
+        } as never,
+        {
+          read: jest.fn().mockResolvedValue({
+            draftId: '20202020-f7c5-4e2f-a44a-240b2d3a9d02',
+            revision: 1,
+            contextAcknowledged: true,
+            body: { markdown: 'body', blocknote: null },
+            authoredIncomingBaseline: authored,
+            bodyProvenance: provenance,
+          }),
+        } as never,
+      );
+
+      await expect(
+        resolver.myahInboxReplyDraft(
+          {
+            expectedWorkspaceId: testWorkspace.id,
+            target: {
+              channel: 'EMAIL',
+              contactId: encodeMyahInboxContactId({
+                workspaceId: testWorkspace.id,
+                identity: { kind: 'email-thread', recordId: threadId },
+              }),
+              threadId,
+            },
+            replyContext: { kind: 'GENERAL' },
+          } as never,
+          testWorkspace as never,
+          workspaceMemberId,
+        ),
+      ).resolves.toMatchObject({ incomingState, bodyEdited });
+    },
+  );
+
   it.each(['NEEDS_REVIEW', 'READY'])(
     'composes readable historical or F1-authored/F2-current draft as NEEDS_REVIEW (%s)',
     async (state) => {

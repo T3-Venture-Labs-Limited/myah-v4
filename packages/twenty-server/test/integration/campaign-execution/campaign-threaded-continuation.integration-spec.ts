@@ -293,6 +293,7 @@ describe('Campaign three-email threaded continuation', () => {
           return 'PROJECTED';
         },
       } as never,
+      { reconcilePendingMessageInTransaction: jest.fn() } as never,
     );
     const binding = {
       campaignExecutionId: id.execution,

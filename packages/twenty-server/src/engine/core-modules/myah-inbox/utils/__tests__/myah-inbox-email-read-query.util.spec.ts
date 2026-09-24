@@ -1,3 +1,9 @@
+import { Test } from '@nestjs/testing';
+import {
+  GraphQLSchemaBuilderModule,
+  GraphQLSchemaFactory,
+} from '@nestjs/graphql';
+import { buildSchema, graphql, printSchema } from 'graphql';
 import { Client } from 'pg';
 import { DataSource } from 'typeorm';
 import {
@@ -5,8 +11,10 @@ import {
   PermissionsExceptionCode,
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { MyahInboxContactEmailQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-email-query.service';
+import { MyahInboxContactResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-contact.resolver';
 import { MessageVisibilityPolicyService } from 'src/modules/messaging/common/query-hooks/message/message-visibility-policy.service';
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
+import { decodeMyahInboxEmailCardCursor } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-email-card-cursor.util';
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 
 jest.mock(
@@ -36,8 +44,10 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     const endpoint = new URL(connectionString!);
     if (
       endpoint.hostname !== '127.0.0.1' ||
-      endpoint.port !== '15432' ||
-      endpoint.pathname !== '/default' ||
+      !(
+        (endpoint.port === '15432' && endpoint.pathname === '/default') ||
+        (endpoint.port === '32768' && endpoint.pathname === '/myah415_test')
+      ) ||
       endpoint.search ||
       endpoint.hash ||
       !['postgres:', 'postgresql:'].includes(endpoint.protocol)
@@ -77,6 +87,17 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       INSERT INTO inbox_context_fixture (id, name) VALUES ('00000000-0000-4000-8000-000000000056','Readable campaign');
       UPDATE inbox_thread_fixture SET "myahCampaignId" = '00000000-0000-4000-8000-000000000056';
       INSERT INTO inbox_participant_fixture (id, "messageId", role, handle) SELECT id, id, 'FROM', 'creator@example.test' FROM inbox_email_fixture;
+      CREATE TEMP TABLE inbox_reply_evidence_fixture (
+        "workspaceId" uuid, "inboundMessageId" uuid, "messageChannelId" uuid,
+        classification text, "matchedAttemptId" uuid, "campaignId" uuid, "enrollmentId" uuid
+      ) ON COMMIT DROP;
+      CREATE TEMP TABLE inbox_attempt_fixture (
+        "attemptId" uuid, "workspaceId" uuid, "messageChannelId" uuid,
+        "projectedMessageId" uuid, "attemptState" text,
+        "campaignId" uuid, "enrollmentId" uuid,
+        "providerAcceptedAt" timestamptz DEFAULT '2026-09-01T00:00:00Z',
+        source text NOT NULL DEFAULT 'CAMPAIGN_SEQUENCE'
+      ) ON COMMIT DROP;
       CREATE TEMP TABLE inbox_account_fixture (id uuid, "workspaceId" uuid, "userWorkspaceId" uuid) ON COMMIT DROP;
       CREATE TEMP TABLE inbox_association_fixture ON COMMIT DROP AS SELECT id, id AS "messageId", '00000000-0000-4000-8000-000000000052'::uuid AS "messageChannelId", direction, NULL::timestamptz AS "deletedAt" FROM inbox_email_fixture;
     `);
@@ -97,7 +118,10 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     }
   });
 
-  const serviceFixture = (denied = new Set<string>()) => {
+  const serviceFixture = (
+    denied = new Set<string>(),
+    replyEvidenceReady = false,
+  ) => {
     const workspaceId = '00000000-0000-4000-8000-000000000053';
     const workspaceMemberId = '00000000-0000-4000-8000-000000000051';
     const workspace = { id: workspaceId };
@@ -164,6 +188,8 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       getGlobalWorkspaceDataSource: async () => ({
         query: async (sql: string, parameters: unknown[]) => {
           statements++;
+          if (sql.startsWith('SELECT to_regclass'))
+            return [{ exists: replyEvidenceReady }];
           const fixtureSql = sql
             .replace(
               /"workspace_[^"]+"\."messageChannelMessageAssociation"/g,
@@ -173,6 +199,14 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
             .replace(
               /core\."connectedAccount"/g,
               'pg_temp.inbox_account_fixture',
+            )
+            .replace(
+              /core\."myahCampaignReplyEvidence"/g,
+              'pg_temp.inbox_reply_evidence_fixture',
+            )
+            .replace(
+              /core\."outboundEmailAttempt"/g,
+              'pg_temp.inbox_attempt_fixture',
             );
           return (await client.query(fixtureSql, parameters)).rows;
         },
@@ -192,7 +226,721 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     };
   };
 
-  it('executes the complete service authorization, projection and hydration envelope in one statement per read', async () => {
+  it('keeps pre-upgrade legacy Creator cards but excludes unrelated legacy threads after evidence provisioning', async () => {
+    const legacy = serviceFixture();
+    expect(
+      (await legacy.service.listCards(legacy.request as never)).cards,
+    ).toHaveLength(3);
+    const provisioned = serviceFixture(new Set(), true);
+    expect(
+      (await provisioned.service.listCards(provisioned.request as never)).cards,
+    ).toEqual([]);
+    const threadId = '00000000-0000-4000-8000-000000000004';
+    const explicitContactId = encodeMyahInboxContactId({
+      workspaceId: provisioned.request.workspace.id,
+      identity: { kind: 'email-thread', recordId: threadId },
+    });
+    const explicit = await provisioned.service.readCard({
+      ...provisioned.request,
+      contactId: explicitContactId,
+      threadId,
+    } as never);
+    expect(explicit.card?.anchorKey).toBe(`legacy:${threadId}`);
+  });
+
+  it('returns two stable accepted-send groups for two answered sends in one thread', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const workspaceId = fixture.request.workspace.id;
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    const channelId = '00000000-0000-4000-8000-000000000052';
+    const attemptA = '00000000-0000-4000-8000-000000000401';
+    const attemptB = '00000000-0000-4000-8000-000000000402';
+    await client.query(
+      `UPDATE inbox_email_fixture SET direction='OUTGOING' WHERE id=$1`,
+      [threadId],
+    );
+    await client.query(
+      `UPDATE inbox_association_fixture SET direction='OUTGOING' WHERE "messageId"=$1`,
+      [threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState") VALUES ($1,$2,$3,$4,'ACCEPTED'),($5,$2,$3,NULL,'ACCEPTED')`,
+      [attemptA, workspaceId, channelId, threadId, attemptB],
+    );
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES
+         ($1,$2,$3,'EXACT',$4,NULL,NULL),
+         ($1,$5,$3,'EXACT',$4,NULL,NULL),
+         ($1,$6,$3,'EXACT',$7,NULL,NULL)`,
+      [
+        workspaceId,
+        '00000000-0000-4000-8000-000000000101',
+        channelId,
+        attemptA,
+        '00000000-0000-4000-8000-000000000102',
+        '00000000-0000-4000-8000-000000000103',
+        attemptB,
+      ],
+    );
+    const answeredSecondId = '00000000-0000-4000-8000-000000000407';
+    await client.query(
+      `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction)
+       VALUES ($1,$2,'2026-09-01T00:00:00.000005Z','2026-08-01T00:00:00Z','second send','body','FULL','OUTGOING')`,
+      [answeredSecondId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_association_fixture VALUES ($1,$1,$2,'OUTGOING',NULL)`,
+      [answeredSecondId, channelId],
+    );
+    await client.query(
+      `UPDATE inbox_attempt_fixture SET "projectedMessageId"=$1 WHERE "attemptId"=$2`,
+      [answeredSecondId, attemptB],
+    );
+    const unansweredId = '00000000-0000-4000-8000-000000000406';
+    const lateReplyId = '00000000-0000-4000-8000-000000000504';
+    await client.query(
+      `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction)
+       VALUES ($1,$2,'2026-09-03T00:00:00Z','2026-08-01T00:00:00Z','send five','body','FULL','OUTGOING'),
+         ($3,$2,'2026-09-04T00:00:00Z','2026-08-01T00:00:00Z','late send three reply','body','FULL','INCOMING')`,
+      [unansweredId, threadId, lateReplyId],
+    );
+    await client.query(
+      `INSERT INTO inbox_association_fixture VALUES ($1,$1,$2,'OUTGOING',NULL),($3,$3,$2,'INCOMING',NULL)`,
+      [unansweredId, channelId, lateReplyId],
+    );
+    await client.query(
+      `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState") VALUES ($1,$2,$3,$4,'ACCEPTED')`,
+      [
+        '00000000-0000-4000-8000-000000000403',
+        workspaceId,
+        channelId,
+        unansweredId,
+      ],
+    );
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      [workspaceId, lateReplyId, channelId, attemptA],
+    );
+    const head = await fixture.service.listCards(fixture.request as never);
+    const answeredCards = head.cards.filter(
+      (card) => card.threadId === threadId,
+    );
+    expect(answeredCards.map((card) => card.anchorKey).sort()).toEqual([
+      `attempt:${attemptA}`,
+      `attempt:${attemptB}`,
+    ]);
+    expect(answeredCards[0].startTimestamp).toBe(
+      answeredCards[1].startTimestamp,
+    );
+    const firstCard = await fixture.service.readCard({
+      ...fixture.request,
+      threadId,
+      anchorKey: `attempt:${attemptA}`,
+    } as never);
+    expect(firstCard.card?.anchorKey).toBe(`attempt:${attemptA}`);
+    const firstPage = await fixture.service.listCardMessages({
+      ...fixture.request,
+      threadId,
+      anchorKey: `attempt:${attemptA}`,
+      snapshot: head.snapshot,
+    } as never);
+    expect(firstPage.anchorKey).toBe(`attempt:${attemptA}`);
+    expect(firstPage.messages.map((message) => message.id)).not.toContain(
+      '00000000-0000-4000-8000-000000000103',
+    );
+    const oldClient = await fixture.service.readCard({
+      ...fixture.request,
+      threadId,
+    } as never);
+    expect(oldClient.card).toMatchObject({
+      anchorKey: `legacy:${threadId}`,
+      rootMessageId: threadId,
+    });
+    const oldPage = await fixture.service.listCardMessages({
+      ...fixture.request,
+      threadId,
+      snapshot: oldClient.snapshot,
+    } as never);
+    expect(oldPage).toMatchObject({
+      anchorKey: `legacy:${threadId}`,
+      root: { id: threadId },
+    });
+    expect(oldPage.messages.map((message) => message.id)).toContain(
+      unansweredId,
+    );
+    await expect(
+      fixture.service.readCard({
+        ...fixture.request,
+        threadId,
+        anchorKey: 'attempt:00000000-0000-4000-8000-000000000499',
+      } as never),
+    ).rejects.toThrow('Inbox card is not readable');
+    await expect(
+      fixture.service.readCard({
+        ...fixture.request,
+        threadId,
+        anchorKey: 'thread:00000000-0000-4000-8000-000000000003',
+      } as never),
+    ).rejects.toThrow('Invalid Inbox card key');
+    const firstReply = await fixture.service.locateMessage({
+      ...fixture.request,
+      snapshot: head.snapshot,
+      messageId: '00000000-0000-4000-8000-000000000101',
+    } as never);
+    expect(firstReply?.card.anchorKey).toBe(`attempt:${attemptA}`);
+    expect(
+      firstReply?.page.messages.map((message) => message.id),
+    ).not.toContain('00000000-0000-4000-8000-000000000103');
+    const laterReply = await fixture.service.locateMessage({
+      ...fixture.request,
+      snapshot: head.snapshot,
+      messageId: '00000000-0000-4000-8000-000000000103',
+    } as never);
+    expect(laterReply?.card.anchorKey).toBe(`attempt:${attemptB}`);
+    const lateReply = await fixture.service.locateMessage({
+      ...fixture.request,
+      snapshot: head.snapshot,
+      messageId: lateReplyId,
+    } as never);
+    expect(lateReply?.card.anchorKey).toBe(`attempt:${attemptA}`);
+    const secondGroup = await fixture.service.listCardMessages({
+      ...fixture.request,
+      snapshot: head.snapshot,
+      threadId,
+      anchorKey: `attempt:${attemptB}`,
+    } as never);
+    expect(secondGroup.messages.map((message) => message.id)).not.toContain(
+      unansweredId,
+    );
+    await client.query(
+      `UPDATE inbox_email_fixture SET readable=FALSE WHERE id=$1`,
+      ['00000000-0000-4000-8000-000000000103'],
+    );
+    await expect(
+      fixture.service.readCard({
+        ...fixture.request,
+        threadId,
+        anchorKey: `attempt:${attemptB}`,
+      } as never),
+    ).rejects.toThrow('Inbox card is not readable');
+    expect(
+      (
+        await fixture.service.readCard({
+          ...fixture.request,
+          threadId,
+        } as never)
+      ).card?.anchorKey,
+    ).toBe(`legacy:${threadId}`);
+  });
+
+  it('executes old and keyed GraphQL operations against real authorized card SQL without fallback', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const workspaceId = fixture.request.workspace.id;
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    const channelId = '00000000-0000-4000-8000-000000000052';
+    const attemptId = '00000000-0000-4000-8000-000000000401';
+    await client.query(
+      `UPDATE inbox_email_fixture SET direction='OUTGOING' WHERE id=$1`,
+      [threadId],
+    );
+    await client.query(
+      `UPDATE inbox_association_fixture SET direction='OUTGOING' WHERE "messageId"=$1`,
+      [threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState") VALUES ($1,$2,$3,$4,'ACCEPTED')`,
+      [attemptId, workspaceId, channelId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      [
+        workspaceId,
+        '00000000-0000-4000-8000-000000000101',
+        channelId,
+        attemptId,
+      ],
+    );
+    await client.query(
+      `DELETE FROM inbox_email_fixture WHERE "messageThreadId"=$1 AND id NOT IN ($1,$2)`,
+      [threadId, '00000000-0000-4000-8000-000000000101'],
+    );
+    const moduleRef = await Test.createTestingModule({
+      imports: [GraphQLSchemaBuilderModule],
+    }).compile();
+    try {
+      const generated = await moduleRef
+        .get(GraphQLSchemaFactory)
+        .create([MyahInboxContactResolver]);
+      const schema = buildSchema(printSchema(generated));
+      const variables = {
+        contactId: fixture.request.contactId,
+        expectedWorkspaceId: workspaceId,
+        threadId,
+      };
+      const rootValue = {
+        myahInboxContactEmailCard: (args: {
+          threadId: string;
+          anchorKey?: string;
+        }) =>
+          fixture.service.readCard({ ...fixture.request, ...args } as never),
+        myahInboxContactEmailCardMessages: (args: {
+          threadId: string;
+          anchorKey?: string;
+          snapshot: string;
+        }) =>
+          fixture.service.listCardMessages({
+            ...fixture.request,
+            ...args,
+          } as never),
+      };
+      const readCard = (anchorKey?: string) =>
+        graphql({
+          schema,
+          rootValue,
+          source: `query($contactId: String!, $expectedWorkspaceId: UUID!, $threadId: UUID!${anchorKey ? ', $anchorKey: String' : ''}) {
+          myahInboxContactEmailCard(contactId: $contactId, expectedWorkspaceId: $expectedWorkspaceId, threadId: $threadId${anchorKey ? ', anchorKey: $anchorKey' : ''}) {
+            snapshot card { threadId anchorKey rootMessageId }
+          }
+        }`,
+          variableValues: { ...variables, ...(anchorKey ? { anchorKey } : {}) },
+        });
+      const oldCard = await readCard();
+      expect(oldCard.errors).toBeUndefined();
+      expect(oldCard.data?.myahInboxContactEmailCard).toMatchObject({
+        card: { anchorKey: `legacy:${threadId}`, rootMessageId: threadId },
+      });
+      const keyedCard = await readCard(`attempt:${attemptId}`);
+      expect(keyedCard.errors).toBeUndefined();
+      expect(keyedCard.data?.myahInboxContactEmailCard).toMatchObject({
+        card: { anchorKey: `attempt:${attemptId}`, rootMessageId: threadId },
+      });
+      for (const [anchorKey, projection] of [
+        [undefined, oldCard],
+        [`attempt:${attemptId}`, keyedCard],
+      ] as const) {
+        const result = await graphql({
+          schema,
+          rootValue,
+          source: `query($contactId: String!, $expectedWorkspaceId: UUID!, $threadId: UUID!, $snapshot: String!${anchorKey ? ', $anchorKey: String' : ''}) {
+            myahInboxContactEmailCardMessages(contactId: $contactId, expectedWorkspaceId: $expectedWorkspaceId, threadId: $threadId, snapshot: $snapshot${anchorKey ? ', anchorKey: $anchorKey' : ''}) {
+              threadId anchorKey root { id } messages { id }
+            }
+          }`,
+          variableValues: {
+            ...variables,
+            snapshot: (
+              projection.data?.myahInboxContactEmailCard as { snapshot: string }
+            ).snapshot,
+            ...(anchorKey ? { anchorKey } : {}),
+          },
+        });
+        expect(result.errors).toBeUndefined();
+        expect(result.data?.myahInboxContactEmailCardMessages).toMatchObject({
+          anchorKey: anchorKey ?? `legacy:${threadId}`,
+          root: { id: threadId },
+          messages: expect.arrayContaining([
+            { id: '00000000-0000-4000-8000-000000000101' },
+          ]),
+        });
+      }
+      for (const key of [
+        'attempt:00000000-0000-4000-8000-000000000499',
+        'thread:00000000-0000-4000-8000-000000000003',
+      ]) {
+        const invalid = await readCard(key);
+        expect(invalid.data).toBeNull();
+        expect(invalid.errors?.[0].message).toMatch(
+          /Inbox card is not readable|Invalid Inbox card key/,
+        );
+      }
+      await client.query(
+        `UPDATE inbox_email_fixture SET readable=FALSE WHERE id=$1`,
+        ['00000000-0000-4000-8000-000000000101'],
+      );
+      const unauthorized = await readCard(`attempt:${attemptId}`);
+      expect(unauthorized.data).toBeNull();
+      expect(unauthorized.errors?.[0].message).toBe(
+        'Inbox card is not readable',
+      );
+      expect((await readCard()).data?.myahInboxContactEmailCard).toMatchObject({
+        card: { anchorKey: `legacy:${threadId}` },
+      });
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it('withholds a pending-only inbound from an answered group until durable evidence resolves it', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const workspaceId = fixture.request.workspace.id;
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    const channelId = '00000000-0000-4000-8000-000000000052';
+    const attemptId = '00000000-0000-4000-8000-000000000401';
+    const pendingId = '00000000-0000-4000-8000-000000000701';
+    await client.query(
+      `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState") VALUES ($1,$2,$3,NULL,'ACCEPTED')`,
+      [attemptId, workspaceId, channelId],
+    );
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      [
+        workspaceId,
+        '00000000-0000-4000-8000-000000000101',
+        channelId,
+        attemptId,
+      ],
+    );
+    await client.query(
+      `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction)
+      VALUES ($1,$2,'2026-09-03T00:00:00Z','2026-08-01T00:00:00Z','pending reply','body','FULL','INCOMING')`,
+      [pendingId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_association_fixture VALUES ($1,$1,$2,'INCOMING',NULL)`,
+      [pendingId, channelId],
+    );
+    const pending = await fixture.service.listCards(fixture.request as never);
+    expect(
+      pending.cards.filter((card) => card.threadId === threadId),
+    ).toHaveLength(1);
+    const before = await fixture.service.listCardMessages({
+      ...fixture.request,
+      threadId,
+      anchorKey: `attempt:${attemptId}`,
+      snapshot: pending.snapshot,
+    } as never);
+    expect(before.messages.map((message) => message.id)).not.toContain(
+      pendingId,
+    );
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      [workspaceId, pendingId, channelId, attemptId],
+    );
+    await expect(
+      fixture.service.listCardMessages({
+        ...fixture.request,
+        threadId,
+        snapshot: pending.snapshot,
+      } as never),
+    ).rejects.toThrow('Inbox history changed; reload history');
+    const fresh = await fixture.service.listCards(fixture.request as never);
+    expect(
+      fresh.cards.filter((card) => card.threadId === threadId),
+    ).toHaveLength(1);
+    const after = await fixture.service.listCardMessages({
+      ...fixture.request,
+      threadId,
+      anchorKey: `attempt:${attemptId}`,
+      snapshot: fresh.snapshot,
+    } as never);
+    expect(after.messages.map((message) => message.id)).toContain(pendingId);
+  });
+
+  it('keeps unproven THREAD replies neutral until their own proof is promoted, then recovers one exact group', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    const attemptId = '00000000-0000-4000-8000-000000000401';
+    const workspaceId = fixture.request.workspace.id;
+    const channelId = '00000000-0000-4000-8000-000000000052';
+    const campaignId = '00000000-0000-4000-8000-000000000056';
+    const enrollmentId = '00000000-0000-4000-8000-000000000057';
+    await client.query(
+      `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState") VALUES ($1,$2,$3,NULL,'ACCEPTED')`,
+      [attemptId, workspaceId, channelId],
+    );
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,$4,$5)`,
+      [
+        workspaceId,
+        '00000000-0000-4000-8000-000000000101',
+        channelId,
+        campaignId,
+        enrollmentId,
+      ],
+    );
+    const old = await fixture.service.listCards(fixture.request as never);
+    expect(
+      old.cards
+        .filter((card) => card.threadId === threadId)
+        .map((card) => card.anchorKey),
+    ).toEqual([`thread:${threadId}`]);
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,$5,$6)`,
+      [
+        workspaceId,
+        '00000000-0000-4000-8000-000000000102',
+        channelId,
+        attemptId,
+        campaignId,
+        enrollmentId,
+      ],
+    );
+    await expect(
+      fixture.service.listCardMessages({
+        ...fixture.request,
+        threadId,
+        snapshot: old.snapshot,
+      } as never),
+    ).rejects.toThrow('Inbox history changed; reload history');
+    const neutral = await fixture.service.listCards(fixture.request as never);
+    expect(
+      neutral.cards
+        .filter((card) => card.threadId === threadId)
+        .map((card) => card.anchorKey),
+    ).toEqual([`thread:${threadId}`, `attempt:${attemptId}`]);
+    const unproven = await fixture.service.locateMessage({
+      ...fixture.request,
+      snapshot: neutral.snapshot,
+      messageId: '00000000-0000-4000-8000-000000000101',
+    } as never);
+    expect(unproven?.card.anchorKey).toBe(`thread:${threadId}`);
+    await client.query(
+      `UPDATE inbox_reply_evidence_fixture SET classification='EXACT', "matchedAttemptId"=$1 WHERE "inboundMessageId"=$2`,
+      [attemptId, '00000000-0000-4000-8000-000000000101'],
+    );
+    await expect(
+      fixture.service.listCardMessages({
+        ...fixture.request,
+        threadId,
+        snapshot: neutral.snapshot,
+      } as never),
+    ).rejects.toThrow('Inbox history changed; reload history');
+    const fresh = await fixture.service.listCards(fixture.request as never);
+    expect(
+      fresh.cards
+        .filter((card) => card.threadId === threadId)
+        .map((card) => card.anchorKey),
+    ).toEqual([`attempt:${attemptId}`]);
+    const promoted = await fixture.service.locateMessage({
+      ...fixture.request,
+      snapshot: fresh.snapshot,
+      messageId: '00000000-0000-4000-8000-000000000101',
+    } as never);
+    expect(promoted?.card.anchorKey).toBe(`attempt:${attemptId}`);
+  });
+
+  it('coalesces a previously recorded THREAD reply with its uniquely proven accepted send without duplicating either reply', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    const workspaceId = fixture.request.workspace.id;
+    const channelId = '00000000-0000-4000-8000-000000000052';
+    const attemptId = '00000000-0000-4000-8000-000000000401';
+    const campaignId = '00000000-0000-4000-8000-000000000056';
+    const enrollmentId = '00000000-0000-4000-8000-000000000057';
+    await client.query(
+      `UPDATE inbox_email_fixture SET direction='OUTGOING' WHERE id=$1`,
+      [threadId],
+    );
+    await client.query(
+      `UPDATE inbox_association_fixture SET direction='OUTGOING' WHERE "messageId"=$1`,
+      [threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState","campaignId","enrollmentId") VALUES ($1,$2,$3,$4,'ACCEPTED',$5,$6)`,
+      [attemptId, workspaceId, channelId, threadId, campaignId, enrollmentId],
+    );
+    for (const [inboundId, classification, matchedAttemptId] of [
+      ['00000000-0000-4000-8000-000000000101', 'THREAD', null],
+      ['00000000-0000-4000-8000-000000000102', 'EXACT', attemptId],
+    ]) {
+      await client.query(
+        `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [
+          workspaceId,
+          inboundId,
+          channelId,
+          classification,
+          matchedAttemptId,
+          campaignId,
+          enrollmentId,
+        ],
+      );
+    }
+    const result = await fixture.service.listCards(fixture.request as never);
+    expect(
+      result.cards
+        .filter((card) => card.threadId === threadId)
+        .map((card) => card.anchorKey),
+    ).toEqual([`attempt:${attemptId}`]);
+    const page = await fixture.service.listCardMessages({
+      ...fixture.request,
+      threadId,
+      anchorKey: `attempt:${attemptId}`,
+      snapshot: result.snapshot,
+    } as never);
+    expect(page.messages.map((message) => message.id)).toEqual([
+      '00000000-0000-4000-8000-000000000101',
+      '00000000-0000-4000-8000-000000000102',
+    ]);
+    // Another accepted attempt in the same cohort makes the old THREAD proof
+    // ambiguous again; it must not be silently assigned to the first send.
+    await client.query(
+      `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState","campaignId","enrollmentId") VALUES ($1,$2,$3,NULL,'ACCEPTED',$4,$5)`,
+      [
+        '00000000-0000-4000-8000-000000000402',
+        workspaceId,
+        channelId,
+        campaignId,
+        enrollmentId,
+      ],
+    );
+    await expect(
+      fixture.service.listCardMessages({
+        ...fixture.request,
+        threadId,
+        anchorKey: `attempt:${attemptId}`,
+        snapshot: result.snapshot,
+      } as never),
+    ).rejects.toThrow('Inbox history changed; reload history');
+    const ambiguous = await fixture.service.listCards(fixture.request as never);
+    expect(
+      ambiguous.cards
+        .filter((card) => card.threadId === threadId)
+        .map((card) => card.anchorKey),
+    ).toEqual([`attempt:${attemptId}`, `thread:${threadId}`]);
+    await client.query(
+      `DELETE FROM inbox_attempt_fixture WHERE "attemptId"=$1`,
+      ['00000000-0000-4000-8000-000000000402'],
+    );
+    await client.query(
+      `UPDATE inbox_attempt_fixture SET "providerAcceptedAt"='2026-09-02T00:00:00.000002Z' WHERE "attemptId"=$1`,
+      [attemptId],
+    );
+    const earlierReply = await fixture.service.listCards(
+      fixture.request as never,
+    );
+    expect(
+      earlierReply.cards
+        .filter((card) => card.threadId === threadId)
+        .map((card) => card.anchorKey),
+    ).toEqual([`attempt:${attemptId}`, `thread:${threadId}`]);
+  });
+
+  it('ignores unrelated legacy null timestamps in response-only cards but fails closed on the proven reply', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const channelId = '00000000-0000-4000-8000-000000000052';
+    const replyId = '00000000-0000-4000-8000-000000000101';
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,NULL,NULL)`,
+      [fixture.request.workspace.id, replyId, channelId],
+    );
+    await client.query(
+      `UPDATE inbox_email_fixture SET "receivedAt"=NULL WHERE id=$1`,
+      ['00000000-0000-4000-8000-000000000001'],
+    );
+    await client.query(
+      `UPDATE inbox_email_fixture SET "createdAt"=NULL WHERE id=$1`,
+      ['00000000-0000-4000-8000-000000000002'],
+    );
+    const response = await fixture.service.listCards(fixture.request as never);
+    expect(response.cards.map((card) => card.anchorKey)).toEqual([
+      `thread:${threadId}`,
+    ]);
+    await client.query(
+      `UPDATE inbox_email_fixture SET "receivedAt"=NULL WHERE id=$1`,
+      [replyId],
+    );
+    await expect(
+      fixture.service.listCards(fixture.request as never),
+    ).rejects.toThrow('Inbox history ordering is unavailable');
+  });
+
+  it('keeps an EXACT group key while an unreadable parent transitions from PENDING to its send root', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const workspaceId = fixture.request.workspace.id;
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    const channelId = '00000000-0000-4000-8000-000000000052';
+    const attemptId = '00000000-0000-4000-8000-000000000401';
+    await client.query(
+      `UPDATE inbox_email_fixture SET direction='OUTGOING', readable=FALSE WHERE id=$1`,
+      [threadId],
+    );
+    await client.query(
+      `UPDATE inbox_association_fixture SET direction='OUTGOING' WHERE "messageId"=$1`,
+      [threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState") VALUES ($1,$2,$3,$4,'ACCEPTED')`,
+      [attemptId, workspaceId, channelId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      [
+        workspaceId,
+        '00000000-0000-4000-8000-000000000101',
+        channelId,
+        attemptId,
+      ],
+    );
+    const pending = await fixture.service.listCards(fixture.request as never);
+    const card = pending.cards.find((item) => item.threadId === threadId)!;
+    expect(card).toMatchObject({
+      anchorKey: `attempt:${attemptId}`,
+      rootMessageId: '00000000-0000-4000-8000-000000000101',
+      historyBasis: 'PENDING',
+    });
+    await client.query(
+      `UPDATE inbox_email_fixture SET readable=TRUE WHERE id=$1`,
+      [threadId],
+    );
+    await expect(
+      fixture.service.listCardMessages({
+        ...fixture.request,
+        threadId,
+        snapshot: pending.snapshot,
+      } as never),
+    ).rejects.toThrow('Inbox history changed; reload history');
+    const fresh = await fixture.service.listCards(fixture.request as never);
+    expect(fresh.cards.filter((item) => item.threadId === threadId)).toEqual([
+      expect.objectContaining({
+        anchorKey: card.anchorKey,
+        rootMessageId: threadId,
+        historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+      }),
+    ]);
+  });
+
+  it('uses a deterministic neutral THREAD group alongside unchanged explicit legacy thread identity', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,NULL,NULL)`,
+      [
+        fixture.request.workspace.id,
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000000052',
+      ],
+    );
+    const head = await fixture.service.listCards(fixture.request as never);
+    expect(
+      head.cards.find((card) => card.threadId === threadId)?.anchorKey,
+    ).toBe(`thread:${threadId}`);
+    const unproven = await fixture.service.locateMessage({
+      ...fixture.request,
+      snapshot: head.snapshot,
+      messageId: '00000000-0000-4000-8000-000000000102',
+    } as never);
+    expect(unproven).toBeNull();
+    const located = await fixture.service.locateMessage({
+      ...fixture.request,
+      snapshot: head.snapshot,
+      messageId: '00000000-0000-4000-8000-000000000101',
+    } as never);
+    expect(located?.card.anchorKey).toBe(`thread:${threadId}`);
+    const legacyId = '00000000-0000-4000-8000-000000000004';
+    const legacy = await fixture.service.readCard({
+      ...fixture.request,
+      contactId: encodeMyahInboxContactId({
+        workspaceId: fixture.request.workspace.id,
+        identity: { kind: 'email-thread', recordId: legacyId },
+      }),
+      threadId: legacyId,
+    } as never);
+    expect(legacy.card?.anchorKey).toBe(`legacy:${legacyId}`);
+  });
+
+  it('executes authorized projection and hydration in one statement after a schema preflight', async () => {
     const fixture = serviceFixture();
     const head = await fixture.service.listCards(fixture.request as never);
     expect(head.cards.map((card) => card.threadId)).toEqual(
@@ -200,7 +948,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
         (i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
       ),
     );
-    expect(fixture.statements()).toBe(1);
+    expect(fixture.statements()).toBe(2);
     expect(head.cards[2].campaignLabel).toBe('Readable campaign');
     const page = await fixture.service.listCardMessages({
       ...fixture.request,
@@ -210,10 +958,21 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     expect(page.messages).toHaveLength(20);
     expect(page.messages[0].receivedAt).toBe('2026-09-02T00:00:00.000181Z');
     expect(page.olderCursor).not.toBeNull();
+    expect(
+      decodeMyahInboxEmailCardCursor(
+        page.olderCursor!,
+        {
+          workspaceId: fixture.request.workspace.id,
+          userWorkspaceId: fixture.request.authContext.userWorkspaceId,
+          contactId: fixture.request.contactId,
+        },
+        'older',
+      ).anchorKey,
+    ).toBe(`legacy:${head.cards[2].threadId}`);
     expect(page.root.participants).toEqual([
       { role: 'FROM', handle: 'creator@example.test', displayName: null },
     ]);
-    expect(fixture.statements()).toBe(2);
+    expect(fixture.statements()).toBe(4);
   });
 
   it.each([
@@ -384,6 +1143,12 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     const query = buildMyahInboxEmailReadQuery(
       {
         sql: `authorized_email AS (SELECT id, "messageThreadId", "receivedAt", "createdAt", visibility, direction FROM inbox_email_fixture),
+        accepted_outreach AS (SELECT "projectedMessageId", "attemptId", "campaignId", "enrollmentId", "messageChannelId", "providerAcceptedAt" FROM inbox_attempt_fixture WHERE "attemptState"='ACCEPTED'),
+        reply_evidence AS (SELECT evidence."inboundMessageId", inbound."messageThreadId", evidence.classification,
+          evidence."matchedAttemptId", evidence."campaignId", evidence."enrollmentId", evidence."messageChannelId", attempt."projectedMessageId"
+          FROM inbox_reply_evidence_fixture evidence
+          JOIN authorized_email inbound ON inbound.id=evidence."inboundMessageId" AND inbound.direction='INCOMING'
+          LEFT JOIN inbox_attempt_fixture attempt ON attempt."attemptId"=evidence."matchedAttemptId"),
         readable_member AS (SELECT 1), readable_contact AS (SELECT 1),
         readable_subject AS (SELECT id, subject FROM inbox_email_fixture),
         readable_text AS (SELECT id, text FROM inbox_email_fixture),
@@ -395,7 +1160,18 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       },
       { mode: 'cards', ...options },
     );
-    const result = await client.query(query.sql, query.parameters);
+    const result = await client.query(
+      query.sql
+        .replace(
+          /core\."myahCampaignReplyEvidence"/g,
+          'pg_temp.inbox_reply_evidence_fixture',
+        )
+        .replace(
+          /core\."outboundEmailAttempt"/g,
+          'pg_temp.inbox_attempt_fixture',
+        ),
+      query.parameters,
+    );
     return result.rows[0] as unknown as {
       snapshotAt: string;
       fingerprint: string;
@@ -438,7 +1214,8 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       '2026-01-01T00:00:00Z', clock_timestamp(), 'import', 'body', 'FULL', 'INCOMING')`);
     const boundary = {
       timestamp: '2026-09-01T00:00:00.000003Z',
-      id: '00000000-0000-4000-8000-000000000003',
+      id: 'legacy:00000000-0000-4000-8000-000000000003',
+      threadId: '00000000-0000-4000-8000-000000000003',
     };
     await expect(
       read({
@@ -513,7 +1290,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     });
   });
 
-  it('encodes the authorized boundary when an older page becomes empty', async () => {
+  it('invalidates a revoked older boundary rather than replaying stale group membership', async () => {
     const fixture = serviceFixture();
     const head = await fixture.service.listCards(fixture.request as never);
     const located = await fixture.service.locateMessage({
@@ -525,14 +1302,22 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     await client.query(
       `UPDATE inbox_email_fixture SET "deletedAt" = now() WHERE "receivedAt" >= '2026-09-02T00:00:00Z' AND "receivedAt" < '2026-09-02T00:00:00.000002Z'`,
     );
-    const empty = await fixture.service.listCardMessages({
-      ...fixture.request,
-      snapshot: head.snapshot,
-      threadId: located!.card.threadId,
-      cursor: olderCursor,
-    } as never);
-    expect(empty.messages).toEqual([]);
-    expect(empty.newerCursor).not.toBeNull();
+    await expect(
+      fixture.service.listCardMessages({
+        ...fixture.request,
+        snapshot: head.snapshot,
+        threadId: located!.card.threadId,
+        cursor: olderCursor,
+      } as never),
+    ).rejects.toThrow('Inbox history changed; reload history');
+    const fresh = await fixture.service.listCards(fixture.request as never);
+    await expect(
+      fixture.service.listCardMessages({
+        ...fixture.request,
+        snapshot: fresh.snapshot,
+        threadId: located!.card.threadId,
+      } as never),
+    ).resolves.toMatchObject({ threadId: located!.card.threadId });
   });
 
   it('retains a bounded route back from an empty older segment', async () => {

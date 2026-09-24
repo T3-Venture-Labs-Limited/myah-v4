@@ -3320,6 +3320,42 @@ const pushStatefulSample = (
 };
 
 describe('real-service stateful Task4B outcomes and failures', () => {
+  it.each(['ACCEPTED', 'DEFINITELY_UNACCEPTED'] as const)(
+    'keeps a committed %s outcome when a later Inbox transaction fails',
+    async (state) => {
+      const harness = createStatefulCompositionHarness({
+        samples: sameDaySamples(3),
+      });
+      const { submission } = await reserveAndBeginStatefully(harness);
+
+      pushStatefulSample(harness, new Date('2026-03-10T14:00:30.000Z'));
+      const outcome = await harness.transaction(() =>
+        state === 'ACCEPTED'
+          ? harness.service.recordAccepted(
+              { ...submission, ...acceptedEvidence('provider-committed') },
+              harness.manager,
+            )
+          : harness.service.recordDefinitelyUnaccepted(
+              {
+                ...submission,
+                safeOutcomeReason: 'DEFINITELY_UNACCEPTED_NON_RETRYABLE',
+              },
+              harness.manager,
+            ),
+      );
+      expect(outcome).toMatchObject({ status: 'RECORDED' });
+      const committed = harness.snapshot();
+
+      await expect(
+        harness.transaction(async () => {
+          throw new Error('Inbox lock unavailable');
+        }),
+      ).rejects.toThrow('Inbox lock unavailable');
+      expect(harness.snapshot()).toEqual(committed);
+      expect(harness.attempts.get(ids.attempt)?.attemptState).toBe(state);
+    },
+  );
+
   it('resolves UNKNOWN to accepted on its immutable day exactly once', async () => {
     const harness = createStatefulCompositionHarness({
       samples: sameDaySamples(3),

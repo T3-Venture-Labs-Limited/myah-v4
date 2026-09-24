@@ -5,11 +5,12 @@ import { MyahInboxContactEmailMessage } from 'src/engine/core-modules/myah-inbox
 @ObjectType()
 export class MyahInboxEmailCard {
   @Field(() => UUIDScalarType) threadId: string;
+  @Field(() => String) anchorKey: string;
   @Field(() => UUIDScalarType) rootMessageId: string;
   @Field(() => String) startTimestamp: string;
   @Field(() => String, { nullable: true }) subject: string | null;
   @Field(() => String, { nullable: true }) campaignLabel: string | null;
-  @Field(() => String) historyBasis: 'EARLIEST_AUTHORIZED_RETAINED';
+  @Field(() => String) historyBasis: 'EARLIEST_AUTHORIZED_RETAINED' | 'PENDING';
 }
 
 @ObjectType()
@@ -25,6 +26,7 @@ export class MyahInboxEmailCardPage {
 @ObjectType()
 export class MyahInboxEmailMessagePage {
   @Field(() => UUIDScalarType) threadId: string;
+  @Field(() => String) anchorKey: string;
   @Field(() => MyahInboxContactEmailMessage) root: MyahInboxContactEmailMessage;
   @Field(() => [MyahInboxContactEmailMessage])
   messages: MyahInboxContactEmailMessage[];

@@ -269,6 +269,61 @@ describe('MyahInboxContactTriageLifecycleService', () => {
     ).toBe(false);
   });
 
+  it('rejects an uncovered anticipated Creator before acquiring its lock', async () => {
+    const sourceId = '00000000-0000-4000-8000-000000000001';
+    const creatorC = '00000000-0000-4000-8000-000000000103';
+    const query = jest.fn(async (sql: string, _parameters?: unknown[]) => {
+      if (sql.includes('to_regclass')) return [{ exists: false }];
+      if (
+        sql.includes('FROM "messageThread"') &&
+        sql.includes('WHERE id = ANY')
+      ) {
+        return [{ id: sourceId, creatorId: creatorC }];
+      }
+      if (sql.includes('FROM "messageThread"') && sql.includes('WHERE id=$1')) {
+        return [{ id: sourceId, creatorId: creatorC }];
+      }
+      return [];
+    });
+    const service = new MyahInboxContactTriageLifecycleService({
+      ensureSourceContactInTransaction: jest.fn(),
+      lockIdentityKeysInTransaction: jest.fn(),
+      finalizePreviousCreatorIdentitiesInTransaction: jest.fn(),
+    } as never);
+    const withPreparedSourceMutation =
+      service.withPreparedSourceMutationInTransaction as (
+        options: Record<string, unknown>,
+      ) => Promise<unknown>;
+
+    await expect(
+      withPreparedSourceMutation.call(service, {
+        workspaceId: '00000000-0000-4000-8000-000000000200',
+        sourceType: 'EMAIL_THREAD',
+        sourceRecordIds: [sourceId],
+        nextCreatorIds: [
+          '00000000-0000-4000-8000-000000000101',
+          '00000000-0000-4000-8000-000000000102',
+        ],
+        coveredCreatorIds: [
+          '00000000-0000-4000-8000-000000000101',
+          '00000000-0000-4000-8000-000000000102',
+        ],
+        manager: { queryRunner: { query } },
+        mutate: jest.fn(),
+      }),
+    ).rejects.toThrow(
+      'Inbox Creator lock coverage changed before source mutation',
+    );
+
+    expect(
+      query.mock.calls.some(
+        ([sql, parameters]) =>
+          String(sql).includes('myah-inbox-anchor:') &&
+          parameters?.[0] === `creator:${creatorC}`,
+      ),
+    ).toBe(false);
+  });
+
   it('takes Creator mutation anchors in lexical order before the mutation', async () => {
     const query = jest.fn().mockResolvedValue([]);
     const mutate = jest.fn().mockResolvedValue('mutated');

@@ -206,6 +206,9 @@ describe('MyahInboxContactTriageActions', () => {
       expect(screen.getAllByRole('combobox', { name: 'State' })).toHaveLength(
         1,
       );
+      expect(screen.getByRole('option', { name: 'New message' })).toHaveValue(
+        'NEEDS_REPLY',
+      );
     },
   );
 

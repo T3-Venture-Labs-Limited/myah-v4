@@ -62,13 +62,17 @@ const messageRepository = (
   const qb: Record<string, jest.Mock> = {};
   for (const method of [
     'select',
+    'addSelect',
     'where',
     'andWhere',
     'setParameters',
     'orderBy',
+    'addOrderBy',
+    'limit',
   ])
     qb[method] = jest.fn(() => qb);
   qb.getRawMany = jest.fn(async () => rows);
+  qb.getRawOne = jest.fn(async () => null);
   return { createQueryBuilder: jest.fn(() => qb), qb };
 };
 const emptyEvidenceRepository = { find: jest.fn(async () => []) };
@@ -406,6 +410,7 @@ describe('MyahInboxReplyContextService', () => {
               }),
             };
           }
+          if (objectName === 'message') return messageRepository([]);
           return emptyEvidenceRepository;
         }),
       } as never,
@@ -444,7 +449,9 @@ describe('MyahInboxReplyContextService', () => {
                   myahCampaignId: null,
                 }),
               }
-            : emptyEvidenceRepository,
+            : objectName === 'message'
+              ? messageRepository([])
+              : emptyEvidenceRepository,
         ),
       } as never,
       visibilityPolicy as never,
@@ -801,6 +808,62 @@ describe('Email reply context persisted evidence and fingerprint', () => {
       contextFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
   });
+
+  it.each([
+    { name: 'Campaign', request: readRequest },
+    {
+      name: 'Creator General',
+      request: {
+        ...readRequest,
+        replyContext: { kind: ReplyContextKind.GENERAL },
+      } as ReplyContextRequest,
+    },
+    {
+      name: 'thread General alias',
+      request: {
+        ...readRequest,
+        replyContext: { kind: ReplyContextKind.GENERAL },
+        contactIdentity: { kind: 'email-thread', recordId: threadId },
+      } as ReplyContextRequest,
+    },
+  ])(
+    'changes $name authority only for a readable newest inbound',
+    async ({ request }) => {
+      const { resolver, repositories } = setup();
+      const initial = await resolver.resolveCurrentEvidence(request);
+      repositories.message.qb.getRawOne.mockResolvedValue({
+        id: 'reply-2',
+        receivedAt: '2026-09-23T13:30:00.000Z',
+      });
+      const replied = await resolver.resolveCurrentEvidence(request);
+      expect(replied.contextFingerprint).not.toBe(initial.contextFingerprint);
+      repositories.message.qb.getRawOne.mockResolvedValue({
+        id: 'reply-2',
+        receivedAt: '2026-09-23T13:30:00.001Z',
+      });
+      expect(
+        (await resolver.resolveCurrentEvidence(request)).contextFingerprint,
+      ).not.toBe(replied.contextFingerprint);
+      expect(repositories.message.qb.orderBy).toHaveBeenCalledWith(
+        'message."receivedAt"',
+        'DESC',
+      );
+      expect(repositories.message.qb.addOrderBy).toHaveBeenCalledWith(
+        'message.id',
+        'DESC',
+      );
+      expect(
+        repositories.message.qb.andWhere.mock.calls.flat().join(' '),
+      ).toContain("association.direction = 'INCOMING'");
+      expect(
+        repositories.message.qb.andWhere.mock.calls.flat().join(' '),
+      ).toContain(':messageVisibilityFull');
+      repositories.message.qb.getRawOne.mockResolvedValue(null);
+      expect(
+        (await resolver.resolveCurrentEvidence(request)).contextFingerprint,
+      ).toBe(initial.contextFingerprint);
+    },
+  );
 
   it.each([
     'campaignBriefMarkdown',

@@ -27,6 +27,8 @@ export const useMyahInboxReplyDraft = (
   input: MyahInboxReplyDraftInput | null,
   controller: MyahInboxDraftAutosaveController,
   authorizationScope = '',
+  // Increments on each background arrival tick; metadata-only draft reread.
+  arrivalEpoch = 0,
 ) => {
   const client = useApolloCoreClient();
   const store = useStore();
@@ -39,6 +41,11 @@ export const useMyahInboxReplyDraft = (
   );
   // oxlint-disable-next-line twenty/no-state-useref
   const scopeRef = useRef(scope);
+  // Current scoped reader; arrival reads never outlive their authorized scope.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const readerRef = useRef<
+    (() => Promise<MyahInboxDraftAutosaveThread | null>) | null
+  >(null);
   scopeRef.current = scope;
   const [state, setState] = useState<{
     scope: typeof scope;
@@ -102,6 +109,8 @@ export const useMyahInboxReplyDraft = (
               }
             : null,
           executionState: draft.executionState,
+          incomingState: draft.incomingState ?? null,
+          bodyEdited: draft.bodyEdited ?? null,
           contextFingerprint: resolved.contextFingerprint ?? null,
         };
       };
@@ -131,6 +140,7 @@ export const useMyahInboxReplyDraft = (
           return;
         }
         ownedKey = key;
+        readerRef.current = readDraft;
         capture = controller.beginTargetRead(key, isCurrent, refreshAfterSave);
         const authorized = controller.authorizeTarget(capture, thread);
         setState({
@@ -144,10 +154,22 @@ export const useMyahInboxReplyDraft = (
       });
     return () => {
       abort.abort();
+      if (readerRef.current === readDraft) readerRef.current = null;
       if (capture) controller.invalidateTarget(capture);
       if (ownedKey) controller.releaseEditor(ownedKey, editorOwner);
     };
   }, [client, controller, editorOwner, input, scope, store]);
+  useEffect(() => {
+    const read = readerRef.current;
+    if (!arrivalEpoch || !read) return;
+    void read()
+      .then((thread) => {
+        if (thread && readerRef.current === read)
+          controller.reconcileArrival(thread);
+      })
+      // A failed background read changes nothing; the next tick retries.
+      .catch(() => undefined);
+  }, [arrivalEpoch, controller]);
   const current = state?.scope === scope ? state : null;
   const key = current?.key ?? null;
   const entry = useAtomValue(

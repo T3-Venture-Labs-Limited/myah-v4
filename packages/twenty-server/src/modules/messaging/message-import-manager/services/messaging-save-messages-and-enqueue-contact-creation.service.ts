@@ -1,8 +1,10 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
 
 import { type MyahInboxTriageMode } from 'src/engine/core-modules/myah-inbox/types/myah-inbox-contact-triage.types';
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
+import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { ModuleRef } from '@nestjs/core';
 
 import {
@@ -50,6 +52,7 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly myahInboxContactTriageService: MyahInboxContactTriageService,
     private readonly myahInboxContactTriageReceiptService: MyahInboxContactTriageReceiptService,
+    private readonly myahInboxContactTriageLifecycleService: MyahInboxContactTriageLifecycleService,
     @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
 
@@ -95,18 +98,145 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
           )
         : false;
 
+      const replyEvidence = this.moduleRef?.get<{
+        prepareInboundCandidateCreatorsInTransaction: (
+          input: {
+            workspaceId: string;
+            messageChannelId: string;
+            candidates: Array<{
+              threadExternalId: string;
+              normalizedSender: string;
+            }>;
+          },
+          manager: WorkspaceEntityManager,
+        ) => Promise<string[]>;
+        reconcileInboundMessageInTransaction: (
+          input: {
+            workspaceId: string;
+            messageChannelId: string;
+            threadExternalId: string;
+            fromHandle: string;
+            inboundEvidenceId: string;
+            inboundMessageThreadId: string;
+            inReplyToTokens?: string[];
+            coveredCreatorIds?: string[];
+          },
+          manager: WorkspaceEntityManager,
+        ) => Promise<void>;
+      }>(CAMPAIGN_REPLY_EVIDENCE_PORT, { strict: false });
+      const candidates = messagesToSave.flatMap((message) => {
+        if (message.direction !== MessageDirection.INCOMING) return [];
+        const from = message.participants
+          .find(
+            (participant) => participant.role === MessageParticipantRole.FROM,
+          )
+          ?.handle?.trim()
+          .toLowerCase();
+        return from && message.messageThreadExternalId.trim()
+          ? [
+              {
+                threadExternalId: message.messageThreadExternalId,
+                normalizedSender: from,
+              },
+            ]
+          : [];
+      });
+      let coveredCreatorIds: string[] = [];
+      if (recordTriageSource && candidates.length > 0) {
+        const attemptCreatorIds = replyEvidence
+          ? await replyEvidence.prepareInboundCandidateCreatorsInTransaction(
+              { workspaceId, messageChannelId: messageChannel.id, candidates },
+              transactionManager,
+            )
+          : [];
+        const query = transactionManager.queryRunner?.query.bind(
+          transactionManager.queryRunner,
+        );
+        if (!query)
+          throw new Error(
+            'Creator source preflight requires an active transaction',
+          );
+        await query("SELECT set_config('search_path', $1, true)", [
+          getWorkspaceSchemaName(workspaceId),
+        ]);
+        const currentSourceCreators = (await query(
+          `SELECT DISTINCT thread."creatorId" FROM "messageThread" thread
+            WHERE thread."creatorId" IS NOT NULL AND (
+              thread.id=ANY($1::uuid[])
+              OR thread.id IN (SELECT "messageThreadId" FROM "message"
+                WHERE "headerMessageId"=ANY($2::text[]) OR id=ANY($3::uuid[]))
+              OR thread.id IN (SELECT message."messageThreadId"
+                FROM "messageChannelMessageAssociation" association
+                JOIN "message" message ON message.id=association."messageId"
+                WHERE association."messageChannelId"=$4
+                  AND association."messageThreadExternalId"=ANY($5::text[]))
+            )`,
+          [
+            messagesToSave
+              .map((message) => message.deliveryTargetId)
+              .filter(isDefined),
+            messagesToSave
+              .map((message) => message.headerMessageId)
+              .filter(isDefined),
+            messagesToSave
+              .map((message) => message.expectedMessageId)
+              .filter(isDefined),
+            messageChannel.id,
+            messagesToSave.map((message) => message.messageThreadExternalId),
+          ],
+        )) as Array<{ creatorId: string }>;
+        coveredCreatorIds = [
+          ...new Set([
+            ...attemptCreatorIds,
+            ...currentSourceCreators.map((source) => source.creatorId),
+          ]),
+        ].sort();
+      }
+
+      const persist = () =>
+        this.messageService.saveMessagesWithinTransaction(
+          messagesToSave,
+          messageChannel.id,
+          transactionManager,
+          workspaceId,
+          ...(recordTriageSource ? ([true] as const) : []),
+        );
       const {
         messageExternalIdsAndIdsMap,
         messageExternalIdToMessageChannelMessageAssociationIdMap,
         messageExternalIdToMessageThreadIdMap,
         messageExternalIdToPersistenceInfoMap,
-      } = await this.messageService.saveMessagesWithinTransaction(
-        messagesToSave,
-        messageChannel.id,
-        transactionManager,
-        workspaceId,
-        ...(recordTriageSource ? ([true] as const) : []),
-      );
+      } =
+        recordTriageSource && candidates.length > 0
+          ? await this.myahInboxContactTriageLifecycleService.withCreatorMutationLocksInTransaction(
+              {
+                creatorIds: coveredCreatorIds,
+                manager: transactionManager,
+                mutate: persist,
+              },
+            )
+          : await persist();
+
+      let lockedSourceRows:
+        | Array<{ id: string; creatorId: string | null }>
+        | undefined;
+      if (recordTriageSource && candidates.length > 0) {
+        const query = transactionManager.queryRunner!.query.bind(
+          transactionManager.queryRunner,
+        );
+        lockedSourceRows = (await query(
+          'SELECT id, "creatorId" FROM "messageThread" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE',
+          [[...new Set(messageExternalIdToMessageThreadIdMap.values())].sort()],
+        )) as Array<{ id: string; creatorId: string | null }>;
+        this.myahInboxContactTriageLifecycleService.assertCreatorMutationLockCoverage(
+          {
+            anticipatedCreatorIds: lockedSourceRows.flatMap((source) =>
+              source.creatorId ? [source.creatorId] : [],
+            ),
+            coveredCreatorIds,
+          },
+        );
+      }
 
       for (const message of messagesToSave) {
         if (message.direction !== MessageDirection.INCOMING) continue;
@@ -117,29 +247,28 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
           (participant) => participant.role === MessageParticipantRole.FROM,
         )?.handle;
         if (!inboundEvidenceId || !fromHandle) continue;
-        await this.moduleRef
-          ?.get<{
-            reconcileInboundMessageInTransaction: (
-              input: {
-                workspaceId: string;
-                messageChannelId: string;
-                threadExternalId: string;
-                fromHandle: string;
-                inboundEvidenceId: string;
-              },
-              manager: WorkspaceEntityManager,
-            ) => Promise<void>;
-          }>(CAMPAIGN_REPLY_EVIDENCE_PORT, { strict: false })
-          ?.reconcileInboundMessageInTransaction(
-            {
-              workspaceId,
-              messageChannelId: messageChannel.id,
-              threadExternalId: message.messageThreadExternalId,
-              fromHandle,
-              inboundEvidenceId,
-            },
-            transactionManager,
-          );
+        const inboundMessageThreadId =
+          messageExternalIdToMessageThreadIdMap.get(message.externalId);
+        if (!inboundMessageThreadId) {
+          throw new Error('Persisted inbound Message must have a Thread');
+        }
+        await replyEvidence?.reconcileInboundMessageInTransaction(
+          {
+            workspaceId,
+            messageChannelId: messageChannel.id,
+            threadExternalId: message.messageThreadExternalId,
+            fromHandle,
+            inboundEvidenceId,
+            inboundMessageThreadId,
+            ...(message.inReplyToTokens === undefined
+              ? {}
+              : { inReplyToTokens: message.inReplyToTokens }),
+            ...(recordTriageSource && candidates.length > 0
+              ? { coveredCreatorIds }
+              : {}),
+          },
+          transactionManager,
+        );
       }
 
       const participantsWithMessageId: (ParticipantWithMessageId & {
@@ -285,10 +414,12 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
             'Email triage identity preparation requires an active transaction manager',
           );
         }
-        const sourceRows = (await query(
-          'SELECT id, "creatorId" FROM "messageThread" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE',
-          [sourceRecordIds],
-        )) as Array<{ id: string; creatorId: string | null }>;
+        const sourceRows =
+          lockedSourceRows ??
+          ((await query(
+            'SELECT id, "creatorId" FROM "messageThread" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE',
+            [sourceRecordIds],
+          )) as Array<{ id: string; creatorId: string | null }>);
         const creatorIdBySourceId = new Map(
           sourceRows.map((sourceRow) => [sourceRow.id, sourceRow.creatorId]),
         );
@@ -333,7 +464,23 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
           async () => {
             const workspaceDataSource =
               await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-            return workspaceDataSource?.transaction(saveWithinTransaction);
+            if (!workspaceDataSource) return undefined;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                return await workspaceDataSource.transaction(
+                  saveWithinTransaction,
+                );
+              } catch (error) {
+                if (
+                  !(error instanceof ConflictException) ||
+                  error.message !==
+                    'Inbox Creator lock coverage changed before source mutation' ||
+                  attempt === 2
+                )
+                  throw error;
+              }
+            }
+            return undefined;
           },
           authContext,
           { lite: true },

@@ -25,6 +25,8 @@ import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 const flush = jest.fn().mockResolvedValue(undefined);
 const flushWorkspace = jest.fn().mockResolvedValue(true);
 const invalidateWorkspace = jest.fn();
+const ambientRefreshContacts = jest.fn();
+const ambientRefreshEmail = jest.fn();
 const refreshContacts = jest.fn();
 const loadMoreContacts = jest.fn();
 const loadMoreEmail = jest.fn();
@@ -248,12 +250,14 @@ jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
     thread,
     onSent,
     scopeGeneration,
+    arrivalEpoch,
     targetAvailable,
     presentation,
     replyTargets,
     onReplyTargetChange,
   }: {
     scopeGeneration: string;
+    arrivalEpoch?: number;
     targetAvailable: boolean;
     presentation?: 'default' | 'main';
     thread: { id: string };
@@ -268,6 +272,7 @@ jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
     <div
       data-testid="draft-authority"
       data-scope={scopeGeneration}
+      data-arrival={String(arrivalEpoch ?? 0)}
       data-available={String(targetAvailable)}
       data-presentation={presentation}
     >
@@ -446,6 +451,7 @@ const setDefaultHooks = () => {
     hasNextPage: false,
     loadMore: loadMoreContacts,
     refresh: refreshContacts,
+    ambientRefresh: ambientRefreshContacts,
     isRefreshing: false,
     refreshStatus: 'idle',
     refreshError: null,
@@ -464,6 +470,7 @@ const setDefaultHooks = () => {
                   latestThreadId: 'thread-2',
                   cards: ['thread-1', 'thread-2'].map((id, index) => ({
                     threadId: id,
+                    anchorKey: `legacy:${id}`,
                     rootMessageId: `${id}-root`,
                     subject: id,
                     campaignLabel:
@@ -482,6 +489,7 @@ const setDefaultHooks = () => {
       loading: false,
       missingMessageIds: [],
       refresh: refreshEmail,
+      ambientRefresh: ambientRefreshEmail,
       openCard: jest.fn(),
       openDetachedCard: jest.fn(),
       setReadingAnchor: jest.fn(),
@@ -790,6 +798,70 @@ describe('MyahInboxPage contact-first flow', () => {
       status: 'success',
       selectedContact: contacts[0],
     });
+  });
+
+  it('checks for changes every 30 seconds while visible and re-authorizes history only on change or every 5 minutes', async () => {
+    jest.useFakeTimers();
+    let visibility: DocumentVisibilityState = 'visible';
+    jest
+      .spyOn(document, 'visibilityState', 'get')
+      .mockImplementation(() => visibility);
+    ambientRefreshContacts.mockResolvedValue({
+      status: 'success',
+      selectedContact: contacts[0],
+    });
+    ambientRefreshEmail.mockResolvedValue(undefined);
+    const arrival = () =>
+      screen.getByTestId('draft-authority').getAttribute('data-arrival');
+    try {
+      const { store } = renderPage();
+      await act(async () => jest.advanceTimersByTimeAsync(0));
+      await screen.findByText('Email composer thread-2');
+      const selection = store.get(myahInboxContactSelectionState.atom);
+
+      // Unchanged selected contact: only the one contact-list check runs.
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(ambientRefreshContacts).toHaveBeenCalledWith('contact-1');
+      expect(ambientRefreshEmail).not.toHaveBeenCalled();
+      expect(arrival()).toBe('0');
+
+      // A new readable creator response changes the signature.
+      ambientRefreshContacts.mockResolvedValueOnce({
+        status: 'success',
+        selectedContact: {
+          ...contacts[0],
+          lastActivityAt: '2026-09-06T12:00:00.000Z',
+          preview: 'A new creator reply',
+        },
+      });
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(1);
+      expect(arrival()).toBe('1');
+      expect(refreshContacts).not.toHaveBeenCalled();
+      expect(refreshEmail).not.toHaveBeenCalled();
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(selection);
+
+      // Unchanged ticks stay cheap until 5 minutes since the last full check.
+      await act(async () => jest.advanceTimersByTimeAsync(270_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(1);
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(2);
+      expect(arrival()).toBe('2');
+
+      const checks = ambientRefreshContacts.mock.calls.length;
+      visibility = 'hidden';
+      await act(async () => jest.advanceTimersByTimeAsync(600_000));
+      expect(ambientRefreshContacts).toHaveBeenCalledTimes(checks);
+      visibility = 'visible';
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(ambientRefreshContacts).toHaveBeenCalledTimes(checks + 1);
+    } finally {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    }
   });
 
   it('ignores an old exact header mutation completion after contact/channel scope changes', async () => {

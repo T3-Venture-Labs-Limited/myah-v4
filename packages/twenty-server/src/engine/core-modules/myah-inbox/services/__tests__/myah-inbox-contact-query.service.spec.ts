@@ -188,7 +188,9 @@ const buildHarness = (
   const query = jest.fn().mockResolvedValue(rows);
   // The service probes the private triage schema before its page query; routing
   // that probe to its own mock keeps main-query assertions about the page query.
-  const preflightQuery = jest.fn().mockResolvedValue([{ exists: true }]);
+  const preflightQuery = jest
+    .fn()
+    .mockResolvedValue([{ exists: true, replyEvidenceReady: true }]);
   const dataSourceQuery = jest.fn(async (sql: string, ...rest: unknown[]) =>
     sql.startsWith('SELECT to_regclass')
       ? preflightQuery(sql, ...rest)
@@ -787,6 +789,52 @@ describe('MyahInboxContactQueryService', () => {
     expect(sql).toContain('LEFT JOIN readable_workspace_members triage_owner');
     expect(sql).toContain(
       'THEN triage_owner.id ELSE source."inboxOwnerId" END AS "effectiveInboxOwnerId"',
+    );
+  });
+
+  it('keeps Instagram available without referring to an unprovisioned reply-evidence table', async () => {
+    const harness = buildHarness([]);
+    harness.preflightQuery.mockResolvedValueOnce([
+      { exists: true, replyEvidenceReady: false },
+    ]);
+
+    await harness.service.listContacts(request());
+
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toContain('response_email_messages AS');
+    expect(sql).toMatch(/WHERE message.direction = 'INCOMING'\s+AND FALSE/);
+    expect(sql).not.toContain('core."myahCampaignReplyEvidence"');
+    expect(sql).toContain('instagram_source_rows AS');
+  });
+
+  it('uses only reader-visible inbound reply evidence for default Email source order, while an exact contact keeps legacy Email', async () => {
+    const list = buildHarness([]);
+    await list.service.listContacts(request());
+    const [sql] = list.query.mock.calls[0];
+    expect(sql).toContain('response_email_messages AS');
+    expect(sql).toContain('core."myahCampaignReplyEvidence" evidence');
+    expect(sql).toContain('evidence."inboundMessageId"=message.id');
+    expect(sql).toContain("message.direction = 'INCOMING'");
+    expect(sql).toMatch(
+      /latest_email_by_thread AS[\s\S]*?FROM response_email_messages message/,
+    );
+    expect(sql).toMatch(
+      /latest_inbound_email_by_thread AS[\s\S]*?FROM response_email_messages message/,
+    );
+    expect(sql).toContain('message.visibility <>');
+
+    const exact = buildHarness([]);
+    await exact.service.listContacts(
+      request({
+        contactId: encodeMyahInboxContactId({
+          workspaceId,
+          identity: { kind: 'email-thread', recordId: emailThreadAId },
+        }),
+      }),
+    );
+    const [exactSql] = exact.query.mock.calls[0];
+    expect(exactSql).toMatch(
+      /latest_email_by_thread AS[\s\S]*?FROM visible_email_messages message/,
     );
   });
 

@@ -100,7 +100,7 @@ type ReplyExpansionState = {
   initialized: boolean;
   expandedThreadIds: Set<string>;
 };
-type PendingReveal = { threadId: string; messageId: string };
+type PendingReveal = { anchorKey: string; messageId: string };
 type LocationRefs = {
   scope: History['openCard'];
   priorKeys: Set<string>;
@@ -120,13 +120,15 @@ export const getMyahInboxOutreachCards = (
     ...history.detachedCards.map(({ card }) => card),
     ...history.windows.map((window) => window.card),
   ]) {
-    if (!cards.has(card.threadId)) cards.set(card.threadId, card);
+    const key = `${card.threadId}:${card.anchorKey}`;
+    if (!cards.has(key)) cards.set(key, card);
   }
   return [...cards.values()].sort(
     (a, b) =>
       a.startTimestamp.localeCompare(b.startTimestamp) ||
       String(a.rootMessageId).localeCompare(String(b.rootMessageId)) ||
-      String(a.threadId).localeCompare(String(b.threadId)),
+      String(a.threadId).localeCompare(String(b.threadId)) ||
+      a.anchorKey.localeCompare(b.anchorKey),
   );
 };
 const compareMessages = (
@@ -192,7 +194,7 @@ export const MyahInboxEmailOutreachHistory = ({
   }, [history.openCard, replyExpansion.scope]);
   useLayoutEffect(() => {
     if (effectiveExpansion.initialized || !cards.length) return;
-    const latestThreadId = cards.at(-1)!.threadId;
+    const latestThreadId = cards.at(-1)!.anchorKey;
     setReplyExpansion((current) =>
       current.scope !== history.openCard || current.initialized
         ? current
@@ -270,16 +272,19 @@ export const MyahInboxEmailOutreachHistory = ({
     if (history.loading || history.status !== 'ready') return;
     const unopened = cards.find(
       (card) =>
-        !history.windows.some((window) => window.threadId === card.threadId),
+        !history.windows.some(
+          (window) => window.card.anchorKey === card.anchorKey,
+        ),
     );
     if (!unopened) return;
     const segment = history.segments.find((segment) =>
       segment.pages.some((page) =>
-        page.cards.some((card) => card.threadId === unopened.threadId),
+        page.cards.some((card) => card.anchorKey === unopened.anchorKey),
       ),
     );
-    if (segment) void history.openCard(segment.id, unopened.threadId);
-    else void history.openDetachedCard(unopened.threadId);
+    if (segment)
+      void history.openCard(segment.id, unopened.threadId, unopened.anchorKey);
+    else void history.openDetachedCard(unopened.threadId, unopened.anchorKey);
   }, [cards, history]);
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
@@ -296,7 +301,7 @@ export const MyahInboxEmailOutreachHistory = ({
           ? [
               {
                 key: `${window.id}:${request.messageId}`,
-                threadId: window.threadId,
+                anchorKey: window.card.anchorKey,
                 messageId: request.messageId,
               },
             ]
@@ -313,20 +318,20 @@ export const MyahInboxEmailOutreachHistory = ({
       if (explicit) {
         refs.handledKeys.add(explicit.key);
         refs.pending = {
-          threadId: explicit.threadId,
+          anchorKey: explicit.anchorKey,
           messageId: explicit.messageId,
         };
         setReplyExpansion((current) => {
           if (
             current.scope !== history.openCard ||
-            current.expandedThreadIds.has(explicit.threadId)
+            current.expandedThreadIds.has(explicit.anchorKey)
           )
             return current;
           return {
             ...current,
             expandedThreadIds: new Set([
               ...current.expandedThreadIds,
-              explicit.threadId,
+              explicit.anchorKey,
             ]),
           };
         });
@@ -351,7 +356,9 @@ export const MyahInboxEmailOutreachHistory = ({
       !initialized.current &&
       cards.length &&
       cards.every((card) =>
-        history.windows.some((window) => window.threadId === card.threadId),
+        history.windows.some(
+          (window) => window.card.anchorKey === card.anchorKey,
+        ),
       )
     ) {
       area.scrollTop = area.scrollHeight;
@@ -359,7 +366,7 @@ export const MyahInboxEmailOutreachHistory = ({
     }
     const pending = locationRefs.current.pending;
     if (pending) {
-      const region = regionRefs.current.get(pending.threadId);
+      const region = regionRefs.current.get(pending.anchorKey);
       const target = scroll.current?.querySelector<HTMLElement>(
         `[data-message-id="${pending.messageId}"]`,
       );
@@ -431,7 +438,7 @@ export const MyahInboxEmailOutreachHistory = ({
       {cards.map((card) => {
         const subject = getMyahInboxSafeEmailSubject(card.subject ?? null);
         const windows = history.windows.filter(
-          (window) => window.threadId === card.threadId,
+          (window) => window.card.anchorKey === card.anchorKey,
         );
         const root = windows
           .flatMap((window) => window.pages.map((page) => page.root))
@@ -502,15 +509,19 @@ export const MyahInboxEmailOutreachHistory = ({
             />
           </StyledControls>
         );
-        const expanded = isExpanded(card.threadId);
-        const repliesId = `replies-${card.threadId}`;
+        const expanded = isExpanded(card.anchorKey);
+        const uiKey = card.anchorKey.startsWith('legacy:')
+          ? card.threadId
+          : card.anchorKey;
+        const repliesId = `replies-${uiKey}`;
         return (
-          <div key={card.threadId}>
+          <div key={card.anchorKey}>
             {history.segments
               .filter(
                 (segment) =>
                   Boolean(segment.olderCursor) &&
-                  segment.pages.at(-1)?.cards.at(0)?.threadId === card.threadId,
+                  segment.pages.at(-1)?.cards.at(0)?.anchorKey ===
+                    card.anchorKey,
               )
               .map((segment) => (
                 <StyledHistoryPagination key={segment.id}>
@@ -527,6 +538,7 @@ export const MyahInboxEmailOutreachHistory = ({
               ))}
             <StyledCard
               data-thread-id={card.threadId}
+              data-anchor-key={card.anchorKey}
               aria-label={`Outreach: ${subject}`}
             >
               <StyledSubjectHeader aria-label={subject}>
@@ -549,6 +561,9 @@ export const MyahInboxEmailOutreachHistory = ({
                   />
                 )}
               </StyledSubjectHeader>
+              {card.historyBasis === 'PENDING' && (
+                <p>Replied in this sequence</p>
+              )}
               {root && (
                 <MyahInboxEmailStoredMessage key={root.id} message={root} />
               )}
@@ -558,23 +573,24 @@ export const MyahInboxEmailOutreachHistory = ({
               >
                 <Button
                   ref={(element) => {
-                    if (element) toggleRefs.current.set(card.threadId, element);
-                    else toggleRefs.current.delete(card.threadId);
+                    if (element)
+                      toggleRefs.current.set(card.anchorKey, element);
+                    else toggleRefs.current.delete(card.anchorKey);
                   }}
                   Icon={expanded ? IconChevronUp : IconChevronDown}
                   ariaLabel={`${expanded ? 'Hide' : 'Show'} replies for ${subject}`}
                   aria-expanded={expanded}
                   aria-controls={repliesId}
-                  dataTestId={`myah-inbox-replies-toggle-${card.threadId}`}
+                  dataTestId={`myah-inbox-replies-toggle-${uiKey}`}
                   variant="tertiary"
                   size="small"
-                  onClick={() => toggleReplies(card.threadId)}
+                  onClick={() => toggleReplies(card.anchorKey)}
                 />
                 <div data-reply-thread-id={card.threadId}>
                   <Button
                     Icon={IconArrowBackUp}
                     ariaLabel={`Reply to ${subject}`}
-                    dataTestId={`myah-inbox-reply-${card.threadId}`}
+                    dataTestId={`myah-inbox-reply-${uiKey}`}
                     variant="tertiary"
                     size="small"
                     onClick={() => onReply(card.threadId)}
@@ -582,21 +598,21 @@ export const MyahInboxEmailOutreachHistory = ({
                 </div>
               </StyledReplyActions>
               <AppTooltip
-                anchorSelect={`[data-testid='myah-inbox-replies-toggle-${card.threadId}']`}
+                anchorSelect={`[data-testid='myah-inbox-replies-toggle-${uiKey}']`}
                 content={expanded ? 'Hide replies' : 'Show replies'}
                 delay={TooltipDelay.shortDelay}
                 place={TooltipPosition.Top}
               />
               <AppTooltip
-                anchorSelect={`[data-testid='myah-inbox-reply-${card.threadId}']`}
+                anchorSelect={`[data-testid='myah-inbox-reply-${uiKey}']`}
                 content="Reply"
                 delay={TooltipDelay.shortDelay}
                 place={TooltipPosition.Top}
               />
               <StyledReplies
                 ref={(element) => {
-                  if (element) regionRefs.current.set(card.threadId, element);
-                  else regionRefs.current.delete(card.threadId);
+                  if (element) regionRefs.current.set(card.anchorKey, element);
+                  else regionRefs.current.delete(card.anchorKey);
                 }}
                 id={repliesId}
                 aria-label={`Replies for ${subject}`}

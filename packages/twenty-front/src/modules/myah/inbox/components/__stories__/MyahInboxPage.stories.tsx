@@ -305,6 +305,7 @@ const MyahInboxStorySurface = ({
     )!;
     return {
       threadId,
+      anchorKey: `legacy:${threadId}`,
       rootMessageId: root.id,
       startTimestamp: root.receivedAt,
       subject: root.subject,
@@ -342,6 +343,7 @@ const MyahInboxStorySurface = ({
       pages: [
         {
           threadId: card.threadId,
+          anchorKey: card.anchorKey,
           root: emailMessages.find(
             (message) => message.id === card.rootMessageId,
           )!,
@@ -371,6 +373,7 @@ const MyahInboxStorySurface = ({
     retryIncremental: async () => undefined,
     locateMessage: async () => undefined,
     refresh: async () => undefined,
+    ambientRefresh: async () => undefined,
     rebase: async () => undefined,
     setReadingAnchor: () => undefined,
     purge: () => undefined,

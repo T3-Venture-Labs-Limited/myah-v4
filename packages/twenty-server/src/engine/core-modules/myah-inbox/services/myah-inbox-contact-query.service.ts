@@ -502,6 +502,35 @@ export class MyahInboxContactQueryService {
             )`;
         }
         const limit = addParameter(pageSize + 1);
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        // Old workspaces can have triage but not yet the additive reply table.
+        // They keep Instagram and exact Email lookups, never guessed responses.
+        const [triageRelations] = (await dataSource.query(
+          `SELECT to_regclass($1) IS NOT NULL AS "exists",
+            to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "replyEvidenceReady"`,
+          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        )) as Array<{ exists: boolean; replyEvidenceReady: boolean }>;
+        if (!triageRelations?.exists) {
+          throw new ForbiddenException(
+            'Triage is unavailable with your current Inbox access',
+          );
+        }
+        const responseEvidencePredicate = triageRelations.replyEvidenceReady
+          ? `EXISTS (
+      SELECT 1 FROM core."myahCampaignReplyEvidence" evidence
+      JOIN "${workspaceSchemaName}"."messageChannelMessageAssociation" association
+        ON association."messageId"=message.id
+       AND association."messageChannelId"=evidence."messageChannelId"
+       AND association."deletedAt" IS NULL AND association.direction='INCOMING'
+      WHERE evidence."workspaceId"=$1 AND evidence."inboundMessageId"=message.id
+    )`
+          : 'FALSE';
+        const emailSource = exactContact
+          ? 'visible_email_messages'
+          : 'response_email_messages';
         const sql = `WITH request_scope AS (
   SELECT $1::uuid AS "workspaceId", $2::uuid AS "userWorkspaceId"
 ),
@@ -546,6 +575,12 @@ visible_email_messages AS (
   WHERE message."receivedAt" IS NOT NULL
     AND message.visibility <> ${hidden}
 ),
+response_email_messages AS (
+  SELECT message.*
+  FROM visible_email_messages message
+  WHERE message.direction = 'INCOMING'
+    AND ${responseEvidencePredicate}
+),
 latest_email_by_thread AS (
   SELECT DISTINCT ON (message."messageThreadId")
     message.id,
@@ -566,14 +601,14 @@ latest_email_by_thread AS (
       WHEN message.visibility = ${full} THEN message.text
       ELSE NULL
     END AS "searchBody"
-  FROM visible_email_messages message
+  FROM ${emailSource} message
   ORDER BY message."messageThreadId", message."receivedAt" DESC, message.id DESC
 ),
 latest_inbound_email_by_thread AS (
   SELECT DISTINCT ON (message."messageThreadId")
     message."messageThreadId",
     message."receivedAt" AS "inboundAt"
-  FROM visible_email_messages message
+  FROM ${emailSource} message
   WHERE message.direction = 'INCOMING'
   ORDER BY message."messageThreadId", message."receivedAt" DESC, message.id DESC
 ),
@@ -885,28 +920,6 @@ FROM filtered_total
 CROSS JOIN triage_capability
 LEFT JOIN paged_contacts ON TRUE
 ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderingKey" DESC NULLS LAST`;
-        const dataSource =
-          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-
-        // The private triage relations are provisioned by the 2.20 command,
-        // whose marker row is written last. Without them the triage CTEs above
-        // cannot be referenced at all, so fail closed with the same generic
-        // response instead of surfacing a raw SQL error during a partial
-        // upgrade. The identifier is derived from the internal workspace UUID
-        // and bound as a parameter here.
-        const [triageRelations] = (await dataSource.query(
-          'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
-          undefined,
-          { shouldBypassPermissionChecks: true },
-        )) as Array<{ exists: boolean }>;
-
-        if (!triageRelations?.exists) {
-          throw new ForbiddenException(
-            'Triage is unavailable with your current Inbox access',
-          );
-        }
-
         const rows = await dataSource.query<ContactRaw[]>(
           sql,
           parameters,

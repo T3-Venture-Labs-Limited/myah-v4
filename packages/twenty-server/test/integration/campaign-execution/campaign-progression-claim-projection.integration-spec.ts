@@ -451,6 +451,7 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
       progressionRoutes as never,
       dispatch,
       { reconcile: jest.fn(async () => 'PROJECTED') } as never,
+      { reconcilePendingMessageInTransaction: jest.fn() } as never,
     );
     const [before] = await dataSource.query(
       `SELECT "claimedAt","slotAt","unknownAfter","localDate" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
