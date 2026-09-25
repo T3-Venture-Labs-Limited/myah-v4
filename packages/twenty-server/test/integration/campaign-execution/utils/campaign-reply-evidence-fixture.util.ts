@@ -220,6 +220,14 @@ export const seedCampaignFixture = async (
       recipient,
     ],
   );
+  // Model an inbound provider timestamp after the eventual accepted send even
+  // when the receipt transaction commits after the import transaction.
+  // pi-lens-ignore: sql-injection, no-sql-in-code
+  await runner.query(
+    `INSERT INTO "${schemaName}".message (id,"messageThreadId","receivedAt",subject,"isDraft")
+     VALUES ($1,$2,now()+interval '1 day','reply',false)`,
+    [ids.inbound, ids.inboundThread],
+  );
   await runner.query(
     `INSERT INTO core."outboundEmailAttempt"
     ("attemptId","workspaceId",source,"attemptState","capacityState","connectedAccountId","messageChannelId",
@@ -262,6 +270,10 @@ export const cleanupCampaignFixture = async (
     `DELETE FROM core."myahCampaignReplyEvidence" WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
     [workspaceId, ids.inbound],
   );
+  // pi-lens-ignore: sql-injection, no-sql-in-code
+  await runner.query(`DELETE FROM "${schemaName}".message WHERE id=$1`, [
+    ids.inbound,
+  ]);
   // pi-lens-ignore: sql-injection, no-sql-in-code
   await runner.query(
     `DELETE FROM "${schemaName}"."messageThread" WHERE id=$1`,

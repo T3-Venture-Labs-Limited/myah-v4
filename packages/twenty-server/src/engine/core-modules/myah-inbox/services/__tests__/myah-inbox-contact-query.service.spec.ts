@@ -814,6 +814,14 @@ describe('MyahInboxContactQueryService', () => {
     expect(sql).toContain('response_email_messages AS');
     expect(sql).toContain('core."myahCampaignReplyEvidence" evidence');
     expect(sql).toContain('evidence."inboundMessageId"=message.id');
+    expect(sql).toContain('readable_campaigns AS');
+    expect(sql).toContain(
+      'JOIN readable_campaigns campaign ON campaign.id=evidence."campaignId"',
+    );
+    expect(sql).toContain(
+      'JOIN readable_creators evidence_creator ON evidence_creator.id=evidence."creatorId"',
+    );
+    expect(sql).toContain('evidence_thread."creatorId"=evidence_creator.id');
     expect(sql).toContain("message.direction = 'INCOMING'");
     expect(sql).toMatch(
       /latest_email_by_thread AS[\s\S]*?FROM response_email_messages message/,

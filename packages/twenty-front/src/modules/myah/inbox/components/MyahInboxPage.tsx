@@ -844,11 +844,15 @@ const MyahInboxPageContent = ({
     try {
       const result = await contacts.ambientRefresh(selection.contactId);
       if (
-        result.status !== 'success' ||
         workspaceRef.current !== workspaceId ||
         selectionGenerationRef.current !== generation
       )
         return;
+      if (result.status !== 'success') {
+        if (result.status === 'failed' && selection.channel === 'EMAIL')
+          email.purge();
+        return;
+      }
       if (selection.contactId && !result.selectedContact) {
         invalidateWorkspace(workspaceId);
         setRetainedContact(null);
@@ -872,11 +876,18 @@ const MyahInboxPageContent = ({
           MYAH_INBOX_FULL_REAUTHORIZATION_MS
       )
         return;
+      if (selection.channel === 'EMAIL' && !(await email.ambientRefresh())) {
+        // A busy or failed history read did not complete authorization.
+        fullReauthorizationRef.current = {
+          contactId: selection.contactId,
+          at: 0,
+        };
+        return;
+      }
       fullReauthorizationRef.current = {
         contactId: selection.contactId,
         at: now,
       };
-      if (selection.channel === 'EMAIL') await email.ambientRefresh();
       setDraftArrivalEpoch((epoch) => epoch + 1);
     } finally {
       ambientArrivalInFlightRef.current = false;

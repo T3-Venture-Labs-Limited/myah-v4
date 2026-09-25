@@ -17,10 +17,16 @@ describe('CampaignReplyService', () => {
       triageReady: true,
     },
     { tokens: [], classification: 'THREAD', triageReady: true },
+    {
+      tokens: [],
+      classification: 'THREAD',
+      triageReady: true,
+      skipProgression: true,
+    },
     { tokens: [], classification: 'THREAD', triageReady: false },
   ])(
     'records $classification accepted outreach evidence without ACTIVE progression (triage: $triageReady)',
-    async ({ tokens, classification, triageReady }) => {
+    async ({ tokens, classification, triageReady, skipProgression }) => {
       const progression = { terminalizeReplyInTransaction: jest.fn() };
       const query = jest.fn(
         async (sql: string, _params?: readonly unknown[]) => {
@@ -40,6 +46,7 @@ describe('CampaignReplyService', () => {
                 attemptId: 'attempt-a',
                 creatorId: 'creator-a',
                 providerHeaderMessageId: '<sent@example.com>',
+                afterAcceptance: true,
               },
             ];
           return [];
@@ -51,6 +58,7 @@ describe('CampaignReplyService', () => {
         ...input,
         inReplyToTokens: tokens,
         coveredCreatorIds: ['creator-a'],
+        skipProgression,
       };
       const lifecycle = {
         withPreparedSourceMutationInTransaction: jest.fn(async ({ mutate }) =>
@@ -97,6 +105,9 @@ describe('CampaignReplyService', () => {
         ),
       ).toBe(true);
       expect(progression.terminalizeReplyInTransaction).not.toHaveBeenCalled();
+      expect(
+        query.mock.calls.some(([sql]) => sql.includes("e.state='ACTIVE'")),
+      ).toBe(!skipProgression);
       expect(
         query.mock.calls.some(
           ([sql]) =>
@@ -173,6 +184,9 @@ describe('CampaignReplyService', () => {
     expect(pendingInsert?.[1]).toContain('creator@example.com');
     expect(pendingInsert?.[1]).toContainEqual(['<sent-three@example.com>']);
     expect(pendingInsert?.[1]).toContainEqual(['attempt-three']);
+    expect(
+      query.mock.calls.some(([sql]) => sql.includes("e.state='ACTIVE'")),
+    ).toBe(false);
   });
 
   it('does not freeze an older enrollment as THREAD evidence while an unresolved follow-up could belong to another enrollment', async () => {
@@ -227,6 +241,7 @@ describe('CampaignReplyService', () => {
         enrollmentId: 'enrollment-a',
         attemptId: 'attempt-a',
         providerHeaderMessageId: '<a>',
+        afterAcceptance: true,
       },
       {
         workspaceId: input.workspaceId,
@@ -234,6 +249,7 @@ describe('CampaignReplyService', () => {
         enrollmentId: 'enrollment-a',
         attemptId: 'attempt-b',
         providerHeaderMessageId: '<b>',
+        afterAcceptance: true,
       },
     ];
     const query = jest.fn(async (sql: string, _params?: readonly unknown[]) =>
@@ -293,6 +309,7 @@ describe('CampaignReplyService', () => {
           enrollmentId: 'enrollment-a',
           attemptId: 'accepted-a',
           providerHeaderMessageId: '<a>',
+          afterAcceptance: true,
         },
       ],
       expectedClassification: 'THREAD',
@@ -306,12 +323,14 @@ describe('CampaignReplyService', () => {
           enrollmentId: 'enrollment-a',
           attemptId: 'accepted-a',
           providerHeaderMessageId: '<a>',
+          afterAcceptance: true,
         },
         {
           campaignId: 'campaign-a',
           enrollmentId: 'enrollment-a',
           attemptId: 'accepted-b',
           providerHeaderMessageId: '<b>',
+          afterAcceptance: false,
         },
       ],
       expectedClassification: 'EXACT',
@@ -325,12 +344,14 @@ describe('CampaignReplyService', () => {
           enrollmentId: 'enrollment-a',
           attemptId: 'accepted-a',
           providerHeaderMessageId: '<a>',
+          afterAcceptance: true,
         },
         {
           campaignId: 'campaign-b',
           enrollmentId: 'enrollment-b',
           attemptId: 'accepted-b',
           providerHeaderMessageId: '<b>',
+          afterAcceptance: false,
         },
       ],
       expectedClassification: null,

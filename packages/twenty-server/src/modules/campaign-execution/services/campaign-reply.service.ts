@@ -170,6 +170,7 @@ export class CampaignReplyService {
       );
 
       const [state] = rows(
+        // pi-lens-ignore: sql-injection, no-sql-in-code
         await runner.query(
           `SELECT ev."classification", EXISTS (
            SELECT 1 FROM core."outboundEmailAttempt" a
@@ -184,12 +185,33 @@ export class CampaignReplyService {
            SELECT count(*)::int FROM (
              SELECT DISTINCT a."campaignId",a."enrollmentId"
                FROM core."outboundEmailAttempt" a
+               JOIN "${workspaceSchema}".message inbound
+                 ON inbound.id=p."messageId" AND inbound."messageThreadId"=p."messageThreadId"
+                AND inbound."deletedAt" IS NULL
               WHERE a."workspaceId"=p."workspaceId" AND a."messageChannelId"=p."messageChannelId"
                 AND a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='ACCEPTED'
                 AND a."resolvedThreadExternalId"=p."threadExternalId"
                 AND a."normalizedRecipient"=p."normalizedSender"
            ) acceptedGroups
-         ) AS "acceptedGroupCount"
+         ) AS "acceptedGroupCount", EXISTS (
+           SELECT 1 FROM core."outboundEmailAttempt" a
+           JOIN "${workspaceSchema}".message inbound
+             ON inbound.id=p."messageId" AND inbound."messageThreadId"=p."messageThreadId"
+            AND inbound."deletedAt" IS NULL
+          WHERE a."workspaceId"=p."workspaceId" AND a."messageChannelId"=p."messageChannelId"
+            AND a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='ACCEPTED'
+            AND a."resolvedThreadExternalId"=p."threadExternalId"
+            AND a."normalizedRecipient"=p."normalizedSender"
+            AND (inbound."receivedAt">=a."providerAcceptedAt"
+              OR (a."providerHeaderMessageId"=ANY(p."inReplyToHeaderMessageIds")
+                AND 1=(SELECT count(*) FROM core."outboundEmailAttempt" parent
+                  WHERE parent."workspaceId"=a."workspaceId"
+                    AND parent."messageChannelId"=a."messageChannelId"
+                    AND parent.source='CAMPAIGN_SEQUENCE' AND parent."attemptState"='ACCEPTED'
+                    AND parent."resolvedThreadExternalId"=a."resolvedThreadExternalId"
+                    AND parent."normalizedRecipient"=a."normalizedRecipient"
+                    AND parent."providerHeaderMessageId"=ANY(p."inReplyToHeaderMessageIds"))))
+         ) AS "hasEligibleAccepted"
            FROM core."myahCampaignReplyPending" p
            LEFT JOIN core."myahCampaignReplyEvidence" ev
              ON ev."workspaceId"=p."workspaceId" AND ev."inboundMessageId"=p."messageId"
@@ -201,7 +223,8 @@ export class CampaignReplyService {
         state?.hasUnresolved === false &&
         (state.classification === 'EXACT' ||
           state.classification === 'THREAD' ||
-          Number(state.acceptedGroupCount) !== 1)
+          Number(state.acceptedGroupCount) !== 1 ||
+          state.hasEligibleAccepted === false)
       ) {
         await runner.query(
           `DELETE FROM core."myahCampaignReplyPending" WHERE "workspaceId"=$1 AND "messageId"=$2`,
@@ -239,6 +262,7 @@ export class CampaignReplyService {
       inboundMessageThreadId: string;
       inReplyToTokens?: string[];
       coveredCreatorIds?: string[];
+      skipProgression?: boolean;
     },
     manager: WorkspaceEntityManager,
   ): Promise<void> {
@@ -247,6 +271,8 @@ export class CampaignReplyService {
       throw new Error('Campaign reply reconciliation requires active manager');
     const from = input.fromHandle.trim().toLowerCase();
     if (!from || !input.threadExternalId.trim()) return;
+    // UUID-derived schema identifier; message timestamps are provider data.
+    const schemaName = getWorkspaceSchemaName(input.workspaceId);
 
     // Older workspaces continue importing mail until the additive schema is applied.
     const evidenceReady =
@@ -255,6 +281,7 @@ export class CampaignReplyService {
           `SELECT to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "exists"`,
         ),
       )[0]?.exists === true;
+    let exactParentAttemptId: string | null = null;
     if (evidenceReady) {
       const parentTokens = [
         ...new Set(
@@ -288,6 +315,9 @@ export class CampaignReplyService {
         ),
       );
       if (unresolved.length > 0) {
+        // Historical backfill has evidence authority only: a pending row would
+        // later replay without skipProgression and advance live Campaign state.
+        if (input.skipProgression) return;
         await runner.query(
           `INSERT INTO core."myahCampaignReplyPending" (
              "workspaceId","messageId","messageThreadId","messageChannelId",
@@ -326,12 +356,19 @@ export class CampaignReplyService {
             unresolved.length > 64,
           ],
         );
+        // Defer both Inbox attribution and ACTIVE reply progression until all
+        // plausible sends settle; replay owns the eventual decision.
+        return;
       }
       const accepted = rows(
+        // pi-lens-ignore: sql-injection, no-sql-in-code
         await runner.query(
-          `SELECT a."workspaceId",a."campaignId",a."enrollmentId",a."attemptId",a."providerHeaderMessageId",e."creatorId"
+          `SELECT a."workspaceId",a."campaignId",a."enrollmentId",a."attemptId",a."providerHeaderMessageId",e."creatorId",
+              inbound."receivedAt">=a."providerAcceptedAt" AS "afterAcceptance"
            FROM core."outboundEmailAttempt" a
            JOIN core."campaignEnrollment" e ON e.id=a."enrollmentId" AND e."workspaceId"=a."workspaceId"
+           JOIN "${schemaName}".message inbound ON inbound.id=$5 AND inbound."messageThreadId"=$6
+             AND inbound."deletedAt" IS NULL
           WHERE a."workspaceId"=$1 AND a."messageChannelId"=$2 AND a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='ACCEPTED'
             AND a."resolvedThreadExternalId"=$3 AND a."normalizedRecipient"=$4
           FOR UPDATE OF a,e`,
@@ -340,6 +377,8 @@ export class CampaignReplyService {
             input.messageChannelId,
             input.threadExternalId,
             from,
+            input.inboundEvidenceId,
+            input.inboundMessageThreadId,
           ],
         ),
       );
@@ -348,19 +387,20 @@ export class CampaignReplyService {
           (attempt) => `${attempt.campaignId}:${attempt.enrollmentId}`,
         ),
       );
-      if (
-        unresolved.length === 0 &&
-        candidates.size === 1 &&
-        accepted.length > 0
-      ) {
-        const parentTokenSet = new Set(parentTokens);
-        const parents = accepted.filter(
-          (attempt) =>
-            typeof attempt.providerHeaderMessageId === 'string' &&
-            parentTokenSet.has(attempt.providerHeaderMessageId.trim()),
-        );
-        const exactParent = parents.length === 1 ? parents[0] : null;
-        const attempt = accepted[0];
+      const parentTokenSet = new Set(parentTokens);
+      const parents = accepted.filter(
+        (attempt) =>
+          typeof attempt.providerHeaderMessageId === 'string' &&
+          parentTokenSet.has(attempt.providerHeaderMessageId.trim()),
+      );
+      // An exact parent proves the send preceded this reply even if recovery
+      // recorded its ACCEPTED receipt after the provider's inbound timestamp.
+      const exactParent = parents.length === 1 ? parents[0] : null;
+      exactParentAttemptId = exactParent ? String(exactParent.attemptId) : null;
+      const attempt =
+        exactParent ??
+        accepted.find((candidate) => candidate.afterAcceptance === true);
+      if (candidates.size === 1 && attempt) {
         await runner.query(
           `INSERT INTO core."myahCampaignReplyEvidence" (
              "workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification","matchedAttemptId"
@@ -431,22 +471,31 @@ export class CampaignReplyService {
           );
         }
       }
+      if (candidates.size !== 1 || !attempt) return;
     }
+    if (input.skipProgression) return;
     const matches = rows(
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await runner.query(
         `SELECT a."workspaceId",a."campaignId",a."enrollmentId",a."authorizationId",auth.generation AS "authorizationGeneration",act.id AS "activationId",a."workflowVersionId",a."occurrenceId",a."connectedAccountId",a."messageChannelId",a."attemptId",e."campaignCreatorId",e."creatorId"
          FROM core."outboundEmailAttempt" a
          JOIN core."campaignEnrollment" e ON e.id=a."enrollmentId" AND e."workspaceId"=a."workspaceId" AND e.state='ACTIVE'
          JOIN core."campaignSequenceAuthorization" auth ON auth."authorizationId"=a."authorizationId" AND auth."workspaceId"=a."workspaceId" AND auth."campaignId"=a."campaignId"
          JOIN core."campaignActivation" act ON act."workspaceId"=a."workspaceId" AND act."campaignId"=a."campaignId" AND act."authorizationId"=a."authorizationId" AND act."authorizationGeneration"=auth.generation AND act."workflowVersionId"=a."workflowVersionId"
+         JOIN "${schemaName}".message inbound ON inbound.id=$5 AND inbound."messageThreadId"=$6
+           AND inbound."deletedAt" IS NULL
         WHERE a."workspaceId"=$1 AND a."messageChannelId"=$2 AND a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='ACCEPTED'
           AND a."resolvedThreadExternalId"=$3 AND a."normalizedRecipient"=$4
+          AND (inbound."receivedAt">=a."providerAcceptedAt" OR a."attemptId"=$7)
         FOR UPDATE OF a,e,auth,act`,
         [
           input.workspaceId,
           input.messageChannelId,
           input.threadExternalId,
           from,
+          input.inboundEvidenceId,
+          input.inboundMessageThreadId,
+          exactParentAttemptId,
         ],
       ),
     );
@@ -469,7 +518,6 @@ export class CampaignReplyService {
     );
     if (result.status === 'EXACT_REPLAY') return;
     // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
-    const schemaName = getWorkspaceSchemaName(input.workspaceId);
     const stageUpdates = rows(
       // pi-lens-ignore: sql-injection, no-sql-in-code
       await runner.query(

@@ -50,6 +50,10 @@ import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
+import {
   MessageVisibilityAccess,
   MessageVisibilityPolicyService,
 } from 'src/modules/messaging/common/query-hooks/message/message-visibility-policy.service';
@@ -418,6 +422,24 @@ export class MyahInboxContactQueryService {
           readableSocialConversationsSql,
           readableSocialMessagesSql,
         ] = permissionQueries.map(appendPermissionQuery);
+        let readableCampaignsSql: string;
+        try {
+          readableCampaignsSql = appendPermissionQuery(
+            serializePermissionQuery(
+              campaignRepository
+                .createQueryBuilder('campaign')
+                .select('campaign.id', 'id')
+                .where('campaign."deletedAt" IS NULL'),
+            ),
+          );
+        } catch (error) {
+          if (
+            !(error instanceof PermissionsException) ||
+            error.code !== PermissionsExceptionCode.PERMISSION_DENIED
+          )
+            throw error;
+          readableCampaignsSql = 'SELECT NULL::uuid AS id WHERE FALSE';
+        }
         const addParameter = (value: unknown): string => {
           parameters.push(value);
 
@@ -521,6 +543,10 @@ export class MyahInboxContactQueryService {
         const responseEvidencePredicate = triageRelations.replyEvidenceReady
           ? `EXISTS (
       SELECT 1 FROM core."myahCampaignReplyEvidence" evidence
+      JOIN readable_campaigns campaign ON campaign.id=evidence."campaignId"
+      JOIN readable_creators evidence_creator ON evidence_creator.id=evidence."creatorId"
+      JOIN readable_threads evidence_thread ON evidence_thread.id=message."messageThreadId"
+        AND evidence_thread."creatorId"=evidence_creator.id
       JOIN "${workspaceSchemaName}"."messageChannelMessageAssociation" association
         ON association."messageId"=message.id
        AND association."messageChannelId"=evidence."messageChannelId"
@@ -538,6 +564,7 @@ readable_messages AS (${readableMessagesSql}),
 readable_participants AS (${readableParticipantsSql}),
 readable_threads AS (${readableThreadsSql}),
 readable_creators AS (${readableCreatorsSql}),
+readable_campaigns AS (${readableCampaignsSql}),
 readable_workspace_members AS (${readableWorkspaceMembersSql}),
 readable_social_conversations AS (${readableSocialConversationsSql}),
 readable_social_messages AS (${readableSocialMessagesSql}),

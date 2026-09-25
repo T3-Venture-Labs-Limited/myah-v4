@@ -61,7 +61,7 @@ export const buildMyahInboxEmailReadQuery = (
 
   return {
     parameters,
-    sql: `WITH ${scope.sql},
+    sql: `WITH RECURSIVE ${scope.sql},
 clock AS (SELECT COALESCE(${cutoff}::timestamptz, statement_timestamp()) AS at, ${threadId}::uuid AS "targetThreadId"),
 promotable_threads AS (
   SELECT recorded."inboundMessageId" AS id, MIN(exact."matchedAttemptId"::text) AS "attemptId"
@@ -83,7 +83,7 @@ promotable_threads AS (
   HAVING COUNT(DISTINCT exact."matchedAttemptId")=1
 ),
 direct_groups AS (
-  SELECT evidence."inboundMessageId" AS id, evidence."messageThreadId",
+  SELECT evidence."inboundMessageId" AS id, evidence."messageThreadId", evidence."messageChannelId",
     COALESCE(evidence."projectedMessageId", promoted_attempt."projectedMessageId") AS "projectedMessageId",
     CASE WHEN evidence.classification='EXACT' AND evidence."matchedAttemptId" IS NOT NULL
       THEN 'attempt:' || evidence."matchedAttemptId"::text
@@ -92,6 +92,35 @@ direct_groups AS (
   FROM reply_evidence evidence
   LEFT JOIN promotable_threads promoted ON promoted.id=evidence."inboundMessageId"
   LEFT JOIN accepted_outreach promoted_attempt ON promoted_attempt."attemptId"::text=promoted."attemptId"
+),
+inbox_reply_candidates AS (
+  SELECT sent.id, sent."messageThreadId", sent."messageChannelId", link."recordId" AS "parentId"
+  FROM authorized_email sent
+  JOIN core."actionExecutionReceipt" receipt ON receipt."workspaceId"=sent."workspaceId"
+    AND receipt.state='SENT' AND receipt."providerMessageId"=sent."headerMessageId"
+    AND (receipt."providerExternalMessageId" IS NULL OR receipt."providerExternalMessageId"=sent."messageExternalId")
+  JOIN core."actionApprovalBinding" binding ON binding.id=receipt."actionApprovalBindingId"
+    AND binding."workspaceId"=sent."workspaceId" AND binding."actionName"='send_inbox_reply'
+  JOIN core."actionApprovalBindingEvidenceLink" target ON target."actionApprovalBindingId"=binding.id
+    AND target.role IN ('draft','delivery_target') AND target."recordId"=sent."messageThreadId"
+  JOIN core."actionApprovalBindingEvidenceLink" link ON link."actionApprovalBindingId"=binding.id
+    AND link.role='thread_parent'
+  WHERE sent.direction='OUTGOING' AND sent."headerMessageId" IS NOT NULL
+),
+inbox_reply_paths AS (
+  SELECT reply.id, reply."messageThreadId", reply."messageChannelId", parent."anchorKey"
+  FROM inbox_reply_candidates reply
+  JOIN direct_groups parent ON parent.id=reply."parentId"
+    AND parent."messageThreadId"=reply."messageThreadId" AND parent."messageChannelId"=reply."messageChannelId"
+  UNION
+  SELECT reply.id, reply."messageThreadId", reply."messageChannelId", parent."anchorKey"
+  FROM inbox_reply_candidates reply
+  JOIN inbox_reply_paths parent ON parent.id=reply."parentId"
+    AND parent."messageThreadId"=reply."messageThreadId" AND parent."messageChannelId"=reply."messageChannelId"
+),
+inbox_reply_groups AS (
+  SELECT id, MIN("anchorKey") AS "anchorKey" FROM inbox_reply_paths
+  GROUP BY id HAVING COUNT(DISTINCT "anchorKey")=1
 ),
 root_candidates AS (
   SELECT COALESCE(parent.id, inbound.id) AS id, direct."messageThreadId",
@@ -120,6 +149,8 @@ current_roots AS (
 message_groups AS (
   SELECT message.id, message."messageThreadId", message."receivedAt", message."createdAt",
     CASE WHEN direct.id IS NOT NULL THEN direct."anchorKey"
+      WHEN inbox_reply.id IS NOT NULL THEN inbox_reply."anchorKey"
+      ${scope.responseCardsOnly ? `WHEN message.direction='OUTGOING' AND accepted."projectedMessageId" IS NULL THEN NULL` : ''}
       WHEN message.direction='INCOMING' AND EXISTS (
         SELECT 1 FROM direct_groups evidence WHERE evidence."messageThreadId"=message."messageThreadId"
       ) THEN NULL
@@ -137,6 +168,7 @@ message_groups AS (
           ORDER BY root."receivedAt", root."anchorKey" LIMIT 1)) END AS "anchorKey"
   FROM authorized_email message
   LEFT JOIN direct_groups direct ON direct.id=message.id
+  LEFT JOIN inbox_reply_groups inbox_reply ON inbox_reply.id=message.id
   LEFT JOIN accepted_outreach accepted ON accepted."projectedMessageId"=message.id
 ),
 metadata AS (
@@ -162,7 +194,7 @@ selected_roots AS (
     AND ${
       isCards
         ? `(${cardsFilter.replace(/"anchorKey"/g, 'roots."anchorKey"')} AND (${boundaryTimestamp}::timestamptz IS NULL OR (roots."receivedAt", roots."messageThreadId", roots."anchorKey") < (${boundaryTimestamp}::timestamptz, ${boundaryThreadId}::uuid, ${boundaryId}::text)))`
-        : `roots."messageThreadId" = COALESCE(${threadId}::uuid, (SELECT "messageThreadId" FROM authorized_email WHERE id = ${messageId}::uuid)) AND ((${messageId}::uuid IS NOT NULL AND roots."anchorKey"=(SELECT "anchorKey" FROM message_groups WHERE id=${messageId}::uuid)) OR (${messageId}::uuid IS NULL AND roots."anchorKey"=COALESCE(${anchorKey}::text, 'legacy:' || ${threadId}::text)))`
+        : `${selection.mode === 'location' && scope.responseCardsOnly ? `roots.${cardsFilter} AND ` : ''}roots."messageThreadId" = COALESCE(${threadId}::uuid, (SELECT "messageThreadId" FROM authorized_email WHERE id = ${messageId}::uuid)) AND ((${messageId}::uuid IS NOT NULL AND roots."anchorKey"=(SELECT "anchorKey" FROM message_groups WHERE id=${messageId}::uuid)) OR (${messageId}::uuid IS NULL AND roots."anchorKey"=COALESCE(${anchorKey}::text, 'legacy:' || ${threadId}::text)))`
     }
   ORDER BY roots."receivedAt" DESC, roots."messageThreadId" DESC, roots."anchorKey" DESC LIMIT ${isCards ? 3 : 1}
 ),

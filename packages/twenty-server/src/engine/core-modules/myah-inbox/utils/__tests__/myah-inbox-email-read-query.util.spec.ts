@@ -77,7 +77,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
         '2026-09-02T00:00:00Z'::timestamptz + i * interval '1 microsecond',
         '2026-08-01T00:00:00Z', 'reply', 'reply body', 'FULL', 'INCOMING'
       FROM generate_series(1,200) i`);
-    await client.query(`ALTER TABLE inbox_email_fixture ADD "deletedAt" timestamptz, ADD "isDraft" boolean DEFAULT FALSE, ADD readable boolean DEFAULT TRUE;
+    await client.query(`ALTER TABLE inbox_email_fixture ADD "deletedAt" timestamptz, ADD "isDraft" boolean DEFAULT FALSE, ADD readable boolean DEFAULT TRUE, ADD "headerMessageId" text;
       CREATE TEMP TABLE inbox_thread_fixture ON COMMIT DROP AS SELECT DISTINCT "messageThreadId" AS id, '00000000-0000-4000-8000-000000000050'::uuid AS "creatorId", NULL::uuid AS "myahCampaignId", NULL::timestamptz AS "deletedAt", TRUE AS readable FROM inbox_email_fixture;
       CREATE TEMP TABLE inbox_context_fixture (id uuid, name text, "deletedAt" timestamptz, readable boolean DEFAULT TRUE) ON COMMIT DROP;
       INSERT INTO inbox_context_fixture (id, name) VALUES ('00000000-0000-4000-8000-000000000050','Contact'), ('00000000-0000-4000-8000-000000000051','Member');
@@ -99,7 +99,10 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
         source text NOT NULL DEFAULT 'CAMPAIGN_SEQUENCE'
       ) ON COMMIT DROP;
       CREATE TEMP TABLE inbox_account_fixture (id uuid, "workspaceId" uuid, "userWorkspaceId" uuid) ON COMMIT DROP;
-      CREATE TEMP TABLE inbox_association_fixture ON COMMIT DROP AS SELECT id, id AS "messageId", '00000000-0000-4000-8000-000000000052'::uuid AS "messageChannelId", direction, NULL::timestamptz AS "deletedAt" FROM inbox_email_fixture;
+      CREATE TEMP TABLE inbox_association_fixture ON COMMIT DROP AS SELECT id, id AS "messageId", '00000000-0000-4000-8000-000000000052'::uuid AS "messageChannelId", direction, NULL::timestamptz AS "deletedAt", NULL::text AS "messageExternalId" FROM inbox_email_fixture;
+      CREATE TEMP TABLE inbox_binding_fixture (id uuid, "workspaceId" uuid, "actionName" text) ON COMMIT DROP;
+      CREATE TEMP TABLE inbox_receipt_fixture ("workspaceId" uuid, "actionApprovalBindingId" uuid, state text, "providerMessageId" text, "providerExternalMessageId" text) ON COMMIT DROP;
+      CREATE TEMP TABLE inbox_binding_link_fixture ("actionApprovalBindingId" uuid, role text, "recordId" uuid) ON COMMIT DROP;
     `);
   }, 15000);
   beforeEach(async () => {
@@ -195,6 +198,10 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
               /"workspace_[^"]+"\."messageChannelMessageAssociation"/g,
               'pg_temp.inbox_association_fixture',
             )
+            .replace(
+              /"workspace_[^"]+"\."message"/g,
+              'pg_temp.inbox_email_fixture',
+            )
             .replace(/core\."messageChannel"/g, 'pg_temp.inbox_channel_fixture')
             .replace(
               /core\."connectedAccount"/g,
@@ -204,9 +211,27 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
               /core\."myahCampaignReplyEvidence"/g,
               'pg_temp.inbox_reply_evidence_fixture',
             )
+            // This fixture's linked Creator is fixed; the real GraphQL suite
+            // covers evidence-Creator mismatch against the full core table.
+            .replace(
+              /ev\."creatorId"/g,
+              "'00000000-0000-4000-8000-000000000050'::uuid",
+            )
             .replace(
               /core\."outboundEmailAttempt"/g,
               'pg_temp.inbox_attempt_fixture',
+            )
+            .replace(
+              /core\."actionExecutionReceipt"/g,
+              'pg_temp.inbox_receipt_fixture',
+            )
+            .replace(
+              /core\."actionApprovalBindingEvidenceLink"/g,
+              'pg_temp.inbox_binding_link_fixture',
+            )
+            .replace(
+              /core\."actionApprovalBinding"/g,
+              'pg_temp.inbox_binding_fixture',
             );
           return (await client.query(fixtureSql, parameters)).rows;
         },
@@ -248,6 +273,33 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     expect(explicit.card?.anchorKey).toBe(`legacy:${threadId}`);
   });
 
+  it('withholds a response card when its Campaign is not readable', async () => {
+    const visible = serviceFixture(new Set(), true);
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,$4,$5)`,
+      [
+        visible.request.workspace.id,
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000000052',
+        '00000000-0000-4000-8000-000000000056',
+        '00000000-0000-4000-8000-000000000057',
+      ],
+    );
+    expect(
+      (await visible.service.listCards(visible.request as never)).cards,
+    ).toHaveLength(1);
+    const denied = serviceFixture(new Set(['campaign.id']), true);
+    expect(
+      (await denied.service.listCards(denied.request as never)).cards,
+    ).toEqual([]);
+    await client.query(
+      `UPDATE inbox_context_fixture SET readable=FALSE WHERE id='00000000-0000-4000-8000-000000000056'`,
+    );
+    expect(
+      (await visible.service.listCards(visible.request as never)).cards,
+    ).toEqual([]);
+  });
+
   it('returns two stable accepted-send groups for two answered sends in one thread', async () => {
     const fixture = serviceFixture(new Set(), true);
     const workspaceId = fixture.request.workspace.id;
@@ -269,9 +321,9 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     );
     await client.query(
       `INSERT INTO inbox_reply_evidence_fixture VALUES
-         ($1,$2,$3,'EXACT',$4,NULL,NULL),
-         ($1,$5,$3,'EXACT',$4,NULL,NULL),
-         ($1,$6,$3,'EXACT',$7,NULL,NULL)`,
+         ($1,$2,$3,'EXACT',$4,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057'),
+         ($1,$5,$3,'EXACT',$4,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057'),
+         ($1,$6,$3,'EXACT',$7,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
       [
         workspaceId,
         '00000000-0000-4000-8000-000000000101',
@@ -289,7 +341,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       [answeredSecondId, threadId],
     );
     await client.query(
-      `INSERT INTO inbox_association_fixture VALUES ($1,$1,$2,'OUTGOING',NULL)`,
+      `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction,"deletedAt") VALUES ($1,$1,$2,'OUTGOING',NULL)`,
       [answeredSecondId, channelId],
     );
     await client.query(
@@ -297,6 +349,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       [answeredSecondId, attemptB],
     );
     const unansweredId = '00000000-0000-4000-8000-000000000406';
+    const unrelatedId = '00000000-0000-4000-8000-000000000408';
     const lateReplyId = '00000000-0000-4000-8000-000000000504';
     await client.query(
       `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction)
@@ -305,8 +358,17 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       [unansweredId, threadId, lateReplyId],
     );
     await client.query(
-      `INSERT INTO inbox_association_fixture VALUES ($1,$1,$2,'OUTGOING',NULL),($3,$3,$2,'INCOMING',NULL)`,
+      `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction,"deletedAt") VALUES ($1,$1,$2,'OUTGOING',NULL),($3,$3,$2,'INCOMING',NULL)`,
       [unansweredId, channelId, lateReplyId],
+    );
+    await client.query(
+      `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction)
+       VALUES ($1,$2,'2026-09-03T12:00:00Z','2026-08-01T00:00:00Z','unrelated send','body','FULL','OUTGOING')`,
+      [unrelatedId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction,"deletedAt") VALUES ($1,$1,$2,'OUTGOING',NULL)`,
+      [unrelatedId, channelId],
     );
     await client.query(
       `INSERT INTO inbox_attempt_fixture ("attemptId","workspaceId","messageChannelId","projectedMessageId","attemptState") VALUES ($1,$2,$3,$4,'ACCEPTED')`,
@@ -318,8 +380,80 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       ],
     );
     await client.query(
-      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
       [workspaceId, lateReplyId, channelId, attemptA],
+    );
+    const operatorReplyId = '00000000-0000-4000-8000-000000000409';
+    const bindingId = '00000000-0000-4000-8000-000000000601';
+    await client.query(
+      `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction,"headerMessageId")
+       VALUES ($1,$2,'2026-09-03T13:00:00Z','2026-08-01T00:00:00Z','Inbox reply','body','FULL','OUTGOING','<inbox-reply@example.com>')`,
+      [operatorReplyId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction,"messageExternalId")
+       VALUES ($1,$1,$2,'OUTGOING','inbox-reply-external')`,
+      [operatorReplyId, channelId],
+    );
+    await client.query(
+      `INSERT INTO inbox_binding_fixture VALUES ($1,$2,'send_inbox_reply')`,
+      [bindingId, workspaceId],
+    );
+    await client.query(
+      `INSERT INTO inbox_binding_link_fixture VALUES ($1,'thread_parent',$2),($1,'delivery_target',$3)`,
+      [bindingId, '00000000-0000-4000-8000-000000000101', threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_receipt_fixture VALUES ($1,$2,'SENT','<inbox-reply@example.com>','inbox-reply-external')`,
+      [workspaceId, bindingId],
+    );
+    const legacyOperatorReplyId = '00000000-0000-4000-8000-000000000410';
+    const legacyBindingId = '00000000-0000-4000-8000-000000000602';
+    await client.query(
+      `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction,"headerMessageId")
+       VALUES ($1,$2,'2026-09-03T13:01:00Z','2026-08-01T00:00:00Z','Legacy Inbox reply','body','FULL','OUTGOING','<inbox-reply-v1@example.com>')`,
+      [legacyOperatorReplyId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction,"messageExternalId")
+       VALUES ($1,$1,$2,'OUTGOING','inbox-reply-v1-external')`,
+      [legacyOperatorReplyId, channelId],
+    );
+    await client.query(
+      `INSERT INTO inbox_binding_fixture VALUES ($1,$2,'send_inbox_reply')`,
+      [legacyBindingId, workspaceId],
+    );
+    await client.query(
+      `INSERT INTO inbox_binding_link_fixture VALUES ($1,'thread_parent',$2),($1,'draft',$3)`,
+      [legacyBindingId, '00000000-0000-4000-8000-000000000101', threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_receipt_fixture VALUES ($1,$2,'SENT','<inbox-reply-v1@example.com>','inbox-reply-v1-external')`,
+      [workspaceId, legacyBindingId],
+    );
+    const followUpId = '00000000-0000-4000-8000-000000000411';
+    const followUpBindingId = '00000000-0000-4000-8000-000000000603';
+    await client.query(
+      `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction,"headerMessageId")
+       VALUES ($1,$2,'2026-09-03T13:02:00Z','2026-08-01T00:00:00Z','Inbox follow-up','body','FULL','OUTGOING','<inbox-follow-up@example.com>')`,
+      [followUpId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction,"messageExternalId")
+       VALUES ($1,$1,$2,'OUTGOING','inbox-follow-up-external')`,
+      [followUpId, channelId],
+    );
+    await client.query(
+      `INSERT INTO inbox_binding_fixture VALUES ($1,$2,'send_inbox_reply')`,
+      [followUpBindingId, workspaceId],
+    );
+    await client.query(
+      `INSERT INTO inbox_binding_link_fixture VALUES ($1,'thread_parent',$2),($1,'delivery_target',$3)`,
+      [followUpBindingId, operatorReplyId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_receipt_fixture VALUES ($1,$2,'SENT','<inbox-follow-up@example.com>','inbox-follow-up-external')`,
+      [workspaceId, followUpBindingId],
     );
     const head = await fixture.service.listCards(fixture.request as never);
     const answeredCards = head.cards.filter(
@@ -345,8 +479,20 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       snapshot: head.snapshot,
     } as never);
     expect(firstPage.anchorKey).toBe(`attempt:${attemptA}`);
+    expect(firstPage.messages.map((message) => message.id)).toContain(
+      operatorReplyId,
+    );
+    expect(firstPage.messages.map((message) => message.id)).toContain(
+      legacyOperatorReplyId,
+    );
+    expect(firstPage.messages.map((message) => message.id)).toContain(
+      followUpId,
+    );
     expect(firstPage.messages.map((message) => message.id)).not.toContain(
       '00000000-0000-4000-8000-000000000103',
+    );
+    expect(firstPage.messages.map((message) => message.id)).not.toContain(
+      unrelatedId,
     );
     const oldClient = await fixture.service.readCard({
       ...fixture.request,
@@ -367,6 +513,9 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     });
     expect(oldPage.messages.map((message) => message.id)).toContain(
       unansweredId,
+    );
+    expect(oldPage.messages.map((message) => message.id)).toContain(
+      unrelatedId,
     );
     await expect(
       fixture.service.readCard({
@@ -391,6 +540,13 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     expect(
       firstReply?.page.messages.map((message) => message.id),
     ).not.toContain('00000000-0000-4000-8000-000000000103');
+    expect(
+      await fixture.service.locateMessage({
+        ...fixture.request,
+        snapshot: head.snapshot,
+        messageId: unrelatedId,
+      } as never),
+    ).toBeNull();
     const laterReply = await fixture.service.locateMessage({
       ...fixture.request,
       snapshot: head.snapshot,
@@ -411,6 +567,80 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     } as never);
     expect(secondGroup.messages.map((message) => message.id)).not.toContain(
       unansweredId,
+    );
+    expect(secondGroup.messages.map((message) => message.id)).not.toContain(
+      operatorReplyId,
+    );
+    expect(secondGroup.messages.map((message) => message.id)).not.toContain(
+      legacyOperatorReplyId,
+    );
+    expect(secondGroup.messages.map((message) => message.id)).not.toContain(
+      followUpId,
+    );
+    const invalidProofs: Array<[string, unknown[]]> = [
+      [
+        `DELETE FROM inbox_receipt_fixture WHERE "actionApprovalBindingId"=$1`,
+        [bindingId],
+      ],
+      [
+        `UPDATE inbox_receipt_fixture SET state='FAILED' WHERE "actionApprovalBindingId"=$1`,
+        [bindingId],
+      ],
+      [
+        `UPDATE inbox_receipt_fixture SET "providerMessageId"='<other@example.com>' WHERE "actionApprovalBindingId"=$1`,
+        [bindingId],
+      ],
+      [
+        `UPDATE inbox_receipt_fixture SET "providerExternalMessageId"='other-external' WHERE "actionApprovalBindingId"=$1`,
+        [bindingId],
+      ],
+      [
+        `UPDATE inbox_binding_link_fixture SET "recordId"=$2 WHERE "actionApprovalBindingId"=$1 AND role='delivery_target'`,
+        [bindingId, '00000000-0000-4000-8000-000000000999'],
+      ],
+      [
+        `UPDATE inbox_association_fixture SET "messageChannelId"=$2 WHERE "messageId"=$1`,
+        [operatorReplyId, '00000000-0000-4000-8000-000000000999'],
+      ],
+    ];
+    await client.query('SAVEPOINT operator_proof');
+    for (const [sql, parameters] of invalidProofs) {
+      await client.query(sql, parameters);
+      const current = await fixture.service.listCards(fixture.request as never);
+      const currentPage = await fixture.service.listCardMessages({
+        ...fixture.request,
+        threadId,
+        anchorKey: `attempt:${attemptA}`,
+        snapshot: current.snapshot,
+      } as never);
+      expect(currentPage.messages.map((message) => message.id)).not.toContain(
+        operatorReplyId,
+      );
+      expect(currentPage.messages.map((message) => message.id)).not.toContain(
+        followUpId,
+      );
+      await client.query('ROLLBACK TO SAVEPOINT operator_proof');
+    }
+    await client.query('RELEASE SAVEPOINT operator_proof');
+    await client.query(
+      `UPDATE inbox_binding_link_fixture SET "recordId"=$1 WHERE "actionApprovalBindingId" IN ($2,$3) AND role='thread_parent'`,
+      ['00000000-0000-4000-8000-000000000999', bindingId, legacyBindingId],
+    );
+    const unproven = await fixture.service.listCards(fixture.request as never);
+    const unprovenPage = await fixture.service.listCardMessages({
+      ...fixture.request,
+      threadId,
+      anchorKey: `attempt:${attemptA}`,
+      snapshot: unproven.snapshot,
+    } as never);
+    expect(unprovenPage.messages.map((message) => message.id)).not.toContain(
+      operatorReplyId,
+    );
+    expect(unprovenPage.messages.map((message) => message.id)).not.toContain(
+      legacyOperatorReplyId,
+    );
+    expect(unprovenPage.messages.map((message) => message.id)).not.toContain(
+      followUpId,
     );
     await client.query(
       `UPDATE inbox_email_fixture SET readable=FALSE WHERE id=$1`,
@@ -452,7 +682,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       [attemptId, workspaceId, channelId, threadId],
     );
     await client.query(
-      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
       [
         workspaceId,
         '00000000-0000-4000-8000-000000000101',
@@ -582,7 +812,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       [attemptId, workspaceId, channelId],
     );
     await client.query(
-      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
       [
         workspaceId,
         '00000000-0000-4000-8000-000000000101',
@@ -596,7 +826,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       [pendingId, threadId],
     );
     await client.query(
-      `INSERT INTO inbox_association_fixture VALUES ($1,$1,$2,'INCOMING',NULL)`,
+      `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction,"deletedAt") VALUES ($1,$1,$2,'INCOMING',NULL)`,
       [pendingId, channelId],
     );
     const pending = await fixture.service.listCards(fixture.request as never);
@@ -613,7 +843,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       pendingId,
     );
     await client.query(
-      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
       [workspaceId, pendingId, channelId, attemptId],
     );
     await expect(
@@ -822,7 +1052,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     const replyId = '00000000-0000-4000-8000-000000000101';
     const threadId = '00000000-0000-4000-8000-000000000005';
     await client.query(
-      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,NULL,NULL)`,
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
       [fixture.request.workspace.id, replyId, channelId],
     );
     await client.query(
@@ -865,7 +1095,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
       [attemptId, workspaceId, channelId, threadId],
     );
     await client.query(
-      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,NULL,NULL)`,
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
       [
         workspaceId,
         '00000000-0000-4000-8000-000000000101',
@@ -905,7 +1135,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     const fixture = serviceFixture(new Set(), true);
     const threadId = '00000000-0000-4000-8000-000000000005';
     await client.query(
-      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,NULL,NULL)`,
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
       [
         fixture.request.workspace.id,
         '00000000-0000-4000-8000-000000000101',
@@ -1142,7 +1372,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     } = require('../myah-inbox-email-read-query.util');
     const query = buildMyahInboxEmailReadQuery(
       {
-        sql: `authorized_email AS (SELECT id, "messageThreadId", "receivedAt", "createdAt", visibility, direction FROM inbox_email_fixture),
+        sql: `authorized_email AS (SELECT id, "messageThreadId", "receivedAt", "createdAt", visibility, direction, NULL::uuid AS "workspaceId", NULL::uuid AS "messageChannelId", "headerMessageId", NULL::text AS "messageExternalId" FROM inbox_email_fixture),
         accepted_outreach AS (SELECT "projectedMessageId", "attemptId", "campaignId", "enrollmentId", "messageChannelId", "providerAcceptedAt" FROM inbox_attempt_fixture WHERE "attemptState"='ACCEPTED'),
         reply_evidence AS (SELECT evidence."inboundMessageId", inbound."messageThreadId", evidence.classification,
           evidence."matchedAttemptId", evidence."campaignId", evidence."enrollmentId", evidence."messageChannelId", attempt."projectedMessageId"
@@ -1169,6 +1399,18 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
         .replace(
           /core\."outboundEmailAttempt"/g,
           'pg_temp.inbox_attempt_fixture',
+        )
+        .replace(
+          /core\."actionExecutionReceipt"/g,
+          'pg_temp.inbox_receipt_fixture',
+        )
+        .replace(
+          /core\."actionApprovalBindingEvidenceLink"/g,
+          'pg_temp.inbox_binding_link_fixture',
+        )
+        .replace(
+          /core\."actionApprovalBinding"/g,
+          'pg_temp.inbox_binding_fixture',
         ),
       query.parameters,
     );

@@ -70,7 +70,7 @@ type Request = {
   variables: Record<string, unknown>;
   resolve: (data: Record<string, unknown>) => void;
   reject: (error: Error) => void;
-  partial: (data: Record<string, unknown>) => void;
+  partial: (data: Record<string, unknown>, errorMessage?: string) => void;
 };
 const setup = (strict = false) => {
   const requests: Request[] = [];
@@ -87,8 +87,8 @@ const setup = (strict = false) => {
               observer.complete();
             },
             reject: (error) => observer.error(error),
-            partial: (data) => {
-              observer.next({ data, errors: [new GraphQLError('Forbidden')] });
+            partial: (data, errorMessage = 'Forbidden') => {
+              observer.next({ data, errors: [new GraphQLError(errorMessage)] });
               observer.complete();
             },
           });
@@ -120,6 +120,15 @@ const respond = async (request: Request, data: Record<string, unknown>) => {
 };
 
 describe('useMyahInboxEmailHistory', () => {
+  it('does not report authorization complete after the history store is deactivated', async () => {
+    const { hook, requests } = setup();
+    await respond(requests[0], cards(['t9']));
+    const refresh = hook.result.current.ambientRefresh;
+    hook.unmount();
+    await expect(refresh()).resolves.toBe(false);
+    expect(requests).toHaveLength(1);
+  });
+
   it('projects each retained group independently when two sends share a native thread', async () => {
     const { hook, requests } = setup();
     const sibling = (anchorKey: string) => ({
@@ -192,17 +201,37 @@ describe('useMyahInboxEmailHistory', () => {
       myahInboxContactEmailCard: { snapshot: 'current', card: card('t9') },
     });
     await waitFor(() => expect(requests).toHaveLength(4));
-    await respond(requests[3], cards(['t9']));
+    await act(async () =>
+      requests[3].partial(
+        { myahInboxContactEmailCards: null },
+        'Inbox history changed; reload history',
+      ),
+    );
     await waitFor(() => expect(requests).toHaveLength(5));
-    // Older m1 lost access and no new mail arrived.
-    await respond(requests[4], {
-      myahInboxContactEmailCardMessages: page(['m2']),
-    });
+    await act(async () =>
+      requests[4].partial(
+        { myahInboxContactEmailCardMessages: null },
+        'Inbox history changed; reload history',
+      ),
+    );
     await waitFor(() => expect(requests).toHaveLength(6));
-    expect(requests[5].variables.messageId).toBe('m1');
-    await respond(requests[5], { myahInboxContactEmailMessageLocation: null });
+    await respond(requests[5], cards(['t9'], 'fresh'));
     await waitFor(() => expect(requests).toHaveLength(7));
-    await respond(requests[6], cards(['t9']));
+    // Older m1 lost access and no new mail arrived. Revalidate each loaded ID.
+    expect(requests[6].variables).toMatchObject({
+      messageId: 'm1',
+      snapshot: 'fresh',
+    });
+    await respond(requests[6], { myahInboxContactEmailMessageLocation: null });
+    await waitFor(() => expect(requests).toHaveLength(8));
+    expect(requests[7].variables.messageId).toBe('m2');
+    await respond(requests[7], {
+      myahInboxContactEmailMessageLocation: {
+        messageId: 'm2',
+        card: card('t9'),
+        page: page(['m2']),
+      },
+    });
     expect(hook.result.current.status).toBe('ready');
     expect(
       hook.result.current.windows.flatMap((window) =>
@@ -213,13 +242,268 @@ describe('useMyahInboxEmailHistory', () => {
     act(() => {
       void hook.result.current.ambientRefresh();
     });
-    await waitFor(() => expect(requests).toHaveLength(8));
-    await act(async () => requests[7].reject(new Error('Unavailable')));
+    await waitFor(() => expect(requests).toHaveLength(9));
+    await act(async () => requests[8].reject(new Error('Unavailable')));
     expect(hook.result.current).toMatchObject({
       status: 'needs-rebase',
       windows: [],
       segments: [],
     });
+  });
+
+  it('masks history on a non-snapshot GraphQL rejection during retained replay', async () => {
+    const { hook, requests } = setup();
+    await respond(requests[0], cards(['t9']));
+    act(() => {
+      void hook.result.current.ambientRefresh();
+    });
+    await waitFor(() => expect(requests).toHaveLength(2));
+    await respond(requests[1], {
+      myahInboxContactEmailCard: { snapshot: 'current', card: card('t9') },
+    });
+    await waitFor(() => expect(requests).toHaveLength(3));
+    await act(async () =>
+      requests[2].partial(
+        { myahInboxContactEmailCards: null },
+        'Inbox member or contact is not readable',
+      ),
+    );
+    expect(hook.result.current).toMatchObject({
+      status: 'needs-rebase',
+      segments: [],
+      windows: [],
+    });
+  });
+
+  it('relocates retained replies when a THREAD group promotes to an accepted-send group', async () => {
+    const { hook, requests } = setup();
+    const thread = { ...card('t9'), anchorKey: 'thread:t9' };
+    const exact = { ...thread, anchorKey: 'attempt:one' };
+    await respond(requests[0], {
+      myahInboxContactEmailCards: {
+        ...cards([]).myahInboxContactEmailCards,
+        cards: [thread],
+      },
+    });
+    act(() => {
+      void hook.result.current.openCard(
+        hook.result.current.segments[0].id,
+        't9',
+        thread.anchorKey,
+      );
+    });
+    await waitFor(() => expect(requests).toHaveLength(2));
+    await respond(requests[1], {
+      myahInboxContactEmailCardMessages: {
+        ...page(['m1']),
+        anchorKey: thread.anchorKey,
+      },
+    });
+    act(() => {
+      void hook.result.current.ambientRefresh();
+    });
+    await waitFor(() => expect(requests).toHaveLength(3));
+    await act(async () =>
+      requests[2].partial(
+        { myahInboxContactEmailCard: null },
+        'Inbox card is not readable',
+      ),
+    );
+    await waitFor(() => expect(requests).toHaveLength(4));
+    expect(requests[3].variables.snapshot).toBe('snapshot-1');
+    await act(async () =>
+      requests[3].partial(
+        { myahInboxContactEmailCards: null },
+        'Inbox history changed; reload history',
+      ),
+    );
+    await waitFor(() => expect(requests).toHaveLength(5));
+    await respond(requests[4], {
+      myahInboxContactEmailCards: {
+        ...cards([], 'current').myahInboxContactEmailCards,
+        cards: [exact],
+      },
+    });
+    await waitFor(() => expect(requests).toHaveLength(6));
+    expect(requests[5].variables.messageId).toBe('m1');
+    await respond(requests[5], {
+      myahInboxContactEmailMessageLocation: {
+        messageId: 'm1',
+        card: exact,
+        page: { ...page(['m1']), anchorKey: exact.anchorKey },
+      },
+    });
+    expect(hook.result.current.windows[0]).toMatchObject({
+      card: { anchorKey: 'attempt:one' },
+      pages: [{ messages: [{ id: 'm1' }] }],
+    });
+  });
+
+  it('keeps a loaded sibling card after another group promotes and invalidates the shared snapshot', async () => {
+    const { hook, requests } = setup();
+    const thread = { ...card('t9'), anchorKey: 'thread:t9' };
+    const exact = { ...thread, anchorKey: 'attempt:one' };
+    const sibling = { ...card('t5'), anchorKey: 'attempt:sibling' };
+    await respond(requests[0], {
+      myahInboxContactEmailCards: {
+        ...cards([]).myahInboxContactEmailCards,
+        cards: [thread, sibling],
+      },
+    });
+    const segmentId = hook.result.current.segments[0].id;
+    act(() => {
+      void hook.result.current.openCard(segmentId, 't9', thread.anchorKey);
+    });
+    await waitFor(() => expect(requests).toHaveLength(2));
+    await respond(requests[1], {
+      myahInboxContactEmailCardMessages: {
+        ...page(['m1']),
+        anchorKey: thread.anchorKey,
+      },
+    });
+    act(() => {
+      void hook.result.current.openCard(segmentId, 't5', sibling.anchorKey);
+    });
+    await waitFor(() => expect(requests).toHaveLength(3));
+    await respond(requests[2], {
+      myahInboxContactEmailCardMessages: {
+        ...page(['m8'], null, null, 't5'),
+        anchorKey: sibling.anchorKey,
+      },
+    });
+    act(() => {
+      void hook.result.current.ambientRefresh();
+    });
+    await waitFor(() => expect(requests).toHaveLength(5));
+    await act(async () =>
+      requests[3].partial(
+        { myahInboxContactEmailCard: null },
+        'Inbox card is not readable',
+      ),
+    );
+    await respond(requests[4], {
+      myahInboxContactEmailCard: { snapshot: 'current', card: sibling },
+    });
+    await waitFor(() => expect(requests).toHaveLength(6));
+    await act(async () =>
+      requests[5].partial(
+        { myahInboxContactEmailCards: null },
+        'Inbox history changed; reload history',
+      ),
+    );
+    await waitFor(() => expect(requests).toHaveLength(7));
+    // The stale fingerprint applies to every window, including unchanged B.
+    expect(requests[6].name).toBe('MyahInboxContactEmailCardMessages');
+    expect(requests[6].variables.snapshot).toBe('snapshot-1');
+    await act(async () =>
+      requests[6].partial(
+        { myahInboxContactEmailCardMessages: null },
+        'Inbox history changed; reload history',
+      ),
+    );
+    await waitFor(() => expect(requests).toHaveLength(8));
+    expect(requests[7].name).toBe('MyahInboxContactEmailCards');
+    expect(requests[7].variables.snapshot).toBeUndefined();
+    await respond(requests[7], {
+      myahInboxContactEmailCards: {
+        ...cards([], 'fresh').myahInboxContactEmailCards,
+        cards: [exact, sibling],
+      },
+    });
+    await waitFor(() => expect(requests).toHaveLength(9));
+    expect(requests[8].variables).toMatchObject({
+      messageId: 'm1',
+      snapshot: 'fresh',
+    });
+    await respond(requests[8], {
+      myahInboxContactEmailMessageLocation: {
+        messageId: 'm1',
+        card: exact,
+        page: { ...page(['m1']), anchorKey: exact.anchorKey },
+      },
+    });
+    await waitFor(() => expect(requests).toHaveLength(10));
+    expect(requests[9].variables).toMatchObject({
+      messageId: 'm8',
+      snapshot: 'fresh',
+    });
+    await respond(requests[9], {
+      myahInboxContactEmailMessageLocation: {
+        messageId: 'm8',
+        card: sibling,
+        page: {
+          ...page(['m8'], null, null, 't5'),
+          anchorKey: sibling.anchorKey,
+        },
+      },
+    });
+    expect(hook.result.current).toMatchObject({ status: 'ready' });
+    expect(hook.result.current.windows).toHaveLength(2);
+    expect(
+      hook.result.current.windows.map(({ card }) => card.anchorKey),
+    ).toEqual(['attempt:one', 'attempt:sibling']);
+    expect(
+      hook.result.current.windows.flatMap(({ pages }) =>
+        pages.flatMap(({ messages }) => messages.map(({ id }) => id)),
+      ),
+    ).toEqual(['m1', 'm8']);
+  });
+
+  it('retains an unopened older response card after its discovery segment goes stale', async () => {
+    const { hook, requests } = setup();
+    const thread = { ...card('t9'), anchorKey: 'thread:t9' };
+    const exact = { ...thread, anchorKey: 'attempt:one' };
+    const older = { ...card('t5'), anchorKey: 'attempt:older' };
+    await respond(requests[0], {
+      myahInboxContactEmailCards: {
+        ...cards([], 'snapshot-1', 'older-1').myahInboxContactEmailCards,
+        cards: [thread],
+      },
+    });
+    act(() => {
+      void hook.result.current.loadOlderCards(
+        hook.result.current.segments[0].id,
+      );
+    });
+    await waitFor(() => expect(requests).toHaveLength(2));
+    await respond(requests[1], {
+      myahInboxContactEmailCards: {
+        ...cards([], 'snapshot-1').myahInboxContactEmailCards,
+        cards: [older],
+      },
+    });
+    act(() => {
+      void hook.result.current.ambientRefresh();
+    });
+    await waitFor(() => expect(requests).toHaveLength(4));
+    await act(async () =>
+      requests[2].partial(
+        { myahInboxContactEmailCard: null },
+        'Inbox card is not readable',
+      ),
+    );
+    await respond(requests[3], {
+      myahInboxContactEmailCard: { snapshot: 'current', card: older },
+    });
+    await waitFor(() => expect(requests).toHaveLength(5));
+    await act(async () =>
+      requests[4].partial(
+        { myahInboxContactEmailCards: null },
+        'Inbox history changed; reload history',
+      ),
+    );
+    await waitFor(() => expect(requests).toHaveLength(6));
+    await respond(requests[5], {
+      myahInboxContactEmailCards: {
+        ...cards([], 'fresh', 'older-fresh').myahInboxContactEmailCards,
+        cards: [exact],
+      },
+    });
+    expect(hook.result.current.status).toBe('ready');
+    expect(hook.result.current.detachedCards).toEqual([
+      { snapshot: 'current', card: older },
+    ]);
+    expect(hook.result.current.segments[0].olderCursor).toBe('older-fresh');
   });
 
   it('recovers a PENDING group on a fresh snapshot when its exact parent becomes readable', async () => {
@@ -265,12 +549,13 @@ describe('useMyahInboxEmailHistory', () => {
       myahInboxContactEmailCard: { snapshot: 'current', card: exact },
     });
     await waitFor(() => expect(requests).toHaveLength(4));
-    await respond(requests[3], {
-      myahInboxContactEmailCards: {
-        ...cards([]).myahInboxContactEmailCards,
-        cards: [pending],
-      },
-    });
+    expect(requests[3].variables.snapshot).toBe('snapshot-1');
+    await act(async () =>
+      requests[3].partial(
+        { myahInboxContactEmailCards: null },
+        'Inbox history changed; reload history',
+      ),
+    );
     await waitFor(() => expect(requests).toHaveLength(5));
     expect(requests[4].name).toBe('MyahInboxContactEmailCards');
     expect(requests[4].variables.snapshot).toBeUndefined();

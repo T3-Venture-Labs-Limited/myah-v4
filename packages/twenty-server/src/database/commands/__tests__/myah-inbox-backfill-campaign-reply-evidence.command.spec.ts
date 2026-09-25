@@ -89,6 +89,9 @@ describe('explicit Campaign reply evidence backfill', () => {
       "association.direction='INCOMING'",
     );
     expect(query.mock.calls[0][0]).toContain('core."outboundEmailAttempt"');
+    expect(query.mock.calls[0][0]).toContain(
+      'attempt."providerAcceptedAt" <= message."receivedAt"',
+    );
     expect(query.mock.calls[0][1]).toEqual([workspaceId, null, 25]);
     // The global workspace datasource rejects raw SQL without an explicit system bypass.
     expect(query.mock.calls[0][3]).toEqual({
@@ -179,6 +182,7 @@ describe('explicit Campaign reply evidence backfill', () => {
         inboundMessageThreadId: threadId,
         inReplyToTokens: [],
         coveredCreatorIds: [creatorId],
+        skipProgression: true,
       },
       expect.anything(),
     );

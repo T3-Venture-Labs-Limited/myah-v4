@@ -125,7 +125,10 @@ const loadService = (): EmailQueryServiceConstructor | undefined => {
   }
 };
 
-const buildHarness = (rows: unknown[] = rawRows) => {
+const buildHarness = (
+  rows: unknown[] = rawRows,
+  replyEvidenceReady = false,
+) => {
   const query = jest.fn().mockResolvedValue(rows);
   const builderByObjectName = new Map<string, Record<string, jest.Mock>>();
   const createQueryBuilder = (objectName: string) => {
@@ -169,7 +172,7 @@ const buildHarness = (rows: unknown[] = rawRows) => {
     getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
       query: (sql: string, ...args: unknown[]) =>
         sql.startsWith('SELECT to_regclass')
-          ? [{ exists: false }]
+          ? [{ exists: replyEvidenceReady }]
           : query(sql, ...args),
     }),
     getRepository: jest.fn(async (_workspaceId, objectName) =>
@@ -321,30 +324,40 @@ describe('MyahInboxContactEmailQueryService', () => {
 
   it('binds a card frontier to the thread and stable accepted attempt key', async () => {
     const anchorKey = `attempt:${messageAId}`;
-    const harness = buildHarness([
-      {
-        authorized: true,
-        orderingUnavailable: false,
-        rootChanged: false,
-        cursorValid: true,
-        fingerprint: 'a'.repeat(32),
-        snapshotAt: '2026-09-08T00:00:00.123456Z',
-        latestThreadId: emailThreadAId,
-        cards: [
-          {
-            threadId: emailThreadAId,
-            anchorKey,
-            rootMessageId: messageAId,
-            startTimestamp: '2026-09-01T00:00:00.123456Z',
-            subject: null,
-            campaignLabel: null,
-            historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
-          },
-        ],
-        hasOlderCards: true,
-      },
-    ]);
+    const harness = buildHarness(
+      [
+        {
+          authorized: true,
+          orderingUnavailable: false,
+          rootChanged: false,
+          cursorValid: true,
+          fingerprint: 'a'.repeat(32),
+          snapshotAt: '2026-09-08T00:00:00.123456Z',
+          latestThreadId: emailThreadAId,
+          cards: [
+            {
+              threadId: emailThreadAId,
+              anchorKey,
+              rootMessageId: messageAId,
+              startTimestamp: '2026-09-01T00:00:00.123456Z',
+              subject: null,
+              campaignLabel: null,
+              historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+            },
+          ],
+          hasOlderCards: true,
+        },
+      ],
+      true,
+    );
     const page = await harness.service.listCards(request());
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toContain(
+      'JOIN readable_campaign campaign ON campaign.id=ev."campaignId"',
+    );
+    expect(sql).toContain(
+      'message.direction=\'OUTGOING\' AND accepted."projectedMessageId" IS NULL THEN NULL',
+    );
     expect(
       decodeMyahInboxEmailCardCursor(
         page.olderCursor as string,

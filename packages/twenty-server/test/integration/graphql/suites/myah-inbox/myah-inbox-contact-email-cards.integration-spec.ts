@@ -165,14 +165,15 @@ describe('Myah Inbox Email card old/new GraphQL compatibility', () => {
     expect(inbound).toBeDefined();
     await global.testDataSource.query(
       `INSERT INTO core."myahCampaignReplyEvidence"
-       ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification")
-       VALUES ($1,$2,$3,$4,$5,'THREAD')`,
+       ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification")
+       VALUES ($1,$2,$3,$4,$5,$6,'THREAD')`,
       [
         SEED_APPLE_WORKSPACE_ID,
         inbound.id,
         inbound.messageChannelId,
         fixture.campaignId,
         randomUUID(),
+        fixture.creatorId,
       ],
     );
     evidenceMessageId = inbound.id;
@@ -298,9 +299,14 @@ describe('Myah Inbox Email card old/new GraphQL compatibility', () => {
         token,
       );
       expect(response.body.data?.myahInboxContactEmailCard).toBeFalsy();
-      expect(response.body.errors?.[0].message).toMatch(
-        /Inbox card is not readable|Invalid Inbox card key|not readable/,
-      );
+      if (anchorKey.startsWith('attempt:'))
+        expect(response.body.errors?.[0].message).toBe(
+          'Inbox card is not readable',
+        );
+      else
+        expect(response.body.errors?.[0].message).toMatch(
+          /Inbox card is not readable|Invalid Inbox card key|not readable/,
+        );
     }
   });
 
@@ -353,5 +359,80 @@ describe('Myah Inbox Email card old/new GraphQL compatibility', () => {
     expect(location.myahInboxContactEmailMessageLocation.card.anchorKey).toBe(
       anchorKey,
     );
+  });
+
+  it('does not expose response evidence assigned to another Creator on the linked thread', async () => {
+    const [channel] = await global.testDataSource.query<
+      [Array<{ messageChannelId: string; enrollmentId: string }>, number]
+    >(
+      `DELETE FROM core."myahCampaignReplyEvidence"
+       WHERE "workspaceId"=$1 AND "inboundMessageId"=$2
+       RETURNING "messageChannelId","enrollmentId"`,
+      [SEED_APPLE_WORKSPACE_ID, evidenceMessageId],
+    );
+    expect(channel).toHaveLength(1);
+    const evidence = channel[0];
+    try {
+      await global.testDataSource.query(
+        `INSERT INTO core."myahCampaignReplyEvidence"
+         ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification")
+         VALUES ($1,$2,$3,$4,$5,$6,'THREAD')`,
+        [
+          SEED_APPLE_WORKSPACE_ID,
+          evidenceMessageId,
+          evidence.messageChannelId,
+          fixture.campaignId,
+          evidence.enrollmentId,
+          fixture.foreignCreatorId,
+        ],
+      );
+      const list = await makeGraphqlAPIRequest(
+        {
+          query: loadNewClientDocument('MyahInboxContactEmailCards'),
+          variables: {
+            contactId: variables.contactId,
+            expectedWorkspaceId: variables.expectedWorkspaceId,
+          },
+        },
+        token,
+      );
+      expect(list.body.errors).toBeUndefined();
+      expect(
+        list.body.data.myahInboxContactEmailCards.cards,
+      ).not.toContainEqual(
+        expect.objectContaining({ anchorKey: `thread:${variables.threadId}` }),
+      );
+      const keyed = await makeGraphqlAPIRequest(
+        {
+          query: keyedCardQuery,
+          variables: {
+            ...variables,
+            anchorKey: `thread:${variables.threadId}`,
+          },
+        },
+        token,
+      );
+      expect(keyed.body.data?.myahInboxContactEmailCard).toBeFalsy();
+      expect(keyed.body.errors?.[0].message).toMatch(/not readable/);
+    } finally {
+      await global.testDataSource.query(
+        `DELETE FROM core."myahCampaignReplyEvidence"
+         WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
+        [SEED_APPLE_WORKSPACE_ID, evidenceMessageId],
+      );
+      await global.testDataSource.query(
+        `INSERT INTO core."myahCampaignReplyEvidence"
+         ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification")
+         VALUES ($1,$2,$3,$4,$5,$6,'THREAD')`,
+        [
+          SEED_APPLE_WORKSPACE_ID,
+          evidenceMessageId,
+          evidence.messageChannelId,
+          fixture.campaignId,
+          evidence.enrollmentId,
+          fixture.creatorId,
+        ],
+      );
+    }
   });
 });

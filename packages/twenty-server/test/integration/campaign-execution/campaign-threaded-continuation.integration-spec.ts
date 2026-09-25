@@ -331,6 +331,8 @@ describe('Campaign three-email threaded continuation', () => {
          FROM core.workspace ORDER BY "createdAt" LIMIT 1 ON CONFLICT (id) DO NOTHING`,
         [id.workspace, `phase2a-${id.workspace.slice(0, 8)}`, schema],
       );
+      // UUID-derived schema identifier; data values are bound.
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
       await manager.query(
         `INSERT INTO core."connectedAccount" (id,"workspaceId",handle,provider,"userWorkspaceId",visibility,"dailySendLimit","minimumSendIntervalMs")
@@ -344,16 +346,20 @@ describe('Campaign three-email threaded continuation', () => {
            FROM core."messageChannel" ORDER BY "createdAt" LIMIT 1`,
         [id.channel, id.workspace, id.account],
       );
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(
         `CREATE TABLE IF NOT EXISTS "${schema}".campaign (id uuid PRIMARY KEY,"lifecycleStatus" text NOT NULL,"sequenceAuthorization" jsonb)`,
       );
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(
         `CREATE TABLE IF NOT EXISTS "${schema}"."campaignCreator" (id uuid PRIMARY KEY,"campaignId" uuid NOT NULL,stage text,"deletedAt" timestamptz,"updatedAt" timestamptz DEFAULT now())`,
       );
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(
         `INSERT INTO "${schema}".campaign VALUES ($1,'ACTIVE',$2::jsonb) ON CONFLICT DO NOTHING`,
         [id.campaign, JSON.stringify(projection)],
       );
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(
         `INSERT INTO "${schema}"."campaignCreator" (id,"campaignId",stage) VALUES ($1,$2,'READY') ON CONFLICT DO NOTHING`,
         [id.campaignCreator, id.campaign],

@@ -7,6 +7,7 @@ import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbo
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
 import { CampaignReplyService } from 'src/modules/campaign-execution/services/campaign-reply.service';
 import { CampaignEmailRuntimeService } from 'src/modules/campaign-execution/services/campaign-email-runtime.service';
 import {
@@ -29,12 +30,38 @@ describe('Campaign reply evidence in PostgreSQL', () => {
     { outcome: 'ACCEPTED', differentEnrollment: true },
     { outcome: 'ACCEPTED', differentEnrollment: false, committed: true },
     {
+      outcome: 'ACCEPTED',
+      differentEnrollment: false,
+      receivedBeforeRecovery: true,
+    },
+    {
+      outcome: 'ACCEPTED',
+      differentEnrollment: true,
+      receivedBeforeRecovery: true,
+    },
+    {
       outcome: 'DEFINITELY_UNACCEPTED',
       differentEnrollment: true,
       committed: true,
     },
     { outcome: 'ACCEPTED', differentEnrollment: false, richerReimport: true },
     { outcome: 'ACCEPTED', differentEnrollment: false, historicalDryRun: true },
+    {
+      outcome: 'ACCEPTED',
+      differentEnrollment: false,
+      duplicateParentPending: true,
+    },
+    {
+      outcome: 'DEFINITELY_UNACCEPTED',
+      differentEnrollment: true,
+      historicalBackfillPending: true,
+    },
+    {
+      outcome: 'DEFINITELY_UNACCEPTED',
+      differentEnrollment: true,
+      historicalDryRun: true,
+      preSendHistorical: true,
+    },
     { outcome: 'ACCEPTED', differentEnrollment: false, boundCreatorB: true },
     { outcome: 'ACCEPTED', differentEnrollment: false, boundCreatorA: true },
     {
@@ -50,13 +77,17 @@ describe('Campaign reply evidence in PostgreSQL', () => {
       creatorContention: true,
     },
   ])(
-    'defers evidence until $outcome (different enrollment: $differentEnrollment; committed: $committed; reimport: $richerReimport; creator lock: $creatorContention)',
+    'defers evidence until $outcome (different enrollment: $differentEnrollment; committed: $committed; reimport: $richerReimport; pre-send: $preSendHistorical; backfill-pending: $historicalBackfillPending; duplicate-parent: $duplicateParentPending; recovery lag: $receivedBeforeRecovery; creator lock: $creatorContention)',
     async ({
       outcome,
       differentEnrollment,
       committed,
       richerReimport,
       historicalDryRun,
+      preSendHistorical,
+      historicalBackfillPending,
+      duplicateParentPending,
+      receivedBeforeRecovery,
       boundCreatorB,
       boundCreatorA,
       creatorContention,
@@ -104,6 +135,18 @@ describe('Campaign reply evidence in PostgreSQL', () => {
               routing,
               secondEnrollmentId,
             });
+            if (receivedBeforeRecovery) {
+              // A was accepted, then B sent but its UNKNOWN receipt recovers after this reply.
+              await runner.query(
+                `UPDATE core."outboundEmailAttempt" SET "providerAcceptedAt"=now()-interval '20 minutes' WHERE "attemptId"=$1`,
+                [ids.attemptA],
+              );
+              // pi-lens-ignore: sql-injection, no-sql-in-code
+              await runner.query(
+                `UPDATE "${schemaName}".message SET "receivedAt"=now()-interval '10 minutes' WHERE id=$1`,
+                [ids.inbound],
+              );
+            }
             if (boundCreatorB || boundCreatorA) {
               // pi-lens-ignore: sql-injection, no-sql-in-code
               await runner.query(
@@ -114,13 +157,95 @@ describe('Campaign reply evidence in PostgreSQL', () => {
                 ],
               );
             }
+            if (duplicateParentPending) {
+              // Two accepted sends in one enrollment share the same claimed
+              // header parent. Neither timestamp nor a unique parent proves
+              // that this older message is a Campaign response.
+              // pi-lens-ignore: sql-injection, no-sql-in-code
+              await runner.query(
+                `UPDATE "${schemaName}".message SET "receivedAt"=now()-interval '1 hour' WHERE id=$1`,
+                [ids.inbound],
+              );
+              await service.reconcileInboundMessageInTransaction(
+                {
+                  workspaceId,
+                  messageChannelId: routing.channelId,
+                  threadExternalId: 'shared-thread',
+                  fromHandle: 'creator@example.com',
+                  inboundEvidenceId: ids.inbound,
+                  inboundMessageThreadId: ids.inboundThread,
+                  inReplyToTokens: ['<first@example.com>'],
+                },
+                runner.manager,
+              );
+              const [before] = await runner.query(
+                `SELECT count(*)::int AS count FROM core."myahCampaignReplyPending"
+                 WHERE "workspaceId"=$1 AND "messageId"=$2`,
+                [workspaceId, ids.inbound],
+              );
+              expect(before.count).toBe(1);
+              await runner.query(
+                `UPDATE core."outboundEmailAttempt" SET
+                 "attemptState"='ACCEPTED', "capacityState"='CONSUMED', "finalEvidenceDigest"=repeat('d',64),
+                 "providerMessageId"='provider-b', "providerMessageExternalId"='external-b',
+                 "providerHeaderMessageId"='<first@example.com>', "providerAcceptedAt"=now(),
+                 retryable=false,"resolvedThreadExternalId"='shared-thread'
+                 WHERE "attemptId"=$1`,
+                [ids.attemptB],
+              );
+              await service.reconcilePendingMessageInTransaction(
+                { workspaceId, inboundEvidenceId: ids.inbound },
+                runner.manager,
+              );
+              const [after] = await runner.query(
+                `SELECT (SELECT count(*)::int FROM core."myahCampaignReplyEvidence"
+                 WHERE "workspaceId"=$1 AND "inboundMessageId"=$2) AS evidence,
+                  (SELECT count(*)::int FROM core."myahCampaignReplyPending"
+                 WHERE "workspaceId"=$1 AND "messageId"=$2) AS pending`,
+                [workspaceId, ids.inbound],
+              );
+              expect(after).toEqual({ evidence: 0, pending: 0 });
+              expect(
+                progression.terminalizeReplyInTransaction,
+              ).not.toHaveBeenCalled();
+              return;
+            }
+            if (historicalBackfillPending) {
+              // The explicit evidence-only command uses this exact reconciler
+              // with skipProgression; it must not leave a normal-progressing
+              // pending row when another send has not settled.
+              await service.reconcileInboundMessageInTransaction(
+                {
+                  workspaceId,
+                  messageChannelId: routing.channelId,
+                  threadExternalId: 'shared-thread',
+                  fromHandle: 'creator@example.com',
+                  inboundEvidenceId: ids.inbound,
+                  inboundMessageThreadId: ids.inboundThread,
+                  inReplyToTokens: [],
+                  skipProgression: true,
+                },
+                runner.manager,
+              );
+              const [pending] = await runner.query(
+                `SELECT count(*)::int AS count FROM core."myahCampaignReplyPending"
+                 WHERE "workspaceId"=$1 AND "messageId"=$2`,
+                [workspaceId, ids.inbound],
+              );
+              expect(pending.count).toBe(0);
+              expect(
+                progression.terminalizeReplyInTransaction,
+              ).not.toHaveBeenCalled();
+              return;
+            }
             if (historicalDryRun) {
               // Historical imported Message/association/participant proof is
               // scanned without persisting anything, even with an UNKNOWN peer.
               // pi-lens-ignore: sql-injection, no-sql-in-code
               await runner.query(
                 `INSERT INTO "${schemaName}".message (id,"messageThreadId","receivedAt",subject,"isDraft")
-                 VALUES ($1,$2,now(),'historical reply',false)`,
+                 VALUES ($1,$2,now()${preSendHistorical ? "-interval '1 hour'" : ''},'historical reply',false)
+                 ON CONFLICT (id) DO UPDATE SET "receivedAt"=EXCLUDED."receivedAt"`,
                 [ids.inbound, ids.inboundThread],
               );
               // pi-lens-ignore: sql-injection, no-sql-in-code
@@ -153,15 +278,57 @@ describe('Campaign reply evidence in PostgreSQL', () => {
                   {} as never,
                 );
               await backfill.run([], { workspaceId, limit: 10 });
-              expect(await scan.mock.results[0].value).toEqual([
-                expect.objectContaining({ messageId: ids.inbound }),
-              ]);
+              expect(await scan.mock.results[0].value).toEqual(
+                preSendHistorical
+                  ? []
+                  : [expect.objectContaining({ messageId: ids.inbound })],
+              );
               const [unchanged] = await runner.query(
                 `SELECT count(*)::int AS count FROM core."myahCampaignReplyEvidence"
                  WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
                 [workspaceId, ids.inbound],
               );
               expect(unchanged.count).toBe(0);
+              if (preSendHistorical) {
+                await service.reconcileInboundMessageInTransaction(
+                  {
+                    workspaceId,
+                    messageChannelId: routing.channelId,
+                    threadExternalId: 'shared-thread',
+                    fromHandle: 'creator@example.com',
+                    inboundEvidenceId: ids.inbound,
+                    inboundMessageThreadId: ids.inboundThread,
+                  },
+                  runner.manager,
+                );
+                const [before] = await runner.query(
+                  `SELECT count(*)::int AS count FROM core."myahCampaignReplyPending"
+                   WHERE "workspaceId"=$1 AND "messageId"=$2`,
+                  [workspaceId, ids.inbound],
+                );
+                expect(before.count).toBe(1);
+                await runner.query(
+                  `UPDATE core."outboundEmailAttempt" SET "attemptState"='DEFINITELY_UNACCEPTED', "capacityState"='RELEASED'
+                   WHERE "attemptId"=$1`,
+                  [ids.attemptB],
+                );
+                await service.reconcilePendingMessageInTransaction(
+                  { workspaceId, inboundEvidenceId: ids.inbound },
+                  runner.manager,
+                );
+                const [state] = await runner.query(
+                  `SELECT (SELECT count(*)::int FROM core."myahCampaignReplyEvidence"
+                   WHERE "workspaceId"=$1 AND "inboundMessageId"=$2) AS evidence,
+                    (SELECT count(*)::int FROM core."myahCampaignReplyPending"
+                   WHERE "workspaceId"=$1 AND "messageId"=$2) AS pending`,
+                  [workspaceId, ids.inbound],
+                );
+                expect(state).toEqual({ evidence: 0, pending: 0 });
+                expect(
+                  progression.terminalizeReplyInTransaction,
+                ).not.toHaveBeenCalled();
+                return;
+              }
             }
 
             expect(
@@ -206,6 +373,9 @@ describe('Campaign reply evidence in PostgreSQL', () => {
               [workspaceId, ids.inbound],
             );
             expect(before[0]).toEqual({ evidence: 0, pending: 1 });
+            expect(
+              progression.terminalizeReplyInTransaction,
+            ).not.toHaveBeenCalled();
             if (richerReimport) {
               await service.reconcileInboundMessageInTransaction(
                 { ...inbound, inReplyToTokens: ['<second@example.com>'] },
@@ -488,8 +658,7 @@ describe('Campaign reply evidence in PostgreSQL', () => {
             expect(
               progression.terminalizeReplyInTransaction,
             ).toHaveBeenCalledTimes(
-              (outcome === 'ACCEPTED' && differentEnrollment ? 1 : 2) +
-                (richerReimport ? 1 : 0) +
+              (outcome === 'ACCEPTED' && differentEnrollment ? 0 : 1) +
                 (committed && outcome === 'ACCEPTED' && !differentEnrollment
                   ? 1
                   : 0),
@@ -638,7 +807,8 @@ describe('Campaign reply evidence in PostgreSQL', () => {
             // pi-lens-ignore: sql-injection, no-sql-in-code
             await setup.query(
               `INSERT INTO "${schemaName}".message (id,"messageThreadId","receivedAt",subject,"isDraft")
-               VALUES ($1,$2,now(),'race reply',false)`,
+               VALUES ($1,$2,now(),'race reply',false)
+               ON CONFLICT (id) DO UPDATE SET "receivedAt"=EXCLUDED."receivedAt"`,
               [ids.inbound, ids.inboundThread],
             );
             // pi-lens-ignore: sql-injection, no-sql-in-code
@@ -811,13 +981,10 @@ describe('Campaign reply evidence in PostgreSQL', () => {
     const lifecycle = new MyahInboxContactTriageLifecycleService(
       new MyahInboxContactTriageService(),
     );
+    const timelineEventWriter = { writeInTransaction: jest.fn() };
     const service = new CampaignReplyService(
-      {
-        terminalizeReplyInTransaction: jest.fn(async () => ({
-          status: 'EXACT_REPLAY',
-        })),
-      } as never,
-      undefined,
+      new CampaignProgressionService(),
+      timelineEventWriter as never,
       lifecycle,
     );
     const orm = getOrm();
@@ -959,6 +1126,14 @@ describe('Campaign reply evidence in PostgreSQL', () => {
             creatorId: ids.creatorA,
             myahCampaignId: ids.campaign,
           });
+          const [state] = await setup.query(
+            `SELECT e.state, creator.stage FROM core."campaignEnrollment" e
+             JOIN "${schemaName}"."campaignCreator" creator ON creator.id=e."campaignCreatorId"
+             WHERE e.id=$1`,
+            [ids.enrollmentA],
+          );
+          expect(state).toEqual({ state: 'ACTIVE', stage: 'CONTACTED' });
+          expect(timelineEventWriter.writeInTransaction).not.toHaveBeenCalled();
         } finally {
           if (setup.isTransactionActive) await setup.rollbackTransaction();
           await setup.startTransaction();

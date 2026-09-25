@@ -137,6 +137,7 @@ export class MyahInboxBackfillCampaignReplyEvidenceCommand extends CommandRunner
                   AND attempt."messageChannelId"=association."messageChannelId"
                   AND attempt.source='CAMPAIGN_SEQUENCE'
                   AND attempt."attemptState"='ACCEPTED'
+                  AND attempt."providerAcceptedAt" <= message."receivedAt"
                   AND attempt."resolvedThreadExternalId"=association."messageThreadExternalId"
                   AND attempt."normalizedRecipient"=lower(trim(sender.handle))
               )
@@ -203,6 +204,7 @@ export class MyahInboxBackfillCampaignReplyEvidenceCommand extends CommandRunner
                           inboundMessageThreadId: candidate.threadId,
                           inReplyToTokens: [],
                           coveredCreatorIds,
+                          skipProgression: true,
                         },
                         workspaceManager,
                       ),

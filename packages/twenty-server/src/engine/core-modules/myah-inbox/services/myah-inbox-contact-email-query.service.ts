@@ -611,10 +611,12 @@ export class MyahInboxContactEmailQueryService {
         const workspaceId = parameter(input.workspace.id);
         const schema = getWorkspaceSchemaName(input.workspace.id);
         ctes.push(`authorized_email AS (
-        SELECT message.id, message."messageThreadId", message."receivedAt", message."createdAt", message.visibility, association.direction, association."messageChannelId"
-        FROM readable_messages message JOIN readable_threads thread ON thread.id = message."messageThreadId"
+        SELECT message.id, message."messageThreadId", message."receivedAt", message."createdAt", message.visibility, association.direction, association."messageChannelId", association."workspaceId", association."messageExternalId", native."headerMessageId"
+        FROM readable_messages message
+        JOIN "${schema}"."message" native ON native.id=message.id
+        JOIN readable_threads thread ON thread.id = message."messageThreadId"
         JOIN LATERAL (
-          SELECT association.direction, association."messageChannelId" FROM "${schema}"."messageChannelMessageAssociation" association
+          SELECT association.direction, association."messageChannelId", channel."workspaceId", association."messageExternalId" FROM "${schema}"."messageChannelMessageAssociation" association
           JOIN core."messageChannel" channel ON channel.id = association."messageChannelId" AND channel."workspaceId" = ${workspaceId}::uuid
           WHERE association."messageId" = message.id AND association."deletedAt" IS NULL AND channel.type::text IN ('EMAIL','EMAIL_GROUP')
           ORDER BY association.id LIMIT 1
@@ -644,8 +646,17 @@ SELECT "projectedMessageId", "attemptId", "campaignId", "enrollmentId", "message
 SELECT ev."inboundMessageId", inbound."messageThreadId", ev.classification,
                   ev."matchedAttemptId", ev."campaignId", ev."enrollmentId", ev."messageChannelId", attempt."projectedMessageId"
                 FROM core."myahCampaignReplyEvidence" ev
+                JOIN readable_campaign campaign ON campaign.id=ev."campaignId"
                 JOIN authorized_email inbound ON inbound.id=ev."inboundMessageId"
                   AND inbound."messageChannelId"=ev."messageChannelId" AND inbound.direction='INCOMING'
+                ${
+                  contact.kind === 'creator'
+                    ? `AND EXISTS (
+                  SELECT 1 FROM readable_threads linked
+                  WHERE linked.id=inbound."messageThreadId" AND linked."creatorId"=ev."creatorId"
+                )`
+                    : ''
+                }
                 LEFT JOIN core."outboundEmailAttempt" attempt ON attempt."attemptId"=ev."matchedAttemptId"
                   AND attempt."workspaceId"=ev."workspaceId" AND attempt."attemptState"='ACCEPTED'
                 WHERE ev."workspaceId"=${workspaceId}::uuid

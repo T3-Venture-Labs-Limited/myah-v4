@@ -81,16 +81,20 @@ const groupId = ({ threadId, anchorKey }: CardRef) =>
 const refsFor = (cards: CardRef[]): CardRef[] => [
   ...new Map(cards.map((card) => [groupId(card), card])).values(),
 ];
+const isStaleHistorySnapshot = (error: unknown) =>
+  CombinedGraphQLErrors.is(error) &&
+  error.errors.length === 1 &&
+  error.errors[0].message === 'Inbox history changed; reload history';
 
 type ReplayPlan = {
   historyRebased: boolean;
   groups: CardRef[];
   detachedGroups: CardRef[];
   cardPageBudget: number;
-  segments: Pick<
+  segments: (Pick<
     MyahInboxEmailCardSegment,
     'id' | 'origin' | 'snapshot' | 'requests'
-  >[];
+  > & { cards: CardRef[] })[];
   windows: (Pick<
     MyahInboxEmailMessageWindow,
     'id' | 'snapshot' | 'threadId' | 'requests' | 'anchorMessageId'
@@ -221,15 +225,62 @@ export class MyahInboxEmailHistoryStore {
     signal: AbortSignal,
     { threadId, anchorKey }: CardRef,
   ) {
-    const data = await this.query<
-      MyahInboxContactEmailCardQuery,
-      MyahInboxContactEmailCardQueryVariables
-    >(
-      GET_MYAH_INBOX_CONTACT_EMAIL_CARD,
-      { ...this.scope(), threadId, anchorKey },
-      signal,
-    );
-    return data.myahInboxContactEmailCard;
+    try {
+      const data = await this.query<
+        MyahInboxContactEmailCardQuery,
+        MyahInboxContactEmailCardQueryVariables
+      >(
+        GET_MYAH_INBOX_CONTACT_EMAIL_CARD,
+        { ...this.scope(), threadId, anchorKey },
+        signal,
+      );
+      return data.myahInboxContactEmailCard;
+    } catch (error) {
+      // A retained key may disappear after THREAD→EXACT promotion or revocation.
+      // Replay can relocate only the messages it had already loaded.
+      if (
+        CombinedGraphQLErrors.is(error) &&
+        error.errors.length === 1 &&
+        error.errors[0].message === 'Inbox card is not readable'
+      )
+        return { snapshot: '', card: null };
+      throw error;
+    }
+  }
+  // A promoted THREAD key no longer has a card projection. Recover only IDs
+  // the reader had loaded, under the new snapshot and current permissions.
+  private async relocateWindows(
+    signal: AbortSignal,
+    windows: ReplayPlan['windows'],
+    snapshot: string,
+    restored: MyahInboxEmailMessageWindow[],
+    missingMessageIds: string[],
+  ) {
+    for (const window of windows) {
+      const covered = new Set<string>();
+      let first = true;
+      for (const messageId of [
+        ...(window.anchorMessageId ? [window.anchorMessageId] : []),
+        ...window.messageIds,
+      ]) {
+        if (covered.has(messageId)) continue;
+        const location = await this.queryLocation(signal, messageId, snapshot);
+        if (!location || location.card.threadId !== window.threadId) {
+          missingMessageIds.push(messageId);
+          continue;
+        }
+        const next = this.window(location.card, snapshot, location.page, {
+          messageId,
+        });
+        if (first) {
+          next.id = window.id;
+          first = false;
+        }
+        restored.push(next);
+        for (const message of [location.page.root, ...location.page.messages])
+          covered.add(message.id as string);
+      }
+    }
   }
   private window(
     card: MyahInboxEmailCardFieldsFragment,
@@ -254,6 +305,7 @@ export class MyahInboxEmailHistoryStore {
     recover = false,
     incrementalFailure?: IncrementalFailure,
     quiet = false,
+    onComplete?: () => void,
   ) {
     if (
       !this.active ||
@@ -285,6 +337,7 @@ export class MyahInboxEmailHistoryStore {
           loading: false,
           incrementalFailure: undefined,
         });
+        onComplete?.();
       }
     } catch (error) {
       if (this.operation === operation) {
@@ -545,11 +598,12 @@ export class MyahInboxEmailHistoryStore {
       ]),
       segments: this.state.segments
         .filter((segment) => segment.origin === 'retained')
-        .map(({ id, origin, snapshot, requests }) => ({
+        .map(({ id, origin, snapshot, requests, pages }) => ({
           id,
           origin,
           snapshot,
           requests,
+          cards: refsFor(pages.flatMap((page) => page.cards)),
         })),
       windows: this.state.windows.map(
         ({
@@ -584,11 +638,15 @@ export class MyahInboxEmailHistoryStore {
   refresh = () => this.rebuild(false);
   // Background arrival: re-authorize every retained card/window against current
   // permissions without masking rendered history. Only failure masks (fail closed).
-  ambientRefresh = () => {
-    if (this.operation || this.state.status !== 'ready') return;
-    return this.rebuild(true);
+  ambientRefresh = async (): Promise<boolean> => {
+    if (this.operation || this.state.status !== 'ready') return false;
+    let completed = false;
+    await this.rebuild(true, () => {
+      completed = true;
+    });
+    return completed;
   };
-  private rebuild(ambient: boolean) {
+  private rebuild(ambient: boolean, onComplete?: () => void) {
     const plan = this.recovery ?? this.plan();
     if (ambient)
       return this.run(
@@ -596,6 +654,7 @@ export class MyahInboxEmailHistoryStore {
         true,
         undefined,
         true,
+        onComplete,
       );
     this.cancel();
     this.recovery = plan;
@@ -625,10 +684,23 @@ export class MyahInboxEmailHistoryStore {
       ),
     );
     const segments: MyahInboxEmailCardSegment[] = [];
+    const droppedGroups: CardRef[] = [];
     for (const segment of plan.segments) {
       const pages: CardPage[] = [];
+      let stale = false;
       for (const cursor of segment.requests) {
-        const page = await this.queryCards(signal, segment.snapshot, cursor);
+        let page: CardPage;
+        try {
+          page = await this.queryCards(signal, segment.snapshot, cursor);
+        } catch (error) {
+          // A changed card membership invalidates the retained snapshot.
+          // Rediscover under a fresh one rather than masking unrelated cards.
+          if (isStaleHistorySnapshot(error)) {
+            stale = true;
+            break;
+          }
+          throw error;
+        }
         pages.push({
           ...page,
           cards: page.cards.flatMap((card) => {
@@ -648,11 +720,16 @@ export class MyahInboxEmailHistoryStore {
               : page.latestThreadId,
         });
       }
-      segments.push({
-        ...segment,
-        pages,
-        olderCursor: pages.at(-1)?.olderCursor ?? null,
-      });
+      if (stale) droppedGroups.push(...segment.cards);
+      else
+        segments.push({
+          id: segment.id,
+          origin: segment.origin,
+          snapshot: segment.snapshot,
+          requests: segment.requests,
+          pages,
+          olderCursor: pages.at(-1)?.olderCursor ?? null,
+        });
     }
     const rootChanged = plan.windows.some((window) => {
       const card = projections.get(groupId(window))?.card;
@@ -661,6 +738,7 @@ export class MyahInboxEmailHistoryStore {
     const recoveryFresh = rootChanged ? await this.queryCards(signal) : null;
     const windows: MyahInboxEmailMessageWindow[] = [];
     const missingMessageIds: string[] = [];
+    const staleWindows: ReplayPlan['windows'] = [];
     for (const window of plan.windows) {
       const card = projections.get(groupId(window))?.card;
       if (!card) continue;
@@ -676,65 +754,94 @@ export class MyahInboxEmailHistoryStore {
         for (const message of [page.root, ...page.messages])
           covered.add(message.id as string);
       };
-      if (changed) {
-        const page = await this.queryMessages(
-          signal,
-          window.threadId,
-          snapshot,
-          undefined,
-          window.anchorKey,
-        );
-        retain(page, {});
-      }
-      for (const request of changed ? [] : window.requests) {
-        const page = request.messageId
-          ? (await this.queryLocation(signal, request.messageId, snapshot))
-              ?.page
-          : await this.queryMessages(
-              signal,
-              window.threadId,
-              snapshot,
-              request.cursor,
-              window.anchorKey,
-            );
-        if (!page) {
-          if (request.messageId) missingMessageIds.push(request.messageId);
-          continue;
+      const missingBefore = missingMessageIds.length;
+      try {
+        if (changed) {
+          const page = await this.queryMessages(
+            signal,
+            window.threadId,
+            snapshot,
+            undefined,
+            window.anchorKey,
+          );
+          retain(page, {});
         }
-        // Snapshots freeze card starts, not replies. Replayed pages may no
-        // longer touch, so each keeps both navigable frontiers independently.
-        retain(page, request);
-      }
-      // Restore only displaced displayed IDs, anchor first. Location pages
-      // end at their target, so visit the remaining IDs newest-first.
-      for (const messageId of [
-        ...(window.anchorMessageId ? [window.anchorMessageId] : []),
-        ...[...window.messageIds].reverse(),
-      ]) {
-        if (covered.has(messageId) || missingMessageIds.includes(messageId))
-          continue;
-        const location = await this.queryLocation(signal, messageId, snapshot);
-        if (!location) {
-          missingMessageIds.push(messageId);
-          continue;
+        for (const request of changed ? [] : window.requests) {
+          const page = request.messageId
+            ? (await this.queryLocation(signal, request.messageId, snapshot))
+                ?.page
+            : await this.queryMessages(
+                signal,
+                window.threadId,
+                snapshot,
+                request.cursor,
+                window.anchorKey,
+              );
+          if (!page) {
+            if (request.messageId) missingMessageIds.push(request.messageId);
+            continue;
+          }
+          // Snapshots freeze card starts, not replies. Replayed pages may no
+          // longer touch, so each keeps both navigable frontiers independently.
+          retain(page, request);
         }
-        retain(location.page, { messageId });
-      }
-      const anchored = restored.find((next) =>
-        next.pages.some((page) =>
-          [page.root, ...page.messages].some(
-            (message) => message.id === window.anchorMessageId,
+        // Restore only displaced displayed IDs, anchor first. Location pages
+        // end at their target, so visit the remaining IDs newest-first.
+        for (const messageId of [
+          ...(window.anchorMessageId ? [window.anchorMessageId] : []),
+          ...[...window.messageIds].reverse(),
+        ]) {
+          if (covered.has(messageId) || missingMessageIds.includes(messageId))
+            continue;
+          const location = await this.queryLocation(
+            signal,
+            messageId,
+            snapshot,
+          );
+          if (!location) {
+            missingMessageIds.push(messageId);
+            continue;
+          }
+          retain(location.page, { messageId });
+        }
+        const anchored = restored.find((next) =>
+          next.pages.some((page) =>
+            [page.root, ...page.messages].some(
+              (message) => message.id === window.anchorMessageId,
+            ),
           ),
-        ),
-      );
-      const primary = anchored ?? restored.at(0);
-      if (primary) {
-        primary.id = window.id;
-        if (anchored) primary.anchorMessageId = window.anchorMessageId;
+        );
+        const primary = anchored ?? restored.at(0);
+        if (primary) {
+          primary.id = window.id;
+          if (anchored) primary.anchorMessageId = window.anchorMessageId;
+        }
+        windows.push(...restored);
+      } catch (error) {
+        // Another group's promotion can invalidate this unchanged window's
+        // old global fingerprint. Discard its partial pages and relocate only
+        // previously loaded IDs against a fresh authorized snapshot.
+        if (!changed && isStaleHistorySnapshot(error)) {
+          missingMessageIds.length = missingBefore;
+          staleWindows.push(window);
+          continue;
+        }
+        throw error;
       }
-      windows.push(...restored);
     }
     const fresh = recoveryFresh ?? (await this.queryCards(signal));
+    await this.relocateWindows(
+      signal,
+      [
+        ...plan.windows.filter(
+          (window) => !projections.get(groupId(window))?.card,
+        ),
+        ...staleWindows,
+      ],
+      fresh.snapshot,
+      windows,
+      missingMessageIds,
+    );
     const freshCards = new Map(
       fresh.cards.map((card) => [groupId(card), card]),
     );
@@ -786,7 +893,17 @@ export class MyahInboxEmailHistoryStore {
         olderCursor: page.olderCursor ?? null,
       });
     }
-    const detachedCards = plan.detachedGroups.flatMap((ref) => {
+    const listedGroups = new Set(
+      segments.flatMap((segment) =>
+        segment.pages.flatMap((page) => page.cards.map(groupId)),
+      ),
+    );
+    const detachedCards = refsFor([
+      ...plan.detachedGroups,
+      // The fresh page may stop before user-loaded older cards. Keep only
+      // still-readable projections from a dropped retained segment.
+      ...droppedGroups.filter((ref) => !listedGroups.has(groupId(ref))),
+    ]).flatMap((ref) => {
       const projection = projections.get(groupId(ref));
       return projection?.card
         ? [{ snapshot: projection.snapshot, card: projection.card }]
@@ -897,6 +1014,15 @@ export class MyahInboxEmailHistoryStore {
           });
         }
       }
+      await this.relocateWindows(
+        signal,
+        plan.windows.filter(
+          (window) => !projections.get(groupId(window))?.card,
+        ),
+        fresh.snapshot,
+        windows,
+        missingMessageIds,
+      );
       return {
         ...this.state,
         detachedCards,

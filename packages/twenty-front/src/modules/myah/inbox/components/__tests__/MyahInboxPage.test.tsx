@@ -27,6 +27,7 @@ const flushWorkspace = jest.fn().mockResolvedValue(true);
 const invalidateWorkspace = jest.fn();
 const ambientRefreshContacts = jest.fn();
 const ambientRefreshEmail = jest.fn();
+const purgeEmail = jest.fn();
 const refreshContacts = jest.fn();
 const loadMoreContacts = jest.fn();
 const loadMoreEmail = jest.fn();
@@ -490,6 +491,7 @@ const setDefaultHooks = () => {
       missingMessageIds: [],
       refresh: refreshEmail,
       ambientRefresh: ambientRefreshEmail,
+      purge: purgeEmail,
       openCard: jest.fn(),
       openDetachedCard: jest.fn(),
       setReadingAnchor: jest.fn(),
@@ -810,7 +812,7 @@ describe('MyahInboxPage contact-first flow', () => {
       status: 'success',
       selectedContact: contacts[0],
     });
-    ambientRefreshEmail.mockResolvedValue(undefined);
+    ambientRefreshEmail.mockResolvedValue(true);
     const arrival = () =>
       screen.getByTestId('draft-authority').getAttribute('data-arrival');
     try {
@@ -848,6 +850,13 @@ describe('MyahInboxPage contact-first flow', () => {
       expect(ambientRefreshEmail).toHaveBeenCalledTimes(2);
       expect(arrival()).toBe('2');
 
+      // A busy history operation must not count as a completed full check.
+      ambientRefreshEmail.mockResolvedValueOnce(false);
+      await act(async () => jest.advanceTimersByTimeAsync(300_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(3);
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(4);
+
       const checks = ambientRefreshContacts.mock.calls.length;
       visibility = 'hidden';
       await act(async () => jest.advanceTimersByTimeAsync(600_000));
@@ -861,6 +870,24 @@ describe('MyahInboxPage contact-first flow', () => {
     } finally {
       jest.useRealTimers();
       jest.restoreAllMocks();
+    }
+  });
+
+  it('masks selected Email history when the ambient contact authorization check fails', async () => {
+    jest.useFakeTimers();
+    try {
+      renderPage();
+      await act(async () => jest.advanceTimersByTimeAsync(0));
+      await screen.findByText('Email composer thread-2');
+      ambientRefreshContacts.mockResolvedValueOnce({
+        status: 'failed',
+        selectedContact: null,
+      });
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(purgeEmail).toHaveBeenCalledTimes(1);
+      expect(ambientRefreshEmail).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
     }
   });
 

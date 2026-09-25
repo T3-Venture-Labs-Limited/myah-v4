@@ -244,8 +244,8 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       Array<{ inboundMessageId: string }>
     >(
       `INSERT INTO core."myahCampaignReplyEvidence"
-         ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification")
-       SELECT $1, message.id, association."messageChannelId", $2, $3, 'THREAD'
+         ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification")
+       SELECT $1, message.id, association."messageChannelId", $2, $3, $5, 'THREAD'
        FROM "${schema}".message message
        JOIN "${schema}"."messageChannelMessageAssociation" association
          ON association."messageId"=message.id
@@ -255,9 +255,10 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
        RETURNING "inboundMessageId"`,
       [
         SEED_APPLE_WORKSPACE_ID,
-        randomUUID(),
+        fixture.campaignId,
         randomUUID(),
         Object.values(fixture.threadIds),
+        fixture.creatorId,
       ],
     );
     seededEvidenceIds = seeded.map((row) => row.inboundMessageId);
@@ -272,7 +273,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
     await cleanupMyahInboxTask7Fixture({ operatorAccessToken: token });
   });
 
-  it('keeps pending-only Email out of default contacts until resolved evidence commits, preserving exact history', async () => {
+  it('keeps unlinked pending Email out of default contacts while exact history survives resolution', async () => {
     const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
     // pi-lens-ignore: sql-injection
     const [source] = await global.testDataSource.query<Array<{ id: string }>>(
@@ -280,23 +281,28 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       [fixture.threadIds.tiedUnlinked],
     );
     expect(source).toBeDefined();
+    const exactId = encodeMyahInboxContactId({
+      workspaceId: SEED_APPLE_WORKSPACE_ID,
+      identity: {
+        kind: 'email-thread',
+        recordId: fixture.threadIds.tiedUnlinked,
+      },
+    });
     const initial = await fetchContacts(token, {
       first: 20,
       search: fixture.markers.tied,
     });
-    const exactId = initial.edges.find(
-      ({ node }) => node.identityKind === 'EMAIL_THREAD',
-    )?.node.id;
-    expect(exactId).toBeDefined();
+    expect(initial.edges.some(({ node }) => node.id === exactId)).toBe(false);
     const [evidence] = await global.testDataSource.query<
       Array<{
         campaignId: string;
+        creatorId: string;
         enrollmentId: string;
         messageChannelId: string;
         createdAt: Date;
       }>
     >(
-      `SELECT "campaignId","enrollmentId","messageChannelId","createdAt"
+      `SELECT "campaignId","creatorId","enrollmentId","messageChannelId","createdAt"
        FROM core."myahCampaignReplyEvidence"
        WHERE "workspaceId"=$1 AND "inboundMessageId"=$2`,
       [SEED_APPLE_WORKSPACE_ID, source.id],
@@ -325,9 +331,9 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
         first: 20,
         search: fixture.markers.tied,
       });
-      expect(
-        filtered.edges.some(({ node }) => node.identityKind === 'EMAIL_THREAD'),
-      ).toBe(false);
+      expect(filtered.edges.some(({ node }) => node.id === exactId)).toBe(
+        false,
+      );
       const detail = await makeGraphqlAPIRequest(
         { query: contactDetailQuery, variables: { contactId: exactId } },
         token,
@@ -344,14 +350,15 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
         );
         await manager.query(
           `INSERT INTO core."myahCampaignReplyEvidence"
-            ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification","createdAt")
-           VALUES ($1,$2,$3,$4,$5,'THREAD',$6)`,
+            ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification","createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,'THREAD',$7)`,
           [
             SEED_APPLE_WORKSPACE_ID,
             source.id,
             evidence.messageChannelId,
             evidence.campaignId,
             evidence.enrollmentId,
+            evidence.creatorId,
             evidence.createdAt,
           ],
         );
@@ -360,7 +367,15 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
         first: 20,
         search: fixture.markers.tied,
       });
-      expect(resolved.edges.some(({ node }) => node.id === exactId)).toBe(true);
+      expect(resolved.edges.some(({ node }) => node.id === exactId)).toBe(
+        false,
+      );
+      const history = await makeGraphqlAPIRequest(
+        { query: contactDetailQuery, variables: { contactId: exactId } },
+        token,
+      );
+      expect(history.body.errors).toBeUndefined();
+      expect(history.body.data.myahInboxContact?.id).toBe(exactId);
     } finally {
       await global.testDataSource.query(
         `DELETE FROM core."myahCampaignReplyPending" WHERE "workspaceId"=$1 AND "messageId"=$2`,
@@ -368,14 +383,15 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       );
       await global.testDataSource.query(
         `INSERT INTO core."myahCampaignReplyEvidence"
-          ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification","createdAt")
-         VALUES ($1,$2,$3,$4,$5,'THREAD',$6) ON CONFLICT ("workspaceId","inboundMessageId") DO NOTHING`,
+          ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,'THREAD',$7) ON CONFLICT ("workspaceId","inboundMessageId") DO NOTHING`,
         [
           SEED_APPLE_WORKSPACE_ID,
           source.id,
           evidence.messageChannelId,
           evidence.campaignId,
           evidence.enrollmentId,
+          evidence.creatorId,
           evidence.createdAt,
         ],
       );
@@ -514,8 +530,8 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       // A historical THREAD record, then later EXACT proof for the same send.
       await runner.query(
         `INSERT INTO core."myahCampaignReplyEvidence"
-           ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification","matchedAttemptId")
-         VALUES ($1,$2,$4,$5,$6,'THREAD',NULL),($1,$3,$4,$5,$6,'EXACT',$7)`,
+           ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification","matchedAttemptId")
+         VALUES ($1,$2,$4,$5,$6,$8,'THREAD',NULL),($1,$3,$4,$5,$6,$8,'EXACT',$7)`,
         [
           SEED_APPLE_WORKSPACE_ID,
           firstReplyId,
@@ -524,6 +540,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
           ids.campaign,
           ids.enrollmentA,
           ids.attemptA,
+          fixture.creatorId,
         ],
       );
       await runner.commitTransaction();
@@ -580,14 +597,15 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
         if (original)
           await runner.query(
             `INSERT INTO core."myahCampaignReplyEvidence"
-               ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification","createdAt")
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+               ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification","createdAt")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
             [
               original.workspaceId,
               original.inboundMessageId,
               original.messageChannelId,
               original.campaignId,
               original.enrollmentId,
+              original.creatorId,
               original.classification,
               original.createdAt,
             ],
@@ -644,14 +662,15 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
     try {
       await global.testDataSource.query(
         `INSERT INTO core."myahCampaignReplyEvidence"
-          ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","classification")
-         VALUES ($1,$2,$3,$4,$5,'THREAD')`,
+          ("workspaceId","inboundMessageId","messageChannelId","campaignId","enrollmentId","creatorId","classification")
+         VALUES ($1,$2,$3,$4,$5,$6,'THREAD')`,
         [
           SEED_APPLE_WORKSPACE_ID,
           hidden.id,
           hidden.channelId,
+          fixture.campaignId,
           randomUUID(),
-          randomUUID(),
+          fixture.creatorId,
         ],
       );
       expect(
@@ -708,7 +727,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
         list.edges.some(({ node }) =>
           node.email.threadIds.includes(fixture.threadIds.tiedUnlinked),
         ),
-      ).toBe(true);
+      ).toBe(false);
     } finally {
       // pi-lens-ignore: sql-injection
       await global.testDataSource.query(
@@ -718,7 +737,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
     }
   });
 
-  it('groups readable linked threads once, keeps unmatched Email exact, and emits stable opaque cursors', async () => {
+  it('groups readable linked threads once, excludes unlinked Email, and emits stable opaque cursors', async () => {
     const firstRun = await fetchContacts(token, {
       first: 20,
       search: fixture.markers.tied,
@@ -739,10 +758,10 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       fixture.threadIds.tiedLinked,
     );
     expect(linked?.node.email.threadCount).toBeGreaterThan(1);
-    expect(unmatched?.node.email.threadIds).toEqual([
+    expect(unmatched).toBeUndefined();
+    expect(linked?.node.email.threadIds).not.toContain(
       fixture.threadIds.tiedUnlinked,
-    ]);
-    expect(unmatched?.node.id).not.toContain(fixture.threadIds.tiedUnlinked);
+    );
     expect(secondRun.edges.map(({ cursor }) => cursor)).toEqual(
       firstRun.edges.map(({ cursor }) => cursor),
     );
@@ -1070,16 +1089,21 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
     expect(secondPage.edges[0]?.node.id).not.toBe(firstPage.edges[0]?.node.id);
   });
 
-  it('merges and splits an exact Email source immediately when linkage changes', async () => {
+  it('shows a linked Email source only while its Creator binding is readable', async () => {
+    const unmatchedContactId = encodeMyahInboxContactId({
+      workspaceId: SEED_APPLE_WORKSPACE_ID,
+      identity: {
+        kind: 'email-thread',
+        recordId: fixture.threadIds.tiedUnlinked,
+      },
+    });
     const before = await fetchContacts(token, {
       first: 20,
       search: fixture.markers.tied,
     });
-    const unmatchedContactId = before.edges.find(
-      ({ node }) => node.identityKind === 'EMAIL_THREAD',
-    )?.node.id;
-
-    expect(unmatchedContactId).toBeDefined();
+    expect(
+      before.edges.some(({ node }) => node.id === unmatchedContactId),
+    ).toBe(false);
 
     try {
       const linked = await makeGraphqlAPIRequest(
@@ -1127,14 +1151,23 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       first: 20,
       search: fixture.markers.tied,
     });
-
-    expect(split.edges.map(({ node }) => node.identityKind)).toEqual(
-      expect.arrayContaining(['CREATOR', 'EMAIL_THREAD']),
+    expect(split.edges).toHaveLength(1);
+    expect(split.edges[0].node.email.threadIds).not.toContain(
+      fixture.threadIds.tiedUnlinked,
     );
+    const history = await makeGraphqlAPIRequest(
+      {
+        query: contactDetailQuery,
+        variables: { contactId: unmatchedContactId },
+      },
+      token,
+    );
+    expect(history.body.errors).toBeUndefined();
+    expect(history.body.data.myahInboxContact?.id).toBe(unmatchedContactId);
   });
 
   // Requires the parent-owned disposable PostgreSQL gate; never run against UAT.
-  it('pages Contact microseconds and exact-time ID ties exactly once at page size one', async () => {
+  it('excludes unlinked Email even when response timestamps tie at microsecond precision', async () => {
     const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
     const threadIds = [
       fixture.threadIds.tiedLinked,
@@ -1176,33 +1209,12 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
           ],
         );
       }
-      const seen: string[] = [];
-      const cursors: string[] = [];
-      let after: string | undefined;
-      let hasNextPage = true;
-      for (let page = 0; page < threadIds.length + 1 && hasNextPage; page++) {
-        const connection = await fetchContacts(token, {
-          first: 1,
-          search,
-          after,
-        });
-        expect(connection.edges).toHaveLength(1);
-        const edge = connection.edges[0];
-        expect(edge.node.identityKind).toBe('EMAIL_THREAD');
-        expect(edge.node.email.threadIds).toHaveLength(1);
-        seen.push(edge.node.email.threadIds[0]);
-        cursors.push(edge.cursor);
-        expect(connection.pageInfo.endCursor).toBe(edge.cursor);
-        after = edge.cursor;
-        hasNextPage = connection.pageInfo.hasNextPage;
-      }
-      expect(hasNextPage).toBe(false);
-      expect(seen).toEqual([threadIds[2], threadIds[1], threadIds[0]]);
-      expect(new Set(seen).size).toBe(threadIds.length);
-      expect(new Set(cursors).size).toBe(threadIds.length);
-      expect(
-        (await fetchContacts(token, { first: 1, search, after })).edges,
-      ).toEqual([]);
+      const connection = await fetchContacts(token, { first: 1, search });
+      expect(connection.edges).toEqual([]);
+      expect(connection.pageInfo).toEqual({
+        hasNextPage: false,
+        endCursor: null,
+      });
     } finally {
       for (const row of originalMessages) {
         // pi-lens-ignore: sql-injection
