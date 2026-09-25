@@ -1,4 +1,7 @@
-import { type RequestApprovalToolInput } from 'twenty-shared/ai';
+import {
+  type RequestApprovalToolInput,
+  type ReviewedGenericAction,
+} from 'twenty-shared/ai';
 
 import {
   REQUEST_APPROVAL_TOOL_NAME,
@@ -6,26 +9,54 @@ import {
   requestApprovalInputSchema,
 } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 
+const ALICE_ID = '7f1c1c1e-0d8a-4b37-9f6a-8e9d2f1b0a11';
+
 const validApprovalInput: RequestApprovalToolInput = {
-  title: 'Send creator outreach email',
-  summary: 'Send a first-touch email to one creator for the summer launch.',
-  actionKind: 'email_send',
-  riskLevel: 'medium',
-  toolName: 'send_email',
-  targetLabel: 'creator@example.test',
+  title: 'Qualify Alice',
+  summary: "Set Creator Alice's status to Qualified.",
+  actionKind: 'internal_record_write',
+  riskLevel: 'low',
+  toolName: 'update_one_creator',
+  proposedArguments: { id: ALICE_ID, creatorStatus: 'QUALIFIED' },
+  targetLabel: 'Alice',
   affectedRecords: [
     {
-      objectNameSingular: 'person',
-      recordId: 'person-1',
-      label: 'Creator Example',
+      objectNameSingular: 'creator',
+      recordId: ALICE_ID,
+      label: 'Alice',
     },
   ],
   preview: {
     format: 'markdown',
-    content: 'Hi Creator, would you like to try the product?',
+    content: 'Status: New -> Qualified',
   },
-  consequences: ['The recipient will receive an outbound email.'],
+  consequences: ["Alice's status becomes Qualified."],
   options: { allowRequestChanges: true },
+};
+
+const reviewedAction: ReviewedGenericAction = {
+  version: 1,
+  toolName: 'update_one_creator',
+  toolLabel: 'Update Creator',
+  argumentsDigest: 'a'.repeat(64),
+  arguments: { id: ALICE_ID, creatorStatus: 'QUALIFIED' },
+  target: {
+    kind: 'record_write',
+    operation: 'update',
+    objectNameSingular: 'creator',
+    records: [
+      {
+        recordId: ALICE_ID,
+        label: 'Alice',
+        changes: [
+          { field: 'creatorStatus', current: 'NEW', proposed: 'QUALIFIED' },
+        ],
+        linkedRecords: [],
+      },
+    ],
+    totalCount: 1,
+    targetFingerprint: 'b'.repeat(64),
+  },
 };
 
 describe('request_approval tool', () => {
@@ -49,19 +80,59 @@ describe('request_approval tool', () => {
     expect(tool.description).not.toContain('trivial actions');
   });
 
-  it('execute echoes the approval request with a pending status', async () => {
-    const tool = createRequestApprovalTool();
+  it('returns the server-derived reviewed action with a pending status', async () => {
+    const buildReviewedAction = jest.fn().mockResolvedValue(reviewedAction);
+    const tool = createRequestApprovalTool(undefined, { buildReviewedAction });
 
     const output = await tool.execute(validApprovalInput);
 
+    expect(buildReviewedAction).toHaveBeenCalledWith({
+      toolName: 'update_one_creator',
+      proposedArguments: { id: ALICE_ID, creatorStatus: 'QUALIFIED' },
+    });
     expect(output).toEqual({
       success: true,
       message: expect.any(String),
       result: {
         request: validApprovalInput,
+        reviewedAction,
         status: 'pending',
       },
     });
+  });
+
+  it('creates no pending approval when the action is not reviewable', async () => {
+    const tool = createRequestApprovalTool(undefined, {
+      buildReviewedAction: jest
+        .fn()
+        .mockRejectedValue(new Error('The creator record does not exist.')),
+    });
+
+    await expect(tool.execute(validApprovalInput)).rejects.toThrow(
+      'The creator record does not exist.',
+    );
+  });
+
+  it('refuses a generic approval when no reviewer is configured', async () => {
+    await expect(
+      createRequestApprovalTool().execute(validApprovalInput),
+    ).rejects.toThrow('Generic approval review is unavailable.');
+  });
+
+  it('requires the exact proposed arguments for generic approval', () => {
+    const { proposedArguments: _proposedArguments, ...withoutArguments } =
+      validApprovalInput;
+
+    expect(requestApprovalInputSchema.safeParse(withoutArguments).success).toBe(
+      false,
+    );
+  });
+
+  it('tells the model to learn the schema and reuse identical arguments', () => {
+    const { description } = createRequestApprovalTool();
+
+    expect(description).toContain('call learn_tools for that write tool first');
+    expect(description).toContain('identical toolName and arguments');
   });
 
   it('normalizes a model call that wraps direct approval fields in arguments', () => {
@@ -445,5 +516,77 @@ describe('request_approval tool', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  describe('published JSON Schema', () => {
+    type JsonSchemaNode = {
+      anyOf?: JsonSchemaNode[];
+      oneOf?: JsonSchemaNode[];
+      properties?: Record<string, JsonSchemaNode>;
+      additionalProperties?: unknown;
+    };
+    const publishedSchema = async (): Promise<JsonSchemaNode> =>
+      (await (
+        createRequestApprovalTool().inputSchema as unknown as {
+          jsonSchema: unknown;
+        }
+      ).jsonSchema) as JsonSchemaNode;
+    const branches = (node: JsonSchemaNode): JsonSchemaNode[] =>
+      node.anyOf || node.oneOf
+        ? [...(node.anyOf ?? []), ...(node.oneOf ?? [])].flatMap(branches)
+        : [node];
+
+    // Providers enforce this schema strictly, so proposedArguments must accept
+    // any exact tool input (MYAH-315 live UAT regression).
+    it('lets proposedArguments carry any tool arguments', async () => {
+      const generic = branches(await publishedSchema()).find(
+        (branch) => branch.properties?.proposedArguments,
+      );
+
+      expect(generic?.properties?.proposedArguments).toMatchObject({
+        type: 'object',
+      });
+      expect(
+        generic?.properties?.proposedArguments.additionalProperties,
+      ).not.toBe(false);
+      // Providers reject the whole call on any stray key; the generic branch is
+      // published open so Zod's strict check returns a correctable tool error.
+      expect(generic?.additionalProperties).toBeUndefined();
+    });
+
+    it('rejects stray generic keys on the server with Zod', () => {
+      expect(
+        requestApprovalInputSchema.safeParse({
+          ...validApprovalInput,
+          strayKey: true,
+        }).success,
+      ).toBe(false);
+    });
+
+    it('publishes registered send branches as strict objects', async () => {
+      const registered = branches(await publishedSchema()).filter(
+        (branch) => branch.properties?.actionInput,
+      );
+
+      expect(registered).toHaveLength(3);
+      for (const branch of registered) {
+        expect(branch.additionalProperties).toBe(false);
+      }
+    });
+
+    it('still validates model input with the approval schema', async () => {
+      const validate = (
+        createRequestApprovalTool().inputSchema as unknown as {
+          validate: (value: unknown) => Promise<{ success: boolean }>;
+        }
+      ).validate;
+
+      await expect(validate(validApprovalInput)).resolves.toMatchObject({
+        success: true,
+      });
+      await expect(
+        validate({ ...validApprovalInput, proposedArguments: undefined }),
+      ).resolves.toMatchObject({ success: false });
+    });
   });
 });

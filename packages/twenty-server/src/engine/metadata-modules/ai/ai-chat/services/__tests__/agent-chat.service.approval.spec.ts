@@ -5,19 +5,37 @@ import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/service
 import { CHAT_SYSTEM_PROMPTS } from 'src/engine/metadata-modules/ai/ai-chat/constants/chat-system-prompts.const';
 import { AiExceptionCode } from 'src/engine/metadata-modules/ai/ai.exception';
 
+const reviewedAction = {
+  version: 1,
+  toolName: 'update_one_creator',
+  toolLabel: 'Update Creator',
+  argumentsDigest: 'a'.repeat(64),
+  arguments: { id: 'alice-id', creatorStatus: 'QUALIFIED' },
+  target: { kind: 'arguments_only' },
+};
+
+const legacyApprovalRequest = {
+  title: 'Qualify Alice',
+  summary: "Set Alice's status to Qualified.",
+  actionKind: 'internal_record_write',
+  riskLevel: 'low',
+  consequences: ['Alice becomes Qualified.'],
+};
+
 const pendingApprovalOutput = {
   success: true,
   message: 'Approval request presented to the user; awaiting their decision.',
   result: {
-    request: {
-      title: 'Send email',
-      summary: 'Send one email.',
-      actionKind: 'email_send',
-      riskLevel: 'medium',
-      consequences: ['Email will be sent.'],
-    },
+    request: legacyApprovalRequest,
+    reviewedAction,
     status: 'pending',
   },
+};
+
+const legacyPendingApprovalOutput = {
+  success: true,
+  message: 'Approval request presented to the user; awaiting their decision.',
+  result: { request: legacyApprovalRequest, status: 'pending' },
 };
 
 const buildService = ({
@@ -171,6 +189,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
           message: 'User resolved the approval request.',
           result: expect.objectContaining({
             request: pendingApprovalOutput.result.request,
+            reviewedAction,
             status: 'resolved',
             decision: 'approved',
             comment: 'Looks good',
@@ -185,6 +204,59 @@ describe('AgentChatService.resolvePendingApproval', () => {
       shouldResume: true,
     });
   });
+
+  it('refuses to approve a legacy generic approval without a reviewed action', async () => {
+    const { service, threadRepository, messagePartRepository } = buildService({
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolOutput: legacyPendingApprovalOutput,
+        },
+      ],
+    });
+
+    await expect(
+      service.resolvePendingApproval({
+        threadId: 'thread-id',
+        messageId: 'message-id',
+        decision: { decision: 'approved' },
+        streamId: 'stream-id',
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+      }),
+    ).rejects.toMatchObject({
+      code: AiExceptionCode.INVALID_APPROVAL_DECISION,
+    });
+    expect(threadRepository.update).not.toHaveBeenCalled();
+    expect(messagePartRepository.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['rejected', 'changes_requested'] as const)(
+    'still lets the founder %s a legacy generic approval',
+    async (decision) => {
+      const { service } = buildService({
+        messageParts: [
+          {
+            id: 'part-id',
+            toolName: REQUEST_APPROVAL_TOOL_NAME,
+            toolOutput: legacyPendingApprovalOutput,
+          },
+        ],
+      });
+
+      await expect(
+        service.resolvePendingApproval({
+          threadId: 'thread-id',
+          messageId: 'message-id',
+          decision: { decision },
+          streamId: 'stream-id',
+          workspaceId: 'workspace-id',
+          userWorkspaceId: 'user-workspace-id',
+        }),
+      ).resolves.toMatchObject({ shouldResume: false });
+    },
+  );
 
   it('locks only the message root before loading nullable parts', async () => {
     const { service, messageRepository } = buildService();

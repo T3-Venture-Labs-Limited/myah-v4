@@ -9,6 +9,8 @@ export type RequestApprovalToolInput = {
   actionKind: ApprovalActionKind;
   riskLevel: ApprovalRiskLevel;
   toolName?: string;
+  // The exact arguments the approved tool will receive.
+  proposedArguments?: Record<string, unknown>;
   targetLabel?: string;
   affectedRecords?: RequestApprovalAffectedRecord[];
   preview?: RequestApprovalPreview;
