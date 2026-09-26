@@ -128,6 +128,7 @@ const loadService = (): EmailQueryServiceConstructor | undefined => {
 const buildHarness = (
   rows: unknown[] = rawRows,
   replyEvidenceReady = false,
+  responseFocusEnabled = true,
 ) => {
   const query = jest.fn().mockResolvedValue(rows);
   const builderByObjectName = new Map<string, Record<string, jest.Mock>>();
@@ -197,6 +198,7 @@ const buildHarness = (
     service: new Service!(
       globalWorkspaceOrmManager as never,
       visibilityPolicy as never,
+      { get: jest.fn(() => responseFocusEnabled) } as never,
     ),
   };
 };
@@ -369,6 +371,16 @@ describe('MyahInboxContactEmailQueryService', () => {
         'cards',
       ),
     ).toMatchObject({ id: anchorKey, threadId: emailThreadAId });
+  });
+
+  it('shows one legacy card per thread while response focus is disabled', async () => {
+    const harness = buildHarness([], true, false);
+    await harness.service.listCards(request()).catch(() => undefined);
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toContain(`roots."anchorKey" LIKE 'legacy:%'`);
+    expect(sql).not.toContain(
+      'message.direction=\'OUTGOING\' AND accepted."projectedMessageId" IS NULL THEN NULL',
+    );
   });
 
   it('maps a single authorized card envelope without changing legacy message paging', async () => {

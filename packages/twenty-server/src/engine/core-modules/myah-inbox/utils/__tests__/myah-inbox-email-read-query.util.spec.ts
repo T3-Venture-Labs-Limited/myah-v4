@@ -124,6 +124,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
   const serviceFixture = (
     denied = new Set<string>(),
     replyEvidenceReady = false,
+    responseFocusEnabled = true,
   ) => {
     const workspaceId = '00000000-0000-4000-8000-000000000053';
     const workspaceMemberId = '00000000-0000-4000-8000-000000000051';
@@ -247,6 +248,7 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
           {} as never,
           {} as never,
         ),
+        { get: () => responseFocusEnabled } as never,
       ),
     };
   };
@@ -1129,6 +1131,51 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
         historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
       }),
     ]);
+  });
+
+  it('keeps recorded replies inside one legacy thread card while response focus is disabled', async () => {
+    const fixture = serviceFixture(new Set(), true, false);
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'THREAD',NULL,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
+      [
+        fixture.request.workspace.id,
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000000052',
+      ],
+    );
+    const head = await fixture.service.listCards(fixture.request as never);
+    expect(head.cards.map((card) => card.anchorKey)).toEqual(
+      [3, 4, 5].map(
+        (i) => `legacy:00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      ),
+    );
+    for (const messageId of [
+      '00000000-0000-4000-8000-000000000101',
+      '00000000-0000-4000-8000-000000000102',
+    ]) {
+      const located = await fixture.service.locateMessage({
+        ...fixture.request,
+        snapshot: head.snapshot,
+        messageId,
+      } as never);
+      expect(located?.card.anchorKey).toBe(`legacy:${threadId}`);
+    }
+    const page = await fixture.service.listCardMessages({
+      ...fixture.request,
+      threadId,
+      anchorKey: `legacy:${threadId}`,
+      snapshot: head.snapshot,
+    } as never);
+    expect(page.olderCursor).not.toBeNull();
+    const older = await fixture.service.listCardMessages({
+      ...fixture.request,
+      threadId,
+      anchorKey: `legacy:${threadId}`,
+      snapshot: head.snapshot,
+      cursor: page.olderCursor,
+    } as never);
+    expect(older.messages.length).toBeGreaterThan(0);
   });
 
   it('uses a deterministic neutral THREAD group alongside unchanged explicit legacy thread identity', async () => {
