@@ -15,7 +15,7 @@ import {
   type UITools,
 } from 'ai';
 import { type APP_LOCALES } from 'twenty-shared/translations';
-import { AppPath } from 'twenty-shared/types';
+import { AppPath, FieldMetadataType, RelationType } from 'twenty-shared/types';
 import { getAppPath, isDefined, isValidUuid } from 'twenty-shared/utils';
 
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
@@ -81,10 +81,26 @@ import {
   allowRegisteredActionSenders,
   getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
-  getLatestApprovedGenericToolName,
+  getLatestApprovedGenericAction,
   hasApprovedRegisteredActionApproval,
+  type LatestApprovedGenericAction,
   PRE_APPROVAL_SAFE_TOOL_NAMES,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
+import {
+  consumeApprovedGenericAction,
+  invalidateApprovedGenericAction,
+  recordApprovedGenericActionOutcome,
+} from 'src/engine/metadata-modules/ai/ai-chat/utils/generic-approval-consumption.util';
+import { computeGenericApprovalDigest } from 'src/engine/metadata-modules/ai/ai-chat/utils/generic-approval-digest.util';
+import {
+  createGenericApprovalReviewer,
+  isGenericApprovalDeniedTool,
+  isGenericApprovalSchemaOnlyTool,
+} from 'src/engine/metadata-modules/ai/ai-chat/utils/generic-approval-review.util';
+import { getFlatFieldsFromFlatObjectMetadata } from 'src/engine/api/graphql/workspace-schema-builder/utils/get-flat-fields-for-flat-object-metadata.util';
+import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { assertHumanInputToolCallIsExclusive } from 'src/engine/metadata-modules/ai/ai-chat/utils/assert-human-input-tool-call-is-exclusive.util';
 import { extractCodeInterpreterFiles } from 'src/engine/metadata-modules/ai/ai-chat/utils/extract-code-interpreter-files.util';
 import {
@@ -152,6 +168,10 @@ export class ChatExecutionService {
     private readonly instagramMessagePermissionService?: InstagramMessagePermissionService,
     @Optional()
     private readonly instagramMessageRecordAccessService?: InstagramMessageRecordAccessService,
+    // Only labels linked records on generic approval cards; absent in some
+    // unit harnesses, where linked records show IDs without labels.
+    @Optional()
+    private readonly workspaceCacheService?: WorkspaceCacheService,
   ) {}
 
   async streamChat({
@@ -279,7 +299,16 @@ export class ChatExecutionService {
       ...nativeTools,
     };
 
-    const approvedGenericToolName = getLatestApprovedGenericToolName(messages);
+    const approvedGenericAction = getLatestApprovedGenericAction(messages);
+    const approvedGenericToolName =
+      approvedGenericAction?.reviewedAction.toolName ?? null;
+    const genericApprovalReviewer = createGenericApprovalReviewer({
+      toolRegistry: this.toolRegistry,
+      toolContext,
+      toolCatalog,
+      resolveLinkedObjectNames: (objectNameSingular) =>
+        this.resolveLinkedObjectNames(workspace.id, objectNameSingular),
+    });
     const hasApprovedRegisteredAction =
       hasApprovedRegisteredActionApproval(messages);
     const preApprovalSafeToolNames = new Set(
@@ -318,26 +347,40 @@ export class ChatExecutionService {
     const activeTools: ToolSet = {
       ...directTools,
       [ASK_QUESTIONS_TOOL_NAME]: createAskQuestionsTool(),
-      [REQUEST_APPROVAL_TOOL_NAME]: createRequestApprovalTool({
-        workspaceId: workspace.id,
-        userWorkspaceId,
-        threadId,
-        actionDefinitions: {
-          send_instagram_reply: this.instagramMessageAuthorityReader,
-          send_outreach_email: this.outreachEmailActionDefinition,
-          send_myah_inbox_reply: this.myahInboxReplyActionDefinition,
+      [REQUEST_APPROVAL_TOOL_NAME]: createRequestApprovalTool(
+        {
+          workspaceId: workspace.id,
+          userWorkspaceId,
+          threadId,
+          actionDefinitions: {
+            send_instagram_reply: this.instagramMessageAuthorityReader,
+            send_outreach_email: this.outreachEmailActionDefinition,
+            send_myah_inbox_reply: this.myahInboxReplyActionDefinition,
+          },
+          actionApprovalService: this.actionApprovalService,
+          instagramMessagePermissionService:
+            this.instagramMessagePermissionService!,
+          instagramMessageRecordAccessService:
+            this.instagramMessageRecordAccessService!,
+          rolePermissionConfig: { unionOf: [roleId] },
         },
-        actionApprovalService: this.actionApprovalService,
-        instagramMessagePermissionService:
-          this.instagramMessagePermissionService!,
-        instagramMessageRecordAccessService:
-          this.instagramMessageRecordAccessService!,
-        rolePermissionConfig: { unionOf: [roleId] },
-      }),
+        {
+          buildReviewedAction: genericApprovalReviewer.buildReviewedAction,
+        },
+      ),
       [LEARN_TOOLS_TOOL_NAME]: createLearnToolsTool(
         this.toolRegistry,
         toolContext,
         preApprovalExcludedToolNames,
+        // Generic internal writes only: send, email, external-write, and code
+        // tools keep their existing pre-approval visibility.
+        new Set(
+          [...preApprovalExcludedToolNames].filter(
+            (toolName) =>
+              isGenericApprovalSchemaOnlyTool(toolName) &&
+              !isGenericApprovalDeniedTool(toolName),
+          ),
+        ),
       ),
       [EXECUTE_TOOL_TOOL_NAME]: createExecuteToolTool(
         this.toolRegistry,
@@ -346,7 +389,41 @@ export class ChatExecutionService {
           compactOutput: true,
           excludeTools: preApprovalExcludedToolNames,
           allowedTools: preApprovalSafeToolNames,
-          singleUseToolName: approvedGenericToolName ?? undefined,
+          approvedActionGuard: approvedGenericAction
+            ? {
+                toolName: approvedGenericAction.reviewedAction.toolName,
+                verifyAndConsume: (args) =>
+                  this.verifyAndConsumeGenericApproval({
+                    approvedGenericAction,
+                    args,
+                    verifyTarget: genericApprovalReviewer.verifyTarget,
+                    workspaceId: workspace.id,
+                    threadId,
+                    userWorkspaceId,
+                  }),
+                recordOutcome: async (outcome) => {
+                  if (!threadId) return;
+
+                  await this.actionApprovalService.executeInTransaction(
+                    (manager) =>
+                      recordApprovedGenericActionOutcome(
+                        manager,
+                        {
+                          workspaceId: workspace.id,
+                          threadId,
+                          userWorkspaceId,
+                          messageId: approvedGenericAction.messageId,
+                          toolCallId: approvedGenericAction.toolCallId,
+                          argumentsDigest:
+                            approvedGenericAction.reviewedAction
+                              .argumentsDigest,
+                        },
+                        outcome,
+                      ),
+                  );
+                },
+              }
+            : undefined,
           spillLargeOutput: true,
         },
       ),
@@ -664,11 +741,31 @@ export class ChatExecutionService {
       messages: [systemMessage, ...modelMessages],
       tools: guardedTools,
       abortSignal,
-      stopWhen: (step) =>
-        stepCountIs(AGENT_CONFIG.MAX_STEPS)(step) ||
-        hasToolCall(ASK_QUESTIONS_TOOL_NAME)(step) ||
-        hasToolCall(REQUEST_APPROVAL_TOOL_NAME)(step) ||
-        hasNoMoreAvailableCredits,
+      stopWhen: (step) => {
+        const lastStep = step.steps[step.steps.length - 1];
+        const approvalCall = lastStep?.toolCalls.find(
+          ({ toolName }) => toolName === REQUEST_APPROVAL_TOOL_NAME,
+        );
+        const approvalIsPending = lastStep?.toolResults.some(
+          ({ toolName, output }) =>
+            toolName === REQUEST_APPROVAL_TOOL_NAME &&
+            isObject(output) &&
+            isObject(output.result) &&
+            output.result.status === 'pending',
+        );
+
+        return (
+          stepCountIs(AGENT_CONFIG.MAX_STEPS)(step) ||
+          hasToolCall(ASK_QUESTIONS_TOOL_NAME)(step) ||
+          (approvalCall !== undefined &&
+            ((isObject(approvalCall.input) &&
+              ('actionInput' in approvalCall.input ||
+                (isObject(approvalCall.input.arguments) &&
+                  'actionInput' in approvalCall.input.arguments))) ||
+              approvalIsPending === true)) ||
+          hasNoMoreAvailableCredits
+        );
+      },
       maxRetries: usesManagedOpenRouter ? 0 : undefined,
       experimental_telemetry: usesManagedOpenRouter
         ? MANAGED_AI_TELEMETRY_CONFIG
@@ -885,6 +982,139 @@ export class ChatExecutionService {
       modelConfig,
       hasNoMoreAvailableCredits: () => hasNoMoreAvailableCredits,
     };
+  }
+
+  // Runs immediately before the approved generic write: exact arguments, then
+  // fresh target and authorization, then an atomic durable consume. Any
+  // refusal stops before the write; mismatches also burn the approval.
+  private async verifyAndConsumeGenericApproval({
+    approvedGenericAction,
+    args,
+    verifyTarget,
+    workspaceId,
+    threadId,
+    userWorkspaceId,
+  }: {
+    approvedGenericAction: LatestApprovedGenericAction;
+    args: Record<string, unknown>;
+    verifyTarget: ReturnType<
+      typeof createGenericApprovalReviewer
+    >['verifyTarget'];
+    workspaceId: string;
+    threadId: string | undefined;
+    userWorkspaceId: string;
+  }): Promise<ToolOutput | null> {
+    const { reviewedAction } = approvedGenericAction;
+    const refuse = (reason: string, detail: string): ToolOutput => ({
+      success: false,
+      message: 'Approved action was not executed',
+      error: `${reason}: ${detail} Nothing was changed. Propose the action again with request_approval to get a new approval.`,
+    });
+
+    if (!threadId) {
+      return refuse(
+        'NOT_AUTHORIZED_OR_UNAVAILABLE',
+        'An authenticated chat thread is required.',
+      );
+    }
+
+    const target = {
+      workspaceId,
+      threadId,
+      userWorkspaceId,
+      messageId: approvedGenericAction.messageId,
+      toolCallId: approvedGenericAction.toolCallId,
+      argumentsDigest: reviewedAction.argumentsDigest,
+    };
+    const invalidate = (
+      reason:
+        | 'ACTION_CHANGED'
+        | 'TARGET_CHANGED'
+        | 'NOT_AUTHORIZED_OR_UNAVAILABLE'
+        | 'APPROVAL_EXPIRED',
+    ) =>
+      this.actionApprovalService.executeInTransaction((manager) =>
+        invalidateApprovedGenericAction(manager, target, reason),
+      );
+
+    if (computeGenericApprovalDigest(args) !== reviewedAction.argumentsDigest) {
+      await invalidate('ACTION_CHANGED');
+
+      return refuse(
+        'ACTION_CHANGED',
+        'The call does not match the approved target, values, or fields.',
+      );
+    }
+
+    const verification = await verifyTarget(reviewedAction);
+
+    if (!verification.ok) {
+      await invalidate(verification.reason);
+
+      return refuse(verification.reason, verification.message);
+    }
+
+    const consumed = await this.actionApprovalService.executeInTransaction(
+      (manager) => consumeApprovedGenericAction(manager, target),
+    );
+
+    if (!consumed) {
+      const expired = await invalidate('APPROVAL_EXPIRED');
+
+      return refuse(
+        expired ? 'APPROVAL_EXPIRED' : 'APPROVAL_ALREADY_USED',
+        expired
+          ? 'The approval expired before the action ran.'
+          : 'This approval was already used or is no longer valid.',
+      );
+    }
+
+    return null;
+  }
+
+  // Relation join column (e.g. campaignId) -> related object's singular name.
+  private async resolveLinkedObjectNames(
+    workspaceId: string,
+    objectNameSingular: string,
+  ): Promise<Record<string, string>> {
+    if (!this.workspaceCacheService) {
+      return {};
+    }
+
+    const { flatObjectMetadataMaps, flatFieldMetadataMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'flatObjectMetadataMaps',
+        'flatFieldMetadataMaps',
+      ]);
+    const flatObject = Object.values(
+      flatObjectMetadataMaps.byUniversalIdentifier,
+    ).find((candidate) => candidate?.nameSingular === objectNameSingular);
+
+    if (!flatObject) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      getFlatFieldsFromFlatObjectMetadata(flatObject, flatFieldMetadataMaps)
+        .filter(
+          (field) =>
+            (field.type === FieldMetadataType.RELATION ||
+              field.type === FieldMetadataType.MORPH_RELATION) &&
+            (field.settings as { relationType?: RelationType } | null)
+              ?.relationType === RelationType.MANY_TO_ONE &&
+            isDefined(field.relationTargetObjectMetadataId),
+        )
+        .flatMap((field) => {
+          const targetObject = findFlatEntityByIdInFlatEntityMaps({
+            flatEntityId: field.relationTargetObjectMetadataId as string,
+            flatEntityMaps: flatObjectMetadataMaps,
+          });
+
+          return targetObject
+            ? [[`${field.name}Id`, targetObject.nameSingular]]
+            : [];
+        }),
+    );
   }
 
   private extractLastUserText(messages: UIMessage[]): string {

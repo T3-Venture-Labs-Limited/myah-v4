@@ -65,7 +65,7 @@ if (sendMyahInboxReply === undefined) {
   throw new Error('Missing Myah Inbox registered action tool');
 }
 
-const internalWriteApproval = `Call ${REQUEST_APPROVAL_TOOL_NAME} immediately before every internal/generated write in its own step; after approval, execute exactly that one write and read back its returned state. Never authorize or describe more than one write tool call in the same approval.`;
+export const internalWriteApproval = `Call ${REQUEST_APPROVAL_TOOL_NAME} immediately before every internal/generated write in its own step, with toolName and the exact proposedArguments (learn the write tool's schema first); after approval, execute exactly that one write with the identical arguments and read back its returned state. If the approved write is refused, do not retry with changes; propose it again for a new approval. Never authorize or describe more than one write tool call in the same approval.`;
 
 const commonFailureHandling = `## Failure handling
 

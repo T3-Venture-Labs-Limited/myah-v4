@@ -1,6 +1,7 @@
 import { isToolUIPart } from 'ai';
 import { type ExtendedUIMessage } from 'twenty-shared/ai';
 
+import { markApprovalPending } from '@/ai/utils/markApprovalPending';
 import { markApprovalResolved } from '@/ai/utils/markApprovalResolved';
 
 const request = {
@@ -51,11 +52,88 @@ describe('approval optimistic state helpers', () => {
 
     expect(resolvedPart.output).toEqual({
       result: {
+        request,
         status: 'resolved',
         decision: 'approved',
         comment: 'Looks good',
         decidedAt: expect.any(String),
       },
+    });
+  });
+
+  it.each(['approved', 'rejected'] as const)(
+    'keeps the reviewed generic action visible when %s',
+    (decision) => {
+      const reviewedAction = {
+        version: 1,
+        toolName: 'update_one_creator',
+        toolLabel: 'Update Creator',
+        argumentsDigest: 'a'.repeat(64),
+        arguments: { id: 'alice-id', creatorStatus: 'QUALIFIED' },
+        target: { kind: 'arguments_only' },
+      };
+      const reviewedMessages = [
+        {
+          ...messages[0],
+          parts: [
+            {
+              ...messages[0].parts[0],
+              output: {
+                result: { request, reviewedAction, status: 'pending' },
+              },
+            },
+          ],
+        },
+      ] as ExtendedUIMessage[];
+
+      const [resolvedPart] = markApprovalResolved(
+        reviewedMessages,
+        'message-id',
+        'approval-call',
+        { decision },
+      )[0].parts;
+
+      expect(resolvedPart).toMatchObject({
+        output: {
+          result: { request, reviewedAction, status: 'resolved', decision },
+        },
+      });
+    },
+  );
+
+  it('keeps the reviewed generic action when rolling back to pending', () => {
+    const reviewedAction = {
+      version: 1,
+      toolName: 'update_one_creator',
+      toolLabel: 'Update Creator',
+      argumentsDigest: 'a'.repeat(64),
+      arguments: { id: 'alice-id' },
+      target: { kind: 'arguments_only' },
+    };
+    const resolvedMessages = [
+      {
+        ...messages[0],
+        parts: [
+          {
+            ...messages[0].parts[0],
+            output: {
+              result: {
+                request,
+                reviewedAction,
+                status: 'resolved',
+                decision: 'approved',
+              },
+            },
+          },
+        ],
+      },
+    ] as ExtendedUIMessage[];
+
+    expect(
+      markApprovalPending(resolvedMessages, 'message-id', 'approval-call')[0]
+        .parts[0],
+    ).toMatchObject({
+      output: { result: { request, reviewedAction, status: 'pending' } },
     });
   });
 

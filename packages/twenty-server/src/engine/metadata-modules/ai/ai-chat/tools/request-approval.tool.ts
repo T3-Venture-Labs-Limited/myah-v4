@@ -1,9 +1,12 @@
+import { jsonSchema } from 'ai';
+import { type JSONSchema7 } from 'json-schema';
 import { z } from 'zod';
 
 import {
   REQUEST_APPROVAL_TOOL_NAME,
   type RequestApprovalToolInput,
   type RequestApprovalToolResult,
+  type ReviewedGenericAction,
 } from 'twenty-shared/ai';
 
 import { InstagramReplyActionProposalInputZodSchema } from 'src/engine/core-modules/tool/tools/instagram-tool/instagram-reply-tool.schema';
@@ -75,6 +78,11 @@ const requestApprovalInputObjectSchema = z
       .string()
       .min(1)
       .describe('The exact tool that may run once after approval.'),
+    proposedArguments: z
+      .record(z.string(), z.unknown())
+      .describe(
+        'The exact arguments the tool will receive. Learn the tool schema first. After approval, pass these to execute_tool unchanged.',
+      ),
     targetLabel: z
       .string()
       .optional()
@@ -143,6 +151,8 @@ const registeredApprovalInputSchema = z.discriminatedUnion('toolName', [
   registeredMyahInboxReplyApprovalInputSchema,
 ]);
 
+// z.preprocess passes unknown to the union schema for validation below.
+// pi-lens-ignore: no-unknown-returns
 const unwrapDirectApprovalArguments = (input: unknown): unknown => {
   if (
     !input ||
@@ -167,9 +177,51 @@ const unwrapDirectApprovalArguments = (input: unknown): unknown => {
   return argumentsValue;
 };
 
+const requestApprovalInputUnionSchema = z.union([
+  requestApprovalInputObjectSchema,
+  registeredApprovalInputSchema,
+]);
+
 export const requestApprovalInputSchema = z.preprocess(
   unwrapDirectApprovalArguments,
-  z.union([requestApprovalInputObjectSchema, registeredApprovalInputSchema]),
+  requestApprovalInputUnionSchema,
+);
+
+const toToolJsonSchema = (schema: z.ZodType): JSONSchema7 => {
+  const { $schema: _draft, ...jsonSchemaBody } = z.toJSONSchema(schema, {
+    target: 'draft-7',
+    io: 'input',
+  }) as JSONSchema7;
+
+  return jsonSchemaBody;
+};
+
+// Published to the model instead of the AI SDK's Zod conversion, which forces
+// additionalProperties: false on every object (proposedArguments could only be
+// {}). The generic branch is also published open: providers reject the whole
+// call on one stray key, while Zod's strict check below returns an error the
+// model can correct. Registered send branches stay strict and unchanged.
+const requestApprovalToolInputSchema = jsonSchema<
+  z.infer<typeof requestApprovalInputSchema>
+>(
+  () => {
+    const { additionalProperties: _strict, ...genericBranch } =
+      toToolJsonSchema(requestApprovalInputObjectSchema);
+
+    return {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      anyOf: [genericBranch, toToolJsonSchema(registeredApprovalInputSchema)],
+    };
+  },
+  {
+    validate: async (value) => {
+      const result = await z.safeParseAsync(requestApprovalInputSchema, value);
+
+      return result.success
+        ? { success: true, value: result.data }
+        : { success: false, error: result.error };
+    },
+  },
 );
 
 type RegisteredApprovalInput = z.infer<typeof registeredApprovalInputSchema>;
@@ -189,6 +241,15 @@ type RegisteredApprovalOptions = {
   rolePermissionConfig?: RolePermissionConfig;
 };
 
+type GenericApprovalOptions = {
+  // Derives the reviewed action from current data; throws when the action is
+  // not reviewable, so no approval card is created.
+  buildReviewedAction: (input: {
+    toolName: string;
+    proposedArguments: Record<string, unknown>;
+  }) => Promise<ReviewedGenericAction>;
+};
+
 type RequestApprovalPendingOutput = {
   success: true;
   message: string;
@@ -202,6 +263,7 @@ type RequestApprovalPendingOutput = {
 
 export const createRequestApprovalTool = (
   registeredApprovalOptions?: RegisteredApprovalOptions,
+  genericApprovalOptions?: GenericApprovalOptions,
 ) => {
   const registeredActions = registeredApprovalOptions
     ? {
@@ -259,8 +321,9 @@ export const createRequestApprovalTool = (
       'Use this tool before external writes, public posts, outbound email, destructive changes, or financial actions. ' +
       'Do not use it for read-only lookups. For a prepared Instagram reply or outreach email, provide only its registered record ID. ' +
       'Approval is not execution: after approval, call the real action tool through the normal tool pipeline. ' +
-      'If rejected, stop or ask for a safer alternative. Call at most one human-input tool in a single turn.',
-    inputSchema: requestApprovalInputSchema,
+      'For a generic write, call learn_tools for that write tool first, then provide toolName and proposedArguments exactly as the tool will receive them; the card shows the server-derived target and changes. After approval, call execute_tool with the identical toolName and arguments. A different target, value, or field is refused before any write and needs a new approval. ' +
+      'If the user rejects a pending approval, stop or ask for a safer alternative. If a generic approval request is refused before it reaches the user, explain the refusal or propose a corrected request in the same turn. Call at most one human-input tool per step.',
+    inputSchema: requestApprovalToolInputSchema,
     execute: async (
       input: RequestApprovalToolInput | RegisteredApprovalInput,
     ): Promise<RequestApprovalPendingOutput> => {
@@ -327,12 +390,22 @@ export const createRequestApprovalTool = (
         };
       }
 
+      if (!genericApprovalOptions) {
+        throw new Error('Generic approval review is unavailable.');
+      }
+
+      const reviewedAction = await genericApprovalOptions.buildReviewedAction({
+        toolName: input.toolName ?? '',
+        proposedArguments: input.proposedArguments ?? {},
+      });
+
       return {
         success: true,
         message:
           'Approval request presented to the user; awaiting their decision.',
         result: {
           request: input,
+          reviewedAction,
           status: 'pending',
         },
       };

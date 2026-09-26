@@ -347,4 +347,184 @@ describe('AiChatApprovalCard', () => {
       screen.getByRole('button', { name: 'Request changes' }),
     ).toBeDisabled();
   });
+
+  describe('generic approval with a server-derived reviewed action', () => {
+    const aliceUpdate: AgentChatPendingApproval = {
+      messageId: 'message-id',
+      toolCallId: 'tool-call-id',
+      request: {
+        title: 'Qualify Tim',
+        summary: "Set Tim's status to Qualified.",
+        actionKind: 'internal_record_write',
+        riskLevel: 'low',
+        targetLabel: 'Tim',
+        consequences: ['A creator becomes Qualified.'],
+      },
+      reviewedAction: {
+        version: 1,
+        toolName: 'update_one_creator',
+        toolLabel: 'Update Creator',
+        argumentsDigest: 'a'.repeat(64),
+        arguments: { id: 'alice-id', creatorStatus: 'QUALIFIED' },
+        target: {
+          kind: 'record_write',
+          operation: 'update',
+          objectNameSingular: 'creator',
+          records: [
+            {
+              recordId: 'alice-id',
+              label: 'Alice',
+              changes: [
+                {
+                  field: 'creatorStatus',
+                  current: 'NEW',
+                  proposed: 'QUALIFIED',
+                },
+              ],
+              linkedRecords: [],
+            },
+          ],
+          totalCount: 1,
+          targetFingerprint: 'b'.repeat(64),
+        },
+      },
+    };
+
+    it('shows the real target and change from the reviewed action', () => {
+      renderApprovalCard(aliceUpdate);
+
+      expect(screen.getByText('Review: Update Creator')).toBeInTheDocument();
+      expect(screen.getByText('What will change')).toBeInTheDocument();
+      expect(screen.getByText('Alice (creator)')).toBeInTheDocument();
+      expect(
+        screen.getByText('creatorStatus: NEW → QUALIFIED'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    });
+
+    it('distinguishes clearing a field from setting it to null', () => {
+      renderApprovalCard({
+        ...aliceUpdate,
+        reviewedAction: {
+          ...aliceUpdate.reviewedAction!,
+          target: {
+            kind: 'record_write',
+            operation: 'update',
+            objectNameSingular: 'creator',
+            records: [
+              {
+                recordId: 'alice-id',
+                label: 'Alice',
+                changes: [{ field: 'city', current: null, proposed: '' }],
+                linkedRecords: [],
+              },
+            ],
+            totalCount: 1,
+            targetFingerprint: 'b'.repeat(64),
+          },
+        },
+      });
+
+      expect(screen.getByText('city: — → ""')).toBeInTheDocument();
+    });
+
+    it('keeps a disagreeing model summary secondary and never as the target', () => {
+      renderApprovalCard(aliceUpdate);
+
+      expect(screen.queryByText('Qualify Tim')).not.toBeInTheDocument();
+      expect(screen.queryByText('Tim')).not.toBeInTheDocument();
+      expect(screen.getByText("Assistant's description")).toBeInTheDocument();
+      expect(
+        screen.getByText("Set Tim's status to Qualified."),
+      ).toBeInTheDocument();
+    });
+
+    it('marks contradictory risk, action, and consequences as assistant-authored rather than reviewed facts', () => {
+      renderApprovalCard({
+        ...aliceUpdate,
+        request: {
+          ...aliceUpdate.request!,
+          actionKind: 'email_send',
+          riskLevel: 'low',
+          consequences: ['No records will change.'],
+        },
+      });
+
+      expect(screen.getByText('Alice (creator)')).toBeInTheDocument();
+      expect(
+        screen.getByText('creatorStatus: NEW → QUALIFIED'),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Assistant's risk estimate: Low")).toBeVisible();
+      expect(
+        screen.getByText("Assistant's action category: Send email"),
+      ).toBeVisible();
+      expect(screen.getByText("Assistant's stated consequences")).toBeVisible();
+      expect(screen.getByText('No records will change.')).toBeVisible();
+      expect(screen.queryByText('Risk: Low')).not.toBeInTheDocument();
+      expect(screen.queryByText('Action: Send email')).not.toBeInTheDocument();
+    });
+
+    it('shows the exact arguments of a non-record tool', () => {
+      renderApprovalCard({
+        ...aliceUpdate,
+        reviewedAction: {
+          version: 1,
+          toolName: 'update_myah_inbox_thread',
+          toolLabel: 'Update Inbox thread',
+          argumentsDigest: 'c'.repeat(64),
+          arguments: { messageThreadId: 'thread-id', state: 'CLOSED' },
+          target: { kind: 'arguments_only' },
+        },
+      });
+
+      expect(screen.getByText('What will run')).toBeInTheDocument();
+      expect(
+        screen.getByText(/"messageThreadId": "thread-id"/),
+      ).toBeInTheDocument();
+    });
+
+    it('labels a linked record next to its ID on a creation', () => {
+      renderApprovalCard({
+        ...aliceUpdate,
+        reviewedAction: {
+          ...aliceUpdate.reviewedAction!,
+          toolName: 'create_one_task_target',
+          target: {
+            kind: 'record_write',
+            operation: 'create',
+            objectNameSingular: 'taskTarget',
+            records: [
+              {
+                recordId: null,
+                label: null,
+                changes: [{ field: 'creatorId', proposed: 'alice-id' }],
+                linkedRecords: [
+                  { field: 'creatorId', recordId: 'alice-id', label: 'Alice' },
+                ],
+              },
+            ],
+            totalCount: 1,
+            targetFingerprint: null,
+          },
+        },
+      });
+
+      expect(screen.getByText('What will be created')).toBeInTheDocument();
+      expect(
+        screen.getByText('creatorId: Alice (alice-id)'),
+      ).toBeInTheDocument();
+    });
+
+    it('never offers approval for a legacy generic request without a reviewed action', () => {
+      renderApprovalCard(pendingApproval);
+
+      expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
+      expect(
+        screen.getByText(
+          /The exact action is unavailable, so it cannot be approved/,
+        ),
+      ).toBeInTheDocument();
+    });
+  });
 });

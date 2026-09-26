@@ -2863,6 +2863,11 @@ msgstr "and"
 msgid "And"
 msgstr "And"
 
+#. js-lingui-id: ZYrz4f
+#: src/modules/ai/components/AiChatReviewedActionSummary.tsx
+msgid "and {hiddenCount} more records"
+msgstr "and {hiddenCount} more records"
+
 #. js-lingui-id: YkfDoz
 #: src/modules/settings/billing/components/internal/SettingsBillingPlanComparisonTable.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
@@ -3179,10 +3184,30 @@ msgstr "Approved"
 msgid "Approved access domain validated"
 msgstr "Approved access domain validated"
 
+#. js-lingui-id: NhbRu1
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Approved and run"
+msgstr "Approved and run"
+
 #. js-lingui-id: 9tggYj
 #: src/pages/settings/members/tabs/SettingsWorkspaceMembersInviteTab.tsx
 msgid "Approved Domains"
 msgstr "Approved Domains"
+
+#. js-lingui-id: uyPedL
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Approved, but not run"
+msgstr "Approved, but not run"
+
+#. js-lingui-id: dFFvwy
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Approved, execution reported a failure"
+msgstr "Approved, execution reported a failure"
+
+#. js-lingui-id: uuaBEP
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Approved, outcome unconfirmed"
+msgstr "Approved, outcome unconfirmed"
 
 #. js-lingui-id: VDvaN2
 #: src/modules/settings/admin-panel/components/SettingsAdminContent.tsx
@@ -3402,6 +3427,31 @@ msgstr "Assignment"
 #: src/pages/settings/ai/SettingsAgentTurnDetail.tsx
 msgid "Assistant"
 msgstr "Assistant"
+
+#. js-lingui-id: ynxChG
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Assistant's action category"
+msgstr "Assistant's action category"
+
+#. js-lingui-id: Xj6fF3
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Assistant's description"
+msgstr "Assistant's description"
+
+#. js-lingui-id: NA2qYX
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Assistant's preview"
+msgstr "Assistant's preview"
+
+#. js-lingui-id: o7Btq0
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Assistant's risk estimate"
+msgstr "Assistant's risk estimate"
+
+#. js-lingui-id: Agd2Ax
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Assistant's stated consequences"
+msgstr "Assistant's stated consequences"
 
 #. js-lingui-id: 4H6WHS
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminHealthStatus.tsx
@@ -14326,6 +14376,12 @@ msgstr "Never shown at sign-in. Members use the workspace URL."
 msgid "New"
 msgstr "New"
 
+#. js-lingui-id: 6WSYbN
+#. placeholder {0}: target.objectNameSingular
+#: src/modules/ai/components/AiChatReviewedActionSummary.tsx
+msgid "New {0}"
+msgstr "New {0}"
+
 #. js-lingui-id: LfvvW4
 #: src/modules/side-panel/hooks/useOpenRecordInSidePanel.ts
 msgid "New {objectLabelSingular}"
@@ -16681,6 +16737,11 @@ msgstr "Permanently Destroy {objectLabel}"
 msgid "permission flag"
 msgstr "permission flag"
 
+#. js-lingui-id: irqSMh
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Permission is missing or the records are unavailable. Nothing was changed."
+msgstr "Permission is missing or the records are unavailable. Nothing was changed."
+
 #. js-lingui-id: 9cDpsw
 #: src/modules/settings/roles/role/components/SettingsRole.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowEditActionAiAgent.tsx
@@ -18883,6 +18944,12 @@ msgstr "Review warmup capacity"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Review warmup capacity purchase"
 msgstr "Review warmup capacity purchase"
+
+#. js-lingui-id: Amm9js
+#. placeholder {0}: reviewedAction.toolLabel
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review: {0}"
+msgstr "Review: {0}"
 
 #. js-lingui-id: 6LTyxl
 #: src/modules/ai/components/AiChatApprovalCard.tsx
@@ -21801,6 +21868,16 @@ msgstr "The address your workspace will send and receive email from (e.g. suppor
 msgid "The API endpoint for your OpenAI-compatible provider"
 msgstr "The API endpoint for your OpenAI-compatible provider"
 
+#. js-lingui-id: 5awvja
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "The approval expired before it ran. Nothing was changed; ask for a new approval."
+msgstr "The approval expired before it ran. Nothing was changed; ask for a new approval."
+
+#. js-lingui-id: cEqByE
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "The assistant tried a different action than the one approved. Nothing was changed; ask for a new approval."
+msgstr "The assistant tried a different action than the one approved. Nothing was changed; ask for a new approval."
+
 #. js-lingui-id: qjNojw
 #: src/pages/settings/admin-panel/SettingsAdminNewAiProvider.tsx
 msgid "The AWS region for Bedrock"
@@ -21936,6 +22013,11 @@ msgstr "The email associated to your account"
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "The email will be sent to the selected recipient."
 msgstr "The email will be sent to the selected recipient."
+
+#. js-lingui-id: VvN+ps
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The exact action is unavailable, so it cannot be approved. Reject this request and ask the assistant to propose it again."
+msgstr "The exact action is unavailable, so it cannot be approved. Reject this request and ask the assistant to propose it again."
 
 #. js-lingui-id: f1P1mM
 #: src/modules/ai/components/AiChatApprovalCard.tsx
@@ -22137,6 +22219,11 @@ msgstr "The provider did not respond."
 msgid "The recipient or sender changed. Refresh the recipient before sending."
 msgstr "The recipient or sender changed. Refresh the recipient before sending."
 
+#. js-lingui-id: BP0ome
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "The records changed after review. Nothing was changed; ask for a new approval."
+msgstr "The records changed after review. Nothing was changed; ask for a new approval."
+
 #. js-lingui-id: c82Ji/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/ai/components/AiChatApprovalCard.tsx
@@ -22185,6 +22272,11 @@ msgstr "The subscription quantity could not be scheduled."
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "The TLS certificate could not be verified. Check the connection security setting."
 msgstr "The TLS certificate could not be verified. Check the connection security setting."
+
+#. js-lingui-id: 2rMze2
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "The tool may have made changes. Check the records before requesting a new approval."
+msgstr "The tool may have made changes. Check the records before requesting a new approval."
 
 #. js-lingui-id: qrhV2s
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
@@ -25016,6 +25108,26 @@ msgstr "What can I help you with?"
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeysNew.tsx
 msgid "What this API can do: Select a user role to define its permissions."
 msgstr "What this API can do: Select a user role to define its permissions."
+
+#. js-lingui-id: 7kLDSk
+#: src/modules/ai/components/AiChatReviewedActionSummary.tsx
+msgid "What will be created"
+msgstr "What will be created"
+
+#. js-lingui-id: Uqx3vN
+#: src/modules/ai/components/AiChatReviewedActionSummary.tsx
+msgid "What will be deleted"
+msgstr "What will be deleted"
+
+#. js-lingui-id: Q6PLDS
+#: src/modules/ai/components/AiChatReviewedActionSummary.tsx
+msgid "What will change"
+msgstr "What will change"
+
+#. js-lingui-id: z0r32H
+#: src/modules/ai/components/AiChatReviewedActionSummary.tsx
+msgid "What will run"
+msgstr "What will run"
 
 #. js-lingui-id: drC+Tq
 #: src/pages/settings/ai/components/SettingsAiOverviewTab.tsx

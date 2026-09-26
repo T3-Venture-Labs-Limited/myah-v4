@@ -1,4 +1,7 @@
-import { type RequestApprovalToolInput } from 'twenty-shared/ai';
+import {
+  type RequestApprovalToolInput,
+  type ReviewedGenericAction,
+} from 'twenty-shared/ai';
 
 type PendingApprovalBase = {
   messageId: string;
@@ -6,5 +9,10 @@ type PendingApprovalBase = {
 };
 
 export type AgentChatPendingApproval =
-  | (PendingApprovalBase & { request: RequestApprovalToolInput })
+  | (PendingApprovalBase & {
+      request: RequestApprovalToolInput;
+      // Server-derived exact action; absent only on legacy approvals, which
+      // cannot be approved.
+      reviewedAction?: ReviewedGenericAction;
+    })
   | (PendingApprovalBase & { actionApprovalBindingId: string });
