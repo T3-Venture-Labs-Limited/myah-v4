@@ -247,6 +247,8 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
          FROM core.workspace ORDER BY "createdAt" LIMIT 1 ON CONFLICT (id) DO NOTHING`,
         [id.workspace, `phase2a-${id.workspace.slice(0, 8)}`, schema],
       );
+      // UUID-derived schema identifier; data values are bound.
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
       await manager.query(
         `INSERT INTO core."connectedAccount" (id,"workspaceId",handle,provider,"userWorkspaceId",visibility,"dailySendLimit","minimumSendIntervalMs")
@@ -277,16 +279,20 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
         "inReplyTo" text,"threadExternalId" text,"references" jsonb NOT NULL DEFAULT '[]'::jsonb,
         "createdAt" timestamptz NOT NULL DEFAULT now(),"updatedAt" timestamptz NOT NULL DEFAULT now()
       )`);
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(
         `CREATE TABLE IF NOT EXISTS "${schema}".campaign (id uuid PRIMARY KEY,"lifecycleStatus" text NOT NULL,"sequenceAuthorization" jsonb)`,
       );
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(
         `CREATE TABLE IF NOT EXISTS "${schema}"."campaignCreator" (id uuid PRIMARY KEY,"campaignId" uuid NOT NULL,stage text,"deletedAt" timestamptz,"updatedAt" timestamptz DEFAULT now())`,
       );
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(
         `INSERT INTO "${schema}".campaign VALUES ($1,'ACTIVE',$2::jsonb) ON CONFLICT DO NOTHING`,
         [id.campaign, JSON.stringify(projection)],
       );
+      // pi-lens-ignore: sql-injection, no-sql-in-code
       await manager.query(
         `INSERT INTO "${schema}"."campaignCreator" (id,"campaignId",stage) VALUES ($1,$2,'READY') ON CONFLICT DO NOTHING`,
         [id.campaignCreator, id.campaign],
@@ -451,6 +457,7 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
       progressionRoutes as never,
       dispatch,
       { reconcile: jest.fn(async () => 'PROJECTED') } as never,
+      { reconcilePendingMessageInTransaction: jest.fn() } as never,
     );
     const [before] = await dataSource.query(
       `SELECT "claimedAt","slotAt","unknownAfter","localDate" FROM core."outboundEmailAttempt" WHERE "attemptId"=$1`,
@@ -592,6 +599,7 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
       'EXACT_REPLAY',
       'PROGRESSED',
     ]);
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     const [state] = await dataSource.query(
       `SELECT
       (SELECT state FROM core."campaignOccurrence" WHERE id=$1) occurrence,
@@ -610,6 +618,7 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
   });
 
   it('preserves a later Creator stage and suppresses routing/generation/version mismatches without mutation', async () => {
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     await dataSource.query(
       `UPDATE "${schema}"."campaignCreator" SET stage='NEGOTIATING' WHERE id=$1`,
       [id.campaignCreator],
@@ -626,6 +635,7 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
         ),
       ),
     ).resolves.toEqual({ status: 'TERMINAL_SUPPRESSED' });
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     const [creator] = await dataSource.query(
       `SELECT stage FROM "${schema}"."campaignCreator" WHERE id=$1`,
       [id.campaignCreator],

@@ -9,6 +9,8 @@ import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permi
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { WorkspaceCampaignCapacityTimeZoneModule } from 'src/engine/core-modules/myah/workspace-campaign-capacity-time-zone.module';
+import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
+import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { ConnectedAccountMetadataModule } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.module';
@@ -37,6 +39,7 @@ import {
 } from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
 import { CampaignExecutionService } from 'src/modules/campaign-execution/services/campaign-execution.service';
 import { CampaignEmailRuntimeCronJob } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.job';
+import { CampaignReplyService } from 'src/modules/campaign-execution/services/campaign-reply.service';
 import { EmailingModule } from 'src/modules/emailing/emailing.module';
 import { MessageSuppressionService } from 'src/modules/emailing/services/message-suppression.service';
 import { CampaignLifecycleTransactionService } from 'src/modules/campaign-execution/services/campaign-lifecycle-transaction.service';
@@ -127,6 +130,14 @@ class EmptyExternalInfrastructureModule {}
 })
 class FlatEntityMapsCacheTestModule {}
 
+@Module({
+  providers: [
+    { provide: MyahInboxContactTriageLifecycleService, useValue: {} },
+  ],
+  exports: [MyahInboxContactTriageLifecycleService],
+})
+class TriageTestModule {}
+
 describe('CampaignExecutionOrchestrationModule', () => {
   it('registers with the runtime HTTP, GraphQL, and worker composition roots', () => {
     expect(
@@ -149,6 +160,7 @@ describe('CampaignExecutionOrchestrationModule', () => {
     ).toEqual([
       CampaignExecutionModule,
       CampaignSequenceAuthorityModule,
+      MyahInboxContactTriageModule,
       EmailingModule,
       CampaignOutreachWorkflowModule,
       MyahCampaignLifecycleModule,
@@ -170,6 +182,8 @@ describe('CampaignExecutionOrchestrationModule', () => {
     })
       .overrideModule(ConnectedAccountMetadataModule)
       .useModule(EmptyExternalInfrastructureModule)
+      .overrideModule(MyahInboxContactTriageModule)
+      .useModule(TriageTestModule)
       .overrideModule(EmailingModule)
       .useModule(EmptyExternalInfrastructureModule)
       .overrideModule(TwentyORMModule)
@@ -231,6 +245,15 @@ describe('CampaignExecutionOrchestrationModule', () => {
     expect(module.get(CAMPAIGN_FINAL_SUBMISSION_AUTHORITY_PORT)).toBeDefined();
     expect(module.get(CAMPAIGN_SENT_PROJECTION_PORT)).toBeDefined();
     expect(module.get(CAMPAIGN_REPLY_EVIDENCE_PORT)).toBeDefined();
+    expect(
+      (
+        module.get<CampaignReplyService>(
+          CAMPAIGN_REPLY_EVIDENCE_PORT,
+        ) as unknown as {
+          myahInboxContactTriageLifecycleService: unknown;
+        }
+      ).myahInboxContactTriageLifecycleService,
+    ).toBe(module.get(MyahInboxContactTriageLifecycleService));
     expect(module.get(CampaignEmailRuntimeCronJob)).toBeInstanceOf(
       CampaignEmailRuntimeCronJob,
     );

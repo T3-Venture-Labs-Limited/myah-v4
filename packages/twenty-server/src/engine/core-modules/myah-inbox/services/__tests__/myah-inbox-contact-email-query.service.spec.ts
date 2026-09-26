@@ -7,6 +7,10 @@ import {
   decodeMyahInboxContactEmailCursor,
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-cursor.util';
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
+import {
+  decodeMyahInboxEmailCardCursor,
+  encodeMyahInboxEmailCardCursor,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-email-card-cursor.util';
 
 const rolePermissionConfig = { unionOf: ['role-id'] };
 
@@ -121,7 +125,10 @@ const loadService = (): EmailQueryServiceConstructor | undefined => {
   }
 };
 
-const buildHarness = (rows: unknown[] = rawRows) => {
+const buildHarness = (
+  rows: unknown[] = rawRows,
+  replyEvidenceReady = false,
+) => {
   const query = jest.fn().mockResolvedValue(rows);
   const builderByObjectName = new Map<string, Record<string, jest.Mock>>();
   const createQueryBuilder = (objectName: string) => {
@@ -162,7 +169,12 @@ const buildHarness = (rows: unknown[] = rawRows) => {
   };
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(async (callback) => callback()),
-    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
+    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+      query: (sql: string, ...args: unknown[]) =>
+        sql.startsWith('SELECT to_regclass')
+          ? [{ exists: replyEvidenceReady }]
+          : query(sql, ...args),
+    }),
     getRepository: jest.fn(async (_workspaceId, objectName) =>
       getRepository(objectName),
     ),
@@ -200,6 +212,13 @@ const request = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('MyahInboxContactEmailQueryService', () => {
+  it('fails closed on malformed serialized participants', async () => {
+    const harness = buildHarness([{ ...rawRows[0], participants: '{' }]);
+    await expect(harness.service.listMessages(request())).rejects.toThrow(
+      'Inbox participant projection failed closed',
+    );
+  });
+
   it('emits exact SQL cursor text separately from the Date display timestamp', async () => {
     const exactTimestamp = '2026-09-05T12:30:00.000900Z';
     const harness = buildHarness([
@@ -303,6 +322,55 @@ describe('MyahInboxContactEmailQueryService', () => {
     );
   });
 
+  it('binds a card frontier to the thread and stable accepted attempt key', async () => {
+    const anchorKey = `attempt:${messageAId}`;
+    const harness = buildHarness(
+      [
+        {
+          authorized: true,
+          orderingUnavailable: false,
+          rootChanged: false,
+          cursorValid: true,
+          fingerprint: 'a'.repeat(32),
+          snapshotAt: '2026-09-08T00:00:00.123456Z',
+          latestThreadId: emailThreadAId,
+          cards: [
+            {
+              threadId: emailThreadAId,
+              anchorKey,
+              rootMessageId: messageAId,
+              startTimestamp: '2026-09-01T00:00:00.123456Z',
+              subject: null,
+              campaignLabel: null,
+              historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+            },
+          ],
+          hasOlderCards: true,
+        },
+      ],
+      true,
+    );
+    const page = await harness.service.listCards(request());
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toContain(
+      'JOIN readable_campaign campaign ON campaign.id=ev."campaignId"',
+    );
+    expect(sql).toContain(
+      'message.direction=\'OUTGOING\' AND accepted."projectedMessageId" IS NULL THEN NULL',
+    );
+    expect(
+      decodeMyahInboxEmailCardCursor(
+        page.olderCursor as string,
+        {
+          workspaceId,
+          userWorkspaceId,
+          contactId: creatorContactId,
+        },
+        'cards',
+      ),
+    ).toMatchObject({ id: anchorKey, threadId: emailThreadAId });
+  });
+
   it('maps a single authorized card envelope without changing legacy message paging', async () => {
     const card = {
       threadId: emailThreadAId,
@@ -367,6 +435,99 @@ describe('MyahInboxContactEmailQueryService', () => {
         harness.service.listCardMessages(
           request({ threadId: emailThreadAId, snapshot: head.snapshot }),
         ))(),
+    ).rejects.toThrow('Inbox card is not readable');
+    await expect(
+      harness.service.readCard(
+        request({
+          threadId: emailThreadAId,
+          anchorKey: `attempt:${messageAId}`,
+        }),
+      ),
+    ).rejects.toThrow('Inbox card is not readable');
+    await expect(
+      harness.service.readCard(
+        request({
+          threadId: emailThreadAId,
+          anchorKey: `thread:${emailThreadBId}`,
+        }),
+      ),
+    ).rejects.toThrow('Invalid Inbox card key');
+    const snapshot = decodeMyahInboxEmailCardCursor(
+      head.snapshot as string,
+      {
+        workspaceId,
+        userWorkspaceId,
+        contactId: creatorContactId,
+      },
+      'snapshot',
+    );
+    const wrongGroupCursor = encodeMyahInboxEmailCardCursor({
+      ...snapshot,
+      kind: 'older',
+      threadId: emailThreadAId,
+      anchorKey: `attempt:${messageAId}`,
+      timestamp: '2026-09-01T00:00:00.123456Z',
+      id: messageAId,
+    });
+    const statements = harness.query.mock.calls.length;
+    await expect(
+      harness.service.listCardMessages(
+        request({
+          threadId: emailThreadAId,
+          anchorKey: `attempt:${messageBId}`,
+          snapshot: head.snapshot,
+          cursor: wrongGroupCursor,
+        }),
+      ),
+    ).rejects.toThrow('Invalid Inbox history cursor');
+    expect(harness.query).toHaveBeenCalledTimes(statements);
+  });
+
+  it('rejects a supplied valid group key when the authorized SQL envelope resolves a different group', async () => {
+    const wrongKey = `attempt:${messageAId}`;
+    const actualKey = `attempt:${messageBId}`;
+    const card = {
+      threadId: emailThreadAId,
+      anchorKey: actualKey,
+      rootMessageId: messageBId,
+      startTimestamp: '2026-09-01T00:00:00.123456Z',
+      subject: null,
+      campaignLabel: null,
+      historyBasis: 'PENDING',
+    };
+    const harness = buildHarness([
+      {
+        authorized: true,
+        orderingUnavailable: false,
+        rootChanged: false,
+        cursorValid: true,
+        fingerprint: 'a'.repeat(32),
+        snapshotAt: '2026-09-08T00:00:00.123456Z',
+        cards: [card],
+        card,
+        page: { threadId: emailThreadAId, anchorKey: actualKey },
+      },
+    ]);
+    await expect(
+      harness.service.readCard(
+        request({
+          threadId: emailThreadAId,
+          anchorKey: wrongKey,
+        }),
+      ),
+    ).rejects.toThrow('Inbox card is not readable');
+    const oldClient = await harness.service.readCard(
+      request({ threadId: emailThreadAId }),
+    );
+    expect(oldClient).toMatchObject({ card: { anchorKey: actualKey } });
+    await expect(
+      harness.service.listCardMessages(
+        request({
+          threadId: emailThreadAId,
+          anchorKey: wrongKey,
+          snapshot: oldClient.snapshot,
+        }),
+      ),
     ).rejects.toThrow('Inbox card is not readable');
   });
 

@@ -397,6 +397,11 @@ msgstr "Actual recording end"
 msgid "Actual recording start"
 msgstr "Actual recording start"
 
+#. js-lingui-id: a7BQsq
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Add at least one creator before activating this campaign."
+msgstr "Add at least one creator before activating this campaign."
+
 #. js-lingui-id: ffpvxH
 #: src/engine/core-modules/user/utils/assert-workspace-member-update-non-custom-fields.util.ts
 msgid "Add at least one field to update."
@@ -798,6 +803,7 @@ msgstr "Attachment record position"
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
 msgid "Attachment target"
 msgstr "Attachment target"
 
@@ -1156,16 +1162,61 @@ msgstr "Call Recordings"
 msgid "Campaign"
 msgstr "Campaign"
 
+#. js-lingui-id: jEoVAq
+#: src/modules/myah-campaign/utils/reject-generic-campaign-lifecycle-operation.util.ts
+msgid "Campaign lifecycle and execution authority require a dedicated operation."
+msgstr "Campaign lifecycle and execution authority require a dedicated operation."
+
 #. js-lingui-id: OzGe7D
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-campaign-standard-flat-field-metadata.util.ts
 msgid "Campaign lifecycle status"
 msgstr "Campaign lifecycle status"
+
+#. js-lingui-id: ISL8dQ
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Campaign name is required before activation."
+msgstr "Campaign name is required before activation."
+
+#. js-lingui-id: lQS5rM
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Campaign objective is required before activation."
+msgstr "Campaign objective is required before activation."
+
+#. js-lingui-id: hPqk/l
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workflow-version-standard-flat-field-metadata.util.ts
+msgid "Campaign sequence"
+msgstr "Campaign sequence"
+
+#. js-lingui-id: GJvp5X
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Campaign sequence authorization requires a dedicated operation."
+msgstr "Campaign sequence authorization requires a dedicated operation."
+
+#. js-lingui-id: kI0Tvk
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Campaign status is invalid."
+msgstr "Campaign status is invalid."
+
+#. js-lingui-id: OwK4Ea
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workflow-standard-flat-field-metadata.util.ts
+msgid "Campaign that owns this Outreach workflow"
+msgstr "Campaign that owns this Outreach workflow"
+
+#. js-lingui-id: gy8MKs
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Campaign upsert is not supported; use create or update."
+msgstr "Campaign upsert is not supported; use create or update."
 
 #. js-lingui-id: oRJtCM
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-list-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/object-metadata/create-standard-flat-object-metadata.util.ts
 msgid "Campaigns"
 msgstr "Campaigns"
+
+#. js-lingui-id: 4mOdLO
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
+msgid "Campaigns owned by the workspace member"
+msgstr "Campaigns owned by the workspace member"
 
 #. js-lingui-id: mZkYVW
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-list-standard-flat-field-metadata.util.ts
@@ -1400,6 +1451,16 @@ msgstr "Cannot update workflow version status manually"
 msgid "Cc"
 msgstr "Cc"
 
+#. js-lingui-id: bYTN/F
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Change Campaign status from Campaign Overview."
+msgstr "Change Campaign status from Campaign Overview."
+
+#. js-lingui-id: lpHHS6
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Change one Campaign status at a time."
+msgstr "Change one Campaign status at a time."
+
 #. js-lingui-id: 4IVK41
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-channel-event-association-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-channel-event-association-standard-flat-field-metadata.util.ts
@@ -1447,6 +1508,11 @@ msgstr "Client credentials are not configured for this OAuth provider."
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-opportunity-standard-flat-field-metadata.util.ts
 msgid "Close date"
 msgstr "Close date"
+
+#. js-lingui-id: D87pha
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Closed"
+msgstr "Closed"
 
 #. js-lingui-id: T9qjpu
 #: src/engine/core-modules/tool-provider/constants/action-tool-label.constant.ts
@@ -1870,6 +1936,17 @@ msgstr "Creation date"
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-event-standard-flat-field-metadata.util.ts
 msgid "Creation DateTime"
 msgstr "Creation DateTime"
+
+#. js-lingui-id: UE2beD
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Creator"
+msgstr "Creator"
+
+#. js-lingui-id: 5KkBJu
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
+msgid "Creators owned by the workspace member"
+msgstr "Creators owned by the workspace member"
 
 #. js-lingui-id: 6Oaeoc
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workflow-automated-trigger-standard-flat-field-metadata.util.ts
@@ -2404,6 +2481,8 @@ msgid "Event Participants"
 msgstr "Event Participants"
 
 #. js-lingui-id: 8B2x9+
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
@@ -3286,6 +3365,23 @@ msgstr "Image"
 msgid "In progress"
 msgstr "In progress"
 
+#. js-lingui-id: fSPiHS
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Inbox owner"
+msgstr "Inbox owner"
+
+#. js-lingui-id: 8kWs8Q
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Inbox state"
+msgstr "Inbox state"
+
+#. js-lingui-id: HWUc+w
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
+msgid "Inbox threads owned by the workspace member"
+msgstr "Inbox threads owned by the workspace member"
+
 #. js-lingui-id: RAMaAx
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-channel-message-association-standard-flat-field-metadata.util.ts
 msgid "Incoming"
@@ -3362,6 +3458,11 @@ msgstr "Insufficient permissions to access calendar."
 #: src/engine/core-modules/auth/auth.exception.ts
 msgid "Insufficient permissions."
 msgstr "Insufficient permissions."
+
+#. js-lingui-id: 1pOqAR
+#: src/engine/core-modules/managed-provider-billing/managed-provider-billing.exception.ts
+msgid "Insufficient prepaid balance for this operation."
+msgstr "Insufficient prepaid balance for this operation."
 
 #. js-lingui-id: pSjWxS
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-runner/exceptions/workspace-migration-action-execution.exception.ts
@@ -4572,6 +4673,48 @@ msgstr "Logic function not found."
 msgid "Logic function with same universal identifier already exists"
 msgstr "Logic function with same universal identifier already exists"
 
+#. js-lingui-id: 1PBFid
+#: src/engine/core-modules/managed-email/providers/icemail/icemail.exception.ts
+msgid "Managed mailbox provisioning could not be completed."
+msgstr "Managed mailbox provisioning could not be completed."
+
+#. js-lingui-id: b2zYY5
+#: src/engine/core-modules/managed-email/providers/icemail/icemail.exception.ts
+msgid "Managed mailbox provisioning is unavailable."
+msgstr "Managed mailbox provisioning is unavailable."
+
+#. js-lingui-id: zx0bxS
+#: src/engine/core-modules/managed-email/providers/warmup-inbox/warmup-inbox.exception.ts
+msgid "Managed mailbox warmup is temporarily busy."
+msgstr "Managed mailbox warmup is temporarily busy."
+
+#. js-lingui-id: 0Ljz9K
+#: src/engine/core-modules/managed-email/providers/warmup-inbox/warmup-inbox.exception.ts
+#: src/engine/core-modules/managed-email/providers/warmup-inbox/warmup-inbox.exception.ts
+msgid "Managed mailbox warmup is temporarily unavailable."
+msgstr "Managed mailbox warmup is temporarily unavailable."
+
+#. js-lingui-id: ygTgTv
+#: src/engine/core-modules/managed-email/providers/warmup-inbox/warmup-inbox.exception.ts
+msgid "Managed mailbox warmup is unavailable."
+msgstr "Managed mailbox warmup is unavailable."
+
+#. js-lingui-id: UZDNY7
+#: src/engine/core-modules/managed-email/providers/warmup-inbox/warmup-inbox.exception.ts
+#: src/engine/core-modules/managed-email/providers/warmup-inbox/warmup-inbox.exception.ts
+msgid "Managed mailbox warmup requires reconciliation."
+msgstr "Managed mailbox warmup requires reconciliation."
+
+#. js-lingui-id: L73IM3
+#: src/engine/core-modules/managed-provider-billing/metronome-client.exception.ts
+msgid "Managed-provider billing could not be completed."
+msgstr "Managed-provider billing could not be completed."
+
+#. js-lingui-id: mwe1Bc
+#: src/engine/core-modules/managed-provider-billing/metronome-client.exception.ts
+msgid "Managed-provider billing is unavailable."
+msgstr "Managed-provider billing is unavailable."
+
 #. js-lingui-id: Mwvtvf
 #: src/engine/workspace-manager/workspace-migration/interceptors/utils/__tests__/build-metadata-validation-error-payload.util.spec.ts
 #: src/engine/workspace-manager/workspace-migration/interceptors/utils/build-metadata-validation-error-payload.util.ts
@@ -4900,6 +5043,24 @@ msgstr "Multiple records found with the same unique field values for {conflictin
 msgid "Multiple subscriptions found where one was expected."
 msgstr "Multiple subscriptions found where one was expected."
 
+#. js-lingui-id: rHLZ1M
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Myah campaign"
+msgstr "Myah campaign"
+
+#. js-lingui-id: SIxvWi
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Myah reply draft"
+msgstr "Myah reply draft"
+
+#. js-lingui-id: 1kTMV8
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Myah reply draft revision"
+msgstr "Myah reply draft revision"
+
 #. js-lingui-id: 6YtxFj
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-company-standard-flat-field-metadata.util.ts
@@ -5015,6 +5176,11 @@ msgstr "Navigation menu item type is required"
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-event-participant-standard-flat-field-metadata.util.ts
 msgid "Needs Action"
 msgstr "Needs Action"
+
+#. js-lingui-id: op6liN
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Needs reply"
+msgstr "Needs reply"
 
 #. js-lingui-id: isRobC
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-opportunity-standard-flat-field-metadata.util.ts
@@ -5214,6 +5380,9 @@ msgid "NoteTarget record position"
 msgstr "NoteTarget record position"
 
 #. js-lingui-id: mqwohF
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
@@ -5606,6 +5775,26 @@ msgstr "Output field names can only contain letters, numbers, underscores, dots 
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-agent-response-format.util.ts
 msgid "Output field names must use only letters, numbers, underscores, dots or hyphens and be at most 64 characters: {0}"
 msgstr "Output field names must use only letters, numbers, underscores, dots or hyphens and be at most 64 characters: {0}"
+
+#. js-lingui-id: gCG31B
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workflow-standard-flat-field-metadata.util.ts
+msgid "Outreach Campaign"
+msgstr "Outreach Campaign"
+
+#. js-lingui-id: /9NsJu
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
+msgid "Owned campaigns"
+msgstr "Owned campaigns"
+
+#. js-lingui-id: twe0hf
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
+msgid "Owned creators"
+msgstr "Owned creators"
+
+#. js-lingui-id: ZtQBH3
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
+msgid "Owned inbox threads"
+msgstr "Owned inbox threads"
 
 #. js-lingui-id: 6ua+9g
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
@@ -6063,6 +6252,16 @@ msgstr "Preferred color scheme"
 msgid "Preferred language"
 msgstr "Preferred language"
 
+#. js-lingui-id: iw7yj6
+#: src/engine/core-modules/tool-provider/constants/action-tool-label.constant.ts
+msgid "Prepare Instagram Reply Draft"
+msgstr "Prepare Instagram Reply Draft"
+
+#. js-lingui-id: +U9+d6
+#: src/engine/core-modules/tool-provider/constants/action-tool-label.constant.ts
+msgid "Prepare Outreach Email Draft"
+msgstr "Prepare Outreach Email Draft"
+
 #. js-lingui-id: FOoDGS
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
 msgid "Presentation"
@@ -6270,6 +6469,8 @@ msgstr "Relation field target metadata not found"
 #. js-lingui-id: HmNKeM
 #: src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-filter/graphql-query-filter-field.parser.ts
 #: src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-filter/graphql-query-filter-field.parser.ts
+#: src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-filter/graphql-query-filter-field.parser.ts
+#: src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-filter/graphql-query-filter-field.parser.ts
 msgid "Relation filter is misconfigured"
 msgstr "Relation filter is misconfigured"
 
@@ -6394,6 +6595,11 @@ msgstr "Response format with type \"text\" should not include a schema"
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-calendar-event-participant-standard-flat-field-metadata.util.ts
 msgid "Response Status"
 msgstr "Response Status"
+
+#. js-lingui-id: CTAowC
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workflow-version-standard-flat-field-metadata.util.ts
+msgid "Restricted Campaign outreach sequence"
+msgstr "Restricted Campaign outreach sequence"
 
 #. js-lingui-id: 1AYnSb
 #: src/engine/metadata-modules/page-layout-widget/constants/standard-page-layout-widget-titles.ts
@@ -6749,6 +6955,16 @@ msgstr "Search vector field not found"
 msgid "Send Email"
 msgstr "Send Email"
 
+#. js-lingui-id: 11W7Ux
+#: src/engine/core-modules/tool-provider/constants/action-tool-label.constant.ts
+msgid "Send Instagram Reply"
+msgstr "Send Instagram Reply"
+
+#. js-lingui-id: 9I6J/1
+#: src/engine/core-modules/tool-provider/constants/action-tool-label.constant.ts
+msgid "Send Outreach Email"
+msgstr "Send Outreach Email"
+
 #. js-lingui-id: +KBxqW
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-campaign-standard-flat-field-metadata.util.ts
 msgid "Sender address for the campaign"
@@ -6763,6 +6979,11 @@ msgstr "Sending"
 #: src/engine/core-modules/emailing-domain/drivers/exceptions/emailing-domain-driver.exception.ts
 msgid "Sending is currently suspended for this email domain."
 msgstr "Sending is currently suspended for this email domain."
+
+#. js-lingui-id: zeTZqW
+#: src/engine/metadata-modules/connected-account/connected-account.exception.ts
+msgid "Sending policy changed. Refresh and try again."
+msgstr "Sending policy changed. Refresh and try again."
 
 #. js-lingui-id: h69WC6
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-campaign-standard-flat-field-metadata.util.ts
@@ -6847,6 +7068,17 @@ msgstr "Skill with name \"{name}\" already exists"
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-standard-flat-field-metadata.util.ts
 msgid "Skipped"
 msgstr "Skipped"
+
+#. js-lingui-id: rz6s8e
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Snoozed"
+msgstr "Snoozed"
+
+#. js-lingui-id: tEvdhp
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Snoozed until"
+msgstr "Snoozed until"
 
 #. js-lingui-id: kIKb9e
 #: src/engine/metadata-modules/view-field-group/constants/standard-view-field-group-names.ts
@@ -7130,12 +7362,21 @@ msgstr "Tab not found for widget duplication."
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-attachment-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
@@ -7279,6 +7520,9 @@ msgid "TaskTarget record position"
 msgstr "TaskTarget record position"
 
 #. js-lingui-id: ZNDHIy
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts
@@ -7504,6 +7748,21 @@ msgstr "The list the person belongs to"
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-campaign-standard-flat-field-metadata.util.ts
 msgid "The list this campaign was sent to"
 msgstr "The list this campaign was sent to"
+
+#. js-lingui-id: pn/ikp
+#: src/engine/core-modules/managed-email/providers/icemail/icemail.exception.ts
+msgid "The managed mailbox request is invalid."
+msgstr "The managed mailbox request is invalid."
+
+#. js-lingui-id: 82CaBE
+#: src/engine/core-modules/managed-email/providers/warmup-inbox/warmup-inbox.exception.ts
+msgid "The managed mailbox warmup request conflicts with an existing resource."
+msgstr "The managed mailbox warmup request conflicts with an existing resource."
+
+#. js-lingui-id: aEXDKl
+#: src/engine/core-modules/managed-email/providers/warmup-inbox/warmup-inbox.exception.ts
+msgid "The managed mailbox warmup request is invalid."
+msgstr "The managed mailbox warmup request is invalid."
 
 #. js-lingui-id: kdTB4e
 #: src/engine/core-modules/application/connection-provider/connection-provider.exception.ts
@@ -7741,6 +8000,11 @@ msgstr "This app requires a newer version of the Twenty server. Please upgrade y
 msgid "This approval request has already been resolved."
 msgstr "This approval request has already been resolved."
 
+#. js-lingui-id: ym2Mrz
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "This Campaign status change is not allowed."
+msgstr "This Campaign status change is not allowed."
+
 #. js-lingui-id: 99gsJ/
 #: src/engine/metadata-modules/index-metadata/utils/validate-no-duplicate-unique-index.util.ts
 msgid "This column is already marked as unique. Toggle the field's \"Unique\" off first if you want to manage the constraint here."
@@ -7880,6 +8144,11 @@ msgstr "This object cannot be modified."
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-object-permission-validator.service.ts
 msgid "This object permission is already set for the role"
 msgstr "This object permission is already set for the role"
+
+#. js-lingui-id: fAr9fM
+#: src/engine/core-modules/managed-provider-billing/managed-provider-billing.exception.ts
+msgid "This operation conflicts with an existing request. Please use a new request."
+msgstr "This operation conflicts with an existing request. Please use a new request."
 
 #. js-lingui-id: 7ZdJO2
 #: src/engine/twenty-orm/exceptions/twenty-orm.exception.ts
@@ -8846,6 +9115,21 @@ msgstr "ViewId is required to create a view group."
 msgid "ViewId is required to create a view sort."
 msgstr "ViewId is required to create a view sort."
 
+#. js-lingui-id: JVUgXJ
+#: src/engine/metadata-modules/connected-account/connected-account.exception.ts
+msgid "Wait for active Campaign email work to settle before changing minimum spacing."
+msgstr "Wait for active Campaign email work to settle before changing minimum spacing."
+
+#. js-lingui-id: iCUi+i
+#: src/engine/metadata-modules/ai/ai.exception.ts
+msgid "Wait for the current response to finish, then send this Inbox request again."
+msgstr "Wait for the current response to finish, then send this Inbox request again."
+
+#. js-lingui-id: +Id5cz
+#: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-thread-standard-flat-field-metadata.util.ts
+msgid "Waiting on creator"
+msgstr "Waiting on creator"
+
 #. js-lingui-id: xvV2NJ
 #: src/engine/twenty-orm/error-handling/compute-twenty-orm-exception.ts
 msgid "We are experiencing a temporary issue with our database. Please try again later."
@@ -9601,6 +9885,11 @@ msgstr "Your Myah trial is ending soon"
 #: src/engine/core-modules/auth/services/auth.service.ts
 msgid "Your Password Has Been Successfully Changed"
 msgstr "Your Password Has Been Successfully Changed"
+
+#. js-lingui-id: 7cz2uC
+#: src/modules/myah-campaign/services/campaign-lifecycle.service.ts
+msgid "Your permissions could not be resolved."
+msgstr "Your permissions could not be resolved."
 
 #. js-lingui-id: XxkUFT
 #: src/engine/metadata-modules/permissions/permissions.service.ts

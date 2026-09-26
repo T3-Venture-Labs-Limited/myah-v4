@@ -76,6 +76,7 @@ const StyledStatus = styled.div`
 export type MyahInboxContactConversationProps = {
   workspaceId: string;
   draftScopeGeneration?: string;
+  draftArrivalEpoch?: number;
   draftScopeAvailable?: boolean;
   contact: MyahInboxContact;
   selectionChannel: MyahInboxChannel;
@@ -97,6 +98,7 @@ export type MyahInboxContactConversationProps = {
 export const MyahInboxContactConversation = ({
   workspaceId,
   draftScopeGeneration,
+  draftArrivalEpoch,
   draftScopeAvailable = true,
   contact,
   selectionChannel,
@@ -142,6 +144,7 @@ export const MyahInboxContactConversation = ({
         thread={selectedThread.thread}
         contactId={contact.id}
         scopeGeneration={draftScopeGeneration}
+        arrivalEpoch={draftArrivalEpoch}
         targetAvailable={
           draftScopeAvailable &&
           email.status === 'ready' &&

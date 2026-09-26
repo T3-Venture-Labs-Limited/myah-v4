@@ -1,4 +1,6 @@
 import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
+import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from './2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
+import { AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand } from './2-20-instance-command-fast-1790141137400-add-myah-inbox-reply-draft-incoming-baseline';
 import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
 import { Module } from '@nestjs/common';
 import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
@@ -84,6 +86,8 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     CatchUpCampaignActivityControlMetadataWorkspaceCommand,
     CreateMyahInboxReplyContextDraftsFastInstanceCommand,
     CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
+    CreateMyahCampaignReplyEvidenceFastInstanceCommand,
+    AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
     RefreshMyahAssistantSkillsWorkspaceCommand,
     RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand,
