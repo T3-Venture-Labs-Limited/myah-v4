@@ -36,10 +36,15 @@ export type MyahInboxDraftExecutionState =
   | 'OUTCOME_UNKNOWN'
   | 'CONTEXT_UNAVAILABLE';
 
+// Incoming mail relative to the body's authored baseline (UNKNOWN = legacy).
+export type MyahInboxDraftIncomingState = 'CURRENT' | 'STALE' | 'UNKNOWN';
+
 export type MyahInboxDraftAutosaveThread = {
   input?: MyahInboxReplyDraftInput;
   contextFingerprint?: string | null;
   executionState?: MyahInboxDraftExecutionState;
+  incomingState?: MyahInboxDraftIncomingState | null;
+  bodyEdited?: boolean | null;
   key: MyahInboxDraftAutosaveKey;
   revision: number;
   body: MyahInboxRichText | null;
@@ -80,7 +85,11 @@ export type MyahInboxDraftAutosaveEntry = {
   input?: MyahInboxReplyDraftInput;
   contextFingerprint?: string | null;
   executionState?: MyahInboxDraftExecutionState;
+  incomingState?: MyahInboxDraftIncomingState | null;
+  bodyEdited?: boolean | null;
   proposalContextFingerprint?: string | null;
+  // An explicit update stores its validated proposal without acknowledgement.
+  proposalRequiresReview?: boolean;
   operation: { token: symbol; kind: MyahInboxDraftOperationKind } | null;
   editorOwner: symbol | null;
   localBody: MyahInboxRichText;

@@ -54,6 +54,7 @@ export const useMyahInboxEmailHistory = (
     loadMessages: history.loadMessages,
     retryIncremental: history.retryIncremental,
     refresh: history.refresh,
+    ambientRefresh: history.ambientRefresh,
     rebase: history.rebase,
     setReadingAnchor: history.setReadingAnchor,
     purge: history.purge,

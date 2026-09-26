@@ -16,6 +16,7 @@ import {
   decodeMyahInboxEmailCardCursor,
   encodeMyahInboxEmailCardCursor,
   isMyahInboxEmailTimestamp,
+  isMyahInboxEmailAnchorKey,
   type MyahInboxEmailCardCursor,
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-email-card-cursor.util';
 import {
@@ -188,7 +189,11 @@ export class MyahInboxContactEmailQueryService {
       cutoff: snapshot?.snapshotAt,
       fingerprint: snapshot?.fingerprint,
       boundary: cursor
-        ? { timestamp: cursor.timestamp!, id: cursor.id! }
+        ? {
+            timestamp: cursor.timestamp!,
+            id: cursor.threadId ? cursor.id! : `legacy:${cursor.id}`,
+            threadId: cursor.threadId ?? cursor.id,
+          }
         : undefined,
     });
     const token: MyahInboxEmailCardCursor = {
@@ -209,22 +214,25 @@ export class MyahInboxContactEmailQueryService {
               ...token,
               kind: 'cards',
               timestamp: first.startTimestamp,
-              id: first.threadId,
+              id: first.anchorKey,
+              threadId: first.threadId,
             })
           : null,
     };
   }
 
   async readCard(
-    input: MyahInboxEmailReadContext & { threadId: string },
+    input: MyahInboxEmailReadContext & { threadId: string; anchorKey?: string },
   ): Promise<MyahInboxEmailCardProjection> {
     this.assertUserRequest(input);
-    if (!isValidUuid(input.threadId))
-      throw new BadRequestException('Invalid Inbox thread');
+    this.assertCardKey(input);
     const row = await this.readEmailEnvelope(input, {
       mode: 'card',
       threadId: input.threadId,
+      anchorKey: input.anchorKey,
     });
+    if (input.anchorKey && row.card?.anchorKey !== input.anchorKey)
+      throw new ForbiddenException('Inbox card is not readable');
     return {
       card: row.card,
       snapshot: encodeMyahInboxEmailCardCursor({
@@ -242,12 +250,12 @@ export class MyahInboxContactEmailQueryService {
   async listCardMessages(
     input: MyahInboxEmailReadContext & {
       threadId: string;
+      anchorKey?: string;
       snapshot: string;
       cursor?: string;
     },
   ): Promise<MyahInboxEmailMessagePage> {
-    if (!isValidUuid(input.threadId))
-      throw new BadRequestException('Invalid Inbox thread');
+    this.assertCardKey(input);
     const snapshot = this.readSnapshot(input);
     const cursor = input.cursor
       ? decodeMyahInboxEmailCardCursor(input.cursor, snapshot)
@@ -256,6 +264,9 @@ export class MyahInboxContactEmailQueryService {
       cursor &&
       (!['older', 'newer'].includes(cursor.kind) ||
         cursor.threadId !== input.threadId ||
+        (cursor.anchorKey &&
+          cursor.anchorKey !==
+            (input.anchorKey ?? `legacy:${input.threadId}`)) ||
         cursor.snapshotAt !== snapshot.snapshotAt ||
         cursor.fingerprint !== snapshot.fingerprint)
     )
@@ -263,6 +274,7 @@ export class MyahInboxContactEmailQueryService {
     const row = await this.readEmailEnvelope(input, {
       mode: 'messages',
       threadId: input.threadId,
+      anchorKey: input.anchorKey,
       cutoff: snapshot.snapshotAt,
       fingerprint: snapshot.fingerprint,
       direction: cursor?.kind === 'newer' ? 'newer' : 'older',
@@ -270,7 +282,13 @@ export class MyahInboxContactEmailQueryService {
         ? { timestamp: cursor.timestamp!, id: cursor.id! }
         : undefined,
     });
-    if (!row.page) throw new ForbiddenException('Inbox card is not readable');
+    if (
+      !row.page ||
+      (input.anchorKey && row.page.anchorKey !== input.anchorKey)
+    )
+      throw new ForbiddenException('Inbox card is not readable');
+    if (cursor?.anchorKey && cursor.anchorKey !== row.page.anchorKey)
+      throw new BadRequestException('Invalid Inbox history cursor');
     return this.mapMessagePage(row.page, snapshot, cursor);
   }
 
@@ -295,6 +313,20 @@ export class MyahInboxContactEmailQueryService {
       : null;
   }
 
+  private assertCardKey(input: { threadId: string; anchorKey?: string }): void {
+    if (!isValidUuid(input.threadId))
+      throw new BadRequestException('Invalid Inbox thread');
+    if (
+      input.anchorKey !== undefined &&
+      (!isMyahInboxEmailAnchorKey(input.anchorKey) ||
+        (input.anchorKey.startsWith('thread:') &&
+          input.anchorKey !== `thread:${input.threadId}`) ||
+        (input.anchorKey.startsWith('legacy:') &&
+          input.anchorKey !== `legacy:${input.threadId}`))
+    )
+      throw new BadRequestException('Invalid Inbox card key');
+  }
+
   private readSnapshot(
     input: MyahInboxEmailReadContext & { snapshot: string },
   ): MyahInboxEmailCardCursor {
@@ -315,6 +347,8 @@ export class MyahInboxContactEmailQueryService {
     snapshot: MyahInboxEmailCardCursor,
     cursor?: MyahInboxEmailCardCursor,
   ): MyahInboxEmailMessagePage {
+    if (!isMyahInboxEmailAnchorKey(page.anchorKey))
+      throw new ForbiddenException('Inbox message projection failed closed');
     const messages = [page.root, ...page.messages];
     for (const message of messages) {
       if (!isMyahInboxEmailTimestamp(message.receivedAt))
@@ -337,6 +371,7 @@ export class MyahInboxContactEmailQueryService {
             ...snapshot,
             kind,
             threadId: page.threadId,
+            anchorKey: page.anchorKey,
             timestamp: message.receivedAt,
             id: message.id,
           })
@@ -346,6 +381,7 @@ export class MyahInboxContactEmailQueryService {
     };
     return {
       threadId: page.threadId,
+      anchorKey: page.anchorKey,
       root: page.root,
       messages: page.messages,
       olderCursor: page.hasOlder ? boundary('older') : null,
@@ -575,10 +611,12 @@ export class MyahInboxContactEmailQueryService {
         const workspaceId = parameter(input.workspace.id);
         const schema = getWorkspaceSchemaName(input.workspace.id);
         ctes.push(`authorized_email AS (
-        SELECT message.id, message."messageThreadId", message."receivedAt", message."createdAt", message.visibility, association.direction
-        FROM readable_messages message JOIN readable_threads thread ON thread.id = message."messageThreadId"
+        SELECT message.id, message."messageThreadId", message."receivedAt", message."createdAt", message.visibility, association.direction, association."messageChannelId", association."workspaceId", association."messageExternalId", native."headerMessageId"
+        FROM readable_messages message
+        JOIN "${schema}"."message" native ON native.id=message.id
+        JOIN readable_threads thread ON thread.id = message."messageThreadId"
         JOIN LATERAL (
-          SELECT association.direction FROM "${schema}"."messageChannelMessageAssociation" association
+          SELECT association.direction, association."messageChannelId", channel."workspaceId", association."messageExternalId" FROM "${schema}"."messageChannelMessageAssociation" association
           JOIN core."messageChannel" channel ON channel.id = association."messageChannelId" AND channel."workspaceId" = ${workspaceId}::uuid
           WHERE association."messageId" = message.id AND association."deletedAt" IS NULL AND channel.type::text IN ('EMAIL','EMAIL_GROUP')
           ORDER BY association.id LIMIT 1
@@ -586,7 +624,57 @@ export class MyahInboxContactEmailQueryService {
         WHERE ${eligibleThread} AND message."isDraft" = FALSE AND message.visibility <> 'HIDDEN'
           AND EXISTS (SELECT 1 FROM readable_member) AND EXISTS (SELECT 1 FROM readable_contact)
       )`);
-        return consume({ sql: ctes.join(',\n'), parameters });
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        const [replySchema] = await dataSource.query<
+          Array<{ exists: boolean }>
+        >(
+          `SELECT to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "exists"`,
+          [],
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        );
+        ctes.push(`accepted_outreach AS (
+SELECT "projectedMessageId", "attemptId", "campaignId", "enrollmentId", "messageChannelId", "providerAcceptedAt"
+          FROM core."outboundEmailAttempt"
+          WHERE "workspaceId"=${workspaceId}::uuid AND source='CAMPAIGN_SEQUENCE'
+            AND "attemptState"='ACCEPTED'
+        )`);
+        ctes.push(
+          replySchema?.exists
+            ? `reply_evidence AS (
+SELECT ev."inboundMessageId", inbound."messageThreadId", ev.classification,
+                  ev."matchedAttemptId", ev."campaignId", ev."enrollmentId", ev."messageChannelId", attempt."projectedMessageId"
+                FROM core."myahCampaignReplyEvidence" ev
+                JOIN readable_campaign campaign ON campaign.id=ev."campaignId"
+                JOIN authorized_email inbound ON inbound.id=ev."inboundMessageId"
+                  AND inbound."messageChannelId"=ev."messageChannelId" AND inbound.direction='INCOMING'
+                ${
+                  contact.kind === 'creator'
+                    ? `AND EXISTS (
+                  SELECT 1 FROM readable_threads linked
+                  WHERE linked.id=inbound."messageThreadId" AND linked."creatorId"=ev."creatorId"
+                )`
+                    : ''
+                }
+                LEFT JOIN core."outboundEmailAttempt" attempt ON attempt."attemptId"=ev."matchedAttemptId"
+                  AND attempt."workspaceId"=ev."workspaceId" AND attempt."attemptState"='ACCEPTED'
+                WHERE ev."workspaceId"=${workspaceId}::uuid
+              )`
+            : `reply_evidence AS (
+                SELECT NULL::uuid AS "inboundMessageId", NULL::uuid AS "messageThreadId",
+                  NULL::text AS classification, NULL::uuid AS "matchedAttemptId",
+NULL::uuid AS "campaignId", NULL::uuid AS "enrollmentId", NULL::uuid AS "messageChannelId",
+                  NULL::uuid AS "projectedMessageId" WHERE FALSE
+              )`,
+        );
+        return consume({
+          sql: ctes.join(',\n'),
+          parameters,
+          responseCardsOnly:
+            contact.kind === 'creator' && replySchema?.exists === true,
+          legacyCardsOnly: contact.kind === 'email-thread',
+        });
       },
       input.authContext,
     );
@@ -840,13 +928,21 @@ LIMIT ${limit}`;
             );
           }
           const receivedAt = toIsoString(row.receivedAt);
-          const participants = !row.participants
-            ? []
-            : typeof row.participants === 'string'
-              ? (JSON.parse(
-                  row.participants,
-                ) as MyahInboxContactEmailParticipant[])
-              : row.participants;
+          let participants: MyahInboxContactEmailParticipant[];
+          try {
+            participants =
+              typeof row.participants === 'string'
+                ? JSON.parse(row.participants)
+                : (row.participants ?? []);
+          } catch {
+            throw new ForbiddenException(
+              'Inbox participant projection failed closed',
+            );
+          }
+          if (!Array.isArray(participants))
+            throw new ForbiddenException(
+              'Inbox participant projection failed closed',
+            );
           const subject =
             row.visibility === MessageVisibilityAccess.FULL ||
             row.visibility === MessageVisibilityAccess.SUBJECT

@@ -40,6 +40,21 @@ const toRichText = (
 ): MyahInboxRichText | null =>
   body ? { markdown: body.markdown, blocknote: body.blocknote ?? null } : null;
 
+// Metadata-only reads may omit incoming fields; never erase known state then.
+const incomingMetadata = (
+  thread: MyahInboxDraftAutosaveThread,
+  entry: MyahInboxDraftAutosaveEntry,
+) => ({
+  incomingState:
+    thread.incomingState !== undefined
+      ? thread.incomingState
+      : (entry.incomingState ?? null),
+  bodyEdited:
+    thread.bodyEdited !== undefined
+      ? thread.bodyEdited
+      : (entry.bodyEdited ?? null),
+});
+
 type UpdateDraftParams = {
   key: MyahInboxDraftAutosaveKey;
   body: MyahInboxRichText;
@@ -127,12 +142,14 @@ export type MyahInboxDraftAutosaveController = {
   applyProposalIfCurrent: (
     capture: MyahInboxDraftOperationCapture,
     body: MyahInboxRichText,
+    options?: { requireReview?: boolean },
   ) => Promise<boolean>;
   reconcileOperation: (
     capture: MyahInboxDraftOperationCapture,
     thread: MyahInboxDraftAutosaveThread,
   ) => void;
   reconcile: (thread: MyahInboxDraftAutosaveThread) => void;
+  reconcileArrival: (thread: MyahInboxDraftAutosaveThread) => void;
   updateDraft: (params: UpdateDraftParams) => void;
   flush: (
     key: MyahInboxDraftAutosaveKey,
@@ -255,7 +272,13 @@ export const useMyahInboxDraftAutosaveController =
           !entry ||
           !entry.dirty ||
           !isTargetAuthorized(key) ||
-          (entry.executionState != null && entry.executionState !== 'READY') ||
+          (entry.executionState != null &&
+            entry.executionState !== 'READY' &&
+            // A guarded update may persist its validated proposal when stale.
+            !(
+              entry.executionState === 'NEEDS_REVIEW' &&
+              entry.operation?.kind === 'applying'
+            )) ||
           entry.operation?.kind === 'pending' ||
           entry.operation?.kind === 'unknown' ||
           entry.operation?.kind === 'generating' ||
@@ -307,7 +330,12 @@ export const useMyahInboxDraftAutosaveController =
           const result = await saveDraftRef.current({
             ...entry.input,
             ...(entry.proposalContextFingerprint
-              ? { proposalContextFingerprint: entry.proposalContextFingerprint }
+              ? {
+                  proposalContextFingerprint: entry.proposalContextFingerprint,
+                  ...(entry.proposalRequiresReview
+                    ? { requireReview: true }
+                    : {}),
+                }
               : {}),
             expectedRevision,
             body: submittedBody,
@@ -566,6 +594,8 @@ export const useMyahInboxDraftAutosaveController =
         if (!entry) {
           store.set(atom, {
             executionState,
+            incomingState: thread.incomingState ?? null,
+            bodyEdited: thread.bodyEdited ?? null,
             input: thread.input,
             contextFingerprint: thread.contextFingerprint ?? null,
             operation: null,
@@ -588,6 +618,7 @@ export const useMyahInboxDraftAutosaveController =
         store.set(atom, {
           ...entry,
           executionState,
+          ...incomingMetadata(thread, entry),
           input: thread.input ?? entry.input,
           contextFingerprint:
             thread.contextFingerprint ?? entry.contextFingerprint,
@@ -627,6 +658,7 @@ export const useMyahInboxDraftAutosaveController =
         store.set(atom, {
           ...entry,
           executionState,
+          ...incomingMetadata(thread, entry),
           input: thread.input ?? entry.input,
           contextFingerprint:
             thread.contextFingerprint ?? entry.contextFingerprint,
@@ -643,6 +675,22 @@ export const useMyahInboxDraftAutosaveController =
         });
       },
       [maskOutcomeBody, runtime, store],
+    );
+
+    // Background arrival never interrupts typing, saving or an operation: it
+    // updates only incoming metadata; the post-save read applies the rest.
+    const reconcileArrival = useCallback(
+      (thread: MyahInboxDraftAutosaveThread) => {
+        const atom = myahInboxDraftAutosaveFamilyState.atomFamily(thread.key);
+        const entry = store.get(atom);
+        if (!entry || !isTargetAuthorized(thread.key)) return;
+        if (entry.dirty || entry.status === 'saving' || entry.operation) {
+          store.set(atom, { ...entry, ...incomingMetadata(thread, entry) });
+          return;
+        }
+        reconcile(thread);
+      },
+      [isTargetAuthorized, reconcile, store],
     );
 
     const beginTargetRead = useCallback(
@@ -1037,7 +1085,11 @@ export const useMyahInboxDraftAutosaveController =
           (kind === 'reviewing'
             ? entry.executionState !== 'NEEDS_REVIEW'
             : entry.executionState != null &&
-              entry.executionState !== 'READY') ||
+              entry.executionState !== 'READY' &&
+              // Only generation may refresh a stale-but-readable body.
+              !(
+                kind === 'generating' && entry.executionState === 'NEEDS_REVIEW'
+              )) ||
           (entry.editorOwner && entry.editorOwner !== editorOwner) ||
           entry.operation ||
           entry.status === 'error' ||
@@ -1145,6 +1197,7 @@ export const useMyahInboxDraftAutosaveController =
       async (
         capture: MyahInboxDraftOperationCapture,
         body: MyahInboxRichText,
+        options?: { requireReview?: boolean },
       ) => {
         const entry = getEntry(capture.key);
         if (
@@ -1165,6 +1218,7 @@ export const useMyahInboxDraftAutosaveController =
           operation: { token: capture.token, kind: 'applying' },
           localBody: body,
           proposalContextFingerprint: capture.contextFingerprint,
+          proposalRequiresReview: options?.requireReview === true,
           dirty: true,
           status: 'idle',
           editorVersion: entry.editorVersion + 1,
@@ -1289,6 +1343,7 @@ export const useMyahInboxDraftAutosaveController =
     return useMemo(
       () => ({
         reconcile,
+        reconcileArrival,
         getEntry,
         claimEditor,
         releaseEditor,
@@ -1315,6 +1370,7 @@ export const useMyahInboxDraftAutosaveController =
       }),
       [
         reconcile,
+        reconcileArrival,
         getEntry,
         claimEditor,
         releaseEditor,

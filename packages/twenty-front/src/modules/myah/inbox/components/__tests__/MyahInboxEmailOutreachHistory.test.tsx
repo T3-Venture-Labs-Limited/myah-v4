@@ -13,7 +13,10 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import { MyahInboxEmailOutreachHistory } from '@/myah/inbox/components/MyahInboxEmailOutreachHistory';
+import {
+  getMyahInboxOutreachCards,
+  MyahInboxEmailOutreachHistory,
+} from '@/myah/inbox/components/MyahInboxEmailOutreachHistory';
 import { useMyahInboxEmailHistory } from '@/myah/inbox/hooks/useMyahInboxEmailHistory';
 let mockClient: ApolloClient;
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
@@ -21,6 +24,7 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
 }));
 const card = (id: string, campaignLabel: string | null = 'Same campaign') => ({
   threadId: id,
+  anchorKey: `legacy:${id}`,
   rootMessageId: `${id}-root`,
   startTimestamp: `2026-09-0${id.slice(1)}T00:00:00Z`,
   subject: `Subject ${id}`,
@@ -86,6 +90,7 @@ const cardPage = (
 const messagesPage = (threadId: string) => ({
   myahInboxContactEmailCardMessages: {
     threadId,
+    anchorKey: `legacy:${threadId}`,
     root: message(`${threadId}-root`, threadId, Number(threadId.slice(1))),
     messages: [
       message(`${threadId}-m8`, threadId, 8),
@@ -98,6 +103,7 @@ const messagesPage = (threadId: string) => ({
 const olderMessagesPage = (threadId: string) => ({
   myahInboxContactEmailCardMessages: {
     threadId,
+    anchorKey: `legacy:${threadId}`,
     root: message(`${threadId}-root`, threadId, Number(threadId.slice(1))),
     messages: [message(`${threadId}-m6`, threadId, 6)],
     olderCursor: null,
@@ -160,6 +166,103 @@ beforeEach(() => {
   });
 });
 afterEach(() => mockClient.stop());
+it('retains two accepted-send cards in one native thread with separate group identities', () => {
+  const first = { ...card('t3'), anchorKey: 'attempt:send-one' };
+  const second = { ...card('t3'), anchorKey: 'attempt:send-two' };
+  expect(
+    getMyahInboxOutreachCards({
+      segments: [{ pages: [{ cards: [first, second] }] }],
+      detachedCards: [],
+      windows: [],
+    } as never).map(
+      (item) => (item as unknown as { anchorKey: string }).anchorKey,
+    ),
+  ).toEqual(['attempt:send-one', 'attempt:send-two']);
+});
+it('opens sibling accepted-send cards independently and keeps their replies in separate windows', async () => {
+  const { container } = render(<Harness />);
+  const keys = ['attempt:send-one', 'attempt:send-two'];
+  await respond(take('MyahInboxContactEmailCards'), {
+    myahInboxContactEmailCards: {
+      ...cardPage([], 'snapshot', null).myahInboxContactEmailCards,
+      cards: keys.map((anchorKey, index) => ({
+        ...card('t3'),
+        anchorKey,
+        rootMessageId: `t3-send-${index}`,
+      })),
+    },
+  });
+  for (const [index, anchorKey] of keys.entries()) {
+    await waitFor(() =>
+      expect(
+        requests.some(
+          ({ name }) => name === 'MyahInboxContactEmailCardMessages',
+        ),
+      ).toBe(true),
+    );
+    const request = take('MyahInboxContactEmailCardMessages');
+    expect(request.variables).toMatchObject({ threadId: 't3', anchorKey });
+    await respond(request, {
+      myahInboxContactEmailCardMessages: {
+        ...messagesPage('t3').myahInboxContactEmailCardMessages,
+        anchorKey,
+        root: message(`t3-send-${index}`, 't3'),
+        messages: [message(`t3-reply-${index}`, 't3')],
+      },
+    });
+  }
+  expect(container.querySelectorAll('[data-thread-id="t3"]')).toHaveLength(2);
+  expect(
+    container.querySelectorAll('[data-message-id="t3-reply-0"]'),
+  ).toHaveLength(1);
+  expect(
+    container.querySelectorAll('[data-message-id="t3-reply-1"]'),
+  ).toHaveLength(1);
+  const region = (key: string) =>
+    container.querySelector<HTMLElement>(`[id="replies-${key}"]`)!;
+  expect(region('attempt:send-one').hidden).toBe(true);
+  expect(region('attempt:send-two').hidden).toBe(false);
+  fireEvent.click(
+    screen.getByTestId('myah-inbox-replies-toggle-attempt:send-one'),
+  );
+  expect(region('attempt:send-one').hidden).toBe(false);
+  expect(region('attempt:send-two').hidden).toBe(false);
+  fireEvent.click(screen.getByTestId('myah-inbox-reply-attempt:send-one'));
+  fireEvent.click(screen.getByTestId('myah-inbox-reply-attempt:send-two'));
+  expect(reply.mock.calls).toEqual([['t3'], ['t3']]);
+});
+it('labels an unreadable exact parent with neutral sequence wording', async () => {
+  render(<Harness />);
+  await respond(take('MyahInboxContactEmailCards'), {
+    myahInboxContactEmailCards: {
+      ...cardPage([], 'snapshot', null).myahInboxContactEmailCards,
+      cards: [
+        {
+          ...card('t3'),
+          anchorKey: 'attempt:one',
+          historyBasis: 'PENDING',
+          rootMessageId: 'reply-only',
+        },
+      ],
+    },
+  });
+  await waitFor(() =>
+    expect(
+      requests.some(({ name }) => name === 'MyahInboxContactEmailCardMessages'),
+    ).toBe(true),
+  );
+  const request = take('MyahInboxContactEmailCardMessages');
+  expect(request.variables.anchorKey).toBe('attempt:one');
+  await respond(request, {
+    myahInboxContactEmailCardMessages: {
+      ...messagesPage('t3').myahInboxContactEmailCardMessages,
+      anchorKey: 'attempt:one',
+      root: message('reply-only', 't3'),
+      messages: [],
+    },
+  });
+  expect(screen.getByText('Replied in this sequence')).toBeInTheDocument();
+});
 it('renders three distinct ascending native cards with root and real replies; loads only on explicit older action', async () => {
   const { container } = render(<Harness />);
   await resolveCards();

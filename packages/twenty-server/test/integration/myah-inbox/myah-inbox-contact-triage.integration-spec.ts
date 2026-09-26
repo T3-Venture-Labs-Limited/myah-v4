@@ -13,6 +13,7 @@ import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
 import { MyahInboxContactTriageSchemaService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-schema.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { normalizeReadCapabilitySql } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { WorkspaceManagerService } from 'src/engine/workspace-manager/workspace-manager.service';
@@ -71,9 +72,11 @@ const contactsQuery = gql`
     $owner: String
     $states: [MyahInboxState!]
     $snoozeStatus: MyahInboxSnoozeStatus
+    $contactId: String
   ) {
     myahInboxContacts(
       first: $first
+      contactId: $contactId
       owner: $owner
       states: $states
       snoozeStatus: $snoozeStatus
@@ -99,6 +102,14 @@ const contactsQuery = gql`
     }
   }
 `;
+
+// MYAH-415: the default Email list shows only Campaign responses. These
+// triage fixtures are not responses, so tests address them by exact contact.
+const exactContactId = (
+  kind: 'creator' | 'email-thread',
+  recordId: string,
+): string =>
+  encodeMyahInboxContactId({ workspaceId, identity: { kind, recordId } });
 
 const updateTriageMutation = gql`
   mutation Myah354UpdateTriage($input: UpdateMyahInboxContactTriageInput!) {
@@ -1309,6 +1320,7 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
         query: contactsQuery,
         variables: {
           first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
           owner: 'UNASSIGNED',
           states: ['NEEDS_REPLY'],
         },
@@ -1339,7 +1351,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contactResponse = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1391,7 +1407,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1457,7 +1477,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1535,7 +1559,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
       const sourceContacts = await makeGraphqlAPIRequest(
         {
           query: contactsQuery,
-          variables: { first: 20, states: ['NEEDS_REPLY'] },
+          variables: {
+            first: 20,
+            contactId: exactContactId('email-thread', fixture.threadId),
+            states: ['NEEDS_REPLY'],
+          },
         },
         APPLE_JANE_ADMIN_ACCESS_TOKEN,
       );
@@ -1648,7 +1676,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1735,7 +1767,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1836,7 +1872,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const response = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, snoozeStatus: 'DUE' },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          snoozeStatus: 'DUE',
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -2045,7 +2085,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
       const sharedToo = await makeGraphqlAPIRequest(
         {
           query: contactsQuery,
-          variables: { first: 20, states: ['NEEDS_REPLY'] },
+          variables: {
+            first: 20,
+            contactId: exactContactId('email-thread', fixture.threadId),
+            states: ['NEEDS_REPLY'],
+          },
         },
         APPLE_JANE_ADMIN_ACCESS_TOKEN,
       );
@@ -2209,7 +2253,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('creator', fixture.creatorA),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -2291,6 +2339,7 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
           query: contactsQuery,
           variables: {
             first: 20,
+            contactId: exactContactId('creator', fixture.creatorA),
             owner: 'UNASSIGNED',
             states: ['NEEDS_REPLY'],
           },

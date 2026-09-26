@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
@@ -5,6 +6,7 @@ import {
   FieldActorSource,
   MessageChannelContactAutoCreationPolicy,
   MessageParticipantRole,
+  ConnectedAccountProvider,
 } from 'twenty-shared/types';
 
 import { type MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
@@ -13,6 +15,7 @@ import { MessageQueueService } from 'src/engine/core-modules/message-queue/servi
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
+import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -32,8 +35,13 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
   let messageParticipantService: MessagingMessageParticipantService;
   let campaignReplyEvidencePort: {
     reconcileInboundMessageInTransaction: jest.Mock;
+    prepareInboundCandidateCreatorsInTransaction: jest.Mock;
   };
   let triageService: MyahInboxContactTriageService;
+  let lifecycleService: {
+    withCreatorMutationLocksInTransaction: jest.Mock;
+    assertCreatorMutationLockCoverage: jest.Mock;
+  };
   let receiptService: MyahInboxContactTriageReceiptService;
 
   let datasourceInstance: { transaction: jest.Mock };
@@ -123,6 +131,9 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     rollbackTransaction = jest.fn();
     campaignReplyEvidencePort = {
       reconcileInboundMessageInTransaction: jest.fn(),
+      prepareInboundCandidateCreatorsInTransaction: jest
+        .fn()
+        .mockResolvedValue([]),
     };
     datasourceInstance = {
       transaction: jest.fn().mockImplementation(async (callback) => {
@@ -228,6 +239,19 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
           },
         },
         {
+          provide: MyahInboxContactTriageLifecycleService,
+          useValue: {
+            withCreatorMutationLocksInTransaction: jest.fn(async ({ mutate }) =>
+              mutate(),
+            ),
+            assertCreatorMutationLockCoverage: jest.fn((input) =>
+              new MyahInboxContactTriageLifecycleService().assertCreatorMutationLockCoverage(
+                input,
+              ),
+            ),
+          },
+        },
+        {
           provide: MyahInboxContactTriageReceiptService,
           useValue: {
             isTriageSchemaProvisioned: jest.fn().mockResolvedValue(true),
@@ -264,6 +288,7 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
       MessagingMessageParticipantService,
     );
     triageService = module.get(MyahInboxContactTriageService);
+    lifecycleService = module.get(MyahInboxContactTriageLifecycleService);
     receiptService = module.get(MyahInboxContactTriageReceiptService);
   });
 
@@ -292,6 +317,182 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     );
     expect(result?.messageExternalIdToMessageThreadIdMap.get('message-1')).toBe(
       'db-thread-id-1',
+    );
+  });
+
+  it('prepares inbound Campaign candidates before locking the persisted source', async () => {
+    transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+    const persist = jest
+      .mocked(messageService.saveMessagesWithinTransaction)
+      .getMockImplementation();
+    if (!persist) throw new Error('Missing test persistence implementation');
+    let prepared = false;
+    campaignReplyEvidencePort.prepareInboundCandidateCreatorsInTransaction.mockImplementation(
+      async () => {
+        prepared = true;
+        return [];
+      },
+    );
+    jest
+      .mocked(messageService.saveMessagesWithinTransaction)
+      .mockImplementation(async (...args) => {
+        expect(prepared).toBe(true);
+        return persist(...args);
+      });
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[1]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'import-preflight' },
+    );
+
+    expect(
+      campaignReplyEvidencePort.prepareInboundCandidateCreatorsInTransaction,
+    ).toHaveBeenCalledWith(
+      {
+        workspaceId,
+        messageChannelId: mockMessageChannel.id,
+        candidates: [
+          {
+            threadExternalId: 'thread-1',
+            normalizedSender: 'contact@company.com',
+          },
+        ],
+      },
+      transactionManager,
+    );
+  });
+
+  it('covers both Campaign A and an existing Creator B before source persistence', async () => {
+    const creatorA = '00000000-0000-4000-8000-000000000101';
+    const creatorB = '00000000-0000-4000-8000-000000000102';
+    campaignReplyEvidencePort.prepareInboundCandidateCreatorsInTransaction.mockResolvedValue(
+      [creatorA],
+    );
+    transactionManager = {
+      queryRunner: {
+        query: jest.fn(async (sql: string) =>
+          sql.includes('SELECT DISTINCT thread."creatorId"')
+            ? [{ creatorId: creatorB }]
+            : sql.includes('FROM "messageThread" WHERE id')
+              ? [{ id: 'db-thread-id-1', creatorId: creatorB }]
+              : [],
+        ),
+      },
+    } as never;
+    const persist = jest
+      .mocked(messageService.saveMessagesWithinTransaction)
+      .getMockImplementation();
+    if (!persist) throw new Error('Missing test persistence implementation');
+    jest
+      .mocked(messageService.saveMessagesWithinTransaction)
+      .mockImplementation(async (...args) => {
+        expect(
+          lifecycleService.withCreatorMutationLocksInTransaction,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            creatorIds: [creatorA, creatorB],
+            manager: transactionManager,
+          }),
+        );
+        return persist(...args);
+      });
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[1]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'import-covered' },
+    );
+    expect(
+      campaignReplyEvidencePort.reconcileInboundMessageInTransaction,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ coveredCreatorIds: [creatorA, creatorB] }),
+      transactionManager,
+    );
+  });
+
+  it('rolls back rather than acquiring an unanticipated Creator C after source locking', async () => {
+    const creatorA = '00000000-0000-4000-8000-000000000101';
+    const creatorB = '00000000-0000-4000-8000-000000000102';
+    const creatorC = '00000000-0000-4000-8000-000000000103';
+    campaignReplyEvidencePort.prepareInboundCandidateCreatorsInTransaction.mockResolvedValue(
+      [creatorA],
+    );
+    transactionManager = {
+      queryRunner: {
+        query: jest.fn(async (sql: string) =>
+          sql.includes('SELECT DISTINCT thread."creatorId"')
+            ? [{ creatorId: creatorB }]
+            : sql.includes('FROM "messageThread" WHERE id')
+              ? [{ id: 'db-thread-id-1', creatorId: creatorC }]
+              : [],
+        ),
+      },
+    } as never;
+
+    await expect(
+      service.saveMessagesAndEnqueueContactCreation(
+        [mockMessages[1]],
+        mockMessageChannel,
+        mockConnectedAccount,
+        workspaceId,
+        { mode: 'LIVE', generationId: 'import-race' },
+      ),
+    ).rejects.toThrow('Inbox Creator lock coverage changed');
+    expect(
+      campaignReplyEvidencePort.reconcileInboundMessageInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(commitTransaction).not.toHaveBeenCalled();
+    expect(datasourceInstance.transaction).toHaveBeenCalledTimes(3);
+    expect(rollbackTransaction).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries the entire import transaction after source Creator coverage changes', async () => {
+    transactionManager = {
+      queryRunner: {
+        query: jest.fn(async (sql: string) =>
+          sql.includes('FROM "messageThread" WHERE id')
+            ? [
+                {
+                  id: 'db-thread-id-1',
+                  creatorId: '00000000-0000-4000-8000-000000000101',
+                },
+              ]
+            : [],
+        ),
+      },
+    } as never;
+    campaignReplyEvidencePort.prepareInboundCandidateCreatorsInTransaction.mockResolvedValue(
+      ['00000000-0000-4000-8000-000000000101'],
+    );
+    lifecycleService.assertCreatorMutationLockCoverage.mockImplementationOnce(
+      () => {
+        throw new ConflictException(
+          'Inbox Creator lock coverage changed before source mutation',
+        );
+      },
+    );
+
+    await expect(
+      service.saveMessagesAndEnqueueContactCreation(
+        [mockMessages[1]],
+        mockMessageChannel,
+        mockConnectedAccount,
+        workspaceId,
+        { mode: 'LIVE', generationId: 'import-retry' },
+      ),
+    ).resolves.toBeDefined();
+    expect(datasourceInstance.transaction).toHaveBeenCalledTimes(2);
+    expect(rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(commitTransaction).toHaveBeenCalledTimes(1);
+    expect(messageService.saveMessagesWithinTransaction).toHaveBeenCalledTimes(
+      2,
     );
   });
 
@@ -333,11 +534,60 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
         threadExternalId: mockMessages[1].messageThreadExternalId,
         fromHandle: 'contact@company.com',
         inboundEvidenceId: 'db-message-id-2',
+        inboundMessageThreadId: 'db-thread-id-1',
       },
       transactionManager,
     );
     expect(commitTransaction).toHaveBeenCalledTimes(1);
     expect(rollbackTransaction).not.toHaveBeenCalled();
+  });
+
+  it.each<[string[]]>([
+    [[]],
+    [['<accepted@example.com>']],
+    [['<accepted-one@example.com>', '<accepted-two@example.com>']],
+  ])(
+    'forwards only the provider-supplied reply-parent tokens',
+    async (tokens) => {
+      const incoming: MessageWithParticipants = {
+        ...mockMessages[1],
+        inReplyToTokens: tokens,
+      };
+
+      await service.saveMessagesAndEnqueueContactCreation(
+        [incoming],
+        mockMessageChannel,
+        mockConnectedAccount,
+        workspaceId,
+      );
+
+      const reconciliationInput =
+        campaignReplyEvidencePort.reconcileInboundMessageInTransaction.mock
+          .calls[0][0];
+      expect(reconciliationInput.inReplyToTokens).toEqual(tokens);
+    },
+  );
+
+  it.each([
+    ConnectedAccountProvider.GOOGLE,
+    ConnectedAccountProvider.MICROSOFT,
+  ])('leaves reply-parent proof unset for %s imports', async (provider) => {
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[1]],
+      mockMessageChannel,
+      { ...mockConnectedAccount, provider },
+      workspaceId,
+    );
+
+    const reconciliationInput =
+      campaignReplyEvidencePort.reconcileInboundMessageInTransaction.mock
+        .calls[0][0];
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        reconciliationInput,
+        'inReplyToTokens',
+      ),
+    ).toBe(false);
   });
 
   it('rolls back the import when Campaign reconciliation rejects', async () => {

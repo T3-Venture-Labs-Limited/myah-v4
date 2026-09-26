@@ -1278,9 +1278,14 @@ describe('MyahInboxReplyActionDefinition', () => {
         'andWhere',
         'setParameters',
         'orderBy',
+        'addSelect',
+        'addOrderBy',
+        'limit',
       ])
         qb[method] = jest.fn(() => qb);
       qb.getRawMany = jest.fn(async () => [{ id: 'delivered' }]);
+      // No readable inbound: the incoming authority term is stable across F1→F2.
+      qb.getRawOne = jest.fn(async () => undefined);
       const repositories = {
         messageThread: {
           findOne: jest.fn(async () => ({

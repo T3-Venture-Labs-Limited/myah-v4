@@ -19,6 +19,18 @@ registerEnumType(MyahInboxReplyDraftExecutionState, {
   name: 'MyahInboxReplyDraftExecutionState',
 });
 
+// Incoming mail relative to the body's authored baseline. UNKNOWN is a legacy
+// draft without a captured baseline: conservative, explicit update only.
+export enum MyahInboxReplyDraftIncomingState {
+  CURRENT = 'CURRENT',
+  STALE = 'STALE',
+  UNKNOWN = 'UNKNOWN',
+}
+
+registerEnumType(MyahInboxReplyDraftIncomingState, {
+  name: 'MyahInboxReplyDraftIncomingState',
+});
+
 @ObjectType('MyahInboxResolvedReplyTarget')
 export class MyahInboxResolvedReplyTarget {
   @Field(() => ReplyChannel)
@@ -68,4 +80,11 @@ export class MyahInboxReplyContextDraft {
 
   @Field(() => MyahInboxReplyDraftExecutionState)
   executionState: MyahInboxReplyDraftExecutionState;
+
+  @Field(() => MyahInboxReplyDraftIncomingState, { nullable: true })
+  incomingState?: MyahInboxReplyDraftIncomingState | null;
+
+  // False only for an untouched validated proposal; legacy bodies are edited.
+  @Field(() => Boolean, { nullable: true })
+  bodyEdited?: boolean | null;
 }
