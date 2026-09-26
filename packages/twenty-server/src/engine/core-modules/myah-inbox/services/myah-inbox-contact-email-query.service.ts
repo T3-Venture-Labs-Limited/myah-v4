@@ -24,6 +24,7 @@ import {
   type MyahInboxEmailSqlScope,
   type MyahInboxEmailReadSelection,
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-email-read-query.util';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import {
   PermissionsException,
   PermissionsExceptionCode,
@@ -156,6 +157,7 @@ export class MyahInboxContactEmailQueryService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly messageVisibilityPolicyService: MessageVisibilityPolicyService,
+    private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
   async listCards(
@@ -668,12 +670,16 @@ NULL::uuid AS "campaignId", NULL::uuid AS "enrollmentId", NULL::uuid AS "message
                   NULL::uuid AS "projectedMessageId" WHERE FALSE
               )`,
         );
+        // Off until historical replies are backfilled: show one card per thread.
+        const responseFocus =
+          this.twentyConfigService.get('MYAH_INBOX_RESPONSE_FOCUS_ENABLED') &&
+          replySchema?.exists === true;
+
         return consume({
           sql: ctes.join(',\n'),
           parameters,
-          responseCardsOnly:
-            contact.kind === 'creator' && replySchema?.exists === true,
-          legacyCardsOnly: contact.kind === 'email-thread',
+          responseCardsOnly: contact.kind === 'creator' && responseFocus,
+          legacyCardsOnly: contact.kind === 'email-thread' || !responseFocus,
         });
       },
       input.authContext,

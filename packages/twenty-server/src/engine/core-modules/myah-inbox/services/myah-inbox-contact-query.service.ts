@@ -44,6 +44,7 @@ import {
   encodeMyahInboxContactId,
   type MyahInboxContactIdentityKind as ContactIdentityKind,
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
@@ -201,6 +202,7 @@ export class MyahInboxContactQueryService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly messageVisibilityPolicyService: MessageVisibilityPolicyService,
+    private readonly twentyConfigService: TwentyConfigService,
     private readonly triageCapabilityService?: MyahInboxTriageCapabilityService,
   ) {}
 
@@ -554,9 +556,12 @@ export class MyahInboxContactQueryService {
       WHERE evidence."workspaceId"=$1 AND evidence."inboundMessageId"=message.id
     )`
           : 'FALSE';
-        const emailSource = exactContact
-          ? 'visible_email_messages'
-          : 'response_email_messages';
+        // Off until historical replies are backfilled; otherwise old replies vanish.
+        const emailSource =
+          exactContact ||
+          !this.twentyConfigService.get('MYAH_INBOX_RESPONSE_FOCUS_ENABLED')
+            ? 'visible_email_messages'
+            : 'response_email_messages';
         const sql = `WITH request_scope AS (
   SELECT $1::uuid AS "workspaceId", $2::uuid AS "userWorkspaceId"
 ),

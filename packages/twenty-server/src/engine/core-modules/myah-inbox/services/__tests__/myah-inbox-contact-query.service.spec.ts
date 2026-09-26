@@ -181,6 +181,7 @@ const buildHarness = (
   canReadCanonicalTriage = true,
   useProductionPermissionDenial = false,
   hasRolePermissionConfig = true,
+  responseFocusEnabled = true,
 ) => {
   rolePermissionConfig = hasRolePermissionConfig
     ? resolvedRolePermissionConfig
@@ -279,6 +280,7 @@ const buildHarness = (
     service: new Service!(
       globalWorkspaceOrmManager as never,
       visibilityPolicy as never,
+      { get: jest.fn(() => responseFocusEnabled) } as never,
       triageCapabilityService as never,
     ),
     triageCapabilityService,
@@ -843,6 +845,18 @@ describe('MyahInboxContactQueryService', () => {
     const [exactSql] = exact.query.mock.calls[0];
     expect(exactSql).toMatch(
       /latest_email_by_thread AS[\s\S]*?FROM visible_email_messages message/,
+    );
+  });
+
+  it('keeps every visible Email in the default list while response focus is disabled', async () => {
+    const harness = buildHarness([], true, false, true, false);
+    await harness.service.listContacts(request());
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toMatch(
+      /latest_email_by_thread AS[\s\S]*?FROM visible_email_messages message/,
+    );
+    expect(sql).toMatch(
+      /latest_inbound_email_by_thread AS[\s\S]*?FROM visible_email_messages message/,
     );
   });
 
