@@ -148,7 +148,8 @@ current_roots AS (
 ),
 message_groups AS (
   SELECT message.id, message."messageThreadId", message."receivedAt", message."createdAt",
-    CASE WHEN direct.id IS NOT NULL THEN direct."anchorKey"
+    CASE ${scope.legacyCardsOnly ? `WHEN TRUE THEN 'legacy:' || message."messageThreadId"::text` : ''}
+      WHEN direct.id IS NOT NULL THEN direct."anchorKey"
       WHEN inbox_reply.id IS NOT NULL THEN inbox_reply."anchorKey"
       ${scope.responseCardsOnly ? `WHEN message.direction='OUTGOING' AND accepted."projectedMessageId" IS NULL THEN NULL` : ''}
       WHEN message.direction='INCOMING' AND EXISTS (

@@ -367,6 +367,16 @@ export class ConfigVariables {
   MYAH_TEAM_ALLOWED_EMAILS?: string;
 
   @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description:
+      'Limit the default Myah Email Inbox to recorded Campaign responses; enable only after historical reply evidence is backfilled',
+    isEnvOnly: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  MYAH_INBOX_RESPONSE_FOCUS_ENABLED = false;
+
+  @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
     description: 'Enable Myah managed-provider billing through Metronome',
     isEnvOnly: true,
