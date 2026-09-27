@@ -54,7 +54,12 @@ describe('ResynchronizeMyahCampaignLayoutCommand', () => {
         ),
       ),
     );
-    expect(options).toEqual({ synchronizeExistingSelectedMetadata: true });
+    expect(options).toEqual({
+      synchronizeExistingSelectedMetadata: true,
+      deletionSelection: {
+        pageLayoutWidget: new Set(['368b8c66-435d-4e5b-94b8-4d3f08fc283b']),
+      },
+    });
     expect(args.dataSource?.query).not.toHaveBeenCalled();
   });
 

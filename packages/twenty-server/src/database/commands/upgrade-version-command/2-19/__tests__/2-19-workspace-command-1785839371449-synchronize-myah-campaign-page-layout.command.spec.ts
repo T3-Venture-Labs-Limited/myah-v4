@@ -38,6 +38,12 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
               [MYAH_STANDARD_OBJECTS.campaign.universalIdentifier]: {},
             },
           },
+          flatViewMaps: {
+            byUniversalIdentifier: {
+              [MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+                .universalIdentifier]: {},
+            },
+          },
         }),
       } as unknown as WorkspaceCacheService,
     );
@@ -132,6 +138,30 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
     });
   });
 
+  it('leaves the new audience tab to the later audience command until its view exists', async () => {
+    const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
+    const command = new SynchronizeMyahCampaignPageLayoutCommand(
+      {} as WorkspaceIteratorService,
+      {
+        synchronizeWorkspace,
+      } as unknown as SynchronizeSourceControlledMyahMetadataService,
+      {
+        getOrRecompute: jest.fn().mockResolvedValue({
+          flatObjectMetadataMaps: {
+            byUniversalIdentifier: {
+              [MYAH_STANDARD_OBJECTS.campaign.universalIdentifier]: {},
+            },
+          },
+          flatViewMaps: { byUniversalIdentifier: {} },
+        }),
+      } as unknown as WorkspaceCacheService,
+    );
+
+    await command.runOnWorkspace(args);
+
+    expect(synchronizeWorkspace).not.toHaveBeenCalled();
+  });
+
   it('skips Campaign page-layout synchronization when Campaign metadata is absent', async () => {
     const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
     const getOrRecompute = jest.fn().mockResolvedValue({
@@ -153,6 +183,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
 
     expect(getOrRecompute).toHaveBeenCalledWith(args.workspaceId, [
       'flatObjectMetadataMaps',
+      'flatViewMaps',
     ]);
     expect(synchronizeWorkspace).not.toHaveBeenCalled();
   });

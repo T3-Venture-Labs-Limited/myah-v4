@@ -15,7 +15,9 @@ const campaignPageLayoutTabs = Object.values(
 );
 const campaignPageLayoutWidgets = new Set(
   campaignPageLayoutTabs.flatMap(({ widgets }) =>
-    Object.values(widgets).map(({ universalIdentifier }) => universalIdentifier),
+    Object.values(widgets).map(
+      ({ universalIdentifier }) => universalIdentifier,
+    ),
   ),
 );
 const campaignViews = [
@@ -51,14 +53,20 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
       return;
     }
 
-    const { flatObjectMetadataMaps } =
+    const { flatObjectMetadataMaps, flatViewMaps } =
       await this.workspaceCacheService.getOrRecompute(args.workspaceId, [
         'flatObjectMetadataMaps',
+        'flatViewMaps',
       ]);
 
+    // The audience command runs later and installs this view and its widget.
     if (
       flatObjectMetadataMaps.byUniversalIdentifier[
         MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+      ] === undefined ||
+      flatViewMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+          .universalIdentifier
       ] === undefined
     ) {
       return;
@@ -66,8 +74,8 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
 
     const campaignChildSelection = {
       pageLayoutTab: new Set(
-        campaignPageLayoutTabs.map(({ universalIdentifier }) =>
-          universalIdentifier,
+        campaignPageLayoutTabs.map(
+          ({ universalIdentifier }) => universalIdentifier,
         ),
       ),
       pageLayoutWidget: campaignPageLayoutWidgets,
