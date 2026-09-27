@@ -1,3 +1,4 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { styled } from '@linaria/react';
 import { type ChangeEvent, useRef, useState } from 'react';
 
@@ -6,6 +7,7 @@ import { AttachmentList } from '@/activities/files/components/AttachmentList';
 import { DropZone } from '@/activities/files/components/DropZone';
 import { useAttachments } from '@/activities/files/hooks/useAttachments';
 import { useUploadAttachmentFile } from '@/activities/files/hooks/useUploadAttachmentFile';
+import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
@@ -42,7 +44,8 @@ const StyledDropZoneContainer = styled.div`
 export const FilesCard = () => {
   const targetRecord = useTargetRecord();
   const inputFileRef = useRef<HTMLInputElement>(null);
-  const { attachments, loading } = useAttachments(targetRecord);
+  const { attachments, loading, error, hasReadPermission } =
+    useAttachments(targetRecord);
   const { uploadAttachmentFile } = useUploadAttachmentFile();
 
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -80,6 +83,22 @@ export const FilesCard = () => {
   );
 
   const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
+  const { objectMetadataItem: attachmentMetadataItem } = useObjectMetadataItem({
+    objectNameSingular: CoreObjectNameSingular.Attachment,
+  });
+  const attachmentPermissions = useObjectPermissionsForObject(
+    attachmentMetadataItem.id,
+  );
+  const isReadDenied =
+    !objectPermissions.canReadObjectRecords ||
+    !attachmentPermissions.canReadObjectRecords ||
+    !hasReadPermission ||
+    (CombinedGraphQLErrors.is(error) &&
+      error.errors.some(
+        ({ extensions }) =>
+          extensions?.code === 'FORBIDDEN' ||
+          extensions?.code === 'UNAUTHENTICATED',
+      ));
 
   const hasUploadPermission = useHasPermissionFlag(
     PermissionFlagType.UPLOAD_FILE,
@@ -87,8 +106,40 @@ export const FilesCard = () => {
 
   const canUploadFiles = hasObjectUpdatePermissions && hasUploadPermission;
 
+  if (isReadDenied) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            <Trans>Files are not available</Trans>
+          </AnimatedPlaceholderEmptyTitle>
+          <AnimatedPlaceholderEmptySubTitle>
+            <Trans>You don't have permission to view files.</Trans>
+          </AnimatedPlaceholderEmptySubTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
+  }
+
   if (loading && isAttachmentsEmpty) {
     return <SkeletonLoader />;
+  }
+
+  if (error && isAttachmentsEmpty) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            <Trans>Files couldn't be loaded</Trans>
+          </AnimatedPlaceholderEmptyTitle>
+          <AnimatedPlaceholderEmptySubTitle>
+            <Trans>Please refresh the page.</Trans>
+          </AnimatedPlaceholderEmptySubTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
   }
 
   if (isAttachmentsEmpty) {
@@ -134,6 +185,14 @@ export const FilesCard = () => {
 
   return (
     <StyledAttachmentsContainer>
+      {error && (
+        <div role="alert">
+          <strong>
+            <Trans>Files couldn't be loaded</Trans>
+          </strong>{' '}
+          <Trans>Please refresh the page.</Trans>
+        </div>
+      )}
       <StyledFileInput
         ref={inputFileRef}
         onChange={handleFileChange}

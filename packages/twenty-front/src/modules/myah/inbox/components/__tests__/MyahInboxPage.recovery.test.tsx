@@ -314,7 +314,7 @@ const contact = (
   id,
   identityKind: linked ? 'CREATOR' : 'EMAIL_THREAD',
   displayName: id,
-  instagramUsername: linked ? `${id}.ig` : null,
+  instagramDisplayHandle: linked ? `${id}.ig` : null,
   creator: linked ? { id: `creator-${id}`, name: id } : null,
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel,

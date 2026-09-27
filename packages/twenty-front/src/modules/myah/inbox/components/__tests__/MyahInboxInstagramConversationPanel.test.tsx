@@ -152,7 +152,7 @@ const contact = (
   id: 'contact-1',
   identityKind: 'CREATOR',
   displayName: 'Ada',
-  instagramUsername: 'ada',
+  instagramDisplayHandle: 'ada',
   creator: { id: 'creator-1', name: 'Ada' },
   lastActivityAt: '2026-09-05T10:00:00.000Z',
   latestChannel: 'INSTAGRAM',
@@ -1004,7 +1004,7 @@ describe('MyahInboxInstagramConversationPanel', () => {
       <MyahInboxInstagramConversationPanel
         workspaceId="workspace-1"
         contact={contact({
-          instagramUsername: null,
+          instagramDisplayHandle: null,
           instagram: {
             isAvailable: true,
             state: 'READY',
@@ -1021,13 +1021,36 @@ describe('MyahInboxInstagramConversationPanel', () => {
     expect(screen.getByText('Composer Ada ready')).toBeVisible();
   });
 
+  it('does not substitute a contact display handle for a selected conversation recipient', () => {
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagramDisplayHandle: 'different.profile',
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [
+              { ...conversation('conversation-1'), recipientUsername: null },
+            ],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Instagram conversation')).toBeVisible();
+    expect(screen.queryByText('@different.profile')).not.toBeInTheDocument();
+    expect(screen.getByText('Composer Ada ready')).toBeVisible();
+  });
+
   it('keeps an unlinked reply blocked without a conversation username', () => {
     render(
       <MyahInboxInstagramConversationPanel
         workspaceId="workspace-1"
         contact={contact({
           creator: null,
-          instagramUsername: null,
+          instagramDisplayHandle: null,
           instagram: {
             isAvailable: true,
             state: 'READY',
@@ -1051,11 +1074,11 @@ describe('MyahInboxInstagramConversationPanel', () => {
 
   it.each(['ada', null])(
     'shows neutral global-command guidance without creating a draft for no conversation (%s)',
-    (instagramUsername) => {
+    (instagramDisplayHandle) => {
       render(
         <MyahInboxInstagramConversationPanel
           workspaceId="workspace-1"
-          contact={contact({ instagramUsername })}
+          contact={contact({ instagramDisplayHandle })}
           onActivity={jest.fn()}
         />,
       );

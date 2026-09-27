@@ -10,6 +10,7 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useGetRecordGroupVisibilityFilters } from '@/views/hooks/useGetRecordGroupVisibilityFilters';
 import {
+  combineFilters,
   computeRecordGqlOperationFilter,
   isDefined,
   turnAnyFieldFilterIntoRecordGqlFilter,
@@ -58,7 +59,7 @@ export const useGetRecordIndexTotalCount = () => {
     id: { COUNT: number };
   }>({
     objectNameSingular: objectMetadataItem.nameSingular,
-    filter: { ...filter, ...anyFieldFilter },
+    filter: combineFilters([filter, anyFieldFilter]),
     recordGqlFieldsAggregate: {
       id: [AggregateOperations.COUNT],
     },

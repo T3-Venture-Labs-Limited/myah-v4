@@ -338,7 +338,19 @@ export class InstagramMessageComposerService {
                 computeInstagramComposerPreparationFingerprint(
                   { recipient: input.recipient },
                   authenticatedContext,
-                  { ...graph, creatorRecordId: null },
+                  {
+                    ...graph,
+                    creatorRecordId: null,
+                    recipient: {
+                      ...graph.recipient,
+                      sourceValues: [
+                        {
+                          field: 'rawHandle',
+                          value: input.recipient.rawHandle!,
+                        },
+                      ],
+                    },
+                  },
                 );
             if (
               (persistedDraft && !resumesCommittedAttempt) ||
@@ -854,16 +866,48 @@ export class InstagramMessageComposerService {
                 input.authenticatedContext.rolePermissionConfig,
               );
             await beforeQuery();
-            const inserted = await creatorRepository.insert(
-              { instagramUsername: input.graph.normalizedHandle },
-              manager,
-              ['id'],
-            );
+            const inserted = await creatorRepository.insert({}, manager, [
+              'id',
+            ]);
             const id = inserted.identifiers[0]?.id;
             if (typeof id !== 'string') {
               throw new Error('Instagram composer Creator is unavailable');
             }
             creatorRecordId = id;
+            const profileRepository =
+              await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+                input.authenticatedContext.workspaceId,
+                'socialProfile',
+                input.authenticatedContext.rolePermissionConfig,
+              );
+            await beforeQuery();
+            const profile = await profileRepository.insert(
+              {
+                creatorId: creatorRecordId,
+                platform: 'INSTAGRAM',
+                name: `@${input.graph.normalizedHandle} on INSTAGRAM`,
+                handle: input.graph.normalizedHandle,
+                normalizedLocator: `handle:${input.graph.normalizedHandle}`,
+                profileUrl: `https://www.instagram.com/${input.graph.normalizedHandle}/`,
+              },
+              manager,
+              ['id'],
+            );
+            const profileId = profile.identifiers[0]?.id;
+            if (typeof profileId !== 'string') {
+              throw new Error('Instagram composer profile is unavailable');
+            }
+            input.graph.recipient.sourceValues = [
+              { field: 'socialProfile.id', value: profileId },
+              {
+                field: 'socialProfile.handle',
+                value: input.graph.normalizedHandle,
+              },
+              {
+                field: 'socialProfile.profileUrl',
+                value: `https://www.instagram.com/${input.graph.normalizedHandle}/`,
+              },
+            ];
           }
           const snapshot = this.toSnapshot({ ...input.graph, creatorRecordId });
 

@@ -16,12 +16,14 @@ type RecordTableWidgetViewLoadEffectProps = {
   viewId: string;
   widgetId: string;
   objectMetadataItem: EnrichedObjectMetadataItem;
+  recordIndexId: string;
 };
 
 export const RecordTableWidgetViewLoadEffect = ({
   viewId,
   widgetId,
   objectMetadataItem,
+  recordIndexId,
 }: RecordTableWidgetViewLoadEffectProps) => {
   const { loadRecordIndexStates } = useLoadRecordIndexStates();
 
@@ -77,6 +79,7 @@ export const RecordTableWidgetViewLoadEffect = ({
 
     loadRecordIndexStates(currentView, objectMetadataItem, {
       skipGlobalIndexStates: true,
+      recordIndexId,
     });
 
     setLastLoadedRecordTableWidgetViewId({
@@ -86,6 +89,7 @@ export const RecordTableWidgetViewLoadEffect = ({
     });
   }, [
     viewId,
+    recordIndexId,
     lastLoadedRecordTableWidgetViewId,
     setLastLoadedRecordTableWidgetViewId,
     currentView,

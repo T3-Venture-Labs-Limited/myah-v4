@@ -165,30 +165,6 @@ export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
       icon: 'IconUsers',
     },
   }),
-  creatorMetrics: createStandardViewFlatMetadata({
-    ...args,
-    objectName: 'creator',
-    context: {
-      viewName: 'creatorMetrics',
-      name: 'Creator metrics',
-      type: ViewType.TABLE,
-      key: null,
-      position: 2,
-      icon: 'IconChartBar',
-    },
-  }),
-  qualifiedCreatorsWithEmail: createStandardViewFlatMetadata({
-    ...args,
-    objectName: 'creator',
-    context: {
-      viewName: 'qualifiedCreatorsWithEmail',
-      name: 'Qualified creators with email',
-      type: ViewType.TABLE,
-      key: null,
-      position: 1,
-      icon: 'IconUsers',
-    },
-  }),
   campaignOperationsFields: createStandardViewFlatMetadata({
     ...args,
     objectName: 'campaign',
@@ -248,11 +224,7 @@ export const computeMyahCreatorListViews = (args: Args) =>
 export const computeMyahCreatorViews = (args: Args) =>
   Object.fromEntries(
     Object.entries(computeMyahViews(args)).filter(
-      ([key]) =>
-        key === 'creatorRecordPageFields' ||
-        key === 'creators' ||
-        key === 'creatorMetrics' ||
-        key === 'qualifiedCreatorsWithEmail',
+      ([key]) => key === 'creatorRecordPageFields' || key === 'creators',
     ),
   );
 export const computeMyahSocialProfileViews = (args: Args) =>

@@ -37,7 +37,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
   objectNameSingular: string,
 ) => {
   const apolloCoreClient = useApolloCoreClient();
-  const metadataClient = useApolloClient();
+  const apolloMetadataClient = useApolloClient();
   const [creatorImportAttemptKey, setCreatorImportAttemptKey] = useState<
     string | null
   >(null);
@@ -133,7 +133,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
                 throw new Error('Creator import row identity is unavailable');
               }
 
-              await metadataClient.mutate({
+              await apolloMetadataClient.mutate({
                 mutation: COMMIT_CREATOR_IMPORT,
                 variables: {
                   input: {
@@ -215,7 +215,8 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
             },
           }
         : {}),
-      spreadsheetImportFields,
+      spreadsheetImportFields:
+        creatorSession?.spreadsheetImportFields ?? spreadsheetImportFields,
       availableFieldMetadataItems: availableFieldMetadataItemsToImport,
       onAbortSubmit: () => {
         abortController.abort();

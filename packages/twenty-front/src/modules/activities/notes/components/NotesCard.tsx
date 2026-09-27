@@ -7,6 +7,7 @@ import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadata
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useTargetRecord } from '@/ui/layout/contexts/useTargetRecord';
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { IconPlus } from 'twenty-ui/icon';
@@ -36,6 +37,7 @@ export const NotesCard = () => {
     fetchMoreNotes,
     hasNextPage,
     error,
+    hasReadPermission,
   } = useNotes(targetRecord);
 
   const handleLastRowVisible = async () => {
@@ -59,6 +61,31 @@ export const NotesCard = () => {
   );
 
   const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
+  const isReadDenied =
+    !objectPermissions.canReadObjectRecords ||
+    !hasReadPermission ||
+    (CombinedGraphQLErrors.is(error) &&
+      error.errors.some(
+        ({ extensions }) =>
+          extensions?.code === 'FORBIDDEN' ||
+          extensions?.code === 'UNAUTHENTICATED',
+      ));
+
+  if (isReadDenied) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            {t`Notes are not available`}
+          </AnimatedPlaceholderEmptyTitle>
+          <AnimatedPlaceholderEmptySubTitle>
+            {t`You don't have permission to view notes.`}
+          </AnimatedPlaceholderEmptySubTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
+  }
 
   if (loading && isNotesEmpty) {
     return <SkeletonLoader />;
@@ -110,6 +137,12 @@ export const NotesCard = () => {
 
   return (
     <StyledNotesContainer>
+      {error && (
+        <div role="alert">
+          <strong>{t`Notes couldn't be loaded`}</strong>{' '}
+          {t`Please refresh the page.`}
+        </div>
+      )}
       <NoteList
         title={t`All`}
         notes={notes}

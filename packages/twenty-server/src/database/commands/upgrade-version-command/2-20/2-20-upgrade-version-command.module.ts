@@ -1,6 +1,7 @@
 import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
 import { CreateCreatorDataOperationReceiptsFastInstanceCommand } from './2-20-instance-command-fast-1789645911010-create-creator-data-operation-receipts';
 import { MigrateMyahCreatorSocialProfilesCommand } from './2-20-workspace-command-1789645911011-migrate-myah-creator-social-profiles.command';
+import { ScopeMyahCreatorSocialProfilesForwardCommand } from './2-20-workspace-command-1789645911012-scope-myah-creator-social-profiles-forward.command';
 import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
 import { Module } from '@nestjs/common';
 import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
@@ -76,6 +77,7 @@ import { MyahCreatorSocialProfileModule } from 'src/modules/myah-creator-social-
     MigrateMyahCreatorSocialLinksService,
     MigrateMyahCreatorSocialProfilesService,
     MigrateMyahCreatorSocialProfilesCommand,
+    ScopeMyahCreatorSocialProfilesForwardCommand,
     RemoveReplacedTwentyCrmMetadataCommand,
     SynchronizeInstagramMessagePermissionsCommand,
     InvalidateComposioInstagramAuthoritiesWorkspaceCommand,

@@ -160,8 +160,6 @@ const briefing: MyahInboxReplyBriefing = {
     name: 'Ada Creator',
     language: 'English',
     location: 'London',
-    categories: ['Beauty'],
-    niches: ['Skincare'],
   },
 };
 
@@ -278,8 +276,6 @@ const createService = (
       findOne: jest.fn().mockResolvedValue({
         id: thread.creator?.id,
         ...briefing.creator,
-        categories: briefing.creator?.categories.join(', '),
-        niches: briefing.creator?.niches.join(', '),
       }),
       update: businessRecordMutation,
       save: businessRecordMutation,
@@ -528,6 +524,10 @@ describe('MyahInboxReplyProposalService', () => {
     );
     expect(modelRequest).toContain('Reference data — Campaign relationship');
     expect(modelRequest).toContain('Reference data — Creator profile');
+    expect(modelRequest).toContain('Language: English');
+    expect(modelRequest).toContain('Location: London');
+    expect(modelRequest).not.toContain('Categories:');
+    expect(modelRequest).not.toContain('Niches:');
     expect(modelRequest).not.toContain('PRIVATE_EMAIL_MUST_NOT_LEAK');
     expect(modelRequest).not.toContain(
       'A Campaign email signature will be appended after your response.',

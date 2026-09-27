@@ -50,12 +50,7 @@ class ComposerResolutionError extends Error {
   }
 }
 
-type CreatorIdentity = ObjectRecord & {
-  id: string;
-  instagramUsername: string | null;
-  instagramUrl: string | null;
-  instagramLink: { primaryLinkUrl?: string | null } | null;
-};
+type CreatorIdentity = ObjectRecord & { id: string };
 
 type LocalConversation = ObjectRecord & {
   id: string;
@@ -224,6 +219,7 @@ export class InstagramMessageRecipientService {
       'preparationFingerprint'
     > = {
       status: 'READY',
+      selectedCreatorRecordId: input.recipient.creatorRecordId ?? null,
       normalizedHandle: recipient.normalizedHandle,
       creatorRecordId: creator?.id ?? null,
       sender: {
@@ -268,9 +264,13 @@ export class InstagramMessageRecipientService {
     manager: WorkspaceEntityManager,
     beforeQuery: () => Promise<void>,
   ): Promise<void> {
-    const recipient = this.assertRecipient({
-      rawHandle: graph.normalizedHandle,
-    });
+    // A Creator selection must recheck every profile for that Creator, including
+    // newly added or hidden accounts. A raw handle instead checks its exact locator.
+    const recipient = this.assertRecipient(
+      graph.selectedCreatorRecordId
+        ? { creatorRecordId: graph.selectedCreatorRecordId }
+        : { rawHandle: graph.normalizedHandle },
+    );
     const creator = await this.resolveCreator({
       recipient,
       workspaceId: context.workspaceId,
@@ -334,144 +334,39 @@ export class InstagramMessageRecipientService {
       })
     | null
   > {
-    // Discovery is internal and minimal; a match must still pass the separate
-    // role-scoped read (or current create permission check) below.
-    const allCreators =
-      await this.globalWorkspaceOrmManager.getRepository<CreatorIdentity>(
-        input.workspaceId,
-        'creator',
-        { shouldBypassPermissionChecks: true },
-      );
     const readableCreators =
       await this.globalWorkspaceOrmManager.getRepository<CreatorIdentity>(
         input.workspaceId,
         'creator',
         input.rolePermissionConfig,
       );
-
     const socialProfile = await this.resolveCanonicalSocialProfile(input);
     if (socialProfile) {
       await input.beforeQuery?.();
       const selected = await readableCreators.findOne(
         {
           where: { id: socialProfile.creatorId, deletedAt: IsNull() },
-          select: {
-            id: true,
-            instagramUsername: true,
-            instagramUrl: true,
-            instagramLinkPrimaryLinkUrl: true,
-          },
+          select: { id: true },
         },
         input.manager,
       );
       if (!selected) throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
-
       input.recipient.creatorRecordId = socialProfile.creatorId;
       input.recipient.normalizedHandle = socialProfile.normalizedHandle;
       input.recipient.sourceValues = socialProfile.sourceValues;
-
       return { ...selected, ...socialProfile };
     }
 
+    // A Creator without an unambiguous canonical account has no message identity.
     if (input.recipient.creatorRecordId) {
-      await input.beforeQuery?.();
-      const selected = await readableCreators.findOne(
-        {
-          where: { id: input.recipient.creatorRecordId, deletedAt: IsNull() },
-          select: {
-            id: true,
-            instagramUsername: true,
-            instagramUrl: true,
-            // TypeORM selects mapped columns; formatResult restores instagramLink.
-            instagramLinkPrimaryLinkUrl: true,
-          },
-        },
-        input.manager,
-      );
-      if (!selected) throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
-
-      const resolved = this.resolveCreatorHandle(selected);
-      if (!resolved) throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
-      input.recipient.normalizedHandle = resolved.normalizedHandle;
-      input.recipient.sourceValues = resolved.sourceValues;
-
-      return { ...selected, ...resolved };
+      throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
     }
-
-    await input.beforeQuery?.();
-    const candidates = await allCreators.find(
-      {
-        where: { deletedAt: IsNull() },
-        select: {
-          id: true,
-          instagramUsername: true,
-          instagramUrl: true,
-          instagramLinkPrimaryLinkUrl: true,
-        },
-      },
-      input.manager,
-    );
-    const matchingIds = new Set<string>();
-    let conflictingCandidate = false;
-    for (const candidate of candidates) {
-      const resolved = this.resolveCreatorHandle(candidate);
-      if (resolved?.normalizedHandle === input.recipient.normalizedHandle) {
-        matchingIds.add(candidate.id);
-      } else if (
-        this.hasSourceMatching(candidate, input.recipient.normalizedHandle)
-      ) {
-        // A stale/contradictory canonical record must never be ignored to create a duplicate.
-        conflictingCandidate = true;
-      }
+    if (!(await this.canCreateCreator(readableCreators))) {
+      throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
     }
-    if (conflictingCandidate)
-      throw new ComposerResolutionError('CREATOR_AMBIGUOUS');
-    if (matchingIds.size > 1)
-      throw new ComposerResolutionError('CREATOR_AMBIGUOUS');
-    const [id] = matchingIds;
-    if (id) {
-      await this.assertNoCanonicalInstagramProfile(input, id);
-    }
-    if (!id) {
-      if (!(await this.canCreateCreator(readableCreators))) {
-        throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
-      }
-      // A prospective raw-handle Creator will persist this canonical source;
-      // use it now so a crash after the Creator transaction has a stable v3
-      // snapshot on replay.
-      input.recipient.sourceValues = [
-        {
-          field: 'instagramUsername',
-          value: input.recipient.normalizedHandle,
-        },
-      ];
-      return null;
-    }
-
-    await input.beforeQuery?.();
-    const readable = await readableCreators.findOne(
-      {
-        where: { id, deletedAt: IsNull() },
-        select: {
-          id: true,
-          instagramUsername: true,
-          instagramUrl: true,
-          instagramLinkPrimaryLinkUrl: true,
-        },
-      },
-      input.manager,
-    );
-    if (!readable) throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
-    const resolved = this.resolveCreatorHandle(readable);
-    if (
-      !resolved ||
-      resolved.normalizedHandle !== input.recipient.normalizedHandle
-    ) {
-      throw new ComposerResolutionError('CONTEXT_CHANGED');
-    }
-
-    input.recipient.sourceValues = resolved.sourceValues;
-    return { ...readable, ...resolved };
+    // The raw handle is only a preparation input. The transaction creates a
+    // canonical profile and binds its ID into the durable action snapshot.
+    return null;
   }
 
   private async resolveCanonicalSocialProfile(input: {
@@ -598,34 +493,6 @@ export class InstagramMessageRecipientService {
     };
   }
 
-  private async assertNoCanonicalInstagramProfile(
-    input: {
-      manager?: WorkspaceEntityManager;
-      beforeQuery?: () => Promise<void>;
-      workspaceId: string;
-    },
-    creatorId: string,
-  ): Promise<void> {
-    const profiles =
-      await this.globalWorkspaceOrmManager.getRepository<SocialProfileRecord>(
-        input.workspaceId,
-        'socialProfile',
-        { shouldBypassPermissionChecks: true },
-      );
-    await input.beforeQuery?.();
-    const existing = await profiles.find(
-      {
-        where: { creatorId, platform: 'INSTAGRAM', deletedAt: IsNull() },
-        select: { id: true },
-        take: 1,
-      },
-      input.manager,
-    );
-    if (existing.length > 0) {
-      throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
-    }
-  }
-
   private async canCreateCreator(
     creatorRepository: WorkspaceRepository<CreatorIdentity>,
   ): Promise<boolean> {
@@ -642,7 +509,7 @@ export class InstagramMessageRecipientService {
           creatorRepository.internalContext.objectIdByNameSingular,
         selectedColumns: ['id'],
         allFieldsSelected: false,
-        updatedColumns: ['instagramUsername'],
+        updatedColumns: [],
       });
 
       return true;
@@ -655,65 +522,6 @@ export class InstagramMessageRecipientService {
       }
       throw error;
     }
-  }
-
-  private resolveCreatorHandle(creator: CreatorIdentity): {
-    normalizedHandle: string;
-    sourceValues: Array<{ field: string; value: string }>;
-  } | null {
-    try {
-      const resolved = resolveInstagramRecipient({
-        instagramUsername: creator.instagramUsername,
-        instagramUrl: creator.instagramUrl,
-        instagramLink: creator.instagramLink,
-      });
-      return {
-        normalizedHandle: resolved.normalizedUsername,
-        sourceValues: resolved.sourceFields.map((field) => ({
-          field,
-          value:
-            field === 'instagramUsername'
-              ? (creator.instagramUsername ?? '')
-              : field === 'instagramUrl'
-                ? (creator.instagramUrl ?? '')
-                : (creator.instagramLink?.primaryLinkUrl ?? ''),
-        })),
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  private hasSourceMatching(
-    creator: CreatorIdentity,
-    normalizedHandle: string,
-  ): boolean {
-    return [
-      {
-        instagramUsername: creator.instagramUsername,
-        instagramUrl: null,
-        instagramLink: null,
-      },
-      {
-        instagramUsername: null,
-        instagramUrl: creator.instagramUrl,
-        instagramLink: null,
-      },
-      {
-        instagramUsername: null,
-        instagramUrl: null,
-        instagramLink: creator.instagramLink,
-      },
-    ].some((source) => {
-      try {
-        return (
-          resolveInstagramRecipient(source).normalizedUsername ===
-          normalizedHandle
-        );
-      } catch {
-        return false;
-      }
-    });
   }
 
   private async resolveProfile(accountId: string, normalizedHandle: string) {

@@ -3,8 +3,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { type Repository } from 'typeorm';
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
-import { resolveInstagramRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-instagram-recipient.util';
 import {
   type InstagramMessageActionAuthority,
   type InstagramMessageV3ActionAuthority,
@@ -45,6 +45,7 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
     initiatorUserWorkspaceId: string;
     draftId: string;
     expectedRevision: number;
+    rolePermissionConfig: RolePermissionConfig;
   }): Promise<InstagramMessageV3ActionAuthority> {
     return this.createFreshReplyAuthority({ ...input, threadId: null });
   }
@@ -54,6 +55,7 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
     initiatorUserWorkspaceId: string;
     threadId: string;
     draftId: string;
+    rolePermissionConfig: RolePermissionConfig;
   }): Promise<InstagramMessageV3ActionAuthority> {
     if (!input.threadId)
       throw new Error('Instagram approval thread is unavailable');
@@ -66,6 +68,7 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
     draftId: string;
     threadId: string | null;
     expectedRevision?: number;
+    rolePermissionConfig: RolePermissionConfig;
   }): Promise<InstagramMessageV3ActionAuthority> {
     const workspace = await this.getWorkspace(input.workspaceId);
     const accountBinding = await this.getActiveAccountBinding(
@@ -82,12 +85,10 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
     ) {
       throw new Error('Instagram reply draft is unavailable');
     }
-    const recipient = resolveInstagramRecipient({
-      instagramUsername: draft.creatorInstagramUsername,
-      instagramUrl: draft.creatorInstagramUrl,
-      instagramLink: {
-        primaryLinkUrl: draft.creatorInstagramLinkPrimaryLinkUrl,
-      },
+    const recipient = await this.resolveAuthorityRecipient({
+      workspaceId: input.workspaceId,
+      draft,
+      rolePermissionConfig: input.rolePermissionConfig,
     });
     const profile = await this.unipileClient.getInstagramMessagingProfile({
       accountId: accountBinding.unipileAccountId,
@@ -112,6 +113,7 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
           : 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
         interactionContextId: input.threadId ? null : input.draftId,
       },
+      rolePermissionConfig: input.rolePermissionConfig,
       v3: {
         composerInputDigest: null,
         snapshot: {
@@ -128,19 +130,14 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
           conversationRecordId: draft.conversationId,
           providerChatId: draft.providerConversationId,
           attendeeProviderId: profile.providerMessagingId,
-          recipientSourceValues: recipient.sourceFields.map((field) => ({
-            field,
-            value:
-              field === 'instagramUsername'
-                ? draft.creatorInstagramUsername!
-                : field === 'instagramUrl'
-                  ? draft.creatorInstagramUrl!
-                  : draft.creatorInstagramLinkPrimaryLinkUrl!,
-          })),
+          recipientSourceValues: recipient.sourceValues,
         },
       },
     });
-    await this.assertReadyAfterReservation(authority);
+    await this.assertReadyAfterReservation(
+      authority,
+      input.rolePermissionConfig,
+    );
     if (authority.expectedActionBinding.actionVersion !== 3)
       throw new Error('Instagram v3 identity is required');
     return {
@@ -247,6 +244,7 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
 
   async assertReadyAfterReservation(
     authority: InstagramMessageActionAuthority,
+    rolePermissionConfig: RolePermissionConfig,
   ): Promise<void> {
     const { account, draft } = authority.canonicalGraph;
     const accountBinding = await this.getActiveAccountBinding(
@@ -298,6 +296,7 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
     await this.rebuildExecutionAuthority({
       workspaceId: authority.expectedActionBinding.workspaceId,
       binding: authority.expectedActionBinding,
+      rolePermissionConfig,
     });
   }
 

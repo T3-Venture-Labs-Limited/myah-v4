@@ -99,6 +99,15 @@ const authenticatedContext = {
   rolePermissionConfig: {} as never,
 };
 
+const canonicalSourceValues = [
+  { field: 'socialProfile.id', value: '00000000-0000-4000-8000-000000000010' },
+  { field: 'socialProfile.handle', value: 'recipient' },
+  {
+    field: 'socialProfile.profileUrl',
+    value: 'https://www.instagram.com/recipient/',
+  },
+];
+
 const graph = {
   status: 'READY' as const,
   normalizedHandle: 'recipient',
@@ -115,7 +124,7 @@ const graph = {
   recipient: {
     providerId: 'provider-id',
     providerMessagingId: 'provider-messaging-id',
-    sourceValues: [{ field: 'instagramUsername', value: 'recipient' }],
+    sourceValues: canonicalSourceValues,
   },
   chat: {
     actionKind: 'START_CHAT' as const,
@@ -133,7 +142,7 @@ const snapshot = {
   instagramAccountRecordId: accountId,
   unipileAccountId: 'unipile-account',
   instagramUserId: 'instagram-user',
-  recipientSourceValues: [{ field: 'instagramUsername', value: 'recipient' }],
+  recipientSourceValues: canonicalSourceValues,
   actionKind: 'START_CHAT' as const,
   conversationRecordId: null,
   providerChatId: null,
@@ -250,6 +259,10 @@ const buildTransactionHarness = (
   };
   const currentGraph: ResolvedInstagramComposerGraph = {
     ...graph,
+    recipient: {
+      ...graph.recipient,
+      sourceValues: [{ field: 'rawHandle', value: 'recipient' }],
+    },
     creatorRecordId: null,
     actionKind: route,
     chat:
@@ -298,13 +311,29 @@ const buildTransactionHarness = (
   const creatorRepository = {
     insert: jest.fn(async (values, manager, columns) => {
       requireManager(manager);
-      expect(values).toEqual({ instagramUsername: 'recipient' });
+      expect(values).toEqual({});
       expect(columns).toEqual(['id']);
       expect(events).toContain('canonical-scan');
       events.push('creator-insert');
       state.creatorStaged = true;
       enqueue();
       return { identifiers: [{ id: creatorId }] };
+    }),
+  };
+  const socialProfileRepository = {
+    insert: jest.fn(async (values, manager, columns) => {
+      requireManager(manager);
+      expect(values).toEqual({
+        creatorId,
+        platform: 'INSTAGRAM',
+        name: '@recipient on INSTAGRAM',
+        handle: 'recipient',
+        normalizedLocator: 'handle:recipient',
+        profileUrl: 'https://www.instagram.com/recipient/',
+      });
+      expect(columns).toEqual(['id']);
+      events.push('profile-insert');
+      return { identifiers: [{ id: '00000000-0000-4000-8000-000000000010' }] };
     }),
   };
   const draftRepository = {
@@ -476,6 +505,7 @@ const buildTransactionHarness = (
       expect(workspace).toBe(workspaceId);
       expect(role).toBe(authenticatedContext.rolePermissionConfig);
       if (name === 'creator') return creatorRepository;
+      if (name === 'socialProfile') return socialProfileRepository;
       if (name === 'myahSocialConversation') return conversationRepository;
       if (name === 'myahInstagramReplyDraft') return draftRepository;
       throw new Error(`unexpected repository ${name}`);
@@ -500,6 +530,7 @@ const buildTransactionHarness = (
     currentGraph,
     locks,
     creatorRepository,
+    socialProfileRepository,
     draftRepository,
     conversationRepository,
     eventSnapshots,
@@ -672,6 +703,7 @@ describe('InstagramMessageComposerService', () => {
       'table-lock',
       'canonical-scan',
       'creator-insert',
+      'profile-insert',
       'draft-insert',
       'commit',
       'release',
@@ -697,7 +729,7 @@ describe('InstagramMessageComposerService', () => {
       'fresh v3 unavailable',
     );
     expect(h.creatorRepository.insert).toHaveBeenCalledWith(
-      { instagramUsername: 'recipient' },
+      {},
       h.runner.manager,
       ['id'],
     );
@@ -1659,9 +1691,9 @@ describe('InstagramMessageComposerService complete receiptless recovery matrix',
     h.state.row.instagramMessageSnapshot = Object.fromEntries(
       Object.entries(snapshot).reverse(),
     );
-    h.state.snapshot.recipientSourceValues = [
-      { value: 'recipient', field: 'instagramUsername' },
-    ];
+    h.state.snapshot.recipientSourceValues = canonicalSourceValues.map(
+      ({ field, value }) => ({ value, field }),
+    );
     h.approvals.getApprovedBinding.mockResolvedValue({
       ...loadedBinding,
       instagramMessageSnapshot: h.state.snapshot,
@@ -1838,7 +1870,14 @@ describe('InstagramMessageComposerService own Creator preparation exception', ()
       computeInstagramComposerPreparationFingerprint(
         input,
         authenticatedContext,
-        { ...graph, creatorRecordId: null },
+        {
+          ...graph,
+          creatorRecordId: null,
+          recipient: {
+            ...graph.recipient,
+            sourceValues: [{ field: 'rawHandle', value: 'recipient' }],
+          },
+        },
       );
     const retry = { ...input, expectedPreparationFingerprint };
     h.state.row.composerInputDigest = sha256([
@@ -2274,6 +2313,7 @@ describe('InstagramMessageComposerService write transaction boundary', () => {
         expect(h.listener).not.toHaveBeenCalled();
       h.state.released = true;
       h.currentGraph.creatorRecordId = creatorId;
+      h.currentGraph.recipient.sourceValues = canonicalSourceValues;
       h.currentGraph.preparationFingerprint =
         computeInstagramComposerPreparationFingerprint(
           input,
@@ -2396,6 +2436,7 @@ describe('InstagramMessageComposerService overlapping composer protocol', () => 
 const buildComposedSendHarness = async (route: 'START_CHAT' | 'REPLY') => {
   const h = buildTransactionHarness(route);
   h.currentGraph.creatorRecordId = creatorId;
+  h.currentGraph.recipient.sourceValues = canonicalSourceValues;
   const conversationId =
     route === 'REPLY' ? h.currentGraph.chat.conversationRecordId : null;
   const account = {
@@ -2408,11 +2449,16 @@ const buildComposedSendHarness = async (route: 'START_CHAT' | 'REPLY') => {
     deactivatedAt: null,
   };
   const accountRepository = { find: jest.fn(async () => [account]) };
-  const creator = {
-    id: creatorId,
-    instagramUsername: 'recipient',
-    instagramUrl: null,
-    instagramLink: null,
+  const creator = { id: creatorId };
+  const socialProfile = {
+    id: '00000000-0000-4000-8000-000000000010',
+    creatorId,
+    platform: 'INSTAGRAM',
+    handle: 'recipient',
+    profileUrl: 'https://www.instagram.com/recipient/',
+    normalizedLocator: 'handle:recipient',
+    platformAccountId: null,
+    deletedAt: null,
   };
   const chat = {
     chatId: 'chat-id',
@@ -2458,24 +2504,28 @@ const buildComposedSendHarness = async (route: 'START_CHAT' | 'REPLY') => {
       operation(),
     getRepository: jest.fn(async (_workspace, name, _role) => ({
       find: async () =>
-        name === 'creator'
-          ? [creator]
-          : name === 'myahSocialConversation' && route === 'REPLY'
-            ? [conversation()]
-            : [],
+        name === 'socialProfile'
+          ? [socialProfile]
+          : name === 'creator'
+            ? [creator]
+            : name === 'myahSocialConversation' && route === 'REPLY'
+              ? [conversation()]
+              : [],
       findOne: async () =>
-        name === 'creator'
-          ? creator
-          : name === 'myahInstagramReplyDraft'
-            ? (h.state.committed[0] ?? null)
-            : name === 'myahSocialConversation'
-              ? conversation()
-              : {
-                  id: accountId,
-                  label: 'Instagram',
-                  status: 'ACTIVE',
-                  unipileAccountId: account.unipileAccountId,
-                },
+        name === 'socialProfile'
+          ? socialProfile
+          : name === 'creator'
+            ? creator
+            : name === 'myahInstagramReplyDraft'
+              ? (h.state.committed[0] ?? null)
+              : name === 'myahSocialConversation'
+                ? conversation()
+                : {
+                    id: accountId,
+                    label: 'Instagram',
+                    status: 'ACTIVE',
+                    unipileAccountId: account.unipileAccountId,
+                  },
     })),
     getGlobalWorkspaceDataSource: async () => ({
       query: async (sql: string) => {

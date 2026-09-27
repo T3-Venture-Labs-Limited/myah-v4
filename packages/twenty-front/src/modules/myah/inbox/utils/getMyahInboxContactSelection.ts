@@ -21,7 +21,7 @@ const resolveAvailableChannel = (
 ): MyahInboxChannel | null => {
   const instagramAvailable =
     contact.instagram.isAvailable ||
-    Boolean(contact.creator && contact.instagramUsername);
+    Boolean(contact.creator && contact.instagramDisplayHandle);
 
   if (
     (preferredChannel === 'EMAIL' && contact.email.isAvailable) ||

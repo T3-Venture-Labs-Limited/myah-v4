@@ -91,7 +91,7 @@ const dualContact: MyahInboxContact = {
   id: 'contact-ada',
   identityKind: 'CREATOR',
   displayName: 'Ada Okafor',
-  instagramUsername: 'ada.creates',
+  instagramDisplayHandle: 'ada.creates',
   creator: { id: 'creator-ada', name: 'Ada Okafor' },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
@@ -136,7 +136,7 @@ const emailOnlyContact: MyahInboxContact = {
   ...dualContact,
   id: 'contact-email-only',
   latestChannel: 'EMAIL',
-  instagramUsername: null,
+  instagramDisplayHandle: null,
   instagram: {
     isAvailable: false,
     state: 'UNAVAILABLE',
@@ -150,7 +150,7 @@ const unmatchedEmailContact: MyahInboxContact = {
   id: 'contact-unmatched-email',
   identityKind: 'EMAIL_THREAD',
   displayName: 'newcreator@example.com',
-  instagramUsername: null,
+  instagramDisplayHandle: null,
   creator: null,
   latestChannel: 'EMAIL',
   instagram: {
@@ -166,7 +166,7 @@ const unmatchedInstagramContact: MyahInboxContact = {
   id: 'contact-unmatched-instagram',
   identityKind: 'INSTAGRAM_CONVERSATION',
   displayName: '@new.creator',
-  instagramUsername: null,
+  instagramDisplayHandle: null,
   creator: null,
   email: {
     isAvailable: false,
@@ -381,7 +381,7 @@ const MyahInboxStorySurface = ({
     selectedContact?.instagram.state === 'AMBIGUOUS'
       ? 'AMBIGUOUS'
       : instagramConversation ||
-          (selectedContact?.creator && selectedContact.instagramUsername)
+          (selectedContact?.creator && selectedContact.instagramDisplayHandle)
         ? 'READY'
         : 'UNAVAILABLE';
   const isFirstInstagramMessage =
@@ -488,9 +488,11 @@ const MyahInboxStorySurface = ({
               {selectedContact.instagram.state === 'AMBIGUOUS' ? null : (
                 <MyahInboxInstagramComposer
                   username={
-                    instagramConversation?.recipientUsername ??
-                    selectedContact.instagramUsername ??
-                    'unlinked-contact'
+                    instagramConversation
+                      ? (instagramConversation.recipientUsername ??
+                        'unlinked-contact')
+                      : (selectedContact.instagramDisplayHandle ??
+                        'unlinked-contact')
                   }
                   body={instagramBody}
                   channelState={effectiveInstagramChannelState}

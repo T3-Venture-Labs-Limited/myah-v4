@@ -124,7 +124,7 @@ ${commonFailureHandling}`,
           'Find and manage Myah Creator records without changing campaign lifecycle state.',
         content: `# Myah Creators
 
-Creator owns canonical identity, contact, source, and profile-state fields: name, email, phone, location, gender, language, profileType, creatorStatus, owner, source, sourceUrl, importSource, lastImportedAt, categories, and niches. SocialProfile owns per-platform identity, handles, URLs, bios, follower observations, and platform metrics. Native Note records linked through NoteTarget own supplementary notes. Creator's read-only relations include socialProfiles, listMemberships, campaignCreators, inboxThreads, taskTargets, noteTargets, timelineActivities, and attachments. CampaignCreator owns its Campaign-specific fields; do not use a Creator update to change campaign lifecycle or CampaignCreator.stage.
+Creator owns canonical identity, contact, and source fields: name, email, phone, location, language, owner, source, sourceUrl, importSource, and lastImportedAt. Do not query removed Creator status, categories, niches, platform account fields, or inline notes; use the SocialProfile relation and native Notes instead. SocialProfile owns per-platform identity, handles, URLs, bios, follower observations, and platform metrics. Native Note records linked through NoteTarget own supplementary notes. Creator's read-only relations include socialProfiles, listMemberships, campaignCreators, inboxThreads, taskTargets, noteTargets, timelineActivities, and attachments. CampaignCreator owns its Campaign-specific fields; do not use a Creator update to change campaign lifecycle or CampaignCreator.stage.
 
 ## Procedure
 
@@ -138,7 +138,7 @@ Creator owns canonical identity, contact, source, and profile-state fields: name
 
 ## Safety
 
-- Do not conflate Campaign lifecycleStatus, Creator profile state, and CampaignCreator.stage.
+- Do not conflate Campaign lifecycleStatus, SocialProfile identity, and CampaignCreator.stage.
 - A generic approval does not authorize a registered external action.
 - Duplicate Campaign membership is an idempotent no-op; never create raw CampaignCreator rows to force it.
 
@@ -190,7 +190,7 @@ ${commonFailureHandling}`,
           'Operate Myah Campaign audiences and outreach workflows with explicit validation.',
         content: `# Myah Campaigns
 
-Campaign Home owns name, objective, owner, targetPlatforms, targetDemographics, icpGoal, budgetNotes, campaignBrief, communicationGuidelines, replyRules, escalationBoundaries, additionalNotes, and emailSignature. Campaign lifecycleStatus owns lifecycle; the legacy Campaign status is not a lifecycle control. CampaignCreator owns stage. Do not conflate Campaign status with Creator status or CampaignCreator.stage.
+Campaign Home owns name, objective, owner, targetPlatforms, targetDemographics, icpGoal, budgetNotes, campaignBrief, communicationGuidelines, replyRules, escalationBoundaries, additionalNotes, and emailSignature. Campaign lifecycleStatus owns lifecycle; the legacy Campaign status is not a lifecycle control. CampaignCreator owns stage. Do not conflate Campaign status with CampaignCreator.stage or SocialProfile identity.
 
 ## Campaign Home and operations
 

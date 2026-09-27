@@ -130,12 +130,10 @@ describe('Myah standard skills', () => {
       expect.stringContaining('request_approval immediately before'),
     );
     for (const fieldOrRelation of [
-      'gender',
       'source',
       'sourceUrl',
       'language',
-      'categories',
-      'niches',
+      'lastImportedAt',
       'SocialProfile owns per-platform identity',
       'find_many_social_profiles',
       'create_one_social_profile',
@@ -158,6 +156,9 @@ describe('Myah standard skills', () => {
       );
     }
     expect(creators.content).not.toContain('person.companyId');
+    expect(creators.content).not.toContain(
+      'Creator owns canonical identity, contact, source, and profile-state',
+    );
     expect(creators.content).not.toContain('create_object_metadata');
     expect(creators.content).not.toContain(
       'Creator owns canonical identity, source, profile, social, and metric fields',
@@ -402,7 +403,7 @@ describe('Myah standard skills', () => {
     );
     expect(myahCampaigns.content).toEqual(
       expect.stringContaining(
-        'Do not conflate Campaign status with Creator status',
+        'Do not conflate Campaign status with CampaignCreator.stage',
       ),
     );
   });

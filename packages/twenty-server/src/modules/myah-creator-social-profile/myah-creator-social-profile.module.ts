@@ -13,6 +13,7 @@ import {
   SocialProfileUpdateOnePreQueryHook,
 } from 'src/modules/myah-creator-social-profile/query-hooks/social-profile.pre-query-hooks';
 import { CreatorImportResolver } from 'src/modules/myah-creator-social-profile/resolvers/creator-import.resolver';
+import { SocialProfileResolver } from 'src/modules/myah-creator-social-profile/resolvers/social-profile.resolver';
 import { CreatorDataOperationService } from 'src/modules/myah-creator-social-profile/services/creator-data-operation.service';
 import { CreatorDataOperationWriterService } from 'src/modules/myah-creator-social-profile/services/creator-data-operation-writer.service';
 import { CreatorImportService } from 'src/modules/myah-creator-social-profile/services/creator-import.service';
@@ -24,6 +25,7 @@ import { SocialProfileService } from 'src/modules/myah-creator-social-profile/se
     CreatorDataOperationWriterService,
     CreatorImportService,
     CreatorImportResolver,
+    SocialProfileResolver,
     SocialProfileService,
     SocialProfileCreateOnePreQueryHook,
     SocialProfileCreateManyPreQueryHook,

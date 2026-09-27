@@ -4,6 +4,7 @@ import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObject
 import { RecordComponentInstanceContextsWrapper } from '@/object-record/components/RecordComponentInstanceContextsWrapper';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { RecordIndexContextProvider } from '@/object-record/record-index/contexts/RecordIndexContext';
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { useRecordIndexFieldMetadataDerivedStates } from '@/object-record/record-index/hooks/useRecordIndexFieldMetadataDerivedStates';
 import { RecordTableWidgetContextStoreInitializer } from '@/object-record/record-table-widget/components/RecordTableWidgetContextStoreInitEffect';
 import { RecordTableWidgetViewLoadEffect } from '@/object-record/record-table-widget/components/RecordTableWidgetViewLoadEffect';
@@ -18,6 +19,9 @@ type RecordTableWidgetProviderProps = PropsWithChildren<{
   viewId: string;
   widgetId: string;
   recordLimit?: number;
+  queryOnlyRecordFilters?: RecordFilter[];
+  requiredCreationInput?: Record<string, string>;
+  scopeInstanceId?: string;
 }>;
 
 export const RecordTableWidgetProvider = ({
@@ -25,16 +29,25 @@ export const RecordTableWidgetProvider = ({
   viewId,
   widgetId,
   recordLimit,
+  queryOnlyRecordFilters,
+  requiredCreationInput,
+  scopeInstanceId,
   children,
 }: RecordTableWidgetProviderProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
   });
 
-  const recordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
+  const baseRecordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
     objectMetadataItem.namePlural,
     viewId,
   );
+  const recordIndexId = scopeInstanceId
+    ? `${baseRecordIndexId}-${scopeInstanceId}`
+    : baseRecordIndexId;
+  const contextStoreInstanceId = scopeInstanceId
+    ? `record-table-widget-${scopeInstanceId}`
+    : `record-table-widget-${widgetId}`;
 
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
   const objectPermissions = getObjectPermissionsForObject(
@@ -70,10 +83,10 @@ export const RecordTableWidgetProvider = ({
 
   return (
     <ContextStoreComponentInstanceContext.Provider
-      value={{ instanceId: `record-table-widget-${widgetId}` }}
+      value={{ instanceId: contextStoreInstanceId }}
     >
       <RecordTableWidgetContextStoreInitializer
-        contextStoreInstanceId={`record-table-widget-${widgetId}`}
+        contextStoreInstanceId={contextStoreInstanceId}
         objectMetadataItemId={objectMetadataItem.id}
         viewId={viewId}
       />
@@ -92,6 +105,8 @@ export const RecordTableWidgetProvider = ({
           fieldMetadataItemByFieldMetadataItemId,
           fieldDefinitionByFieldMetadataItemId,
           recordLimit,
+          queryOnlyRecordFilters,
+          requiredCreationInput,
         }}
       >
         <ViewComponentInstanceContext.Provider
@@ -104,6 +119,7 @@ export const RecordTableWidgetProvider = ({
               viewId={viewId}
               widgetId={widgetId}
               objectMetadataItem={objectMetadataItem}
+              recordIndexId={recordIndexId}
             />
             {children}
           </RecordComponentInstanceContextsWrapper>

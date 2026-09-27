@@ -10277,6 +10277,17 @@ msgstr "File no longer exists - {label}"
 msgid "File upload failed"
 msgstr "File upload failed"
 
+#. js-lingui-id: CmbuKA
+#: src/modules/activities/files/components/FilesCard.tsx
+msgid "Files are not available"
+msgstr "Files are not available"
+
+#. js-lingui-id: XUP46e
+#: src/modules/activities/files/components/FilesCard.tsx
+#: src/modules/activities/files/components/FilesCard.tsx
+msgid "Files couldn't be loaded"
+msgstr "Files couldn't be loaded"
+
 #. js-lingui-id: BZGmTs
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionTestTab.tsx
 msgid "Fill with sample input from"
@@ -15631,6 +15642,11 @@ msgstr "Not started"
 #: src/modules/settings/accounts/components/SettingsAccountsConnectedAccountsRowRightContainer.tsx
 msgid "Not synced"
 msgstr "Not synced"
+
+#. js-lingui-id: kHzQBZ
+#: src/modules/activities/notes/components/NotesCard.tsx
+msgid "Notes are not available"
+msgstr "Notes are not available"
 
 #. js-lingui-id: f8W9q0
 #: src/modules/activities/notes/components/NotesCard.tsx
@@ -25515,6 +25531,16 @@ msgstr "You do not have permission to view this widget"
 #: src/modules/object-record/record-index/components/RecordIndexEmptyStateNotShared.tsx
 msgid "You don't have access to this object."
 msgstr "You don't have access to this object."
+
+#. js-lingui-id: IGMDcw
+#: src/modules/activities/files/components/FilesCard.tsx
+msgid "You don't have permission to view files."
+msgstr "You don't have permission to view files."
+
+#. js-lingui-id: tQBnDp
+#: src/modules/activities/notes/components/NotesCard.tsx
+msgid "You don't have permission to view notes."
+msgstr "You don't have permission to view notes."
 
 #. js-lingui-id: RDAH2t
 #: src/modules/settings/billing/components/internal/SettingsBillingSubscriptionInfoModals.tsx

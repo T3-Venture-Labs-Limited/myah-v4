@@ -210,6 +210,9 @@ export const createRequestApprovalTool = (
           propose: (input: unknown) => {
             const parsedInput =
               InstagramReplyActionProposalInputZodSchema.parse(input);
+            if (!registeredApprovalOptions.rolePermissionConfig) {
+              throw new Error('Instagram actor permissions are unavailable');
+            }
 
             return registeredApprovalOptions.actionDefinitions.send_instagram_reply.createThreadReplyAuthority(
               {
@@ -218,6 +221,8 @@ export const createRequestApprovalTool = (
                   registeredApprovalOptions.userWorkspaceId ?? '',
                 threadId: registeredApprovalOptions.threadId ?? '',
                 draftId: parsedInput.draftId,
+                rolePermissionConfig:
+                  registeredApprovalOptions.rolePermissionConfig,
               },
             );
           },

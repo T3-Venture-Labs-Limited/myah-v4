@@ -2178,6 +2178,29 @@ type CreatorListMembershipRemovalImpactDTO {
   confirmationToken: String
 }
 
+type CommitCreatorImportResult {
+  receiptId: UUID!
+  creatorId: UUID!
+  socialProfileIds: [UUID!]!
+  noteId: UUID
+  noteTargetId: UUID
+  replayed: Boolean!
+}
+
+type SocialProfileDTO {
+  id: UUID!
+  creatorId: UUID!
+  name: String!
+  platform: String!
+  handle: String
+  profileUrl: String
+  platformAccountId: String
+  followerCount: Int
+  followerCountObservedAt: DateTime
+  followerCountSource: String
+  deletedAt: DateTime
+}
+
 type ApprovedAccessDomain {
   id: UUID!
   domain: String!
@@ -3940,6 +3963,10 @@ type Mutation {
   deleteApplicationRegistrationVariable(id: String!): Boolean!
   uploadAppTarball(file: Upload!, universalIdentifier: String): ApplicationRegistration!
   transferApplicationRegistrationOwnership(applicationRegistrationId: String!, targetWorkspaceSubdomain: String!): ApplicationRegistration!
+  commitCreatorImport(input: CommitCreatorImportInput!): CommitCreatorImportResult!
+  updateSocialProfileIdentity(input: UpdateSocialProfileIdentityInput!): SocialProfileDTO!
+  retireSocialProfile(input: RetireSocialProfileInput!): SocialProfileDTO!
+  restoreSocialProfile(input: RestoreSocialProfileInput!): SocialProfileDTO!
   createOneField(input: CreateOneFieldMetadataInput!): Field!
   updateOneField(input: UpdateOneFieldMetadataInput!): Field!
   deleteOneField(input: DeleteOneFieldInput!): Field!
@@ -4302,6 +4329,60 @@ input UpdateApplicationRegistrationVariablePayload {
   value: String
   resetValue: Boolean
   description: String
+}
+
+input CommitCreatorImportInput {
+  attemptKey: UUID!
+  operationKey: String!
+  creator: CreatorImportCreatorInput!
+  profiles: [CreatorImportSocialProfileInput!]!
+  note: CreatorImportNoteInput
+}
+
+input CreatorImportCreatorInput {
+  name: String!
+  email: String
+  phone: String
+  location: String
+  language: String
+  source: String
+  sourceUrl: String
+  importSource: String
+  lastImportedAt: String
+}
+
+input CreatorImportSocialProfileInput {
+  platform: String!
+  handle: String
+  profileUrl: String
+  platformAccountId: String
+  followerCount: Int
+  followerCountObservedAt: String
+  followerCountSource: String
+}
+
+input CreatorImportNoteInput {
+  title: String!
+  markdown: String!
+}
+
+input UpdateSocialProfileIdentityInput {
+  id: UUID!
+  platform: String
+  handle: String
+  profileUrl: String
+  platformAccountId: String
+  followerCount: Int
+  followerCountObservedAt: String
+  followerCountSource: String
+}
+
+input RetireSocialProfileInput {
+  id: UUID!
+}
+
+input RestoreSocialProfileInput {
+  id: UUID!
 }
 
 input CreateOneFieldMetadataInput {

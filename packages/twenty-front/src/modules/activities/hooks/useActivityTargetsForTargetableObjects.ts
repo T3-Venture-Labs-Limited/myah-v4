@@ -54,6 +54,7 @@ export const useActivityTargetsForTargetableObjects = ({
     fetchMoreRecords: fetchMoreActivityTargets,
     hasNextPage,
     error,
+    hasReadPermission,
   } = useFindManyRecords<TaskTarget | NoteTarget>({
     skip,
     objectNameSingular:
@@ -72,5 +73,6 @@ export const useActivityTargetsForTargetableObjects = ({
     fetchMoreActivityTargets,
     hasNextPage,
     error,
+    hasReadPermission,
   };
 };
