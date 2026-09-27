@@ -138,7 +138,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
     });
   });
 
-  it('leaves the new audience tab to the later audience command until its view exists', async () => {
+  it('materializes prerequisite Campaign views before the later audience command creates its view and tab', async () => {
     const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
     const command = new SynchronizeMyahCampaignPageLayoutCommand(
       {} as WorkspaceIteratorService,
@@ -159,7 +159,25 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
 
     await command.runOnWorkspace(args);
 
-    expect(synchronizeWorkspace).not.toHaveBeenCalled();
+    expect(synchronizeWorkspace).toHaveBeenCalledTimes(1);
+    expect(synchronizeWorkspace).toHaveBeenCalledWith(args, {
+      view: new Set([
+        MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaign.views.vieweb4da94a.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaign.views.view9c4f90c5.universalIdentifier,
+      ]),
+      viewField: new Set(
+        [
+          MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9,
+          MYAH_STANDARD_OBJECTS.campaign.views.vieweb4da94a,
+          MYAH_STANDARD_OBJECTS.campaign.views.view9c4f90c5,
+        ].flatMap(({ viewFields }) =>
+          Object.values(viewFields).map(
+            ({ universalIdentifier }) => universalIdentifier,
+          ),
+        ),
+      ),
+    });
   });
 
   it('skips Campaign page-layout synchronization when Campaign metadata is absent', async () => {

@@ -59,16 +59,32 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
         'flatViewMaps',
       ]);
 
-    // The audience command runs later and installs this view and its widget.
     if (
       flatObjectMetadataMaps.byUniversalIdentifier[
         MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
-      ] === undefined ||
+      ] === undefined
+    ) {
+      return;
+    }
+
+    const campaignViewSelection = {
+      view: new Set(
+        campaignViews.map(({ universalIdentifier }) => universalIdentifier),
+      ),
+      viewField: campaignViewFieldUniversalIdentifiers,
+    };
+
+    // The audience command runs later and installs its view and full layout.
+    if (
       flatViewMaps.byUniversalIdentifier[
         MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
           .universalIdentifier
       ] === undefined
     ) {
+      await this.synchronizeSourceControlledMyahMetadataService.synchronizeWorkspace(
+        args,
+        campaignViewSelection,
+      );
       return;
     }
 
@@ -79,10 +95,7 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
         ),
       ),
       pageLayoutWidget: campaignPageLayoutWidgets,
-      view: new Set(
-        campaignViews.map(({ universalIdentifier }) => universalIdentifier),
-      ),
-      viewField: campaignViewFieldUniversalIdentifiers,
+      ...campaignViewSelection,
     };
 
     await this.synchronizeSourceControlledMyahMetadataService.synchronizeWorkspace(
