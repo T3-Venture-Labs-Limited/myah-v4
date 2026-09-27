@@ -135,6 +135,11 @@ const contacts: MyahInboxContact[] = [
     creator: { id: 'creator-1', name: 'Ada Creator' },
     lastActivityAt: '2026-07-24T12:00:00.000Z',
     latestChannel: 'EMAIL',
+    initialSelection: {
+      channel: 'EMAIL',
+      emailThreadId: 'thread-2',
+      instagramConversationId: null,
+    },
     preview: 'First preview',
     sender: 'ada@example.com',
     needsAttention: true,
@@ -168,6 +173,11 @@ const contacts: MyahInboxContact[] = [
     creator: null,
     lastActivityAt: '2026-07-24T11:00:00.000Z',
     latestChannel: 'EMAIL',
+    initialSelection: {
+      channel: 'EMAIL',
+      emailThreadId: 'thread-3',
+      instagramConversationId: null,
+    },
     preview: 'Second preview',
     sender: 'grace@example.com',
     needsAttention: false,

@@ -44,11 +44,16 @@ import {
   encodeMyahInboxContactId,
   type MyahInboxContactIdentityKind as ContactIdentityKind,
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import {
   MessageVisibilityAccess,
   MessageVisibilityPolicyService,
@@ -89,6 +94,9 @@ type ContactRaw = {
   lastActivityAt: Date | string;
   activityCursorTimestamp: string;
   latestChannel: MyahInboxContactLatestChannel;
+  initialChannel: MyahInboxContactLatestChannel;
+  initialEmailThreadId: string | null;
+  initialInstagramConversationId: string | null;
   displayName: string | null;
   creatorId: string | null;
   creatorName: string | null;
@@ -194,6 +202,7 @@ export class MyahInboxContactQueryService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly messageVisibilityPolicyService: MessageVisibilityPolicyService,
+    private readonly twentyConfigService: TwentyConfigService,
     private readonly triageCapabilityService?: MyahInboxTriageCapabilityService,
   ) {}
 
@@ -429,6 +438,24 @@ export class MyahInboxContactQueryService {
           readableSocialConversationsSql,
           readableSocialMessagesSql,
         ] = permissionQueries.map(appendPermissionQuery);
+        let readableCampaignsSql: string;
+        try {
+          readableCampaignsSql = appendPermissionQuery(
+            serializePermissionQuery(
+              campaignRepository
+                .createQueryBuilder('campaign')
+                .select('campaign.id', 'id')
+                .where('campaign."deletedAt" IS NULL'),
+            ),
+          );
+        } catch (error) {
+          if (
+            !(error instanceof PermissionsException) ||
+            error.code !== PermissionsExceptionCode.PERMISSION_DENIED
+          )
+            throw error;
+          readableCampaignsSql = 'SELECT NULL::uuid AS id WHERE FALSE';
+        }
         const addParameter = (value: unknown): string => {
           parameters.push(value);
 
@@ -513,6 +540,42 @@ export class MyahInboxContactQueryService {
             )`;
         }
         const limit = addParameter(pageSize + 1);
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        // Old workspaces can have triage but not yet the additive reply table.
+        // They keep Instagram and exact Email lookups, never guessed responses.
+        const [triageRelations] = (await dataSource.query(
+          `SELECT to_regclass($1) IS NOT NULL AS "exists",
+            to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "replyEvidenceReady"`,
+          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        )) as Array<{ exists: boolean; replyEvidenceReady: boolean }>;
+        if (!triageRelations?.exists) {
+          throw new ForbiddenException(
+            'Triage is unavailable with your current Inbox access',
+          );
+        }
+        const responseEvidencePredicate = triageRelations.replyEvidenceReady
+          ? `EXISTS (
+      SELECT 1 FROM core."myahCampaignReplyEvidence" evidence
+      JOIN readable_campaigns campaign ON campaign.id=evidence."campaignId"
+      JOIN readable_creators evidence_creator ON evidence_creator.id=evidence."creatorId"
+      JOIN readable_threads evidence_thread ON evidence_thread.id=message."messageThreadId"
+        AND evidence_thread."creatorId"=evidence_creator.id
+      JOIN "${workspaceSchemaName}"."messageChannelMessageAssociation" association
+        ON association."messageId"=message.id
+       AND association."messageChannelId"=evidence."messageChannelId"
+       AND association."deletedAt" IS NULL AND association.direction='INCOMING'
+      WHERE evidence."workspaceId"=$1 AND evidence."inboundMessageId"=message.id
+    )`
+          : 'FALSE';
+        // Off until historical replies are backfilled; otherwise old replies vanish.
+        const emailSource =
+          exactContact ||
+          !this.twentyConfigService.get('MYAH_INBOX_RESPONSE_FOCUS_ENABLED')
+            ? 'visible_email_messages'
+            : 'response_email_messages';
         const sql = `WITH request_scope AS (
   SELECT $1::uuid AS "workspaceId", $2::uuid AS "userWorkspaceId"
 ),
@@ -521,6 +584,7 @@ readable_participants AS (${readableParticipantsSql}),
 readable_threads AS (${readableThreadsSql}),
 readable_creators AS (${readableCreatorsSql}),
 readable_social_profiles AS (${readableSocialProfilesSql}),
+readable_campaigns AS (${readableCampaignsSql}),
 readable_workspace_members AS (${readableWorkspaceMembersSql}),
 readable_social_conversations AS (${readableSocialConversationsSql}),
 readable_social_messages AS (${readableSocialMessagesSql}),
@@ -532,8 +596,21 @@ visible_email_messages AS (
     message.subject,
     message.text,
     message.visibility,
+    email_association.direction,
     sender.handle AS sender
   FROM readable_messages message
+  INNER JOIN LATERAL (
+    SELECT association.direction
+    FROM "${workspaceSchemaName}"."messageChannelMessageAssociation" association
+    INNER JOIN core."messageChannel" channel
+      ON channel.id = association."messageChannelId"
+     AND channel."workspaceId" = ${emailChannelWorkspace}
+    WHERE association."messageId" = message.id
+      AND association."deletedAt" IS NULL
+      AND channel.type::text = ANY(${emailChannelTypes}::text[])
+    ORDER BY (association.direction = 'INCOMING') DESC, association.id
+    LIMIT 1
+  ) email_association ON TRUE
   LEFT JOIN LATERAL (
     SELECT participant.handle
     FROM readable_participants participant
@@ -544,16 +621,12 @@ visible_email_messages AS (
   ) sender ON TRUE
   WHERE message."receivedAt" IS NOT NULL
     AND message.visibility <> ${hidden}
-    AND EXISTS (
-      SELECT 1
-      FROM "${workspaceSchemaName}"."messageChannelMessageAssociation" association
-      INNER JOIN core."messageChannel" channel
-        ON channel.id = association."messageChannelId"
-       AND channel."workspaceId" = ${emailChannelWorkspace}
-      WHERE association."messageId" = message.id
-        AND association."deletedAt" IS NULL
-        AND channel.type::text = ANY(${emailChannelTypes}::text[])
-    )
+),
+response_email_messages AS (
+  SELECT message.*
+  FROM visible_email_messages message
+  WHERE message.direction = 'INCOMING'
+    AND ${responseEvidencePredicate}
 ),
 latest_email_by_thread AS (
   SELECT DISTINCT ON (message."messageThreadId")
@@ -575,7 +648,15 @@ latest_email_by_thread AS (
       WHEN message.visibility = ${full} THEN message.text
       ELSE NULL
     END AS "searchBody"
-  FROM visible_email_messages message
+  FROM ${emailSource} message
+  ORDER BY message."messageThreadId", message."receivedAt" DESC, message.id DESC
+),
+latest_inbound_email_by_thread AS (
+  SELECT DISTINCT ON (message."messageThreadId")
+    message."messageThreadId",
+    message."receivedAt" AS "inboundAt"
+  FROM ${emailSource} message
+  WHERE message.direction = 'INCOMING'
   ORDER BY message."messageThreadId", message."receivedAt" DESC, message.id DESC
 ),
 latest_instagram_by_conversation AS (
@@ -588,6 +669,14 @@ latest_instagram_by_conversation AS (
   FROM readable_social_messages message
   ORDER BY message."conversationId", COALESCE(message."providerCreatedAt", message."createdAt") DESC, message.id DESC
 ),
+latest_inbound_instagram_by_conversation AS (
+  SELECT DISTINCT ON (message."conversationId")
+    message."conversationId",
+    COALESCE(message."providerCreatedAt", message."createdAt") AS "inboundAt"
+  FROM readable_social_messages message
+  WHERE message.direction = 'INBOUND'
+  ORDER BY message."conversationId", COALESCE(message."providerCreatedAt", message."createdAt") DESC, message.id DESC
+),
 email_source_rows AS (
   SELECT
     CASE WHEN creator.id IS NULL THEN 'email-thread' ELSE 'creator' END AS "identityKind",
@@ -595,6 +684,7 @@ email_source_rows AS (
     'EMAIL' AS "sourceKind",
     CONCAT('EMAIL:', thread.id) AS "sourceOrderingKey",
     latest."activityAt",
+    inbound."inboundAt",
     latest.preview,
     latest.sender,
     thread.id AS "emailThreadId",
@@ -615,6 +705,8 @@ email_source_rows AS (
   FROM readable_threads thread
   INNER JOIN latest_email_by_thread latest
     ON latest."messageThreadId" = thread.id
+  LEFT JOIN latest_inbound_email_by_thread inbound
+    ON inbound."messageThreadId" = thread.id
   LEFT JOIN readable_creators creator ON creator.id = thread."creatorId"
 ),
 instagram_source_rows AS (
@@ -624,6 +716,7 @@ instagram_source_rows AS (
     'INSTAGRAM' AS "sourceKind",
     CONCAT('INSTAGRAM:', conversation.id) AS "sourceOrderingKey",
     COALESCE(latest."activityAt", conversation."updatedAt", conversation."createdAt") AS "activityAt",
+    inbound."inboundAt",
     latest.preview,
     COALESCE(conversation."recipientUsername", conversation."recipientDisplayName") AS sender,
     NULL::uuid AS "emailThreadId",
@@ -644,6 +737,8 @@ instagram_source_rows AS (
   FROM readable_social_conversations conversation
   LEFT JOIN latest_instagram_by_conversation latest
     ON latest."conversationId" = conversation.id
+  LEFT JOIN latest_inbound_instagram_by_conversation inbound
+    ON inbound."conversationId" = conversation.id
   LEFT JOIN readable_creators creator ON creator.id = conversation."creatorId"
 ),
 all_source_rows AS (
@@ -749,6 +844,15 @@ latest_source AS (
    AND eligible."identityRecordId" = source."identityRecordId"
   ORDER BY source."identityKind", source."identityRecordId", source."activityAt" DESC, source."sourceOrderingKey" DESC
 ),
+latest_inbound_source AS (
+  SELECT DISTINCT ON (source."identityKind", source."identityRecordId") source.*
+  FROM effective_source_rows source
+  INNER JOIN eligible_contacts eligible
+    ON eligible."identityKind" = source."identityKind"
+   AND eligible."identityRecordId" = source."identityRecordId"
+  WHERE source."inboundAt" IS NOT NULL
+  ORDER BY source."identityKind", source."identityRecordId", source."inboundAt" DESC, source."sourceOrderingKey" DESC
+),
 email_aggregation AS (
   SELECT
     source."identityKind",
@@ -793,6 +897,20 @@ contact AS (
     CONCAT(latest."identityKind", ':', latest."identityRecordId") AS "orderingKey",
     latest."activityAt" AS "lastActivityAt",
     latest."sourceKind" AS "latestChannel",
+    COALESCE(inbound."sourceKind", latest."sourceKind") AS "initialChannel",
+    CASE
+      WHEN COALESCE(inbound."sourceKind", latest."sourceKind") = 'EMAIL'
+        THEN COALESCE(inbound."emailThreadId", latest."emailThreadId")
+      ELSE NULL::uuid
+    END AS "initialEmailThreadId",
+    CASE
+      WHEN COALESCE(inbound."sourceKind", latest."sourceKind") = 'INSTAGRAM'
+        AND JSONB_ARRAY_LENGTH(COALESCE(instagram."instagramConversations", '[]'::jsonb)) = 1
+        AND COALESCE(inbound."instagramConversationId", latest."instagramConversationId") =
+          (instagram."instagramConversations"->0->>'id')::uuid
+        THEN COALESCE(inbound."instagramConversationId", latest."instagramConversationId")
+      ELSE NULL::uuid
+    END AS "initialInstagramConversationId",
     COALESCE(
       latest."creatorName",
       latest."recipientDisplayName",
@@ -816,6 +934,9 @@ contact AS (
     COALESCE(instagram."instagramNeedsAttention", FALSE) AS "instagramNeedsAttention",
     COALESCE(instagram."instagramConversations", '[]'::jsonb) AS "instagramConversations"
   FROM latest_source latest
+  LEFT JOIN latest_inbound_source inbound
+    ON inbound."identityKind" = latest."identityKind"
+   AND inbound."identityRecordId" = latest."identityRecordId"
   LEFT JOIN email_aggregation email
     ON email."identityKind" = latest."identityKind"
    AND email."identityRecordId" = latest."identityRecordId"
@@ -854,28 +975,6 @@ CROSS JOIN triage_capability
 LEFT JOIN paged_contacts ON TRUE
 LEFT JOIN profile_aggregation ON profile_aggregation."creatorId" = paged_contacts."creatorId"
 ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderingKey" DESC NULLS LAST`;
-        const dataSource =
-          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-
-        // The private triage relations are provisioned by the 2.20 command,
-        // whose marker row is written last. Without them the triage CTEs above
-        // cannot be referenced at all, so fail closed with the same generic
-        // response instead of surfacing a raw SQL error during a partial
-        // upgrade. The identifier is derived from the internal workspace UUID
-        // and bound as a parameter here.
-        const [triageRelations] = (await dataSource.query(
-          'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
-          undefined,
-          { shouldBypassPermissionChecks: true },
-        )) as Array<{ exists: boolean }>;
-
-        if (!triageRelations?.exists) {
-          throw new ForbiddenException(
-            'Triage is unavailable with your current Inbox access',
-          );
-        }
-
         const rows = await dataSource.query<ContactRaw[]>(
           sql,
           parameters,
@@ -953,6 +1052,11 @@ ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderi
       instagramDisplayHandle: row.instagramDisplayHandle ?? null,
       lastActivityAt,
       latestChannel: row.latestChannel,
+      initialSelection: {
+        channel: row.initialChannel,
+        emailThreadId: row.initialEmailThreadId,
+        instagramConversationId: row.initialInstagramConversationId,
+      },
       preview: row.preview,
       sender: row.sender,
       needsAttention: row.triageIsAvailable

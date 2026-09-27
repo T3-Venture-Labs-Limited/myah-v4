@@ -13,6 +13,7 @@ type SettingsAccountSendingPolicyProps = {
   connectedAccountId: string;
   dailySendLimit: number;
   minimumSendIntervalMs: number;
+  sendingPolicyRevision?: number;
 };
 
 type UpdateConnectedAccountSendingPolicyData = {
@@ -20,6 +21,7 @@ type UpdateConnectedAccountSendingPolicyData = {
     id: string;
     dailySendLimit: number;
     minimumSendIntervalMs: number;
+    sendingPolicyRevision: number;
   };
 };
 
@@ -28,6 +30,8 @@ type UpdateConnectedAccountSendingPolicyVariables = {
     connectedAccountId: string;
     dailySendLimit: number;
     minimumSendIntervalMs: number;
+    expectedRevision: number;
+    idempotencyKey: string;
   };
 };
 
@@ -49,6 +53,7 @@ export const SettingsAccountSendingPolicy = ({
   connectedAccountId,
   dailySendLimit,
   minimumSendIntervalMs,
+  sendingPolicyRevision = 1,
 }: SettingsAccountSendingPolicyProps) => {
   const [dailySendLimitOverride, setDailySendLimitOverride] = useState<
     string | null
@@ -88,6 +93,8 @@ export const SettingsAccountSendingPolicy = ({
             connectedAccountId,
             dailySendLimit: parsedDailySendLimit,
             minimumSendIntervalMs: parsedMinimumSendIntervalMs,
+            expectedRevision: sendingPolicyRevision,
+            idempotencyKey: crypto.randomUUID(),
           },
         },
       });
@@ -101,7 +108,9 @@ export const SettingsAccountSendingPolicy = ({
           ? null
           : currentOverride,
       );
-      enqueueSuccessSnackBar({ message: t`Sending policy updated` });
+      enqueueSuccessSnackBar({
+        message: t`Sending policy saved. Campaign estimates are refreshing.`,
+      });
     } catch (error) {
       if (CombinedGraphQLErrors.is(error)) {
         enqueueErrorSnackBar({ apolloError: error });

@@ -64,6 +64,31 @@ export class SynchronizeMyahAssistantSkillsCommand extends ActiveOrSuspendedWork
     super(workspaceIteratorService);
   }
 
+  protected readonly createMissingSkills: boolean = true;
+
+  protected buildSkillUpdate(
+    existingSkill: FlatSkill,
+    standardSkill: FlatSkill,
+  ): FlatSkill | undefined {
+    if (
+      !MYAH_SKILL_CONTROLLED_FIELDS.some(
+        (fieldName) => existingSkill[fieldName] !== standardSkill[fieldName],
+      )
+    ) {
+      return undefined;
+    }
+
+    return {
+      ...existingSkill,
+      ...Object.fromEntries(
+        MYAH_SKILL_CONTROLLED_FIELDS.map((fieldName) => [
+          fieldName,
+          standardSkill[fieldName],
+        ]),
+      ),
+    };
+  }
+
   override async runOnWorkspace({
     workspaceId,
     options,
@@ -134,40 +159,25 @@ export class SynchronizeMyahAssistantSkillsCommand extends ActiveOrSuspendedWork
       );
     }
 
-    const skillsToCreate = standardMyahSkills.filter(
-      (skill) =>
-        !isDefined(
-          existingSkillsByUniversalIdentifier[skill.universalIdentifier],
-        ) && !isDefined(existingSkillsByName[skill.name]),
-    );
+    const skillsToCreate = this.createMissingSkills
+      ? standardMyahSkills.filter(
+          (skill) =>
+            !isDefined(
+              existingSkillsByUniversalIdentifier[skill.universalIdentifier],
+            ) && !isDefined(existingSkillsByName[skill.name]),
+        )
+      : [];
     const skillsToUpdate = [
       ...standardMyahSkills,
       ...standardMyahBrandedExistingSkills,
     ].flatMap((standardSkill) => {
       const existingSkill =
         existingSkillsByUniversalIdentifier[standardSkill.universalIdentifier];
+      const updatedSkill = isDefined(existingSkill)
+        ? this.buildSkillUpdate(existingSkill, standardSkill)
+        : undefined;
 
-      if (
-        !isDefined(existingSkill) ||
-        !MYAH_SKILL_CONTROLLED_FIELDS.some(
-          (fieldName) =>
-            existingSkill[fieldName] !== standardSkill[fieldName],
-        )
-      ) {
-        return [];
-      }
-
-      return [
-        {
-          ...existingSkill,
-          ...Object.fromEntries(
-            MYAH_SKILL_CONTROLLED_FIELDS.map((fieldName) => [
-              fieldName,
-              standardSkill[fieldName],
-            ]),
-          ),
-        },
-      ];
+      return isDefined(updatedSkill) ? [updatedSkill] : [];
     });
 
     if (skillsToCreate.length === 0 && skillsToUpdate.length === 0) {

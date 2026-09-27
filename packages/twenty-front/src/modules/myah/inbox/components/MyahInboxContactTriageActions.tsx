@@ -37,7 +37,7 @@ const StyledStatus = styled.div`
 `;
 
 const INBOX_STATE_OPTIONS = [
-  { label: 'Needs reply', value: 'NEEDS_REPLY' },
+  { label: 'New message', value: 'NEEDS_REPLY' },
   { label: 'Waiting on creator', value: 'WAITING_ON_CREATOR' },
   { label: 'Closed', value: 'CLOSED' },
 ];

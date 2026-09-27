@@ -750,7 +750,7 @@ const buildCurrentSourceHarness = async (
     listMessages: jest.fn(),
   };
   const query = jest.fn(async (sql: string) =>
-    sql.includes('"_myahInstagramReplyDraft"')
+    sql.includes('"myahInstagramReplyDraft"')
       ? [{ ...draft }]
       : [
           {

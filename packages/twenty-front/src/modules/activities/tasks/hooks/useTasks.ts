@@ -1,5 +1,4 @@
 import { useActivities } from '@/activities/hooks/useActivities';
-import { FIND_MANY_TIMELINE_ACTIVITIES_ORDER_BY } from '@/activities/timeline-activities/constants/FindManyTimelineActivitiesOrderBy';
 import { type ActivityTargetableObject } from '@/activities/types/ActivityTargetableEntity';
 import { type Task } from '@/activities/types/Task';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
@@ -15,10 +14,13 @@ export const useTasks = ({ targetableObjects }: UseTasksProps) => {
     fetchMoreActivities: fetchMoreTasks,
     hasNextPage,
     totalCountActivities,
+    error,
   } = useActivities<Task>({
     objectNameSingular: CoreObjectNameSingular.Task,
     targetableObjects,
-    activityTargetsOrderByVariables: FIND_MANY_TIMELINE_ACTIVITIES_ORDER_BY,
+    activityTargetsOrderByVariables: [
+      { task: { createdAt: 'DescNullsFirst' } },
+    ],
     limit: 200,
   });
 
@@ -28,5 +30,6 @@ export const useTasks = ({ targetableObjects }: UseTasksProps) => {
     fetchMoreTasks,
     hasNextPage,
     totalCountTasks: totalCountActivities,
+    error,
   };
 };

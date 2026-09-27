@@ -1,4 +1,5 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { type CampaignMessageOverviewReturnTarget } from '@/myah/campaign-messages/types/CampaignMessageOverviewReturnTarget';
 import {
   myahInboxContactSelectionState,
   myahInboxPreserveSelectionOnUnmountState,
@@ -14,7 +15,12 @@ export const useOpenMyahInboxConversation = () => {
   const navigate = useNavigate();
 
   const openMyahInboxConversation = useCallback(
-    (target: { workspaceId: string; contactId: string; threadId: string }) => {
+    (target: {
+      workspaceId: string;
+      contactId: string;
+      threadId: string;
+      returnTarget?: CampaignMessageOverviewReturnTarget;
+    }) => {
       if (!currentWorkspace || target.workspaceId !== currentWorkspace.id)
         return false;
 
@@ -26,7 +32,11 @@ export const useOpenMyahInboxConversation = () => {
         instagramConversationId: null,
       });
       store.set(myahInboxPreserveSelectionOnUnmountState.atom, true);
-      navigate('/myah/inbox');
+      navigate('/myah/inbox', {
+        state: target.returnTarget
+          ? { campaignMessageOverviewReturnTarget: target.returnTarget }
+          : null,
+      });
       return true;
     },
     [currentWorkspace, navigate, store],

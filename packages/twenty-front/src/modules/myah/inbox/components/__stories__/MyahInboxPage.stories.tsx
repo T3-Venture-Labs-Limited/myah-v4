@@ -95,6 +95,11 @@ const dualContact: MyahInboxContact = {
   creator: { id: 'creator-ada', name: 'Ada Okafor' },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
+  initialSelection: {
+    channel: 'INSTAGRAM',
+    emailThreadId: null,
+    instagramConversationId: 'instagram-ada',
+  },
   preview: 'The revised rate works for me.',
   sender: '@ada.creates',
   needsAttention: true,
@@ -300,6 +305,7 @@ const MyahInboxStorySurface = ({
     )!;
     return {
       threadId,
+      anchorKey: `legacy:${threadId}`,
       rootMessageId: root.id,
       startTimestamp: root.receivedAt,
       subject: root.subject,
@@ -337,6 +343,7 @@ const MyahInboxStorySurface = ({
       pages: [
         {
           threadId: card.threadId,
+          anchorKey: card.anchorKey,
           root: emailMessages.find(
             (message) => message.id === card.rootMessageId,
           )!,
@@ -366,6 +373,7 @@ const MyahInboxStorySurface = ({
     retryIncremental: async () => undefined,
     locateMessage: async () => undefined,
     refresh: async () => undefined,
+    ambientRefresh: async () => true,
     rebase: async () => undefined,
     setReadingAnchor: () => undefined,
     purge: () => undefined,

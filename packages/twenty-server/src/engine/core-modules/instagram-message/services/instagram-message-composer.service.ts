@@ -735,7 +735,7 @@ export class InstagramMessageComposerService {
       `SELECT column_name
        FROM information_schema.columns
        WHERE table_schema = $1
-         AND table_name = '_myahInstagramReplyDraft'
+         AND table_name = 'myahInstagramReplyDraft'
          AND column_name = ANY($2)`,
       [schemaName, ['composerInputDigest', 'instagramMessageSnapshot']],
       undefined,
@@ -752,7 +752,7 @@ export class InstagramMessageComposerService {
               "conversationId", "recipientUsername", "recipientProviderId",
               "createdByWorkspaceMemberId", "sentAt", "composerInputDigest",
               "instagramMessageSnapshot"
-       FROM "${schemaName}"."_myahInstagramReplyDraft"
+       FROM "${schemaName}"."myahInstagramReplyDraft"
        WHERE "id" = $1 AND "deletedAt" IS NULL`,
       [input.draftId],
       undefined,
@@ -797,7 +797,7 @@ export class InstagramMessageComposerService {
       `SELECT column_name
        FROM information_schema.columns
        WHERE table_schema = $1
-         AND table_name = '_myahInstagramReplyDraft'
+         AND table_name = 'myahInstagramReplyDraft'
          AND column_name = ANY($2)`,
       [schemaName, ['composerInputDigest', 'instagramMessageSnapshot']],
       undefined,

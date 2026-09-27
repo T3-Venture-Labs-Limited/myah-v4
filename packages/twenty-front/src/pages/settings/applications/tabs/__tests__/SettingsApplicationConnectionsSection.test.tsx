@@ -73,6 +73,7 @@ describe('SettingsApplicationConnectionsSection', () => {
           authFailedAt: '2026-05-01T00:00:00.000Z',
           dailySendLimit: 50,
           minimumSendIntervalMs: 300_000,
+          sendingPolicyRevision: 0,
           scopes: ['calendar.readonly'],
           handleAliases: [],
           lastSignedInAt: null,

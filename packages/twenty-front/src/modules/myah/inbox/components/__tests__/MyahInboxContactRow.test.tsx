@@ -57,6 +57,11 @@ const contact: MyahInboxContact = {
   creator: { id: 'creator-1', name: 'Ada Creator' },
   lastActivityAt: '2026-07-24T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
+  initialSelection: {
+    channel: 'INSTAGRAM',
+    emailThreadId: null,
+    instagramConversationId: null,
+  },
   preview: 'Can we move the launch to Friday?',
   sender: '@ada',
   needsAttention: true,
@@ -130,7 +135,8 @@ describe('MyahInboxContactRow', () => {
 
     expect(screen.getByLabelText('Email available')).toBeVisible();
     expect(screen.getByLabelText('Instagram available')).toBeVisible();
-    expect(screen.getByText('Needs attention')).toBeVisible();
+    expect(screen.getByText('New message')).toBeVisible();
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
     expect(row.querySelector('button')).toBeNull();
   });
 
@@ -140,6 +146,7 @@ describe('MyahInboxContactRow', () => {
         contact={{
           ...contact,
           needsAttention: false,
+          triage: { ...contact.triage, inboxState: 'WAITING_ON_CREATOR' },
           email: { ...contact.email, isAvailable: false },
           instagram: { ...contact.instagram, isAvailable: false },
         }}
@@ -156,5 +163,6 @@ describe('MyahInboxContactRow', () => {
       screen.queryByLabelText('Instagram available'),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
+    expect(screen.queryByText('New message')).not.toBeInTheDocument();
   });
 });

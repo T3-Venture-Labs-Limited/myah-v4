@@ -93,6 +93,8 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
             revision: snapshot.revision,
             body: snapshot.body,
             targetState,
+            authoredIncomingBaseline: snapshot.authoredIncomingBaseline,
+            bodyProvenance: snapshot.bodyProvenance,
             contextAcknowledged:
               snapshot.body === null ||
               (resolvedContext.contextFingerprint !== null &&

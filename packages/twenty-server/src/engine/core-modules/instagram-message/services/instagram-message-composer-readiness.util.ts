@@ -1,9 +1,9 @@
+import { TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER } from 'twenty-shared/application';
 import { FieldMetadataType } from 'twenty-shared/types';
 
 import {
   INSTAGRAM_REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_COMPOSER_FIELD_UNIVERSAL_IDENTIFIERS,
-  INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
 } from 'src/engine/api/common/common-args-processors/data-arg-processor/utils/assert-instagram-composer-fields-not-written.util';
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
@@ -78,7 +78,7 @@ export const isInstagramComposerReady = async (
     [
       object.applicationId,
       workspaceId,
-      INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+      TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
     ],
     undefined,
     { shouldBypassPermissionChecks: true },
@@ -97,7 +97,7 @@ export const isInstagramComposerReady = async (
      FROM information_schema.columns c
      JOIN information_schema.tables t
        ON t.table_schema = c.table_schema AND t.table_name = c.table_name
-     WHERE c.table_schema = $1 AND c.table_name = '_myahInstagramReplyDraft'
+     WHERE c.table_schema = $1 AND c.table_name = 'myahInstagramReplyDraft'
        AND t.table_type = 'BASE TABLE' AND c.column_name = ANY($2)`,
     [
       getWorkspaceSchemaName(workspaceId),

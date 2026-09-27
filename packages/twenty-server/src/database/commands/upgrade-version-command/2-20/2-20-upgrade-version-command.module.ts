@@ -2,7 +2,10 @@ import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20
 import { CreateCreatorDataOperationReceiptsFastInstanceCommand } from './2-20-instance-command-fast-1789645911010-create-creator-data-operation-receipts';
 import { MigrateMyahCreatorSocialProfilesCommand } from './2-20-workspace-command-1789645911011-migrate-myah-creator-social-profiles.command';
 import { ScopeMyahCreatorSocialProfilesForwardCommand } from './2-20-workspace-command-1789645911012-scope-myah-creator-social-profiles-forward.command';
+import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from './2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
+import { AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand } from './2-20-instance-command-fast-1790141137400-add-myah-inbox-reply-draft-incoming-baseline';
 import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
+import { SynchronizeInstagramSourceControlledMetadataCommand } from './2-20-workspace-command-1790491923604-synchronize-instagram-source-controlled-metadata.command';
 import { Module } from '@nestjs/common';
 import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
@@ -27,6 +30,7 @@ import { SynchronizeMyahCreatorCrmSearchMetadataCommand } from 'src/database/com
 import { MigrateMyahCreatorImportMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302006-migrate-myah-creator-import-metadata.command';
 import { SynchronizeMyahAssistantSkillsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788250000000-synchronize-myah-assistant-skills.command';
 import { RefreshMyahAssistantSkillsWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789645911006-refresh-myah-assistant-skills.command';
+import { RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790161829172-refresh-myah-assistant-skills-for-exact-approvals.command';
 import { SynchronizeMyahCampaignAccountMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788537600000-synchronize-myah-campaign-account-metadata.command';
 import { SynchronizeCampaignSequenceMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789281428333-synchronize-campaign-sequence-metadata.command';
 import { RepairOrphanedObjectNavigationCommandsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788766265947-repair-orphaned-object-navigation-commands.command';
@@ -93,12 +97,17 @@ import { MyahCreatorSocialProfileModule } from 'src/modules/myah-creator-social-
     CreateMyahInboxReplyContextDraftsFastInstanceCommand,
     CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
     CreateCreatorDataOperationReceiptsFastInstanceCommand,
+    CreateMyahCampaignReplyEvidenceFastInstanceCommand,
+    AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
+    SynchronizeInstagramSourceControlledMetadataCommand,
     RefreshMyahAssistantSkillsWorkspaceCommand,
+    RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,
     SynchronizeMyahStandardMetadataCommand,
+    SynchronizeInstagramSourceControlledMetadataCommand,
     MigrateMyahCreatorSocialLinksService,
   ],
 })

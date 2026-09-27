@@ -4,12 +4,12 @@ import { DataSource } from 'typeorm';
 import { PostgresDriver } from 'typeorm/driver/postgres/PostgresDriver';
 import { InstagramMessageComposerService } from '../instagram-message-composer.service';
 import { InstagramMessageRecipientService } from '../instagram-message-recipient.service';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER } from 'twenty-shared/application';
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import {
   INSTAGRAM_REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
-  INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_COMPOSER_FIELD_UNIVERSAL_IDENTIFIERS,
   INSTAGRAM_COMPOSER_PROTECTED_FIELD_UNIVERSAL_IDENTIFIERS,
 } from 'src/engine/api/common/common-args-processors/data-arg-processor/utils/assert-instagram-composer-fields-not-written.util';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -69,12 +69,12 @@ const fixture = () => {
       expect(params).toEqual([
         object.applicationId,
         workspaceId,
-        INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+        TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
       ]);
       return applications;
     }
     expect(sql).toContain("t.table_type = 'BASE TABLE'");
-    expect(sql).toContain("c.table_name = '_myahInstagramReplyDraft'");
+    expect(sql).toContain("c.table_name = 'myahInstagramReplyDraft'");
     expect(sql).toContain('c.table_schema = $1');
     expect(params).toEqual([
       getWorkspaceSchemaName(workspaceId),
@@ -251,29 +251,20 @@ describe('Instagram composer installed metadata and storage readiness', () => {
     expect(f.getRepository).not.toHaveBeenCalled();
   });
 
-  it('keeps the one server UID mirror in parity with app-owned identifiers', () => {
-    const source = readFileSync(
-      resolve(
-        __dirname,
-        '../../../../../../../twenty-apps/public/myah-instagram-messaging/src/constants/universal-identifiers.ts',
-      ),
-      'utf8',
-    );
-    const read = (name: string) =>
-      source.match(new RegExp(`export const ${name} =\\s*'([^']+)'`))?.[1];
-    expect(read('APPLICATION_UNIVERSAL_IDENTIFIER')).toBe(
-      INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
-    );
-    expect(read('REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER')).toBe(
+  it('keeps server composer identifiers in parity with source-controlled metadata', () => {
+    const replyDraft = MYAH_STANDARD_OBJECTS.myahInstagramReplyDraft;
+
+    expect(replyDraft.universalIdentifier).toBe(
       INSTAGRAM_REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
     );
+    expect(replyDraft.fields.composerInputDigest.universalIdentifier).toBe(
+      INSTAGRAM_COMPOSER_FIELD_UNIVERSAL_IDENTIFIERS.composerInputDigest,
+    );
+    expect(replyDraft.fields.instagramMessageSnapshot.universalIdentifier).toBe(
+      INSTAGRAM_COMPOSER_FIELD_UNIVERSAL_IDENTIFIERS.instagramMessageSnapshot,
+    );
     expect(
-      new Set([
-        read('REPLY_DRAFT_COMPOSER_INPUT_DIGEST_FIELD_UNIVERSAL_IDENTIFIER'),
-        read(
-          'REPLY_DRAFT_INSTAGRAM_MESSAGE_SNAPSHOT_FIELD_UNIVERSAL_IDENTIFIER',
-        ),
-      ]),
+      new Set(Object.values(INSTAGRAM_COMPOSER_FIELD_UNIVERSAL_IDENTIFIERS)),
     ).toEqual(INSTAGRAM_COMPOSER_PROTECTED_FIELD_UNIVERSAL_IDENTIFIERS);
   });
   it.each(['metadata', 'application', 'storage'] as const)(

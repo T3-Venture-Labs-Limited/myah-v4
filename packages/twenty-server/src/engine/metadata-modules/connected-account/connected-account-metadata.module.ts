@@ -4,12 +4,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppOAuthRefreshModule } from 'src/engine/core-modules/application/connection-provider/refresh/app-oauth-refresh.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { CampaignMailboxDeletionFenceService } from 'src/engine/core-modules/campaign-execution/services/campaign-mailbox-deletion-fence.service';
+import { CampaignExecutionModule } from 'src/modules/campaign-execution/campaign-execution.module';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/connected-account/interceptors/connected-account-graphql-api-exception.interceptor';
 import { ConnectedAccountResolver } from 'src/engine/metadata-modules/connected-account/resolvers/connected-account.resolver';
 import { ConnectedAccountSendingPolicyService } from 'src/engine/metadata-modules/connected-account/services/connected-account-sending-policy.service';
+import { ConnectedAccountSendingPolicySpacingGuardService } from 'src/engine/metadata-modules/connected-account/services/connected-account-sending-policy-spacing-guard.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
@@ -17,6 +19,7 @@ import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/
 
 @Module({
   imports: [
+    CampaignExecutionModule,
     TypeOrmModule.forFeature([
       ConnectedAccountEntity,
       CalendarChannelEntity,
@@ -34,6 +37,7 @@ import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/
     ConnectedAccountResolver,
     ConnectedAccountGraphqlApiExceptionInterceptor,
     ConnectedAccountSendingPolicyService,
+    ConnectedAccountSendingPolicySpacingGuardService,
   ],
   exports: [
     CampaignMailboxDeletionFenceService,

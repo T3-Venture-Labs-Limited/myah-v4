@@ -46,6 +46,9 @@ export const SettingsAccountsMessageChannelsContainer = ({
                     minimumSendIntervalMs={
                       connectedAccount.minimumSendIntervalMs
                     }
+                    sendingPolicyRevision={
+                      connectedAccount.sendingPolicyRevision
+                    }
                   />
                 )}
               </>

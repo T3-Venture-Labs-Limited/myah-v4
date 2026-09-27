@@ -75,7 +75,7 @@ const buildHarness = () => {
     getChat: jest.fn().mockResolvedValue(chat),
   };
   const query = jest.fn(async (sql: string) =>
-    sql.includes('"_myahInstagramReplyDraft"')
+    sql.includes('"myahInstagramReplyDraft"')
       ? [draft]
       : [
           {
@@ -308,7 +308,7 @@ const buildSendHarness = async (
       h.draft.providerConversationId = null;
       h.client.listChats.mockResolvedValue({ chats: [], nextCursor: null });
       h.query.mockImplementation(async (sql) =>
-        sql.includes('"_myahInstagramReplyDraft"') ? [h.draft] : [],
+        sql.includes('"myahInstagramReplyDraft"') ? [h.draft] : [],
       );
     }
     const old = authority.expectedActionBinding;

@@ -21,6 +21,10 @@ import {
 @Index('IDX_CO_DUE_PENDING', ['dueAt', 'workspaceId', 'campaignId', 'id'], {
   where: `"state" = 'PENDING'`,
 })
+@Index('IDX_CO_FORECAST_PENDING', ['workspaceId', 'dueAt', 'id'], {
+  where: `"state" = 'PENDING'`,
+})
+@Index('IDX_CO_OVERVIEW', ['workspaceId', 'dueAt', 'id'])
 @Index('IDX_CO_UNRESOLVED', ['state', 'updatedAt', 'id'], {
   where: `"state" IN ('IN_FLIGHT', 'UNKNOWN', 'HELD')`,
 })

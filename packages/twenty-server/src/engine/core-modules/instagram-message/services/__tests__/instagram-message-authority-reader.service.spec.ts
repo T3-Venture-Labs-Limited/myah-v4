@@ -1,4 +1,6 @@
 import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import { PermissionsException } from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { InstagramMessageAuthorityReaderService } from '../instagram-message-authority-reader.service';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
@@ -10,7 +12,7 @@ const profileId = '00000000-0000-4000-8000-000000000006';
 const actorId = '00000000-0000-4000-8000-000000000007';
 const rolePermissionConfig = { unionOf: ['role'] };
 
-const setup = () => {
+const setup = (dataSourceOverride?: { query: jest.Mock }) => {
   const draft = {
     id: draftId,
     body: 'Hello creator',
@@ -62,7 +64,7 @@ const setup = () => {
     getChat: jest.fn().mockResolvedValue(chat),
   };
   const query = jest.fn(async (sql: string) =>
-    sql.includes('"_myahInstagramReplyDraft"')
+    sql.includes('"myahInstagramReplyDraft"')
       ? [draft]
       : [
           {
@@ -101,7 +103,9 @@ const setup = () => {
     {
       getRepository,
       executeInWorkspaceContext: jest.fn(async (callback) => callback()),
-      getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
+      getGlobalWorkspaceDataSource: jest
+        .fn()
+        .mockResolvedValue(dataSourceOverride ?? { query }),
     } as never,
     { find: jest.fn().mockResolvedValue([account]) } as never,
     {
@@ -136,46 +140,86 @@ const setup = () => {
 };
 
 describe('InstagramMessageAuthorityReaderService canonical reply authority', () => {
-  it('refuses scalar-only historical v2 before any draft or provider read', async () => {
-    const h = setup();
-    const historical = buildLegacyInstagramMessageActionAuthority({
-      workspaceId,
-      initiatorUserWorkspaceId: actorId,
-      threadId: null,
-      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
-      interactionContextId: draftId,
-      draft: {
-        id: draftId,
-        revision: 2,
-        body: 'Hello creator',
-        kind: 'REPLY',
-        creatorRecordId: creatorId,
-        recipientUsername: 'creator.name',
-        recipientProviderId: 'recipient-igsid',
-        recipientSourceValues: [
-          { field: 'instagramUsername', value: 'creator.name' },
-        ],
-        conversationRecordId: conversationId,
-        providerConversationId: 'provider-chat',
-      },
-      account: {
-        bindingId: h.account.id,
-        workspaceInstagramAccountRecordId: accountId,
-        unipileAccountId: h.account.unipileAccountId,
-        instagramUserId: h.account.instagramUserId,
-      },
-      evidenceLinks: [],
-    });
-    await expect(
-      h.reader.rebuildExecutionAuthority({
+  it.each(['START_CHAT', 'REPLY'] as const)(
+    'refuses scalar-only historical v2 %s before any draft or provider read',
+    async (kind) => {
+      const h = setup();
+      const historical = buildLegacyInstagramMessageActionAuthority({
         workspaceId,
-        binding: historical.expectedActionBinding,
-        rolePermissionConfig,
-      }),
-    ).rejects.toThrow('historical recipient is unavailable');
-    expect(h.query).not.toHaveBeenCalled();
-    expect(h.client.getChat).not.toHaveBeenCalled();
-    expect(h.client.getInstagramMessagingProfile).not.toHaveBeenCalled();
+        initiatorUserWorkspaceId: actorId,
+        threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+        interactionContextId: draftId,
+        draft: {
+          id: draftId,
+          revision: 2,
+          body: 'Hello creator',
+          kind,
+          creatorRecordId: creatorId,
+          recipientUsername: 'creator.name',
+          recipientProviderId: 'recipient-igsid',
+          recipientSourceValues: [
+            { field: 'instagramUsername', value: 'creator.name' },
+          ],
+          conversationRecordId: kind === 'REPLY' ? conversationId : null,
+          providerConversationId: kind === 'REPLY' ? 'provider-chat' : null,
+        },
+        account: {
+          bindingId: h.account.id,
+          workspaceInstagramAccountRecordId: accountId,
+          unipileAccountId: h.account.unipileAccountId,
+          instagramUserId: h.account.instagramUserId,
+        },
+        evidenceLinks: [],
+      });
+      await expect(
+        h.reader.rebuildExecutionAuthority({
+          workspaceId,
+          binding: historical.expectedActionBinding,
+          rolePermissionConfig,
+        }),
+      ).rejects.toThrow('historical recipient is unavailable');
+      expect(h.query).not.toHaveBeenCalled();
+      expect(h.client.getChat).not.toHaveBeenCalled();
+      expect(h.client.listChats).not.toHaveBeenCalled();
+      expect(h.client.getInstagramMessagingProfile).not.toHaveBeenCalled();
+    },
+  );
+
+  it('requires explicit raw-query permission options for canonical v3 draft and conversation reads', async () => {
+    let draftRow: ReturnType<typeof setup>['draft'] | undefined;
+    const queryRunner = {
+      isReleased: false,
+      query: jest.fn(async (sql: string) =>
+        sql.includes('"myahInstagramReplyDraft"')
+          ? [draftRow]
+          : [
+              {
+                id: conversationId,
+                providerConversationId: 'provider-chat',
+                recipientIgsid: 'recipient-igsid',
+              },
+            ],
+      ),
+      release: jest.fn(),
+    };
+    const dataSource = Object.create(
+      GlobalWorkspaceDataSource.prototype,
+    ) as GlobalWorkspaceDataSource;
+    Object.defineProperty(dataSource, 'createQueryRunner', {
+      value: jest.fn(() => queryRunner),
+    });
+    const h = setup(dataSource as never);
+    draftRow = h.draft;
+
+    expect(() => dataSource.query('SELECT 1')).toThrow(PermissionsException);
+    await h.reader.createDirectAuthority(h.input);
+    expect(
+      queryRunner.query.mock.calls.map(([sql]) => sql).join('\n'),
+    ).toContain('"myahInstagramReplyDraft"');
+    expect(
+      queryRunner.query.mock.calls.map(([sql]) => sql).join('\n'),
+    ).toContain('"myahSocialConversation"');
   });
 
   it('rebuilds a canonical v3 reply under role-readable repositories without provider reads', async () => {
@@ -203,6 +247,28 @@ describe('InstagramMessageAuthorityReaderService canonical reply authority', () 
     );
     expect(h.client.getChat).not.toHaveBeenCalled();
     expect(h.client.getInstagramMessagingProfile).not.toHaveBeenCalled();
+  });
+
+  it('retains provider-free v3 reconciliation and verifies the exact REPLY only after reservation', async () => {
+    const h = setup();
+    const authority = await h.reader.createDirectAuthority(h.input);
+    h.client.getChat.mockClear();
+    h.client.listChats.mockClear();
+    await expect(
+      h.reader.rebuildForReconciliation({
+        workspaceId,
+        binding: authority.expectedActionBinding,
+      }),
+    ).resolves.toEqual(authority);
+    expect(h.client.getChat).not.toHaveBeenCalled();
+    expect(h.client.listChats).not.toHaveBeenCalled();
+
+    await h.reader.assertReadyAfterReservation(authority, rolePermissionConfig);
+    expect(h.client.getChat).toHaveBeenCalledWith({
+      accountId: h.account.unipileAccountId,
+      chatId: 'provider-chat',
+      expectedAttendeeId: 'recipient-igsid',
+    });
   });
 
   it.each(['socialProfile', 'creator'] as const)(
@@ -260,6 +326,12 @@ describe('InstagramMessageAuthorityReaderService canonical reply authority', () 
           workspaceId,
           binding: authority.expectedActionBinding,
           rolePermissionConfig,
+        }),
+      ).rejects.toThrow('REPLY draft target is stale');
+      await expect(
+        h.reader.rebuildForReconciliation({
+          workspaceId,
+          binding: authority.expectedActionBinding,
         }),
       ).rejects.toThrow('REPLY draft target is stale');
       expect(authority.expectedActionBinding.actionVersion).toBe(3);

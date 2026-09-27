@@ -1,0 +1,23 @@
+export type CampaignMessageOverviewRow = {
+  occurrenceId: string;
+  campaignId: string;
+  campaignName: string;
+  creatorId: string;
+  creatorName: string | null;
+  recipient: string | null;
+  subject: string | null;
+  preview: string | null;
+  sequenceStep: number;
+  platform: string;
+  status: string;
+  estimatedSendAt: string | null;
+  sentAt: string | null;
+  eligibleAfter: string | null;
+  connectedAccountId: string | null;
+  connectedAccountLabel: string | null;
+  senderIsEstimated: boolean;
+  needsAttention: boolean;
+  reason: string | null;
+  inboxContactId: string | null;
+  inboxThreadId: string | null;
+};

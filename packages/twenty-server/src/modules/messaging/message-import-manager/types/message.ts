@@ -32,6 +32,7 @@ export type Message = Omit<
   allowExpectedMessageIdAdoption?: boolean;
   isImapSmtpHeaderFallback?: boolean;
   providerOccurredAt?: string | null;
+  inReplyToTokens?: string[];
 };
 
 export type MessageAttachment = {

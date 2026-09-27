@@ -13,6 +13,7 @@ import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queu
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 
 export type MessagingRelaunchFailedMessageChannelJobData = {
   workspaceId: string;
@@ -24,6 +25,9 @@ export type MessagingRelaunchFailedMessageChannelJobData = {
   scope: Scope.REQUEST,
 })
 export class MessagingRelaunchFailedMessageChannelJob {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
+
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(MessageChannelEntity)
@@ -53,14 +57,22 @@ export class MessagingRelaunchFailedMessageChannelJob {
           return;
         }
 
-        await this.messageChannelRepository.update(
-          { id: messageChannelId, workspaceId },
-          {
-            syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
-            syncStatus: MessageChannelSyncStatus.ACTIVE,
-            throttleFailureCount: 0,
-            throttleRetryAfter: null,
-            syncStageStartedAt: null,
+        await this.messageChannelRepository.manager.transaction(
+          async (manager) => {
+            await manager.getRepository(MessageChannelEntity).update(
+              { id: messageChannelId, workspaceId },
+              {
+                syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
+                syncStatus: MessageChannelSyncStatus.ACTIVE,
+                throttleFailureCount: 0,
+                throttleRetryAfter: null,
+                syncStageStartedAt: null,
+              },
+            );
+            await this.forecastInvalidation.invalidateInTransaction(
+              { workspaceId },
+              manager,
+            );
           },
         );
       },

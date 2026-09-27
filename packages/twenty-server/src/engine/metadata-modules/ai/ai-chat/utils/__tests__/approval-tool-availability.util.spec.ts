@@ -3,7 +3,7 @@ import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-ch
 import {
   allowRegisteredActionSenders,
   getGenericApprovedResumeActiveToolNames,
-  getLatestApprovedGenericToolName,
+  getLatestApprovedGenericAction,
   getPreApprovalExcludedToolNames,
   hasApprovedRegisteredActionApproval,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
@@ -179,70 +179,99 @@ describe('approval tool availability', () => {
     expect(excluded.has('app_myah_list_instagram_conversations')).toBe(true);
   });
 
-  it('returns only the exact tool named by the latest approved generic request', () => {
-    const approvedMessage = {
+  describe('getLatestApprovedGenericAction', () => {
+    const reviewedAction = {
+      version: 1,
+      toolName: 'update_one_creator',
+      toolLabel: 'Update Creator',
+      argumentsDigest: 'a'.repeat(64),
+      arguments: { id: 'alice-id', creatorStatus: 'QUALIFIED' },
+      target: { kind: 'arguments_only' },
+    };
+    const approvalMessage = (
+      result: Record<string, unknown>,
+      input: Record<string, unknown> = { toolName: 'update_one_creator' },
+    ) => ({
+      id: 'approval-message-id',
       role: 'assistant',
       parts: [
         {
           type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
-          input: { toolName: 'update_myah_inbox_thread' },
-          output: { result: { status: 'resolved', decision: 'approved' } },
+          toolCallId: 'approval-call-id',
+          input,
+          output: { result },
         },
       ],
+    });
+    const approved = {
+      status: 'resolved',
+      decision: 'approved',
+      reviewedAction,
     };
 
-    expect(getLatestApprovedGenericToolName([approvedMessage])).toBe(
-      'update_myah_inbox_thread',
-    );
-    expect(
-      getLatestApprovedGenericToolName([
+    it('returns the reviewed action of the latest approved generic request', () => {
+      expect(
+        getLatestApprovedGenericAction([approvalMessage(approved)]),
+      ).toEqual({
+        messageId: 'approval-message-id',
+        toolCallId: 'approval-call-id',
+        reviewedAction,
+      });
+    });
+
+    it.each([
+      ['consumed', { ...approved, status: 'consumed' }],
+      ['invalidated', { ...approved, status: 'invalidated' }],
+      ['rejected', { ...approved, decision: 'rejected' }],
+      ['changes requested', { ...approved, decision: 'changes_requested' }],
+      ['legacy (tool name only)', { status: 'resolved', decision: 'approved' }],
+      [
+        'registered',
         {
-          ...approvedMessage,
-          parts: [{ ...approvedMessage.parts[0], input: {} }],
+          status: 'resolved',
+          decision: 'approved',
+          actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
         },
-      ]),
-    ).toBeNull();
-    expect(
-      getLatestApprovedGenericToolName([
-        approvedMessage,
-        { role: 'user', parts: [] },
-      ]),
-    ).toBeNull();
-    expect(
-      getLatestApprovedGenericToolName([
+      ],
+      [
+        'malformed digest',
         {
-          ...approvedMessage,
-          parts: [
-            {
-              ...approvedMessage.parts[0],
-              output: {
-                result: {
-                  status: 'resolved',
-                  decision: 'approved',
-                  actionApprovalBindingId:
-                    'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
-                },
-              },
-            },
-          ],
+          ...approved,
+          reviewedAction: { ...reviewedAction, argumentsDigest: 'x' },
         },
-      ]),
-    ).toBeNull();
-    expect(
-      getLatestApprovedGenericToolName([
+      ],
+      [
+        'registered sender tool',
         {
-          ...approvedMessage,
-          parts: [
-            {
-              ...approvedMessage.parts[0],
-              output: {
-                result: { status: 'resolved', decision: 'rejected' },
-              },
-            },
-          ],
+          ...approved,
+          reviewedAction: {
+            ...reviewedAction,
+            toolName: 'send_myah_inbox_reply',
+          },
         },
-      ]),
-    ).toBeNull();
+      ],
+    ])('returns null for a %s approval', (_label, result) => {
+      expect(
+        getLatestApprovedGenericAction([approvalMessage(result)]),
+      ).toBeNull();
+    });
+
+    it('returns null when the reviewed tool differs from the requested tool', () => {
+      expect(
+        getLatestApprovedGenericAction([
+          approvalMessage(approved, { toolName: 'delete_one_creator' }),
+        ]),
+      ).toBeNull();
+    });
+
+    it('returns null once a later message follows the approval', () => {
+      expect(
+        getLatestApprovedGenericAction([
+          approvalMessage(approved),
+          { role: 'user', parts: [] },
+        ]),
+      ).toBeNull();
+    });
   });
 
   it('only exposes the sender for a resolved registered approval result with a binding UUID', () => {

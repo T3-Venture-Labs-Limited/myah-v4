@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
@@ -48,6 +50,8 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
   let getOrRecompute: jest.Mock;
   let validateBuildAndRunWorkspaceMigrationFromTo: jest.Mock;
   let update: jest.Mock;
+  let count: jest.Mock;
+  let query: jest.Mock;
   let flush: jest.Mock;
   let findByUniversalIdentifier: jest.Mock;
   let createQueryRunner: jest.Mock;
@@ -58,7 +62,33 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
   let incrementMetadataVersion: jest.Mock;
 
   beforeEach(() => {
-    update = jest.fn().mockResolvedValue({ affected: 1 });
+    update = jest.fn().mockImplementation(
+      (_entity, where: { universalIdentifier: { _value: string[] } }) =>
+        Promise.resolve({ affected: where.universalIdentifier._value.length }),
+    );
+    count = jest.fn().mockImplementation(
+      (_entity, { where }: { where: { universalIdentifier: { _value: string[] } } }) =>
+        Promise.resolve(where.universalIdentifier._value.length),
+    );
+    let tableLookupCount = 0;
+    query = jest.fn().mockImplementation((sql: string, parameters?: unknown[]) => {
+      if (sql.includes('information_schema.tables')) {
+        tableLookupCount += 1;
+        const tableNames = parameters?.[1] as string[];
+
+        if (tableLookupCount === 2 || tableLookupCount === 3) {
+          return Promise.resolve([]);
+        }
+
+        return Promise.resolve(tableNames.map((table_name) => ({ table_name })));
+      }
+
+      if (sql.includes('count(*)')) {
+        return Promise.resolve([{ count: '1' }]);
+      }
+
+      return Promise.resolve([]);
+    });
     flush = jest.fn().mockResolvedValue(undefined);
     getOrRecompute = jest.fn().mockResolvedValue({
       ...createEmptyAllFlatEntityMaps(),
@@ -79,7 +109,8 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       commitTransaction: jest.fn(),
       rollbackTransaction: jest.fn(),
       release: releaseQueryRunner,
-      manager: { update },
+      query,
+      manager: { update, count },
     });
     validateBuildAndRunWorkspaceMigrationFromTo = jest.fn().mockResolvedValue({
       status: 'success',
@@ -91,6 +122,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         createQueryRunner,
         getRepository: jest.fn().mockReturnValue({
           findOne: findWorkspace,
+          findOneOrFail: jest.fn().mockResolvedValue({ metadataVersion: 1 }),
         }),
       } as unknown as DataSource,
       {
@@ -1077,9 +1109,61 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     expect(createQueryRunner).toHaveBeenCalledTimes(1);
     expect(update).not.toHaveBeenCalled();
+    // No legacy application ownership transfer occurs, but the newly
+    // synchronized metadata still requires cache invalidation so readers
+    // (including the GraphQL schema) observe it.
+    expect(flush).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      expect.arrayContaining(['flatObjectMetadataMaps', 'flatFieldMetadataMaps']),
+    );
+    expect(incrementMetadataVersion).toHaveBeenCalledWith(WORKSPACE_ID);
+  });
+
+  it('flushes the workspace cache and bumps metadata version after first-time synchronization with no legacy application to migrate', async () => {
+    await command.synchronizeWorkspace(
+      {
+        workspaceId: WORKSPACE_ID,
+        options: { dryRun: false },
+        index: 0,
+        total: 1,
+      },
+      {
+        targetObjectUniversalIdentifiers: new Set([
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+        ]),
+        migrateLegacyMyahApplication: false,
+      },
+    );
+
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    expect(flush).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      expect.arrayContaining(['flatObjectMetadataMaps', 'flatFieldMetadataMaps']),
+    );
+    expect(incrementMetadataVersion).toHaveBeenCalledWith(WORKSPACE_ID);
+  });
+
+  it('does not flush the workspace cache or bump metadata version in dry-run mode when no legacy application is migrated', async () => {
+    await command.synchronizeWorkspace(
+      {
+        workspaceId: WORKSPACE_ID,
+        options: { dryRun: true },
+        index: 0,
+        total: 1,
+      },
+      {
+        targetObjectUniversalIdentifiers: new Set([
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+        ]),
+        migrateLegacyMyahApplication: false,
+      },
+    );
+
     expect(flush).not.toHaveBeenCalled();
     expect(incrementMetadataVersion).not.toHaveBeenCalled();
   });
+
   it('does not persist ownership changes before a failed migration', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({
@@ -1124,6 +1208,174 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(createQueryRunner).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Instagram adoption separate from legacy CRM replacement', async () => {
+    const legacyInstagramApplicationId = 'legacy-instagram-application-id';
+    const legacyBrandBrainApplicationId = 'legacy-brand-brain-application-id';
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-09-21T00:00:00.000Z',
+      });
+    const instagramObjectUniversalIdentifiers = new Set<string>([
+      MYAH_STANDARD_OBJECTS.myahInstagramAccount.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.myahSocialConversation.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.myahSocialMessage.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.myahInstagramReplyDraft.universalIdentifier,
+    ]);
+
+    for (const object of Object.values(
+      allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
+    )) {
+      if (
+        object !== undefined &&
+        instagramObjectUniversalIdentifiers.has(object.universalIdentifier)
+      ) {
+        object.applicationId = legacyInstagramApplicationId;
+      }
+    }
+    for (const field of Object.values(
+      allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    )) {
+      if (
+        field !== undefined &&
+        (instagramObjectUniversalIdentifiers.has(
+          field.objectMetadataUniversalIdentifier,
+        ) ||
+          instagramObjectUniversalIdentifiers.has(
+            field.relationTargetObjectMetadataUniversalIdentifier ?? '',
+          ))
+      ) {
+        field.applicationId = legacyInstagramApplicationId;
+      }
+    }
+    for (const index of Object.values(
+      allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier,
+    )) {
+      if (
+        index !== undefined &&
+        instagramObjectUniversalIdentifiers.has(
+          index.objectMetadataUniversalIdentifier,
+        )
+      ) {
+        index.applicationId = legacyInstagramApplicationId;
+      }
+    }
+
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+    const originalQuery = query.getMockImplementation();
+    const physicalIndexes = [
+      ['_myahInstagramAccount', ['connectedAccountId']],
+      ['_myahInstagramAccount', ['igUserId']],
+      ['_myahInstagramAccount', ['unipileAccountId']],
+      ['_myahSocialConversation', ['provider', 'instagramAccountId', 'providerConversationId']],
+      ['_myahSocialMessage', ['provider', 'conversationId', 'providerMessageId']],
+    ] as const;
+    const indexName = (table: string, columns: readonly string[]) => {
+      const hash = createHash('sha256');
+
+      [table, ...columns, '"deletedAt" IS NULL'].forEach((part) => hash.update(part));
+
+      return `IDX_UNIQUE_${hash.digest('hex').slice(0, 27)}`;
+    };
+
+    query.mockImplementation((sql: string, parameters?: unknown[]) => {
+      if (sql.includes('FROM pg_attribute a JOIN pg_class c')) {
+        return Promise.resolve([
+          ...['createdBySource', 'status', 'updatedBySource'].map((column_name) => ({ table_name: '_myahInstagramAccount', column_name, type_name: `_myahInstagramAccount_${column_name}_enum` })),
+          ...['createdBySource', 'lifecycle', 'provider', 'updatedBySource'].map((column_name) => ({ table_name: '_myahSocialConversation', column_name, type_name: `_myahSocialConversation_${column_name}_enum` })),
+          ...['createdBySource', 'deliveryState', 'direction', 'provider', 'sentVia', 'updatedBySource'].map((column_name) => ({ table_name: '_myahSocialMessage', column_name, type_name: `_myahSocialMessage_${column_name}_enum` })),
+          ...['createdBySource', 'kind', 'source', 'status', 'updatedBySource'].map((column_name) => ({ table_name: '_myahInstagramReplyDraft', column_name, type_name: `_myahInstagramReplyDraft_${column_name}_enum` })),
+        ]);
+      }
+      if (sql.includes('FROM pg_class i JOIN pg_namespace n')) {
+        return Promise.resolve(physicalIndexes.flatMap(([table, columns]) => [table, table.slice(1)].map((physicalTable) => ({
+          index_name: indexName(physicalTable, columns),
+          relkind: 'i',
+          table_name: table,
+          is_unique: true,
+          predicate: '("deletedAt" IS NULL)',
+          columns,
+        }))));
+      }
+
+      return originalQuery?.(sql, parameters);
+    });
+    findByUniversalIdentifier.mockImplementation(
+      ({ universalIdentifier }: { universalIdentifier: string }) => {
+        if (universalIdentifier === '4738ebcd-6662-4ecc-a190-374fa0525951') {
+          return { id: legacyInstagramApplicationId };
+        }
+
+        if (universalIdentifier === '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991') {
+          return { id: legacyBrandBrainApplicationId };
+        }
+
+        return null;
+      },
+    );
+
+    await command.synchronizeWorkspace(
+      {
+        workspaceId: WORKSPACE_ID,
+        options: { dryRun: false },
+        index: 0,
+        total: 1,
+      },
+      {
+        targetObjectUniversalIdentifiers: instagramObjectUniversalIdentifiers,
+        migrateLegacyMyahApplication: false,
+        legacyInstagramApplicationUniversalIdentifier:
+          '4738ebcd-6662-4ecc-a190-374fa0525951',
+      } as unknown as Parameters<typeof command.synchronizeWorkspace>[1],
+    );
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const migratedObjects =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.from
+        .byUniversalIdentifier;
+
+    expect(migratedObjects[STANDARD_OBJECTS.person.universalIdentifier]).toBeUndefined();
+    expect(migratedObjects[STANDARD_OBJECTS.company.universalIdentifier]).toBeUndefined();
+    expect(migratedObjects[STANDARD_OBJECTS.opportunity.universalIdentifier]).toBeUndefined();
+    expect(update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        applicationId: expect.anything(),
+        universalIdentifier: expect.anything(),
+      }),
+      { applicationId: STANDARD_APPLICATION_ID },
+    );
+    expect(query.mock.calls.filter(([sql]) => sql.startsWith('DROP INDEX'))).toHaveLength(5);
+    expect(query.mock.calls.filter(([sql]) => sql.startsWith('ALTER TYPE'))).toHaveLength(18);
+  });
+
+  it('rejects non-standard Instagram ownership when the legacy application is soft-deleted', async () => {
+    const originalQuery = query.getMockImplementation();
+
+    query.mockImplementation((sql: string, parameters?: unknown[]) =>
+      sql.includes('FROM core."objectMetadata"')
+        ? Promise.resolve([{ applicationId: 'soft-deleted-legacy-application' }])
+        : originalQuery?.(sql, parameters),
+    );
+
+    await expect(
+      command.synchronizeWorkspace(
+        { workspaceId: WORKSPACE_ID, options: { dryRun: false }, index: 0, total: 1 },
+        {
+          migrateLegacyMyahApplication: false,
+          legacyInstagramApplicationUniversalIdentifier:
+            '4738ebcd-6662-4ecc-a190-374fa0525951',
+        },
+      ),
+    ).rejects.toThrow('object ownership is ambiguous or incomplete');
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
   });
 
   it('throws when Myah metadata migration validation fails', async () => {

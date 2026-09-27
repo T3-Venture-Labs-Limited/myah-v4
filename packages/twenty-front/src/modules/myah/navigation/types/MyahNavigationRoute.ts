@@ -9,6 +9,7 @@ export type MyahNavigationPageId =
   | 'segments'
   | 'creator-discovery'
   | 'campaigns'
+  | 'messages'
   | 'deliverables'
   | 'creator-briefs'
   | 'creator-videos'

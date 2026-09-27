@@ -12,6 +12,7 @@ import {
   within,
 } from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
+import { MemoryRouter } from 'react-router-dom';
 
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
@@ -24,6 +25,9 @@ import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 const flush = jest.fn().mockResolvedValue(undefined);
 const flushWorkspace = jest.fn().mockResolvedValue(true);
 const invalidateWorkspace = jest.fn();
+const ambientRefreshContacts = jest.fn();
+const ambientRefreshEmail = jest.fn();
+const purgeEmail = jest.fn();
 const refreshContacts = jest.fn();
 const loadMoreContacts = jest.fn();
 const loadMoreEmail = jest.fn();
@@ -247,12 +251,14 @@ jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
     thread,
     onSent,
     scopeGeneration,
+    arrivalEpoch,
     targetAvailable,
     presentation,
     replyTargets,
     onReplyTargetChange,
   }: {
     scopeGeneration: string;
+    arrivalEpoch?: number;
     targetAvailable: boolean;
     presentation?: 'default' | 'main';
     thread: { id: string };
@@ -267,6 +273,7 @@ jest.mock('@/myah/inbox/components/MyahInboxReplyWorkspace', () => ({
     <div
       data-testid="draft-authority"
       data-scope={scopeGeneration}
+      data-arrival={String(arrivalEpoch ?? 0)}
       data-available={String(targetAvailable)}
       data-presentation={presentation}
     >
@@ -386,6 +393,12 @@ const contact = (
   creator: linked ? { id: `creator-${id}`, name: id } : null,
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel,
+  initialSelection: {
+    channel: latestChannel,
+    emailThreadId: latestChannel === 'EMAIL' ? 'thread-2' : null,
+    instagramConversationId:
+      latestChannel === 'INSTAGRAM' ? `conversation-${id}` : null,
+  },
   preview: `${id} preview`,
   sender: id,
   needsAttention: true,
@@ -439,6 +452,7 @@ const setDefaultHooks = () => {
     hasNextPage: false,
     loadMore: loadMoreContacts,
     refresh: refreshContacts,
+    ambientRefresh: ambientRefreshContacts,
     isRefreshing: false,
     refreshStatus: 'idle',
     refreshError: null,
@@ -457,6 +471,7 @@ const setDefaultHooks = () => {
                   latestThreadId: 'thread-2',
                   cards: ['thread-1', 'thread-2'].map((id, index) => ({
                     threadId: id,
+                    anchorKey: `legacy:${id}`,
                     rootMessageId: `${id}-root`,
                     subject: id,
                     campaignLabel:
@@ -475,6 +490,8 @@ const setDefaultHooks = () => {
       loading: false,
       missingMessageIds: [],
       refresh: refreshEmail,
+      ambientRefresh: ambientRefreshEmail,
+      purge: purgeEmail,
       openCard: jest.fn(),
       openDetachedCard: jest.fn(),
       setReadingAnchor: jest.fn(),
@@ -533,6 +550,16 @@ const renderPage = (store = createStore()) => {
       <JotaiProvider store={store}>
         <MyahInboxPage />
       </JotaiProvider>,
+      {
+        wrapper: ({ children }) => (
+          <MemoryRouter
+            initialEntries={['/myah/inbox']}
+            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          >
+            {children}
+          </MemoryRouter>
+        ),
+      },
     ),
   };
 };
@@ -773,6 +800,95 @@ describe('MyahInboxPage contact-first flow', () => {
       status: 'success',
       selectedContact: contacts[0],
     });
+  });
+
+  it('checks for changes every 30 seconds while visible and re-authorizes history only on change or every 5 minutes', async () => {
+    jest.useFakeTimers();
+    let visibility: DocumentVisibilityState = 'visible';
+    jest
+      .spyOn(document, 'visibilityState', 'get')
+      .mockImplementation(() => visibility);
+    ambientRefreshContacts.mockResolvedValue({
+      status: 'success',
+      selectedContact: contacts[0],
+    });
+    ambientRefreshEmail.mockResolvedValue(true);
+    const arrival = () =>
+      screen.getByTestId('draft-authority').getAttribute('data-arrival');
+    try {
+      const { store } = renderPage();
+      await act(async () => jest.advanceTimersByTimeAsync(0));
+      await screen.findByText('Email composer thread-2');
+      const selection = store.get(myahInboxContactSelectionState.atom);
+
+      // Unchanged selected contact: only the one contact-list check runs.
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(ambientRefreshContacts).toHaveBeenCalledWith('contact-1');
+      expect(ambientRefreshEmail).not.toHaveBeenCalled();
+      expect(arrival()).toBe('0');
+
+      // A new readable creator response changes the signature.
+      ambientRefreshContacts.mockResolvedValueOnce({
+        status: 'success',
+        selectedContact: {
+          ...contacts[0],
+          lastActivityAt: '2026-09-06T12:00:00.000Z',
+          preview: 'A new creator reply',
+        },
+      });
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(1);
+      expect(arrival()).toBe('1');
+      expect(refreshContacts).not.toHaveBeenCalled();
+      expect(refreshEmail).not.toHaveBeenCalled();
+      expect(store.get(myahInboxContactSelectionState.atom)).toEqual(selection);
+
+      // Unchanged ticks stay cheap until 5 minutes since the last full check.
+      await act(async () => jest.advanceTimersByTimeAsync(270_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(1);
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(2);
+      expect(arrival()).toBe('2');
+
+      // A busy history operation must not count as a completed full check.
+      ambientRefreshEmail.mockResolvedValueOnce(false);
+      await act(async () => jest.advanceTimersByTimeAsync(300_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(3);
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(ambientRefreshEmail).toHaveBeenCalledTimes(4);
+
+      const checks = ambientRefreshContacts.mock.calls.length;
+      visibility = 'hidden';
+      await act(async () => jest.advanceTimersByTimeAsync(600_000));
+      expect(ambientRefreshContacts).toHaveBeenCalledTimes(checks);
+      visibility = 'visible';
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(ambientRefreshContacts).toHaveBeenCalledTimes(checks + 1);
+    } finally {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    }
+  });
+
+  it('masks selected Email history when the ambient contact authorization check fails', async () => {
+    jest.useFakeTimers();
+    try {
+      renderPage();
+      await act(async () => jest.advanceTimersByTimeAsync(0));
+      await screen.findByText('Email composer thread-2');
+      ambientRefreshContacts.mockResolvedValueOnce({
+        status: 'failed',
+        selectedContact: null,
+      });
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(purgeEmail).toHaveBeenCalledTimes(1);
+      expect(ambientRefreshEmail).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('ignores an old exact header mutation completion after contact/channel scope changes', async () => {
@@ -1157,6 +1273,51 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(screen.queryByText(/Email actions/)).not.toBeInTheDocument();
   });
 
+  it('reapplies the recommendation through the draft barrier on explicit same-row reopen', async () => {
+    const { store } = renderPage();
+
+    await screen.findByText('Email composer thread-2');
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    flushWorkspace.mockClear();
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+    expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+      contactId: 'contact-1',
+      channel: 'EMAIL',
+      emailThreadId: 'thread-2',
+    });
+  });
+
+  it('keeps the manual channel when an explicit same-row reopen cannot flush drafts', async () => {
+    const { store } = renderPage();
+
+    await screen.findByText('Email composer thread-2');
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    flushWorkspace.mockResolvedValueOnce(false);
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+
+    expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+      contactId: 'contact-1',
+      channel: 'INSTAGRAM',
+      emailThreadId: null,
+    });
+  });
+
   it('retains a valid selected Contact on refresh and clears a removed one', async () => {
     const { store } = renderPage();
 
@@ -1282,6 +1443,33 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(
       screen.getByRole('option', { name: 'Select contact-1' }),
     ).toHaveFocus();
+  });
+
+  it('opens the current mobile conversation when recommendation reapply is draft-blocked', async () => {
+    isMobile = true;
+    const { store } = renderPage();
+
+    await screen.findByText('Selected: contact-1');
+    fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' }));
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Instagram channel' }),
+      ),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Contacts' })),
+    );
+    flushWorkspace.mockResolvedValueOnce(false);
+
+    await act(async () =>
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-1' })),
+    );
+
+    expect(screen.getByRole('heading', { name: 'contact-1' })).toBeVisible();
+    expect(store.get(myahInboxContactSelectionState.atom)).toMatchObject({
+      contactId: 'contact-1',
+      channel: 'INSTAGRAM',
+    });
   });
 
   it('opens Creator context from the same mobile control in both channels', async () => {

@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
+
 import { isNonEmptyString } from '@sniptt/guards';
 import { Command } from 'nest-commander';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { In, type DataSource } from 'typeorm';
+import { In, type DataSource, type QueryRunner } from 'typeorm';
 
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
@@ -28,6 +30,7 @@ import { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/wor
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { getReplacedTwentyCrmMetadataUniversalIdentifiers } from 'src/engine/workspace-manager/twenty-standard-application/utils/remove-replaced-twenty-crm-metadata.util';
+import { escapeIdentifier } from 'src/engine/workspace-manager/workspace-migration/utils/remove-sql-injection.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import type {
   AdditionalCacheDataMaps,
@@ -47,6 +50,7 @@ const LEGACY_MYAH_APPLICATION_UNIVERSAL_IDENTIFIERS = [
 
 type UniversalMetadataEntity = {
   universalIdentifier: string;
+  applicationId?: string;
   objectMetadataUniversalIdentifier?: string | null;
   relationTargetObjectMetadataUniversalIdentifier?: string | null;
   relationTargetFieldMetadataUniversalIdentifier?: string | null;
@@ -101,9 +105,65 @@ const withoutCacheDerivedFieldMetadataProperties = <
 };
 
 
+const LEGACY_INSTAGRAM_TABLES = [
+  {
+    objectUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.myahInstagramAccount.universalIdentifier,
+    sourceTableName: '_myahInstagramAccount',
+    targetTableName: 'myahInstagramAccount',
+    uniqueIndexColumns: [
+      ['connectedAccountId'],
+      ['igUserId'],
+      ['unipileAccountId'],
+    ],
+  },
+  {
+    objectUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.myahSocialConversation.universalIdentifier,
+    sourceTableName: '_myahSocialConversation',
+    targetTableName: 'myahSocialConversation',
+    uniqueIndexColumns: [
+      ['provider', 'instagramAccountId', 'providerConversationId'],
+    ],
+  },
+  {
+    objectUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.myahSocialMessage.universalIdentifier,
+    sourceTableName: '_myahSocialMessage',
+    targetTableName: 'myahSocialMessage',
+    uniqueIndexColumns: [
+      ['provider', 'conversationId', 'providerMessageId'],
+    ],
+  },
+  {
+    objectUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.myahInstagramReplyDraft.universalIdentifier,
+    sourceTableName: '_myahInstagramReplyDraft',
+    targetTableName: 'myahInstagramReplyDraft',
+    uniqueIndexColumns: [],
+  },
+] as const;
+
+const physicalUniqueIndexName = (tableName: string, columns: readonly string[]) => {
+  const hash = createHash('sha256');
+
+  [tableName, ...columns, '"deletedAt" IS NULL'].forEach((part) => hash.update(part));
+
+  return `IDX_UNIQUE_${hash.digest('hex').slice(0, 27)}`;
+};
+
+const LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS = new Set<string>(
+  LEGACY_INSTAGRAM_TABLES.map(
+    ({ objectUniversalIdentifier }) => objectUniversalIdentifier,
+  ),
+);
+
 export type SynchronizeMyahStandardMetadataOptions = {
   targetObjectUniversalIdentifiers?: ReadonlySet<string>;
+  additionalAvailableObjectUniversalIdentifiers?: ReadonlySet<string>;
   migrateLegacyMyahApplication?: boolean;
+  /** Enables the dormant, non-CRM-replacement adoption path for the former Instagram SDK. */
+  legacyInstagramApplicationUniversalIdentifier?: string;
   explicitObsoleteUniversalIdentifiersByMetadataName?: Partial<
     Record<TwentyStandardMetadataName, ReadonlySet<string>>
   >;
@@ -127,6 +187,375 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     private readonly workspaceMigrationValidateBuildAndRunService: WorkspaceMigrationValidateBuildAndRunService,
   ) {
     super(workspaceIteratorService);
+  }
+
+  private async preflightLegacyInstagramTables({
+    workspaceId,
+    legacyInstagramApplicationId,
+    expectedUniversalIdentifiersByMetadataName,
+  }: {
+    workspaceId: string;
+    legacyInstagramApplicationId: string;
+    expectedUniversalIdentifiersByMetadataName: Partial<
+      Record<TwentyStandardMetadataName, ReadonlySet<string>>
+    >;
+  }): Promise<{
+    databaseSchema: string;
+    sourceRowCountByTableName: ReadonlyMap<string, number>;
+  }> {
+    const workspace = await this.coreDataSource
+      .getRepository(WorkspaceEntity)
+      .findOne({ select: ['databaseSchema'], where: { id: workspaceId } });
+
+    if (!isNonEmptyString(workspace?.databaseSchema)) {
+      throw new Error(
+        `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: no database schema is configured`,
+      );
+    }
+
+    const queryRunner = this.coreDataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+      const databaseSchema = workspace.databaseSchema;
+      const sourceTableNames = LEGACY_INSTAGRAM_TABLES.map(
+        ({ sourceTableName }) => sourceTableName,
+      );
+      const targetTableNames = LEGACY_INSTAGRAM_TABLES.map(
+        ({ targetTableName }) => targetTableName,
+      );
+      const existingSourceTables = await this.getExistingTables(
+        queryRunner,
+        databaseSchema,
+        sourceTableNames,
+      );
+      const existingTargetTables = await this.getExistingTables(
+        queryRunner,
+        databaseSchema,
+        targetTableNames,
+      );
+
+      if (existingSourceTables.size !== sourceTableNames.length) {
+        throw new Error(
+          `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: the legacy table set is incomplete`,
+        );
+      }
+
+      if (existingTargetTables.size !== 0) {
+        throw new Error(
+          `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: native target tables already exist`,
+        );
+      }
+
+      const sourceRowCountByTableName = new Map<string, number>();
+      for (const sourceTableName of sourceTableNames) {
+        sourceRowCountByTableName.set(
+          sourceTableName,
+          await this.getTableRowCount(
+            queryRunner,
+            databaseSchema,
+            sourceTableName,
+          ),
+        );
+      }
+
+      for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
+        const expectedUniversalIdentifiers =
+          expectedUniversalIdentifiersByMetadataName[metadataName] ??
+          new Set<string>();
+
+        if (expectedUniversalIdentifiers.size === 0) {
+          continue;
+        }
+
+        const entity = ALL_METADATA_ENTITY_BY_METADATA_NAME[metadataName];
+        const matchingMetadataCount = await queryRunner.manager.count(entity, {
+          where: {
+            workspaceId,
+            applicationId: legacyInstagramApplicationId,
+            universalIdentifier: In([...expectedUniversalIdentifiers]),
+          },
+        });
+
+        if (matchingMetadataCount !== expectedUniversalIdentifiers.size) {
+          throw new Error(
+            `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: legacy graph ownership is incomplete`,
+          );
+        }
+      }
+
+      return { databaseSchema, sourceRowCountByTableName };
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  private async getExistingTables(
+    queryRunner: QueryRunner,
+    databaseSchema: string,
+    tableNames: readonly string[],
+  ): Promise<Set<string>> {
+    // SAFETY: this SELECT returns only the declared table_name column.
+    const rows = (await queryRunner.query(
+      `SELECT table_name
+         FROM information_schema.tables
+        WHERE table_schema = $1
+          AND table_name = ANY($2::text[])`,
+      [databaseSchema, tableNames],
+    )) as { table_name: string }[];
+
+    return new Set(rows.map(({ table_name }) => table_name));
+  }
+
+  private async getTableRowCount(
+    queryRunner: QueryRunner,
+    databaseSchema: string,
+    tableName: string,
+  ): Promise<number> {
+    // SAFETY: this aggregate SELECT aliases its sole count column as text.
+    // pi-lens-ignore: no-sql-in-code, sql-injection, property_identifier -- schema and table identifiers are escaped before interpolation.
+    const rows = (await queryRunner.query(
+      `SELECT count(*)::text AS count
+         FROM ${escapeIdentifier(databaseSchema)}.${escapeIdentifier(tableName)}`,
+    )) as { count: string }[];
+    const count = Number(rows[0]?.count);
+
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new Error(`Unable to count legacy Instagram table ${tableName}`);
+    }
+
+    return count;
+  }
+
+  private async renameLegacyInstagramPhysicalNames(
+    queryRunner: QueryRunner,
+    databaseSchema: string,
+  ): Promise<void> {
+    const schema = escapeIdentifier(databaseSchema);
+    const sourceTables = LEGACY_INSTAGRAM_TABLES.map(({ sourceTableName }) => sourceTableName);
+    const expectedIndexes = LEGACY_INSTAGRAM_TABLES.flatMap(
+      ({ sourceTableName, targetTableName, uniqueIndexColumns }) =>
+        uniqueIndexColumns.map((columns) => ({
+          sourceTableName,
+          columns,
+          legacyName: physicalUniqueIndexName(sourceTableName, columns),
+          nativeName: physicalUniqueIndexName(targetTableName, columns),
+        })),
+    );
+    const expectedIndexNames = new Set(
+      expectedIndexes.flatMap(({ legacyName, nativeName }) => [legacyName, nativeName]),
+    );
+    const enums = (await queryRunner.query(
+      `SELECT c.relname AS table_name, a.attname AS column_name, t.typname AS type_name
+         FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         JOIN pg_type t ON t.oid = a.atttypid
+        WHERE n.nspname = $1 AND c.relname = ANY($2::text[])
+          AND t.typtype = 'e' AND a.attnum > 0 AND NOT a.attisdropped`,
+      [databaseSchema, sourceTables],
+    )) as { table_name: string; column_name: string; type_name: string }[];
+
+    if (enums.length !== 18) {
+      throw new Error('Cannot adopt legacy Instagram metadata: legacy enum type set is incomplete');
+    }
+
+    const enumRenames = enums.map(({ table_name, column_name, type_name }) => {
+      const targetTable = LEGACY_INSTAGRAM_TABLES.find(
+        ({ sourceTableName }) => sourceTableName === table_name,
+      );
+      const legacyName = `${table_name}_${column_name}_enum`;
+
+      if (!targetTable || type_name !== legacyName) {
+        throw new Error('Cannot adopt legacy Instagram metadata: unexpected legacy enum type');
+      }
+
+      return { legacyName, nativeName: `${targetTable.targetTableName}_${column_name}_enum` };
+    });
+    const existingNativeTypes = (await queryRunner.query(
+      `SELECT typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = $1 AND t.typname = ANY($2::text[])`,
+      [databaseSchema, enumRenames.map(({ nativeName }) => nativeName)],
+    )) as { typname: string }[];
+
+    if (existingNativeTypes.length > 0) {
+      throw new Error('Cannot adopt legacy Instagram metadata: native enum type name already exists');
+    }
+
+    const indexes = (await queryRunner.query(
+      `SELECT i.relname AS index_name, i.relkind, c.relname AS table_name,
+              ix.indisunique AS is_unique, pg_get_expr(ix.indpred, ix.indrelid) AS predicate,
+              to_json(array_agg(a.attname ORDER BY x.n) FILTER (WHERE a.attname IS NOT NULL)) AS columns
+         FROM pg_class i JOIN pg_namespace n ON n.oid = i.relnamespace
+         LEFT JOIN pg_index ix ON ix.indexrelid = i.oid
+         LEFT JOIN pg_class c ON c.oid = ix.indrelid
+         LEFT JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS x(attnum, n) ON true
+         LEFT JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = x.attnum
+        WHERE n.nspname = $1
+          AND (i.relname = ANY($2::text[])
+            OR (c.relname = ANY($3::text[]) AND ix.indisunique AND ix.indpred IS NOT NULL))
+        GROUP BY i.relname, i.relkind, c.relname, ix.indisunique, ix.indpred, ix.indrelid`,
+      [databaseSchema, [...expectedIndexNames], sourceTables],
+    )) as {
+      index_name: string;
+      relkind: string;
+      table_name: string | null;
+      is_unique: boolean | null;
+      predicate: string | null;
+      columns: string[] | null;
+    }[];
+    const byName = new Map(indexes.map((index) => [index.index_name, index]));
+
+    if (indexes.some(({ index_name }) => !expectedIndexNames.has(index_name))) {
+      throw new Error('Cannot adopt legacy Instagram metadata: unexpected physical unique index');
+    }
+
+    for (const { sourceTableName, columns, legacyName, nativeName } of expectedIndexes) {
+      const legacy = byName.get(legacyName);
+      const native = byName.get(nativeName);
+      const matches = (index: (typeof indexes)[number] | undefined) =>
+        index?.relkind === 'i' && index.table_name === sourceTableName &&
+        index.is_unique === true && index.predicate === '("deletedAt" IS NULL)' &&
+        JSON.stringify(index.columns) === JSON.stringify(columns);
+
+      if (!matches(legacy) || (native !== undefined && !matches(native))) {
+        throw new Error('Cannot adopt legacy Instagram metadata: physical unique index collision or missing legacy index');
+      }
+    }
+
+    for (const { legacyName, nativeName } of expectedIndexes) {
+      if (byName.has(nativeName)) {
+        // A standard-sync-created native twin already exists on this same table.
+        // pi-lens-ignore: no-sql-in-code, sql-injection, property_identifier -- preflight checked exact catalog names in this transaction.
+        await queryRunner.query(`DROP INDEX ${schema}.${escapeIdentifier(legacyName)}`);
+      } else {
+        // pi-lens-ignore: no-sql-in-code, sql-injection, property_identifier -- deterministic names and escaped schema.
+        await queryRunner.query(
+          `ALTER INDEX ${schema}.${escapeIdentifier(legacyName)} RENAME TO ${escapeIdentifier(nativeName)}`,
+        );
+      }
+    }
+    for (const { legacyName, nativeName } of enumRenames) {
+      // pi-lens-ignore: no-sql-in-code, sql-injection, property_identifier -- catalog-verified type on an allowlisted source table.
+      await queryRunner.query(
+        `ALTER TYPE ${schema}.${escapeIdentifier(legacyName)} RENAME TO ${escapeIdentifier(nativeName)}`,
+      );
+    }
+  }
+
+  private async transferLegacyInstagramGraph({
+    workspaceId,
+    legacyInstagramApplicationId,
+    twentyStandardApplicationId,
+    databaseSchema,
+    sourceRowCountByTableName,
+    expectedUniversalIdentifiersByMetadataName,
+  }: {
+    workspaceId: string;
+    legacyInstagramApplicationId: string;
+    twentyStandardApplicationId: string;
+    databaseSchema: string;
+    sourceRowCountByTableName: ReadonlyMap<string, number>;
+    expectedUniversalIdentifiersByMetadataName: Partial<
+      Record<TwentyStandardMetadataName, ReadonlySet<string>>
+    >;
+  }): Promise<void> {
+    const queryRunner = this.coreDataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      await this.renameLegacyInstagramPhysicalNames(queryRunner, databaseSchema);
+
+      for (const { sourceTableName, targetTableName } of LEGACY_INSTAGRAM_TABLES) {
+        // pi-lens-ignore: no-sql-in-code, sql-injection, property_identifier -- fixed table identifiers and escaped schema cannot be parameterized in PostgreSQL.
+        await queryRunner.query(
+          `ALTER TABLE ${escapeIdentifier(databaseSchema)}.${escapeIdentifier(sourceTableName)} RENAME TO ${escapeIdentifier(targetTableName)}`,
+        );
+      }
+
+      for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
+        const expectedUniversalIdentifiers =
+          expectedUniversalIdentifiersByMetadataName[metadataName] ??
+          new Set<string>();
+
+        if (expectedUniversalIdentifiers.size === 0) {
+          continue;
+        }
+
+        await queryRunner.manager.update(
+          ALL_METADATA_ENTITY_BY_METADATA_NAME[metadataName],
+          {
+            workspaceId,
+            applicationId: legacyInstagramApplicationId,
+            universalIdentifier: In([...expectedUniversalIdentifiers]),
+          },
+          { applicationId: twentyStandardApplicationId },
+        );
+
+        const standardOwnedCount = await queryRunner.manager.count(
+          ALL_METADATA_ENTITY_BY_METADATA_NAME[metadataName],
+          {
+            where: {
+              workspaceId,
+              applicationId: twentyStandardApplicationId,
+              universalIdentifier: In([...expectedUniversalIdentifiers]),
+            },
+          },
+        );
+
+        if (standardOwnedCount !== expectedUniversalIdentifiers.size) {
+          throw new Error(
+            `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: graph ownership changed during transfer`,
+          );
+        }
+      }
+
+      const sourceTableNames = LEGACY_INSTAGRAM_TABLES.map(
+        ({ sourceTableName }) => sourceTableName,
+      );
+      const targetTableNames = LEGACY_INSTAGRAM_TABLES.map(
+        ({ targetTableName }) => targetTableName,
+      );
+      const [remainingSourceTables, targetTables] = await Promise.all([
+        this.getExistingTables(queryRunner, databaseSchema, sourceTableNames),
+        this.getExistingTables(queryRunner, databaseSchema, targetTableNames),
+      ]);
+
+      if (
+        remainingSourceTables.size !== 0 ||
+        targetTables.size !== targetTableNames.length
+      ) {
+        throw new Error(
+          `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: table rename verification failed`,
+        );
+      }
+
+      for (const { sourceTableName, targetTableName } of LEGACY_INSTAGRAM_TABLES) {
+        const sourceRowCount = sourceRowCountByTableName.get(sourceTableName);
+        const targetRowCount = await this.getTableRowCount(
+          queryRunner,
+          databaseSchema,
+          targetTableName,
+        );
+
+        if (sourceRowCount === undefined || targetRowCount !== sourceRowCount) {
+          throw new Error(
+            `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: record count verification failed`,
+          );
+        }
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async workspaceSchemaExists(workspaceId: string): Promise<boolean> {
@@ -178,10 +607,52 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       return;
     }
 
+    const metadataVersionBeforeSynchronization = (
+      await this.coreDataSource.getRepository(WorkspaceEntity).findOneOrFail({
+        select: ['metadataVersion'],
+        where: { id: workspaceId },
+      })
+    ).metadataVersion;
+
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow({
         workspaceId,
       });
+    const legacyInstagramApplication =
+      syncOptions.legacyInstagramApplicationUniversalIdentifier === undefined
+        ? undefined
+        : await this.applicationService.findByUniversalIdentifier({
+            universalIdentifier:
+              syncOptions.legacyInstagramApplicationUniversalIdentifier,
+            workspaceId,
+          });
+    if (syncOptions.legacyInstagramApplicationUniversalIdentifier !== undefined) {
+      const queryRunner = this.coreDataSource.createQueryRunner();
+
+      try {
+        await queryRunner.connect();
+        const unexpectedOwners = (await queryRunner.query(
+          `SELECT "applicationId" FROM core."objectMetadata"
+            WHERE "workspaceId" = $1 AND "universalIdentifier" = ANY($2::uuid[])
+              AND "applicationId" IS DISTINCT FROM $3
+              AND ($4::uuid IS NULL OR "applicationId" IS DISTINCT FROM $4)`,
+          [
+            workspaceId,
+            [...LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS],
+            twentyStandardFlatApplication.id,
+            legacyInstagramApplication?.id ?? null,
+          ],
+        )) as { applicationId: string }[];
+
+        if (unexpectedOwners.length > 0) {
+          throw new Error(
+            `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: object ownership is ambiguous or incomplete`,
+          );
+        }
+      } finally {
+        await queryRunner.release();
+      }
+    }
 
     const legacyMyahApplications = (
       await Promise.all(
@@ -215,6 +686,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       );
     const featureFlagsMap =
       cachedMetadata.featureFlagsMap as AdditionalCacheDataMaps['featureFlagsMap'];
+    // SAFETY: cache keys above load the complete standard flat-entity map set.
     const fromAllFlatEntityMaps =
       cachedMetadata as unknown as TwentyStandardAllFlatEntityMaps;
     const { allFlatEntityMaps: standardAllFlatEntityMaps,
@@ -234,6 +706,8 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
       ),
     );
+    const additionalAvailableObjectUniversalIdentifiers =
+      syncOptions.additionalAvailableObjectUniversalIdentifiers ?? new Set();
     const standardFields = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     );
@@ -268,7 +742,13 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
           (!isDefined(relationTargetObjectUniversalIdentifier) ||
             objectUniversalIdentifiers.has(
               relationTargetObjectUniversalIdentifier,
-            ))
+            ) ||
+            (additionalAvailableObjectUniversalIdentifiers.has(
+              relationTargetObjectUniversalIdentifier,
+            ) &&
+              currentObjectUniversalIdentifiers.has(
+                relationTargetObjectUniversalIdentifier,
+              )))
         );
       }
 
@@ -308,6 +788,146 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
               ) === true,
       ),
     );
+    const expectedLegacyInstagramFieldUniversalIdentifiers =
+      toUniversalIdentifiers(
+        standardFields.filter(
+          (field) =>
+            LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS.has(
+              field.objectMetadataUniversalIdentifier ?? '',
+            ) ||
+            LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS.has(
+              field.relationTargetObjectMetadataUniversalIdentifier ?? '',
+            ),
+        ),
+      );
+    const expectedLegacyInstagramIndexUniversalIdentifiers =
+      toUniversalIdentifiers(
+        standardIndexes.filter(
+          (index) =>
+            LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS.has(
+              index.objectMetadataUniversalIdentifier ?? '',
+            ) ||
+            index.universalFlatIndexFieldMetadatas?.some((indexField) =>
+              expectedLegacyInstagramFieldUniversalIdentifiers.has(
+                indexField.fieldMetadataUniversalIdentifier,
+              ),
+            ) === true,
+        ),
+      );
+    const expectedLegacyInstagramUniversalIdentifiersByMetadataName = {
+      objectMetadata: LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS,
+      fieldMetadata: expectedLegacyInstagramFieldUniversalIdentifiers,
+      index: expectedLegacyInstagramIndexUniversalIdentifiers,
+    } satisfies Partial<
+      Record<TwentyStandardMetadataName, ReadonlySet<string>>
+    >;
+    // The historical carrier expressed these identities as field-level
+    // uniqueness. Explicit index metadata is a target-graph requirement,
+    // created by the non-destructive standard synchronization below.
+    const expectedHistoricalLegacyInstagramUniversalIdentifiersByMetadataName = {
+      objectMetadata: LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS,
+      fieldMetadata: expectedLegacyInstagramFieldUniversalIdentifiers,
+    } satisfies Partial<
+      Record<TwentyStandardMetadataName, ReadonlySet<string>>
+    >;
+    const currentLegacyInstagramObjectUniversalIdentifiers =
+      toUniversalIdentifiers(
+        getUniversalMetadataEntities(
+          fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
+        ).filter(
+          (object) =>
+            LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS.has(
+              object.universalIdentifier,
+            ) &&
+            object.applicationId === legacyInstagramApplication?.id,
+        ),
+      );
+    const hasAnyLegacyInstagramObject =
+      currentLegacyInstagramObjectUniversalIdentifiers.size > 0;
+    const hasAdoptableLegacyInstagramGraph =
+      isDefined(legacyInstagramApplication) &&
+      currentLegacyInstagramObjectUniversalIdentifiers.size ===
+        LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS.size;
+
+    if (
+      hasAnyLegacyInstagramObject &&
+      !hasAdoptableLegacyInstagramGraph
+    ) {
+      throw new Error(
+        `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: object ownership is ambiguous or incomplete`,
+      );
+    }
+
+    if (hasAdoptableLegacyInstagramGraph) {
+      const unexpectedLegacyInstagramField = getUniversalMetadataEntities(
+        fromAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+      ).find(
+        (field) =>
+          field.applicationId === legacyInstagramApplication.id &&
+          (LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS.has(
+            field.objectMetadataUniversalIdentifier ?? '',
+          ) ||
+            LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS.has(
+              field.relationTargetObjectMetadataUniversalIdentifier ?? '',
+            )) &&
+          !expectedLegacyInstagramFieldUniversalIdentifiers.has(
+            field.universalIdentifier,
+          ),
+      );
+      const unexpectedLegacyInstagramIndex = getUniversalMetadataEntities(
+        fromAllFlatEntityMaps.flatIndexMaps.byUniversalIdentifier,
+      ).find(
+        (index) =>
+          index.applicationId === legacyInstagramApplication.id &&
+          (LEGACY_INSTAGRAM_OBJECT_UNIVERSAL_IDENTIFIERS.has(
+            index.objectMetadataUniversalIdentifier ?? '',
+          ) ||
+            index.universalFlatIndexFieldMetadatas?.some((indexField) =>
+              expectedLegacyInstagramFieldUniversalIdentifiers.has(
+                indexField.fieldMetadataUniversalIdentifier,
+              ),
+            ) === true) &&
+          !expectedLegacyInstagramIndexUniversalIdentifiers.has(
+            index.universalIdentifier,
+          ),
+      );
+
+      if (
+        unexpectedLegacyInstagramField !== undefined ||
+        unexpectedLegacyInstagramIndex !== undefined
+      ) {
+        throw new Error(
+          `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: unexpected legacy graph metadata remains`,
+        );
+      }
+
+      for (const [metadataName, expectedUniversalIdentifiers] of Object.entries(
+        expectedHistoricalLegacyInstagramUniversalIdentifiersByMetadataName,
+      ) as Array<[TwentyStandardMetadataName, ReadonlySet<string>]>) {
+        const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
+        // SAFETY: metadata-name-derived keys address the complete cached flat-map set.
+        const currentFlatEntityMaps = (
+          fromAllFlatEntityMaps as unknown as Record<
+            string,
+            SyncableFlatEntityMaps
+          >
+        )[flatEntityMapsKey];
+        const ownedCount = Object.values(
+          currentFlatEntityMaps.byUniversalIdentifier,
+        ).filter(
+          (entity) =>
+            entity !== undefined &&
+            expectedUniversalIdentifiers.has(entity.universalIdentifier) &&
+            entity.applicationId === legacyInstagramApplication.id,
+        ).length;
+
+        if (ownedCount !== expectedUniversalIdentifiers.size) {
+          throw new Error(
+            `Cannot adopt legacy Instagram metadata for workspace ${workspaceId}: ${metadataName} graph ownership is incomplete`,
+          );
+        }
+      }
+    }
     const standardViewFields = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
     );
@@ -491,11 +1111,13 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     );
 
     const toAllFlatEntityMaps = createEmptyAllFlatEntityMaps();
+    // SAFETY: each standard metadata name maps to its corresponding flat-map key.
     const standardFlatEntityMapsByKey =
       standardAllFlatEntityMaps as unknown as Record<
         string,
         SyncableFlatEntityMaps
       >;
+    // SAFETY: each standard metadata name maps to its corresponding flat-map key.
     const toFlatEntityMapsByKey = toAllFlatEntityMaps as unknown as Record<
       string,
       SyncableFlatEntityMaps
@@ -634,12 +1256,14 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
         const desiredUniversalIdentifiers = Object.keys(
           (
+            /* SAFETY: each standard metadata name maps to its corresponding flat-map key. */
             toAllFlatEntityMaps as unknown as Record<
               string,
               SyncableFlatEntityMaps
             >
           )[flatEntityMapsKey].byUniversalIdentifier,
         );
+        // SAFETY: each standard metadata name maps to its corresponding flat-map key.
         const currentFlatEntityMaps = (
           fromAllFlatEntityMaps as unknown as Record<
             string,
@@ -655,7 +1279,8 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       });
 
     if (
-      !hasLegacyMyahApplication &&
+      !shouldMigrateLegacyMyahApplication &&
+      !hasAdoptableLegacyInstagramGraph &&
       hasCompleteNativeMyahGraph &&
       !hasExplicitObsoleteUniversalIdentifiers
     ) {
@@ -665,6 +1290,15 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
 
       return;
     }
+    const legacyInstagramAdoptionPreflight =
+      hasAdoptableLegacyInstagramGraph && !options.dryRun
+        ? await this.preflightLegacyInstagramTables({
+            workspaceId,
+            legacyInstagramApplicationId: legacyInstagramApplication.id,
+            expectedUniversalIdentifiersByMetadataName:
+              expectedHistoricalLegacyInstagramUniversalIdentifiersByMetadataName,
+          })
+        : undefined;
     const legacyObsoleteUniversalIdentifiersByMetadataName =
           shouldMigrateLegacyMyahApplication
             ? getReplacedTwentyCrmMetadataUniversalIdentifiers(
@@ -676,12 +1310,15 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     const dependencyAllFlatEntityMaps = createEmptyAllFlatEntityMaps();
     for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
       const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
+      // SAFETY: the metadata-name-derived key always addresses a syncable flat map.
       const toFlatEntityMaps = toAllFlatEntityMaps[
         flatEntityMapsKey
       ] as unknown as SyncableFlatEntityMaps;
+      // SAFETY: the metadata-name-derived key always addresses a syncable flat map.
       const fromFlatEntityMaps = fromAllFlatEntityMaps[
         flatEntityMapsKey
       ] as unknown as SyncableFlatEntityMaps;
+      // SAFETY: the metadata-name-derived key always addresses a syncable flat map.
       (
         dependencyAllFlatEntityMaps as unknown as Record<
           string,
@@ -703,6 +1340,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
           universalIdentifiers,
         });
 
+      // SAFETY: the metadata-name-derived key always addresses a syncable flat map.
       (
         fromMyahFlatEntityMaps as unknown as Record<
           string,
@@ -750,9 +1388,69 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       );
     }
 
-    if (options.dryRun || !shouldMigrateLegacyMyahApplication) {
-          return;
-        }
+    if (options.dryRun) {
+      return;
+    }
+
+    if (
+      legacyInstagramAdoptionPreflight !== undefined &&
+      isDefined(legacyInstagramApplication)
+    ) {
+      await this.transferLegacyInstagramGraph({
+        workspaceId,
+        legacyInstagramApplicationId: legacyInstagramApplication.id,
+        twentyStandardApplicationId: twentyStandardFlatApplication.id,
+        databaseSchema: legacyInstagramAdoptionPreflight.databaseSchema,
+        sourceRowCountByTableName:
+          legacyInstagramAdoptionPreflight.sourceRowCountByTableName,
+        expectedUniversalIdentifiersByMetadataName:
+          expectedLegacyInstagramUniversalIdentifiersByMetadataName,
+      });
+      await this.workspaceCacheService.flush(
+        workspaceId,
+        TWENTY_STANDARD_ALL_METADATA_NAME.map(getMetadataFlatEntityMapsKey),
+      );
+      const metadataVersionAfterStandardSynchronization = (
+        await this.coreDataSource.getRepository(WorkspaceEntity).findOneOrFail({
+          select: ['metadataVersion'],
+          where: { id: workspaceId },
+        })
+      ).metadataVersion;
+      if (
+        metadataVersionAfterStandardSynchronization ===
+        metadataVersionBeforeSynchronization
+      ) {
+        await this.workspaceMetadataVersionService.incrementMetadataVersion(
+          workspaceId,
+        );
+      }
+
+      return;
+    }
+
+    if (!shouldMigrateLegacyMyahApplication) {
+      await this.workspaceCacheService.flush(
+        workspaceId,
+        TWENTY_STANDARD_ALL_METADATA_NAME.map(getMetadataFlatEntityMapsKey),
+      );
+      const metadataVersionAfterFirstTimeSynchronization = (
+        await this.coreDataSource.getRepository(WorkspaceEntity).findOneOrFail({
+          select: ['metadataVersion'],
+          where: { id: workspaceId },
+        })
+      ).metadataVersion;
+
+      if (
+        metadataVersionAfterFirstTimeSynchronization ===
+        metadataVersionBeforeSynchronization
+      ) {
+        await this.workspaceMetadataVersionService.incrementMetadataVersion(
+          workspaceId,
+        );
+      }
+
+      return;
+    }
 
     const queryRunner = this.coreDataSource.createQueryRunner();
 
@@ -765,6 +1463,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
         const targetUniversalIdentifiers = Object.keys(
           (
+            /* SAFETY: each standard metadata name maps to its corresponding flat-map key. */
             toAllFlatEntityMaps as unknown as Record<
               string,
               SyncableFlatEntityMaps

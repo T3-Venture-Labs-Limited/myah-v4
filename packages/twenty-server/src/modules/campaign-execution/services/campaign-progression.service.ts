@@ -12,6 +12,7 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
 import { CampaignOutreachAudienceReviewService } from 'src/modules/campaign-execution/services/campaign-outreach-audience-review.service';
 import { CampaignTimelineEventWriterService } from 'src/modules/campaign-execution/services/campaign-timeline-event-writer.service';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 import { MailboxCapacityService } from 'src/modules/campaign-execution/services/mailbox-capacity.service';
 import {
   OUTBOUND_EMAIL_ATTEMPT_RECEIPT_PROJECTION,
@@ -67,6 +68,8 @@ const runnerOf = (manager: EntityManager): QueryRunner => {
 
 @Injectable()
 export class CampaignProgressionService implements CampaignProgressionPort {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   constructor(
     @Optional() private readonly attemptService?: OutboundEmailAttemptService,
     @Optional() private readonly capacityService?: MailboxCapacityService,
@@ -431,6 +434,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       );
       if (excludedEnrollment.status !== 'CHANGED')
         throw new Error('Campaign eligibility enrollment exclusion CAS failed');
+      await this.invalidateForecast(input.workspaceId, manager);
       const result: CampaignOccurrenceClaimResult = {
         status: 'EXCLUDED',
         reason,
@@ -874,7 +878,18 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         },
       );
     }
+    await this.invalidateForecast(input.workspaceId, manager);
     return { status: 'RESERVED', attemptId };
+  }
+
+  private async invalidateForecast(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    await this.forecastInvalidation.invalidateInTransaction(
+      { workspaceId },
+      manager,
+    );
   }
 
   private async nextDueInWindow(
@@ -1159,11 +1174,13 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       }
     }
 
+    if (result.status === 'CHANGED') {
+      await this.invalidateForecast(input.workspaceId, manager);
+      return { status: 'PROGRESSED' };
+    }
     return result.status === 'EXACT_REPLAY'
       ? { status: 'EXACT_REPLAY' }
-      : result.status === 'CHANGED'
-        ? { status: 'PROGRESSED' }
-        : { status: 'TERMINAL_SUPPRESSED' };
+      : { status: 'TERMINAL_SUPPRESSED' };
   }
 
   async reconcileDefinitelyUnacceptedInTransaction(
@@ -1210,6 +1227,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         },
       );
     }
+    await this.invalidateForecast(input.workspaceId, manager);
     return { status: 'HELD' };
   }
 
@@ -1251,6 +1269,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         reason: 'PROVIDER_OUTCOME_UNCONFIRMED',
       },
     );
+    await this.invalidateForecast(input.workspaceId, manager);
     return { status: 'UNKNOWN' };
   }
 
@@ -1373,7 +1392,10 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       input.reason,
       manager,
     );
-    if (cancelled.status === 'CHANGED') return { status: 'CANCELLED' };
+    if (cancelled.status === 'CHANGED') {
+      await this.invalidateForecast(input.workspaceId, manager);
+      return { status: 'CANCELLED' };
+    }
     if (cancelled.status === 'EXACT_REPLAY') return { status: 'EXACT_REPLAY' };
     throw new Error('Campaign occurrence cancellation CAS failed');
   }
@@ -1470,6 +1492,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         messageId: input.inboundEvidenceId,
       },
     );
+    await this.invalidateForecast(input.workspaceId, manager);
     return { status: processing ? 'PROCESSING_IN_FLIGHT' : 'REPLIED' };
   }
 
@@ -1524,6 +1547,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         WHERE "workspaceId"=$1 AND "campaignId"=$2 AND state='ACTIVE'`,
       [input.workspaceId, input.campaignId],
     );
+    await this.invalidateForecast(input.workspaceId, manager);
     return { status: 'COMPLETED' };
   }
 
@@ -1629,6 +1653,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       terminalAt: changed[0].terminalAt,
       reason,
     });
+    await this.invalidateForecast(String(locked[0].workspaceId), manager);
     return { status: 'CHANGED' };
   }
 
@@ -1683,6 +1708,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       terminalAt: changed[0].terminalAt,
       reason,
     });
+    await this.invalidateForecast(String(locked[0].workspaceId), manager);
     return { status: 'CHANGED' };
   }
 
@@ -2139,6 +2165,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         },
       );
     }
+    await this.invalidateForecast(input.workspaceId, manager);
     return true;
   }
 
@@ -2164,6 +2191,10 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       [enrollmentId, reason],
     );
     if (changed.length !== 1) return false;
+    await this.invalidateForecast(
+      String(changed[0].workspaceId),
+      runner.manager as WorkspaceEntityManager,
+    );
     if (this.timelineEventWriter === undefined) return true;
     const creator = rows(
       await runner.query(
@@ -2218,12 +2249,12 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     const changed = rows(
       await runner.query(
         `UPDATE core."campaignOccurrence" SET ${assignment}, "updatedAt"=clock_timestamp()
-          WHERE id=$1 AND state IN (${statePlaceholders}) RETURNING id`,
+          WHERE id=$1 AND state IN (${statePlaceholders}) RETURNING id,\"workspaceId\"`,
         [occurrenceId, ...parameters, ...fromStates],
       ),
     );
-    return changed.length === 1
-      ? { status: 'CHANGED' }
-      : { status: 'STATE_CONFLICT' };
+    if (changed.length !== 1) return { status: 'STATE_CONFLICT' };
+    await this.invalidateForecast(String(changed[0].workspaceId), manager);
+    return { status: 'CHANGED' };
   }
 }

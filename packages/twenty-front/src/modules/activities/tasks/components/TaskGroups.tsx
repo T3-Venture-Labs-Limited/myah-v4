@@ -1,5 +1,7 @@
 import { styled } from '@linaria/react';
+import { useRef, useState } from 'react';
 
+import { CustomResolverFetchMoreLoader } from '@/activities/components/CustomResolverFetchMoreLoader';
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
 import { useOpenCreateActivityDrawer } from '@/activities/hooks/useOpenCreateActivityDrawer';
 import { useTasks } from '@/activities/tasks/hooks/useTasks';
@@ -35,9 +37,40 @@ type TaskGroupsProps = {
 };
 
 export const TaskGroups = ({ targetableObject }: TaskGroupsProps) => {
-  const { tasks, tasksLoading } = useTasks({
+  const { tasks, tasksLoading, error, hasNextPage, fetchMoreTasks } = useTasks({
     targetableObjects: [targetableObject],
   });
+  const recordKey = `${targetableObject.targetObjectNameSingular}:${targetableObject.id}`;
+  const [pausedPages, setPausedPages] = useState<
+    Record<string, 'failed' | 'empty' | null>
+  >({});
+  // oxlint-disable-next-line twenty/no-state-useref -- A synchronous fetch lock must guard repeat observer callbacks before React rerenders.
+  const inFlightKey = useRef<string | null>(null);
+  const currentPause = pausedPages[recordKey];
+
+  const handleLastRowVisible = async () => {
+    if (!hasNextPage || inFlightKey.current === recordKey) {
+      return;
+    }
+
+    inFlightKey.current = recordKey;
+    try {
+      const nextTasks = await fetchMoreTasks();
+      const reason =
+        nextTasks === undefined
+          ? 'failed'
+          : nextTasks.length === 0
+            ? 'empty'
+            : null;
+      setPausedPages((previous) => ({ ...previous, [recordKey]: reason }));
+    } catch {
+      setPausedPages((previous) => ({ ...previous, [recordKey]: 'failed' }));
+    } finally {
+      if (inFlightKey.current === recordKey) {
+        inFlightKey.current = null;
+      }
+    }
+  };
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular: targetableObject.targetObjectNameSingular,
@@ -53,15 +86,29 @@ export const TaskGroups = ({ targetableObject }: TaskGroupsProps) => {
     activityObjectNameSingular: CoreObjectNameSingular.Task,
   });
 
-  const isLoading = tasksLoading;
+  const isTasksEmpty = tasks.length === 0;
 
-  const isTasksEmpty = tasks?.length === 0;
-
-  if (isLoading && isTasksEmpty) {
+  if (tasksLoading && isTasksEmpty) {
     return <SkeletonLoader />;
   }
 
-  if (isTasksEmpty) {
+  if (error && isTasksEmpty) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            {t`Tasks couldn't be loaded`}
+          </AnimatedPlaceholderEmptyTitle>
+          <AnimatedPlaceholderEmptySubTitle>
+            {t`Please refresh the page.`}
+          </AnimatedPlaceholderEmptySubTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
+  }
+
+  if (isTasksEmpty && !hasNextPage) {
     return (
       <AnimatedPlaceholderEmptyContainer>
         <AnimatedPlaceholder type="noTask" />
@@ -111,6 +158,25 @@ export const TaskGroups = ({ targetableObject }: TaskGroupsProps) => {
           }
         />
       ))}
+      {hasNextPage &&
+        (currentPause ? (
+          <Button
+            title={
+              currentPause === 'failed'
+                ? t`Retry loading tasks`
+                : t`Load more tasks`
+            }
+            variant="secondary"
+            onClick={handleLastRowVisible}
+          />
+        ) : (
+          !error && (
+            <CustomResolverFetchMoreLoader
+              loading={tasksLoading}
+              onLastRowVisible={handleLastRowVisible}
+            />
+          )
+        ))}
     </StyledContainer>
   );
 };

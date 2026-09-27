@@ -23,6 +23,7 @@ describe('CampaignEmailRuntimeService', () => {
   const setup = (
     projectionResult: 'PROJECTED' | 'EXACT_REPLAY' | 'DEFERRED' = 'PROJECTED',
     work: Record<string, unknown>[] = [],
+    pendingReplies: Record<string, unknown>[] = [],
   ) => {
     const routingRow = {
       ...ids,
@@ -37,7 +38,13 @@ describe('CampaignEmailRuntimeService', () => {
       messageChannelId: ids.channelId,
     };
     const query = jest.fn(async (sql: string) =>
-      sql.includes('WITH pending') ? work : [routingRow],
+      sql.includes('WITH pending')
+        ? [...work]
+        : sql.includes('to_regclass')
+          ? [{ exists: true }]
+          : sql.includes('FROM core."myahCampaignReplyPending"')
+            ? pendingReplies
+            : [routingRow],
     );
     const getRepository = jest.fn(() => {
       throw new Error('Campaign runtime must not use a class repository');
@@ -63,6 +70,11 @@ describe('CampaignEmailRuntimeService', () => {
     };
     const projection = { reconcile: jest.fn(async () => projectionResult) };
     const dispatch = { dispatch: jest.fn() };
+    const replyService = {
+      reconcilePendingMessageInTransaction: jest
+        .fn()
+        .mockResolvedValue(undefined),
+    };
     const orm = {
       getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
       executeInWorkspaceContext: jest.fn(
@@ -77,12 +89,14 @@ describe('CampaignEmailRuntimeService', () => {
         progression as never,
         dispatch as never,
         projection as never,
+        replyService as never,
       ),
       dispatch,
       getRepository,
       orm,
       progression,
       projection,
+      replyService,
     };
   };
 
@@ -126,6 +140,72 @@ describe('CampaignEmailRuntimeService', () => {
     );
   });
 
+  it('selects already-projected accepted replies with pending evidence independently of occurrence success', async () => {
+    const pendingMessageId = '00000000-0000-4000-8000-000000000012';
+    const { service, query, dispatch, progression, replyService } = setup(
+      'PROJECTED',
+      [],
+      [{ ...ids, id: pendingMessageId, kind: 'PENDING_REPLY' }],
+    );
+
+    await service.runDueOccurrences();
+
+    const pendingSelection = query.mock.calls.find(([sql]) =>
+      sql.includes('FROM core."myahCampaignReplyPending"'),
+    )?.[0];
+    expect(pendingSelection).toContain(
+      "a.\"attemptState\" IN ('ACCEPTED','DEFINITELY_UNACCEPTED','BLOCKED')",
+    );
+    expect(
+      replyService.reconcilePendingMessageInTransaction,
+    ).toHaveBeenCalledWith(
+      { workspaceId: ids.workspaceId, inboundEvidenceId: pendingMessageId },
+      expect.anything(),
+    );
+    expect(
+      progression.claimAndReserveDueOccurrenceInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(dispatch.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('retries pending Inbox reconciliation on a later tick after a committed outcome, without redispatch', async () => {
+    const pendingMessageId = '00000000-0000-4000-8000-000000000012';
+    const { service, replyService, dispatch, progression } = setup(
+      'PROJECTED',
+      [],
+      [{ ...ids, id: pendingMessageId, kind: 'PENDING_REPLY' }],
+    );
+    const logged = jest.spyOn(console, 'error').mockImplementation();
+    replyService.reconcilePendingMessageInTransaction
+      .mockRejectedValueOnce(new Error('Inbox lock unavailable'))
+      .mockResolvedValueOnce(undefined);
+
+    try {
+      await service.runDueOccurrences();
+      expect(
+        replyService.reconcilePendingMessageInTransaction,
+      ).toHaveBeenCalledTimes(1);
+      await service.runDueOccurrences();
+    } finally {
+      logged.mockRestore();
+    }
+
+    expect(
+      replyService.reconcilePendingMessageInTransaction,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      replyService.reconcilePendingMessageInTransaction,
+    ).toHaveBeenNthCalledWith(
+      2,
+      { workspaceId: ids.workspaceId, inboundEvidenceId: pendingMessageId },
+      expect.anything(),
+    );
+    expect(
+      progression.claimAndReserveDueOccurrenceInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(dispatch.dispatch).not.toHaveBeenCalled();
+  });
+
   it('routes persisted definite and unknown outcomes without provider redispatch', async () => {
     const { service, dispatch, progression } = setup('PROJECTED', [
       { ...ids, kind: 'DEFINITELY_UNACCEPTED' },
@@ -148,7 +228,7 @@ describe('CampaignEmailRuntimeService', () => {
       { ...ids, kind: 'PROCESSING' },
       { ...ids, kind: 'DEFINITELY_UNACCEPTED' },
       { ...ids, kind: 'UNKNOWN' },
-      { ...ids, kind: 'BLOCKED' },
+      { ...ids, id: ids.occurrenceId, kind: 'BLOCKED' },
       { ...ids, kind: 'PENDING' },
     ];
     const { service, query, orm, progression } = setup('PROJECTED', work);
@@ -207,6 +287,14 @@ describe('CampaignEmailRuntimeService', () => {
       'PENDING',
     ]);
     expect(orm.executeInWorkspaceContext).toHaveBeenCalledTimes(work.length);
+    expect(progression.holdOccurrenceInTransaction).toHaveBeenCalledWith(
+      ids.occurrenceId,
+      'DISPATCH_CONTRACT_CONFLICT',
+      expect.objectContaining({ queryRunner: expect.anything() }),
+    );
+    const blockedManager =
+      progression.holdOccurrenceInTransaction.mock.calls[0][2];
+    expect(blockedManager.queryRunner.manager).toBe(blockedManager);
     for (const call of orm.executeInWorkspaceContext.mock.calls)
       expect(call).toHaveLength(2);
   });

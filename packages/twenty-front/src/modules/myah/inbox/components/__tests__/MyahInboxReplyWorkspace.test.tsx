@@ -9,7 +9,13 @@ import {
   InMemoryCache,
   Observable,
 } from '@apollo/client';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -668,6 +674,130 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
       status: 'saved',
       localBody: { markdown: 'generated' },
     });
+  });
+
+  it('updates an edited incoming-stale draft only explicitly, through CAS, leaving review required', async () => {
+    const view = setup();
+    await completeRead({
+      executionState: 'NEEDS_REVIEW',
+      incomingState: 'STALE',
+      bodyEdited: true,
+      body: { markdown: 'my edited reply', blocknote: null },
+    });
+    expect(takeIfPending('GenerateMyahInboxReplyProposal')).toBeNull();
+    expect(
+      screen.getByText('New creator message since this draft was written.'),
+    ).toBeInTheDocument();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Update draft' })),
+    );
+    const generation = take('GenerateMyahInboxReplyProposal');
+    expect(generation.variables).toMatchObject({
+      input: {
+        ...contextInput,
+        expectedContextFingerprint: contextFingerprint,
+      },
+    });
+    await act(async () =>
+      generation.resolve({
+        generateMyahInboxReplyProposal: {
+          body: { markdown: 'updated', blocknote: null },
+          contextFingerprint,
+        },
+      }),
+    );
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables).toMatchObject({
+      input: {
+        expectedRevision: 2,
+        proposalContextFingerprint: contextFingerprint,
+        requireReview: true,
+        body: { markdown: 'updated' },
+      },
+    });
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'updated', blocknote: null },
+        },
+      }),
+    );
+    await completeRead({
+      revision: 3,
+      executionState: 'NEEDS_REVIEW',
+      incomingState: 'CURRENT',
+      bodyEdited: false,
+      body: { markdown: 'updated', blocknote: null },
+    });
+    expect(view.entry()).toMatchObject({
+      executionState: 'NEEDS_REVIEW',
+      incomingState: 'CURRENT',
+      localBody: { markdown: 'updated' },
+      operation: null,
+    });
+    expect(takeIfPending('GenerateMyahInboxReplyProposal')).toBeNull();
+    // Explicit review is the only path from the updated proposal to send.
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Review draft' })),
+    );
+    const review = take('ReviewMyahInboxReplyContext');
+    expect(review.variables).toMatchObject({
+      input: {
+        ...contextInput,
+        expectedDraftRevision: 3,
+        expectedContextFingerprint: contextFingerprint,
+      },
+    });
+    await act(async () =>
+      review.resolve({
+        reviewMyahInboxReplyContext: draftPayload({
+          revision: 3,
+          body: { markdown: 'updated', blocknote: null },
+        }).myahInboxReplyDraft,
+      }),
+    );
+    await completeRead({
+      revision: 3,
+      executionState: 'READY',
+      incomingState: 'CURRENT',
+      bodyEdited: false,
+      body: { markdown: 'updated', blocknote: null },
+    });
+    expect(view.entry()).toMatchObject({ executionState: 'READY' });
+    expect(
+      screen.queryByRole('button', { name: 'Review draft' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('refreshes an untouched incoming-stale proposal automatically as an acknowledged proposal', async () => {
+    setup();
+    await completeRead({
+      executionState: 'NEEDS_REVIEW',
+      incomingState: 'STALE',
+      bodyEdited: false,
+      body: { markdown: 'older proposal', blocknote: null },
+    });
+    await waitFor(() =>
+      expect(
+        requests.some(({ name }) => name === 'GenerateMyahInboxReplyProposal'),
+      ).toBe(true),
+    );
+    const generation = take('GenerateMyahInboxReplyProposal');
+    await act(async () =>
+      generation.resolve({
+        generateMyahInboxReplyProposal: {
+          body: { markdown: 'refreshed', blocknote: null },
+          contextFingerprint,
+        },
+      }),
+    );
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables.input).toMatchObject({
+      proposalContextFingerprint: contextFingerprint,
+    });
+    expect(save.variables.input).not.toHaveProperty('requireReview');
   });
 
   it('never applies a delayed generation after forced target loss', async () => {

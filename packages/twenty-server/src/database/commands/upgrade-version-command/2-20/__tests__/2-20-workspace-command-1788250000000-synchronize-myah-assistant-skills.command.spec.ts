@@ -5,6 +5,7 @@ import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { SynchronizeMyahAssistantSkillsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788250000000-synchronize-myah-assistant-skills.command';
+import { RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790161829172-refresh-myah-assistant-skills-for-exact-approvals.command';
 import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
 
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
@@ -83,16 +84,14 @@ describe('SynchronizeMyahAssistantSkillsCommand', () => {
         },
       }),
   };
-  const Command = SynchronizeMyahAssistantSkillsCommand as unknown as new (
-    ...constructorArgs: unknown[]
-  ) => SynchronizeMyahAssistantSkillsCommand;
-
   const createCommand = ({
     flatObjectMetadataMaps = createCanonicalObjectMaps(),
     flatSkillMaps = createSkillMaps([]),
+    CommandClass = SynchronizeMyahAssistantSkillsCommand,
   }: {
     flatObjectMetadataMaps?: unknown;
     flatSkillMaps?: unknown;
+    CommandClass?: typeof SynchronizeMyahAssistantSkillsCommand;
   } = {}) => {
     const validateBuildAndRunWorkspaceMigration = jest
       .fn()
@@ -101,6 +100,9 @@ describe('SynchronizeMyahAssistantSkillsCommand', () => {
       flatObjectMetadataMaps,
       flatSkillMaps,
     });
+    const Command = CommandClass as unknown as new (
+      ...constructorArgs: unknown[]
+    ) => SynchronizeMyahAssistantSkillsCommand;
     const command = new Command(
       {} as WorkspaceIteratorService,
       applicationService,
@@ -340,6 +342,52 @@ describe('SynchronizeMyahAssistantSkillsCommand', () => {
         ),
       }),
     ]);
+  });
+
+  it('refreshes only old approval wording in existing skills without clobbering drifted content or metadata', async () => {
+    const previousApproval =
+      'Call request_approval immediately before every internal/generated write in its own step; after approval, execute exactly that one write and read back its returned state. Never authorize or describe more than one write tool call in the same approval.';
+    const newApproval =
+      'Call request_approval immediately before every internal/generated write in its own step, with toolName and the exact proposedArguments (learn the write tool\'s schema first); after approval, execute exactly that one write with the identical arguments and read back its returned state. If the approved write is refused, do not retry with changes; propose it again for a new approval. Never authorize or describe more than one write tool call in the same approval.';
+    const [standardSkill, unchangedSkill] = getStandardMyahSkills();
+    const driftedSkill = {
+      ...standardSkill,
+      id: 'persisted-id',
+      label: 'Custom label',
+      description: 'Custom description',
+      content: `${standardSkill.content.split(newApproval).join(previousApproval)}\nCustom send instructions`,
+    };
+    const { command, validateBuildAndRunWorkspaceMigration } = createCommand({
+      CommandClass: RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand,
+      flatSkillMaps: createSkillMaps([driftedSkill, unchangedSkill]),
+    });
+
+    await command.runOnWorkspace(args);
+
+    const operations =
+      validateBuildAndRunWorkspaceMigration.mock.calls[0][0]
+        .allFlatEntityOperationByMetadataName.skill;
+
+    expect(operations.flatEntityToCreate).toEqual([]);
+    expect(operations.flatEntityToUpdate).toEqual([
+      { ...driftedSkill, content: driftedSkill.content.split(previousApproval).join(newApproval) },
+    ]);
+  });
+
+  it('does not rewrite skills without the previous approval wording', async () => {
+    const skill = {
+      ...getStandardMyahSkills()[0],
+      label: 'Custom label',
+      content: 'Deliberately customized instructions without old wording',
+    };
+    const { command, validateBuildAndRunWorkspaceMigration } = createCommand({
+      CommandClass: RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand,
+      flatSkillMaps: createSkillMaps([skill]),
+    });
+
+    await command.runOnWorkspace(args);
+
+    expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
   });
 
   it('is a no-op on the second run after all four skills exist', async () => {

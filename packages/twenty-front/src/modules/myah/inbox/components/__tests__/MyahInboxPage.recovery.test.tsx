@@ -318,6 +318,12 @@ const contact = (
   creator: linked ? { id: `creator-${id}`, name: id } : null,
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel,
+  initialSelection: {
+    channel: latestChannel,
+    emailThreadId: latestChannel === 'EMAIL' ? 'thread-2' : null,
+    instagramConversationId:
+      latestChannel === 'INSTAGRAM' ? `conversation-${id}` : null,
+  },
   preview: `${id} preview`,
   sender: id,
   needsAttention: true,
@@ -408,6 +414,7 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxEmailHistory', () => ({
                   latestThreadId: contact.email.latestThreadId,
                   cards: contact.email.threadIds.map((id, index) => ({
                     threadId: id,
+                    anchorKey: `legacy:${id}`,
                     rootMessageId: `${id}-root`,
                     subject: id,
                     startTimestamp: `2026-09-0${index + 1}T00:00:00Z`,
@@ -918,6 +925,7 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     ]);
     const cards = ['thread-2', 'thread-1'].map((threadId, index) => ({
       threadId,
+      anchorKey: `legacy:${threadId}`,
       rootMessageId: `${threadId}-root`,
       startTimestamp: `2026-09-0${index + 1}T00:00:00Z`,
       subject: threadId,
@@ -936,16 +944,16 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     );
     const summary = take('MyahInboxThreads');
     expect(summary.variables).toMatchObject({
-      threadId: 'thread-1',
+      threadId: 'thread-2',
       first: 1,
       expectedWorkspaceId: key.workspaceId,
     });
     await act(async () =>
       summary.resolve({
-        myahInboxThreads: { edges: [{ node: threads['thread-1'] }] },
+        myahInboxThreads: { edges: [{ node: threads['thread-2'] }] },
       }),
     );
-    await completeRead();
+    await completeRead('thread-2');
     for (const card of cards) {
       const request = take('MyahInboxContactEmailCardMessages');
       expect(request.variables).toMatchObject({
@@ -967,6 +975,7 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         request.resolve({
           myahInboxContactEmailCardMessages: {
             threadId: card.threadId,
+            anchorKey: card.anchorKey,
             root,
             messages: [],
             olderCursor: null,
@@ -975,21 +984,21 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         }),
       );
     }
-    expect(screen.getByText('Email actions thread-1')).toBeVisible();
+    expect(screen.getByText('Email actions thread-2')).toBeVisible();
     expect(screen.getByText('Real body thread-2')).toBeVisible();
     expect(screen.queryByLabelText('Email thread')).toBeNull();
     expect(requests).toHaveLength(0);
-    await selectThread('thread-2');
-    const olderSummary = take('MyahInboxThreads');
-    expect(olderSummary.variables.threadId).toBe('thread-2');
+    await selectThread('thread-1');
+    const newerSummary = take('MyahInboxThreads');
+    expect(newerSummary.variables.threadId).toBe('thread-1');
     await act(async () =>
-      olderSummary.resolve({
-        myahInboxThreads: { edges: [{ node: threads['thread-2'] }] },
+      newerSummary.resolve({
+        myahInboxThreads: { edges: [{ node: threads['thread-1'] }] },
       }),
     );
-    await completeRead('thread-2');
+    await completeRead('thread-1');
     expect(screen.getAllByLabelText('Real shared draft')).toHaveLength(1);
-    expect(screen.getByText('Email actions thread-2')).toBeVisible();
+    expect(screen.getByText('Email actions thread-1')).toBeVisible();
   });
 
   it('revalidates the selected exact summary on thread activity but not ordinary message pagination', async () => {
@@ -1003,6 +1012,7 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
     ]);
     const projection = (id: string, restricted: boolean) => ({
       threadId: id,
+      anchorKey: `legacy:${id}`,
       rootMessageId: `${id}-root`,
       startTimestamp: `2026-09-0${id === 'thread-1' ? 1 : 2}T12:00:00Z`,
       subject: restricted ? null : id,
@@ -1042,6 +1052,7 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
             : {
                 myahInboxContactEmailCardMessages: {
                   threadId: id,
+                  anchorKey: card.anchorKey,
                   root,
                   messages: [
                     {
@@ -1184,11 +1195,13 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
         'MyahInboxContactEmailCards',
         'MyahInboxContactEmailCard',
         'MyahInboxContactEmailCardMessages',
+        'MyahInboxContactEmailMessageLocation',
       ]);
       const cleanMainCardLoss = loss === 'clean main-card loss';
       let mainRemoved = false;
       const card = (threadId: string) => ({
         threadId,
+        anchorKey: `legacy:${threadId}`,
         rootMessageId: `${threadId}-root`,
         startTimestamp: `2026-09-0${threadId === 'thread-1' ? 1 : 2}T12:00:00Z`,
         subject: threadId,
@@ -1200,48 +1213,66 @@ describe('MyahInboxPage retained recovery navigation with real draft controller'
           const request = requests.find(({ name }) => historyNames.has(name));
           if (!request) return;
           take(request.name);
-          const id = String(request.variables.threadId ?? 'thread-1');
+          const id = String(
+            request.variables.threadId ??
+              String(request.variables.messageId ?? 'thread-1').replace(
+                /-root$/,
+                '',
+              ),
+          );
           const projection = card(id);
+          const messagesPage = {
+            threadId: id,
+            anchorKey: projection.anchorKey,
+            root: {
+              id: projection.rootMessageId,
+              messageThreadId: id,
+              receivedAt: projection.startTimestamp,
+              subject: id,
+              text: `Readable ${id}`,
+              direction: 'INCOMING',
+              visibility: 'FULL',
+              participants: [],
+              attachmentFileIds: [],
+            },
+            messages: [],
+            olderCursor: null,
+            newerCursor: null,
+          };
           await act(async () =>
             request.resolve(
-              request.name === 'MyahInboxContactEmailCards'
+              request.name === 'MyahInboxContactEmailMessageLocation'
                 ? {
-                    myahInboxContactEmailCards: {
-                      cards: (mainRemoved
-                        ? ['thread-1']
-                        : ['thread-1', 'thread-2']
-                      ).map(card),
-                      snapshot: request.variables.snapshot ?? 'snapshot',
-                      olderCursor: null,
-                      latestThreadId: mainRemoved ? 'thread-1' : 'thread-2',
-                    },
+                    // A removed card's loaded message is no longer locatable.
+                    myahInboxContactEmailMessageLocation:
+                      mainRemoved && id === 'thread-2'
+                        ? null
+                        : {
+                            messageId: projection.rootMessageId,
+                            card: projection,
+                            page: messagesPage,
+                          },
                   }
-                : request.name === 'MyahInboxContactEmailCard'
+                : request.name === 'MyahInboxContactEmailCards'
                   ? {
-                      myahInboxContactEmailCard:
-                        mainRemoved && id === 'thread-2'
-                          ? null
-                          : { snapshot: 'current', card: projection },
-                    }
-                  : {
-                      myahInboxContactEmailCardMessages: {
-                        threadId: id,
-                        root: {
-                          id: projection.rootMessageId,
-                          messageThreadId: id,
-                          receivedAt: projection.startTimestamp,
-                          subject: id,
-                          text: `Readable ${id}`,
-                          direction: 'INCOMING',
-                          visibility: 'FULL',
-                          participants: [],
-                          attachmentFileIds: [],
-                        },
-                        messages: [],
+                      myahInboxContactEmailCards: {
+                        cards: (mainRemoved
+                          ? ['thread-1']
+                          : ['thread-1', 'thread-2']
+                        ).map(card),
+                        snapshot: request.variables.snapshot ?? 'snapshot',
                         olderCursor: null,
-                        newerCursor: null,
+                        latestThreadId: mainRemoved ? 'thread-1' : 'thread-2',
                       },
-                    },
+                    }
+                  : request.name === 'MyahInboxContactEmailCard'
+                    ? {
+                        myahInboxContactEmailCard:
+                          mainRemoved && id === 'thread-2'
+                            ? null
+                            : { snapshot: 'current', card: projection },
+                      }
+                    : { myahInboxContactEmailCardMessages: messagesPage },
             ),
           );
         }

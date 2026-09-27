@@ -58,7 +58,17 @@ export type { NavigateAppToolOutput } from './types/NavigateAppToolOutput';
 export type { RequestApprovalAffectedRecord } from './types/RequestApprovalAffectedRecord';
 export type { RequestApprovalPreview } from './types/RequestApprovalPreview';
 export type { RequestApprovalToolInput } from './types/RequestApprovalToolInput';
-export type { RequestApprovalToolResult } from './types/RequestApprovalToolResult';
+export type {
+  RequestApprovalInvalidReason,
+  RequestApprovalToolResult,
+} from './types/RequestApprovalToolResult';
+export type {
+  ReviewedGenericActionFieldChange,
+  ReviewedGenericActionLinkedRecord,
+  ReviewedGenericActionRecord,
+  ReviewedGenericActionTarget,
+  ReviewedGenericAction,
+} from './types/ReviewedGenericAction';
 export { inferAiSdkPackage } from './utils/infer-ai-sdk-package.util';
 export { isAiSdkPackage } from './utils/is-ai-sdk-package.util';
 export { isDataResidency } from './utils/is-data-residency.util';

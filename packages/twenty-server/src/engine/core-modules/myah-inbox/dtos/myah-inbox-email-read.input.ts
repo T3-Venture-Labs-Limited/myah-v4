@@ -34,6 +34,12 @@ export class MyahInboxEmailCardInput extends MyahInboxEmailReadInput {
   @Field(() => UUIDScalarType)
   @IsUUID()
   threadId: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  anchorKey?: string;
 }
 
 @ArgsType()

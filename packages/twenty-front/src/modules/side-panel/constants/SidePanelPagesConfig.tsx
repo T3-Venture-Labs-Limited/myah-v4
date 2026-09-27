@@ -9,6 +9,7 @@ import { SidePanelComposeEmailPage } from '@/side-panel/pages/compose-email/comp
 import { SidePanelInstagramMessagePage } from '@/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage';
 import { SidePanelFrontComponentPage } from '@/side-panel/pages/front-component/components/SidePanelFrontComponentPage';
 import { SidePanelMyahInboxContextPage } from '@/side-panel/pages/myah-inbox-context/components/SidePanelMyahInboxContextPage';
+import { SidePanelCampaignMessageOverviewPage } from '@/side-panel/pages/campaign-message-overview/components/SidePanelCampaignMessageOverviewPage';
 import { SidePanelDashboardChartSettings } from '@/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardChartSettings';
 import { SidePanelDashboardIframeSettings } from '@/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardIframeSettings';
 import { SidePanelDashboardRecordTableSettings } from '@/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings';
@@ -79,6 +80,10 @@ export const SIDE_PANEL_PAGES_CONFIG = new Map<SidePanelPages, React.ReactNode>(
     ],
     [SidePanelPages.ViewFrontComponent, <SidePanelFrontComponentPage />],
     [SidePanelPages.MyahInboxContext, <SidePanelMyahInboxContextPage />],
+    [
+      SidePanelPages.CampaignMessageOverview,
+      <SidePanelCampaignMessageOverviewPage />,
+    ],
     [
       SidePanelPages.PageLayoutRecordPageWidgetTypeSelect,
       <SidePanelPageLayoutRecordPageWidgetTypeSelect />,

@@ -3,6 +3,12 @@ import { FieldMetadataType } from 'twenty-shared/types';
 import { type AllStandardObjectFieldName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-field-name.type';
 import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
 
+type MyahInstagramStandardObjectName =
+  | 'myahInstagramAccount'
+  | 'myahSocialConversation'
+  | 'myahSocialMessage'
+  | 'myahInstagramReplyDraft';
+
 export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
   attachment: [{ name: 'name', type: FieldMetadataType.TEXT }],
   blocklist: [{ name: 'handle', type: FieldMetadataType.TEXT }],
@@ -20,6 +26,10 @@ export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
   ],
   creatorList: [{ name: 'name', type: FieldMetadataType.TEXT }],
   creatorListMember: [],
+  myahInstagramAccount: [],
+  myahSocialConversation: [],
+  myahSocialMessage: [],
+  myahInstagramReplyDraft: [],
   offer: [],
   outreachAction: [],
   outreachSequence: [],
@@ -81,4 +91,7 @@ export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
     name: AllStandardObjectFieldName<ObjectName>;
     type: FieldMetadataType;
   }[];
-};
+} & Record<
+  MyahInstagramStandardObjectName,
+  { name: string; type: FieldMetadataType }[]
+>;

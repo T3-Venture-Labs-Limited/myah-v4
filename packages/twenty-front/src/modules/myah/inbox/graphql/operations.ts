@@ -135,6 +135,11 @@ const MYAH_INBOX_CONTACT_FIELDS = gql`
     instagramDisplayHandle
     lastActivityAt
     latestChannel
+    initialSelection {
+      channel
+      emailThreadId
+      instagramConversationId
+    }
     preview
     sender
     needsAttention
@@ -308,6 +313,7 @@ export const GET_MYAH_INBOX_CONTACT_EMAIL_MESSAGES = gql`
 const MYAH_INBOX_EMAIL_CARD_FIELDS = gql`
   fragment MyahInboxEmailCardFields on MyahInboxEmailCard {
     threadId
+    anchorKey
     rootMessageId
     startTimestamp
     subject
@@ -334,6 +340,7 @@ const MYAH_INBOX_EMAIL_MESSAGE_PAGE_FIELDS = gql`
   }
   fragment MyahInboxEmailMessagePageFields on MyahInboxEmailMessagePage {
     threadId
+    anchorKey
     olderCursor
     newerCursor
     root {
@@ -375,11 +382,13 @@ export const GET_MYAH_INBOX_CONTACT_EMAIL_CARD = gql`
     $contactId: String!
     $expectedWorkspaceId: UUID!
     $threadId: UUID!
+    $anchorKey: String
   ) {
     myahInboxContactEmailCard(
       contactId: $contactId
       expectedWorkspaceId: $expectedWorkspaceId
       threadId: $threadId
+      anchorKey: $anchorKey
     ) {
       snapshot
       card {
@@ -395,6 +404,7 @@ export const GET_MYAH_INBOX_CONTACT_EMAIL_CARD_MESSAGES = gql`
     $contactId: String!
     $expectedWorkspaceId: UUID!
     $threadId: UUID!
+    $anchorKey: String
     $snapshot: String!
     $cursor: String
   ) {
@@ -402,6 +412,7 @@ export const GET_MYAH_INBOX_CONTACT_EMAIL_CARD_MESSAGES = gql`
       contactId: $contactId
       expectedWorkspaceId: $expectedWorkspaceId
       threadId: $threadId
+      anchorKey: $anchorKey
       snapshot: $snapshot
       cursor: $cursor
     ) {
@@ -513,6 +524,8 @@ const MYAH_INBOX_REPLY_CONTEXT_DRAFT_FIELDS = gql`
     draftId
     revision
     executionState
+    incomingState
+    bodyEdited
     body {
       markdown
       blocknote

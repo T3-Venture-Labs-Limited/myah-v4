@@ -26,6 +26,7 @@ import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-cli
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 
 const STATE_JWT_EXPIRES_IN = '10m';
 
@@ -53,6 +54,8 @@ type CallbackResult = {
 
 @Injectable()
 export class ConnectionProviderOAuthFlowService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   private readonly logger = new Logger(ConnectionProviderOAuthFlowService.name);
 
   constructor(
@@ -263,15 +266,24 @@ export class ConnectionProviderOAuthFlowService {
     if (isDefined(reconnectingConnectedAccountId)) {
       // Workspace-scope both the update and the read so a foreign id can't
       // leak through findOneByOrFail.
-      await this.connectedAccountRepository.update(
-        { id: reconnectingConnectedAccountId, workspaceId },
-        sharedFields,
+      return this.connectedAccountRepository.manager.transaction(
+        async (manager) => {
+          await manager
+            .getRepository(ConnectedAccountEntity)
+            .update(
+              { id: reconnectingConnectedAccountId, workspaceId },
+              sharedFields,
+            );
+          await this.forecastInvalidation.invalidateInTransaction(
+            { workspaceId },
+            manager,
+          );
+          return manager.getRepository(ConnectedAccountEntity).findOneByOrFail({
+            id: reconnectingConnectedAccountId,
+            workspaceId,
+          });
+        },
       );
-
-      return this.connectedAccountRepository.findOneByOrFail({
-        id: reconnectingConnectedAccountId,
-        workspaceId,
-      });
     }
 
     const existingCount = await this.connectedAccountRepository.count({

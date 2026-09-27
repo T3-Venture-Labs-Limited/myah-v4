@@ -65,12 +65,17 @@ const setup = () => {
   const qb: Record<string, jest.Mock> = {};
   for (const method of [
     'select',
+    'addSelect',
     'where',
     'andWhere',
     'setParameters',
     'orderBy',
+    'addOrderBy',
+    'limit',
   ])
     qb[method] = jest.fn(() => qb);
+  // Latest readable inbound fingerprint term: none in these fixtures.
+  qb.getRawOne = jest.fn(async () => null);
   qb.getRawMany = jest.fn(async () =>
     selectedId && !ineligible.has(selectedId) ? [{ id: id(900) }] : [],
   );

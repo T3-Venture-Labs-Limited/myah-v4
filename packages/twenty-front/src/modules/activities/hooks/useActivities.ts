@@ -75,7 +75,7 @@ export const useActivities = <T extends Task | Note>({
     }
 
     if (!isDefined(result?.data)) {
-      return [];
+      return undefined;
     }
 
     const activityTargets = getRecordsFromRecordConnection<

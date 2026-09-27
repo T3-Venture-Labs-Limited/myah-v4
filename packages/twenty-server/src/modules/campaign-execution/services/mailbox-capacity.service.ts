@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { type EntityManager, type QueryRunner } from 'typeorm';
 
 import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 import {
   type LockAndRankMailboxCapacityInput,
   type LockedReservationDay,
@@ -306,6 +307,8 @@ const compareLockedCandidates = (
 
 @Injectable()
 export class MailboxCapacityService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   async lockAndRankForReservation(
     input: LockAndRankMailboxCapacityInput,
     manager: EntityManager,
@@ -602,6 +605,10 @@ export class MailboxCapacityService {
     ) {
       throw new Error('Mailbox clock advance did not affect one valid row');
     }
+    await this.forecastInvalidation.invalidateInTransaction(
+      { workspaceId: lockedDay.workspaceId },
+      manager,
+    );
   }
 
   async releaseReserved(
@@ -668,6 +675,10 @@ export class MailboxCapacityService {
         'Reservation capacity transition did not affect one valid row',
       );
     }
+    await this.forecastInvalidation.invalidateInTransaction(
+      { workspaceId: lockedDay.workspaceId },
+      manager,
+    );
   }
 
   private async sampleTime(

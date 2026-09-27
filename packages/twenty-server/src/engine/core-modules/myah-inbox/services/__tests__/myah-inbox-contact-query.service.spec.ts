@@ -61,6 +61,9 @@ const rawRows = [
     lastActivityAt: '2026-09-05T12:00:00.000Z',
     activityCursorTimestamp: '2026-09-05T12:00:00.000000Z',
     latestChannel: 'INSTAGRAM',
+    initialChannel: 'EMAIL',
+    initialEmailThreadId: emailThreadAId,
+    initialInstagramConversationId: null,
     displayName: 'Creator One',
     creatorId,
     creatorName: 'Creator One',
@@ -101,6 +104,9 @@ const rawRows = [
     lastActivityAt: '2026-09-05T10:00:00.000Z',
     activityCursorTimestamp: '2026-09-05T10:00:00.000000Z',
     latestChannel: 'EMAIL',
+    initialChannel: 'EMAIL',
+    initialEmailThreadId: emailThreadAId,
+    initialInstagramConversationId: null,
     displayName: 'unmatched@example.com',
     creatorId: null,
     creatorName: null,
@@ -120,6 +126,9 @@ const rawRows = [
     lastActivityAt: '2026-09-05T09:00:00.000Z',
     activityCursorTimestamp: '2026-09-05T09:00:00.000000Z',
     latestChannel: 'INSTAGRAM',
+    initialChannel: 'INSTAGRAM',
+    initialEmailThreadId: null,
+    initialInstagramConversationId: instagramAId,
     displayName: '@unmatched.creator',
     creatorId: null,
     creatorName: null,
@@ -174,6 +183,7 @@ const buildHarness = (
   hasRolePermissionConfig = true,
   denySocialProfileRead = false,
   missingSocialProfileMetadata = false,
+  responseFocusEnabled = true,
 ) => {
   rolePermissionConfig = hasRolePermissionConfig
     ? resolvedRolePermissionConfig
@@ -181,7 +191,9 @@ const buildHarness = (
   const query = jest.fn().mockResolvedValue(rows);
   // The service probes the private triage schema before its page query; routing
   // that probe to its own mock keeps main-query assertions about the page query.
-  const preflightQuery = jest.fn().mockResolvedValue([{ exists: true }]);
+  const preflightQuery = jest
+    .fn()
+    .mockResolvedValue([{ exists: true, replyEvidenceReady: true }]);
   const dataSourceQuery = jest.fn(async (sql: string, ...rest: unknown[]) =>
     sql.startsWith('SELECT to_regclass')
       ? preflightQuery(sql, ...rest)
@@ -281,6 +293,7 @@ const buildHarness = (
     service: new Service!(
       globalWorkspaceOrmManager as never,
       visibilityPolicy as never,
+      { get: jest.fn(() => responseFocusEnabled) } as never,
       triageCapabilityService as never,
     ),
     triageCapabilityService,
@@ -431,6 +444,11 @@ describe('MyahInboxContactQueryService', () => {
             displayName: 'Creator One',
             creator: { id: creatorId, name: 'Creator One' },
             latestChannel: 'INSTAGRAM',
+            initialSelection: {
+              channel: 'EMAIL',
+              emailThreadId: emailThreadAId,
+              instagramConversationId: null,
+            },
             preview: 'Latest Instagram reply',
             needsAttention: true,
             email: {
@@ -860,6 +878,72 @@ describe('MyahInboxContactQueryService', () => {
     );
   });
 
+  it('keeps Instagram available without referring to an unprovisioned reply-evidence table', async () => {
+    const harness = buildHarness([]);
+    harness.preflightQuery.mockResolvedValueOnce([
+      { exists: true, replyEvidenceReady: false },
+    ]);
+
+    await harness.service.listContacts(request());
+
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toContain('response_email_messages AS');
+    expect(sql).toMatch(/WHERE message.direction = 'INCOMING'\s+AND FALSE/);
+    expect(sql).not.toContain('core."myahCampaignReplyEvidence"');
+    expect(sql).toContain('instagram_source_rows AS');
+  });
+
+  it('uses only reader-visible inbound reply evidence for default Email source order, while an exact contact keeps legacy Email', async () => {
+    const list = buildHarness([]);
+    await list.service.listContacts(request());
+    const [sql] = list.query.mock.calls[0];
+    expect(sql).toContain('response_email_messages AS');
+    expect(sql).toContain('core."myahCampaignReplyEvidence" evidence');
+    expect(sql).toContain('evidence."inboundMessageId"=message.id');
+    expect(sql).toContain('readable_campaigns AS');
+    expect(sql).toContain(
+      'JOIN readable_campaigns campaign ON campaign.id=evidence."campaignId"',
+    );
+    expect(sql).toContain(
+      'JOIN readable_creators evidence_creator ON evidence_creator.id=evidence."creatorId"',
+    );
+    expect(sql).toContain('evidence_thread."creatorId"=evidence_creator.id');
+    expect(sql).toContain("message.direction = 'INCOMING'");
+    expect(sql).toMatch(
+      /latest_email_by_thread AS[\s\S]*?FROM response_email_messages message/,
+    );
+    expect(sql).toMatch(
+      /latest_inbound_email_by_thread AS[\s\S]*?FROM response_email_messages message/,
+    );
+    expect(sql).toContain('message.visibility <>');
+
+    const exact = buildHarness([]);
+    await exact.service.listContacts(
+      request({
+        contactId: encodeMyahInboxContactId({
+          workspaceId,
+          identity: { kind: 'email-thread', recordId: emailThreadAId },
+        }),
+      }),
+    );
+    const [exactSql] = exact.query.mock.calls[0];
+    expect(exactSql).toMatch(
+      /latest_email_by_thread AS[\s\S]*?FROM visible_email_messages message/,
+    );
+  });
+
+  it('keeps every visible Email in the default list while response focus is disabled', async () => {
+    const harness = buildHarness([], true, false, true, false, false, false);
+    await harness.service.listContacts(request());
+    const [sql] = harness.query.mock.calls[0];
+    expect(sql).toMatch(
+      /latest_email_by_thread AS[\s\S]*?FROM visible_email_messages message/,
+    );
+    expect(sql).toMatch(
+      /latest_inbound_email_by_thread AS[\s\S]*?FROM visible_email_messages message/,
+    );
+  });
+
   it('builds one server-side visibility-filtered union/group/keyset query before applying the limit', async () => {
     const harness = buildHarness([]);
     const after = encodeMyahInboxContactCursor({
@@ -882,6 +966,21 @@ describe('MyahInboxContactQueryService', () => {
     expect(sql).toContain('visible_email_messages AS');
     expect(sql).toContain('email_visibility(message.id)');
     expect(sql).toMatch(/message\.visibility <> \$\d+/);
+    expect(sql).toContain('association.direction');
+    expect(sql).toContain(
+      "ORDER BY (association.direction = 'INCOMING') DESC, association.id",
+    );
+    expect(sql).toContain('latest_inbound_email_by_thread AS');
+    expect(sql).toContain("WHERE message.direction = 'INCOMING'");
+    expect(sql).toContain('latest_inbound_instagram_by_conversation AS');
+    expect(sql).toContain("WHERE message.direction = 'INBOUND'");
+    expect(sql).toContain('latest_inbound_source AS');
+    expect(sql).toContain(
+      'ORDER BY source."identityKind", source."identityRecordId", source."inboundAt" DESC, source."sourceOrderingKey" DESC',
+    );
+    expect(sql).toContain(
+      'COALESCE(inbound."sourceKind", latest."sourceKind") AS "initialChannel"',
+    );
     expect(sql).toContain('UNION ALL');
     expect(sql).toContain('all_source_rows');
     expect(sql).toContain('eligible_contacts');
@@ -897,6 +996,7 @@ describe('MyahInboxContactQueryService', () => {
     expect(sql).toContain(
       'COALESCE(latest."activityAt", conversation."updatedAt", conversation."createdAt")',
     );
+    expect(sql).toContain('latest."sourceKind" AS "latestChannel"');
     expect(sql).toContain('BOOL_OR(source."instagramDirection" = \'INBOUND\')');
     expect(sql).toContain(
       'source."effectiveSnoozedUntil" <= CURRENT_TIMESTAMP',

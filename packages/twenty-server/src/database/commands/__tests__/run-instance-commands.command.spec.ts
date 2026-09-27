@@ -1,4 +1,9 @@
 import { type DataSource, type QueryRunner } from 'typeorm';
+import { MODULE_METADATA } from '@nestjs/common/constants';
+
+import { DatabaseCommandModule } from 'src/database/commands/database-command.module';
+import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
+import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
 
 import { RunInstanceCommandsCommand } from 'src/database/commands/run-instance-commands.command';
 import { type SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
@@ -13,6 +18,51 @@ import { type UpgradeStatusService } from 'src/engine/core-modules/upgrade/servi
 import { type WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
 
 describe('RunInstanceCommandsCommand', () => {
+  it('registers additive reply-evidence schema without scheduling standalone backfill', () => {
+    const providers: Function[] = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      V2_20_UpgradeVersionCommandModule,
+    );
+    const names = providers.map((provider) => provider.name);
+
+    expect(names).toContain(
+      'CreateMyahCampaignReplyEvidenceFastInstanceCommand',
+    );
+    expect(names).not.toContain(
+      'MyahInboxBackfillCampaignReplyEvidenceCommand',
+    );
+    const cliProviders: Function[] = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      DatabaseCommandModule,
+    );
+    expect(cliProviders.map((provider) => provider.name)).toContain(
+      'MyahInboxBackfillCampaignReplyEvidenceCommand',
+    );
+  });
+
+  it('creates unique evidence and pending rows per inbound without backfilling', async () => {
+    const query = jest.fn().mockResolvedValue(undefined);
+
+    await new CreateMyahCampaignReplyEvidenceFastInstanceCommand().up({
+      query,
+    } as unknown as QueryRunner);
+
+    const statements = query.mock.calls.map(([sql]: [string]) => sql);
+
+    expect(statements).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('PRIMARY KEY ("workspaceId", "messageId")'),
+        expect.stringContaining('"candidateAttemptIds" uuid[] NOT NULL'),
+        expect.stringContaining(
+          'BEFORE UPDATE ON core."myahCampaignReplyEvidence"',
+        ),
+      ]),
+    );
+    expect(statements.join('\n')).not.toMatch(
+      /INSERT INTO|SELECT.*FROM core\."outboundEmailAttempt"/i,
+    );
+  });
+
   it('runs opted-in slow data migrations without active workspaces', async () => {
     const rebrandCommand = {
       down: jest.fn().mockResolvedValue(undefined),

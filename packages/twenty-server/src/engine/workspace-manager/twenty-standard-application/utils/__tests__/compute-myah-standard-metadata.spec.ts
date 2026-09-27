@@ -24,6 +24,7 @@ import {
   MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
   MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { computeObjectTargetTable } from 'src/engine/utils/compute-object-target-table.util';
 import { buildMyahStandardMetadataContract } from './myah-standard-metadata-contract.fixture';
 
 const contract = buildMyahStandardMetadataContract();
@@ -153,6 +154,8 @@ describe('Myah standard metadata contract', () => {
       'listMemberships',
       'campaignCreators',
       'inboxThreads',
+      'instagramConversations',
+      'instagramMessageDrafts',
       'timelineActivities',
       'attachments',
       'noteTargets',
@@ -219,6 +222,269 @@ describe('Myah standard metadata contract', () => {
       ),
     ).toBe(false);
   });
+
+  it('computes the four native Instagram objects from the source-controlled graph', () => {
+    const objects = Object.values(
+      result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+
+    expect(objects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          universalIdentifier: '2d357469-831a-4629-ad4b-47335900e883',
+          nameSingular: 'myahInstagramAccount',
+          namePlural: 'myahInstagramAccounts',
+          labelIdentifierFieldMetadataUniversalIdentifier:
+            '74a2afe3-6c29-4d0a-a4a3-6597785221dc',
+        }),
+        expect.objectContaining({
+          universalIdentifier: '36817464-855f-42db-9fbb-f8853643f8d6',
+          nameSingular: 'myahSocialConversation',
+          namePlural: 'myahSocialConversations',
+          labelIdentifierFieldMetadataUniversalIdentifier:
+            'ca2f533f-5805-4256-8e48-fbf622b5284c',
+        }),
+        expect.objectContaining({
+          universalIdentifier: '7241bd44-e474-4904-8636-339276b3feff',
+          nameSingular: 'myahSocialMessage',
+          namePlural: 'myahSocialMessages',
+          labelIdentifierFieldMetadataUniversalIdentifier:
+            'ceb3642e-b4b4-44b7-8297-fa3ac944dc19',
+        }),
+        expect.objectContaining({
+          universalIdentifier: '85762d24-541b-407f-9d6a-cdf89552c665',
+          nameSingular: 'myahInstagramReplyDraft',
+          namePlural: 'myahInstagramReplyDrafts',
+          labelIdentifierFieldMetadataUniversalIdentifier:
+            'c12d1c07-166e-437b-9035-ac8b368d539d',
+          isUICreatable: false,
+          isUIEditable: false,
+        }),
+      ]),
+    );
+  });
+
+  it('freezes the complete Instagram field, relation, index, and native-table graph', () => {
+    const instagramObjectNames = [
+      'myahInstagramAccount',
+      'myahSocialConversation',
+      'myahSocialMessage',
+      'myahInstagramReplyDraft',
+    ] as const;
+    const objects = result.allFlatEntityMaps.flatObjectMetadataMaps;
+    const fields = result.allFlatEntityMaps.flatFieldMetadataMaps;
+    const indexes = result.allFlatEntityMaps.flatIndexMaps;
+
+    for (const objectName of instagramObjectNames) {
+      const definition = MYAH_STANDARD_OBJECTS[objectName];
+      const object =
+        objects.byUniversalIdentifier[definition.universalIdentifier];
+
+      expect(object).toBeDefined();
+      expect(computeObjectTargetTable(object!)).toBe(objectName);
+      expect(
+        Object.values(fields.byUniversalIdentifier)
+          .filter(isDefined)
+          .filter(
+            (field) =>
+              field.objectMetadataUniversalIdentifier ===
+              definition.universalIdentifier,
+          )
+          .map((field) => field.universalIdentifier)
+          .sort(),
+      ).toEqual(
+        Object.values(definition.fields)
+          .map((field) => field.universalIdentifier)
+          .sort(),
+      );
+
+      for (const baseFieldName of [
+        'id',
+        'name',
+        'createdAt',
+        'updatedAt',
+        'deletedAt',
+        'createdBy',
+        'updatedBy',
+        'position',
+        'searchVector',
+      ]) {
+        expect(
+          (
+            definition.fields as Record<string, { universalIdentifier: string }>
+          )[baseFieldName],
+        ).toEqual({
+          universalIdentifier: uuidv5(
+            `${definition.universalIdentifier}-${baseFieldName}`,
+            '142046f0-4d80-48b5-ad56-26ad410e895c',
+          ),
+        });
+      }
+    }
+
+    expect(
+      Object.values(indexes.byUniversalIdentifier)
+        .filter(isDefined)
+        .filter((index) =>
+          new Set<string>([
+            MYAH_STANDARD_OBJECTS.myahInstagramAccount.universalIdentifier,
+            MYAH_STANDARD_OBJECTS.myahSocialConversation.universalIdentifier,
+            MYAH_STANDARD_OBJECTS.myahSocialMessage.universalIdentifier,
+          ]).has(index.objectMetadataUniversalIdentifier),
+        )
+        .map((index) => ({
+          object: index.objectMetadataUniversalIdentifier,
+          fields: index.universalFlatIndexFieldMetadatas.map(
+            (field) => field.fieldMetadataUniversalIdentifier,
+          ),
+          isUnique: index.isUnique,
+          where: index.indexWhereClause,
+        })),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          object:
+            MYAH_STANDARD_OBJECTS.myahInstagramAccount.universalIdentifier,
+          fields: [
+            MYAH_STANDARD_OBJECTS.myahInstagramAccount.fields.connectedAccountId
+              .universalIdentifier,
+          ],
+          isUnique: true,
+          where: '"deletedAt" IS NULL',
+        }),
+        expect.objectContaining({
+          object:
+            MYAH_STANDARD_OBJECTS.myahInstagramAccount.universalIdentifier,
+          fields: [
+            MYAH_STANDARD_OBJECTS.myahInstagramAccount.fields.igUserId
+              .universalIdentifier,
+          ],
+          isUnique: true,
+          where: '"deletedAt" IS NULL',
+        }),
+        expect.objectContaining({
+          object:
+            MYAH_STANDARD_OBJECTS.myahInstagramAccount.universalIdentifier,
+          fields: [
+            MYAH_STANDARD_OBJECTS.myahInstagramAccount.fields.unipileAccountId
+              .universalIdentifier,
+          ],
+          isUnique: true,
+          where: '"deletedAt" IS NULL',
+        }),
+        expect.objectContaining({
+          object:
+            MYAH_STANDARD_OBJECTS.myahSocialConversation.universalIdentifier,
+          fields: [
+            MYAH_STANDARD_OBJECTS.myahSocialConversation.fields.provider
+              .universalIdentifier,
+            MYAH_STANDARD_OBJECTS.myahSocialConversation.fields.instagramAccount
+              .universalIdentifier,
+            MYAH_STANDARD_OBJECTS.myahSocialConversation.fields
+              .providerConversationId.universalIdentifier,
+          ],
+          isUnique: true,
+          where: '"deletedAt" IS NULL',
+        }),
+        expect.objectContaining({
+          object: MYAH_STANDARD_OBJECTS.myahSocialMessage.universalIdentifier,
+          fields: [
+            MYAH_STANDARD_OBJECTS.myahSocialMessage.fields.provider
+              .universalIdentifier,
+            MYAH_STANDARD_OBJECTS.myahSocialMessage.fields.conversation
+              .universalIdentifier,
+            MYAH_STANDARD_OBJECTS.myahSocialMessage.fields.providerMessageId
+              .universalIdentifier,
+          ],
+          isUnique: true,
+          where: '"deletedAt" IS NULL',
+        }),
+      ]),
+    );
+    expect(
+      Object.values(fields.byUniversalIdentifier)
+        .filter(isDefined)
+        .filter((field) => field.type === FieldMetadataType.RELATION)
+        .filter((field) =>
+          new Set<string>(
+            instagramObjectNames.map(
+              (objectName) =>
+                MYAH_STANDARD_OBJECTS[objectName].universalIdentifier,
+            ),
+          ).has(field.objectMetadataUniversalIdentifier),
+        )
+        .map((field) => [
+          field.universalIdentifier,
+          field.relationTargetFieldMetadataUniversalIdentifier,
+        ]),
+    ).toEqual(
+      expect.arrayContaining([
+        [
+          MYAH_STANDARD_OBJECTS.myahInstagramAccount.fields.conversations
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.myahSocialConversation.fields.instagramAccount
+            .universalIdentifier,
+        ],
+        [
+          MYAH_STANDARD_OBJECTS.myahSocialConversation.fields.creator
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.creator.fields.instagramConversations
+            .universalIdentifier,
+        ],
+        [
+          MYAH_STANDARD_OBJECTS.myahInstagramReplyDraft.fields.creator
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.creator.fields.instagramMessageDrafts
+            .universalIdentifier,
+        ],
+      ]),
+    );
+    expect(
+      objects.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.myahInstagramReplyDraft.universalIdentifier
+      ],
+    ).toEqual(
+      expect.objectContaining({ isUICreatable: false, isUIEditable: false }),
+    );
+  });
+
+  it('preserves default record visibility and does not provision Instagram authorization', () => {
+    const instagramObjectUniversalIdentifiers = new Set<string>([
+      MYAH_STANDARD_OBJECTS.myahInstagramAccount.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.myahSocialConversation.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.myahSocialMessage.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.myahInstagramReplyDraft.universalIdentifier,
+    ]);
+
+    expect(
+      Object.values(
+        mapsWithPermissions.flatObjectPermissionMaps.byUniversalIdentifier,
+      )
+        .filter(isDefined)
+        .filter((permission) =>
+          instagramObjectUniversalIdentifiers.has(
+            permission.objectMetadataUniversalIdentifier,
+          ),
+        ),
+    ).toEqual([]);
+    expect(
+      Object.values(
+        mapsWithPermissions.flatFieldPermissionMaps.byUniversalIdentifier,
+      )
+        .filter(isDefined)
+        .filter((permission) =>
+          instagramObjectUniversalIdentifiers.has(
+            permission.objectMetadataUniversalIdentifier,
+          ),
+        ),
+    ).toEqual([]);
+    expect(
+      Object.values(result.allFlatEntityMaps.flatRoleMaps.byUniversalIdentifier)
+        .filter(isDefined)
+        .map((role) => role.universalIdentifier),
+    ).not.toContain('114a8090-189d-4ffc-98b8-a5447cf1e925');
+  });
+
   const categories = Object.entries(contract).filter(([key]) =>
     key.startsWith('flat'),
   ) as [keyof TwentyStandardAllFlatEntityMaps, readonly string[]][];

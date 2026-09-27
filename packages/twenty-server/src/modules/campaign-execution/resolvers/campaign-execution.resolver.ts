@@ -27,6 +27,13 @@ import {
   UpdateCampaignSendingWindowInput,
 } from 'src/modules/campaign-execution/dtos/campaign-execution.dto';
 import { CampaignActivityReaderService } from 'src/modules/campaign-execution/services/campaign-activity-reader.service';
+import {
+  CampaignMessageOverviewConnectionDTO,
+  CampaignMessageOverviewDetailInput,
+  CampaignMessageOverviewInput,
+  CampaignMessageOverviewRowDTO,
+} from 'src/modules/campaign-execution/dtos/campaign-message-overview.dto';
+import { CampaignMessageOverviewReaderService } from 'src/modules/campaign-execution/services/campaign-message-overview-reader.service';
 import { CampaignCreatorExclusionService } from 'src/modules/campaign-execution/services/campaign-creator-exclusion.service';
 import { CampaignExecutionApplicationService } from 'src/modules/campaign-execution/services/campaign-execution-application.service';
 import {
@@ -45,6 +52,8 @@ export class CampaignExecutionResolver {
     private readonly creatorExclusion?: CampaignCreatorExclusionService,
     @Optional()
     private readonly activityReader?: CampaignActivityReaderService,
+    @Optional()
+    private readonly messageOverviewReader?: CampaignMessageOverviewReaderService,
   ) {}
 
   @Query(() => CampaignActivityConnectionDTO)
@@ -56,6 +65,30 @@ export class CampaignExecutionResolver {
     return this.activityReader.read({
       ...input,
       authContext: getWorkspaceAuthContext(),
+    });
+  }
+
+  @Query(() => CampaignMessageOverviewConnectionDTO)
+  campaignMessageOverview(
+    @Args('input') input: CampaignMessageOverviewInput,
+  ): Promise<CampaignMessageOverviewConnectionDTO> {
+    if (!this.messageOverviewReader)
+      throw new Error('Campaign message overview is unavailable');
+    return this.messageOverviewReader.read({
+      authContext: getWorkspaceAuthContext(),
+      filters: input,
+    });
+  }
+
+  @Query(() => CampaignMessageOverviewRowDTO, { nullable: true })
+  campaignMessageOverviewDetail(
+    @Args('input') input: CampaignMessageOverviewDetailInput,
+  ): Promise<CampaignMessageOverviewRowDTO | null> {
+    if (!this.messageOverviewReader)
+      throw new Error('Campaign message overview is unavailable');
+    return this.messageOverviewReader.readDetail({
+      authContext: getWorkspaceAuthContext(),
+      occurrenceId: input.occurrenceId,
     });
   }
 

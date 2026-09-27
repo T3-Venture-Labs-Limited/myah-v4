@@ -153,6 +153,7 @@ const createHarness = (
     messageChannel: createRepository(rows.messageChannel),
   };
   const query = jest.fn(async (sql: string, parameters: unknown[] = []) => {
+    if (sql.includes('campaignForecastHead')) return [];
     if (sql.includes('pg_advisory_xact_lock')) return [];
     if (sql.includes('FROM core."connectedAccount"')) {
       return rows.connectedAccount.filter(
@@ -275,7 +276,7 @@ const createHarness = (
     throw new Error(`Unhandled SQL in test: ${sql}`);
   });
   const transactionManager = {
-    queryRunner: { query },
+    queryRunner: { isReleased: false, isTransactionActive: true, query },
     getRepository: jest.fn(
       (name: string) =>
         workspaceRepositories[name as keyof typeof workspaceRepositories],

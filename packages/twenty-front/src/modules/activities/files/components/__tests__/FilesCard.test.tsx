@@ -57,9 +57,7 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
 jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
   useObjectPermissionsForObject: (objectMetadataId: string) => ({
     canReadObjectRecords:
-      objectMetadataId === 'creator-object-metadata-id'
-        ? canReadCreator
-        : true,
+      objectMetadataId === 'creator-object-metadata-id' ? canReadCreator : true,
     canUpdateObjectRecords: true,
   }),
 }));

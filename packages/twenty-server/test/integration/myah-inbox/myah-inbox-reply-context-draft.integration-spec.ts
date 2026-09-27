@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 
 import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts';
+import { AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790141137400-add-myah-inbox-reply-draft-incoming-baseline';
 import {
   MyahInboxReplyContextDraftService,
   type AnchoredReplyIdentity,
@@ -67,6 +68,26 @@ describeIsolated(
       await new CreateMyahInboxReplyContextDraftsFastInstanceCommand().up(
         runner,
       );
+      // Existing (legacy) rows predate the baseline columns; repeat is additive.
+      await dataSource.query(
+        `INSERT INTO core."myahInboxReplyContextDraft" (
+          "workspaceId","contactAnchorKind","contactAnchorId","channel",
+          "deliveryTargetId","contextKind","campaignId","bodyMarkdown","revision"
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'legacy body',1)`,
+        [
+          baseIdentity.workspaceId,
+          baseIdentity.contactAnchorKind,
+          baseIdentity.contactAnchorId,
+          baseIdentity.channel,
+          fixture(90),
+          baseIdentity.context.kind,
+          baseIdentity.context.campaignId,
+        ],
+      );
+      for (let run = 0; run < 2; run++)
+        await new AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand().up(
+          runner,
+        );
       await runner.release();
       drafts = new MyahInboxReplyContextDraftService(dataSource);
     });
@@ -277,6 +298,128 @@ describeIsolated(
         body: null,
         proposalContextFingerprint: '3'.repeat(64),
         reviewedContextFingerprint: null,
+      });
+    });
+
+    it('captures authored incoming baselines without acknowledgement and never silently rebaselines them', async () => {
+      const incoming = (id: number) =>
+        JSON.stringify([fixture(id), '2099-01-01T00:00:00.000Z']);
+      const manual = { ...baseIdentity, deliveryTargetId: fixture(80) };
+      await drafts.save({
+        ...manual,
+        expectedRevision: 0,
+        body: body('first manual body'),
+        incomingBaseline: incoming(70),
+      });
+      await expect(drafts.read(manual)).resolves.toMatchObject({
+        authoredIncomingBaseline: incoming(70),
+        bodyProvenance: 'EDITED',
+        proposalContextFingerprint: null,
+        reviewedContextFingerprint: null,
+      });
+      // A later save after new incoming mail keeps the authored baseline.
+      await drafts.save({
+        ...manual,
+        expectedRevision: 1,
+        body: body('first manual body'),
+        incomingBaseline: incoming(71),
+      });
+      await expect(drafts.read(manual)).resolves.toMatchObject({
+        revision: 2,
+        authoredIncomingBaseline: incoming(70),
+        bodyProvenance: 'EDITED',
+      });
+
+      const proposal = { ...baseIdentity, deliveryTargetId: fixture(81) };
+      await drafts.save({
+        ...proposal,
+        expectedRevision: 0,
+        body: body('proposal text'),
+        proposalContextFingerprint: '4'.repeat(64),
+        incomingBaseline: incoming(72),
+      });
+      await expect(drafts.read(proposal)).resolves.toMatchObject({
+        authoredIncomingBaseline: incoming(72),
+        bodyProvenance: 'PROPOSAL',
+      });
+      // Edit then revert to the exact proposal text remains edited.
+      for (const [revision, markdown] of [
+        [1, 'human edit'],
+        [2, 'proposal text'],
+      ] as const)
+        await drafts.save({
+          ...proposal,
+          expectedRevision: revision,
+          body: body(markdown),
+          incomingBaseline: incoming(73),
+        });
+      await expect(drafts.read(proposal)).resolves.toMatchObject({
+        revision: 3,
+        body: body('proposal text'),
+        authoredIncomingBaseline: incoming(72),
+        bodyProvenance: 'EDITED',
+      });
+      // A fresh proposal replaces the baseline with its validated snapshot.
+      await drafts.save({
+        ...proposal,
+        expectedRevision: 3,
+        body: body('updated proposal'),
+        proposalContextFingerprint: '5'.repeat(64),
+        incomingBaseline: incoming(73),
+      });
+      await expect(drafts.read(proposal)).resolves.toMatchObject({
+        authoredIncomingBaseline: incoming(73),
+        bodyProvenance: 'PROPOSAL',
+      });
+      // Clearing then writing a body is a new first body creation.
+      await drafts.save({ ...proposal, expectedRevision: 4, body: null });
+      await expect(drafts.read(proposal)).resolves.toMatchObject({
+        authoredIncomingBaseline: null,
+        bodyProvenance: null,
+      });
+      await drafts.save({
+        ...proposal,
+        expectedRevision: 5,
+        body: body('new manual body'),
+        incomingBaseline: 'NONE',
+      });
+      await expect(drafts.read(proposal)).resolves.toMatchObject({
+        authoredIncomingBaseline: 'NONE',
+        bodyProvenance: 'EDITED',
+      });
+
+      // An explicit update replaces text as an untouched current proposal but
+      // grants no acknowledgement: send stays blocked until explicit review.
+      await drafts.save({
+        ...manual,
+        expectedRevision: 2,
+        body: body('updated from current context'),
+        proposalContextFingerprint: '6'.repeat(64),
+        acknowledgeProposal: false,
+        incomingBaseline: incoming(75),
+      });
+      await expect(drafts.read(manual)).resolves.toMatchObject({
+        revision: 3,
+        authoredIncomingBaseline: incoming(75),
+        bodyProvenance: 'PROPOSAL',
+        proposalContextFingerprint: null,
+        reviewedContextFingerprint: null,
+      });
+
+      const legacy = { ...baseIdentity, deliveryTargetId: fixture(90) };
+      await expect(drafts.read(legacy)).resolves.toMatchObject({
+        authoredIncomingBaseline: null,
+        bodyProvenance: null,
+      });
+      await drafts.save({
+        ...legacy,
+        expectedRevision: 1,
+        body: body('legacy edit'),
+        incomingBaseline: incoming(74),
+      });
+      await expect(drafts.read(legacy)).resolves.toMatchObject({
+        authoredIncomingBaseline: null,
+        bodyProvenance: 'EDITED',
       });
     });
 

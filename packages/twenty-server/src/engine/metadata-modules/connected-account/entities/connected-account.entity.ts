@@ -118,6 +118,12 @@ export class ConnectedAccountEntity extends WorkspaceRelatedEntity {
   @Column({ type: 'integer', nullable: false, default: 300_000 })
   minimumSendIntervalMs: number;
 
+  @Column({ type: 'integer', nullable: false, default: 1 })
+  sendingPolicyRevision: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  sendingPolicyIdempotencyKey: string | null;
+
   @OneToMany(
     'MessageChannelEntity',
     (messageChannel: MessageChannelEntity) => messageChannel.connectedAccount,

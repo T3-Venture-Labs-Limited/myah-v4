@@ -183,6 +183,9 @@ describe('MyahInboxReplyContextDraftService', () => {
       false,
       2,
       row.id,
+      // Omitted incoming baseline and default proposal acknowledgement.
+      null,
+      true,
     ]);
   });
 

@@ -232,7 +232,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
       for (const [sql, values, runner, options] of (query as jest.Mock).mock
         .calls) {
         expect(sql).toContain(
-          `FROM "${getWorkspaceSchemaName(workspace.id)}"."_myahInstagramAccount"`,
+          `FROM "${getWorkspaceSchemaName(workspace.id)}"."myahInstagramAccount"`,
         );
         expect(sql).not.toContain('"deletedAt" IS NULL');
         expect(sql).not.toContain(account.instagramUserId);
@@ -426,7 +426,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     const [updateSql, updateValues, runner, options] = query.mock.calls[2];
 
     expect(updateSql).toContain(
-      `UPDATE "${getWorkspaceSchemaName(workspace.id)}"."_myahInstagramAccount"`,
+      `UPDATE "${getWorkspaceSchemaName(workspace.id)}"."myahInstagramAccount"`,
     );
     expect(updateSql).toContain('WHERE "id" = $12');
     expect(updateSql).toContain('"deletedAt" IS NULL');
@@ -469,7 +469,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     expect(subject.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining(`FROM "${schemaName}"."_myahInstagramAccount"`),
+      expect.stringContaining(`FROM "${schemaName}"."myahInstagramAccount"`),
       [account.instagramUserId],
       undefined,
       queryOptions,
@@ -490,7 +490,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining(`UPDATE "${schemaName}"."_myahInstagramAccount"`),
+      expect.stringContaining(`UPDATE "${schemaName}"."myahInstagramAccount"`),
       [
         '@verified.creator',
         '@verified.creator',
@@ -551,7 +551,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining(`FROM "${schemaName}"."_myahInstagramAccount"`),
+      expect.stringContaining(`FROM "${schemaName}"."myahInstagramAccount"`),
       [account.instagramUserId],
       undefined,
       queryOptions,
@@ -567,7 +567,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     expect(query).toHaveBeenNthCalledWith(
       3,
       expect.stringContaining(
-        `INSERT INTO "${schemaName}"."_myahInstagramAccount"`,
+        `INSERT INTO "${schemaName}"."myahInstagramAccount"`,
       ),
       [
         workspaceInstagramAccountRecordId,
@@ -625,7 +625,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     const [selectSql, selectValues] = query.mock.calls[0];
 
     expect(query).toHaveBeenCalledTimes(1);
-    expect(selectSql).toContain(`FROM "${schemaName}"."_myahInstagramAccount"`);
+    expect(selectSql).toContain(`FROM "${schemaName}"."myahInstagramAccount"`);
     expect(selectSql).toContain('"igUserId" = $1');
     expect(selectSql).not.toContain('"deletedAt" IS NULL');
     expect(selectSql).not.toContain(workspace.id);
@@ -671,7 +671,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     );
     expect(subject.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining(`FROM "${schemaName}"."_myahInstagramAccount"`),
+      expect.stringContaining(`FROM "${schemaName}"."myahInstagramAccount"`),
       [workspaceInstagramAccountRecordId],
       undefined,
       queryOptions,
@@ -726,7 +726,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     );
     expect(subject.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining(`FROM "${schemaName}"."_myahInstagramAccount"`),
+      expect.stringContaining(`FROM "${schemaName}"."myahInstagramAccount"`),
       [workspaceInstagramAccountRecordId],
       undefined,
       queryOptions,
@@ -774,7 +774,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
     );
     expect(subject.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining(`UPDATE "${schemaName}"."_myahInstagramAccount"`),
+      expect.stringContaining(`UPDATE "${schemaName}"."myahInstagramAccount"`),
       [
         'NEEDS_RECONNECT',
         lastCheckedAt,

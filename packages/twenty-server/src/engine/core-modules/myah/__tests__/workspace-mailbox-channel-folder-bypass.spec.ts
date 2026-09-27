@@ -137,9 +137,34 @@ describe('workspace mailbox channel and folder mutation boundaries', () => {
       connectedAccountId: personalAccount.id,
       id: 'personal-message-channel-id',
     } as MessageChannelEntity;
+    const transactionalRepository = {
+      update: jest.fn(),
+      findOneOrFail: jest.fn().mockResolvedValue(personalChannel),
+    };
+    const manager = {
+      queryRunner: {
+        isTransactionActive: true,
+        isReleased: false,
+        query: jest.fn(async (sql: string, params: unknown[]) => {
+          if (!sql.startsWith('INSERT INTO core."campaignForecastHead"')) {
+            throw new Error(`Unexpected SQL: ${sql}`);
+          }
+          expect(params).toEqual([workspace.id, `workspace:${workspace.id}`]);
+          return [];
+        }),
+      },
+      getRepository: jest.fn(() => transactionalRepository),
+    };
     const repository = {
       findOne: jest.fn().mockResolvedValue(null),
       findOneOrFail: jest.fn().mockResolvedValue(personalChannel),
+      manager: {
+        transaction: jest.fn(
+          async (
+            operation: (transactionManager: typeof manager) => Promise<unknown>,
+          ) => operation(manager),
+        ),
+      },
       update: jest.fn(),
     };
     const service = new MessageChannelMetadataService(
@@ -161,7 +186,10 @@ describe('workspace mailbox channel and folder mutation boundaries', () => {
       }),
     ).resolves.toBe(personalChannel);
 
-    expect(repository.update).toHaveBeenCalledTimes(1);
+    expect(repository.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(transactionalRepository.update).toHaveBeenCalledTimes(1);
+    expect(manager.queryRunner.query).toHaveBeenCalledTimes(1);
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it('rejects singular and bulk folder updates in the generic resolver', async () => {

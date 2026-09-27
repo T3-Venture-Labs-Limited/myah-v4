@@ -99,6 +99,7 @@ export type MyahInboxReplyWorkspaceProps = {
   replyContext?: ReplyContextInput | null;
   targetAvailable?: boolean;
   scopeGeneration?: string;
+  arrivalEpoch?: number;
   presentation?: 'default' | 'main';
   replyTargets?: Array<{
     threadId: string;
@@ -121,6 +122,7 @@ const MyahInboxReplyWorkspaceContent = ({
   workspaceId,
   targetAvailable = true,
   scopeGeneration = '',
+  arrivalEpoch = 0,
   presentation = 'default',
   replyTargets = [],
   onReplyTargetChange,
@@ -176,10 +178,12 @@ const MyahInboxReplyWorkspaceContent = ({
     entry: draftEntry,
     editorOwner,
     status,
+    review,
   } = useMyahInboxReplyDraft(
     input,
     draftAutosaveController,
     JSON.stringify([scopeGeneration, authorizationKey]),
+    arrivalEpoch,
   );
 
   // Edit mode is owned outside the editor so it survives the guidance round trip.
@@ -330,6 +334,33 @@ const MyahInboxReplyWorkspaceContent = ({
   }
 
   const hasDraftContent = draftEntry.localBody.markdown.trim().length > 0;
+  // New readable creator mail since the body was authored: an untouched
+  // proposal refreshes itself; any other body waits for an explicit update.
+  const incomingUpdate =
+    hasDraftContent &&
+    !draftEntry.dirty &&
+    (draftEntry.executionState === 'READY' ||
+      draftEntry.executionState === 'NEEDS_REVIEW') &&
+    (draftEntry.incomingState === 'STALE' ||
+      draftEntry.incomingState === 'UNKNOWN')
+      ? draftEntry.incomingState === 'STALE' && draftEntry.bodyEdited === false
+        ? ('auto' as const)
+        : ('explicit' as const)
+      : undefined;
+  // A clean body whose context changed (new mail, guidance, or after Update
+  // draft) needs explicit review before send; Update draft stays optional.
+  const reviewAction =
+    hasDraftContent &&
+    !draftEntry.dirty &&
+    !draftEntry.operation &&
+    draftEntry.executionState === 'NEEDS_REVIEW' ? (
+      <Button
+        title="Review draft"
+        variant="secondary"
+        size="small"
+        onClick={() => void review()}
+      />
+    ) : null;
   const campaignRequiredReason = campaignId
     ? undefined
     : 'Link an exact readable Campaign to generate a reply or open AI guidance.';
@@ -344,8 +375,12 @@ const MyahInboxReplyWorkspaceContent = ({
       key={myahInboxDraftKeyId(draftKey)}
       draftKey={draftKey}
       editorOwner={editorOwner}
+      incomingUpdate={incomingUpdate}
+      incomingState={
+        draftEntry.incomingState === 'UNKNOWN' ? 'UNKNOWN' : 'STALE'
+      }
       disabled={
-        draftEntry.executionState !== 'READY' ||
+        (draftEntry.executionState !== 'READY' && !incomingUpdate) ||
         Boolean(draftEntry.operation) ||
         draftEntry.status === 'saving' ||
         draftEntry.status === 'error' ||
@@ -409,13 +444,18 @@ const MyahInboxReplyWorkspaceContent = ({
             actions={
               presentation === 'main' ? (
                 hasDraftContent ? (
-                  sendAction
+                  <>
+                    {incomingUpdate === 'explicit' && generateAction}
+                    {reviewAction}
+                    {sendAction}
+                  </>
                 ) : (
                   generateAction
                 )
               ) : (
                 <>
                   {generateAction}
+                  {reviewAction}
                   {sendAction}
                 </>
               )
@@ -434,6 +474,7 @@ export const MyahInboxReplyWorkspace = ({
   onSent,
   targetAvailable,
   scopeGeneration,
+  arrivalEpoch,
   presentation = 'default',
   replyTargets,
   onReplyTargetChange,
@@ -465,6 +506,7 @@ export const MyahInboxReplyWorkspace = ({
           onSent={onSent}
           targetAvailable={targetAvailable}
           scopeGeneration={scopeGeneration}
+          arrivalEpoch={arrivalEpoch}
           presentation={presentation}
           replyTargets={replyTargets}
           onReplyTargetChange={onReplyTargetChange}

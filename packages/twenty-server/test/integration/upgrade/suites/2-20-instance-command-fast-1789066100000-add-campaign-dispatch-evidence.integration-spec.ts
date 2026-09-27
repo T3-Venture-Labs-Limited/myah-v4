@@ -17,6 +17,14 @@ describe('2.20 fast command 1789066100000 (postgres)', () => {
       `ALTER SCHEMA core RENAME TO core_dispatch_evidence_original`,
     );
     await runner.query(`CREATE SCHEMA core`);
+    // The historical command is isolated, but the test invokes today's writer,
+    // which invalidates the newer forecast projection in this same transaction.
+    await runner.query(`CREATE TABLE core."campaignForecastHead" (
+      "workspaceId" uuid NOT NULL, "scopeKey" text NOT NULL,
+      "inputRevision" bigint NOT NULL DEFAULT 1,
+      "updatedAt" timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY ("workspaceId","scopeKey")
+    )`);
     await runner.query(`CREATE TABLE core."campaignOccurrence" (
       id uuid PRIMARY KEY, "workspaceId" uuid NOT NULL, "campaignId" uuid NOT NULL,
       "enrollmentId" uuid NOT NULL, "workflowVersionId" uuid NOT NULL, "messageId" uuid NOT NULL,

@@ -96,7 +96,7 @@ const buildHarness = () => {
   const queryRunner = {
     isReleased: false,
     query: jest.fn(async (sql: string) =>
-      sql.includes('"_myahInstagramReplyDraft"') ? [authorityDraft] : [],
+      sql.includes('"myahInstagramReplyDraft"') ? [authorityDraft] : [],
     ),
     release: jest.fn(),
   };
@@ -384,34 +384,30 @@ const postgresEntity = (
   });
 
 const workspaceEntitySchemas = (schema: string) => [
-  postgresEntity(
-    'myahInstagramReplyDraft',
-    schema,
-    '_myahInstagramReplyDraft',
-    {
-      id: { type: 'uuid', primary: true },
-      body: { type: 'text', nullable: true },
-      revision: { type: 'integer' },
-      kind: { type: 'text' },
-      creatorId: { type: 'uuid', nullable: true },
-      recipientUsername: { type: 'text', nullable: true },
-      recipientProviderId: { type: 'text', nullable: true },
-      conversationId: { type: 'uuid', nullable: true },
-      sentAt: { type: 'timestamptz', nullable: true },
-      deletedAt: { type: 'timestamptz', nullable: true },
-    },
-  ),
-  postgresEntity('myahSocialConversation', schema, '_myahSocialConversation', {
+  postgresEntity('myahInstagramReplyDraft', schema, 'myahInstagramReplyDraft', {
+    id: { type: 'uuid', primary: true },
+    body: { type: 'text', nullable: true },
+    revision: { type: 'integer' },
+    kind: { type: 'text' },
+    creatorId: { type: 'uuid', nullable: true },
+    recipientUsername: { type: 'text', nullable: true },
+    recipientProviderId: { type: 'text', nullable: true },
+    conversationId: { type: 'uuid', nullable: true },
+    sentAt: { type: 'timestamptz', nullable: true },
+    deletedAt: { type: 'timestamptz', nullable: true },
+  }),
+  postgresEntity('myahSocialConversation', schema, 'myahSocialConversation', {
     id: { type: 'uuid', primary: true },
     providerConversationId: { type: 'text', nullable: true },
     recipientIgsid: { type: 'text', nullable: true },
     recipientUsername: { type: 'text', nullable: true },
+    creatorId: { type: 'uuid', nullable: true },
     instagramAccountId: { type: 'uuid', nullable: true },
     provider: { type: 'text' },
     lifecycle: { type: 'text' },
     deletedAt: { type: 'timestamptz', nullable: true },
   }),
-  postgresEntity('myahInstagramAccount', schema, '_myahInstagramAccount', {
+  postgresEntity('myahInstagramAccount', schema, 'myahInstagramAccount', {
     id: { type: 'uuid', primary: true },
     username: { type: 'text' },
     status: { type: 'text' },
@@ -552,9 +548,9 @@ describeIsolatedPostgres(
       await executeFixtureSql(
         client,
         `CREATE SCHEMA "${workspaceSchema}"; CREATE SCHEMA "${coreSchema}";
-      CREATE TABLE "${workspaceSchema}"."_myahInstagramReplyDraft" ("id" uuid PRIMARY KEY, "body" text, "revision" integer NOT NULL, "kind" text NOT NULL, "creatorId" uuid, "recipientUsername" text, "recipientProviderId" text, "conversationId" uuid, "sentAt" timestamptz, "deletedAt" timestamptz);
-      CREATE TABLE "${workspaceSchema}"."_myahSocialConversation" ("id" uuid PRIMARY KEY, "providerConversationId" text, "recipientIgsid" text, "recipientUsername" text, "instagramAccountId" uuid, "provider" text NOT NULL, "lifecycle" text NOT NULL, "deletedAt" timestamptz);
-      CREATE TABLE "${workspaceSchema}"."_myahInstagramAccount" ("id" uuid PRIMARY KEY, "username" text NOT NULL, "status" text NOT NULL, "unipileAccountId" text, "deletedAt" timestamptz);
+      CREATE TABLE "${workspaceSchema}"."myahInstagramReplyDraft" ("id" uuid PRIMARY KEY, "body" text, "revision" integer NOT NULL, "kind" text NOT NULL, "creatorId" uuid, "recipientUsername" text, "recipientProviderId" text, "conversationId" uuid, "sentAt" timestamptz, "deletedAt" timestamptz);
+      CREATE TABLE "${workspaceSchema}"."myahSocialConversation" ("id" uuid PRIMARY KEY, "providerConversationId" text, "recipientIgsid" text, "recipientUsername" text, "creatorId" uuid, "instagramAccountId" uuid, "provider" text NOT NULL, "lifecycle" text NOT NULL, "deletedAt" timestamptz);
+      CREATE TABLE "${workspaceSchema}"."myahInstagramAccount" ("id" uuid PRIMARY KEY, "username" text NOT NULL, "status" text NOT NULL, "unipileAccountId" text, "deletedAt" timestamptz);
       CREATE TABLE "${workspaceSchema}"."creator" ("id" uuid PRIMARY KEY, "instagramUsername" text, "instagramUrl" text, "instagramLinkPrimaryLinkUrl" text, "deletedAt" timestamptz);
       CREATE TABLE "${coreSchema}"."workspaceFixture" ("id" uuid PRIMARY KEY);
       CREATE TABLE "${coreSchema}"."objectMetadataFixture" ("id" uuid PRIMARY KEY, "workspaceId" uuid NOT NULL, "universalIdentifier" text NOT NULL);
@@ -602,22 +598,23 @@ describeIsolatedPostgres(
       );
       await executeFixtureSql(
         client,
-        `INSERT INTO "${workspaceSchema}"."_myahInstagramAccount" VALUES ($1,'canonical-account','ACTIVE','canonical-provider-account',NULL),($2,'denied-account','ACTIVE','denied-provider-account',NULL)`,
+        `INSERT INTO "${workspaceSchema}"."myahInstagramAccount" VALUES ($1,'canonical-account','ACTIVE','canonical-provider-account',NULL),($2,'denied-account','ACTIVE','denied-provider-account',NULL)`,
         [canonicalInstagramAccountId, deniedInstagramAccountId],
       );
       await executeFixtureSql(
         client,
-        `INSERT INTO "${workspaceSchema}"."_myahSocialConversation" VALUES ($1,'provider-canonical-chat','creator-igsid','creator.name',$2,'UNIPILE','ACTIVE',NULL),($3,'provider-denied-chat','creator-igsid','creator.name',$4,'UNIPILE','ACTIVE',NULL)`,
+        `INSERT INTO "${workspaceSchema}"."myahSocialConversation" VALUES ($1,'provider-canonical-chat','creator-igsid','creator.name',$5,$2,'UNIPILE','ACTIVE',NULL),($3,'provider-denied-chat','creator-igsid','creator.name',$5,$4,'UNIPILE','ACTIVE',NULL)`,
         [
           canonicalConversation,
           canonicalInstagramAccountId,
           deniedConversation,
           deniedInstagramAccountId,
+          creator,
         ],
       );
       await executeFixtureSql(
         client,
-        `INSERT INTO "${workspaceSchema}"."_myahInstagramReplyDraft" VALUES ($1,'Reply from canonical',1,'REPLY',$2,'creator.name','creator-igsid',$3,NULL,NULL),($4,'Reply from denied',1,'REPLY',$2,'creator.name','creator-igsid',$5,NULL,NULL)`,
+        `INSERT INTO "${workspaceSchema}"."myahInstagramReplyDraft" VALUES ($1,'Reply from canonical',1,'REPLY',$2,'creator.name','creator-igsid',$3,NULL,NULL),($4,'Reply from denied',1,'REPLY',$2,'creator.name','creator-igsid',$5,NULL,NULL)`,
         [
           canonicalDraftId,
           creator,
@@ -686,6 +683,7 @@ describeIsolatedPostgres(
           universalIdentifier: '36817464-855f-42db-9fbb-f8853643f8d6',
           fields: [
             'id',
+            'creatorId',
             'instagramAccountId',
             'provider',
             'lifecycle',
@@ -882,7 +880,7 @@ describeIsolatedPostgres(
         (
           await executeFixtureSql(
             client,
-            `SELECT id FROM "${workspaceSchema}"."_myahInstagramAccount" WHERE "status" = 'ACTIVE' AND "deletedAt" IS NULL AND "unipileAccountId" IS NOT NULL`,
+            `SELECT id FROM "${workspaceSchema}"."myahInstagramAccount" WHERE "status" = 'ACTIVE' AND "deletedAt" IS NULL AND "unipileAccountId" IS NOT NULL`,
           )
         ).rows,
       ).toHaveLength(2);
@@ -894,7 +892,7 @@ describeIsolatedPostgres(
     it('returns account unavailable when the role-readable denied draft points to the real policy-hidden account', async () => {
       const exists = await executeFixtureSql(
         client,
-        `SELECT id FROM "${workspaceSchema}"."_myahInstagramAccount" WHERE id = $1 AND "status" = 'ACTIVE' AND "deletedAt" IS NULL AND "unipileAccountId" IS NOT NULL`,
+        `SELECT id FROM "${workspaceSchema}"."myahInstagramAccount" WHERE id = $1 AND "status" = 'ACTIVE' AND "deletedAt" IS NULL AND "unipileAccountId" IS NOT NULL`,
         [deniedInstagramAccountId],
       );
       expect(exists.rows).toHaveLength(1);
