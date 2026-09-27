@@ -21,7 +21,7 @@ type FirstSourceLock = {
 
 type SourceLockConfig = {
   sourceType: 'EMAIL_THREAD' | 'INSTAGRAM_CONVERSATION';
-  tableName: 'messageThread' | '_myahSocialConversation';
+  tableName: 'messageThread' | 'myahSocialConversation';
   fallbackPrefix: 'email-thread' | 'instagram-conversation';
 };
 
@@ -33,7 +33,7 @@ const emailSourceLockConfig: SourceLockConfig = {
 
 const instagramSourceLockConfig: SourceLockConfig = {
   sourceType: 'INSTAGRAM_CONVERSATION',
-  tableName: '_myahSocialConversation',
+  tableName: 'myahSocialConversation',
   fallbackPrefix: 'instagram-conversation',
 };
 
@@ -212,7 +212,7 @@ describe('MyahInboxContactTriageService receipt transitions', () => {
     async (direction, expectedState) => {
       let inboxState = 'CLOSED';
       const query = jest.fn(async (sql: string, parameters: string[] = []) => {
-        if (sql.includes('FROM "_myahSocialConversation"')) {
+        if (sql.includes('FROM "myahSocialConversation"')) {
           return [{ id: threadId, creatorId: null }];
         }
         if (sql.includes('UPDATE "myahInboxContactTriage"')) {
@@ -270,7 +270,7 @@ describe('MyahInboxContactTriageService receipt transitions', () => {
       hasStateDecision: false,
     };
     const query = jest.fn(async (sql: string, parameters: unknown[] = []) => {
-      if (sql.includes('FROM "_myahSocialConversation"')) {
+      if (sql.includes('FROM "myahSocialConversation"')) {
         return [{ id: threadId, creatorId: null }];
       }
       if (sql.includes('SET "inboxOwnerId"=')) {
@@ -349,7 +349,7 @@ describe('MyahInboxContactTriageService receipt transitions', () => {
     };
     let inboundTransitions = 0;
     const query = jest.fn(async (sql: string, parameters: string[] = []) => {
-      if (sql.includes('FROM "_myahSocialConversation"')) {
+      if (sql.includes('FROM "myahSocialConversation"')) {
         return [{ id: threadId, creatorId: null }];
       }
       if (
@@ -752,11 +752,11 @@ describe('MyahInboxContactTriageService Creator identity reconciliation', () => 
 
     expect(query).toHaveBeenCalledWith(
       'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-      ['"_myahSocialConversation"'],
+      ['"myahSocialConversation"'],
     );
     expect(
       query.mock.calls.some(([sql]) =>
-        String(sql).includes('FROM "_myahSocialConversation"'),
+        String(sql).includes('FROM "myahSocialConversation"'),
       ),
     ).toBe(false);
   });

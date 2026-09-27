@@ -111,6 +111,23 @@ describe('getServerEnvFilePath', () => {
 });
 
 describe('reachable env-loader use sites', () => {
+  it('sequence-runner env loader uses the selected file and preserves override', async () => {
+    const source = await readFile(
+      join(
+        SERVER_ROOT,
+        'test/integration/upgrade/utils/upgrade-sequence-runner-integration-test.util.ts',
+      ),
+      'utf8',
+    );
+
+    expect(source).toContain(
+      "import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';",
+    );
+    expect(source).toMatch(
+      /config\(\{\s*path: getServerEnvFilePath\(\),\s*override: true,\s*\}\);/,
+    );
+  });
+
   let envSnapshot: EnvSnapshot;
 
   beforeEach(() => {

@@ -95,7 +95,7 @@ export class MyahInboxContactTriageService {
             [sourceRecordId],
           )
         : await query(
-            'SELECT id, "creatorId" FROM "_myahSocialConversation" WHERE id=$1 FOR UPDATE',
+            'SELECT id, "creatorId" FROM "myahSocialConversation" WHERE id=$1 FOR UPDATE',
             [sourceRecordId],
           )
     ) as SourceRecord[];
@@ -152,7 +152,7 @@ export class MyahInboxContactTriageService {
             [sourceRecordId],
           )
         : await query(
-            'SELECT id, "creatorId" FROM "_myahSocialConversation" WHERE id=$1 FOR UPDATE',
+            'SELECT id, "creatorId" FROM "myahSocialConversation" WHERE id=$1 FOR UPDATE',
             [sourceRecordId],
           )
     ) as SourceRecord[];
@@ -475,7 +475,7 @@ export class MyahInboxContactTriageService {
             [receipt.sourceRecordId],
           )
         : await query(
-            'SELECT "creatorId" FROM "_myahSocialConversation" WHERE id=$1 FOR UPDATE',
+            'SELECT "creatorId" FROM "myahSocialConversation" WHERE id=$1 FOR UPDATE',
             [receipt.sourceRecordId],
           )
     ) as Pick<SourceRecord, 'creatorId'>[];
@@ -667,10 +667,10 @@ export class MyahInboxContactTriageService {
     );
     const [instagramRelations] = (await query(
       'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-      ['"_myahSocialConversation"'],
+      ['"myahSocialConversation"'],
     )) as Array<{ exists: boolean }>;
     const instagramSourcePredicate = instagramRelations?.exists
-      ? ' AND NOT EXISTS (SELECT 1 FROM "_myahSocialConversation" WHERE "creatorId"=$2::uuid)'
+      ? ' AND NOT EXISTS (SELECT 1 FROM "myahSocialConversation" WHERE "creatorId"=$2::uuid)'
       : '';
     // The Instagram predicate is one of two compile-time constant SQL fragments.
     // pi-lens-ignore: sql-injection

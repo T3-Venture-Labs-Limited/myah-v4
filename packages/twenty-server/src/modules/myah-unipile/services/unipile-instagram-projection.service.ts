@@ -176,10 +176,11 @@ export class UnipileInstagramProjectionService {
             return { conversationRecordId };
           };
 
+          // pi-lens-ignore: sql-injection -- workspace schema comes from the trusted workspace identifier.
           const activeRecords = await querySource.query<ConversationRecord[]>(
             `
             SELECT "id", "creatorId"
-            FROM "${schemaName}"."_myahSocialConversation"
+            FROM "${schemaName}"."myahSocialConversation"
             WHERE "provider" = $1
               AND "instagramAccountId" = $2
               AND "providerConversationId" = $3
@@ -217,7 +218,7 @@ export class UnipileInstagramProjectionService {
           const deletedRecords = await querySource.query<ConversationRecord[]>(
             `
             SELECT "id", "creatorId"
-            FROM "${schemaName}"."_myahSocialConversation"
+            FROM "${schemaName}"."myahSocialConversation"
             WHERE "provider" = $1
               AND "instagramAccountId" = $2
               AND "providerConversationId" = $3
@@ -275,7 +276,7 @@ export class UnipileInstagramProjectionService {
           // pi-lens-ignore: sql-injection
           await querySource.query(
             `
-            INSERT INTO "${schemaName}"."_myahSocialConversation" (
+            INSERT INTO "${schemaName}"."myahSocialConversation" (
               "id", "name", "label", "provider", "lifecycle",
               "providerConversationId", "recipientIgsid", "recipientDisplayName",
               "instagramAccountId", "createdBySource", "createdByWorkspaceMemberId",
@@ -369,7 +370,7 @@ export class UnipileInstagramProjectionService {
           const conversations = await querySource.query<ConversationRecord[]>(
             `
             SELECT "id", "creatorId"
-            FROM "${schemaName}"."_myahSocialConversation"
+            FROM "${schemaName}"."myahSocialConversation"
             WHERE "id" = $1
               AND "instagramAccountId" = $2
               AND "provider" = $3
@@ -404,7 +405,7 @@ export class UnipileInstagramProjectionService {
           const activeRecords = await querySource.query<MessageRecord[]>(
             `
             SELECT "id", "createdAt", "deliveryState", "deliveryStateUpdatedAt"
-            FROM "${schemaName}"."_myahSocialMessage"
+            FROM "${schemaName}"."myahSocialMessage"
             WHERE "conversationId" = $1
               AND "provider" = $2
               AND "providerMessageId" = $3
@@ -455,7 +456,7 @@ export class UnipileInstagramProjectionService {
           const deletedRecords = await querySource.query<MessageRecord[]>(
             `
             SELECT "id", "createdAt", "deliveryState", "deliveryStateUpdatedAt"
-            FROM "${schemaName}"."_myahSocialMessage"
+            FROM "${schemaName}"."myahSocialMessage"
             WHERE "conversationId" = $1
               AND "provider" = $2
               AND "providerMessageId" = $3
@@ -509,7 +510,7 @@ export class UnipileInstagramProjectionService {
 
           const [insertedRecord] = await querySource.query<MessageRecord[]>(
             `
-            INSERT INTO "${schemaName}"."_myahSocialMessage" (
+            INSERT INTO "${schemaName}"."myahSocialMessage" (
               "id", "text", "conversationId", "direction", "sentVia", "provider",
               "providerMessageId", "providerCreatedAt", "deliveryState",
               "deliveryStateUpdatedAt", "hasAttachments", "attachmentCount",
@@ -579,7 +580,7 @@ export class UnipileInstagramProjectionService {
         // pi-lens-ignore: sql-injection
         await dataSource.query(
           `
-            UPDATE "${schemaName}"."_myahSocialConversation"
+            UPDATE "${schemaName}"."myahSocialConversation"
             SET
               "completedMessageSyncAt" = $1,
               "updatedAt" = now(),
@@ -619,7 +620,7 @@ export class UnipileInstagramProjectionService {
         // pi-lens-ignore: sql-injection
         await dataSource.query(
           `
-            UPDATE "${schemaName}"."_myahInstagramAccount"
+            UPDATE "${schemaName}"."myahInstagramAccount"
             SET
               "completedChatSyncAt" = $1,
               "updatedAt" = now(),
@@ -810,7 +811,7 @@ export class UnipileInstagramProjectionService {
     // pi-lens-ignore: sql-injection
     await dataSource.query(
       `
-        UPDATE "${schemaName}"."_myahSocialConversation"
+        UPDATE "${schemaName}"."myahSocialConversation"
         SET
           "recipientIgsid" = $1,
           "recipientDisplayName" = $2,
@@ -855,7 +856,7 @@ export class UnipileInstagramProjectionService {
     // pi-lens-ignore: sql-injection
     await dataSource.query(
       `
-        UPDATE "${schemaName}"."_myahSocialConversation"
+        UPDATE "${schemaName}"."myahSocialConversation"
         SET
           "deletedAt" = NULL,
           "recipientIgsid" = $1,
@@ -902,7 +903,7 @@ export class UnipileInstagramProjectionService {
     // pi-lens-ignore: sql-injection
     await dataSource.query(
       `
-        UPDATE "${schemaName}"."_myahSocialMessage"
+        UPDATE "${schemaName}"."myahSocialMessage"
         SET
           "text" = $1,
           "direction" = $2,
@@ -952,7 +953,7 @@ export class UnipileInstagramProjectionService {
     // pi-lens-ignore: sql-injection
     await dataSource.query(
       `
-        UPDATE "${schemaName}"."_myahSocialMessage"
+        UPDATE "${schemaName}"."myahSocialMessage"
         SET
           "deletedAt" = NULL,
           "text" = $1,

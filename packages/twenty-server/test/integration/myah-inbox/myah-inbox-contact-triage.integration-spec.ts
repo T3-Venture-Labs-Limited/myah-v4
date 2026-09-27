@@ -62,8 +62,8 @@ const permissionCacheKeys = [
 
 const capabilitySources = [
   ['messageThread', 'message_thread', 'messageThread'],
-  ['myahSocialConversation', 'social_conversation', '_myahSocialConversation'],
-  ['myahSocialMessage', 'social_message', '_myahSocialMessage'],
+  ['myahSocialConversation', 'social_conversation', 'myahSocialConversation'],
+  ['myahSocialMessage', 'social_message', 'myahSocialMessage'],
 ] as const;
 
 const contactsQuery = gql`
@@ -591,7 +591,14 @@ const seedInstagramProducerFixture =
     };
 
     await global.testDataSource.query(
-      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation" (
+      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInstagramAccount" (
+       id, label, "unipileAccountId"
+     ) VALUES ($1, 'MYAH354 Instagram Account', $2)`,
+      [accountRecordId, binding.unipileAccountId],
+    );
+
+    await global.testDataSource.query(
+      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation" (
        id, name, label, provider, lifecycle, "providerConversationId",
        "recipientIgsid", "recipientUsername", "recipientDisplayName",
        "instagramAccountId", "updatedAt", "createdAt"
@@ -693,7 +700,7 @@ const mutateInstagramCreator = async ({
         entered?.resolve();
         if (release) await release.promise;
         await manager.query(
-          'UPDATE "_myahSocialConversation" SET "creatorId"=$2 WHERE id=$1',
+          'UPDATE "myahSocialConversation" SET "creatorId"=$2 WHERE id=$1',
           [fixture.conversationId, creatorId],
         );
       },
@@ -709,7 +716,7 @@ const cleanupInstagramProducerFixture = async (
     [fixture.conversationId],
   );
   await global.testDataSource.query(
-    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialMessage" WHERE "conversationId"=$1`,
+    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialMessage" WHERE "conversationId"=$1`,
     [fixture.conversationId],
   );
   await global.testDataSource.query(
@@ -721,9 +728,14 @@ const cleanupInstagramProducerFixture = async (
     [`instagram-conversation:${fixture.conversationId}`],
   );
   await global.testDataSource.query(
-    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation" WHERE id=$1`,
+    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation" WHERE id=$1`,
     [fixture.conversationId],
   );
+  const removedAccounts = await global.testDataSource.query(
+    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInstagramAccount" WHERE id=$1 AND label='MYAH354 Instagram Account' AND "unipileAccountId"=$2 RETURNING id`,
+    [fixture.accountRecordId, fixture.binding.unipileAccountId],
+  );
+  expect(removedAccounts).toEqual([[{ id: fixture.accountRecordId }], 1]);
 };
 
 const persistExistingEmailThroughProducer = async (
@@ -2639,7 +2651,7 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
       await Promise.all([mutation, producer]);
       const [messageCount] = await global.testDataSource.query(
         `SELECT count(*)::int AS count
-         FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialMessage"
+         FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialMessage"
          WHERE "conversationId"=$1`,
         [instagram.conversationId],
       );
@@ -2658,14 +2670,14 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     await blocker.startTransaction();
     await blocker.query("SELECT set_config('search_path', $1, true)", [schema]);
     await blocker.query(
-      'SELECT id FROM "_myahSocialConversation" WHERE id=$1 FOR UPDATE',
+      'SELECT id FROM "myahSocialConversation" WHERE id=$1 FOR UPDATE',
       [instagram.conversationId],
     );
     const producer = projectInstagramMessage(instagram);
     let mutation: Promise<void> | undefined;
 
     try {
-      await waitForBlockedDatabaseQuery('_myahSocialConversation');
+      await waitForBlockedDatabaseQuery('myahSocialConversation');
       mutation = mutateInstagramCreator({
         fixture: instagram,
         creatorId: fixture.creatorA,
@@ -2675,7 +2687,7 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
       await Promise.all([producer, mutation]);
 
       const [source] = (await global.testDataSource.query(
-        `SELECT "creatorId" FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation" WHERE id=$1`,
+        `SELECT "creatorId" FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation" WHERE id=$1`,
         [instagram.conversationId],
       )) as Array<{ creatorId: string | null }>;
       expect(source.creatorId).toBe(fixture.creatorA);

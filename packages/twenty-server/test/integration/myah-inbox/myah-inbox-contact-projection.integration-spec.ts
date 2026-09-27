@@ -892,7 +892,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       );
       // pi-lens-ignore: sql-injection
       await global.testDataSource.query(
-        `INSERT INTO "${schema}"."_myahSocialConversation"
+        `INSERT INTO "${schema}"."myahSocialConversation"
           (id, provider, lifecycle, "providerConversationId", "recipientUsername",
            "recipientDisplayName", "creatorId", "createdAt", "updatedAt",
            "createdBySource", "createdByName", "createdByContext",
@@ -909,7 +909,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
       );
       // pi-lens-ignore: sql-injection
       await global.testDataSource.query(
-        `INSERT INTO "${schema}"."_myahSocialMessage"
+        `INSERT INTO "${schema}"."myahSocialMessage"
           (id, text, direction, provider, "providerMessageId",
            "providerCreatedAt", "conversationId", "createdAt",
            "createdBySource", "createdByName", "createdByContext",
@@ -949,7 +949,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
 
       // pi-lens-ignore: sql-injection
       await global.testDataSource.query(
-        `UPDATE "${schema}"."_myahSocialMessage"
+        `UPDATE "${schema}"."myahSocialMessage"
          SET "providerCreatedAt" = '2099-10-05T11:00:00Z'
          WHERE id = $1`,
         [instagramMessageId],
@@ -971,7 +971,7 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
 
       // pi-lens-ignore: sql-injection
       await global.testDataSource.query(
-        `INSERT INTO "${schema}"."_myahSocialConversation"
+        `INSERT INTO "${schema}"."myahSocialConversation"
           (id, provider, lifecycle, "providerConversationId", "recipientUsername",
            "recipientDisplayName", "creatorId", "createdAt", "updatedAt",
            "createdBySource", "createdByName", "createdByContext",
@@ -1002,12 +1002,12 @@ describe('Myah Inbox contact-first projection (PostgreSQL)', () => {
     } finally {
       // pi-lens-ignore: sql-injection
       await global.testDataSource.query(
-        `DELETE FROM "${schema}"."_myahSocialMessage" WHERE id = $1`,
+        `DELETE FROM "${schema}"."myahSocialMessage" WHERE id = $1`,
         [instagramMessageId],
       );
       // pi-lens-ignore: sql-injection
       await global.testDataSource.query(
-        `DELETE FROM "${schema}"."_myahSocialConversation"
+        `DELETE FROM "${schema}"."myahSocialConversation"
          WHERE id = ANY($1::uuid[])`,
         [[conversationId, secondConversationId]],
       );

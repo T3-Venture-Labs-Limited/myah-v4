@@ -92,7 +92,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         }[]
       >(
         `SELECT "body", "conversationId"
-          FROM "${schemaName}"."_myahInstagramReplyDraft"
+          FROM "${schemaName}"."myahInstagramReplyDraft"
           WHERE "id" = $1
             AND "sentAt" IS NULL
             AND "status" = 'NEEDS_REVIEW'
@@ -110,16 +110,18 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         throw new Error('The approved draft is unavailable for projection');
       }
 
+      // pi-lens-ignore: property_identifier -- workspace schema is resolved by the platform.
       await manager.query(
-        `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
+        `UPDATE "${schemaName}"."myahInstagramReplyDraft"
           SET "status" = 'SENT', "sentAt" = NOW(), "updatedAt" = NOW()
           WHERE "id" = $1
             AND "sentAt" IS NULL
             AND "status" = 'NEEDS_REVIEW'`,
         [draftId],
       );
+      // pi-lens-ignore: property_identifier -- workspace schema is resolved by the platform.
       await manager.query(
-        `INSERT INTO "${schemaName}"."_myahSocialMessage" (
+        `INSERT INTO "${schemaName}"."myahSocialMessage" (
           "id", "text", "conversationId", "direction", "sentVia", "createdAt", "updatedAt",
           "createdBySource", "createdByWorkspaceMemberId", "createdByName", "createdByContext",
           "updatedBySource", "updatedByWorkspaceMemberId", "updatedByName", "updatedByContext"
@@ -552,7 +554,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     receiptId: string,
   ): Promise<boolean> {
     const projections = await manager.query<{ id: string }[]>(
-      `SELECT "id" FROM "${schemaName}"."_myahSocialMessage"
+      `SELECT "id" FROM "${schemaName}"."myahSocialMessage"
         WHERE "createdByContext" ->> 'actionReceiptId' = $1
         LIMIT 1`,
       [receiptId],
