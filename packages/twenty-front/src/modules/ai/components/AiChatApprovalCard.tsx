@@ -17,6 +17,7 @@ import {
 import { MainButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
+import { AiChatReviewedActionSummary } from '@/ai/components/AiChatReviewedActionSummary';
 import { LazyMarkdownRenderer } from '@/ai/components/LazyMarkdownRenderer';
 import { useSubmitApprovalDecision } from '@/ai/hooks/useSubmitApprovalDecision';
 import { type AgentChatPendingApproval } from '@/ai/types/AgentChatPendingApproval';
@@ -331,8 +332,18 @@ export const AiChatApprovalCard = ({
             ],
           };
 
+  const reviewedAction =
+    'request' in pendingApproval ? pendingApproval.reviewedAction : undefined;
+  // A generic approval without its server-derived action (legacy) is not
+  // proof of what would run: it can be rejected but never approved.
+  const isGenericActionUnavailable =
+    'request' in pendingApproval && reviewedAction === undefined;
+
   const handleDecision = async (decision: ApprovalDecision) => {
-    if (isDecisionDisabled) {
+    if (
+      isDecisionDisabled ||
+      (decision === 'approved' && isGenericActionUnavailable)
+    ) {
       return;
     }
 
@@ -351,24 +362,61 @@ export const AiChatApprovalCard = ({
       <StyledHeader>
         <IconAlertTriangle size={16} color={themeCssVariables.color.orange} />
         <StyledHeaderText>
-          <StyledTitle>{request.title}</StyledTitle>
+          <StyledTitle>
+            {reviewedAction
+              ? t`Review: ${reviewedAction.toolLabel}`
+              : request.title}
+          </StyledTitle>
+          {!reviewedAction && <StyledSummary>{request.summary}</StyledSummary>}
+          {!reviewedAction && (
+            <StyledMeta>
+              <span>
+                {t`Risk`}: {APPROVAL_RISK_LEVEL_LABELS[request.riskLevel]}
+              </span>
+              <span>
+                {t`Action`}: {APPROVAL_ACTION_KIND_LABELS[request.actionKind]}
+              </span>
+              {request.targetLabel && <span>{request.targetLabel}</span>}
+            </StyledMeta>
+          )}
+        </StyledHeaderText>
+      </StyledHeader>
+
+      {reviewedAction && (
+        <AiChatReviewedActionSummary reviewedAction={reviewedAction} />
+      )}
+
+      {isGenericActionUnavailable && (
+        <StyledSummary>
+          {t`The exact action is unavailable, so it cannot be approved. Reject this request and ask the assistant to propose it again.`}
+        </StyledSummary>
+      )}
+
+      {reviewedAction && (
+        <StyledSection>
+          <StyledSectionTitle>{t`Assistant's description`}</StyledSectionTitle>
           <StyledSummary>{request.summary}</StyledSummary>
           <StyledMeta>
             <span>
-              {t`Risk`}: {APPROVAL_RISK_LEVEL_LABELS[request.riskLevel]}
+              {t`Assistant's risk estimate`}:{' '}
+              {APPROVAL_RISK_LEVEL_LABELS[request.riskLevel]}
             </span>
             <span>
-              {t`Action`}: {APPROVAL_ACTION_KIND_LABELS[request.actionKind]}
+              {t`Assistant's action category`}:{' '}
+              {APPROVAL_ACTION_KIND_LABELS[request.actionKind]}
             </span>
-            {request.targetLabel && <span>{request.targetLabel}</span>}
           </StyledMeta>
-        </StyledHeaderText>
-      </StyledHeader>
+        </StyledSection>
+      )}
 
       {request.preview && (
         <StyledSection>
           <StyledSectionTitle>
-            {actionApprovalBindingId ? t`Projected message` : t`Preview`}
+            {actionApprovalBindingId
+              ? t`Projected message`
+              : reviewedAction
+                ? t`Assistant's preview`
+                : t`Preview`}
           </StyledSectionTitle>
           {request.preview.format === 'markdown' ? (
             <StyledMarkdownPreview>
@@ -402,7 +450,11 @@ export const AiChatApprovalCard = ({
       )}
 
       <StyledSection>
-        <StyledSectionTitle>{t`Consequences`}</StyledSectionTitle>
+        <StyledSectionTitle>
+          {reviewedAction
+            ? t`Assistant's stated consequences`
+            : t`Consequences`}
+        </StyledSectionTitle>
         <StyledList>
           {request.consequences.map((consequence, index) => (
             <li key={index}>{consequence}</li>
@@ -436,7 +488,7 @@ export const AiChatApprovalCard = ({
         <MainButton
           title={t`Approve`}
           Icon={IconCheck}
-          disabled={isDecisionDisabled}
+          disabled={isDecisionDisabled || isGenericActionUnavailable}
           onClick={() => void handleDecision('approved')}
         />
       </StyledActions>

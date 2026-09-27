@@ -317,6 +317,31 @@ describe('Myah standard skills', () => {
     }
   });
 
+  it('binds each generic approval to the exact proposed arguments', () => {
+    for (const skillName of [
+      'myah-inbox',
+      'myah-creators',
+      'myah-creator-lists',
+      'myah-campaigns',
+    ] as const) {
+      const { content } = buildSkill(skillName);
+
+      expect(content).toEqual(
+        expect.stringContaining('the exact proposedArguments'),
+      );
+      expect(content).toEqual(
+        expect.stringContaining(
+          'execute exactly that one write with the identical arguments',
+        ),
+      );
+      expect(content).toEqual(
+        expect.stringContaining(
+          'If the approved write is refused, do not retry with changes',
+        ),
+      );
+    }
+  });
+
   it('limits each generic approval to one write tool call', () => {
     for (const skillName of [
       'myah-inbox',

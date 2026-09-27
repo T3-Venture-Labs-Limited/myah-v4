@@ -42,11 +42,18 @@ describe('CHAT_SYSTEM_PROMPTS', () => {
     expect(prompt).toContain(
       'One approval request may authorize exactly one write tool call',
     );
-    expect(prompt).toContain(
+    expect(prompt).not.toContain(
       'Approval-gated write tools are intentionally unavailable to \`learn_tools\` before approval',
     );
     expect(prompt).toContain(
-      'Do not use \`learn_tools\` to discover them before approval',
+      '\`learn_tools\` returns the input schema of a generic approval-gated write before approval',
+    );
+    expect(prompt).toContain('\`proposedArguments\`');
+    expect(prompt).toContain(
+      'call \`execute_tool\` with the identical tool name and arguments',
+    );
+    expect(prompt).toContain(
+      'If the approved write is refused, do not retry with changes',
     );
     expect(prompt).not.toContain(
       'For multiple related writes, preview the complete write plan in one approval request',

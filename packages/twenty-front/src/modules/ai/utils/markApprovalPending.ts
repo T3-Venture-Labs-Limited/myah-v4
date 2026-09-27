@@ -41,6 +41,9 @@ export const markApprovalPending = (
             ...previousOutput,
             result: {
               request,
+              ...(isDefined(previousResult?.reviewedAction) && {
+                reviewedAction: previousResult.reviewedAction,
+              }),
               status: 'pending',
             } satisfies RequestApprovalToolResult,
           },

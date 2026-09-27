@@ -102,4 +102,94 @@ describe('createLearnToolsTool', () => {
     expect(suggestSimilarToolNames).not.toHaveBeenCalled();
     expect(result.message).toBe('No matching tools found.');
   });
+
+  describe('schema-only approval-gated tools', () => {
+    const excluded = new Set([
+      'update_one_creator',
+      'code_interpreter',
+      'send_outreach_email',
+      'send_myah_inbox_reply',
+      'send_instagram_reply',
+      'send_email',
+      'draft_email',
+      'http_request',
+    ]);
+    const buildRegistry = () =>
+      ({
+        getToolInfo: jest.fn((names: string[]) =>
+          Promise.resolve(
+            names.map((name) => ({
+              name,
+              description: `Describe ${name}`,
+              inputSchema: { type: 'object' },
+            })),
+          ),
+        ),
+        suggestSimilarToolNames: jest.fn().mockResolvedValue({}),
+      }) as unknown as ToolRegistryService;
+
+    it('returns a gated write schema marked as requiring approval', async () => {
+      const toolRegistry = buildRegistry();
+      const learnTools = createLearnToolsTool(
+        toolRegistry,
+        context,
+        excluded,
+        new Set(['update_one_creator']),
+      );
+
+      const result = await learnTools.execute({
+        toolNames: [...excluded],
+        aspects: ['description', 'schema'],
+      });
+
+      expect(toolRegistry.getToolInfo).toHaveBeenCalledWith(
+        ['update_one_creator'],
+        context,
+        ['description', 'schema'],
+      );
+      expect(result.tools).toEqual([
+        {
+          name: 'update_one_creator',
+          description: expect.stringContaining('Requires approval'),
+          inputSchema: { type: 'object' },
+          requiresApproval: true,
+        },
+      ]);
+      expect(result.notFound).toEqual([]);
+    });
+
+    it('keeps send, email, external-write, and code schemas withheld as before', async () => {
+      const toolRegistry = buildRegistry();
+      const learnTools = createLearnToolsTool(
+        toolRegistry,
+        context,
+        excluded,
+        new Set(['update_one_creator']),
+      );
+
+      const result = await learnTools.execute({
+        toolNames: [...excluded].filter(
+          (name) => name !== 'update_one_creator',
+        ),
+        aspects: ['schema'],
+      });
+
+      expect(result.tools).toEqual([]);
+      expect(toolRegistry.getToolInfo).toHaveBeenCalledWith([], context, [
+        'schema',
+      ]);
+    });
+
+    it('is unchanged when no schema-only set is passed (MCP)', async () => {
+      const toolRegistry = buildRegistry();
+      const learnTools = createLearnToolsTool(toolRegistry, context, excluded);
+
+      const result = await learnTools.execute({
+        toolNames: ['update_one_creator'],
+        aspects: ['schema'],
+      });
+
+      expect(result.tools).toEqual([]);
+    });
+  });
 });

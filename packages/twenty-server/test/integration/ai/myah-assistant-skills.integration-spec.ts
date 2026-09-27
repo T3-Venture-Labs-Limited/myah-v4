@@ -34,6 +34,7 @@ import {
   seedMyahInboxTask7Fixture,
   type MyahInboxTask7Fixture,
 } from 'test/integration/myah-inbox/utils/seed-myah-inbox-task-7-fixture.util';
+import { proposeGenericApproval } from 'test/integration/ai/utils/generic-approval-chat.util';
 import { waitForAllJobsToFinish } from 'test/integration/utils/wait-for-all-jobs-to-finish.util';
 
 type ScriptedCall = {
@@ -56,20 +57,6 @@ type Fixture = {
   workspaceId: string;
 };
 let createdUserAccessToken: string | undefined;
-
-const genericApprovalMessage = (toolName: string) => ({
-  id: 'generic-approval',
-  role: 'assistant' as const,
-  parts: [
-    {
-      type: 'tool-request_approval' as const,
-      toolCallId: 'generic-approval-call',
-      state: 'output-available' as const,
-      input: { toolName },
-      output: { result: { status: 'resolved', decision: 'approved' } },
-    },
-  ],
-});
 
 type InboxSelectedContextResult = {
   kind: 'CAMPAIGN' | 'GENERAL';
@@ -96,8 +83,7 @@ const findInboxSelectedContext = (
   if (
     typeof selected === 'object' &&
     selected !== null &&
-    typeof (selected as Record<string, unknown>).contextFingerprint ===
-      'string'
+    typeof (selected as Record<string, unknown>).contextFingerprint === 'string'
   ) {
     return selected as InboxSelectedContextResult;
   }
@@ -389,6 +375,34 @@ const runScriptedChat = async ({
   registeredApprovalBindingId?: string;
   calls: ScriptedCall[];
 }) => {
+  // MYAH-315: a generic approval is proposed through the real request_approval
+  // tool and approved through AgentChatService, bound to the exact arguments
+  // of the scripted execute_tool call.
+  let approvalMessage: unknown;
+  let approvalError: string | undefined;
+
+  if (approvedToolName) {
+    const approvedCall = calls.find(
+      ({ toolName, input }) =>
+        toolName === 'execute_tool' && input.toolName === approvedToolName,
+    );
+    const approval = await proposeGenericApproval({
+      workspaceId: fixture.workspaceId,
+      userWorkspaceId: fixture.userWorkspaceId,
+      chatThreadId: fixture.chatThreadId,
+      toolName: approvedToolName,
+      proposedArguments:
+        (approvedCall?.input.arguments as Record<string, unknown>) ?? {},
+    });
+
+    if (approval.proposed) {
+      await approval.decide('approved');
+      approvalMessage = await approval.loadMessage();
+    } else {
+      approvalError = approval.error;
+    }
+  }
+
   const { emittedToolCalls, model, resolvedToolInputs } =
     createScriptedLanguageModel(calls);
   const chatExecution = getChatExecutionService();
@@ -423,8 +437,8 @@ const runScriptedChat = async ({
       messages: [
         registeredApprovalBindingId
           ? registeredApprovalMessage(registeredApprovalBindingId)
-          : approvedToolName
-            ? genericApprovalMessage(approvedToolName)
+          : approvalMessage
+            ? approvalMessage
             : {
                 id: 'user-message',
                 role: 'user' as const,
@@ -444,7 +458,12 @@ const runScriptedChat = async ({
     }
     await execution.stream.steps;
 
-    return { chunks, modelToolCalls: emittedToolCalls, resolvedToolInputs };
+    return {
+      chunks,
+      modelToolCalls: emittedToolCalls,
+      resolvedToolInputs,
+      approvalError,
+    };
   } finally {
     modelConfig.mockRestore();
     validateModel.mockRestore();
@@ -995,11 +1014,15 @@ describe('Myah assistant skills scripted model integration', () => {
       [fixture.campaignId],
     );
 
+    expect(readinessExecution.approvalError).toBeUndefined();
     expect(readinessExecution.modelToolCalls).toEqual([
       'load_skills',
       'learn_tools',
       'execute_tool',
     ]);
+    expect(JSON.stringify(readinessExecution.chunks)).toContain(
+      'Campaign lifecycle and execution authority require a dedicated operation.',
+    );
     expect(beforeAudienceCampaign.lifecycleStatus).toBe('DRAFT');
 
     const membershipExecution = await runScriptedChat({
@@ -1154,6 +1177,13 @@ describe('Myah assistant skills scripted model integration', () => {
         },
       ],
     });
+    expect(stageExecution.approvalError).toBeUndefined();
+    expect(
+      stageExecution.chunks.find(
+        (chunk) =>
+          chunk.type === 'tool-result' && chunk.toolName === 'execute_tool',
+      )?.output,
+    ).toMatchObject({ success: true });
     const [updatedCampaignCreator] = await global.testDataSource.query<
       { stage: string }[]
     >(
@@ -1203,11 +1233,15 @@ describe('Myah assistant skills scripted model integration', () => {
       [fixture.campaignId],
     );
 
+    expect(lifecycleExecution.approvalError).toBeUndefined();
     expect(lifecycleExecution.modelToolCalls).toEqual([
       'load_skills',
       'learn_tools',
       'execute_tool',
     ]);
+    expect(JSON.stringify(lifecycleExecution.chunks)).toContain(
+      'Campaign lifecycle and execution authority require a dedicated operation.',
+    );
     expect(JSON.stringify(lifecycleExecution.chunks)).toContain(
       'success":false',
     );
@@ -1493,8 +1527,7 @@ describe('Myah assistant skills scripted model integration', () => {
                 replyContext: campaignContext,
                 expectedContextFingerprint:
                   campaignRead.selectedContext.contextFingerprint,
-                expectedRevision:
-                  campaignRead.selectedContext.draftRevision,
+                expectedRevision: campaignRead.selectedContext.draftRevision,
                 body: campaignBody,
               },
             },
@@ -1576,9 +1609,10 @@ describe('Myah assistant skills scripted model integration', () => {
         'execute_tool',
         'execute_tool',
       ]);
-      expect(
-        [...campaignSave.modelToolCalls, ...generalSave.modelToolCalls],
-      ).not.toEqual(
+      expect([
+        ...campaignSave.modelToolCalls,
+        ...generalSave.modelToolCalls,
+      ]).not.toEqual(
         expect.arrayContaining([
           'get_myah_inbox_reply_send_readiness',
           'send_myah_inbox_reply',

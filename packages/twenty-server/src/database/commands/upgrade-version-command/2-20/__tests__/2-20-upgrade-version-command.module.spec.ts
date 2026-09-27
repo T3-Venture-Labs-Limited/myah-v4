@@ -76,6 +76,30 @@ describe('V2_20_UpgradeVersionCommandModule', () => {
     );
   });
 
+  it('appends the MYAH-315 exact-approval Myah assistant skill refresh', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      V2_20_UpgradeVersionCommandModule,
+    ) as Function[];
+    const refresh = providers.find(
+      (provider) =>
+        provider.name ===
+        'RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand',
+    );
+
+    expect(refresh).toBeDefined();
+    expect(Object.getPrototypeOf(refresh)).toBe(
+      SynchronizeMyahAssistantSkillsCommand,
+    );
+    expect(getRegisteredWorkspaceCommandMetadata(refresh!)).toEqual({
+      version: '2.20.0',
+      timestamp: 1790161829172,
+    });
+    expect(Reflect.getMetadata(CommandMeta, refresh!)).toMatchObject({
+      name: 'upgrade:2-20:refresh-myah-assistant-skills-for-exact-approvals',
+    });
+  });
+
   it('appends a distinct idempotent Myah assistant skill refresh command', () => {
     const providers = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
@@ -379,33 +403,36 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // The Myah assistant skill refresh is the final append-only 2.20.0
-    // workspace step, after Email provenance and Instagram composer metadata.
+    // The MYAH-315 exact-approval skill refresh is the final append-only
+    // 2.20.0 workspace step, after the earlier Myah assistant skill refresh.
     expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_RefreshMyahAssistantSkillsWorkspaceCommand_1789645911006',
+      '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
     );
     expect(sequence[sequence.length - 2]?.name).toBe(
-      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
+      '2.20.0_RefreshMyahAssistantSkillsWorkspaceCommand_1789645911006',
     );
     expect(sequence[sequence.length - 3]?.name).toBe(
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
     );
     expect(sequence[sequence.length - 4]?.name).toBe(
-      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
     );
     expect(sequence[sequence.length - 5]?.name).toBe(
-      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
     );
     expect(sequence[sequence.length - 6]?.name).toBe(
-      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
     );
     expect(sequence[sequence.length - 7]?.name).toBe(
-      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
+      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
     );
     expect(sequence[sequence.length - 8]?.name).toBe(
-      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
     );
     expect(sequence[sequence.length - 9]?.name).toBe(
+      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+    );
+    expect(sequence[sequence.length - 10]?.name).toBe(
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
     );
     const workspaceCommands = sequence
@@ -426,6 +453,7 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
       '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
       '2.20.0_RefreshMyahAssistantSkillsWorkspaceCommand_1789645911006',
+      '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(

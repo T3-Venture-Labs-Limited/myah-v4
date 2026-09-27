@@ -2,7 +2,9 @@ import { streamText } from 'ai';
 
 import { createExecuteToolTool } from 'src/engine/core-modules/tool-provider/tools/execute-tool.tool';
 import { ChatExecutionService } from 'src/engine/metadata-modules/ai/ai-chat/services/chat-execution.service';
+import { computeGenericApprovalDigest } from 'src/engine/metadata-modules/ai/ai-chat/utils/generic-approval-digest.util';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
+import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 
 jest.mock('ai', () => ({
   ...jest.requireActual('ai'),
@@ -68,7 +70,47 @@ const toolEntry = (name: string) => ({
   executionRef: { kind: 'static', toolId: name },
 });
 
-const buildService = () => {
+// Stands in for the conditional UPDATE: only a resolved approval can move.
+const buildApprovalStore = () => {
+  const store = {
+    status: 'resolved',
+    outcome: undefined as string | undefined,
+    transitions: [] as string[],
+  };
+  const manager = {
+    query: jest.fn((sql: string, parameters: unknown[]) => {
+      const nextStatus = parameters[6] as string;
+
+      if (sql.includes("'{result,executionOutcome}'")) {
+        if (store.status !== 'consumed' || store.outcome)
+          return Promise.resolve([{ count: 0 }]);
+        store.outcome = nextStatus;
+        return Promise.resolve([{ count: 1 }]);
+      }
+      if (store.status !== 'resolved') return Promise.resolve([{ count: 0 }]);
+      store.status = nextStatus;
+      store.transitions.push(
+        nextStatus === 'invalidated'
+          ? `invalidated:${parameters[8]}`
+          : nextStatus,
+      );
+
+      return Promise.resolve([{ count: 1 }]);
+    }),
+  };
+
+  return {
+    store,
+    actionApprovalService: {
+      executeInTransaction: jest.fn((operation: (m: unknown) => unknown) =>
+        operation(manager),
+      ),
+    },
+  };
+};
+
+const buildService = (extraCatalog: unknown[] = []) => {
+  const approvalStore = buildApprovalStore();
   const toolRegistry = {
     buildToolIndex: jest
       .fn()
@@ -83,6 +125,7 @@ const buildService = () => {
         toolEntry('update_myah_inbox_thread'),
         toolEntry('save_myah_inbox_reply_draft'),
         toolEntry('send_myah_inbox_reply'),
+        ...extraCatalog,
       ]),
     getToolsByName: jest.fn().mockResolvedValue({}),
     getToolInfo: jest.fn().mockImplementation((toolNames: string[]) =>
@@ -176,22 +219,37 @@ const buildService = () => {
     {} as never,
     {} as never,
     {} as never,
-    {} as never,
+    approvalStore.actionApprovalService as never,
     {
       isManagedModel: jest.fn().mockReturnValue(false),
       wrapModel: jest.fn(({ model }) => model),
     } as never,
   );
 
-  return { service, skillService, toolRegistry };
+  return { service, skillService, toolRegistry, approvalStore };
 };
+
+const reviewedActionFor = (
+  toolName: string,
+  toolArguments: Record<string, unknown>,
+  target: Record<string, unknown> = { kind: 'arguments_only' },
+) => ({
+  version: 1,
+  toolName,
+  toolLabel: toolName,
+  argumentsDigest: computeGenericApprovalDigest(toolArguments),
+  arguments: toolArguments,
+  target,
+});
 
 const approvalMessages = ({
   genericApproved,
   registeredApproved,
+  reviewedAction = reviewedActionFor('update_myah_inbox_thread', {}),
 }: {
   genericApproved: boolean;
   registeredApproved: boolean;
+  reviewedAction?: ReturnType<typeof reviewedActionFor>;
 }) => [
   ...(registeredApproved
     ? [
@@ -226,8 +284,15 @@ const approvalMessages = ({
               type: `tool-${REQUEST_APPROVAL_TOOL_NAME}` as `tool-${string}`,
               toolCallId: 'generic-approval-call',
               state: 'output-available' as const,
-              input: { toolName: 'update_myah_inbox_thread' },
-              output: { result: { status: 'resolved', decision: 'approved' } },
+              input: { toolName: reviewedAction.toolName },
+              output: {
+                result: {
+                  status: 'resolved',
+                  decision: 'approved',
+                  decidedAt: new Date().toISOString(),
+                  reviewedAction,
+                },
+              },
             },
           ],
         },
@@ -357,10 +422,11 @@ describe('ChatExecutionService Myah tool availability', () => {
     },
   );
 
-  it('does not surface excluded write and sender schemas through learn_tools', async () => {
-    const { service, toolRegistry } = buildService();
-
-    await service.streamChat({
+  const startChat = async (
+    service: ChatExecutionService,
+    messages: ReturnType<typeof approvalMessages>,
+  ) =>
+    service.streamChat({
       workspace: {
         id: 'workspace-id',
         smartModel: 'test-model',
@@ -371,88 +437,342 @@ describe('ChatExecutionService Myah tool availability', () => {
       browsingContext: null,
       conversationSizeTokens: 10,
       managedProviderRequestIdRoot: 'turn-id',
-      messages: approvalMessages({
-        genericApproved: false,
-        registeredApproved: false,
-      }),
+      messages,
     });
+
+  const runTool = async (toolName: string, args: Record<string, unknown>) => {
+    const execution = getActiveTools().execute_tool.execute({
+      toolName,
+      arguments: args,
+    });
+
+    await jest.runOnlyPendingTimersAsync();
+
+    return execution;
+  };
+
+  it('continues after a refused generic proposal but stops for pending and registered approvals', async () => {
+    const { service } = buildService();
+
+    await startChat(
+      service,
+      approvalMessages({ genericApproved: false, registeredApproved: false }),
+    );
+
+    const stopWhen = jest.mocked(streamText).mock.lastCall?.[0].stopWhen as (
+      step: unknown,
+    ) => boolean;
+    const approvalStep = (
+      input: Record<string, unknown>,
+      output?: unknown,
+    ) => ({
+      steps: [
+        {
+          toolCalls: [{ toolName: REQUEST_APPROVAL_TOOL_NAME, input }],
+          toolResults: output
+            ? [{ toolName: REQUEST_APPROVAL_TOOL_NAME, output }]
+            : [],
+        },
+      ],
+    });
+
+    expect(
+      stopWhen(approvalStep({ toolName: 'update_myah_inbox_thread' })),
+    ).toBe(false);
+    expect(
+      stopWhen(
+        approvalStep(
+          { toolName: 'update_myah_inbox_thread' },
+          { success: true, result: { status: 'pending' } },
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      stopWhen(
+        approvalStep({ toolName: 'send_myah_inbox_reply', actionInput: {} }),
+      ),
+    ).toBe(true);
+    expect(stopWhen(approvalStep({ arguments: { actionInput: {} } }))).toBe(
+      true,
+    );
+  });
+
+  it('reveals only generic write schemas before approval, never the sender', async () => {
+    const { service, toolRegistry } = buildService();
+
+    await startChat(
+      service,
+      approvalMessages({ genericApproved: false, registeredApproved: false }),
+    );
 
     const learnTools = getActiveTools().learn_tools.execute({
       toolNames: ['update_myah_inbox_thread', 'send_myah_inbox_reply'],
     });
     await jest.runOnlyPendingTimersAsync();
-    await expect(learnTools).resolves.toEqual({
-      tools: [],
-      notFound: [],
-      message: 'No matching tools found.',
-    });
+    await expect(learnTools).resolves.toEqual(
+      expect.objectContaining({
+        tools: [
+          expect.objectContaining({
+            name: 'update_myah_inbox_thread',
+            requiresApproval: true,
+          }),
+        ],
+        notFound: [],
+      }),
+    );
     expect(toolRegistry.getToolInfo).toHaveBeenCalledWith(
-      [],
+      ['update_myah_inbox_thread'],
       expect.anything(),
       undefined,
     );
-    expect(createExecuteToolTool).toHaveBeenCalled();
+    // Schema visibility does not make the write executable.
+    await expect(runTool('update_myah_inbox_thread', {})).resolves.toEqual(
+      expect.objectContaining({ success: false }),
+    );
+    expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalled();
   });
-  it('exposes only one call to the exact generic-approved write', async () => {
-    const { service, toolRegistry } = buildService();
 
-    await service.streamChat({
-      workspace: {
-        id: 'workspace-id',
-        smartModel: 'test-model',
-        aiAdditionalInstructions: null,
-      } as never,
-      userWorkspaceId: 'user-workspace-id',
-      threadId: 'chat-thread-id',
-      browsingContext: null,
-      conversationSizeTokens: 10,
-      managedProviderRequestIdRoot: 'turn-id',
-      messages: approvalMessages({
+  it('runs the exact approved write once, then refuses a replay', async () => {
+    const approvedArguments = {
+      messageThreadId: 'thread-id',
+      state: 'CLOSED',
+    };
+    const { service, toolRegistry, approvalStore } = buildService();
+
+    await startChat(
+      service,
+      approvalMessages({
         genericApproved: true,
         registeredApproved: false,
+        reviewedAction: reviewedActionFor(
+          'update_myah_inbox_thread',
+          approvedArguments,
+        ),
       }),
-    });
+    );
 
-    const execute = getActiveTools().execute_tool.execute;
-
-    const approvedWrite = execute({
-      toolName: 'update_myah_inbox_thread',
-      arguments: { messageThreadId: 'thread-id' },
-    });
-
-    await jest.runOnlyPendingTimersAsync();
-    await expect(approvedWrite).resolves.toEqual({
+    // Key order does not matter.
+    await expect(
+      runTool('update_myah_inbox_thread', {
+        state: 'CLOSED',
+        messageThreadId: 'thread-id',
+      }),
+    ).resolves.toEqual({
       success: true,
       result: { name: 'update_myah_inbox_thread' },
     });
-
-    const differentWrite = execute({
-      toolName: 'save_myah_inbox_reply_draft',
-      arguments: {},
-    });
-
-    await expect(differentWrite).resolves.toEqual(
+    await expect(runTool('save_myah_inbox_reply_draft', {})).resolves.toEqual(
       expect.objectContaining({ success: false }),
     );
-
-    const repeatedWrite = execute({
-      toolName: 'update_myah_inbox_thread',
-      arguments: { messageThreadId: 'other-thread-id' },
-    });
-
-    await expect(repeatedWrite).resolves.toEqual(
+    await expect(
+      runTool('update_myah_inbox_thread', approvedArguments),
+    ).resolves.toEqual(
       expect.objectContaining({
         success: false,
-        message: 'Tool "update_myah_inbox_thread" approval is already consumed',
+        message: 'Approved action was not executed',
+        error: expect.stringContaining('APPROVAL_ALREADY_USED'),
       }),
     );
     expect(toolRegistry.resolveAndExecute).toHaveBeenCalledTimes(1);
+    expect(approvalStore.store.transitions).toEqual(['consumed']);
+    expect(approvalStore.store.outcome).toBe('succeeded');
     expect(createExecuteToolTool).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.anything(),
       expect.objectContaining({
-        singleUseToolName: 'update_myah_inbox_thread',
+        approvedActionGuard: expect.objectContaining({
+          toolName: 'update_myah_inbox_thread',
+        }),
       }),
     );
+  });
+
+  it.each([
+    [
+      'a different record',
+      { messageThreadId: 'other-thread-id', state: 'CLOSED' },
+    ],
+    ['a different value', { messageThreadId: 'thread-id', state: 'OPEN' }],
+    [
+      'an added field',
+      { messageThreadId: 'thread-id', state: 'CLOSED', ownerId: 'someone' },
+    ],
+  ])(
+    'refuses %s before any write and burns the approval',
+    async (_label, changedArguments) => {
+      const { service, toolRegistry, approvalStore } = buildService();
+
+      await startChat(
+        service,
+        approvalMessages({
+          genericApproved: true,
+          registeredApproved: false,
+          reviewedAction: reviewedActionFor('update_myah_inbox_thread', {
+            messageThreadId: 'thread-id',
+            state: 'CLOSED',
+          }),
+        }),
+      );
+
+      await expect(
+        runTool('update_myah_inbox_thread', changedArguments),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          success: false,
+          error: expect.stringContaining('ACTION_CHANGED'),
+        }),
+      );
+      // The original action cannot be run after a mismatch either.
+      await expect(
+        runTool('update_myah_inbox_thread', {
+          messageThreadId: 'thread-id',
+          state: 'CLOSED',
+        }),
+      ).resolves.toEqual(expect.objectContaining({ success: false }));
+      expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalled();
+      expect(approvalStore.store.transitions).toEqual([
+        'invalidated:ACTION_CHANGED',
+      ]);
+    },
+  );
+
+  it('refuses a stale record target before any write', async () => {
+    const aliceId = '7f1c1c1e-0d8a-4b37-9f6a-8e9d2f1b0a11';
+    const crud = (name: string, operation: string) => ({
+      name,
+      label: name,
+      description: name,
+      category: 'DATABASE_CRUD',
+      executionRef: {
+        kind: 'database_crud',
+        objectNameSingular: 'creator',
+        operation,
+      },
+    });
+    const { service, toolRegistry, approvalStore } = buildService([
+      crud('update_one_creator', 'update_one'),
+      crud('find_one_creator', 'find_one'),
+    ]);
+
+    toolRegistry.getToolInfo.mockImplementation((toolNames: string[]) =>
+      Promise.resolve(
+        toolNames.map((name) => ({
+          name,
+          inputSchema: {
+            type: 'object',
+            properties: { id: {}, creatorStatus: {} },
+          },
+        })),
+      ),
+    );
+    // Alice's status changed after the founder reviewed "NEW -> QUALIFIED".
+    toolRegistry.resolveAndExecute.mockImplementation((name: string) =>
+      Promise.resolve(
+        name === 'find_one_creator'
+          ? {
+              success: true,
+              result: {
+                records: [{ id: aliceId, creatorStatus: 'REJECTED' }],
+                count: 1,
+              },
+              recordReferences: [
+                {
+                  objectNameSingular: 'creator',
+                  recordId: aliceId,
+                  displayName: 'Alice',
+                },
+              ],
+            }
+          : { success: true, result: { name } },
+      ),
+    );
+
+    await startChat(
+      service,
+      approvalMessages({
+        genericApproved: true,
+        registeredApproved: false,
+        reviewedAction: reviewedActionFor(
+          'update_one_creator',
+          { id: aliceId, creatorStatus: 'QUALIFIED' },
+          {
+            kind: 'record_write',
+            operation: 'update',
+            objectNameSingular: 'creator',
+            records: [],
+            totalCount: 1,
+            targetFingerprint: computeGenericApprovalDigest({
+              [aliceId]: { creatorStatus: 'NEW' },
+            }),
+          },
+        ),
+      }),
+    );
+
+    await expect(
+      runTool('update_one_creator', {
+        id: aliceId,
+        creatorStatus: 'QUALIFIED',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('TARGET_CHANGED'),
+      }),
+    );
+    expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalledWith(
+      'update_one_creator',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(approvalStore.store.transitions).toEqual([
+      'invalidated:TARGET_CHANGED',
+    ]);
+  });
+
+  it('labels the join column of a many-to-one morph relation', async () => {
+    const { service } = buildService();
+
+    Object.assign(service, {
+      workspaceCacheService: {
+        getOrRecompute: jest.fn().mockResolvedValue({
+          flatObjectMetadataMaps: {
+            byUniversalIdentifier: {
+              source: {
+                id: 'source-id',
+                nameSingular: 'taskTarget',
+                fieldIds: ['morph-id'],
+              },
+              creator: { id: 'creator-id', nameSingular: 'creator' },
+            },
+            universalIdentifierById: { 'creator-id': 'creator' },
+          },
+          flatFieldMetadataMaps: {
+            byUniversalIdentifier: {
+              morph: {
+                id: 'morph-id',
+                name: 'targetCreator',
+                type: FieldMetadataType.MORPH_RELATION,
+                settings: { relationType: RelationType.MANY_TO_ONE },
+                relationTargetObjectMetadataId: 'creator-id',
+              },
+            },
+            universalIdentifierById: { 'morph-id': 'morph' },
+          },
+        }),
+      },
+    });
+
+    const resolver = service as unknown as {
+      resolveLinkedObjectNames: (
+        workspaceId: string,
+        objectNameSingular: string,
+      ) => Promise<Record<string, string>>;
+    };
+
+    await expect(
+      resolver.resolveLinkedObjectNames('workspace-id', 'taskTarget'),
+    ).resolves.toEqual({ targetCreatorId: 'creator' });
   });
 });

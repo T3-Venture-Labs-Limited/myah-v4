@@ -30,6 +30,7 @@ export type LearnToolsResultEntry = {
   name: string;
   description?: string;
   inputSchema?: object;
+  requiresApproval?: true;
 };
 
 export type LearnToolsResult = {
@@ -43,6 +44,9 @@ export const createLearnToolsTool = (
   toolRegistry: ToolRegistryService,
   context: ToolContext,
   excludeTools?: Set<string>,
+  // Excluded tools whose schema (not execution) may be learned before
+  // approval, so the model can propose exact arguments. Passed only by AI chat.
+  schemaOnlyToolNames?: Set<string>,
 ) => ({
   description:
     'Get input schemas for tools. Pass all the tool names you need in a single call (toolNames accepts an array) rather than calling learn_tools once per tool. Call this with exact tool names to learn the required arguments before calling execute_tool.',
@@ -51,14 +55,27 @@ export const createLearnToolsTool = (
     const { toolNames, aspects } = parameters;
 
     const allowedNames = excludeTools
-      ? toolNames.filter((name) => !excludeTools.has(name))
+      ? toolNames.filter(
+          (name) =>
+            !excludeTools.has(name) || schemaOnlyToolNames?.has(name) === true,
+        )
       : toolNames;
 
-    const toolInfos = await toolRegistry.getToolInfo(
-      allowedNames,
-      context,
-      aspects,
-    );
+    const toolInfos = (
+      await toolRegistry.getToolInfo(allowedNames, context, aspects)
+    ).map((toolInfo): LearnToolsResultEntry => {
+      if (!excludeTools?.has(toolInfo.name)) {
+        return toolInfo;
+      }
+
+      return {
+        ...toolInfo,
+        ...(toolInfo.description !== undefined && {
+          description: `Requires approval: call request_approval with this tool name and the exact proposedArguments before execute_tool. ${toolInfo.description}`,
+        }),
+        requiresApproval: true,
+      };
+    });
 
     const foundNames = new Set(toolInfos.map((toolInfo) => toolInfo.name));
     // Base notFound on allowedNames so excluded tools aren't surfaced as

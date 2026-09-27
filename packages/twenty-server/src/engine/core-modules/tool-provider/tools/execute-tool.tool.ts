@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { jsonSchema } from 'ai';
 import { type JSONSchema7 } from 'json-schema';
 import { z } from 'zod';
@@ -7,6 +8,8 @@ import { type ToolContext } from 'src/engine/core-modules/tool-provider/types/to
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 
 export const EXECUTE_TOOL_TOOL_NAME = 'execute_tool';
+
+const logger = new Logger('ExecuteToolTool');
 
 const executeToolInputZodSchema = z.object({
   toolName: z.string().describe('Exact tool name. Do not guess.'),
@@ -48,13 +51,20 @@ export const createExecuteToolTool = (
   options?: {
     excludeTools?: Set<string>;
     allowedTools?: Set<string>;
-    singleUseToolName?: string;
+    // AI chat only: the one approved generic write. verifyAndConsume checks the
+    // exact reviewed action and durably consumes the approval, returning a
+    // refusal (never dispatched) or null to proceed.
+    approvedActionGuard?: {
+      toolName: string;
+      verifyAndConsume: (
+        args: Record<string, unknown>,
+      ) => Promise<ToolOutput | null>;
+      recordOutcome?: (outcome: 'succeeded' | 'failed') => Promise<void>;
+    };
     compactOutput?: boolean;
     spillLargeOutput?: boolean;
   },
 ) => {
-  let isSingleUseToolAvailable = options?.singleUseToolName !== undefined;
-
   return {
     description:
       'Execute a tool by name with arguments. Call learn_tools first to discover the required input schema.',
@@ -72,22 +82,37 @@ export const createExecuteToolTool = (
           error: `Tool "${toolName}" is not available in this context. Use get_tool_catalog to discover available tools.`,
         };
       }
-      if (toolName === options?.singleUseToolName) {
-        if (!isSingleUseToolAvailable) {
-          return {
-            success: false,
-            message: `Tool "${toolName}" approval is already consumed`,
-            error: `Tool "${toolName}" requires a new approval before another execution.`,
-          };
-        }
+      if (toolName === options?.approvedActionGuard?.toolName) {
+        const refusal =
+          await options.approvedActionGuard.verifyAndConsume(args);
 
-        isSingleUseToolAvailable = false;
+        if (refusal) {
+          return refusal;
+        }
       }
 
-      return toolRegistry.resolveAndExecute(toolName, args, context, {
-        compactOutput: options?.compactOutput,
-        spillLargeOutput: options?.spillLargeOutput,
-      });
+      const output = await toolRegistry.resolveAndExecute(
+        toolName,
+        args,
+        context,
+        {
+          compactOutput: options?.compactOutput,
+          spillLargeOutput: options?.spillLargeOutput,
+        },
+      );
+
+      if (toolName === options?.approvedActionGuard?.toolName) {
+        try {
+          await options.approvedActionGuard.recordOutcome?.(
+            output.success ? 'succeeded' : 'failed',
+          );
+        } catch {
+          // A failed receipt must not turn a completed write into a tool error.
+          logger.error('Could not record the approved action outcome');
+        }
+      }
+
+      return output;
     },
   };
 };
