@@ -191,6 +191,26 @@ describe('FieldsWidget', () => {
     );
   });
 
+  it('excludes only named fields while retaining custom and hidden fields', () => {
+    render(
+      <FieldsWidget
+        widget={operationsWidget}
+        excludeFieldNames={['emailSignature']}
+      />,
+    );
+
+    expect(
+      screen.getAllByTestId('rendered-field').map((field) => field.textContent),
+    ).toEqual(['lifecycleStatus', 'hiddenField']);
+    expect(screen.getByTestId('hover-portal')).not.toHaveTextContent(
+      'emailSignature',
+    );
+    expect(screen.getByText('hiddenField')).toHaveAttribute(
+      'data-global-index',
+      '1',
+    );
+  });
+
   it('keeps every visible and hidden field and group when no field names are included', () => {
     render(<FieldsWidget widget={operationsWidget} />);
 

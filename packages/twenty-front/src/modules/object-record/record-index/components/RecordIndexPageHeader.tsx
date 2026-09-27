@@ -16,7 +16,7 @@ import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { type ReactNode } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledTitleWithSelectedRecords = styled.div`
   display: flex;
@@ -34,16 +34,47 @@ const StyledSelectedRecordsCount = styled.div`
   padding-left: ${themeCssVariables.spacing['0.5']};
 `;
 
+const StyledCampaignTitle = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[1]};
+  min-width: 0;
+  padding: ${themeCssVariables.spacing[2]} 0;
+  > span:first-child {
+    font-size: ${themeCssVariables.font.size.xl};
+    font-weight: ${themeCssVariables.font.weight.semiBold};
+  }
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    > span:first-child {
+      font-size: ${themeCssVariables.font.size.md};
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    > span:not(:first-child) {
+      display: none;
+    }
+  }
+`;
+
+const StyledCampaignSubtitle = styled.span`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
+  font-weight: ${themeCssVariables.font.weight.regular};
+`;
+
 export type RecordIndexPageHeaderProps = {
   contextStoreInstanceId: string;
   headerTitle?: string;
   headerLeadingAction?: ReactNode;
+  campaignCreationAction?: ReactNode;
 };
 
 export const RecordIndexPageHeader = ({
   contextStoreInstanceId,
   headerTitle,
   headerLeadingAction,
+  campaignCreationAction,
 }: RecordIndexPageHeaderProps) => {
   const { findObjectMetadataItemByNamePlural } =
     useFilteredObjectMetadataItems();
@@ -71,6 +102,13 @@ export const RecordIndexPageHeader = ({
           {t`${formatNumber(contextStoreNumberOfSelectedRecords)} selected`}
         </StyledSelectedRecordsCount>
       </StyledTitleWithSelectedRecords>
+    ) : isDefined(campaignCreationAction) ? (
+      <StyledCampaignTitle>
+        <span>{headerTitle ?? metadataLabel}</span>
+        <StyledCampaignSubtitle>
+          {t`Your campaigns, from first draft to outreach. Search, filter and open campaigns in the list below.`}
+        </StyledCampaignSubtitle>
+      </StyledCampaignTitle>
     ) : (
       (headerTitle ?? metadataLabel)
     );
@@ -91,17 +129,23 @@ export const RecordIndexPageHeader = ({
       }
       title={pageHeaderTitle}
       actionButton={
-        !embeddedSurfaceOptions && isDefined(contextStoreCurrentViewId) ? (
+        (!embeddedSurfaceOptions || isDefined(campaignCreationAction)) &&
+        isDefined(contextStoreCurrentViewId) ? (
           <>
             <MyahCreatorBulkActions
               contextStoreInstanceId={contextStoreInstanceId}
             />
-            <RecordIndexCommandMenu />
+            <RecordIndexCommandMenu
+              hideCreateNewRecord={isDefined(campaignCreationAction)}
+            />
+            {campaignCreationAction}
             {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
           </>
         ) : undefined
       }
-      showTitleOnMobile={isDefined(headerLeadingAction)}
+      showTitleOnMobile={
+        isDefined(headerLeadingAction) || isDefined(campaignCreationAction)
+      }
     />
   );
 };

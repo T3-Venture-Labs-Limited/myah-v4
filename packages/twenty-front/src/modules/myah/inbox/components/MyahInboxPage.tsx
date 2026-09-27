@@ -1,5 +1,6 @@
 import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
 import { isCampaignMessageOverviewReturnTarget } from '@/myah/campaign-messages/types/CampaignMessageOverviewReturnTarget';
+import { isCampaignCreatorInboxReturnTarget } from '@/myah/inbox/types/CampaignCreatorInboxReturnTarget';
 import {
   useCallback,
   useContext,
@@ -178,6 +179,12 @@ const MyahInboxPageContent = ({
   const canReturnToMessages =
     workspaceId !== null &&
     isCampaignMessageOverviewReturnTarget(returnTarget, workspaceId);
+  const creatorReturnTarget = workspaceId
+    ? location.state?.campaignCreatorInboxReturnTarget
+    : null;
+  const canReturnToCreator =
+    workspaceId !== null &&
+    isCampaignCreatorInboxReturnTarget(creatorReturnTarget, workspaceId);
   const store = useStore();
   const [
     myahInboxPendingInstagramSelection,
@@ -539,6 +546,14 @@ const MyahInboxPageContent = ({
   // A later click or a forced scope transition must not commit an older awaited navigation.
   // oxlint-disable-next-line twenty/no-state-useref
   const transitionRef = useRef<symbol | null>(null);
+  useEffect(
+    () => () => {
+      // A pending flush cannot complete a return after this Inbox route leaves
+      // or its history entry changes (including an unmount).
+      transitionRef.current = null;
+    },
+    [location.key, location.pathname],
+  );
   // oxlint-disable-next-line twenty/no-state-useref
   const workspaceRef = useRef(workspaceId);
   workspaceRef.current = workspaceId;
@@ -922,6 +937,24 @@ const MyahInboxPageContent = ({
           title="Inbox"
           actionButton={
             <>
+              {canReturnToCreator ? (
+                <Button
+                  title="Return to Campaign creator"
+                  variant="secondary"
+                  size="small"
+                  onClick={async () => {
+                    if (!(await flushAffectedDrafts())) return;
+                    navigate(
+                      `${creatorReturnTarget.pathname}${creatorReturnTarget.search}#${creatorReturnTarget.influencerTabId}`,
+                      {
+                        state: {
+                          campaignCreatorInboxReturnTarget: creatorReturnTarget,
+                        },
+                      },
+                    );
+                  }}
+                />
+              ) : null}
               {canReturnToMessages ? (
                 <Button
                   title="Return to Campaign messages"

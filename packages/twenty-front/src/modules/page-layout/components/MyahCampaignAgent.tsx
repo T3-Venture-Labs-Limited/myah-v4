@@ -39,11 +39,6 @@ export const MyahCampaignAgent = ({
 
   const campaignAgentFields = [
     {
-      fieldName: 'campaignBrief',
-      placeholder: t`Enter instructions`,
-      showFormattingControls: false,
-    },
-    {
       fieldName: 'communicationGuidelines',
       placeholder: t`Enter instructions`,
       showFormattingControls: false,
@@ -58,11 +53,6 @@ export const MyahCampaignAgent = ({
       placeholder: t`Enter instructions`,
       showFormattingControls: false,
     },
-    {
-      fieldName: 'additionalNotes',
-      placeholder: t`Enter instructions`,
-      showFormattingControls: false,
-    },
   ] as const;
 
   return (
@@ -73,12 +63,18 @@ export const MyahCampaignAgent = ({
     >
       <MyahCampaignRichTextSettings
         campaignId={campaignId}
+        description={t`Communication guidance for this Campaign. Facts and Creator Notes stay in their own scopes.`}
         copy={{
           saveSuccess: t`Campaign Agent settings saved.`,
           saveError: t`Campaign Agent settings could not be saved.`,
           unsavedChangesSubtitle: t`Your Campaign Agent changes have not been saved.`,
         }}
         fields={campaignAgentFields}
+        sidebar={
+          <p>
+            {t`Campaign brief and additional notes remain under Campaign, not global Creator Notes. Communication guidelines, reply rules and escalation boundaries guide drafting. Guidance does not send replies or approve commercial terms.`}
+          </p>
+        }
         modalIdPrefix="campaign-agent-unsaved-changes"
         title={title}
       />

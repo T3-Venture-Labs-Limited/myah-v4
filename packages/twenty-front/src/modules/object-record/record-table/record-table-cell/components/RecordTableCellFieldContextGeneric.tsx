@@ -11,6 +11,7 @@ import { getTargetObjectMetadataIdsFromField } from '@/object-record/record-fiel
 import { hasJunctionConfig } from '@/object-record/record-field/ui/utils/junction/hasJunctionConfig';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
+import { RecordTableCellContext } from '@/object-record/record-table/contexts/RecordTableCellContext';
 import { useRecordTableRowContextOrThrow } from '@/object-record/record-table/contexts/RecordTableRowContext';
 import { RecordTableUpdateContext } from '@/object-record/record-table/contexts/RecordTableUpdateContext';
 import { isRecordTableCellsNonEditableComponentState } from '@/object-record/record-table/states/isRecordTableCellsNonEditableComponentState';
@@ -26,18 +27,25 @@ export const RecordTableCellFieldContextGeneric = ({
   recordField,
   children,
 }: RecordTableCellFieldContextGenericProps) => {
-  const { recordId, isRecordReadOnly } = useRecordTableRowContextOrThrow();
+  const { recordId, isRecordReadOnly, rowIndex } =
+    useRecordTableRowContextOrThrow();
+  const { cellPosition } = useContext(RecordTableCellContext);
 
   const isRecordTableCellsNonEditable = useAtomComponentStateValue(
     isRecordTableCellsNonEditableComponentState,
   );
 
-  const { objectMetadataItem, objectMetadataItems, objectPermissions } =
-    useRecordTableContextOrThrow();
+  const {
+    objectMetadataItem,
+    objectMetadataItems,
+    objectPermissions,
+    onRecordIdentifierClick,
+  } = useRecordTableContextOrThrow();
 
   const {
     objectPermissionsByObjectMetadataId,
     fieldDefinitionByFieldMetadataItemId,
+    openFirstColumnRelationInIndex,
   } = useRecordIndexContextOrThrow();
 
   const fieldDefinition =
@@ -126,6 +134,31 @@ export const RecordTableCellFieldContextGeneric = ({
             objectPermissionsByObjectMetadataId,
           }),
         isForbidden: !hasObjectReadPermissions,
+        onRecordChipClick:
+          openFirstColumnRelationInIndex &&
+          onRecordIdentifierClick &&
+          cellPosition.column === 0 &&
+          objectMetadataItem.nameSingular === 'campaignCreator' &&
+          isFieldRelationManyToOne(fieldDefinition) &&
+          fieldDefinition.metadata.fieldName === 'creator' &&
+          fieldDefinition.metadata.relationObjectMetadataNameSingular ===
+            'creator'
+            ? (event) => {
+                if (
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey ||
+                  event.button !== 0
+                )
+                  return;
+                onRecordIdentifierClick?.(
+                  rowIndex,
+                  recordId,
+                  event.currentTarget,
+                );
+              }
+            : undefined,
       }}
     >
       {children}

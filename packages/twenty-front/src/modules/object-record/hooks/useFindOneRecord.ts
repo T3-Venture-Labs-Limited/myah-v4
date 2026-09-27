@@ -1,6 +1,7 @@
 import { useQuery } from '@apollo/client/react';
 import { useMemo } from 'react';
 
+import { type CampaignRecordReadContext } from '@/apollo/utils/campaignRecordReadLink';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { type ObjectMetadataItemIdentifier } from '@/object-metadata/types/ObjectMetadataItemIdentifier';
@@ -19,11 +20,15 @@ export const useFindOneRecord = <T extends ObjectRecord = ObjectRecord>({
   recordGqlFields,
   skip,
   withSoftDeleted = false,
+  freshRead = false,
+  campaignRecordRead,
 }: ObjectMetadataItemIdentifier & {
   objectRecordId: string | undefined;
   recordGqlFields?: RecordGqlOperationGqlRecordFields;
   skip?: boolean;
   withSoftDeleted?: boolean;
+  freshRead?: boolean;
+  campaignRecordRead?: CampaignRecordReadContext;
 }) => {
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -61,6 +66,10 @@ export const useFindOneRecord = <T extends ObjectRecord = ObjectRecord>({
       !hasReadPermission,
     variables: { objectRecordId },
     client: apolloCoreClient,
+    ...(freshRead && {
+      fetchPolicy: 'no-cache' as const,
+      context: { queryDeduplication: false, campaignRecordRead },
+    }),
   });
 
   // TODO: Remove connection from record
@@ -77,6 +86,7 @@ export const useFindOneRecord = <T extends ObjectRecord = ObjectRecord>({
   return {
     record: recordWithoutConnection,
     loading,
+    hasReadPermission,
     error,
     refetch,
   };

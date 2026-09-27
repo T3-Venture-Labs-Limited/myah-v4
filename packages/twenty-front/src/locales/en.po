@@ -270,6 +270,19 @@ msgstr "{0} {1}?"
 msgid "{0} / year"
 msgstr "{0} / year"
 
+#. js-lingui-id: 5Im2V2
+#. placeholder {0}: preview.linkedCreatorIds.length
+#. placeholder {1}: preview.unlinkedCreatorIds.length
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "{0} already directly added · {1} will be directly added"
+msgstr "{0} already directly added · {1} will be directly added"
+
+#. js-lingui-id: gH2pwN
+#. placeholder {0}: preview.linkedCreatorIds.length
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "{0} already directly added · No changes will be made."
+msgstr "{0} already directly added · No changes will be made."
+
 #. js-lingui-id: VKL2Q6
 #. placeholder {0}: domain.name
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -1406,6 +1419,11 @@ msgstr "Access your workspace data"
 msgid "Access your workspace data from your favorite MCP client like Claude, Codex or Cursor."
 msgstr "Access your workspace data from your favorite MCP client like Claude, Codex or Cursor."
 
+#. js-lingui-id: VE64oA
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Accessible campaigns across all views"
+msgstr "Accessible campaigns across all views"
+
 #. js-lingui-id: AeXO77
 #: src/modules/settings/accounts/components/SettingsConnectedAccountsTableHeader.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionCreateCalendarEvent.tsx
@@ -1797,6 +1815,7 @@ msgid "Add Index"
 msgstr "Add Index"
 
 #. js-lingui-id: Htjybb
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 msgid "Add Influencers"
@@ -2605,11 +2624,6 @@ msgstr "All roles"
 msgid "All system objects are already in the sidebar"
 msgstr "All system objects are already in the sidebar"
 
-#. js-lingui-id: p+lpde
-#: src/modules/activities/tasks/components/TaskGroups.tsx
-msgid "All tasks addressed. Maintain the momentum."
-msgstr "All tasks addressed. Maintain the momentum."
-
 #. js-lingui-id: 45Gm/K
 #: src/pages/settings/applications/components/SettingsApplicationsTable.tsx
 msgid "All the applications currently installed on this workspace"
@@ -2720,6 +2734,11 @@ msgstr "alphabetical"
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
 msgid "Already absent"
 msgstr "Already absent"
+
+#. js-lingui-id: YRBwev
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Already directly added"
+msgstr "Already directly added"
 
 #. js-lingui-id: eO7HSp
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelObjectMenuItem.tsx
@@ -3562,6 +3581,11 @@ msgstr "Authenticator App"
 msgid "Authenticator apps and browser extensions like 1Password, Authy, Microsoft Authenticator, etc. generate one-time passwords that are used as a second factor to verify your identity when prompted during sign-in."
 msgstr "Authenticator apps and browser extensions like 1Password, Authy, Microsoft Authenticator, etc. generate one-time passwords that are used as a second factor to verify your identity when prompted during sign-in."
 
+#. js-lingui-id: nCCGgt
+#: src/modules/activities/components/ActivityAttribution.tsx
+msgid "Author unavailable"
+msgstr "Author unavailable"
+
 #. js-lingui-id: SIFUTh
 #: src/pages/auth/Authorize.tsx
 msgid "Authorization failed. Please try again."
@@ -3689,6 +3713,11 @@ msgstr "Axis name"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Back"
 msgstr "Back"
+
+#. js-lingui-id: CTSIBX
+#: src/modules/object-record/record-show/components/ObjectRecordShowPageBreadcrumb.tsx
+msgid "Back to {objectLabel}"
+msgstr "Back to {objectLabel}"
 
 #. js-lingui-id: wWjfh4
 #: src/modules/ui/navigation/bread-crumb/components/MobileBreadcrumb.tsx
@@ -4207,16 +4236,50 @@ msgstr "Campaign Agent settings could not be saved."
 msgid "Campaign Agent settings saved."
 msgstr "Campaign Agent settings saved."
 
+#. js-lingui-id: pU6+eG
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Campaign brief and additional notes remain under Campaign, not global Creator Notes. Communication guidelines, reply rules and escalation boundaries guide drafting. Guidance does not send replies or approve commercial terms."
+msgstr "Campaign brief and additional notes remain under Campaign, not global Creator Notes. Communication guidelines, reply rules and escalation boundaries guide drafting. Guidance does not send replies or approve commercial terms."
+
 #. js-lingui-id: M3txsw
 #: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
 msgid "Campaign creation is already in progress."
 msgstr "Campaign creation is already in progress."
 
+#. js-lingui-id: dK2dz9
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Campaign creation is unavailable with your current access."
+msgstr "Campaign creation is unavailable with your current access."
+
+#. js-lingui-id: SpTDfh
+#: src/modules/page-layout/components/MyahCampaignHome.tsx
+msgid "Campaign facts"
+msgstr "Campaign facts"
+
+#. js-lingui-id: rc1TPX
+#: src/modules/page-layout/components/MyahCampaignHome.tsx
+msgid "Campaign facts could not be saved."
+msgstr "Campaign facts could not be saved."
+
+#. js-lingui-id: h+nGy9
+#: src/modules/page-layout/components/MyahCampaignHome.tsx
+msgid "Campaign facts saved."
+msgstr "Campaign facts saved."
+
 #. js-lingui-id: su0ybc
-#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 msgid "Campaign Influencers are unavailable."
 msgstr "Campaign Influencers are unavailable."
+
+#. js-lingui-id: fBqxYe
+#: src/modules/object-record/record-show/components/CampaignRecordReadStatusMessage.tsx
+msgid "Campaign is unavailable or you do not have access to it."
+msgstr "Campaign is unavailable or you do not have access to it."
+
+#. js-lingui-id: BzRXvr
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Campaign name"
+msgstr "Campaign name"
 
 #. js-lingui-id: 06mPlO
 #: src/modules/activities/emails/hooks/useSendMessageCampaign.ts
@@ -4227,6 +4290,11 @@ msgstr "Campaign queued to {queuedCount} recipient(s)"
 #: src/modules/activities/emails/hooks/useSendMessageCampaign.ts
 msgid "Campaign queued to {queuedCount} recipient(s), {skippedCount} skipped"
 msgstr "Campaign queued to {queuedCount} recipient(s), {skippedCount} skipped"
+
+#. js-lingui-id: N4Y1vI
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Campaign recovery is unavailable with your current access."
+msgstr "Campaign recovery is unavailable with your current access."
 
 #. js-lingui-id: r3wwzn
 #: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
@@ -4242,6 +4310,31 @@ msgstr "Campaign saved, but counts could not refresh."
 #: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
 msgid "Campaign saved, but some data could not refresh. Reopen the Campaign or refresh this view."
 msgstr "Campaign saved, but some data could not refresh. Reopen the Campaign or refresh this view."
+
+#. js-lingui-id: VzSO8k
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Campaign summary"
+msgstr "Campaign summary"
+
+#. js-lingui-id: MFso4D
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Campaign summary requires read access."
+msgstr "Campaign summary requires read access."
+
+#. js-lingui-id: Q013k3
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Campaign summary unavailable. Retry by refreshing the view."
+msgstr "Campaign summary unavailable. Retry by refreshing the view."
+
+#. js-lingui-id: e8khEy
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Campaign was not created. Correct its name and try again."
+msgstr "Campaign was not created. Correct its name and try again."
+
+#. js-lingui-id: OLBvKu
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Campaign was not opened. Retry here to check the same creation, or check your Campaign access. Do not start a new draft elsewhere."
+msgstr "Campaign was not opened. Retry here to check the same creation, or check your Campaign access. Do not start a new draft elsewhere."
 
 #. js-lingui-id: oRJtCM
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
@@ -4267,6 +4360,8 @@ msgstr "Can't scan? Copy the"
 
 #. js-lingui-id: dEgA5A
 #: src/modules/applications/components/AuthorizeActionButtons.tsx
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
 #: src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter.tsx
@@ -4290,6 +4385,11 @@ msgstr "Can't scan? Copy the"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Cancel"
 msgstr "Cancel"
+
+#. js-lingui-id: t9HCcy
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "Cancel addition"
+msgstr "Cancel addition"
 
 #. js-lingui-id: J8nuSF
 #: src/modules/settings/billing/components/internal/ResourceCreditPriceSelector.tsx
@@ -4677,6 +4777,11 @@ msgstr "Chat with AI agents and use AI features"
 msgid "Chats"
 msgstr "Chats"
 
+#. js-lingui-id: On+/JO
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Check campaign"
+msgstr "Check campaign"
+
 #. js-lingui-id: d+fVrI
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "Check connection"
@@ -4732,12 +4837,18 @@ msgstr "Checking DNS"
 msgid "Checking DNS locally"
 msgstr "Checking DNS locally"
 
+#. js-lingui-id: gwN23Y
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "Checking existing memberships…"
+msgstr "Checking existing memberships…"
+
 #. js-lingui-id: 4hyqZB
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Checking status"
 msgstr "Checking status"
 
 #. js-lingui-id: RLe7Vk
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
 msgid "Checking…"
 msgstr "Checking…"
@@ -5175,6 +5286,11 @@ msgstr "Commas and dot"
 #: src/pages/settings/ai/SettingsAgentTurnDetail.tsx
 msgid "Comment"
 msgstr "Comment"
+
+#. js-lingui-id: LJofW6
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Communication guidance for this Campaign. Facts and Creator Notes stay in their own scopes."
+msgstr "Communication guidance for this Campaign. Facts and Creator Notes stay in their own scopes."
 
 #. js-lingui-id: chL5IG
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
@@ -6382,6 +6498,11 @@ msgstr "Create custom view"
 msgid "Create date field"
 msgstr "Create date field"
 
+#. js-lingui-id: /NVhwV
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Create draft"
+msgstr "Create draft"
+
 #. js-lingui-id: 5lQoJJ
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog.tsx
@@ -6494,6 +6615,11 @@ msgstr "Created {objectLabel}"
 msgid "Created by"
 msgstr "Created by"
 
+#. js-lingui-id: QhrIcl
+#: src/modules/activities/components/ActivityAttribution.tsx
+msgid "Created by {author}"
+msgstr "Created by {author}"
+
 #. js-lingui-id: t3sqJR
 #. placeholder {0}: beautifyExactDateTime(signingKey.createdAt)
 #: src/modules/settings/admin-panel/signing-keys/components/SettingsAdminSigningKeysTable.tsx
@@ -6526,6 +6652,11 @@ msgstr "Creating your workspace..."
 #: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
 msgid "Creator List is unavailable."
 msgstr "Creator List is unavailable."
+
+#. js-lingui-id: FP9eaP
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Creator-campaign participations across all campaigns"
+msgstr "Creator-campaign participations across all campaigns"
 
 #. js-lingui-id: HAzhV7
 #: src/pages/settings/admin-panel/SettingsAdminAiProviderDetail.tsx
@@ -8447,6 +8578,11 @@ msgstr "Edit Record Table"
 msgid "Edit Records on All Objects"
 msgstr "Edit Records on All Objects"
 
+#. js-lingui-id: 1vQRUm
+#: src/modules/page-layout/components/MyahCampaignHome.tsx
+msgid "Edit the existing Campaign brief and notes; Creator-specific agreements remain separate."
+msgstr "Edit the existing Campaign brief and notes; Creator-specific agreements remain separate."
+
 #. js-lingui-id: eMFB6/
 #: src/modules/views/view-picker/components/ViewPickerContentEditMode.tsx
 msgid "Edit view"
@@ -8578,6 +8714,11 @@ msgstr "Email Channels"
 #: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
 msgid "Email copied to clipboard"
 msgstr "Email copied to clipboard"
+
+#. js-lingui-id: LQ2IdL
+#: src/modules/page-layout/components/MyahCampaignOperations.tsx
+msgid "Email delivery settings. Instagram messages can be authored but Campaign Start sends email only. Shared mailbox policy remains authoritative."
+msgstr "Email delivery settings. Instagram messages can be authored but Campaign Start sends email only. Shared mailbox policy remains authoritative."
 
 #. js-lingui-id: GXLHVG
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
@@ -8962,6 +9103,16 @@ msgstr "Enter array of items or variable expression"
 msgid "Enter BCC emails, comma-separated"
 msgstr "Enter BCC emails, comma-separated"
 
+#. js-lingui-id: YjFEF6
+#: src/modules/page-layout/components/MyahCampaignHome.tsx
+msgid "Enter campaign brief"
+msgstr "Enter campaign brief"
+
+#. js-lingui-id: HCCdG9
+#: src/modules/page-layout/components/MyahCampaignHome.tsx
+msgid "Enter campaign notes"
+msgstr "Enter campaign notes"
+
 #. js-lingui-id: mPsuKh
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "Enter CC emails, comma-separated"
@@ -9014,8 +9165,6 @@ msgid "Enter in Unicode format"
 msgstr "Enter in Unicode format"
 
 #. js-lingui-id: fFd9X1
-#: src/modules/page-layout/components/MyahCampaignAgent.tsx
-#: src/modules/page-layout/components/MyahCampaignAgent.tsx
 #: src/modules/page-layout/components/MyahCampaignAgent.tsx
 #: src/modules/page-layout/components/MyahCampaignAgent.tsx
 #: src/modules/page-layout/components/MyahCampaignAgent.tsx
@@ -10276,6 +10425,11 @@ msgstr "File no longer exists - {label}"
 #: src/modules/object-record/record-field/ui/meta-types/hooks/useUploadFilesFieldFile.ts
 msgid "File upload failed"
 msgstr "File upload failed"
+
+#. js-lingui-id: XUP46e
+#: src/modules/activities/files/components/FilesCard.tsx
+msgid "Files couldn't be loaded"
+msgstr "Files couldn't be loaded"
 
 #. js-lingui-id: BZGmTs
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionTestTab.tsx
@@ -12769,6 +12923,11 @@ msgstr "Linked mailboxes for {0}"
 msgid "Linked resources"
 msgstr "Linked resources"
 
+#. js-lingui-id: aAvO2j
+#: src/modules/activities/tasks/components/TaskGroups.tsx
+msgid "Linked tasks will appear here."
+msgstr "Linked tasks will appear here."
+
 #. js-lingui-id: 82kQhK
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
@@ -12855,6 +13014,16 @@ msgstr "Loading {objectLabelSingular} results"
 msgid "Loading applications..."
 msgstr "Loading applications..."
 
+#. js-lingui-id: vB7Jlw
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Loading campaign summary…"
+msgstr "Loading campaign summary…"
+
+#. js-lingui-id: D89dKG
+#: src/modules/object-record/record-show/components/CampaignRecordReadStatusMessage.tsx
+msgid "Loading campaign…"
+msgstr "Loading campaign…"
+
 #. js-lingui-id: +auT/L
 #: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
 msgid "Loading Creator List…"
@@ -12908,6 +13077,11 @@ msgstr "Loading metrics data..."
 #: src/modules/ui/input/components/IconPicker.tsx
 msgid "Loading more..."
 msgstr "Loading more..."
+
+#. js-lingui-id: NWbPbP
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Loading participation summary…"
+msgstr "Loading participation summary…"
 
 #. js-lingui-id: FRBnaT
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
@@ -13880,11 +14054,6 @@ msgstr "Missing calendar permission."
 msgid "Missing email draft permission."
 msgstr "Missing email draft permission."
 
-#. js-lingui-id: mibKsa
-#: src/modules/activities/tasks/components/TaskGroups.tsx
-msgid "Mission accomplished!"
-msgstr "Mission accomplished!"
-
 #. js-lingui-id: onBnv+
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 msgid "Mixed status"
@@ -14366,6 +14535,12 @@ msgstr "New AI Provider"
 msgid "New Approved Access Domain"
 msgstr "New Approved Access Domain"
 
+#. js-lingui-id: fV8wLJ
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "New campaign"
+msgstr "New campaign"
+
 #. js-lingui-id: yGfI61
 #: src/modules/side-panel/hooks/useOpenCampaignComposerInSidePanel.ts
 msgid "New Campaign"
@@ -14656,6 +14831,11 @@ msgstr "No {targetLabel}"
 #: src/modules/settings/admin-panel/components/SettingsAdminServerAdminAccess.tsx
 msgid "No access"
 msgstr "No access"
+
+#. js-lingui-id: zRWToZ
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "No accessible campaigns yet."
+msgstr "No accessible campaigns yet."
 
 #. js-lingui-id: Vg3dIJ
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -15377,6 +15557,11 @@ msgstr "No system objects with views found"
 msgid "No targets available"
 msgstr "No targets available"
 
+#. js-lingui-id: r0Yewc
+#: src/modules/activities/tasks/components/TaskGroups.tsx
+msgid "No tasks linked to this record"
+msgstr "No tasks linked to this record"
+
 #. js-lingui-id: t0t36i
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsAiAgentDetail.tsx
 msgid "No tools were called"
@@ -15636,6 +15821,11 @@ msgstr "Not started"
 #: src/modules/settings/accounts/components/SettingsAccountsConnectedAccountsRowRightContainer.tsx
 msgid "Not synced"
 msgstr "Not synced"
+
+#. js-lingui-id: dswCrr
+#: src/modules/activities/notes/components/NotesCard.tsx
+msgid "Notes are unavailable"
+msgstr "Notes are unavailable"
 
 #. js-lingui-id: f8W9q0
 #: src/modules/activities/notes/components/NotesCard.tsx
@@ -16313,6 +16503,16 @@ msgstr "Output"
 msgid "Output tokens"
 msgstr "Output tokens"
 
+#. js-lingui-id: A69vpc
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Outreach status across campaigns"
+msgstr "Outreach status across campaigns"
+
+#. js-lingui-id: FmBs3w
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Outreach summary requires Campaign read access."
+msgstr "Outreach summary requires Campaign read access."
+
 #. js-lingui-id: in6CUw
 #: src/modules/workflow/components/OverrideWorkflowDraftConfirmationModal.tsx
 msgid "Override Draft"
@@ -16430,6 +16630,16 @@ msgstr "Parameters"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Partially completed"
 msgstr "Partially completed"
+
+#. js-lingui-id: 5hH7H8
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Participation summary requires read access."
+msgstr "Participation summary requires read access."
+
+#. js-lingui-id: sMjSAD
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Participation summary unavailable. Retry by refreshing the view."
+msgstr "Participation summary unavailable. Retry by refreshing the view."
 
 #. js-lingui-id: 8ZsakT
 #: src/modules/auth/sign-in-up/components/internal/SignInUpPasswordField.tsx
@@ -16845,6 +17055,7 @@ msgid "Please reconnect your mailbox {mailboxHandle} to update your email aliase
 msgstr "Please reconnect your mailbox {mailboxHandle} to update your email aliases:"
 
 #. js-lingui-id: CjNkdJ
+#: src/modules/activities/files/components/FilesCard.tsx
 #: src/modules/activities/notes/components/NotesCard.tsx
 #: src/modules/activities/tasks/components/TaskGroups.tsx
 #: src/modules/error-handler/components/AppRootErrorFallback.tsx
@@ -18670,6 +18881,7 @@ msgstr "Retest/Reconnect"
 #: src/modules/ai/components/AiChatErrorMessage.tsx
 #: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
 #: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+#: src/modules/object-record/record-show/components/CampaignRecordReadStatusMessage.tsx
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobRowDropdownMenu.tsx
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminRetryJobsConfirmationModal.tsx
 #: src/pages/onboarding/PaymentSuccess.tsx
@@ -18694,6 +18906,11 @@ msgstr "Retry All Failed"
 msgid "Retry connection"
 msgstr "Retry connection"
 
+#. js-lingui-id: /IhXwB
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Retry creation"
+msgstr "Retry creation"
+
 #. js-lingui-id: NUbOLX
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Retry DNS verification"
@@ -18708,6 +18925,13 @@ msgstr "Retry domain search"
 #: src/modules/activities/tasks/components/TaskGroups.tsx
 msgid "Retry loading tasks"
 msgstr "Retry loading tasks"
+
+#. js-lingui-id: QHBaqY
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Retry preview"
+msgstr "Retry preview"
 
 #. js-lingui-id: 1m7tLS
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -18750,6 +18974,11 @@ msgstr "Return to mailbox overview"
 #: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
 msgid "Return to original view"
 msgstr "Return to original view"
+
+#. js-lingui-id: B9n8Oe
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Return to the original Campaign view to continue this creation."
+msgstr "Return to the original Campaign view to continue this creation."
 
 #. js-lingui-id: ZbpKL+
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminJobDetailsExpandable.tsx
@@ -18802,6 +19031,11 @@ msgstr "Review Inbox reply"
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Review Instagram reply"
 msgstr "Review Instagram reply"
+
+#. js-lingui-id: 9Wuhh+
+#: src/modules/page-layout/components/MyahCampaignOperations.tsx
+msgid "Review linked accounts, the drafting default, sender readiness, and the saved email signature."
+msgstr "Review linked accounts, the drafting default, sender readiness, and the saved email signature."
 
 #. js-lingui-id: zr2Ctn
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -19148,6 +19382,11 @@ msgstr "Save as new view"
 #: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
 msgid "Save billing details"
 msgstr "Save billing details"
+
+#. js-lingui-id: +iP7bR
+#: src/modules/page-layout/components/MyahCampaignHome.tsx
+msgid "Save brief and notes"
+msgstr "Save brief and notes"
 
 #. js-lingui-id: 7byqGp
 #: src/modules/layout-customization/hooks/useEnterLayoutCustomizationMode.ts
@@ -20852,6 +21091,11 @@ msgstr "Source address"
 #: src/modules/settings/accounts/components/SettingsAccountsNewEmailGroupChannel.tsx
 msgid "Source Email Address"
 msgstr "Source Email Address"
+
+#. js-lingui-id: l/XjGo
+#: src/modules/activities/components/ActivityAttribution.tsx
+msgid "Source: {source}"
+msgstr "Source: {source}"
 
 #. js-lingui-id: jlAsfo
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -22586,6 +22830,11 @@ msgstr "This Storybook form uses local React Hook Form state only. Submitted cre
 msgid "This subdomain is reserved"
 msgstr "This subdomain is reserved"
 
+#. js-lingui-id: /PF+Ab
+#: src/modules/page-layout/PageLayoutMainContent.tsx
+msgid "This tab shows existing tasks linked to this Campaign only. Task status is not evidence of fulfillment or commercial completion."
+msgstr "This tab shows existing tasks linked to this Campaign only. Task status is not evidence of fulfillment or commercial completion."
+
 #. js-lingui-id: MMGDfe
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableHelpText.tsx
 msgid "This value will be saved to the database."
@@ -23031,6 +23280,11 @@ msgstr "Triggers the function with an HTTP request"
 msgid "True"
 msgstr "True"
 
+#. js-lingui-id: KDw4GX
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Try again"
+msgstr "Try again"
+
 #. js-lingui-id: 64tOpZ
 #: src/pages/settings/api-webhooks/SettingsApiWebhooks.tsx
 msgid "Try our REST or GraphQL API playgrounds"
@@ -23201,6 +23455,11 @@ msgstr "Unable to load {objectLabelSingular} results"
 msgid "Unable to load application details. Please try again later."
 msgstr "Unable to load application details. Please try again later."
 
+#. js-lingui-id: +hXbDc
+#: src/modules/object-record/record-show/components/CampaignRecordReadStatusMessage.tsx
+msgid "Unable to load campaign. Try again."
+msgstr "Unable to load campaign. Try again."
+
 #. js-lingui-id: ifAJf+
 #: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
 msgid "Unable to load Creator List."
@@ -23215,6 +23474,16 @@ msgstr "Unable to Reach Back-end"
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
 msgid "Unable to validate import"
 msgstr "Unable to validate import"
+
+#. js-lingui-id: n9rn0Z
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "Unable to verify existing memberships."
+msgstr "Unable to verify existing memberships."
+
+#. js-lingui-id: mzO+5C
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Unable to verify existing relationships."
+msgstr "Unable to verify existing relationships."
 
 #. js-lingui-id: cVEIR0
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
@@ -23240,6 +23509,11 @@ msgstr "Unassigned"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Unavailable"
 msgstr "Unavailable"
+
+#. js-lingui-id: 2Frtrq
+#: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+msgid "Unavailable — no verified all-campaign breakdown"
+msgstr "Unavailable — no verified all-campaign breakdown"
 
 #. js-lingui-id: EWf/l+
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -24318,6 +24592,11 @@ msgstr "View all evaluations"
 msgid "View billing details"
 msgstr "View billing details"
 
+#. js-lingui-id: /5oDGG
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "View Creator activity"
+msgstr "View Creator activity"
+
 #. js-lingui-id: PaIbn1
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "View DNS check"
@@ -25101,6 +25380,11 @@ msgstr "Widgets"
 msgid "Will be added"
 msgstr "Will be added"
 
+#. js-lingui-id: i18Zj6
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Will be directly added"
+msgstr "Will be directly added"
+
 #. js-lingui-id: nHGIvQ
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
 msgid "Will be removed"
@@ -25492,6 +25776,11 @@ msgstr "You can't change your email because you belong to 2 or more workspaces."
 msgid "You cannot impersonate your own account"
 msgstr "You cannot impersonate your own account"
 
+#. js-lingui-id: NOyJud
+#: src/modules/object-record/record-show/components/CampaignRecordReadStatusMessage.tsx
+msgid "You do not have access to this campaign."
+msgstr "You do not have access to this campaign."
+
 #. js-lingui-id: m79Vnd
 #: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
 msgid "You do not have permission for this Instagram message route."
@@ -25531,6 +25820,16 @@ msgstr "You do not have permission to view this widget"
 #: src/modules/object-record/record-index/components/RecordIndexEmptyStateNotShared.tsx
 msgid "You don't have access to this object."
 msgstr "You don't have access to this object."
+
+#. js-lingui-id: rCYJPD
+#: src/modules/activities/files/components/FilesCard.tsx
+msgid "You don't have permission to view files"
+msgstr "You don't have permission to view files"
+
+#. js-lingui-id: P+7OTe
+#: src/modules/activities/notes/components/NotesCard.tsx
+msgid "You don't have permission to view notes"
+msgstr "You don't have permission to view notes"
 
 #. js-lingui-id: RDAH2t
 #: src/modules/settings/billing/components/internal/SettingsBillingSubscriptionInfoModals.tsx
@@ -25635,6 +25934,16 @@ msgstr "Your billing interval will switch to yearly immediately and your trial w
 #: src/modules/page-layout/components/MyahCampaignAgent.tsx
 msgid "Your Campaign Agent changes have not been saved."
 msgstr "Your Campaign Agent changes have not been saved."
+
+#. js-lingui-id: BA7sCg
+#: src/modules/page-layout/components/MyahCampaignHome.tsx
+msgid "Your Campaign facts have not been saved."
+msgstr "Your Campaign facts have not been saved."
+
+#. js-lingui-id: 4Qq3Fv
+#: src/modules/object-record/record-index/components/RecordIndexPageHeader.tsx
+msgid "Your campaigns, from first draft to outreach. Search, filter and open campaigns in the list below."
+msgstr "Your campaigns, from first draft to outreach. Search, filter and open campaigns in the list below."
 
 #. js-lingui-id: 0L4hpS
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx

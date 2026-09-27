@@ -1,3 +1,4 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { styled } from '@linaria/react';
 import { type ChangeEvent, useRef, useState } from 'react';
 
@@ -42,7 +43,8 @@ const StyledDropZoneContainer = styled.div`
 export const FilesCard = () => {
   const targetRecord = useTargetRecord();
   const inputFileRef = useRef<HTMLInputElement>(null);
-  const { attachments, loading } = useAttachments(targetRecord);
+  const { attachments, loading, error, hasReadPermission } =
+    useAttachments(targetRecord);
   const { uploadAttachmentFile } = useUploadAttachmentFile();
 
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -87,8 +89,49 @@ export const FilesCard = () => {
 
   const canUploadFiles = hasObjectUpdatePermissions && hasUploadPermission;
 
+  const serverDeniedRead =
+    CombinedGraphQLErrors.is(error) &&
+    error.errors.some(
+      ({ extensions }) =>
+        extensions?.code === 'FORBIDDEN' ||
+        extensions?.code === 'UNAUTHENTICATED',
+    );
+
+  if (
+    !hasReadPermission ||
+    !objectPermissions.canReadObjectRecords ||
+    serverDeniedRead
+  ) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            {t`You don't have permission to view files`}
+          </AnimatedPlaceholderEmptyTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
+  }
+
   if (loading && isAttachmentsEmpty) {
     return <SkeletonLoader />;
+  }
+
+  if (error && isAttachmentsEmpty) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            {t`Files couldn't be loaded`}
+          </AnimatedPlaceholderEmptyTitle>
+          <AnimatedPlaceholderEmptySubTitle>
+            {t`Please refresh the page.`}
+          </AnimatedPlaceholderEmptySubTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
   }
 
   if (isAttachmentsEmpty) {

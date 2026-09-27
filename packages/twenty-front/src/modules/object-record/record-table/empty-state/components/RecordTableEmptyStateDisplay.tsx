@@ -19,7 +19,8 @@ import {
 } from 'twenty-ui/feedback';
 
 const StyledEmptyPlaceholderOuterContainer = styled.div`
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   width: 100%;
 `;
 

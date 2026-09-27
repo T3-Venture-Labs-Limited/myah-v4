@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { type CampaignSequenceMessage } from 'twenty-shared/workflow';
+import {
+  validateCampaignSequence,
+  type CampaignSequenceMessage,
+} from 'twenty-shared/workflow';
 
 import { CampaignSequenceMessageEditor } from '@/myah-outreach/components/CampaignSequenceMessageEditor';
 
@@ -96,7 +99,14 @@ const Harness = ({
   return (
     <CampaignSequenceMessageEditor
       editable
-      issues={[]}
+      issues={validateCampaignSequence({
+        schemaVersion: 1,
+        messages:
+          messageIndex > 0
+            ? [email({ id: 'b0000000-0000-4000-8000-000000000002' }), message]
+            : [message],
+        delaysSeconds: messageIndex > 0 ? [10] : [],
+      })}
       message={message}
       messageIndex={messageIndex}
       onAttachmentsAdded={(messageId, attachments) =>
@@ -121,6 +131,9 @@ describe('CampaignSequenceMessageEditor', () => {
   it('explains Campaign authority and prevents a first email from enabling reply intent', () => {
     render(<Harness />);
 
+    expect(
+      screen.getByRole('heading', { name: 'Step 1 · Email' }),
+    ).toBeVisible();
     expect(
       screen.getByText(/sender and recipients are controlled by the Campaign/i),
     ).toBeVisible();
@@ -152,6 +165,72 @@ describe('CampaignSequenceMessageEditor', () => {
         'Move this email after an earlier email or turn off reply.',
       ),
     ).toBeVisible();
+  });
+
+  it('shows the authored reply subject read-only, retains it across mode changes and explains historical thread resolution', () => {
+    render(
+      <Harness
+        initialMessage={email({
+          subject: 'Distinct reply subject',
+          replyToThread: true,
+        })}
+        messageIndex={1}
+      />,
+    );
+
+    const subject = screen.getByRole('textbox', { name: 'Subject' });
+    expect(subject).toHaveValue('Distinct reply subject');
+    expect(subject).toBeDisabled();
+    expect(
+      screen.getByText(
+        /sending resolves the verified earlier email thread separately for each Creator/i,
+      ),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Reply to earlier email' }),
+    );
+    expect(screen.getByRole('textbox', { name: 'Subject' })).not.toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveValue(
+      'Distinct reply subject',
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'Subject' }), {
+      target: { value: 'Edited authored subject' },
+    });
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Reply to earlier email' }),
+    );
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveValue(
+      'Edited authored subject',
+    );
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toBeDisabled();
+  });
+
+  it('keeps empty reply subject validation visible with a safe path back to editing', () => {
+    const message = email({ subject: '', replyToThread: true });
+    render(<Harness initialMessage={message} messageIndex={1} />);
+    expect(screen.getByText('Add an email subject')).toBeVisible();
+    expect(
+      screen.getByText(/turn off reply to edit the saved subject/i),
+    ).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toBeDisabled();
+    expect(
+      screen.getByRole('checkbox', { name: 'Reply to earlier email' }),
+    ).toBeEnabled();
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Reply to earlier email' }),
+    );
+    expect(screen.getByRole('textbox', { name: 'Subject' })).not.toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Subject' }), {
+      target: { value: 'Recovered reply subject' },
+    });
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Reply to earlier email' }),
+    );
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveValue(
+      'Recovered reply subject',
+    );
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toBeDisabled();
+    expect(screen.queryByText('Add an email subject')).not.toBeInTheDocument();
   });
 
   it('updates subject, body, and authenticated attachment metadata independently', async () => {
@@ -248,6 +327,9 @@ describe('CampaignSequenceMessageEditor', () => {
       />,
     );
 
+    expect(
+      screen.getByRole('heading', { name: 'Step 1 · Instagram' }),
+    ).toBeVisible();
     expect(screen.getByText('Instagram delivery unavailable')).toBeVisible();
     expect(
       screen.getByRole('textbox', { name: 'Instagram message' }),
