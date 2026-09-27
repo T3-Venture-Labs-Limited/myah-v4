@@ -1,4 +1,8 @@
-import { type ExtendedUIMessagePart } from 'twenty-shared/ai';
+import { getToolName, isToolUIPart } from 'ai';
+import {
+  REQUEST_APPROVAL_TOOL_NAME,
+  type ExtendedUIMessagePart,
+} from 'twenty-shared/ai';
 
 import { type AssistantMessageRenderItem } from '@/ai/utils/assistantMessageRenderItem';
 import { isThinkingStepPart } from '@/ai/utils/isThinkingStepPart';
@@ -22,6 +26,31 @@ export const groupContiguousThinkingStepParts = (
 
   for (const part of parts) {
     if (part.type === 'step-start') {
+      continue;
+    }
+
+    const approvalResult =
+      isToolUIPart(part) &&
+      getToolName(part) === REQUEST_APPROVAL_TOOL_NAME &&
+      typeof part.output === 'object' &&
+      part.output !== null &&
+      'result' in part.output
+        ? part.output.result
+        : undefined;
+
+    if (
+      typeof approvalResult === 'object' &&
+      approvalResult !== null &&
+      !('actionApprovalBindingId' in approvalResult) &&
+      isToolUIPart(part) &&
+      !(
+        typeof part.input === 'object' &&
+        part.input !== null &&
+        'actionInput' in part.input
+      )
+    ) {
+      flushThinkingParts();
+      renderItems.push({ type: 'part', part });
       continue;
     }
 

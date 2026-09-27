@@ -263,6 +263,9 @@ export class MyahInboxMutationService {
           expectedRevision: input.expectedRevision,
           body: input.body,
           proposalContextFingerprint: input.proposalContextFingerprint,
+          // Validated by the fingerprint above; never a later reread.
+          incomingBaseline: fresh.resolved.incomingBaseline ?? null,
+          acknowledgeProposal: input.requireReview !== true,
           clearContextAcknowledgement:
             input.expectedContextFingerprint != null &&
             input.proposalContextFingerprint == null,

@@ -183,7 +183,13 @@ export const MyahInboxContactRow = ({
               Instagram
             </StyledChannel>
           ) : null}
-          {contact.needsAttention ? (
+          {contact.triage.isAvailable &&
+          contact.triage.inboxState === 'NEEDS_REPLY' ? (
+            <StyledAttention>
+              <StyledAttentionDot aria-hidden="true" />
+              New message
+            </StyledAttention>
+          ) : contact.needsAttention ? (
             <StyledAttention>
               <StyledAttentionDot aria-hidden="true" />
               Needs attention

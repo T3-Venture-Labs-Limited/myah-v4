@@ -13,6 +13,7 @@ import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
 import { MyahInboxContactTriageSchemaService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-schema.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
+import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { normalizeReadCapabilitySql } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { WorkspaceManagerService } from 'src/engine/workspace-manager/workspace-manager.service';
@@ -61,8 +62,8 @@ const permissionCacheKeys = [
 
 const capabilitySources = [
   ['messageThread', 'message_thread', 'messageThread'],
-  ['myahSocialConversation', 'social_conversation', '_myahSocialConversation'],
-  ['myahSocialMessage', 'social_message', '_myahSocialMessage'],
+  ['myahSocialConversation', 'social_conversation', 'myahSocialConversation'],
+  ['myahSocialMessage', 'social_message', 'myahSocialMessage'],
 ] as const;
 
 const contactsQuery = gql`
@@ -71,9 +72,11 @@ const contactsQuery = gql`
     $owner: String
     $states: [MyahInboxState!]
     $snoozeStatus: MyahInboxSnoozeStatus
+    $contactId: String
   ) {
     myahInboxContacts(
       first: $first
+      contactId: $contactId
       owner: $owner
       states: $states
       snoozeStatus: $snoozeStatus
@@ -99,6 +102,14 @@ const contactsQuery = gql`
     }
   }
 `;
+
+// MYAH-415: the default Email list shows only Campaign responses. These
+// triage fixtures are not responses, so tests address them by exact contact.
+const exactContactId = (
+  kind: 'creator' | 'email-thread',
+  recordId: string,
+): string =>
+  encodeMyahInboxContactId({ workspaceId, identity: { kind, recordId } });
 
 const updateTriageMutation = gql`
   mutation Myah354UpdateTriage($input: UpdateMyahInboxContactTriageInput!) {
@@ -580,7 +591,14 @@ const seedInstagramProducerFixture =
     };
 
     await global.testDataSource.query(
-      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation" (
+      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInstagramAccount" (
+       id, label, "unipileAccountId"
+     ) VALUES ($1, 'MYAH354 Instagram Account', $2)`,
+      [accountRecordId, binding.unipileAccountId],
+    );
+
+    await global.testDataSource.query(
+      `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation" (
        id, name, label, provider, lifecycle, "providerConversationId",
        "recipientIgsid", "recipientUsername", "recipientDisplayName",
        "instagramAccountId", "updatedAt", "createdAt"
@@ -682,7 +700,7 @@ const mutateInstagramCreator = async ({
         entered?.resolve();
         if (release) await release.promise;
         await manager.query(
-          'UPDATE "_myahSocialConversation" SET "creatorId"=$2 WHERE id=$1',
+          'UPDATE "myahSocialConversation" SET "creatorId"=$2 WHERE id=$1',
           [fixture.conversationId, creatorId],
         );
       },
@@ -698,7 +716,7 @@ const cleanupInstagramProducerFixture = async (
     [fixture.conversationId],
   );
   await global.testDataSource.query(
-    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialMessage" WHERE "conversationId"=$1`,
+    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialMessage" WHERE "conversationId"=$1`,
     [fixture.conversationId],
   );
   await global.testDataSource.query(
@@ -710,9 +728,14 @@ const cleanupInstagramProducerFixture = async (
     [`instagram-conversation:${fixture.conversationId}`],
   );
   await global.testDataSource.query(
-    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation" WHERE id=$1`,
+    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation" WHERE id=$1`,
     [fixture.conversationId],
   );
+  const removedAccounts = await global.testDataSource.query(
+    `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInstagramAccount" WHERE id=$1 AND label='MYAH354 Instagram Account' AND "unipileAccountId"=$2 RETURNING id`,
+    [fixture.accountRecordId, fixture.binding.unipileAccountId],
+  );
+  expect(removedAccounts).toEqual([[{ id: fixture.accountRecordId }], 1]);
 };
 
 const persistExistingEmailThroughProducer = async (
@@ -1309,6 +1332,7 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
         query: contactsQuery,
         variables: {
           first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
           owner: 'UNASSIGNED',
           states: ['NEEDS_REPLY'],
         },
@@ -1339,7 +1363,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contactResponse = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1391,7 +1419,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1457,7 +1489,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1535,7 +1571,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
       const sourceContacts = await makeGraphqlAPIRequest(
         {
           query: contactsQuery,
-          variables: { first: 20, states: ['NEEDS_REPLY'] },
+          variables: {
+            first: 20,
+            contactId: exactContactId('email-thread', fixture.threadId),
+            states: ['NEEDS_REPLY'],
+          },
         },
         APPLE_JANE_ADMIN_ACCESS_TOKEN,
       );
@@ -1648,7 +1688,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1735,7 +1779,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -1836,7 +1884,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const response = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, snoozeStatus: 'DUE' },
+        variables: {
+          first: 20,
+          contactId: exactContactId('email-thread', fixture.threadId),
+          snoozeStatus: 'DUE',
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -2045,7 +2097,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
       const sharedToo = await makeGraphqlAPIRequest(
         {
           query: contactsQuery,
-          variables: { first: 20, states: ['NEEDS_REPLY'] },
+          variables: {
+            first: 20,
+            contactId: exactContactId('email-thread', fixture.threadId),
+            states: ['NEEDS_REPLY'],
+          },
         },
         APPLE_JANE_ADMIN_ACCESS_TOKEN,
       );
@@ -2209,7 +2265,11 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     const contacts = await makeGraphqlAPIRequest(
       {
         query: contactsQuery,
-        variables: { first: 20, states: ['NEEDS_REPLY'] },
+        variables: {
+          first: 20,
+          contactId: exactContactId('creator', fixture.creatorA),
+          states: ['NEEDS_REPLY'],
+        },
       },
       APPLE_JANE_ADMIN_ACCESS_TOKEN,
     );
@@ -2291,6 +2351,7 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
           query: contactsQuery,
           variables: {
             first: 20,
+            contactId: exactContactId('creator', fixture.creatorA),
             owner: 'UNASSIGNED',
             states: ['NEEDS_REPLY'],
           },
@@ -2590,7 +2651,7 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
       await Promise.all([mutation, producer]);
       const [messageCount] = await global.testDataSource.query(
         `SELECT count(*)::int AS count
-         FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialMessage"
+         FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialMessage"
          WHERE "conversationId"=$1`,
         [instagram.conversationId],
       );
@@ -2609,14 +2670,14 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
     await blocker.startTransaction();
     await blocker.query("SELECT set_config('search_path', $1, true)", [schema]);
     await blocker.query(
-      'SELECT id FROM "_myahSocialConversation" WHERE id=$1 FOR UPDATE',
+      'SELECT id FROM "myahSocialConversation" WHERE id=$1 FOR UPDATE',
       [instagram.conversationId],
     );
     const producer = projectInstagramMessage(instagram);
     let mutation: Promise<void> | undefined;
 
     try {
-      await waitForBlockedDatabaseQuery('_myahSocialConversation');
+      await waitForBlockedDatabaseQuery('myahSocialConversation');
       mutation = mutateInstagramCreator({
         fixture: instagram,
         creatorId: fixture.creatorA,
@@ -2626,7 +2687,7 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
       await Promise.all([producer, mutation]);
 
       const [source] = (await global.testDataSource.query(
-        `SELECT "creatorId" FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation" WHERE id=$1`,
+        `SELECT "creatorId" FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation" WHERE id=$1`,
         [instagram.conversationId],
       )) as Array<{ creatorId: string | null }>;
       expect(source.creatorId).toBe(fixture.creatorA);

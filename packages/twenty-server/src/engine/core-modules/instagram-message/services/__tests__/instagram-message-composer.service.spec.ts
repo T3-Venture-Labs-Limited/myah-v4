@@ -434,7 +434,7 @@ const buildTransactionHarness = (
           ];
         }
         expect(sql).toContain(
-          `FROM "${getWorkspaceSchemaName(workspaceId)}"."_myahInstagramReplyDraft"`,
+          `FROM "${getWorkspaceSchemaName(workspaceId)}"."myahInstagramReplyDraft"`,
         );
         expect([draftId, secondDraftId]).toContain(params[0]);
         return state.committed.filter((row) => row.id === params[0]);
@@ -1108,7 +1108,7 @@ const buildRecoveryHarness = () => {
         getWorkspaceSchemaName(workspaceId),
         ['composerInputDigest', 'instagramMessageSnapshot'],
       ]);
-      expect(sql).toContain("table_name = '_myahInstagramReplyDraft'");
+      expect(sql).toContain("table_name = 'myahInstagramReplyDraft'");
       return [
         { column_name: 'composerInputDigest' },
         { column_name: 'instagramMessageSnapshot' },
@@ -1124,7 +1124,7 @@ const buildRecoveryHarness = () => {
       return [];
     }
     expect(sql).toContain(
-      `FROM "${getWorkspaceSchemaName(workspaceId)}"."_myahInstagramReplyDraft"`,
+      `FROM "${getWorkspaceSchemaName(workspaceId)}"."myahInstagramReplyDraft"`,
     );
     expect(sql).toContain('WHERE "id" = $1 AND "deletedAt" IS NULL');
     expect(params).toEqual([draftId]);
@@ -2479,7 +2479,7 @@ const buildComposedSendHarness = async (route: 'START_CHAT' | 'REPLY') => {
     })),
     getGlobalWorkspaceDataSource: async () => ({
       query: async (sql: string) => {
-        if (!sql.includes('"_myahInstagramReplyDraft"'))
+        if (!sql.includes('"myahInstagramReplyDraft"'))
           return route === 'REPLY' ? [conversation()] : [];
         const row = h.state.committed[0];
         return row

@@ -2,6 +2,7 @@ import { Field, InputType, Int } from '@nestjs/graphql';
 
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -48,6 +49,13 @@ export class SaveMyahInboxDraftInput extends MyahInboxReplyDraftInput {
   @ValidateNested()
   @Type(() => MyahInboxRichTextInput)
   body: MyahInboxRichTextInput | null;
+
+  // Explicit update of an edited/legacy draft: store the validated proposal
+  // without acknowledgement so send still requires explicit review.
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  requireReview?: boolean | null;
 }
 
 @InputType('ReviewMyahInboxReplyContextInput')

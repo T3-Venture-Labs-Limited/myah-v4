@@ -44,11 +44,16 @@ import {
   encodeMyahInboxContactId,
   type MyahInboxContactIdentityKind as ContactIdentityKind,
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import {
   MessageVisibilityAccess,
   MessageVisibilityPolicyService,
@@ -197,6 +202,7 @@ export class MyahInboxContactQueryService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly messageVisibilityPolicyService: MessageVisibilityPolicyService,
+    private readonly twentyConfigService: TwentyConfigService,
     private readonly triageCapabilityService?: MyahInboxTriageCapabilityService,
   ) {}
 
@@ -418,6 +424,24 @@ export class MyahInboxContactQueryService {
           readableSocialConversationsSql,
           readableSocialMessagesSql,
         ] = permissionQueries.map(appendPermissionQuery);
+        let readableCampaignsSql: string;
+        try {
+          readableCampaignsSql = appendPermissionQuery(
+            serializePermissionQuery(
+              campaignRepository
+                .createQueryBuilder('campaign')
+                .select('campaign.id', 'id')
+                .where('campaign."deletedAt" IS NULL'),
+            ),
+          );
+        } catch (error) {
+          if (
+            !(error instanceof PermissionsException) ||
+            error.code !== PermissionsExceptionCode.PERMISSION_DENIED
+          )
+            throw error;
+          readableCampaignsSql = 'SELECT NULL::uuid AS id WHERE FALSE';
+        }
         const addParameter = (value: unknown): string => {
           parameters.push(value);
 
@@ -502,6 +526,42 @@ export class MyahInboxContactQueryService {
             )`;
         }
         const limit = addParameter(pageSize + 1);
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        // Old workspaces can have triage but not yet the additive reply table.
+        // They keep Instagram and exact Email lookups, never guessed responses.
+        const [triageRelations] = (await dataSource.query(
+          `SELECT to_regclass($1) IS NOT NULL AS "exists",
+            to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "replyEvidenceReady"`,
+          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        )) as Array<{ exists: boolean; replyEvidenceReady: boolean }>;
+        if (!triageRelations?.exists) {
+          throw new ForbiddenException(
+            'Triage is unavailable with your current Inbox access',
+          );
+        }
+        const responseEvidencePredicate = triageRelations.replyEvidenceReady
+          ? `EXISTS (
+      SELECT 1 FROM core."myahCampaignReplyEvidence" evidence
+      JOIN readable_campaigns campaign ON campaign.id=evidence."campaignId"
+      JOIN readable_creators evidence_creator ON evidence_creator.id=evidence."creatorId"
+      JOIN readable_threads evidence_thread ON evidence_thread.id=message."messageThreadId"
+        AND evidence_thread."creatorId"=evidence_creator.id
+      JOIN "${workspaceSchemaName}"."messageChannelMessageAssociation" association
+        ON association."messageId"=message.id
+       AND association."messageChannelId"=evidence."messageChannelId"
+       AND association."deletedAt" IS NULL AND association.direction='INCOMING'
+      WHERE evidence."workspaceId"=$1 AND evidence."inboundMessageId"=message.id
+    )`
+          : 'FALSE';
+        // Off until historical replies are backfilled; otherwise old replies vanish.
+        const emailSource =
+          exactContact ||
+          !this.twentyConfigService.get('MYAH_INBOX_RESPONSE_FOCUS_ENABLED')
+            ? 'visible_email_messages'
+            : 'response_email_messages';
         const sql = `WITH request_scope AS (
   SELECT $1::uuid AS "workspaceId", $2::uuid AS "userWorkspaceId"
 ),
@@ -509,6 +569,7 @@ readable_messages AS (${readableMessagesSql}),
 readable_participants AS (${readableParticipantsSql}),
 readable_threads AS (${readableThreadsSql}),
 readable_creators AS (${readableCreatorsSql}),
+readable_campaigns AS (${readableCampaignsSql}),
 readable_workspace_members AS (${readableWorkspaceMembersSql}),
 readable_social_conversations AS (${readableSocialConversationsSql}),
 readable_social_messages AS (${readableSocialMessagesSql}),
@@ -546,6 +607,12 @@ visible_email_messages AS (
   WHERE message."receivedAt" IS NOT NULL
     AND message.visibility <> ${hidden}
 ),
+response_email_messages AS (
+  SELECT message.*
+  FROM visible_email_messages message
+  WHERE message.direction = 'INCOMING'
+    AND ${responseEvidencePredicate}
+),
 latest_email_by_thread AS (
   SELECT DISTINCT ON (message."messageThreadId")
     message.id,
@@ -566,14 +633,14 @@ latest_email_by_thread AS (
       WHEN message.visibility = ${full} THEN message.text
       ELSE NULL
     END AS "searchBody"
-  FROM visible_email_messages message
+  FROM ${emailSource} message
   ORDER BY message."messageThreadId", message."receivedAt" DESC, message.id DESC
 ),
 latest_inbound_email_by_thread AS (
   SELECT DISTINCT ON (message."messageThreadId")
     message."messageThreadId",
     message."receivedAt" AS "inboundAt"
-  FROM visible_email_messages message
+  FROM ${emailSource} message
   WHERE message.direction = 'INCOMING'
   ORDER BY message."messageThreadId", message."receivedAt" DESC, message.id DESC
 ),
@@ -885,28 +952,6 @@ FROM filtered_total
 CROSS JOIN triage_capability
 LEFT JOIN paged_contacts ON TRUE
 ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderingKey" DESC NULLS LAST`;
-        const dataSource =
-          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-
-        // The private triage relations are provisioned by the 2.20 command,
-        // whose marker row is written last. Without them the triage CTEs above
-        // cannot be referenced at all, so fail closed with the same generic
-        // response instead of surfacing a raw SQL error during a partial
-        // upgrade. The identifier is derived from the internal workspace UUID
-        // and bound as a parameter here.
-        const [triageRelations] = (await dataSource.query(
-          'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
-          undefined,
-          { shouldBypassPermissionChecks: true },
-        )) as Array<{ exists: boolean }>;
-
-        if (!triageRelations?.exists) {
-          throw new ForbiddenException(
-            'Triage is unavailable with your current Inbox access',
-          );
-        }
-
         const rows = await dataSource.query<ContactRaw[]>(
           sql,
           parameters,

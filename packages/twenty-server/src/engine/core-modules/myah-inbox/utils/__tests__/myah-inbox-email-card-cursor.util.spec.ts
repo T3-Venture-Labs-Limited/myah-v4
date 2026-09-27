@@ -43,6 +43,61 @@ describe('myah-inbox-email-card-cursor', () => {
   ])('rejects noncanonical or unexpected token fields', (invalid) => {
     expect(() => decode(token(invalid))).toThrow(BadRequestException);
   });
+  it('carries a namespaced accepted-send group through card and message cursors', () => {
+    const anchorKey = `attempt:${workspaceId}`;
+    expect(
+      decode(
+        token({
+          ...payload,
+          kind: 'cards',
+          timestamp: payload.snapshotAt,
+          id: anchorKey,
+          threadId: workspaceId,
+        }),
+        scope,
+        'cards',
+      ),
+    ).toMatchObject({ id: anchorKey, threadId: workspaceId });
+    expect(() =>
+      decode(
+        token({
+          ...payload,
+          kind: 'cards',
+          timestamp: payload.snapshotAt,
+          id: anchorKey,
+        }),
+        scope,
+        'cards',
+      ),
+    ).toThrow(BadRequestException);
+    expect(
+      decode(
+        token({
+          ...payload,
+          kind: 'older',
+          timestamp: payload.snapshotAt,
+          id: workspaceId,
+          threadId: workspaceId,
+          anchorKey,
+        }),
+        scope,
+        'older',
+      ),
+    ).toMatchObject({ anchorKey });
+    expect(() =>
+      decode(
+        token({
+          ...payload,
+          kind: 'cards',
+          timestamp: payload.snapshotAt,
+          id: `attempt:${scope.contactId}`,
+        }),
+        scope,
+        'cards',
+      ),
+    ).toThrow(BadRequestException);
+  });
+
   it('rejects non-string UUID boundary values even when string coercion would match', () => {
     expect(() =>
       decode(

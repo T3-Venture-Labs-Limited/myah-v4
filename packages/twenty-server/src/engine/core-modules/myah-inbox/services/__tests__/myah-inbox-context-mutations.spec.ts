@@ -100,6 +100,44 @@ const setup = () => {
 };
 
 describe('Myah Inbox public context mutations', () => {
+  it('applies an explicit update as a validated unacknowledged proposal', async () => {
+    const { service, drafts, resolved } = setup();
+    await service.saveMyahInboxDraft({
+      ...input,
+      proposalContextFingerprint: resolved.contextFingerprint,
+      requireReview: true,
+    } as never);
+    expect(drafts.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proposalContextFingerprint: resolved.contextFingerprint,
+        acknowledgeProposal: false,
+      }),
+    );
+  });
+
+  it('persists the incoming baseline from the fresh lock-time context, never the pre-lock read', async () => {
+    const { service, drafts, contexts, resolved } = setup();
+    contexts.resolveForAction
+      .mockResolvedValueOnce({
+        ...resolved,
+        incomingBaseline: 'stale',
+      } as never)
+      .mockResolvedValueOnce({
+        ...resolved,
+        incomingBaseline: 'fresh',
+      } as never);
+    await service.saveMyahInboxDraft({
+      ...input,
+      proposalContextFingerprint: resolved.contextFingerprint,
+    } as never);
+    expect(drafts.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        incomingBaseline: 'fresh',
+        proposalContextFingerprint: resolved.contextFingerprint,
+      }),
+    );
+  });
+
   it('saves only the resolved anchored context and never acknowledges changed guidance on an edit', async () => {
     const { service, drafts, approvals, options } = setup();
     await expect(

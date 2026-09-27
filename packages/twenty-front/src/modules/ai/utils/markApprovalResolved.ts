@@ -54,6 +54,13 @@ export const markApprovalResolved = (
                   status: 'resolved',
                 }
               : {
+                  // Keep what was reviewed visible until the server refetch.
+                  ...(isRecord(part.output.result.request)
+                    ? { request: part.output.result.request }
+                    : {}),
+                  ...(isRecord(part.output.result.reviewedAction)
+                    ? { reviewedAction: part.output.result.reviewedAction }
+                    : {}),
                   status: 'resolved',
                   decision: resolution.decision,
                   ...(typeof resolution.comment === 'string'

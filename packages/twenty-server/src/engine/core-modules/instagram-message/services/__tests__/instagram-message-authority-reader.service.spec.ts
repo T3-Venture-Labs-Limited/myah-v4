@@ -49,7 +49,7 @@ const buildHarness = (
   const dataSource = dataSourceOverride ?? {
     transaction: jest.fn(async (callback) => callback({ query: jest.fn() })),
     query: jest.fn(async (sql: string) =>
-      sql.includes('"_myahInstagramReplyDraft"') ? [draft] : [],
+      sql.includes('"myahInstagramReplyDraft"') ? [draft] : [],
     ),
   };
   const globalWorkspaceOrmManager = {
@@ -201,7 +201,7 @@ describe('InstagramMessageAuthorityReaderService historical v2 reconstruction', 
     const queryRunner = {
       isReleased: false,
       query: jest.fn(async (sql: string) =>
-        sql.includes('"_myahInstagramReplyDraft"') ? [firstDraft] : [],
+        sql.includes('"myahInstagramReplyDraft"') ? [firstDraft] : [],
       ),
       release: jest.fn(),
     };
@@ -232,10 +232,10 @@ describe('InstagramMessageAuthorityReaderService historical v2 reconstruction', 
 
     expect(
       queryRunner.query.mock.calls.map(([sql]) => sql).join('\n'),
-    ).toContain('"_myahInstagramReplyDraft"');
+    ).toContain('"myahInstagramReplyDraft"');
     expect(
       queryRunner.query.mock.calls.map(([sql]) => sql).join('\n'),
-    ).toContain('"_myahSocialConversation"');
+    ).toContain('"myahSocialConversation"');
   });
 
   it('blocks START_CHAT when a current provider chat already exists', async () => {
@@ -336,7 +336,7 @@ describe('InstagramMessageAuthorityReaderService shared local extraction', () =>
       expect(harness.client.listChats).not.toHaveBeenCalled();
       expect(harness.client.getChat).not.toHaveBeenCalled();
       expect(harness.dataSource.query).toHaveBeenLastCalledWith(
-        expect.stringContaining('"_myahInstagramReplyDraft"'),
+        expect.stringContaining('"myahInstagramReplyDraft"'),
         [draftId, method === 'rebuildForReconciliation'],
         undefined,
         { shouldBypassPermissionChecks: true },

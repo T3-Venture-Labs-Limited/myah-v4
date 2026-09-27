@@ -3706,6 +3706,46 @@ export const buildMyahStandardFlatFieldMetadatas = ({
     case 'creator':
       return {
         ...buildMyahBaseSystemFields({ objectName, ...args }),
+        instagramConversations: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'instagramConversations',
+            label: 'Instagram conversations',
+            description: 'Instagram conversations',
+            icon: 'IconMessages',
+            targetObjectName: 'myahSocialConversation',
+            targetFieldName: 'creator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramMessageDrafts: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'instagramMessageDrafts',
+            label: 'Instagram message drafts',
+            description: 'Instagram message drafts',
+            icon: 'IconMessagePlus',
+            targetObjectName: 'myahInstagramReplyDraft',
+            targetFieldName: 'creator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         name: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
@@ -5354,8 +5394,903 @@ export const buildMyahStandardFlatFieldMetadatas = ({
         }),
       };
 
+    case 'myahInstagramAccount':
+    case 'myahSocialConversation':
+    case 'myahSocialMessage':
+    case 'myahInstagramReplyDraft':
+      return buildMyahInstagramStandardFlatFieldMetadatas({
+        objectName,
+        ...args,
+      });
+
     default:
       return {};
   }
 };
 export const MYAH_RELATION_FIELD_COUNT = 38;
+
+type MyahInstagramFieldConfig = {
+  name: string;
+  type: FieldMetadataType;
+  label: string;
+  description?: string;
+  icon?: string;
+  isNullable?: boolean;
+  isUnique?: boolean;
+  isUIEditable?: boolean;
+  defaultValue?: unknown;
+  options?: unknown;
+  universalSettings?: unknown;
+};
+const MYAH_INSTAGRAM_ACCOUNT_FIELD_CONFIGS = [
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Label',
+    name: 'label',
+    description: 'Human-readable account label shown to workspace members.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Legacy connected account ID',
+    name: 'connectedAccountId',
+    isUnique: true,
+    description:
+      'Legacy provider connection id retained with this workspace Instagram account.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Legacy provider user ID',
+    name: 'composioUserId',
+    description: 'Legacy workspace user id retained for historical records.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Legacy authorization config ID',
+    name: 'authConfigId',
+    isNullable: true,
+    defaultValue: null,
+    description:
+      'Legacy authorization configuration id retained for historical records.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Instagram account ID',
+    name: 'igUserId',
+    isNullable: true,
+    isUnique: true,
+    defaultValue: null,
+    description: 'Instagram-scoped account id when returned by provider data.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Unipile account ID',
+    name: 'unipileAccountId',
+    isNullable: true,
+    isUnique: true,
+    defaultValue: null,
+    description: 'Unipile account id for this workspace Instagram account.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Username',
+    name: 'username',
+    isNullable: true,
+    defaultValue: null,
+    description: 'Instagram username or handle when known.',
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Status',
+    name: 'status',
+    defaultValue: `'${'ACTIVE'}'`,
+    options: [
+      {
+        id: '91e5543f-6fc5-4f49-a5bf-dccbbee7b625',
+        value: 'ACTIVE',
+        label: 'Active',
+        position: 0,
+        color: 'green',
+      },
+      {
+        id: 'cb391884-78b4-4f8b-be4a-1ab8266654df',
+        value: 'INACTIVE',
+        label: 'Inactive',
+        position: 1,
+        color: 'gray',
+      },
+      {
+        id: '0630ec55-2b0f-4ba1-ad69-776baf2889e7',
+        value: 'NEEDS_RECONNECT',
+        label: 'Needs reconnect',
+        position: 2,
+        color: 'orange',
+      },
+      {
+        id: '343ff77a-a842-4549-9ff2-8f2fa02bbd3e',
+        value: 'ERROR',
+        label: 'Error',
+        position: 3,
+        color: 'red',
+      },
+      {
+        id: 'b14dcff4-87a7-47b4-ad0b-507f825620cb',
+        value: 'CONNECTING',
+        label: 'Connecting',
+        position: 4,
+        color: 'blue',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Last checked at',
+    name: 'lastCheckedAt',
+    isNullable: true,
+    defaultValue: null,
+    description: 'Most recent status check time for this Instagram connection.',
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Last conversation sync at',
+    name: 'lastConversationSyncAt',
+    isNullable: true,
+    defaultValue: null,
+    description:
+      'Most recent manual conversation sync time. Polling is disabled.',
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Completed chat sync at',
+    name: 'completedChatSyncAt',
+    isNullable: true,
+    defaultValue: null,
+    description: 'When the initial chat synchronization completed.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Conversation after cursor',
+    name: 'conversationAfterCursor',
+    isNullable: true,
+    defaultValue: null,
+    description:
+      'Safe cursor for future manual or scheduled conversation sync. Do not store tokenized paging.next URLs.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Last error',
+    name: 'lastError',
+    isNullable: true,
+    defaultValue: null,
+    description:
+      'Redacted latest provider/status error if the connection fails.',
+  },
+  {
+    type: FieldMetadataType.RELATION,
+    label: 'Conversations',
+    name: 'conversations',
+    description: 'Instagram conversations associated with this account.',
+    isNullable: true,
+    universalSettings: {
+      relationType: RelationType.ONE_TO_MANY,
+    },
+  },
+] as const;
+const MYAH_SOCIAL_CONVERSATION_FIELD_CONFIGS = [
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Label',
+    name: 'label',
+    description: 'Human-readable thread label, such as creator handle.',
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Provider',
+    name: 'provider',
+    defaultValue: `'${'COMPOSIO_HISTORY'}'`,
+    options: [
+      {
+        id: 'e161e884-2f21-44ad-a6ac-5e221a0c1cee',
+        value: 'COMPOSIO_HISTORY',
+        label: 'Composio history',
+        position: 0,
+        color: 'purple',
+      },
+      {
+        id: '5dcd0095-ae5f-431a-8fe2-d5d0e22c98ce',
+        value: 'UNIPILE',
+        label: 'Unipile',
+        position: 1,
+        color: 'blue',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Lifecycle',
+    name: 'lifecycle',
+    defaultValue: `'${'HISTORICAL'}'`,
+    options: [
+      {
+        id: 'f0dec157-630f-46d0-ba8a-678f9082d2f9',
+        value: 'ACTIVE',
+        label: 'Active',
+        position: 0,
+        color: 'green',
+      },
+      {
+        id: '4845c0dc-5892-46dc-9682-b008c6f6070f',
+        value: 'HISTORICAL',
+        label: 'Historical',
+        position: 1,
+        color: 'gray',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Provider conversation ID',
+    name: 'providerConversationId',
+    description:
+      'Provider conversation id retained with the conversation metadata.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Recipient IGSID',
+    name: 'recipientIgsid',
+    isNullable: true,
+    defaultValue: null,
+    description:
+      'Instagram-scoped recipient id required by server-owned reply delivery. Usernames are not accepted.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Recipient username',
+    name: 'recipientUsername',
+    isNullable: true,
+    defaultValue: null,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Recipient display name',
+    name: 'recipientDisplayName',
+    isNullable: true,
+    defaultValue: null,
+  },
+  {
+    type: FieldMetadataType.RELATION,
+    label: 'Instagram account',
+    name: 'instagramAccount',
+    description: 'Connected Instagram account that owns this conversation.',
+    isNullable: true,
+    universalSettings: {
+      relationType: RelationType.MANY_TO_ONE,
+      onDelete: RelationOnDeleteAction.SET_NULL,
+      joinColumnName: 'instagramAccountId',
+    },
+  },
+  {
+    type: FieldMetadataType.RELATION,
+    label: 'Creator',
+    name: 'creator',
+    isNullable: true,
+    universalSettings: {
+      relationType: RelationType.MANY_TO_ONE,
+      onDelete: RelationOnDeleteAction.SET_NULL,
+      joinColumnName: 'creatorId',
+    },
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Completed message sync at',
+    name: 'completedMessageSyncAt',
+    isNullable: true,
+    defaultValue: null,
+  },
+  {
+    type: FieldMetadataType.RELATION,
+    label: 'Messages',
+    name: 'messages',
+    description: 'Messages in this conversation.',
+    isNullable: true,
+    universalSettings: {
+      relationType: RelationType.ONE_TO_MANY,
+    },
+  },
+  {
+    type: FieldMetadataType.RELATION,
+    label: 'Reply drafts',
+    name: 'replyDrafts',
+    description: 'Reply drafts prepared for this conversation.',
+    isNullable: true,
+    universalSettings: {
+      relationType: RelationType.ONE_TO_MANY,
+    },
+  },
+] as const;
+const MYAH_SOCIAL_MESSAGE_FIELD_CONFIGS = [
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Text',
+    name: 'text',
+    isNullable: true,
+    defaultValue: null,
+    description: 'Message text or a local note for media-only messages.',
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Direction',
+    name: 'direction',
+    defaultValue: `'${'OUTBOUND'}'`,
+    options: [
+      {
+        id: '13d27078-c7bc-40b1-ae19-1ddbbfe15642',
+        value: 'INBOUND',
+        label: 'Inbound',
+        position: 0,
+        color: 'green',
+      },
+      {
+        id: '34847dd8-c965-43b1-b979-572a0830b97f',
+        value: 'OUTBOUND',
+        label: 'Outbound',
+        position: 1,
+        color: 'blue',
+      },
+      {
+        id: '9b7e22a4-21f8-4379-8b1f-549a0a802434',
+        value: 'UNKNOWN',
+        label: 'Unknown',
+        position: 2,
+        color: 'gray',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Sent via',
+    name: 'sentVia',
+    defaultValue: `'${'MANUAL'}'`,
+    options: [
+      {
+        id: 'a2df96c5-8d37-433b-995a-8b972b85a8aa',
+        value: 'MANUAL',
+        label: 'Manual',
+        position: 0,
+        color: 'gray',
+      },
+      {
+        id: '958683e0-a74a-40c2-9e33-43a36a972b03',
+        value: 'COMPOSIO',
+        label: 'Composio',
+        position: 1,
+        color: 'purple',
+      },
+      {
+        id: 'e2dc9bec-bf06-48aa-9add-a7a99f7d2917',
+        value: 'UNKNOWN',
+        label: 'Unknown',
+        position: 2,
+        color: 'orange',
+      },
+      {
+        id: '6989ae94-6f41-4f00-af49-3aba0e4c2897',
+        value: 'UNIPILE',
+        label: 'Unipile',
+        position: 3,
+        color: 'blue',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Provider',
+    name: 'provider',
+    defaultValue: `'${'COMPOSIO_HISTORY'}'`,
+    options: [
+      {
+        id: 'e177ebaf-239f-4b44-aa9d-4f4358a1d244',
+        value: 'COMPOSIO_HISTORY',
+        label: 'Composio history',
+        position: 0,
+        color: 'purple',
+      },
+      {
+        id: '8f616732-93b5-4a23-9f2a-bcb4d47931e4',
+        value: 'UNIPILE',
+        label: 'Unipile',
+        position: 1,
+        color: 'blue',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.BOOLEAN,
+    label: 'Has attachments',
+    name: 'hasAttachments',
+    defaultValue: false,
+  },
+  {
+    type: FieldMetadataType.NUMBER,
+    label: 'Attachment count',
+    name: 'attachmentCount',
+    defaultValue: 0,
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Delivery state',
+    name: 'deliveryState',
+    defaultValue: `'${'UNKNOWN'}'`,
+    options: [
+      {
+        id: 'ee88c704-acba-411b-9e61-8d953915e7d4',
+        value: 'UNKNOWN',
+        label: 'Unknown',
+        position: 0,
+        color: 'gray',
+      },
+      {
+        id: 'cd27dfbc-7e8c-44a5-88fd-cd8eeceeab48',
+        value: 'RECEIVED',
+        label: 'Received',
+        position: 1,
+        color: 'green',
+      },
+      {
+        id: '69d2a394-a90a-4be9-88e8-84acd3378d5e',
+        value: 'SENT',
+        label: 'Sent',
+        position: 2,
+        color: 'blue',
+      },
+      {
+        id: 'ea556c36-fc36-4d54-917b-cf859a6f095e',
+        value: 'DELIVERED',
+        label: 'Delivered',
+        position: 3,
+        color: 'turquoise',
+      },
+      {
+        id: 'bebfcc76-371c-40bb-8eec-64093cbd2eb0',
+        value: 'READ',
+        label: 'Read',
+        position: 4,
+        color: 'purple',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Delivery state updated at',
+    name: 'deliveryStateUpdatedAt',
+    isNullable: true,
+    defaultValue: null,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Provider message ID',
+    name: 'providerMessageId',
+    isNullable: true,
+    defaultValue: null,
+    description:
+      'Instagram message id when known. Manual first-DM rows may not have one before reconciliation.',
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Provider created at',
+    name: 'providerCreatedAt',
+    isNullable: true,
+    defaultValue: null,
+    description: 'Timestamp reported by Instagram for this message.',
+  },
+  {
+    type: FieldMetadataType.RELATION,
+    label: 'Conversation',
+    name: 'conversation',
+    description: 'Conversation containing this message.',
+    isNullable: true,
+    universalSettings: {
+      relationType: RelationType.MANY_TO_ONE,
+      onDelete: RelationOnDeleteAction.SET_NULL,
+      joinColumnName: 'conversationId',
+    },
+  },
+] as const;
+const MYAH_INSTAGRAM_REPLY_DRAFT_FIELD_CONFIGS = [
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Title',
+    name: 'title',
+    description: 'Short label for the draft reply.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Body',
+    name: 'body',
+    description: 'Reply text to review before explicit send.',
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Kind',
+    name: 'kind',
+    defaultValue: `'${'REPLY'}'`,
+    options: [
+      {
+        id: '391098f4-d2a7-4969-9352-9f24103dd12c',
+        value: 'FIRST_MESSAGE',
+        label: 'First message',
+        position: 0,
+        color: 'blue',
+      },
+      {
+        id: '560e4db8-2875-432c-8131-f14cf59395df',
+        value: 'REPLY',
+        label: 'Reply',
+        position: 1,
+        color: 'gray',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Status',
+    name: 'status',
+    defaultValue: `'${'DRAFT'}'`,
+    options: [
+      {
+        id: 'f1d82de8-e995-4d97-a8f8-6ebdef1c049b',
+        value: 'DRAFT',
+        label: 'Draft',
+        position: 0,
+        color: 'gray',
+      },
+      {
+        id: '3aa09d72-e11e-4c8a-b69f-f6ff0e270360',
+        value: 'NEEDS_REVIEW',
+        label: 'Needs review',
+        position: 1,
+        color: 'orange',
+      },
+      {
+        id: '8e46a2b5-fcdb-4ead-9dd5-0c1f31649cd5',
+        value: 'APPROVED',
+        label: 'Approved',
+        position: 2,
+        color: 'green',
+      },
+      {
+        id: '704cbe46-2eb2-4cc3-a5fd-ac6367e1b0c4',
+        value: 'SENT',
+        label: 'Sent',
+        position: 3,
+        color: 'blue',
+      },
+      {
+        id: '85188535-fc9b-4635-9ce0-2ba1a03b612d',
+        value: 'DISCARDED',
+        label: 'Discarded',
+        position: 4,
+        color: 'red',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.SELECT,
+    label: 'Source',
+    name: 'source',
+    defaultValue: `'${'MANUAL'}'`,
+    options: [
+      {
+        id: '1d31a9c0-5040-4d07-81d2-e5e3a6714328',
+        value: 'MANUAL',
+        label: 'Manual',
+        position: 0,
+        color: 'gray',
+      },
+      {
+        id: '3718ac3b-5d92-4ef9-98bb-f27ff00f77c6',
+        value: 'AI',
+        label: 'AI',
+        position: 1,
+        color: 'purple',
+      },
+      {
+        id: '43d1780f-28c5-4323-8211-134d745bac58',
+        value: 'TEMPLATE',
+        label: 'Template',
+        position: 2,
+        color: 'blue',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Inbound message record ID',
+    name: 'inboundMessageRecordId',
+    isNullable: true,
+    defaultValue: null,
+    description: 'Exact local inbound message evidence for this reply draft.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Inbound provider message ID',
+    name: 'inboundProviderMessageId',
+    isNullable: true,
+    defaultValue: null,
+    description: 'Exact Instagram inbound message ID for this reply draft.',
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Generated at',
+    name: 'generatedAt',
+    isNullable: true,
+    defaultValue: null,
+    description: 'When AI or a template generated this draft.',
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Approved at',
+    name: 'approvedAt',
+    isNullable: true,
+    defaultValue: null,
+    description: 'When a human approved this draft for a future explicit send.',
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    label: 'Sent at',
+    name: 'sentAt',
+    isNullable: true,
+    defaultValue: null,
+    description: 'When the approved draft was explicitly sent.',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Send blocked reason',
+    name: 'sendBlockedReason',
+    isNullable: true,
+    defaultValue: null,
+    description:
+      'Reason a draft cannot be sent, such as a closed Instagram reply window.',
+  },
+  {
+    type: FieldMetadataType.RELATION,
+    label: 'Creator',
+    name: 'creator',
+    isNullable: true,
+    universalSettings: {
+      relationType: RelationType.MANY_TO_ONE,
+      onDelete: RelationOnDeleteAction.SET_NULL,
+      joinColumnName: 'creatorId',
+    },
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Recipient username',
+    name: 'recipientUsername',
+    isNullable: true,
+    defaultValue: null,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Recipient provider ID',
+    name: 'recipientProviderId',
+    isNullable: true,
+    defaultValue: null,
+  },
+  {
+    type: FieldMetadataType.NUMBER,
+    label: 'Revision',
+    name: 'revision',
+    defaultValue: 1,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    label: 'Composer input digest',
+    name: 'composerInputDigest',
+    isNullable: true,
+    isUIEditable: false,
+    defaultValue: null,
+    description:
+      'Server-owned immutable digest for a verified Instagram composer attempt.',
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
+    label: 'Instagram message snapshot',
+    name: 'instagramMessageSnapshot',
+    isNullable: true,
+    isUIEditable: false,
+    defaultValue: null,
+    description:
+      'Server-owned immutable identity snapshot for a verified Instagram composer attempt.',
+  },
+  {
+    type: FieldMetadataType.RELATION,
+    label: 'Conversation',
+    name: 'conversation',
+    description: 'Conversation this draft replies to.',
+    isNullable: true,
+    universalSettings: {
+      relationType: RelationType.MANY_TO_ONE,
+      onDelete: RelationOnDeleteAction.SET_NULL,
+      joinColumnName: 'conversationId',
+    },
+  },
+] as const;
+
+const MYAH_INSTAGRAM_RELATION_TARGETS: Record<
+  string,
+  readonly [MyahStandardObjectName, string]
+> = {
+  'myahInstagramAccount.conversations': [
+    'myahSocialConversation',
+    'instagramAccount',
+  ],
+  'myahSocialConversation.instagramAccount': [
+    'myahInstagramAccount',
+    'conversations',
+  ],
+  'myahSocialConversation.creator': ['creator', 'instagramConversations'],
+  'myahSocialConversation.messages': ['myahSocialMessage', 'conversation'],
+  'myahSocialConversation.replyDrafts': [
+    'myahInstagramReplyDraft',
+    'conversation',
+  ],
+  'myahSocialMessage.conversation': ['myahSocialConversation', 'messages'],
+  'myahInstagramReplyDraft.creator': ['creator', 'instagramMessageDrafts'],
+  'myahInstagramReplyDraft.conversation': [
+    'myahSocialConversation',
+    'replyDrafts',
+  ],
+};
+
+const buildMyahInstagramBaseSystemFields = (args: Args) => ({
+  ...buildMyahBaseSystemFields(args),
+  name: createMyahStandardFieldFlatMetadata({
+    ...args,
+    context: {
+      fieldName: 'name',
+      type: FieldMetadataType.TEXT,
+      label: 'Name',
+      description: 'Name',
+      icon: 'IconAbc',
+      isNullable: true,
+    },
+  }),
+});
+
+const buildMyahInstagramStandardFlatFieldMetadatas = ({
+  objectName,
+  ...args
+}: Args) => {
+  const configsByObject = {
+    myahInstagramAccount: MYAH_INSTAGRAM_ACCOUNT_FIELD_CONFIGS,
+    myahSocialConversation: MYAH_SOCIAL_CONVERSATION_FIELD_CONFIGS,
+    myahSocialMessage: MYAH_SOCIAL_MESSAGE_FIELD_CONFIGS,
+    myahInstagramReplyDraft: MYAH_INSTAGRAM_REPLY_DRAFT_FIELD_CONFIGS,
+  } as const;
+  const configs = configsByObject[objectName as keyof typeof configsByObject];
+  const fields = Object.fromEntries(
+    configs.map((raw) => {
+      const field = raw as MyahInstagramFieldConfig;
+      const relationTarget =
+        MYAH_INSTAGRAM_RELATION_TARGETS[`${objectName}.${field.name}`];
+      const flatField = createMyahStandardFieldFlatMetadata({
+        ...args,
+        objectName,
+        context: {
+          fieldName: field.name as never,
+          type: field.type,
+          label: field.label,
+          description: field.description ?? field.label,
+          icon: field.icon ?? 'Icon123',
+          isNullable: field.isNullable,
+          isUnique: field.isUnique,
+          isUIEditable: field.isUIEditable,
+          defaultValue: field.defaultValue as never,
+          options: field.options as never,
+          settings: field.universalSettings as never,
+        },
+      });
+      if (!relationTarget) return [field.name, flatField];
+      const [targetObjectName, targetFieldName] = relationTarget;
+      return [
+        field.name,
+        {
+          ...flatField,
+          relationTargetObjectMetadataId:
+            args.standardObjectMetadataRelatedEntityIds[targetObjectName].id,
+          relationTargetFieldMetadataId: (
+            args.standardObjectMetadataRelatedEntityIds[targetObjectName]
+              .fields as Record<string, { id: string }>
+          )[targetFieldName].id,
+          relationTargetObjectMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS[targetObjectName].universalIdentifier,
+          relationTargetFieldMetadataUniversalIdentifier: (
+            MYAH_STANDARD_OBJECTS[targetObjectName].fields as Record<
+              string,
+              { universalIdentifier: string }
+            >
+          )[targetFieldName].universalIdentifier,
+        },
+      ];
+    }),
+  );
+  return {
+    ...buildMyahInstagramBaseSystemFields({ objectName, ...args }),
+    ...fields,
+  } as Record<string, FlatFieldMetadata>;
+};
+
+export const buildMyahInstagramAccountStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'myahInstagramAccount',
+    context: {
+      universalIdentifier: '2d357469-831a-4629-ad4b-47335900e883',
+      nameSingular: 'myahInstagramAccount',
+      namePlural: 'myahInstagramAccounts',
+      labelSingular: 'Myah Instagram account',
+      labelPlural: 'Myah Instagram accounts',
+      description:
+        'Workspace Instagram account metadata retained for server-managed messaging.',
+      icon: 'IconBrandInstagram',
+      labelIdentifierFieldMetadataName: 'label',
+    },
+  });
+export const buildMyahSocialConversationStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'myahSocialConversation',
+    context: {
+      universalIdentifier: '36817464-855f-42db-9fbb-f8853643f8d6',
+      nameSingular: 'myahSocialConversation',
+      namePlural: 'myahSocialConversations',
+      labelSingular: 'Myah social conversation',
+      labelPlural: 'Myah social conversations',
+      description:
+        'Instagram DM conversation metadata retained for historical display and server-managed messaging.',
+      icon: 'IconMessages',
+      labelIdentifierFieldMetadataName: 'label',
+    },
+  });
+export const buildMyahSocialMessageStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'myahSocialMessage',
+    context: {
+      universalIdentifier: '7241bd44-e474-4904-8636-339276b3feff',
+      nameSingular: 'myahSocialMessage',
+      namePlural: 'myahSocialMessages',
+      labelSingular: 'Myah social message',
+      labelPlural: 'Myah social messages',
+      description:
+        'Persisted Instagram DM message or manual first-DM touchpoint retained for server-managed messaging.',
+      icon: 'IconMessage',
+      labelIdentifierFieldMetadataName: 'text',
+    },
+  });
+export const buildMyahInstagramReplyDraftStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'myahInstagramReplyDraft',
+    context: {
+      universalIdentifier: '85762d24-541b-407f-9d6a-cdf89552c665',
+      nameSingular: 'myahInstagramReplyDraft',
+      namePlural: 'myahInstagramReplyDrafts',
+      labelSingular: 'Myah Instagram message draft',
+      labelPlural: 'Myah Instagram message drafts',
+      description:
+        'Instagram message draft awaiting human review. Approval never auto-sends; a separate explicit send action is required.',
+      icon: 'IconMessagePlus',
+      isUIEditable: false,
+      isUICreatable: false,
+      labelIdentifierFieldMetadataName: 'title',
+    },
+  });

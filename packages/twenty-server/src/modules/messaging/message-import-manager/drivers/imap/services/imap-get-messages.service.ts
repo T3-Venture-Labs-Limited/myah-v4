@@ -177,6 +177,9 @@ export class ImapGetMessagesService {
       externalId: `${folderPath}:${uid}`,
       messageThreadExternalId: extractThreadIdFromParsedEmail(parsed),
       headerMessageId: parsed.messageId || String(uid),
+      inReplyToTokens:
+        parsed.inReplyTo?.match(/<[^<>\s]+>/g)?.map((token) => token.trim()) ??
+        [],
       subject: sanitizeString(parsed.subject || ''),
       text,
       receivedAt: parsed.date ? new Date(parsed.date) : null,

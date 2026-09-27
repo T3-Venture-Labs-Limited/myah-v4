@@ -82,6 +82,46 @@ describe('thinkingStepsDisplayState', () => {
         parts: [parts[7]],
       });
     });
+
+    it('keeps generic approval status visible outside thinking steps without moving registered sends', () => {
+      const genericApproval = createToolPart({
+        type: 'tool-request_approval',
+        output: {
+          result: { status: 'consumed', reviewedAction: { version: 1 } },
+        },
+      }) as ExtendedUIMessagePart;
+      const registeredApproval = createToolPart({
+        type: 'tool-request_approval',
+        output: {
+          result: {
+            status: 'resolved',
+            actionApprovalBindingId: '00000000-0000-4000-8000-000000000156',
+          },
+        },
+      }) as ExtendedUIMessagePart;
+      const registeredWithoutBinding = createToolPart({
+        type: 'tool-request_approval',
+        input: { actionInput: { messageThreadId: 'thread' } },
+        output: { result: { status: 'resolved' } },
+      }) as ExtendedUIMessagePart;
+      const reasoning = createReasoningPart() as ExtendedUIMessagePart;
+
+      expect(
+        groupContiguousThinkingStepParts([
+          reasoning,
+          genericApproval,
+          registeredApproval,
+          registeredWithoutBinding,
+        ]),
+      ).toEqual([
+        { type: 'thinking-steps', parts: [reasoning] },
+        { type: 'part', part: genericApproval },
+        {
+          type: 'thinking-steps',
+          parts: [registeredApproval, registeredWithoutBinding],
+        },
+      ]);
+    });
   });
 
   describe('isThinkingStepPartActive', () => {

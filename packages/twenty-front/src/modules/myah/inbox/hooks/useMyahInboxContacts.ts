@@ -362,6 +362,87 @@ export const useMyahInboxContacts = (
     [isOperationCurrent, queryContacts, setConnection],
   );
 
+  // Background arrival: re-authorizes every loaded row with fresh cursors in
+  // the current scope, without the refresh indicator or list teardown.
+  const ambientRefresh = useCallback(
+    async (
+      selectedContactId: string | null,
+    ): Promise<MyahInboxContactRefreshResult> => {
+      const current = connectionRef.current;
+      if (
+        operationInFlightRef.current ||
+        current?.scopeKey !== scopeKeyRef.current
+      )
+        return { status: 'ignored', selectedContact: null };
+      const operation: MyahInboxContactsOperation = {
+        scopeKey: current.scopeKey,
+        abortController: new AbortController(),
+      };
+      operationInFlightRef.current = operation;
+      // At least one normal page, so new arrivals never evict retained rows.
+      const loaded = Math.max(
+        current.connection.edges.length,
+        baseVariablesRef.current.first,
+      );
+      try {
+        let edges: MyahInboxContactEdge[] = [];
+        let pageInfo = current.connection.pageInfo;
+        let after: string | undefined;
+        do {
+          const data = await queryContacts(
+            {
+              ...baseVariablesRef.current,
+              // The server clamps each page to 100 rows.
+              first: Math.min(100, loaded - edges.length),
+              after,
+            },
+            operation.abortController,
+          );
+          if (!isOperationCurrent(operation))
+            return { status: 'ignored', selectedContact: null };
+          edges = mergeEdges(edges, data.myahInboxContacts.edges);
+          pageInfo = data.myahInboxContacts.pageInfo;
+          after = pageInfo.endCursor ?? undefined;
+        } while (edges.length < loaded && pageInfo.hasNextPage && after);
+        let selectedContact =
+          edges.find(({ node }) => node.id === selectedContactId)?.node ?? null;
+        if (selectedContactId && !selectedContact) {
+          const validation = await queryContacts(
+            {
+              ...baseVariablesRef.current,
+              first: 1,
+              after: undefined,
+              contactId: selectedContactId,
+            },
+            operation.abortController,
+          );
+          if (!isOperationCurrent(operation))
+            return { status: 'ignored', selectedContact: null };
+          selectedContact = validation.myahInboxContacts.edges[0]?.node ?? null;
+        }
+        operationInFlightRef.current = null;
+        setConnection({
+          scopeKey: operation.scopeKey,
+          connection: { edges, pageInfo },
+        });
+        setListError({ scopeKey: operation.scopeKey, error: undefined });
+        return { status: 'success', selectedContact };
+      } catch {
+        if (!isOperationCurrent(operation))
+          return { status: 'ignored', selectedContact: null };
+        operationInFlightRef.current = null;
+        setRefreshState({
+          scopeKey: operation.scopeKey,
+          isRefreshing: false,
+          status: 'failed',
+          error: new Error('Could not refresh Inbox contacts.'),
+        });
+        return { status: 'failed', selectedContact: null };
+      }
+    },
+    [isOperationCurrent, queryContacts, setConnection],
+  );
+
   const loadMore = useCallback(async () => {
     const scopeKey = scopeKeyRef.current;
     const currentConnection = connectionRef.current;
@@ -461,6 +542,7 @@ export const useMyahInboxContacts = (
     hasNextPage: connection?.pageInfo.hasNextPage ?? false,
     loadMore,
     refresh,
+    ambientRefresh,
     isRefreshing: currentRefreshState.isRefreshing,
     refreshStatus: currentRefreshState.status,
     refreshError: currentRefreshState.error,

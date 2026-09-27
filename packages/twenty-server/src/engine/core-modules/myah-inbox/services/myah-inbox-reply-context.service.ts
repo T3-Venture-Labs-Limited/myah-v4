@@ -13,6 +13,7 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 
 import {
   MyahInboxReplyDraftExecutionState,
+  MyahInboxReplyDraftIncomingState,
   type MyahInboxResolvedReplyContext,
   type MyahInboxResolvedReplyTarget,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context-draft.dto';
@@ -92,6 +93,8 @@ export type ResolvedReplyContext = {
     | 'CONTEXT_UNAVAILABLE'
     | 'NEEDS_REVIEW';
   contextFingerprint: string | null;
+  // Same readable-inbound term hashed into Email fingerprints; 'NONE' if none.
+  incomingBaseline?: string | null;
   eligibilityEvidenceDigest?: string;
   campaignName?: string | null;
   threadCampaign: ThreadCampaign;
@@ -102,6 +105,7 @@ export type CurrentReplyContextEvidence = {
   eligible: boolean;
   target: ResolvedReplyTarget;
   contextFingerprint: string | null;
+  incomingBaseline?: string | null;
   eligibilityEvidenceDigest?: string;
   campaignName?: string | null;
   threadCampaign: ThreadCampaign;
@@ -220,6 +224,55 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
               })
             : null;
 
+          const getLatestInboundEvidence = async () => {
+            const inboundVisibility =
+              this.messageVisibilityPolicyService.buildSqlVisibilityProjection({
+                workspaceId: input.workspace.id,
+                userWorkspaceId,
+                messageIdExpression: 'message.id',
+              });
+            const inboundSchema = getWorkspaceSchemaName(input.workspace.id);
+            const inboundMessages =
+              await this.globalWorkspaceOrmManager.getRepository<{
+                id: string;
+                receivedAt: Date | null;
+              }>(input.workspace.id, 'message', rolePermissionConfig);
+            const newestInbound = await inboundMessages
+              .createQueryBuilder('message')
+              .select('message.id', 'id')
+              .addSelect('message."receivedAt"', 'receivedAt')
+              .where('message."messageThreadId" = :replyThreadId', {
+                replyThreadId: targetInput.threadId,
+              })
+              .andWhere(
+                'message."deletedAt" IS NULL AND message."isDraft" = false AND message."receivedAt" IS NOT NULL',
+              )
+              .andWhere(
+                `${inboundVisibility.expression} = :messageVisibilityFull`,
+              )
+              .andWhere(`EXISTS (SELECT 1 FROM "${inboundSchema}"."messageChannelMessageAssociation" association
+              JOIN core."messageChannel" channel ON channel.id=association."messageChannelId"
+              LEFT JOIN core."connectedAccount" account ON account.id=channel."connectedAccountId"
+              WHERE association."messageId"=message.id AND association."deletedAt" IS NULL
+                AND association.direction = 'INCOMING' AND channel."workspaceId"=:inboundWorkspaceId
+                AND channel.type IN ('EMAIL','EMAIL_GROUP')
+                AND (channel.visibility='SHARE_EVERYTHING' OR account."userWorkspaceId"=:messageVisibilityUserWorkspaceId))`)
+              .setParameters({
+                ...inboundVisibility.parameters,
+                inboundWorkspaceId: input.workspace.id,
+              })
+              .orderBy('message."receivedAt"', 'DESC')
+              .addOrderBy('message.id', 'DESC')
+              .limit(1)
+              .getRawOne<{ id: string; receivedAt: Date | string }>();
+            return newestInbound
+              ? [
+                  newestInbound.id,
+                  new Date(newestInbound.receivedAt).toISOString(),
+                ]
+              : null;
+          };
+
           // Preserve an in-flight thread-anchored General draft after a
           // visible Creator relink, but never use that alias to bypass a
           // linked Creator hidden by the current policy.
@@ -231,6 +284,7 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
             ) {
               return this.unavailable(input);
             }
+            const latestInboundEvidence = await getLatestInboundEvidence();
 
             const target: ResolvedReplyTarget = {
               channel: input.target.channel,
@@ -250,8 +304,10 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
                   target.contactAnchor.kind,
                   target.contactAnchor.id,
                   input.replyContext.kind,
+                  latestInboundEvidence,
                 ]),
               ),
+              incomingBaseline: toIncomingBaseline(latestInboundEvidence),
               campaignName: null,
               threadCampaign: { state: 'UNASSOCIATED' },
             };
@@ -286,6 +342,7 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
           ) {
             return this.unavailable(input);
           }
+          const latestInboundEvidence = await getLatestInboundEvidence();
 
           const target: ResolvedReplyTarget = {
             channel: input.target.channel,
@@ -458,6 +515,7 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
                 term.selectionReason,
                 term.dealSummary,
               ]),
+              latestInboundEvidence,
             ]),
           );
 
@@ -467,6 +525,7 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
               input.replyContext.kind === 'GENERAL' || evidenceIds.length > 0,
             target,
             contextFingerprint,
+            incomingBaseline: toIncomingBaseline(latestInboundEvidence),
             eligibilityEvidenceDigest,
             campaignName: selectedCampaign?.name ?? null,
             threadCampaign,
@@ -506,6 +565,9 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
   }
 }
 
+const toIncomingBaseline = (latestInbound: string[] | null) =>
+  latestInbound ? JSON.stringify(latestInbound) : 'NONE';
+
 export type MyahInboxReplyContextDraftSnapshot = {
   draftId: string | null;
   revision: number;
@@ -513,6 +575,20 @@ export type MyahInboxReplyContextDraftSnapshot = {
   // Task 2's authorized reader composes exact target-wide delivery state.
   targetState: 'PENDING' | 'UNKNOWN' | null;
   contextAcknowledged?: boolean;
+  authoredIncomingBaseline?: string | null;
+  bodyProvenance?: 'PROPOSAL' | 'EDITED' | null;
+};
+
+export const toDraftIncomingState = (
+  authoredIncomingBaseline: string | null | undefined,
+  currentIncomingBaseline: string | null | undefined,
+): MyahInboxReplyDraftIncomingState => {
+  if (!authoredIncomingBaseline || !currentIncomingBaseline)
+    return MyahInboxReplyDraftIncomingState.UNKNOWN;
+
+  return authoredIncomingBaseline === currentIncomingBaseline
+    ? MyahInboxReplyDraftIncomingState.CURRENT
+    : MyahInboxReplyDraftIncomingState.STALE;
 };
 
 // Task 2 replaces this reader without changing authorization or GraphQL composition.
@@ -585,6 +661,7 @@ export class MyahInboxReplyContextService {
       contextFingerprint: evidence.readable
         ? evidence.contextFingerprint
         : null,
+      incomingBaseline: evidence.readable ? evidence.incomingBaseline : null,
       eligibilityEvidenceDigest: evidence.readable
         ? evidence.eligibilityEvidenceDigest
         : undefined,

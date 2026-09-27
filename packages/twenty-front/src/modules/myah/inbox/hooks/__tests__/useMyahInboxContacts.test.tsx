@@ -143,6 +143,82 @@ describe('useMyahInboxContacts', () => {
     });
   });
 
+  it('reauthorizes every loaded page in the background with fresh cursors and drops revoked rows', async () => {
+    mockQuery
+      .mockResolvedValueOnce(
+        contactsResponse([contact('a'), contact('b')], {
+          hasNextPage: true,
+          endCursor: 'page-1',
+        }),
+      )
+      .mockResolvedValueOnce(contactsResponse([contact('c')]));
+    const hook = renderHook(() => useMyahInboxContacts(filters, 'workspace-1'));
+    await waitFor(() => expect(hook.result.current.contacts).toHaveLength(2));
+    await act(async () => hook.result.current.loadMore());
+    expect(hook.result.current.contacts.map(({ id }) => id)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    const retained = createDeferred<ReturnType<typeof contactsResponse>>();
+    mockQuery.mockReturnValueOnce(retained.promise);
+    let result!: Promise<unknown>;
+    act(() => {
+      result = hook.result.current.ambientRefresh('a');
+    });
+    // No routine teardown or refresh indicator while re-authorizing.
+    expect(hook.result.current.isRefreshing).toBe(false);
+    expect(hook.result.current.contacts).toHaveLength(3);
+    expect(mockQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        // Never fewer than one normal page: an arrival must not evict rows.
+        variables: expect.objectContaining({ first: 50, after: undefined }),
+      }),
+    );
+    await act(async () => {
+      retained.resolve(contactsResponse([contact('a'), contact('c')]));
+      await result;
+    });
+    expect(hook.result.current.contacts.map(({ id }) => id)).toEqual([
+      'a',
+      'c',
+    ]);
+    await expect(result).resolves.toMatchObject({
+      status: 'success',
+      selectedContact: { id: 'a' },
+    });
+  });
+
+  it('discards an ambient response that completes after the workspace scope changed', async () => {
+    mockQuery.mockResolvedValueOnce(contactsResponse([contact('a')]));
+    const hook = renderHook(
+      ({ currentFilters, workspaceId }: InboxHookProps) =>
+        useMyahInboxContacts(currentFilters, workspaceId),
+      { initialProps: { currentFilters: filters, workspaceId: 'workspace-1' } },
+    );
+    await waitFor(() => expect(hook.result.current.contacts).toHaveLength(1));
+    const stale = createDeferred<ReturnType<typeof contactsResponse>>();
+    mockQuery
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce(contactsResponse([contact('other')]));
+    let result!: Promise<unknown>;
+    act(() => {
+      result = hook.result.current.ambientRefresh('a');
+    });
+    hook.rerender({ currentFilters: filters, workspaceId: 'workspace-2' });
+    await waitFor(() =>
+      expect(hook.result.current.contacts.map(({ id }) => id)).toEqual([
+        'other',
+      ]),
+    );
+    await act(async () => {
+      stale.resolve(contactsResponse([contact('a'), contact('leak')]));
+      await result;
+    });
+    await expect(result).resolves.toMatchObject({ status: 'ignored' });
+    expect(hook.result.current.contacts.map(({ id }) => id)).toEqual(['other']);
+  });
+
   it('merges the next page using the current cursor', async () => {
     mockQuery
       .mockResolvedValueOnce(
