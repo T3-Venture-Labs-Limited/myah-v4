@@ -67,30 +67,30 @@ describe('ActionApprovalService (PostgreSQL)', () => {
 
   const clearIntegrationWorkspaceGraph = async () => {
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahSocialMessage"
+      `DELETE FROM "${projectionSchemaName}"."myahSocialMessage"
         WHERE "conversationId" IN (
           SELECT "id"
-          FROM "${projectionSchemaName}"."_myahSocialConversation"
+          FROM "${projectionSchemaName}"."myahSocialConversation"
           WHERE "instagramAccountId" = $1
         )`,
       [integrationAccountId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahInstagramReplyDraft"
+      `DELETE FROM "${projectionSchemaName}"."myahInstagramReplyDraft"
         WHERE "conversationId" IN (
           SELECT "id"
-          FROM "${projectionSchemaName}"."_myahSocialConversation"
+          FROM "${projectionSchemaName}"."myahSocialConversation"
           WHERE "instagramAccountId" = $1
         )`,
       [integrationAccountId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahSocialConversation"
+      `DELETE FROM "${projectionSchemaName}"."myahSocialConversation"
         WHERE "instagramAccountId" = $1`,
       [integrationAccountId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahInstagramAccount"
+      `DELETE FROM "${projectionSchemaName}"."myahInstagramAccount"
         WHERE "id" = $1`,
       [integrationAccountId],
     );
@@ -180,7 +180,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       `CREATE SCHEMA IF NOT EXISTS "${projectionSchemaName}"`,
     );
     await dataSource.query(`
-      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahInstagramAccount" (
+      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."myahInstagramAccount" (
         "id" uuid PRIMARY KEY,
         "name" varchar NOT NULL DEFAULT '',
         "label" varchar,
@@ -194,7 +194,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       )
     `);
     await dataSource.query(`
-      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahSocialConversation" (
+      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."myahSocialConversation" (
         "id" uuid PRIMARY KEY,
         "name" varchar NOT NULL DEFAULT '',
         "label" varchar,
@@ -215,7 +215,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       )
     `);
     await dataSource.query(`
-      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahInstagramReplyDraft" (
+      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."myahInstagramReplyDraft" (
         "id" uuid PRIMARY KEY,
         "name" varchar,
         "title" varchar,
@@ -241,7 +241,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       )
     `);
     await dataSource.query(`
-      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahSocialMessage" (
+      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."myahSocialMessage" (
         "id" uuid PRIMARY KEY,
         "text" text NOT NULL,
         "conversationId" uuid,
@@ -263,7 +263,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       )
     `);
     await dataSource.query(`
-      ALTER TABLE "${projectionSchemaName}"."_myahInstagramReplyDraft"
+      ALTER TABLE "${projectionSchemaName}"."myahInstagramReplyDraft"
         ADD COLUMN IF NOT EXISTS "name" varchar,
         ADD COLUMN IF NOT EXISTS "title" varchar,
         ADD COLUMN IF NOT EXISTS "conversationId" uuid,
@@ -283,11 +283,11 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         ADD COLUMN IF NOT EXISTS "updatedByContext" jsonb
     `);
     await dataSource.query(`
-      ALTER TABLE "${projectionSchemaName}"."_myahInstagramAccount"
+      ALTER TABLE "${projectionSchemaName}"."myahInstagramAccount"
         ADD COLUMN IF NOT EXISTS "igUserId" varchar
     `);
     await dataSource.query(`
-      ALTER TABLE "${projectionSchemaName}"."_myahSocialMessage"
+      ALTER TABLE "${projectionSchemaName}"."myahSocialMessage"
         ADD COLUMN IF NOT EXISTS "conversationId" uuid,
         ADD COLUMN IF NOT EXISTS "providerMessageId" varchar,
         ADD COLUMN IF NOT EXISTS "providerCreatedAt" timestamptz,
@@ -305,16 +305,16 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       [workspaceId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahSocialMessage"
+      `DELETE FROM "${projectionSchemaName}"."myahSocialMessage"
       WHERE "createdByContext" ->> 'actionReceiptId' = $1`,
       [projectionReceiptId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahInstagramReplyDraft" WHERE "id" = $1`,
+      `DELETE FROM "${projectionSchemaName}"."myahInstagramReplyDraft" WHERE "id" = $1`,
       [projectionDraftId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahSocialConversation" WHERE "id" = $1`,
+      `DELETE FROM "${projectionSchemaName}"."myahSocialConversation" WHERE "id" = $1`,
       [projectionConversationId],
     );
     await clearIntegrationWorkspaceGraph();
@@ -331,16 +331,16 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       [workspaceId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahSocialMessage"
+      `DELETE FROM "${projectionSchemaName}"."myahSocialMessage"
       WHERE "createdByContext" ->> 'actionReceiptId' = $1`,
       [projectionReceiptId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahInstagramReplyDraft" WHERE "id" = $1`,
+      `DELETE FROM "${projectionSchemaName}"."myahInstagramReplyDraft" WHERE "id" = $1`,
       [projectionDraftId],
     );
     await dataSource.query(
-      `DELETE FROM "${projectionSchemaName}"."_myahSocialConversation" WHERE "id" = $1`,
+      `DELETE FROM "${projectionSchemaName}"."myahSocialConversation" WHERE "id" = $1`,
       [projectionConversationId],
     );
     await clearIntegrationWorkspaceGraph();
@@ -475,7 +475,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       redactedOutcome: 'accepted',
     });
     await dataSource.query(
-      `INSERT INTO "${projectionSchemaName}"."_myahSocialConversation" (
+      `INSERT INTO "${projectionSchemaName}"."myahSocialConversation" (
         "id", "name", "label", "providerConversationId", "recipientIgsid", "instagramAccountId"
       ) VALUES ($1, $2, $3, $4, $5, $6)`,
       [
@@ -488,7 +488,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       ],
     );
     await dataSource.query(
-      `INSERT INTO "${projectionSchemaName}"."_myahInstagramReplyDraft" (
+      `INSERT INTO "${projectionSchemaName}"."myahInstagramReplyDraft" (
         "id", "body", "conversationId", "status"
       ) VALUES ($1, $2, $3, 'NEEDS_REVIEW')`,
       [projectionDraftId, 'Projected message', projectionConversationId],
@@ -525,8 +525,8 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     await expect(
       dataSource.query<{ text: string; direction: string }[]>(
         `SELECT message."text", message."direction"
-        FROM "${projectionSchemaName}"."_myahSocialConversation" AS conversation
-        INNER JOIN "${projectionSchemaName}"."_myahSocialMessage" AS message
+        FROM "${projectionSchemaName}"."myahSocialConversation" AS conversation
+        INNER JOIN "${projectionSchemaName}"."myahSocialMessage" AS message
           ON message."conversationId" = conversation."id"
         WHERE conversation."id" = $1
           AND message."createdByContext" ->> 'actionReceiptId' = $2`,
@@ -536,7 +536,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     await expect(
       dataSource.query(
         `SELECT "status", "sentAt" IS NOT NULL AS "sent"
-        FROM "${projectionSchemaName}"."_myahInstagramReplyDraft"
+        FROM "${projectionSchemaName}"."myahInstagramReplyDraft"
         WHERE "id" = $1`,
         [projectionDraftId],
       ),

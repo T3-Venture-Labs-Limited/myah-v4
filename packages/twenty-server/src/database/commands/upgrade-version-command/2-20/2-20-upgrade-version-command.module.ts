@@ -2,6 +2,7 @@ import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20
 import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from './2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
 import { AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand } from './2-20-instance-command-fast-1790141137400-add-myah-inbox-reply-draft-incoming-baseline';
 import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
+import { SynchronizeInstagramSourceControlledMetadataCommand } from './2-20-workspace-command-1790491923604-synchronize-instagram-source-controlled-metadata.command';
 import { Module } from '@nestjs/common';
 import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
@@ -89,12 +90,14 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     CreateMyahCampaignReplyEvidenceFastInstanceCommand,
     AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
+    SynchronizeInstagramSourceControlledMetadataCommand,
     RefreshMyahAssistantSkillsWorkspaceCommand,
     RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,
     SynchronizeMyahStandardMetadataCommand,
+    SynchronizeInstagramSourceControlledMetadataCommand,
     MigrateMyahCreatorSocialLinksService,
   ],
 })

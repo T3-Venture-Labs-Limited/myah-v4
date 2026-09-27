@@ -76,7 +76,7 @@ const buildHarness = async (
       }),
       new EntitySchema({
         name: 'myahSocialConversation',
-        tableName: '_myahSocialConversation',
+        tableName: 'myahSocialConversation',
         schema: 'workspace_test',
         columns: {
           id: { type: 'uuid', primary: true },
@@ -289,7 +289,7 @@ const buildHarness = async (
             : [];
       } else {
         expect(sql).toMatch(/^SELECT /);
-        expect(sql).toContain('"workspace_test"."_myahSocialConversation"');
+        expect(sql).toContain('"workspace_test"."myahSocialConversation"');
         result.records =
           (state.linked && sql.includes('"creatorId" IS NULL')) ||
           (denial === 'conversationRLS' && sql.includes('LIKE'))
@@ -549,7 +549,7 @@ describe('InstagramMessageRecipientService real conversation discovery permissio
     );
   const conversationQueries = (h: Awaited<ReturnType<typeof buildHarness>>) =>
     h.query.mock.calls.filter(([sql]) =>
-      sql.includes('"workspace_test"."_myahSocialConversation"'),
+      sql.includes('"workspace_test"."myahSocialConversation"'),
     );
 
   it('rejects omitted permissions for the non-system app conversation before SQL', async () => {
@@ -662,7 +662,7 @@ describe('InstagramMessageRecipientService real conversation discovery permissio
       // Controlled SQL transport drift between real permission-aware SELECTs.
       h.query.mockImplementation(async (sql: string) => {
         const result = await execute(sql);
-        if (sql.includes('"workspace_test"."_myahSocialConversation"')) {
+        if (sql.includes('"workspace_test"."myahSocialConversation"')) {
           h.state.conversationIds = [...ids];
         }
         return result;

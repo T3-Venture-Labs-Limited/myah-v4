@@ -5,11 +5,8 @@ import { USER_WORKSPACE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-s
 
 const workspaceId = SEED_APPLE_WORKSPACE_ID;
 
-// The dev Apple seed deliberately does not install the public Instagram app.
-// This bridge is test-only: it creates the exact application object table names
-// and the smallest cacheable metadata surface used by the Inbox capability
-// serializer. The identifiers and field names are copied from the public
-// myah-instagram-messaging application manifest.
+// The bridge supports base fixtures that predate source-controlled Instagram
+// metadata. Current dev seeds already provision the authoritative native graph.
 const instagramApplicationId = '4738ebcd-6662-4ecc-a190-374fa0525951';
 const instagramApplicationUniversalIdentifier = instagramApplicationId;
 const socialConversationObjectId = '11111111-1111-4111-8111-111111111010';
@@ -129,9 +126,23 @@ const resolveProviderByName = <T>(name: string): T => {
 
 export const installMyahInboxInstagramMetadataBridge =
   async (): Promise<void> => {
+    const [{ count }] = await global.testDataSource.query(
+      `SELECT count(*)::int AS count
+       FROM core."objectMetadata"
+       WHERE "workspaceId" = $1
+         AND "universalIdentifier" IN ($2, $3)`,
+      [
+        workspaceId,
+        socialConversationObjectUniversalIdentifier,
+        socialMessageObjectUniversalIdentifier,
+      ],
+    );
+
+    if (count === 2) return;
+
     await global.testDataSource.transaction(async (manager) => {
       await manager.query(
-        `CREATE TABLE IF NOT EXISTS "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation" (
+        `CREATE TABLE IF NOT EXISTS "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation" (
         id uuid PRIMARY KEY, name text, label text,
         provider text NOT NULL DEFAULT 'COMPOSIO_HISTORY',
         lifecycle text NOT NULL DEFAULT 'HISTORICAL', "providerConversationId" text,
@@ -147,7 +158,7 @@ export const installMyahInboxInstagramMetadataBridge =
       )`,
       );
       await manager.query(
-        `CREATE TABLE IF NOT EXISTS "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialMessage" (
+        `CREATE TABLE IF NOT EXISTS "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialMessage" (
         id uuid PRIMARY KEY, text text, direction text NOT NULL DEFAULT 'OUTBOUND',
         "sentVia" text NOT NULL DEFAULT 'MANUAL',
         provider text NOT NULL DEFAULT 'COMPOSIO_HISTORY', "providerMessageId" text,
@@ -164,7 +175,7 @@ export const installMyahInboxInstagramMetadataBridge =
       )`,
       );
       await manager.query(
-        `ALTER TABLE "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation"
+        `ALTER TABLE "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation"
        ADD COLUMN IF NOT EXISTS name text,
        ADD COLUMN IF NOT EXISTS label text,
        ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'COMPOSIO_HISTORY',
@@ -187,7 +198,7 @@ export const installMyahInboxInstagramMetadataBridge =
        ALTER COLUMN "createdAt" SET DEFAULT now()`,
       );
       await manager.query(
-        `ALTER TABLE "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialMessage"
+        `ALTER TABLE "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialMessage"
        ADD COLUMN IF NOT EXISTS text text,
        ADD COLUMN IF NOT EXISTS direction text NOT NULL DEFAULT 'OUTBOUND',
        ADD COLUMN IF NOT EXISTS "sentVia" text NOT NULL DEFAULT 'MANUAL',
@@ -214,11 +225,11 @@ export const installMyahInboxInstagramMetadataBridge =
       );
       await manager.query(
         `CREATE UNIQUE INDEX IF NOT EXISTS "myah354_social_conversation_provider_identity"
-       ON "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialConversation" (provider, "instagramAccountId", "providerConversationId")`,
+       ON "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation" (provider, "instagramAccountId", "providerConversationId")`,
       );
       await manager.query(
         `CREATE UNIQUE INDEX IF NOT EXISTS "myah354_social_message_provider_identity"
-       ON "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahSocialMessage" (provider, "conversationId", "providerMessageId")`,
+       ON "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialMessage" (provider, "conversationId", "providerMessageId")`,
       );
       await manager.query(
         `INSERT INTO core.application (
@@ -240,14 +251,14 @@ export const installMyahInboxInstagramMetadataBridge =
           socialConversationObjectUniversalIdentifier,
           'myahSocialConversation',
           'myahSocialConversations',
-          '_myahSocialConversation',
+          'myahSocialConversation',
         ],
         [
           socialMessageObjectId,
           socialMessageObjectUniversalIdentifier,
           'myahSocialMessage',
           'myahSocialMessages',
-          '_myahSocialMessage',
+          'myahSocialMessage',
         ],
       ]) {
         await manager.query(

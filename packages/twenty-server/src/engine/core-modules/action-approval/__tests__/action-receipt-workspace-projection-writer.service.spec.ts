@@ -41,7 +41,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
 
     const insert = query.mock.calls.find(
       ([sql]) =>
-        sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage'),
+        sql.includes('INSERT INTO') && sql.includes('myahSocialMessage'),
     );
     expect(insert?.[0]).toContain('"conversationId"');
     expect(insert?.[1]).toContain(conversationId);
@@ -90,14 +90,14 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       query.mock.calls.some(
         ([sql]) =>
           String(sql).trimStart().startsWith('UPDATE ') &&
-          String(sql).includes('_myahInstagramReplyDraft'),
+          String(sql).includes('myahInstagramReplyDraft'),
       ),
     ).toBe(false);
     expect(
       query.mock.calls.some(
         ([sql]) =>
           String(sql).includes('INSERT INTO') &&
-          String(sql).includes('_myahSocialMessage'),
+          String(sql).includes('myahSocialMessage'),
       ),
     ).toBe(false);
   });

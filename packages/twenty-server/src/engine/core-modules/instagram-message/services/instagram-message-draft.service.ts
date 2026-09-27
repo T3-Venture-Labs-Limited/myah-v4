@@ -99,7 +99,7 @@ export class InstagramMessageDraftService {
             : input.conversationRecordId;
         const [draft] = await dataSource.query<SavedDraftRow[]>(
           `SELECT "id", "revision", "body"
-           FROM "${schemaName}"."_myahInstagramReplyDraft"
+           FROM "${schemaName}"."myahInstagramReplyDraft"
            WHERE "kind" = $1
              AND ${targetPredicate}
              AND "sentAt" IS NULL
@@ -184,7 +184,7 @@ export class InstagramMessageDraftService {
 
           if (input.expectedRevision === 0) {
             const [created] = await dataSource.query<SavedDraftRow[]>(
-              `INSERT INTO "${schemaName}"."_myahInstagramReplyDraft" (
+              `INSERT INTO "${schemaName}"."myahInstagramReplyDraft" (
                  "id", "name", "title", "body", "kind", "status", "source",
                  "creatorId", "conversationId", "recipientUsername",
                  "recipientProviderId", "revision",
@@ -218,7 +218,7 @@ export class InstagramMessageDraftService {
 
             const [current] = await dataSource.query<SavedDraftRow[]>(
               `SELECT "id", "revision", "body"
-               FROM "${schemaName}"."_myahInstagramReplyDraft"
+               FROM "${schemaName}"."myahInstagramReplyDraft"
                WHERE "id" = $1
                  AND "deletedAt" IS NULL
                LIMIT 1`,
@@ -234,7 +234,7 @@ export class InstagramMessageDraftService {
           }
 
           const [savedRows] = await dataSource.query<[SavedDraftRow[], number]>(
-            `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
+            `UPDATE "${schemaName}"."myahInstagramReplyDraft"
              SET "body" = $3,
                  "kind" = '${input.kind}',
                  "creatorId" = $4,
@@ -270,7 +270,7 @@ export class InstagramMessageDraftService {
 
           const [current] = await dataSource.query<SavedDraftRow[]>(
             `SELECT "id", "revision", "body"
-             FROM "${schemaName}"."_myahInstagramReplyDraft"
+             FROM "${schemaName}"."myahInstagramReplyDraft"
              WHERE "id" = $1
                AND "deletedAt" IS NULL
              LIMIT 1`,
@@ -298,7 +298,7 @@ export class InstagramMessageDraftService {
       `SELECT column_name
        FROM information_schema.columns
        WHERE table_schema = $1
-         AND table_name = '_myahInstagramReplyDraft'
+         AND table_name = 'myahInstagramReplyDraft'
          AND column_name = ANY($2)`,
       [schemaName, ['composerInputDigest', 'instagramMessageSnapshot']],
       queryRunner,
@@ -312,7 +312,7 @@ export class InstagramMessageDraftService {
       }>
     >(
       `SELECT "composerInputDigest", "instagramMessageSnapshot"
-       FROM "${schemaName}"."_myahInstagramReplyDraft"
+       FROM "${schemaName}"."myahInstagramReplyDraft"
        WHERE "id" = $1 AND "deletedAt" IS NULL`,
       [draftId],
       queryRunner,
@@ -336,9 +336,10 @@ export class InstagramMessageDraftService {
         await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
       const schemaName = getWorkspaceSchemaName(workspace.id);
       await dataSource.transaction(async (manager) => {
+        // pi-lens-ignore: sql-injection -- workspace schema comes from the trusted workspace identifier.
         const [draft] = await dataSource.query<Array<{ body: string | null }>>(
           `SELECT "body"
-             FROM "${schemaName}"."_myahInstagramReplyDraft"
+             FROM "${schemaName}"."myahInstagramReplyDraft"
              WHERE "id" = $1 AND "deletedAt" IS NULL
              LIMIT 1`,
           [input.draftId],
@@ -351,9 +352,9 @@ export class InstagramMessageDraftService {
         ) {
           throw new Error('Instagram message draft content changed');
         }
-        // pi-lens-ignore: no-sql-in-code, sql-injection
+        // pi-lens-ignore: no-sql-in-code, sql-injection -- workspace schema comes from the trusted workspace identifier.
         await dataSource.query(
-          `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
+          `UPDATE "${schemaName}"."myahInstagramReplyDraft"
              SET "status" = 'SENT',
                  "sentAt" = COALESCE("sentAt", NOW()),
                  "updatedAt" = NOW()
@@ -426,7 +427,7 @@ export class InstagramMessageDraftService {
     >(
       `SELECT "id", "creatorId", "provider", "lifecycle",
               "recipientUsername", "recipientIgsid"
-       FROM "${schemaName}"."_myahSocialConversation"
+       FROM "${schemaName}"."myahSocialConversation"
        WHERE "id" = $1
          AND "provider" = 'UNIPILE'
          AND "lifecycle" = 'ACTIVE'

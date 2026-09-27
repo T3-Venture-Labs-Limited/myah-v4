@@ -160,7 +160,7 @@ describe('InstagramMessageDraftService', () => {
         kind === 'REPLY' ? 'exact-igsid' : 'creator.name';
       let stored = { id: draftId, revision: 4, body: 'Persisted text' };
       const harness = buildHarness((sql, parameters) => {
-        if (sql.includes('"_myahSocialConversation"'))
+        if (sql.includes('"myahSocialConversation"'))
           return [
             {
               id: conversationId,
@@ -487,7 +487,7 @@ describe('InstagramMessageDraftService', () => {
 
   it('uses the linked Creator normalized identity and exact conversation IGSID for a REPLY without a conversation username', async () => {
     const harness = buildHarness((sql) => {
-      if (sql.includes('"_myahSocialConversation"')) {
+      if (sql.includes('"myahSocialConversation"')) {
         return [
           {
             id: conversationId,
@@ -583,7 +583,7 @@ describe('InstagramMessageDraftService', () => {
     'fails closed when the active reply %s',
     async (_case, target, creator) => {
       const harness = buildHarness((sql) => {
-        if (sql.includes('"_myahSocialConversation"')) {
+        if (sql.includes('"myahSocialConversation"')) {
           return [
             {
               id: conversationId,
@@ -610,7 +610,7 @@ describe('InstagramMessageDraftService', () => {
   );
   it('loads the latest unsent server draft for the exact target after reload', async () => {
     const harness = buildHarness((sql) =>
-      sql.includes('"_myahInstagramReplyDraft"')
+      sql.includes('"myahInstagramReplyDraft"')
         ? [{ id: draftId, revision: 3, body: 'Saved across reload' }]
         : [],
     );

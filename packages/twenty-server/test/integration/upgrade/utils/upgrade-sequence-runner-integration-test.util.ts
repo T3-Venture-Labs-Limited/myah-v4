@@ -34,11 +34,12 @@ import {
 } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { createWorkspace } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-workspace.util';
 import { WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
+import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';
 
 jest.useRealTimers();
 
 config({
-  path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
+  path: getServerEnvFilePath(),
   override: true,
 });
 

@@ -720,7 +720,7 @@ const buildCurrentSourceHarness = async (
     listMessages: jest.fn(),
   };
   const query = jest.fn(async (sql: string) =>
-    sql.includes('"_myahInstagramReplyDraft"') ? [{ ...draft }] : [],
+    sql.includes('"myahInstagramReplyDraft"') ? [{ ...draft }] : [],
   );
   const reader = new InstagramMessageAuthorityReaderService(
     { findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }) } as never,

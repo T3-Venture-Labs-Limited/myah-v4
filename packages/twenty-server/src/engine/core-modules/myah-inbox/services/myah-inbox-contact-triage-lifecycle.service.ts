@@ -236,7 +236,7 @@ export class MyahInboxContactTriageLifecycleService {
       const rows = (await query(
         source.sourceType === 'EMAIL_THREAD'
           ? 'SELECT id, "creatorId" FROM "messageThread" WHERE id=$1 FOR UPDATE'
-          : 'SELECT id, "creatorId" FROM "_myahSocialConversation" WHERE id=$1 FOR UPDATE',
+          : 'SELECT id, "creatorId" FROM "myahSocialConversation" WHERE id=$1 FOR UPDATE',
         [source.sourceRecordId],
       )) as Array<{ id: string; creatorId: string | null }>;
       if (rows.length !== 1) continue;
@@ -312,7 +312,7 @@ export class MyahInboxContactTriageLifecycleService {
       await query(
         source.sourceType === 'EMAIL_THREAD'
           ? 'UPDATE "messageThread" SET "creatorId"=NULL WHERE id=$1'
-          : 'UPDATE "_myahSocialConversation" SET "creatorId"=NULL WHERE id=$1',
+          : 'UPDATE "myahSocialConversation" SET "creatorId"=NULL WHERE id=$1',
         [source.sourceRecordId],
       );
     }
@@ -432,8 +432,8 @@ export class MyahInboxContactTriageLifecycleService {
       hasInstagramConversation
         ? (query(
             lockRows
-              ? 'SELECT id, "creatorId" FROM "_myahSocialConversation" WHERE "creatorId" = ANY($1::uuid[]) ORDER BY id FOR UPDATE'
-              : 'SELECT id, "creatorId" FROM "_myahSocialConversation" WHERE "creatorId" = ANY($1::uuid[]) ORDER BY id',
+              ? 'SELECT id, "creatorId" FROM "myahSocialConversation" WHERE "creatorId" = ANY($1::uuid[]) ORDER BY id FOR UPDATE'
+              : 'SELECT id, "creatorId" FROM "myahSocialConversation" WHERE "creatorId" = ANY($1::uuid[]) ORDER BY id',
             [creatorIds],
           ) as Promise<Array<{ id: string; creatorId: string | null }>>)
         : Promise.resolve([]),
@@ -461,8 +461,8 @@ export class MyahInboxContactTriageLifecycleService {
           ? 'SELECT id, "creatorId" FROM "messageThread" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE'
           : 'SELECT id, "creatorId" FROM "messageThread" WHERE id = ANY($1::uuid[]) ORDER BY id'
         : lockRows
-          ? 'SELECT id, "creatorId" FROM "_myahSocialConversation" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE'
-          : 'SELECT id, "creatorId" FROM "_myahSocialConversation" WHERE id = ANY($1::uuid[]) ORDER BY id';
+          ? 'SELECT id, "creatorId" FROM "myahSocialConversation" WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE'
+          : 'SELECT id, "creatorId" FROM "myahSocialConversation" WHERE id = ANY($1::uuid[]) ORDER BY id';
     const rows = (await query(sql, [sourceRecordIds])) as Array<{
       id: string;
       creatorId: string | null;
@@ -479,7 +479,7 @@ export class MyahInboxContactTriageLifecycleService {
   ): Promise<boolean> {
     const [relation] = (await query(
       'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-      ['"_myahSocialConversation"'],
+      ['"myahSocialConversation"'],
     )) as Array<{ exists: boolean }>;
 
     return relation?.exists === true;

@@ -313,7 +313,7 @@ const buildFieldPermissionHarness = (deniedField?: string) => {
   // The real draft service executes its system/bypass SQL against this in-memory adapter.
   const query = jest.fn(async (sql: string) => {
     expect(currentContext.type).toBe('system');
-    if (sql.includes('"_myahSocialConversation"')) {
+    if (sql.includes('"myahSocialConversation"')) {
       return [
         {
           id: 'conversation-id',

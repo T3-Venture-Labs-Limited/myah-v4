@@ -260,11 +260,11 @@ describe('MyahInboxContactTriageLifecycleService', () => {
 
     expect(query).toHaveBeenCalledWith(
       'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-      ['"_myahSocialConversation"'],
+      ['"myahSocialConversation"'],
     );
     expect(
       query.mock.calls.some(([sql]) =>
-        String(sql).includes('"_myahSocialConversation"'),
+        String(sql).includes('"myahSocialConversation"'),
       ),
     ).toBe(false);
   });

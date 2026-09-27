@@ -11,9 +11,9 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 
-// Canonical ownership is packages/twenty-apps/public/myah-instagram-messaging.
-// These mirrors intentionally let the generic server API enforce app-owned fields
-// without a runtime dependency on the independently installed application.
+// Canonical ownership is source-controlled Twenty standard metadata.
+// These mirrors intentionally let the generic server API enforce standard-owned
+// fields without a runtime dependency on metadata builders.
 export const INSTAGRAM_REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER =
   '85762d24-541b-407f-9d6a-cdf89552c665';
 export const INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER =
