@@ -45,16 +45,18 @@ export const CampaignRecordReadStatusMessage = ({
   onRetry?: () => void;
 }) =>
   status === 'loading' ? (
-    <div role="status">{t`Loading campaign…`}</div>
+    <div role="status" style={{ padding: 16 }}>
+      {t`Loading campaign…`}
+    </div>
   ) : (
-    <div role="alert">
+    <div role="alert" style={{ padding: 16 }}>
       {status === 'failed'
         ? t`Unable to load campaign. Try again.`
         : status === 'forbidden'
           ? t`You do not have access to this campaign.`
           : t`Campaign is unavailable or you do not have access to it.`}
       {status === 'failed' && onRetry && (
-        <button type="button" onClick={onRetry}>
+        <button type="button" onClick={onRetry} style={{ marginLeft: 8 }}>
           {t`Retry`}
         </button>
       )}
