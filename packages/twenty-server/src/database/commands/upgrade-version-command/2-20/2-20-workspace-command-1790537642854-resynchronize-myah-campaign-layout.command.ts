@@ -9,7 +9,7 @@ import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/deco
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 
-@RegisteredWorkspaceCommand('2.20.0', 1790417100000)
+@RegisteredWorkspaceCommand('2.20.0', 1790537642854)
 @Command({
   name: 'upgrade:2-20:resynchronize-myah-campaign-layout',
   description: 'Resynchronize the standard Campaign layout and tabs',

@@ -44,6 +44,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
     const expectedChildSelection = {
       pageLayoutTab: [
         '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+        '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
         '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
         'cd78ad8c-883a-4ce1-9b74-526adadb751d',
         '0d213a1a-e001-496c-970e-e692968cf17c',
@@ -52,6 +53,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
       ].sort(),
       pageLayoutWidget: [
         '6845e3c3-3a1a-42d8-afcd-71ff885c8f20',
+        '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2',
         'e81ab303-f402-45df-8257-d91172ecc435',
         '9a05fd06-cf91-47a2-bbee-06cb4292f44d',
         '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392',
@@ -115,12 +117,12 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
     expect({
       ...synchronizeCompleteLayoutCall[2],
       deletionSelection: Object.fromEntries(
-        Object.entries(
-          synchronizeCompleteLayoutCall[2].deletionSelection,
-        ).map(([type, universalIdentifiers]) => [
-          type,
-          [...(universalIdentifiers as Set<string>)].sort(),
-        ]),
+        Object.entries(synchronizeCompleteLayoutCall[2].deletionSelection).map(
+          ([type, universalIdentifiers]) => [
+            type,
+            [...(universalIdentifiers as Set<string>)].sort(),
+          ],
+        ),
       ),
     }).toEqual({
       synchronizeExistingSelectedMetadata: true,

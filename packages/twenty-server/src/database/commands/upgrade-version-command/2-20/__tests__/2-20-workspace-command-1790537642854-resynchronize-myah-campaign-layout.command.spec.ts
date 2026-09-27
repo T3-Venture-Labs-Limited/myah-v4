@@ -1,7 +1,7 @@
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
-import { ResynchronizeMyahCampaignLayoutCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790417100000-resynchronize-myah-campaign-layout.command';
+import { ResynchronizeMyahCampaignLayoutCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790537642854-resynchronize-myah-campaign-layout.command';
 import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 
 const args = {
