@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, Logger } from '@nestjs/common';
+import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { IsNull, QueryFailedError } from 'typeorm';
 
 type HostedAuthLinkInput = {
@@ -12,11 +13,21 @@ type HostedAuthLinkInput = {
 
 type UnipileHostedAuthService = {
   createConnectionAttempt: (input: {
-    workspaceId: string;
+    workspace: {
+      id: string;
+      subdomain: string;
+      customDomain: string | null;
+      isCustomDomainEnabled: boolean;
+    };
     userWorkspaceId: string;
   }) => Promise<{ attemptId: string; url: string }>;
   createReconnectAttempt: (input: {
-    workspaceId: string;
+    workspace: {
+      id: string;
+      subdomain: string;
+      customDomain: string | null;
+      isCustomDomainEnabled: boolean;
+    };
     userWorkspaceId: string;
   }) => Promise<{ attemptId: string; url: string }>;
   expirePendingAttempt: (attemptId: string) => Promise<void>;
@@ -55,6 +66,7 @@ type UnipileHostedAuthServiceModule = {
     twentyConfigService: { get: jest.Mock },
     availabilityService: { assertEnabled: jest.Mock },
     accountService?: { finalizeHostedAuthConnection: jest.Mock },
+    workspaceDomainsService?: WorkspaceDomainsService,
   ) => UnipileHostedAuthService;
 };
 
@@ -88,8 +100,22 @@ const createAvailabilityService = () => ({
   assertEnabled: jest.fn(),
 });
 
+const createWorkspaceDomainsService = (config: { get: jest.Mock }) =>
+  new WorkspaceDomainsService(
+    { getFrontUrl: () => new URL(config.get('FRONTEND_URL')) } as never,
+    config as never,
+    {} as never,
+    {} as never,
+  );
+
 describe('UnipileHostedAuthService', () => {
   const workspaceId = '3bb95c5a-b046-4a21-a8ee-8f3a4b3eb1dd';
+  const workspace = {
+    id: workspaceId,
+    subdomain: 'app',
+    customDomain: null,
+    isCustomDomainEnabled: false,
+  };
   const userWorkspaceId = 'f0c7cbb3-7772-455d-9d9a-4dfe7a2f49af';
   const now = new Date('2026-09-04T12:00:00.000Z');
 
@@ -101,6 +127,112 @@ describe('UnipileHostedAuthService', () => {
   afterEach(() => {
     jest.useRealTimers();
   });
+
+  it.each([
+    ['CREATE', 't3labs', null, false, true, 'https://t3labs.myah.dev'],
+    ['CREATE', 'customer', null, false, true, 'https://customer.myah.dev'],
+    [
+      'RECONNECT',
+      'customer',
+      'crm.customer.test',
+      true,
+      true,
+      'https://crm.customer.test',
+    ],
+    ['RECONNECT', 'customer', null, false, false, 'http://localhost:3000'],
+  ] as const)(
+    'returns %s to the initiating workspace (%s, custom=%s, multi=%s)',
+    async (
+      operation,
+      subdomain,
+      customDomain,
+      isCustomDomainEnabled,
+      isMultiworkspaceEnabled,
+      expectedOrigin,
+    ) => {
+      const hostedAuthServiceModule = loadHostedAuthServiceModule();
+
+      expect(hostedAuthServiceModule).toBeDefined();
+      if (!hostedAuthServiceModule) return;
+
+      const workspace = {
+        id: workspaceId,
+        subdomain,
+        customDomain,
+        isCustomDomainEnabled,
+      };
+      const attemptRepository = {
+        create: jest.fn((attempt) => attempt),
+        save: jest.fn(async (attempt) => attempt),
+      };
+      const client = {
+        createHostedAuthLink: jest.fn(async (_input: HostedAuthLinkInput) => ({
+          url: 'https://auth.unipile.test/link',
+        })),
+      };
+      const config = {
+        get: jest.fn((key: string) => {
+          if (key === 'FRONTEND_URL')
+            return isMultiworkspaceEnabled
+              ? 'https://myah.dev'
+              : 'http://localhost:3000';
+          if (key === 'SERVER_URL') return 'https://app.myah.dev';
+          if (key === 'IS_MULTIWORKSPACE_ENABLED')
+            return isMultiworkspaceEnabled;
+        }),
+      };
+      const domains = new WorkspaceDomainsService(
+        {
+          getFrontUrl: () => new URL(config.get('FRONTEND_URL') as string),
+        } as never,
+        config as never,
+        {} as never,
+        {} as never,
+      );
+      const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        attemptRepository,
+        {
+          findOne: jest.fn().mockResolvedValue(null),
+          find: jest
+            .fn()
+            .mockResolvedValue([
+              { id: 'binding', unipileAccountId: 'reconnect-id' },
+            ]),
+        },
+        client,
+        config,
+        createAvailabilityService(),
+        undefined,
+        domains,
+      );
+
+      const result =
+        operation === 'CREATE'
+          ? await service.createConnectionAttempt({
+              workspace,
+              userWorkspaceId,
+            })
+          : await service.createReconnectAttempt({
+              workspace,
+              userWorkspaceId,
+            });
+      const link = client.createHostedAuthLink.mock
+        .calls[0][0] as HostedAuthLinkInput;
+
+      expect(attemptRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId }),
+      );
+      expect(link.successRedirectUrl).toBe(
+        `${expectedOrigin}/settings/accounts/instagram?connection=success&attemptId=${result.attemptId}`,
+      );
+      expect(link.failureRedirectUrl).toBe(
+        `${expectedOrigin}/settings/accounts/instagram?connection=failed&attemptId=${result.attemptId}`,
+      );
+      expect(link.notifyUrl).toBe(
+        `https://app.myah.dev/rest/myah/unipile/instagram/hosted-auth/${result.attemptId}/notify`,
+      );
+    },
+  );
 
   it('persists a pending CREATE attempt before requesting its Hosted Auth link', async () => {
     const hostedAuthServiceModule = loadHostedAuthServiceModule();
@@ -147,10 +279,12 @@ describe('UnipileHostedAuthService', () => {
       client,
       twentyConfigService,
       availabilityService,
+      undefined,
+      createWorkspaceDomainsService(twentyConfigService),
     );
 
     const result = await service.createConnectionAttempt({
-      workspaceId,
+      workspace,
       userWorkspaceId,
     });
 
@@ -235,10 +369,16 @@ describe('UnipileHostedAuthService', () => {
         }),
       },
       createAvailabilityService(),
+      undefined,
+      createWorkspaceDomainsService({
+        get: jest.fn((key: string) => {
+          if (key === 'FRONTEND_URL') return 'https://app.myah.test';
+        }),
+      }),
     );
 
     const { attemptId } = await service.createConnectionAttempt({
-      workspaceId,
+      workspace,
       userWorkspaceId,
     });
     const providerInput = (
@@ -284,10 +424,14 @@ describe('UnipileHostedAuthService', () => {
         }),
       },
       createAvailabilityService(),
+      undefined,
+      createWorkspaceDomainsService({
+        get: jest.fn(() => 'https://app.myah.test'),
+      }),
     );
 
     await expect(
-      service.createConnectionAttempt({ workspaceId, userWorkspaceId }),
+      service.createConnectionAttempt({ workspace, userWorkspaceId }),
     ).rejects.toBe(safeError);
 
     const [pendingAttempt, failedAttempt] =
@@ -358,10 +502,12 @@ describe('UnipileHostedAuthService', () => {
         client,
         twentyConfigService,
         availabilityService,
+        undefined,
+        createWorkspaceDomainsService(twentyConfigService),
       );
 
       const result = await service.createReconnectAttempt({
-        workspaceId,
+        workspace,
         userWorkspaceId,
       });
 
@@ -464,7 +610,7 @@ describe('UnipileHostedAuthService', () => {
       );
 
       await expect(
-        service.createReconnectAttempt({ workspaceId, userWorkspaceId }),
+        service.createReconnectAttempt({ workspace, userWorkspaceId }),
       ).rejects.toThrow();
 
       expect(attemptRepository.create).not.toHaveBeenCalled();
@@ -630,6 +776,9 @@ describe('UnipileHostedAuthService', () => {
       }),
     );
     expect(client.getAccount).toHaveBeenCalledWith(accountId);
+    expect(accountService.finalizeHostedAuthConnection).toHaveBeenCalledTimes(
+      1,
+    );
     expect(accountService.finalizeHostedAuthConnection).toHaveBeenCalledWith({
       attemptId,
       workspaceId,
@@ -1268,6 +1417,7 @@ describe('UnipileHostedAuthService', () => {
   it.each([
     {
       description: 'expired pending attempt',
+      reason: 'expired',
       name: 'hosted-auth-rejection-secret',
       attemptStatus: 'PENDING',
       operation: 'CREATE',
@@ -1275,6 +1425,7 @@ describe('UnipileHostedAuthService', () => {
     },
     {
       description: 'wrong callback secret',
+      reason: 'secret_mismatch',
       name: 'wrong-hosted-auth-rejection-secret',
       attemptStatus: 'PENDING',
       operation: 'CREATE',
@@ -1282,6 +1433,7 @@ describe('UnipileHostedAuthService', () => {
     },
     {
       description: 'non-pending attempt status',
+      reason: 'attempt_not_pending',
       name: 'hosted-auth-rejection-secret',
       attemptStatus: 'FAILED',
       operation: 'CREATE',
@@ -1289,6 +1441,7 @@ describe('UnipileHostedAuthService', () => {
     },
     {
       description: 'non-CREATE attempt operation',
+      reason: 'operation_mismatch',
       name: 'hosted-auth-rejection-secret',
       attemptStatus: 'PENDING',
       operation: 'RECONNECT',
@@ -1296,7 +1449,7 @@ describe('UnipileHostedAuthService', () => {
     },
   ])(
     'rejects $description before the provider and never completes the attempt',
-    async ({ name, attemptStatus, operation, expiresAt }) => {
+    async ({ name, reason, attemptStatus, operation, expiresAt }) => {
       const hostedAuthServiceModule = loadHostedAuthServiceModule();
 
       expect(hostedAuthServiceModule).toBeDefined();
@@ -1352,14 +1505,26 @@ describe('UnipileHostedAuthService', () => {
         accountService,
       );
 
-      await expect(
-        service.processNotification({
-          attemptId,
-          name,
-          status: 'CREATION_SUCCESS',
-          accountId,
-        }),
-      ).rejects.toThrow('Unable to process Hosted Auth callback');
+      const warning = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      try {
+        await expect(
+          service.processNotification({
+            attemptId,
+            name,
+            status: 'CREATION_SUCCESS',
+            accountId,
+          }),
+        ).rejects.toThrow('Unable to process Hosted Auth callback');
+
+        expect(warning).toHaveBeenCalledTimes(1);
+        const message = String(warning.mock.calls[0][0]);
+        expect(message).toContain('UNIPILE_HOSTED_AUTH_NOTIFY_REJECTED');
+        expect(message).toContain(reason);
+        expect(message).not.toContain(name);
+        expect(message).not.toContain(accountId);
+      } finally {
+        warning.mockRestore();
+      }
 
       expect(client.getAccount).not.toHaveBeenCalled();
       expect(
@@ -2185,7 +2350,7 @@ describe('UnipileHostedAuthService', () => {
     );
 
     await expect(
-      service.createConnectionAttempt({ workspaceId, userWorkspaceId }),
+      service.createConnectionAttempt({ workspace, userWorkspaceId }),
     ).rejects.toThrow();
     expect(bindingRepository.findOne).toHaveBeenCalledWith({
       where: { workspaceId, deactivatedAt: IsNull() },
