@@ -411,7 +411,10 @@ export const useCampaignSequence = (campaignId: string) => {
       const { data } =
         await apolloCoreClient.mutate<PublishCampaignSequenceData>({
           mutation: PUBLISH_CAMPAIGN_SEQUENCE,
-          refetchQueries: ['CampaignOutreachAudienceReview'],
+          refetchQueries: [
+            'CampaignSequenceExecutionReadiness',
+            'CampaignOutreachAudienceReview',
+          ],
           variables: {
             input: {
               campaignId: capturedCampaignId,

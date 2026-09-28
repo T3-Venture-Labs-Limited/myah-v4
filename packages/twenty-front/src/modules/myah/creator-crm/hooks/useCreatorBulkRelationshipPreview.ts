@@ -35,7 +35,7 @@ export const buildCreatorBulkRelationshipPreview = ({
     selectedRelationshipRecords
       .filter(
         ({ isDirectlyAdded }) =>
-          targetKind !== 'campaign' || isDirectlyAdded !== false,
+          targetKind !== 'campaign' || isDirectlyAdded === true,
       )
       .map(({ creatorId }) => creatorId),
   );
@@ -59,7 +59,12 @@ export const useCreatorBulkRelationshipPreview = ({
   target: CreatorBulkRelationshipTarget;
   selectedCreatorIds: string[];
 }) => {
-  const [hasPaginationError, setHasPaginationError] = useState(false);
+  const scope = `${target.kind}:${target.id}:${selectedCreatorIds.join(',')}`;
+  const [paginationErrorScope, setPaginationErrorScope] = useState<
+    string | null
+  >(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const hasPaginationError = paginationErrorScope === scope;
 
   const objectNameSingular =
     target.kind === 'creator-list' ? 'creatorListMember' : 'campaignCreator';
@@ -92,6 +97,12 @@ export const useCreatorBulkRelationshipPreview = ({
     limit: selectedCreatorIds.length,
     skip: selectedCreatorIds.length === 0,
   });
+  const hasUnverifiableRecords = records.some(
+    ({ id, creatorId, isDirectlyAdded }) =>
+      !id ||
+      !creatorId ||
+      (target.kind === 'campaign' && typeof isDirectlyAdded !== 'boolean'),
+  );
   const preview = useMemo(
     () =>
       buildCreatorBulkRelationshipPreview({
@@ -105,6 +116,11 @@ export const useCreatorBulkRelationshipPreview = ({
   useEffect(() => {
     if (
       selectedCreatorIds.length === 0 ||
+      !hasReadPermission ||
+      hasUnverifiableRecords ||
+      loading ||
+      error !== undefined ||
+      pageInfo?.hasNextPage !== true ||
       !hasNextPage ||
       isFetchingMoreRecords ||
       hasPaginationError
@@ -116,7 +132,7 @@ export const useCreatorBulkRelationshipPreview = ({
 
     void fetchMoreRecords().then((fetchMoreResult) => {
       if (isMounted && fetchMoreResult?.error) {
-        setHasPaginationError(true);
+        setPaginationErrorScope(scope);
       }
     });
 
@@ -127,17 +143,60 @@ export const useCreatorBulkRelationshipPreview = ({
     fetchMoreRecords,
     hasNextPage,
     hasPaginationError,
+    hasReadPermission,
+    hasUnverifiableRecords,
     isFetchingMoreRecords,
+    loading,
+    error,
+    pageInfo?.hasNextPage,
     records,
+    scope,
     selectedCreatorIds.length,
   ]);
 
+  const retryPreview = async () => {
+    if (
+      selectedCreatorIds.length === 0 ||
+      !hasReadPermission ||
+      hasUnverifiableRecords ||
+      (error === undefined && !hasPaginationError) ||
+      isRetrying
+    ) {
+      return;
+    }
+
+    setIsRetrying(true);
+    try {
+      const result = await refetch();
+      if (!result.error) {
+        setPaginationErrorScope((current) =>
+          current === scope ? null : current,
+        );
+      }
+    } catch {
+      // Keep the preview unavailable until an authoritative read succeeds.
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   return {
     ...preview,
-    loading: loading || hasNextPage || pageInfo?.hasNextPage === true,
+    loading:
+      loading || hasNextPage || pageInfo?.hasNextPage === true || isRetrying,
     isPreviewUnavailable:
       selectedCreatorIds.length > 0 &&
-      (!hasReadPermission || error !== undefined || hasPaginationError),
+      (!hasReadPermission ||
+        error !== undefined ||
+        hasPaginationError ||
+        hasUnverifiableRecords),
+    canRetry:
+      selectedCreatorIds.length > 0 &&
+      hasReadPermission &&
+      !hasUnverifiableRecords &&
+      (error !== undefined || hasPaginationError),
+    isRetrying,
+    retryPreview,
     refetch,
   };
 };

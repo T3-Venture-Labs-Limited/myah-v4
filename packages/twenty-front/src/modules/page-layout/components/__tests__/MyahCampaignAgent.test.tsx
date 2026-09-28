@@ -11,6 +11,8 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { MyahCampaignAgent } from '@/page-layout/components/MyahCampaignAgent';
+import { MyahCampaignHome } from '@/page-layout/components/MyahCampaignHome';
+import { requestPageLayoutSidePanelTabChange } from '@/page-layout/constants/PageLayoutSidePanelTabChangeEvent';
 import { resetJotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 
 const mockUpdateOneRecord = jest.fn();
@@ -22,6 +24,9 @@ const mockProceed = jest.fn();
 const mockReset = jest.fn();
 
 let mockRecordLoading = false;
+let mockFactsCanUpdate = true;
+let mockFactsEditMode = false;
+let mockIsInSidePanel = false;
 let mockBlockerState: 'blocked' | 'proceeding' | 'unblocked' = 'unblocked';
 let mockModalOpened = false;
 let mockObjectMetadataItems: Array<{
@@ -111,6 +116,25 @@ const persistedCampaign = {
   replyRules: { blocknote: persistedBodies.replyRules, markdown: null },
 };
 
+jest.mock('@/ui/layout/contexts/LayoutRenderingContext', () => ({
+  useLayoutRenderingContext: () => ({ isInSidePanel: mockIsInSidePanel }),
+}));
+jest.mock('@/page-layout/components/MyahCampaignActivity', () => ({
+  MyahCampaignActivity: () => null,
+}));
+jest.mock('@/page-layout/components/MyahCampaignReadiness', () => ({
+  MyahCampaignReadiness: () => null,
+}));
+jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
+  useObjectPermissionsForObject: () => ({
+    canReadObjectRecords: true,
+    canUpdateObjectRecords: mockFactsCanUpdate,
+    restrictedFields: {},
+  }),
+}));
+jest.mock('@/page-layout/hooks/useIsPageLayoutInEditMode', () => ({
+  useIsPageLayoutInEditMode: () => mockFactsEditMode,
+}));
 jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: () => ({
     objectMetadataItems: mockObjectMetadataItems,
@@ -259,6 +283,9 @@ describe('MyahCampaignAgent', () => {
       mockModalOpened = false;
     });
     mockRecordLoading = false;
+    mockFactsCanUpdate = true;
+    mockFactsEditMode = false;
+    mockIsInSidePanel = false;
     mockUpdateOneRecord.mockResolvedValue(undefined);
     mockObjectMetadataItems = [
       {
@@ -281,7 +308,9 @@ describe('MyahCampaignAgent', () => {
     expect(region).toHaveFocus();
     expect(focus).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit campaignBrief' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit communicationGuidelines' }),
+    );
     expect(focus).toHaveBeenCalledTimes(1);
     focus.mockRestore();
   });
@@ -300,7 +329,25 @@ describe('MyahCampaignAgent', () => {
     },
   );
 
-  it('renders five toolbar-free manual editors in metadata order', () => {
+  it('distinguishes campaign-scoped facts from guidance without suggesting an agent runtime', () => {
+    renderAgent();
+
+    expect(
+      screen.getByText(
+        /Campaign brief and additional notes remain under Campaign/,
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        /Guidance does not send replies or approve commercial terms/,
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /Test agent|Autonomous mode/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders only the three guidance editors in metadata order', () => {
     renderAgent();
 
     expect(
@@ -309,16 +356,20 @@ describe('MyahCampaignAgent', () => {
 
     const editors = screen.getAllByTestId('campaign-agent-editor');
 
-    expect(editors).toHaveLength(5);
+    expect(editors).toHaveLength(3);
     expect(editors.map((editor) => editor.dataset.fieldName)).toEqual([
-      'campaignBrief',
       'communicationGuidelines',
       'replyRules',
       'escalationBoundaries',
-      'additionalNotes',
     ]);
 
-    for (const field of campaignFields) {
+    for (const field of campaignFields.filter(({ name }) =>
+      [
+        'communicationGuidelines',
+        'replyRules',
+        'escalationBoundaries',
+      ].includes(name),
+    )) {
       const group = screen.getByRole('group', { name: field.label });
       const editor = within(group).getByTestId('campaign-agent-editor');
 
@@ -337,7 +388,9 @@ describe('MyahCampaignAgent', () => {
   it('saves only dirty fields when Save is clicked', async () => {
     renderAgent();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit campaignBrief' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit communicationGuidelines' }),
+    );
 
     expect(mockUpdateOneRecord).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
@@ -349,8 +402,8 @@ describe('MyahCampaignAgent', () => {
         idToUpdate: 'campaign-1',
         objectNameSingular: 'campaign',
         updateOneRecordInput: {
-          campaignBrief: {
-            blocknote: draftBody('campaignBrief'),
+          communicationGuidelines: {
+            blocknote: draftBody('communicationGuidelines'),
             markdown: null,
           },
         },
@@ -366,12 +419,14 @@ describe('MyahCampaignAgent', () => {
   it('syncs externally changed clean fields without clobbering a dirty draft', async () => {
     const { store } = renderAgent();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit campaignBrief' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit communicationGuidelines' }),
+    );
 
     await act(async () => {
       store.set(recordStoreFamilyState.atomFamily('campaign-1'), {
         ...persistedCampaign,
-        communicationGuidelines: {
+        replyRules: {
           blocknote: JSON.stringify([
             { content: 'Externally updated guidelines', type: 'paragraph' },
           ]),
@@ -387,8 +442,8 @@ describe('MyahCampaignAgent', () => {
         idToUpdate: 'campaign-1',
         objectNameSingular: 'campaign',
         updateOneRecordInput: {
-          campaignBrief: {
-            blocknote: draftBody('campaignBrief'),
+          communicationGuidelines: {
+            blocknote: draftBody('communicationGuidelines'),
             markdown: null,
           },
         },
@@ -484,9 +539,7 @@ describe('MyahCampaignAgent', () => {
   it('blocks in-app navigation and browser unload while dirty', async () => {
     const { store, view } = renderAgent();
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Edit additionalNotes' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit replyRules' }));
 
     const beforeUnloadEvent = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(beforeUnloadEvent);
@@ -514,6 +567,202 @@ describe('MyahCampaignAgent', () => {
       expect(mockProceed).toHaveBeenCalled();
       expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     });
+  });
+
+  it('keeps Campaign facts drafts on failed writes and blocks unsaved tab navigation', async () => {
+    const store = resetJotaiStore();
+    store.set(
+      recordStoreFamilyState.atomFamily('campaign-1'),
+      persistedCampaign,
+    );
+    const home = () => (
+      <MemoryRouter initialEntries={['/object/campaign/campaign-1']}>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>
+    );
+    const view = render(home());
+    expect(
+      screen
+        .getAllByTestId('campaign-agent-editor')
+        .map((editor) => editor.dataset.fieldName),
+    ).toEqual(['campaignBrief', 'additionalNotes']);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit campaignBrief' }));
+    mockUpdateOneRecord.mockRejectedValueOnce(new Error('Write denied'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save brief and notes' }),
+    );
+    await waitFor(() =>
+      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
+        message: 'Campaign facts could not be saved.',
+      }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Save brief and notes' }),
+    ).toBeEnabled();
+    const beforeUnloadEvent = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(beforeUnloadEvent);
+    expect(beforeUnloadEvent.defaultPrevented).toBe(true);
+    mockBlockerState = 'blocked';
+    view.rerender(home());
+    await waitFor(() => expect(mockOpenModal).toHaveBeenCalled());
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save brief and notes' }),
+    );
+    await waitFor(() =>
+      expect(mockUpdateOneRecord).toHaveBeenLastCalledWith({
+        idToUpdate: 'campaign-1',
+        objectNameSingular: 'campaign',
+        updateOneRecordInput: {
+          campaignBrief: {
+            blocknote: draftBody('campaignBrief'),
+            markdown: null,
+          },
+        },
+      }),
+    );
+    await waitFor(() => expect(mockProceed).toHaveBeenCalled());
+  });
+
+  it('keeps side-panel facts on Keep editing and resumes only after Discard', async () => {
+    mockIsInSidePanel = true;
+    const store = resetJotaiStore();
+    store.set(
+      recordStoreFamilyState.atomFamily('campaign-1'),
+      persistedCampaign,
+    );
+    const view = render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit campaignBrief' }));
+    const resume = jest.fn();
+    const request = () =>
+      requestPageLayoutSidePanelTabChange({
+        currentTabId: 'home',
+        nextTabId: 'agent',
+        resume,
+      });
+    expect(request()).toBe(false);
+    expect(mockOpenModal).toHaveBeenCalledWith(
+      'campaign-facts-unsaved-changes-campaign-1',
+    );
+    expect(resume).not.toHaveBeenCalled();
+    view.rerender(
+      <MemoryRouter>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(resume).not.toHaveBeenCalled();
+    expect(request()).toBe(false);
+    view.rerender(
+      <MemoryRouter>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('button', { name: 'Save brief and notes' }),
+    ).toBeDisabled();
+    view.unmount();
+    expect(request()).toBe(true);
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps editing after a canceled tab change so Save can fail and retry before navigating', async () => {
+    mockIsInSidePanel = true;
+    const store = resetJotaiStore();
+    store.set(
+      recordStoreFamilyState.atomFamily('campaign-1'),
+      persistedCampaign,
+    );
+    const view = render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit additionalNotes' }),
+    );
+    const resume = jest.fn();
+    const request = () =>
+      requestPageLayoutSidePanelTabChange({
+        currentTabId: 'home',
+        nextTabId: 'agent',
+        resume,
+      });
+    expect(request()).toBe(false);
+    view.rerender(
+      <MemoryRouter>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    mockUpdateOneRecord.mockRejectedValueOnce(new Error('Write denied'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save brief and notes' }),
+    );
+    await waitFor(() => expect(mockEnqueueErrorSnackBar).toHaveBeenCalled());
+    expect(request()).toBe(false);
+    view.rerender(
+      <MemoryRouter>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save brief and notes' }),
+    );
+    await waitFor(() => expect(mockEnqueueSuccessSnackBar).toHaveBeenCalled());
+    await waitFor(() => expect(request()).toBe(true));
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it('does not mount writable Campaign facts for read-only access or layout edit mode', () => {
+    const store = resetJotaiStore();
+    store.set(
+      recordStoreFamilyState.atomFamily('campaign-1'),
+      persistedCampaign,
+    );
+    mockFactsCanUpdate = false;
+    const view = render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+    expect(
+      screen.queryByTestId('campaign-rich-text-settings-surface'),
+    ).not.toBeInTheDocument();
+    mockFactsCanUpdate = true;
+    mockFactsEditMode = true;
+    view.rerender(
+      <MemoryRouter>
+        <Provider store={store}>
+          <MyahCampaignHome campaignId="campaign-1" />
+        </Provider>
+      </MemoryRouter>,
+    );
+    expect(
+      screen.queryByTestId('campaign-rich-text-settings-surface'),
+    ).not.toBeInTheDocument();
   });
 
   it.each([

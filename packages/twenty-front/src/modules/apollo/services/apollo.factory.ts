@@ -13,6 +13,10 @@ import {
   CampaignCreationBoundaryError,
   isCampaignCreationTransportUncertain,
 } from '@/apollo/utils/campaignCreationOperation';
+import {
+  CampaignRecordReadBoundaryError,
+  campaignRecordReadLink,
+} from '@/apollo/utils/campaignRecordReadLink';
 import { campaignCreationState } from '@/object-record/record-index/states/campaignCreationState';
 import { type CampaignCreationOperationContext } from '@/object-record/record-index/types/CampaignCreationAttempt';
 import { RestLink } from 'apollo-link-rest';
@@ -163,7 +167,11 @@ export class ApolloFactory implements ApolloManager {
         attempts: {
           max: 2,
           retryIf: (error) => {
-            if (error instanceof CampaignCreationBoundaryError) return false;
+            if (
+              error instanceof CampaignCreationBoundaryError ||
+              error instanceof CampaignRecordReadBoundaryError
+            )
+              return false;
             // oxlint-disable-next-line no-console
             console.log('retryIf error from retryLink', error);
             if (this.isAuthenticationError(error)) {
@@ -331,6 +339,7 @@ export class ApolloFactory implements ApolloManager {
       };
 
       const errorLink = new ErrorLink(({ error, operation, forward }) => {
+        if (error instanceof CampaignRecordReadBoundaryError) return;
         const campaignCreation = operation.getContext().campaignCreation as
           | CampaignCreationOperationContext
           | undefined;
@@ -426,6 +435,7 @@ export class ApolloFactory implements ApolloManager {
         ...(extraLinks || []),
         ...(isDebugMode ? [logger] : []),
         retryLink,
+        campaignRecordReadLink,
         campaignCreationLink,
         streamingRestLink,
         restLink,

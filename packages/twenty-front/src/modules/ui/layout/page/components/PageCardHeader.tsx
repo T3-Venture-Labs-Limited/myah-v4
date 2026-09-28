@@ -10,7 +10,7 @@ import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { styled } from '@linaria/react';
 import { type ReactNode } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 
 type PageCardHeaderProps = {
   links?: BreadcrumbProps['links'];
@@ -23,9 +23,13 @@ type PageCardHeaderProps = {
   centerTitle?: boolean;
   titleColor?: string;
   showTitleOnMobile?: boolean;
+  compactBreadcrumbOnMobile?: boolean;
 };
 
-const StyledHeader = styled.div<{ centerTitle?: boolean }>`
+const StyledHeader = styled.div<{
+  centerTitle?: boolean;
+  compactBreadcrumbOnMobile?: boolean;
+}>`
   align-items: center;
   background-color: ${themeCssVariables.background.secondary};
   border-bottom: 1px solid ${themeCssVariables.border.color.medium};
@@ -39,6 +43,15 @@ const StyledHeader = styled.div<{ centerTitle?: boolean }>`
   min-height: ${SIDE_PANEL_TOP_BAR_HEIGHT}px;
   padding: 0 ${themeCssVariables.spacing[3]};
   width: 100%;
+
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    grid-template-columns: ${({ compactBreadcrumbOnMobile, centerTitle }) =>
+      compactBreadcrumbOnMobile && !centerTitle
+        ? 'minmax(0, 1fr) max-content'
+        : centerTitle
+          ? 'minmax(0, 1fr) auto minmax(0, 1fr)'
+          : 'minmax(0, auto) minmax(0, 1fr)'};
+  }
 `;
 
 const StyledLeft = styled.div`
@@ -92,6 +105,7 @@ export const PageCardHeader = ({
   centerTitle = false,
   titleColor,
   showTitleOnMobile = false,
+  compactBreadcrumbOnMobile = false,
 }: PageCardHeaderProps) => {
   const isMobile = useIsMobile();
   const isNavigationDrawerExpanded = useNavigationDrawerExpanded();
@@ -110,7 +124,10 @@ export const PageCardHeader = ({
   );
 
   return (
-    <StyledHeader centerTitle={shouldCenterTitle}>
+    <StyledHeader
+      centerTitle={shouldCenterTitle}
+      compactBreadcrumbOnMobile={compactBreadcrumbOnMobile}
+    >
       <StyledLeft>
         {!isNavigationDrawerExpanded && (
           <NavigationDrawerCollapseButton direction="right" />
