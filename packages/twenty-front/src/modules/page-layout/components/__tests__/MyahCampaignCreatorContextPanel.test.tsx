@@ -4,6 +4,7 @@ import { TimelineActivityContext } from '@/activities/timeline-activities/contex
 import { MyahCampaignCreatorContextPanel } from '@/page-layout/components/MyahCampaignCreatorContextPanel';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -16,6 +17,9 @@ jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
 }));
 jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: jest.fn(),
+}));
+jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
+  useObjectPermissionsForObject: jest.fn(),
 }));
 jest.mock('@/page-layout/components/MyahCampaignCreatorMessages', () => ({
   MyahCampaignCreatorMessages: ({
@@ -49,6 +53,7 @@ jest.mock('@/ui/layout/side-panel/contexts/SidePanelContext', () => ({
 
 const mockFind = useFindOneRecord as jest.Mock;
 const mockMetadata = useObjectMetadataItems as jest.Mock;
+const mockPermissions = useObjectPermissionsForObject as jest.Mock;
 const showPanel = (
   campaignId = 'campaign-a',
   membershipId = 'membership-a',
@@ -74,12 +79,17 @@ const showPanel = (
 describe('MyahCampaignCreatorContextPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPermissions.mockReturnValue({ canReadObjectRecords: true });
     mockMetadata.mockReturnValue({
       objectMetadataItems: [
         {
+          id: 'membership-metadata',
           nameSingular: 'campaignCreator',
           fields: [
+            { id: 'campaign-field', name: 'campaign' },
+            { id: 'creator-field', name: 'creator' },
             {
+              id: 'stage-field',
               name: 'stage',
               options: [
                 { value: 'READY', label: 'Not contacted' },
@@ -88,6 +98,17 @@ describe('MyahCampaignCreatorContextPanel', () => {
               ],
             },
           ],
+        },
+        {
+          id: 'creator-metadata',
+          nameSingular: 'creator',
+          fields: [
+            'name',
+            'email',
+            'instagramUsername',
+            'instagramBio',
+            'instagramFollowerCount',
+          ].map((name) => ({ id: `${name}-field`, name })),
         },
       ],
     });
@@ -117,6 +138,89 @@ describe('MyahCampaignCreatorContextPanel', () => {
               hasReadPermission: true,
             },
     );
+  });
+
+  it('keeps readable Creator context when an optional profile field is denied', () => {
+    mockPermissions.mockImplementation((id: string) => ({
+      canReadObjectRecords: true,
+      restrictedFields:
+        id === 'creator-metadata'
+          ? { 'instagramBio-field': { canRead: false } }
+          : {},
+    }));
+    showPanel();
+    expect(mockFind.mock.calls[1][0].recordGqlFields).not.toHaveProperty(
+      'instagramBio',
+    );
+    expect(screen.queryByText('Thoughtful routines')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Ava Rivera' })).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Notes' }));
+    expect(screen.getByText('Native Creator notes')).toBeVisible();
+  });
+
+  it('keeps Creator tabs available without requesting or displaying denied identity', () => {
+    mockPermissions.mockImplementation((id: string) => ({
+      canReadObjectRecords: true,
+      restrictedFields:
+        id === 'creator-metadata'
+          ? {
+              'name-field': { canRead: false },
+              'email-field': { canRead: false },
+            }
+          : {},
+    }));
+    showPanel();
+    expect(mockFind.mock.calls[1][0].recordGqlFields).not.toHaveProperty(
+      'name',
+    );
+    expect(mockFind.mock.calls[1][0].recordGqlFields).not.toHaveProperty(
+      'email',
+    );
+    expect(screen.queryByText('Ava Rivera')).not.toBeInTheDocument();
+    expect(screen.queryByText('ava@example.invalid')).not.toBeInTheDocument();
+    expect(screen.getByText('Email unavailable')).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Messages' })).toBeVisible();
+  });
+
+  it('keeps Creator context when membership stage is denied without leaking cached stage', () => {
+    mockPermissions.mockImplementation((id: string) => ({
+      canReadObjectRecords: true,
+      restrictedFields:
+        id === 'membership-metadata'
+          ? { 'stage-field': { canRead: false } }
+          : {},
+    }));
+    showPanel();
+    expect(mockFind.mock.calls[0][0].recordGqlFields).not.toHaveProperty(
+      'stage',
+    );
+    expect(
+      screen.getByText(/Recorded campaign stage: Unavailable/),
+    ).toBeVisible();
+    expect(
+      screen.queryByText(/Recorded campaign stage: Negotiating/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Notes' })).toBeVisible();
+  });
+
+  it('does not use cached membership bindings when their relation field is denied', () => {
+    mockPermissions.mockImplementation((id: string) => ({
+      canReadObjectRecords: true,
+      restrictedFields:
+        id === 'membership-metadata'
+          ? { 'creator-field': { canRead: false } }
+          : {},
+    }));
+    showPanel();
+    expect(mockFind.mock.calls[0][0]).toMatchObject({ skip: true });
+    expect(mockFind.mock.calls[1][0]).toMatchObject({
+      skip: true,
+      objectRecordId: '',
+    });
+    expect(screen.queryByText('Ava Rivera')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: 'Notes' }),
+    ).not.toBeInTheDocument();
   });
 
   it('opens ordinary inspection on read-only campaign messages, with the profile route still available', () => {
@@ -199,18 +303,24 @@ describe('MyahCampaignCreatorContextPanel', () => {
   });
 
   it('uses the current workspace stage label rather than an assumed default', () => {
+    const metadata = mockMetadata();
     mockMetadata.mockReturnValue({
-      objectMetadataItems: [
-        {
-          nameSingular: 'campaignCreator',
-          fields: [
-            {
-              name: 'stage',
-              options: [{ value: 'NEGOTIATING', label: 'In talks' }],
-            },
-          ],
-        },
-      ],
+      objectMetadataItems: metadata.objectMetadataItems.map(
+        (item: { nameSingular: string; fields: Array<{ name: string }> }) =>
+          item.nameSingular === 'campaignCreator'
+            ? {
+                ...item,
+                fields: item.fields.map((field) =>
+                  field.name === 'stage'
+                    ? {
+                        ...field,
+                        options: [{ value: 'NEGOTIATING', label: 'In talks' }],
+                      }
+                    : field,
+                ),
+              }
+            : item,
+      ),
     });
     showPanel();
     expect(screen.getByText(/Recorded campaign stage: In talks/)).toBeVisible();

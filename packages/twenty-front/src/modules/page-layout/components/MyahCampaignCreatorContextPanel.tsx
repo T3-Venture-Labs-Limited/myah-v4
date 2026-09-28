@@ -4,6 +4,7 @@ import { type CampaignCreatorInboxReturnTarget } from '@/myah/inbox/types/Campai
 import { TimelineCard } from '@/activities/timeline-activities/components/TimelineCard';
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
+import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
@@ -155,6 +156,39 @@ export const MyahCampaignCreatorContextPanel = ({
     initialTab,
   );
   const { objectMetadataItems } = useObjectMetadataItems();
+  const membershipMetadata = objectMetadataItems.find(
+    (item) => item.nameSingular === 'campaignCreator',
+  );
+  const creatorMetadata = objectMetadataItems.find(
+    (item) => item.nameSingular === 'creator',
+  );
+  const membershipPermissions = useObjectPermissionsForObject(
+    membershipMetadata?.id ?? '',
+  );
+  const creatorPermissions = useObjectPermissionsForObject(
+    creatorMetadata?.id ?? '',
+  );
+  const membershipFieldReadable = (name: string) => {
+    const id = membershipMetadata?.fields.find(
+      (field) => field.name === name,
+    )?.id;
+    return (
+      !!id && membershipPermissions.restrictedFields?.[id]?.canRead !== false
+    );
+  };
+  const creatorFieldReadable = (name: string) => {
+    const id = creatorMetadata?.fields.find((field) => field.name === name)?.id;
+    return !!id && creatorPermissions.restrictedFields?.[id]?.canRead !== false;
+  };
+  const canReadStage = membershipFieldReadable('stage');
+  // The membership foreign keys are exposed through relation field metadata.
+  const canReadMembershipBinding =
+    membershipFieldReadable('campaign') && membershipFieldReadable('creator');
+  const canReadName = creatorFieldReadable('name');
+  const canReadEmail = creatorFieldReadable('email');
+  const canReadHandle = creatorFieldReadable('instagramUsername');
+  const canReadBio = creatorFieldReadable('instagramBio');
+  const canReadFollowers = creatorFieldReadable('instagramFollowerCount');
   const {
     record: membership,
     loading,
@@ -168,10 +202,12 @@ export const MyahCampaignCreatorContextPanel = ({
       id: true,
       campaignId: true,
       creatorId: true,
-      stage: true,
+      ...(canReadStage ? { stage: true } : {}),
     },
+    skip: !canReadMembershipBinding,
   });
   const belongsToCampaign =
+    canReadMembershipBinding &&
     canReadMembership &&
     membership?.id === membershipId &&
     membership.campaignId === campaignId;
@@ -187,15 +223,16 @@ export const MyahCampaignCreatorContextPanel = ({
     objectRecordId: creatorId,
     recordGqlFields: {
       id: true,
-      name: true,
-      email: true,
-      instagramUsername: true,
-      instagramBio: true,
-      instagramFollowerCount: true,
+      ...(canReadName ? { name: true } : {}),
+      ...(canReadEmail ? { email: true } : {}),
+      ...(canReadHandle ? { instagramUsername: true } : {}),
+      ...(canReadBio ? { instagramBio: true } : {}),
+      ...(canReadFollowers ? { instagramFollowerCount: true } : {}),
     },
     skip: !creatorId,
   });
   const readableCreator =
+    creatorPermissions.canReadObjectRecords &&
     canReadCreator &&
     !loading &&
     !creatorLoading &&
@@ -206,21 +243,20 @@ export const MyahCampaignCreatorContextPanel = ({
       ? creator
       : undefined;
 
-  const instagramUsername = readableCreator?.instagramUsername?.replace(
-    /^@/,
-    '',
-  );
+  const instagramUsername = (
+    canReadHandle ? readableCreator?.instagramUsername : undefined
+  )?.replace(/^@/, '');
   const instagramProfileUrl =
     instagramUsername && /^[a-zA-Z0-9._]{1,30}$/.test(instagramUsername)
       ? `https://www.instagram.com/${instagramUsername}/`
       : undefined;
-  const stageLabel = membership?.stage
-    ? (objectMetadataItems
-        .find((item) => item.nameSingular === 'campaignCreator')
-        ?.fields.find((field) => field.name === 'stage')
-        ?.options?.find((option) => option.value === membership.stage)?.label ??
-      'Unknown stage')
-    : 'Unavailable';
+  const stageLabel =
+    canReadStage && membership?.stage
+      ? (membershipMetadata?.fields
+          .find((field) => field.name === 'stage')
+          ?.options?.find((option) => option.value === membership.stage)
+          ?.label ?? 'Unknown stage')
+      : 'Unavailable';
 
   return (
     <StyledPanel aria-label="Campaign creator context">
@@ -236,20 +272,24 @@ export const MyahCampaignCreatorContextPanel = ({
         {readableCreator ? (
           <StyledIdentity>
             <StyledAvatar aria-label="No profile image available">
-              {(readableCreator.name || '?')
+              {((canReadName && readableCreator.name) || '?')
                 .split(' ')
                 .map((part) => part[0])
                 .slice(0, 2)
                 .join('')
                 .toUpperCase()}
             </StyledAvatar>
-            <h2>{readableCreator.name || 'Creator context'}</h2>
-            <span>{readableCreator.email || 'Email unavailable'}</span>
+            <h2>
+              {(canReadName && readableCreator.name) || 'Creator context'}
+            </h2>
+            <span>
+              {(canReadEmail && readableCreator.email) || 'Email unavailable'}
+            </span>
           </StyledIdentity>
         ) : (
           <h2>Creator context</h2>
         )}
-        {readableCreator?.instagramUsername ? (
+        {canReadHandle && readableCreator?.instagramUsername ? (
           <p>
             {instagramProfileUrl ? (
               <a
@@ -264,10 +304,10 @@ export const MyahCampaignCreatorContextPanel = ({
             )}
           </p>
         ) : null}
-        {readableCreator?.instagramBio ? (
+        {canReadBio && readableCreator?.instagramBio ? (
           <p>{readableCreator.instagramBio}</p>
         ) : null}
-        {readableCreator?.instagramFollowerCount != null ? (
+        {canReadFollowers && readableCreator?.instagramFollowerCount != null ? (
           <p>
             {readableCreator.instagramFollowerCount.toLocaleString()} Instagram
             followers

@@ -2,12 +2,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { CampaignInfluencerReferenceList } from '@/myah/creator-crm/components/CampaignInfluencerReferenceList';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 
 jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
   useFindManyRecords: jest.fn(),
 }));
 jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
   useObjectPermissionsForObject: jest.fn(),
+}));
+jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
+  useObjectMetadataItems: jest.fn(),
 }));
 
 const onOpen = jest.fn();
@@ -57,6 +61,15 @@ const setup = (overrides: Record<string, unknown> = {}) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (useObjectMetadataItems as jest.Mock).mockReturnValue({
+    objectMetadataItems: [
+      {
+        id: 'membership-metadata',
+        nameSingular: 'campaignCreator',
+        fields: [{ id: 'stage-field', name: 'stage' }],
+      },
+    ],
+  });
   (useObjectPermissionsForObject as jest.Mock).mockReturnValue({
     canReadObjectRecords: true,
   });
@@ -156,6 +169,28 @@ it('does not request or show restricted Creator identity fields', () => {
   expect(screen.queryByText('Ava Rivera')).not.toBeInTheDocument();
   expect(screen.queryByText('@ava.studio')).not.toBeInTheDocument();
   expect(screen.getByText('Creator unavailable')).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: /Creator unavailable/ }),
+  ).toHaveTextContent('?');
+});
+
+it('keeps readable membership rows when stage is denied without requesting or displaying cached stage', () => {
+  (useObjectPermissionsForObject as jest.Mock).mockImplementation(
+    (id: string) => ({
+      canReadObjectRecords: true,
+      restrictedFields:
+        id === 'membership-metadata'
+          ? { 'stage-field': { canRead: false } }
+          : {},
+    }),
+  );
+  setup();
+  expect(
+    (useFindManyRecords as jest.Mock).mock.calls[0][0].recordGqlFields,
+  ).not.toHaveProperty('stage');
+  const row = screen.getByRole('button', { name: /Ava Rivera/ });
+  expect(row).toHaveTextContent('Stage unavailable');
+  expect(row).not.toHaveTextContent('Negotiating');
 });
 
 it('does not display cached audience records after membership read is revoked', () => {

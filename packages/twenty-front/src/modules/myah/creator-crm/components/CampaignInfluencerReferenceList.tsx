@@ -1,4 +1,5 @@
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
@@ -158,6 +159,16 @@ export const CampaignInfluencerReferenceList = ({
 }) => {
   const [search, setSearch] = useState('');
   const [selectedMembershipId, setSelectedMembershipId] = useState<string>();
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const stageFieldId = objectMetadataItems
+    .find((item) => item.id === campaignCreatorMetadataId)
+    ?.fields.find((field) => field.name === 'stage')?.id;
+  const membershipPermissions = useObjectPermissionsForObject(
+    campaignCreatorMetadataId,
+  );
+  const canReadStage =
+    !!stageFieldId &&
+    membershipPermissions.restrictedFields?.[stageFieldId]?.canRead !== false;
   const creatorPermissions = useObjectPermissionsForObject(
     creatorMetadataId ?? '',
   );
@@ -190,7 +201,7 @@ export const CampaignInfluencerReferenceList = ({
       id: true,
       campaignId: true,
       creatorId: true,
-      stage: true,
+      ...(canReadStage ? { stage: true } : {}),
       ...(canReadCreator
         ? {
             creator: {
@@ -274,8 +285,10 @@ export const CampaignInfluencerReferenceList = ({
               ? creator?.instagramUsername?.trim()
               : null;
             const stage =
-              stageOptions.find((option) => option.value === record.stage)
-                ?.label ?? 'Stage unavailable';
+              (canReadStage &&
+                stageOptions.find((option) => option.value === record.stage)
+                  ?.label) ||
+              'Stage unavailable';
             return (
               <StyledRow
                 key={record.id}
@@ -292,7 +305,9 @@ export const CampaignInfluencerReferenceList = ({
               >
                 <StyledCreator>
                   <StyledAvatar aria-hidden="true">
-                    {creator?.name?.trim().slice(0, 1).toUpperCase() || '?'}
+                    {(canReadCreatorName &&
+                      creator?.name?.trim().slice(0, 1).toUpperCase()) ||
+                      '?'}
                   </StyledAvatar>
                   <StyledIdentity>
                     <StyledName>{name}</StyledName>
