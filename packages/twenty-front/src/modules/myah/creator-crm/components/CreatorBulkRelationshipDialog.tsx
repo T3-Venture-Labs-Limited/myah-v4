@@ -1,11 +1,13 @@
 import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
 import { useCreatorBulkRelationshipPreview } from '@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { type CreatorBulkRelationshipAction } from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { plural, t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { H1Title, H1TitleFontColor } from 'twenty-ui/typography';
@@ -90,6 +92,8 @@ type CreatorBulkRelationshipDialogContentProps = {
   isConfirmationDisabled: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  onRetry?: () => void;
+  isRetrying?: boolean;
 };
 
 const getCreatorCountLabel = (count: number) =>
@@ -115,11 +119,21 @@ export const CreatorBulkRelationshipDialogContent = ({
   isConfirmationDisabled,
   onCancel,
   onConfirm,
+  onRetry,
+  isRetrying,
 }: CreatorBulkRelationshipDialogContentProps) => {
   const isRemoval = action.operation === 'remove';
   const title = isRemoval ? t`Confirm removal` : t`Confirm addition`;
-  const changedLabel = isRemoval ? t`Will be removed` : t`Will be added`;
-  const unchangedLabel = isRemoval ? t`Already absent` : t`Already present`;
+  const changedLabel = isRemoval
+    ? t`Will be removed`
+    : action.target.kind === 'campaign'
+      ? t`Will be directly added`
+      : t`Will be added`;
+  const unchangedLabel = isRemoval
+    ? t`Already absent`
+    : action.target.kind === 'campaign'
+      ? t`Already directly added`
+      : t`Already present`;
   const targetLabel =
     action.target.kind === 'creator-list' ? t`list` : t`campaign`;
   const confirmTitle = isApplying
@@ -131,7 +145,9 @@ export const CreatorBulkRelationshipDialogContent = ({
       : t`Add to ${targetLabel}`;
   const feedback =
     preview.state === 'unavailable'
-      ? t`Unable to verify existing relationships. Try again.`
+      ? onRetry
+        ? t`Unable to verify existing relationships. Try again.`
+        : t`Unable to verify existing relationships.`
       : preview.state === 'ready' && preview.willChangeCount === 0
         ? t`No changes will be made.`
         : undefined;
@@ -164,6 +180,16 @@ export const CreatorBulkRelationshipDialogContent = ({
         </StyledReviewRow>
       </StyledReviewRows>
       <StyledFeedback role="status">{feedback}</StyledFeedback>
+      {onRetry ? (
+        <Button
+          title={t`Retry preview`}
+          variant="secondary"
+          onClick={onRetry}
+          disabled={isRetrying || isApplying}
+          fullWidth
+          justify="center"
+        />
+      ) : null}
       <StyledActions>
         <Button
           title={t`Cancel`}
@@ -201,17 +227,54 @@ export const CreatorBulkRelationshipDialog = ({
   const { applyCreatorBulkRelationship, removeCreatorListMembers } =
     useApplyCreatorBulkRelationship();
   const { closeModal } = useModal();
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const campaignMetadata = objectMetadataItems.find(
+    ({ nameSingular }) => nameSingular === 'campaign',
+  );
+  const campaignPermissions = useObjectPermissionsForObject(
+    campaignMetadata?.id ?? '',
+  );
+  const hasCampaignAccess =
+    action.target.kind !== 'campaign' ||
+    (campaignMetadata !== undefined &&
+      campaignPermissions.canReadObjectRecords &&
+      campaignPermissions.canUpdateObjectRecords);
+  const [hadCampaignAccess, setHadCampaignAccess] = useState(hasCampaignAccess);
+  // oxlint-disable-next-line twenty/no-state-useref -- An old mutation must not close or clear a newer modal after revocation/unmount.
+  const isCurrent = useRef(true);
   const [isApplying, setIsApplying] = useState(false);
   const preview = useCreatorBulkRelationshipPreview({
     target: action.target,
     selectedCreatorIds,
   });
   const modalInstanceId = getCreatorBulkRelationshipDialogId(action);
+  useEffect(() => {
+    isCurrent.current = true;
+    return () => {
+      isCurrent.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (hadCampaignAccess && !hasCampaignAccess) {
+      isCurrent.current = false;
+      closeModal(modalInstanceId);
+      onClose?.();
+    }
+    setHadCampaignAccess(hasCampaignAccess);
+  }, [
+    hadCampaignAccess,
+    hasCampaignAccess,
+    closeModal,
+    modalInstanceId,
+    onClose,
+  ]);
   const isRemoval = action.operation === 'remove';
   const actionableCount = isRemoval
     ? preview.relationshipRecordIds.length
     : preview.unlinkedCreatorIds.length;
   const isConfirmationDisabled =
+    !isCurrent.current ||
+    !hasCampaignAccess ||
     preview.loading ||
     preview.isPreviewUnavailable ||
     isApplying ||
@@ -239,12 +302,14 @@ export const CreatorBulkRelationshipDialog = ({
           creatorIdsToAdd: preview.unlinkedCreatorIds,
         });
       }
-      closeModal(modalInstanceId);
-      onSuccess?.();
+      if (isCurrent.current) {
+        closeModal(modalInstanceId);
+        onSuccess?.();
+      }
     } catch {
       // The mutation hook reports errors; leave the confirmation open for retry.
     } finally {
-      setIsApplying(false);
+      if (isCurrent.current) setIsApplying(false);
     }
   };
 
@@ -282,16 +347,24 @@ export const CreatorBulkRelationshipDialog = ({
           unchangedCount: isRemoval
             ? preview.unlinkedCreatorIds.length
             : preview.linkedCreatorIds.length,
-          state: preview.loading
+          state: preview.isRetrying
             ? 'loading'
             : preview.isPreviewUnavailable
               ? 'unavailable'
-              : 'ready',
+              : preview.loading
+                ? 'loading'
+                : 'ready',
         }}
         isApplying={isApplying}
         isConfirmationDisabled={isConfirmationDisabled}
         onCancel={handleCancel}
         onConfirm={handleConfirm}
+        onRetry={
+          hasCampaignAccess && preview.canRetry
+            ? () => void preview.retryPreview()
+            : undefined
+        }
+        isRetrying={preview.isRetrying}
       />
     </ModalStatefulWrapper>
   );

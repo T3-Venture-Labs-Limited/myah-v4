@@ -8,7 +8,7 @@ import {
 } from '@hello-pangea/dnd';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconPlus, useIcons } from 'twenty-ui/icon';
 import { TabButton } from 'twenty-ui/input';
@@ -121,6 +121,17 @@ export const PageLayoutTabList = ({
     activeTabIdComponentState,
     componentInstanceId,
   );
+  // oxlint-disable-next-line twenty/no-state-useref -- The deferred tab callback must compare the latest selection before resuming.
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+  // oxlint-disable-next-line twenty/no-state-useref -- A canceled tab change may resume after this tab list unmounts.
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const {
     visibleTabCount,
@@ -164,20 +175,33 @@ export const PageLayoutTabList = ({
         return;
       }
 
-      if (
-        activeTabId !== tabId &&
-        !requestPageLayoutSidePanelTabChange({
-          currentTabId: activeTabId,
-          nextTabId: tabId,
-        })
-      ) {
-        return;
+      if (activeTabId !== tabId) {
+        const resume = () => {
+          if (
+            !isMountedRef.current ||
+            activeTabIdRef.current !== activeTabId ||
+            !tabs.some((tab) => tab.id === tabId)
+          )
+            return;
+          activeTabIdRef.current = tabId;
+          setActiveTabId(tabId);
+          onChangeTab?.(tabId);
+        };
+        if (
+          !requestPageLayoutSidePanelTabChange({
+            currentTabId: activeTabId,
+            nextTabId: tabId,
+            resume,
+          })
+        )
+          return;
       }
 
+      activeTabIdRef.current = tabId;
       setActiveTabId(tabId);
       onChangeTab?.(tabId);
     },
-    [activeTabId, isInSidePanel, navigate, onChangeTab, setActiveTabId],
+    [activeTabId, isInSidePanel, navigate, onChangeTab, setActiveTabId, tabs],
   );
 
   const selectTabFromDropdown = useCallback(

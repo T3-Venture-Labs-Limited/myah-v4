@@ -8,6 +8,16 @@ const mockRemoveCreatorListMembers = jest.fn();
 const mockCloseModal = jest.fn();
 const mockUseQuery = jest.fn();
 
+jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
+  useObjectMetadataItems: () => ({ objectMetadataItems: [] }),
+}));
+jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
+  useObjectPermissionsForObject: () => ({
+    canReadObjectRecords: false,
+    canUpdateObjectRecords: false,
+  }),
+}));
+
 jest.mock('@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview', () => ({
   useCreatorBulkRelationshipPreview: (...args: unknown[]) =>
     mockUseCreatorBulkRelationshipPreview(...args),

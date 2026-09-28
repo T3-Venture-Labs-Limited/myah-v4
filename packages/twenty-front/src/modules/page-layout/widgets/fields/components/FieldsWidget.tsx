@@ -57,11 +57,13 @@ const StyledInlineFieldsPropertyBox = styled.div<{
 type FieldsWidgetProps = {
   widget: PageLayoutWidget;
   includeFieldNames?: readonly string[];
+  excludeFieldNames?: readonly string[];
 };
 
 export const FieldsWidget = ({
   widget,
   includeFieldNames,
+  excludeFieldNames,
 }: FieldsWidgetProps) => {
   const targetRecord = useTargetRecord();
   const { isInSidePanel } = useLayoutRenderingContext();
@@ -89,32 +91,38 @@ export const FieldsWidget = ({
   const includedFieldNames = isDefined(includeFieldNames)
     ? new Set(includeFieldNames)
     : null;
+  const excludedFieldNames = new Set(excludeFieldNames);
+  const isFieldIncluded = (fieldName: string) =>
+    (includedFieldNames === null || includedFieldNames.has(fieldName)) &&
+    !excludedFieldNames.has(fieldName);
 
-  const groupsToDisplay = includedFieldNames
-    ? (() => {
-        let nextGlobalIndex = 0;
+  const groupsToDisplay =
+    includedFieldNames || excludedFieldNames.size > 0
+      ? (() => {
+          let nextGlobalIndex = 0;
 
-        return groups
-          .map((group) => ({
-            ...group,
-            fields: group.fields
-              .filter(({ fieldMetadataItem }) =>
-                includedFieldNames.has(fieldMetadataItem.name),
-              )
-              .map((field) => ({
-                ...field,
-                globalIndex: nextGlobalIndex++,
-              })),
-          }))
-          .filter((group) => group.fields.length > 0);
-      })()
-    : groups;
+          return groups
+            .map((group) => ({
+              ...group,
+              fields: group.fields
+                .filter(({ fieldMetadataItem }) =>
+                  isFieldIncluded(fieldMetadataItem.name),
+                )
+                .map((field) => ({
+                  ...field,
+                  globalIndex: nextGlobalIndex++,
+                })),
+            }))
+            .filter((group) => group.fields.length > 0);
+        })()
+      : groups;
 
-  const hiddenFieldsToDisplay = includedFieldNames
-    ? hiddenFields.filter(({ fieldMetadataItem }) =>
-        includedFieldNames.has(fieldMetadataItem.name),
-      )
-    : hiddenFields;
+  const hiddenFieldsToDisplay =
+    includedFieldNames || excludedFieldNames.size > 0
+      ? hiddenFields.filter(({ fieldMetadataItem }) =>
+          isFieldIncluded(fieldMetadataItem.name),
+        )
+      : hiddenFields;
 
   const shouldShowHiddenFields =
     fieldsConfiguration.shouldAllowUserToSeeHiddenFields === true &&
@@ -125,9 +133,10 @@ export const FieldsWidget = ({
   const hiddenFieldsWithOffsetGlobalIndex = shouldShowHiddenFields
     ? hiddenFieldsToDisplay.map((field, index) => ({
         ...field,
-        globalIndex: includedFieldNames
-          ? visibleFields.length + index
-          : field.globalIndex + visibleFields.length,
+        globalIndex:
+          includedFieldNames || excludedFieldNames.size > 0
+            ? visibleFields.length + index
+            : field.globalIndex + visibleFields.length,
       }))
     : [];
 
@@ -140,7 +149,8 @@ export const FieldsWidget = ({
 
   const hasFieldsToDisplay =
     groupsToDisplay.length > 0 ||
-    (includedFieldNames !== null && shouldShowHiddenFields);
+    ((includedFieldNames !== null || excludedFieldNames.size > 0) &&
+      shouldShowHiddenFields);
 
   if (!hasFieldsToDisplay) {
     return (

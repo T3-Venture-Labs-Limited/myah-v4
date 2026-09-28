@@ -1,5 +1,10 @@
 import type { ReactNode } from 'react';
+import { createStore, Provider } from 'jotai';
+import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
+import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
+import { focusStackState } from '@/ui/utilities/focus/states/focusStackState';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -9,6 +14,7 @@ import {
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { MyahCampaignAudienceControls } from './MyahCampaignAudienceControls';
 
+let mockUseRealOverlayHooks = false;
 const mockUseQuery = jest.fn();
 const mockUseMutation = jest.fn();
 const mockOpenModal = jest.fn();
@@ -55,7 +61,10 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
     mockUseObjectMetadataItem(...args),
 }));
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
-  useModal: () => ({ openModal: mockOpenModal, closeModal: mockCloseModal }),
+  useModal: () =>
+    mockUseRealOverlayHooks
+      ? jest.requireActual('@/ui/layout/modal/hooks/useModal').useModal()
+      : { openModal: mockOpenModal, closeModal: mockCloseModal },
 }));
 jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
   ModalStatefulWrapper: ({ children }: { children: ReactNode }) => (
@@ -126,22 +135,44 @@ jest.mock('@/ui/layout/dropdown/components/Dropdown', () => ({
     children,
     clickableComponent,
     dropdownComponents,
+    dropdownId,
     onOpen,
   }: {
     children?: ReactNode;
     clickableComponent: ReactNode;
     dropdownComponents: ReactNode;
     onOpen?: () => void;
-  }) => (
-    <>
-      <div onClick={onOpen}>{clickableComponent}</div>
-      {dropdownComponents}
-      {children}
-    </>
-  ),
+    dropdownId: string;
+  }) => {
+    const { openDropdown } = jest
+      .requireActual('@/ui/layout/dropdown/hooks/useOpenDropdown')
+      .useOpenDropdown();
+    return (
+      <>
+        <div
+          onClick={() => {
+            if (mockUseRealOverlayHooks)
+              openDropdown({
+                dropdownComponentInstanceIdFromProps: dropdownId,
+              });
+            onOpen?.();
+          }}
+        >
+          {clickableComponent}
+        </div>
+        {dropdownComponents}
+        {children}
+      </>
+    );
+  },
 }));
 jest.mock('@/ui/layout/dropdown/hooks/useCloseDropdown', () => ({
-  useCloseDropdown: () => ({ closeDropdown: mockCloseDropdown }),
+  useCloseDropdown: () =>
+    mockUseRealOverlayHooks
+      ? jest
+          .requireActual('@/ui/layout/dropdown/hooks/useCloseDropdown')
+          .useCloseDropdown()
+      : { closeDropdown: mockCloseDropdown },
 }));
 jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomComponentState', () => ({
   useSetAtomComponentState: () => mockSetMultipleRecordPickerState,
@@ -342,6 +373,7 @@ describe('MyahCampaignAudienceControls', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseRealOverlayHooks = false;
     mockRefetchQueries.mockResolvedValue(undefined);
     mockApolloQueries();
     mockRecords();
@@ -401,6 +433,122 @@ describe('MyahCampaignAudienceControls', () => {
         name: 'Remove Creator List',
       }),
     ).toHaveLength(2);
+  });
+
+  it('shows attached sources without attach, review, approval or detach actions in read-only mode', () => {
+    mockApolloQueries({
+      snapshotData: snapshot(['list-1']),
+      candidatesData: candidates(['creator-1']),
+    });
+    mockRecords({ creatorLists: [{ id: 'list-1', name: 'VIP Creators' }] });
+    render(
+      <MyahCampaignAudienceControls
+        campaignId="campaign-1"
+        canManage={false}
+      />,
+    );
+    expect(screen.getByTestId('creator-list-tags')).toHaveTextContent(
+      'VIP Creators',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Add Creator List' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Remove Creator List' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Review 1 addition' }),
+    ).not.toBeInTheDocument();
+    expect(
+      mockUseQuery.mock.calls.some(([query]) =>
+        String(query).includes('CampaignCreatorListAdditionCandidates'),
+      ),
+    ).toBe(false);
+    expect(mockAttach).not.toHaveBeenCalled();
+    expect(mockApprove).not.toHaveBeenCalled();
+    expect(mockDetach).not.toHaveBeenCalled();
+  });
+
+  it('keeps review and detach available when attaching a Creator List is forbidden', () => {
+    mockApolloQueries({
+      snapshotData: snapshot(['list-1']),
+      candidatesData: candidates(['creator-1']),
+    });
+    mockRecords({ creatorLists: [{ id: 'list-1', name: 'VIP Creators' }] });
+    render(
+      <MyahCampaignAudienceControls
+        campaignId="campaign-1"
+        canAttach={false}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Add Creator List' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Remove Creator List' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Review 1 addition' }),
+    ).toBeInTheDocument();
+  });
+
+  it('explains reviewed snapshot membership without suggesting live-list enrollment', () => {
+    mockApolloQueries({
+      snapshotData: snapshot(['list-1']),
+      candidatesData: candidates(['creator-1']),
+    });
+    mockRecords({
+      creatorLists: [{ id: 'list-1', name: 'VIP Creators' }],
+      creators: [{ id: 'creator-1', name: 'Ada' }],
+    });
+    render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+
+    const section = screen.getByTestId('creator-lists-section');
+    expect(section).toHaveTextContent('Later list additions require review');
+    fireEvent.click(screen.getByRole('button', { name: 'Review 1 addition' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      '1 selected of 1 new candidates',
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Only selected creators are added to this campaign. No outreach is sent.',
+    );
+  });
+
+  it('distinguishes a failed attachment snapshot from an empty audience and offers retry', () => {
+    const refetch = jest.fn();
+    mockUseQuery.mockImplementation((query: string) =>
+      query.includes('CampaignInfluencerSnapshot')
+        ? { error: new Error('unavailable'), refetch }
+        : { data: candidates(), refetch: jest.fn() },
+    );
+    render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Creator Lists could not load',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Add Creator List' }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Retry Creator Lists' }),
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows candidate loading rather than reporting zero additions before the query settles', () => {
+    mockUseQuery.mockImplementation((query: string) =>
+      query.includes('CampaignInfluencerSnapshot')
+        ? { data: snapshot(['list-1']), refetch: jest.fn() }
+        : { loading: true, refetch: jest.fn() },
+    );
+    mockRecords({ creatorLists: [{ id: 'list-1', name: 'VIP Creators' }] });
+    render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Checking list additions',
+    );
+    expect(
+      screen.queryByRole('button', { name: /Review .*addition/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('does not reserve a tag container when no Creator Lists are attached', () => {
@@ -548,6 +696,265 @@ describe('MyahCampaignAudienceControls', () => {
         ],
       }),
     );
+  });
+
+  it('does not carry pending attachment UI or callbacks into another campaign', async () => {
+    let rejectAttach!: (reason: Error) => void;
+    mockAttach.mockImplementation(
+      () =>
+        new Promise<void>((_, reject) => {
+          rejectAttach = reject;
+        }),
+    );
+    const { rerender } = render(
+      <MyahCampaignAudienceControls campaignId="campaign-a" />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select creator list' }),
+    );
+    expect(mockAttach).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: {
+          input: {
+            campaignId: 'campaign-a',
+            creatorListIds: ['list-selected'],
+          },
+        },
+      }),
+    );
+    rerender(<MyahCampaignAudienceControls campaignId="campaign-b" />);
+    expect(
+      screen.getByRole('button', { name: 'Add Creator List' }),
+    ).toBeEnabled();
+    await act(async () => {
+      rejectAttach(new Error('A unavailable'));
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mockOpenMultipleRecordPicker).not.toHaveBeenCalled();
+  });
+
+  it('does not close the new campaign modal after an old detach completes', async () => {
+    let resolveDetach!: () => void;
+    mockDetach.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDetach = resolve;
+        }),
+    );
+    mockUseQuery.mockImplementation(
+      (
+        query: string,
+        options: { variables: { input: { campaignId: string } } },
+      ) =>
+        query.includes('CampaignInfluencerSnapshot')
+          ? {
+              data: snapshot([
+                options.variables.input.campaignId === 'campaign-a'
+                  ? 'list-a'
+                  : 'list-b',
+              ]),
+              refetch: jest.fn(),
+            }
+          : { data: candidates(), refetch: jest.fn() },
+    );
+    mockRecords({
+      creatorLists: [
+        { id: 'list-a', name: 'A' },
+        { id: 'list-b', name: 'B' },
+      ],
+    });
+    const { rerender } = render(
+      <MyahCampaignAudienceControls campaignId="campaign-a" />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Creator List' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm Creator List detach' }),
+    );
+    rerender(<MyahCampaignAudienceControls campaignId="campaign-b" />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Creator List' }),
+    );
+    expect(screen.getByText('Detach B?')).toBeVisible();
+    const writeQuery = jest.fn();
+    mockDetach.mock.calls[0][0].update(
+      { writeQuery },
+      {
+        data: {
+          detachCampaignCreatorList: snapshot().campaignInfluencerSnapshot,
+        },
+      },
+    );
+    expect(writeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: { input: { campaignId: 'campaign-a' } },
+      }),
+    );
+    expect(writeQuery).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: { input: { campaignId: 'campaign-b' } },
+      }),
+    );
+    await act(async () => {
+      resolveDetach();
+    });
+    expect(screen.getByText('Detach B?')).toBeVisible();
+    expect(mockCloseModal).not.toHaveBeenCalledWith(
+      'campaign-list-detach-campaign-b',
+    );
+  });
+
+  it('shows a new campaign candidate loading state instead of old list additions', () => {
+    mockUseQuery.mockImplementation(
+      (
+        query: string,
+        options: { variables: { input: { campaignId: string } } },
+      ) =>
+        query.includes('CampaignInfluencerSnapshot')
+          ? { data: snapshot(['list-1']), refetch: jest.fn() }
+          : options.variables.input.campaignId === 'campaign-a'
+            ? { data: candidates(['creator-a']), refetch: jest.fn() }
+            : { loading: true, refetch: jest.fn() },
+    );
+    mockRecords({ creatorLists: [{ id: 'list-1', name: 'VIP Creators' }] });
+    const { rerender } = render(
+      <MyahCampaignAudienceControls campaignId="campaign-a" />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Review 1 addition' }),
+    ).toBeVisible();
+    rerender(<MyahCampaignAudienceControls campaignId="campaign-b" />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Checking list additions',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Review 1 addition' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('completes authorized A batches after switching to B without refreshing B UI', async () => {
+    let resolveApproval!: () => void;
+    mockApprove
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveApproval = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(undefined);
+    const creatorIds = Array.from(
+      { length: 501 },
+      (_, index) => `creator-${index}`,
+    );
+    mockUseQuery.mockImplementation(
+      (
+        query: string,
+        options: { variables: { input: { campaignId: string } } },
+      ) =>
+        query.includes('CampaignInfluencerSnapshot')
+          ? { data: snapshot(['list-1']), refetch: jest.fn() }
+          : {
+              data: candidates(
+                options.variables.input.campaignId === 'campaign-a'
+                  ? creatorIds
+                  : [],
+              ),
+              refetch: jest.fn(),
+            },
+    );
+    mockRecords({ creatorLists: [{ id: 'list-1', name: 'VIP Creators' }] });
+    const { rerender } = render(
+      <MyahCampaignAudienceControls campaignId="campaign-a" />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Review 501 additions' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Approve selected additions' }),
+    );
+    expect(mockApprove).toHaveBeenCalledTimes(1);
+    rerender(<MyahCampaignAudienceControls campaignId="campaign-b" />);
+    await act(async () => {
+      resolveApproval();
+    });
+    expect(mockApprove).toHaveBeenCalledTimes(2);
+    expect(mockApprove).toHaveBeenNthCalledWith(2, {
+      variables: {
+        input: {
+          campaignId: 'campaign-a',
+          creatorListId: 'list-1',
+          creatorIds: ['creator-500'],
+        },
+      },
+    });
+    expect(
+      mockDispatchObjectRecordOperationBrowserEvent,
+    ).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('cleans only open A picker, review, and detach states and focus across A-B-A', () => {
+    mockUseRealOverlayHooks = true;
+    const store = createStore();
+    mockApolloQueries({
+      snapshotData: snapshot(['list-1']),
+      candidatesData: candidates(['creator-1']),
+    });
+    mockRecords({
+      creatorLists: [{ id: 'list-1', name: 'VIP Creators' }],
+      creators: [{ id: 'creator-1', name: 'Ada' }],
+    });
+    const renderControls = (campaignId: string) => (
+      <Provider store={store}>
+        <MyahCampaignAudienceControls campaignId={campaignId} />
+      </Provider>
+    );
+    const { rerender } = render(renderControls('campaign-a'));
+    const pickerA = 'campaign-creator-lists-picker-campaign-a';
+    const reviewA = 'campaign-list-additions-campaign-a-list-1';
+    const detachA = 'campaign-list-detach-campaign-a';
+    const unrelated = 'unrelated-modal';
+    const modalAtom = (id: string) =>
+      isModalOpenedComponentState.atomFamily({ instanceId: id });
+    const dropdownAtom = (id: string) =>
+      isDropdownOpenComponentState.atomFamily({ instanceId: id });
+    fireEvent.click(screen.getByTestId('creator-list-picker-open'));
+    expect(store.get(dropdownAtom(pickerA))).toBe(true);
+    rerender(renderControls('campaign-b'));
+    expect(store.get(dropdownAtom(pickerA))).toBe(false);
+    expect(
+      store
+        .get(focusStackState.atom)
+        .some(({ focusId }) => focusId === pickerA),
+    ).toBe(false);
+    rerender(renderControls('campaign-a'));
+    expect(store.get(dropdownAtom(pickerA))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Review 1 addition' }));
+    expect(store.get(modalAtom(reviewA))).toBe(true);
+    rerender(renderControls('campaign-b'));
+    expect(store.get(modalAtom(reviewA))).toBe(false);
+    expect(
+      store
+        .get(focusStackState.atom)
+        .some(({ focusId }) => focusId === reviewA),
+    ).toBe(false);
+    rerender(renderControls('campaign-a'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Creator List' }),
+    );
+    expect(store.get(modalAtom(detachA))).toBe(true);
+    store.set(modalAtom(unrelated), true);
+    rerender(renderControls('campaign-b'));
+    expect(store.get(modalAtom(detachA))).toBe(false);
+    expect(store.get(modalAtom(unrelated))).toBe(true);
+    expect(
+      store
+        .get(focusStackState.atom)
+        .some(({ focusId }) => focusId === detachA),
+    ).toBe(false);
+    rerender(renderControls('campaign-a'));
+    expect(store.get(modalAtom(detachA))).toBe(false);
   });
 
   it('does not offer a direct Creator-add control', () => {
@@ -802,6 +1209,24 @@ describe('MyahCampaignAudienceControls', () => {
         'The additions changed. Review the current candidates.',
       ),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps detach confirmation open and retryable when detaching fails', async () => {
+    mockApolloQueries({ snapshotData: snapshot(['list-1']) });
+    mockRecords({ creatorLists: [{ id: 'list-1', name: 'VIP Creators' }] });
+    mockDetach.mockRejectedValueOnce(new Error('detach unavailable'));
+    render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Creator List' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm Creator List detach' }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not detach Creator List',
+    );
+    expect(screen.getByText('Detach VIP Creators?')).toBeVisible();
+    expect(mockCloseModal).not.toHaveBeenCalled();
   });
 
   it('confirms only the attachment before detaching a Creator List', async () => {

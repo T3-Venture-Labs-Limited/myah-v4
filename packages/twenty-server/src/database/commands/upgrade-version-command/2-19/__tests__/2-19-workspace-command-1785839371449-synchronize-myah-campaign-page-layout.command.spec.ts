@@ -38,12 +38,19 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
               [MYAH_STANDARD_OBJECTS.campaign.universalIdentifier]: {},
             },
           },
+          flatViewMaps: {
+            byUniversalIdentifier: {
+              [MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+                .universalIdentifier]: {},
+            },
+          },
         }),
       } as unknown as WorkspaceCacheService,
     );
     const expectedChildSelection = {
       pageLayoutTab: [
         '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+        '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
         '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
         'cd78ad8c-883a-4ce1-9b74-526adadb751d',
         '0d213a1a-e001-496c-970e-e692968cf17c',
@@ -52,6 +59,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
       ].sort(),
       pageLayoutWidget: [
         '6845e3c3-3a1a-42d8-afcd-71ff885c8f20',
+        '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2',
         'e81ab303-f402-45df-8257-d91172ecc435',
         '9a05fd06-cf91-47a2-bbee-06cb4292f44d',
         '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392',
@@ -115,18 +123,60 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
     expect({
       ...synchronizeCompleteLayoutCall[2],
       deletionSelection: Object.fromEntries(
-        Object.entries(
-          synchronizeCompleteLayoutCall[2].deletionSelection,
-        ).map(([type, universalIdentifiers]) => [
-          type,
-          [...(universalIdentifiers as Set<string>)].sort(),
-        ]),
+        Object.entries(synchronizeCompleteLayoutCall[2].deletionSelection).map(
+          ([type, universalIdentifiers]) => [
+            type,
+            [...(universalIdentifiers as Set<string>)].sort(),
+          ],
+        ),
       ),
     }).toEqual({
       synchronizeExistingSelectedMetadata: true,
       deletionSelection: {
         pageLayoutWidget: ['368b8c66-435d-4e5b-94b8-4d3f08fc283b'],
       },
+    });
+  });
+
+  it('materializes prerequisite Campaign views before the later audience command creates its view and tab', async () => {
+    const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
+    const command = new SynchronizeMyahCampaignPageLayoutCommand(
+      {} as WorkspaceIteratorService,
+      {
+        synchronizeWorkspace,
+      } as unknown as SynchronizeSourceControlledMyahMetadataService,
+      {
+        getOrRecompute: jest.fn().mockResolvedValue({
+          flatObjectMetadataMaps: {
+            byUniversalIdentifier: {
+              [MYAH_STANDARD_OBJECTS.campaign.universalIdentifier]: {},
+            },
+          },
+          flatViewMaps: { byUniversalIdentifier: {} },
+        }),
+      } as unknown as WorkspaceCacheService,
+    );
+
+    await command.runOnWorkspace(args);
+
+    expect(synchronizeWorkspace).toHaveBeenCalledTimes(1);
+    expect(synchronizeWorkspace).toHaveBeenCalledWith(args, {
+      view: new Set([
+        MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaign.views.vieweb4da94a.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaign.views.view9c4f90c5.universalIdentifier,
+      ]),
+      viewField: new Set(
+        [
+          MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9,
+          MYAH_STANDARD_OBJECTS.campaign.views.vieweb4da94a,
+          MYAH_STANDARD_OBJECTS.campaign.views.view9c4f90c5,
+        ].flatMap(({ viewFields }) =>
+          Object.values(viewFields).map(
+            ({ universalIdentifier }) => universalIdentifier,
+          ),
+        ),
+      ),
     });
   });
 
@@ -151,6 +201,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
 
     expect(getOrRecompute).toHaveBeenCalledWith(args.workspaceId, [
       'flatObjectMetadataMaps',
+      'flatViewMaps',
     ]);
     expect(synchronizeWorkspace).not.toHaveBeenCalled();
   });

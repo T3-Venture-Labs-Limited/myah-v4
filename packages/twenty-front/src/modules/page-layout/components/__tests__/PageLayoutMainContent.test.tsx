@@ -1,9 +1,25 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { PageLayoutMainContent } from '@/page-layout/PageLayoutMainContent';
 import { ViewType, WidgetType } from '~/generated-metadata/graphql';
 
 const mockGetWidgetConfigurationViewId = jest.fn();
+
+const canonicalCampaignAgentWidget = {
+  id: 'agent-fields-widget',
+  title: 'Campaign agent',
+  type: WidgetType.FIELDS,
+  configuration: { viewId: 'agent-fields-view' },
+};
+const canonicalCampaignAgentView = {
+  id: 'agent-fields-view',
+  universalIdentifier: 'eb4da94a-d3da-4354-bb39-7478ac12bd35',
+  type: ViewType.FIELDS_WIDGET,
+  isActive: true,
+};
+let mockAgentWidgetHasAccess = true;
+let mockIsEditMode = false;
+let mockCanUpdateCampaign = true;
 
 const canonicalCampaignOperationsWidget = {
   id: 'operations-fields-widget',
@@ -23,18 +39,42 @@ jest.mock('@/myah/creator-crm/components/CampaignInfluencerIndex', () => ({
   CampaignInfluencerIndex: ({
     campaignId,
     viewId,
+    onOpenCreatorContext,
+    activityTabId,
   }: {
     campaignId: string;
+    activityTabId?: string;
     viewId: string | null;
+    onOpenCreatorContext?: (request: {
+      recordId: string;
+      source: 'table-identifier-action';
+    }) => void;
   }) => (
-    <div>{`Campaign Influencers integration:${campaignId}:${viewId ?? 'default'}`}</div>
+    <>
+      <div>{`Campaign Influencers integration:${campaignId}:${viewId ?? 'default'}`}</div>
+      <output data-testid="activity-tab-destination">
+        {activityTabId ?? 'unavailable'}
+      </output>
+      <button
+        onClick={() =>
+          onOpenCreatorContext?.({
+            recordId: 'membership-a',
+            source: 'table-identifier-action',
+          })
+        }
+      >
+        Open from list
+      </button>
+    </>
   ),
 }));
 let currentPageLayout: {
   type: string;
   universalIdentifier: string;
+  tabs: Array<{ id: string; universalIdentifier: string; isActive: boolean }>;
 };
 let activeTab: {
+  isActive?: boolean;
   layout: string;
   title: string;
   universalIdentifier: string;
@@ -57,6 +97,34 @@ let runtimeViews: Array<{
   isActive: boolean;
 }>;
 
+jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
+  useObjectMetadataItems: () => ({
+    objectMetadataItems: [
+      {
+        id: 'campaign-object',
+        nameSingular: 'campaign',
+        fields: [
+          'communicationGuidelines',
+          'replyRules',
+          'escalationBoundaries',
+        ].map((name) => ({ name, id: name })),
+      },
+    ],
+  }),
+}));
+jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
+  useObjectPermissionsForObject: () => ({
+    canReadObjectRecords: true,
+    canUpdateObjectRecords: mockCanUpdateCampaign,
+    restrictedFields: {},
+  }),
+}));
+jest.mock('@/page-layout/hooks/useIsPageLayoutInEditMode', () => ({
+  useIsPageLayoutInEditMode: () => mockIsEditMode,
+}));
+jest.mock('@/page-layout/widgets/hooks/useWidgetPermissions', () => ({
+  useWidgetPermissions: () => ({ hasAccess: mockAgentWidgetHasAccess }),
+}));
 jest.mock('@/page-layout/components/PageLayoutContent', () => ({
   PageLayoutContent: () => <div>Native page layout content</div>,
 }));
@@ -150,6 +218,13 @@ describe('PageLayoutMainContent', () => {
     currentPageLayout = {
       type: 'RECORD_PAGE',
       universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
+      tabs: [
+        {
+          id: 'home-tab-id',
+          universalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+          isActive: true,
+        },
+      ],
     };
     isInSidePanel = false;
     activeTab = {
@@ -171,7 +246,14 @@ describe('PageLayoutMainContent', () => {
           : 'campaign-influencers-view',
     );
     mockGetWidgetConfigurationViewId.mockClear();
-    runtimeViews = [canonicalCampaignOperationsView];
+    runtimeViews = [
+      canonicalCampaignOperationsView,
+      canonicalCampaignAgentView,
+    ];
+    mockAgentWidgetHasAccess = true;
+    mockCanUpdateCampaign = true;
+    mockIsEditMode = false;
+    activeTab = { ...activeTab, isActive: true, widgets: [] };
   });
 
   it('mounts Campaign Home with native page layout content', () => {
@@ -183,6 +265,52 @@ describe('PageLayoutMainContent', () => {
     ).toBeVisible();
   });
 
+  it('explains linked tasks only on the standard Campaign Tasks tab without replacing native content', () => {
+    activeTab = {
+      ...activeTab,
+      title: 'Tasks',
+      universalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
+      widgets: [
+        {
+          id: 'tasks-widget',
+          type: WidgetType.TASKS,
+        },
+      ],
+    };
+
+    const view = render(<PageLayoutMainContent tabId="tasks-tab-id" />);
+    const note = screen.getByText(/existing tasks linked to this campaign/i);
+
+    expect(note).toHaveTextContent(
+      /not evidence of fulfillment or commercial completion/i,
+    );
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+
+    currentPageLayout = {
+      ...currentPageLayout,
+      universalIdentifier: 'custom-layout',
+    };
+    view.rerender(<PageLayoutMainContent tabId="tasks-tab-id" />);
+    expect(
+      screen.queryByText(/existing tasks linked to this campaign/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+
+    currentPageLayout = {
+      ...currentPageLayout,
+      universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
+    };
+    targetRecordIdentifier = {
+      id: 'person-1',
+      targetObjectNameSingular: 'person',
+    };
+    view.rerender(<PageLayoutMainContent tabId="tasks-tab-id" />);
+    expect(
+      screen.queryByText(/existing tasks linked to this campaign/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+  });
+
   it('mounts the native Campaign Influencers index only on its tab', () => {
     activeTab = {
       ...activeTab,
@@ -191,7 +319,22 @@ describe('PageLayoutMainContent', () => {
       universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
     };
 
-    render(<PageLayoutMainContent tabId="influencers-tab-id" />);
+    const onOpenCampaignCreatorContext = jest.fn();
+    render(
+      <PageLayoutMainContent
+        tabId="influencers-tab-id"
+        activityTabId="home-tab-id"
+        onOpenCampaignCreatorContext={onOpenCampaignCreatorContext}
+      />,
+    );
+    expect(screen.getByTestId('activity-tab-destination')).toHaveTextContent(
+      'home-tab-id',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open from list' }));
+    expect(onOpenCampaignCreatorContext).toHaveBeenCalledWith({
+      recordId: 'membership-a',
+      source: 'table-identifier-action',
+    });
 
     expect(
       screen.getByText(
@@ -201,6 +344,19 @@ describe('PageLayoutMainContent', () => {
     expect(
       screen.queryByText('Native page layout content'),
     ).not.toBeInTheDocument();
+  });
+
+  it('does not advertise a Home tab absent from selectable tab props as an activity destination', () => {
+    activeTab = {
+      ...activeTab,
+      title: 'Influencers',
+      widgets: [{}],
+      universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+    };
+    render(<PageLayoutMainContent tabId="influencers-tab-id" />);
+    expect(screen.getByTestId('activity-tab-destination')).toHaveTextContent(
+      'unavailable',
+    );
   });
 
   it('does not fall through to generic content when Influencers has no view ID', () => {
@@ -244,6 +400,7 @@ describe('PageLayoutMainContent', () => {
     currentPageLayout = {
       type: 'RECORD_PAGE',
       universalIdentifier: 'c8952254-5bf9-43a5-baab-98666f9b444d',
+      tabs: [],
     };
     activeTab = {
       layout: 'VERTICAL_LIST',
@@ -284,7 +441,7 @@ describe('PageLayoutMainContent', () => {
       ...activeTab,
       title: 'Agent',
       universalIdentifier: '0d213a1a-e001-496c-970e-e692968cf17c',
-      widgets: [{ title: 'Campaign agent' }],
+      widgets: [canonicalCampaignAgentWidget],
     };
 
     render(<PageLayoutMainContent tabId="agent-tab-id" />);
@@ -295,6 +452,35 @@ describe('PageLayoutMainContent', () => {
     expect(
       screen.queryByText('Native page layout content'),
     ).not.toBeInTheDocument();
+  });
+
+  it('falls back to native Agent content when its widget is forbidden, hidden, inactive or update permission is lost', () => {
+    activeTab = {
+      ...activeTab,
+      title: 'Agent',
+      universalIdentifier: '0d213a1a-e001-496c-970e-e692968cf17c',
+      widgets: [canonicalCampaignAgentWidget],
+    };
+    const view = render(<PageLayoutMainContent tabId="agent-tab-id" />);
+    mockAgentWidgetHasAccess = false;
+    view.rerender(<PageLayoutMainContent tabId="agent-tab-id" />);
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+    mockAgentWidgetHasAccess = true;
+    activeTab.widgets = [];
+    view.rerender(<PageLayoutMainContent tabId="agent-tab-id" />);
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+    activeTab.widgets = [canonicalCampaignAgentWidget];
+    activeTab.isActive = false;
+    view.rerender(<PageLayoutMainContent tabId="agent-tab-id" />);
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+    activeTab.isActive = true;
+    mockCanUpdateCampaign = false;
+    view.rerender(<PageLayoutMainContent tabId="agent-tab-id" />);
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+    mockCanUpdateCampaign = true;
+    mockIsEditMode = true;
+    view.rerender(<PageLayoutMainContent tabId="agent-tab-id" />);
+    expect(screen.getByText('Native page layout content')).toBeVisible();
   });
 
   it('mounts the editor only on the canonical Campaign Operations tab', () => {

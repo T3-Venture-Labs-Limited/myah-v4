@@ -15,16 +15,39 @@ import { type RecordPickerPickableMorphItem } from '@/object-record/record-picke
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
+import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
+import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { styled } from '@linaria/react';
-import { useState } from 'react';
+import { useStore } from 'jotai';
+import { useEffect, useRef, useState } from 'react';
 import { IconPlus, IconX } from 'twenty-ui/icon';
 import { Button, Checkbox, LightIconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const APPROVAL_BATCH_SIZE = 500;
+
+const StyledAudienceHint = styled.p`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
+  line-height: 1.5;
+  margin: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
+`;
+
+const StyledReviewList = styled.div`
+  display: grid;
+  gap: ${themeCssVariables.spacing[2]};
+  max-height: 40vh;
+  overflow-y: auto;
+
+  label {
+    align-items: center;
+    display: flex;
+    gap: ${themeCssVariables.spacing[2]};
+  }
+`;
 
 const StyledCreatorListTags = styled.div`
   display: flex;
@@ -195,13 +218,41 @@ const CreatorListAttachment = ({
   onChanged,
 }: CreatorListAttachmentProps) => {
   const { closeModal, openModal } = useModal();
+  const store = useStore();
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [selectedCreatorIds, setSelectedCreatorIds] = useState<string[]>([]);
   const [reviewError, setReviewError] = useState<string>();
   const [refreshError, setRefreshError] = useState<string>();
+  // oxlint-disable-next-line twenty/no-state-useref -- Async completion must not update an unmounted campaign.
+  const isCurrent = useRef(true);
+  useEffect(() => {
+    isCurrent.current = true;
+    return () => {
+      isCurrent.current = false;
+    };
+  }, []);
   const reviewModalInstanceId = `campaign-list-additions-${campaignId}-${creatorListId}`;
-  const { data, refetch } = useQuery<
+  useEffect(
+    () => () => {
+      if (
+        store.get(
+          isModalOpenedComponentState.atomFamily({
+            instanceId: reviewModalInstanceId,
+          }),
+        )
+      ) {
+        closeModal(reviewModalInstanceId);
+      }
+    },
+    [closeModal, reviewModalInstanceId, store],
+  );
+  const {
+    data,
+    error: candidatesError,
+    loading: candidatesLoading,
+    refetch,
+  } = useQuery<
     CampaignCreatorListAdditionCandidatesData,
     CampaignCreatorListAdditionCandidatesVariables
   >(ADDITION_CANDIDATES, {
@@ -277,7 +328,9 @@ const CreatorListAttachment = ({
         });
       }
     } catch {
+      if (!isCurrent.current) return;
       const result = await refetch().catch(() => undefined);
+      if (!isCurrent.current) return;
       setSelectedCreatorIds(
         result?.data?.campaignCreatorListAdditionCandidates.creatorIds ?? [],
       );
@@ -288,15 +341,17 @@ const CreatorListAttachment = ({
       return;
     }
 
+    if (!isCurrent.current) return;
     closeReview(true);
     try {
       await Promise.all([refetch(), onChanged()]);
     } catch {
-      setRefreshError(
-        'Approved additions were saved, but the view could not refresh.',
-      );
+      if (isCurrent.current)
+        setRefreshError(
+          'Approved additions were saved, but the view could not refresh.',
+        );
     } finally {
-      setIsApproving(false);
+      if (isCurrent.current) setIsApproving(false);
     }
   };
 
@@ -318,7 +373,9 @@ const CreatorListAttachment = ({
             }
             rightComponent={
               <StyledCreatorListActions>
-                {candidateIds.length > 0 ? (
+                {candidateIds.length > 0 &&
+                !candidatesError &&
+                !candidatesLoading ? (
                   <Button
                     disabled={areCandidateLabelsLoading}
                     ariaLabel={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
@@ -341,6 +398,23 @@ const CreatorListAttachment = ({
             }
           />
         </StyledCreatorListChipBoundary>
+        {candidatesLoading ? (
+          <StyledAudienceHint role="status">
+            Checking list additions…
+          </StyledAudienceHint>
+        ) : null}
+        {candidatesError ? (
+          <p role="alert">
+            Could not check list additions.{' '}
+            <Button
+              ariaLabel="Retry list additions"
+              onClick={() => void refetch()}
+              title="Retry list additions"
+              type="button"
+              variant="secondary"
+            />
+          </p>
+        ) : null}
         {refreshError ? <p role="alert">{refreshError}</p> : null}
       </StyledCreatorListTag>
       {isReviewOpen ? (
@@ -351,7 +425,12 @@ const CreatorListAttachment = ({
           shouldCloseModalOnClickOutsideOrEscape={!isApproving}
         >
           <h2>{`Review additions from ${creatorListName}`}</h2>
-          <div aria-label="Creator List additions" role="group">
+          <StyledAudienceHint>
+            {selectedCreatorIds.length} selected of {candidateIds.length} new
+            candidates. Only selected creators are added to this campaign. No
+            outreach is sent.
+          </StyledAudienceHint>
+          <StyledReviewList aria-label="Creator List additions" role="group">
             {candidates.map(({ id, label }) => (
               <label key={id}>
                 <Checkbox
@@ -368,7 +447,7 @@ const CreatorListAttachment = ({
                 {label}
               </label>
             ))}
-          </div>
+          </StyledReviewList>
           {reviewError ? <p role="alert">{reviewError}</p> : null}
           <Button
             ariaLabel="Approve selected additions"
@@ -397,18 +476,53 @@ const CreatorListAttachment = ({
 
 type MyahCampaignAudienceControlsProps = {
   campaignId: string;
+  canManage?: boolean;
+  canAttach?: boolean;
 };
 
 export const MyahCampaignAudienceControls = ({
   campaignId,
-}: MyahCampaignAudienceControlsProps) => {
+  canManage = true,
+  canAttach = canManage,
+}: MyahCampaignAudienceControlsProps) => (
+  <CampaignAudienceControls
+    key={campaignId}
+    campaignId={campaignId}
+    canManage={canManage}
+    canAttach={canAttach}
+  />
+);
+
+type CampaignAudienceControlsProps = MyahCampaignAudienceControlsProps;
+
+const CampaignAudienceControls = ({
+  campaignId,
+  canManage = true,
+  canAttach = canManage,
+}: CampaignAudienceControlsProps) => {
+  // oxlint-disable-next-line twenty/no-state-useref -- Async completion must not update an unmounted campaign.
+  const isCurrent = useRef(true);
+  useEffect(() => {
+    isCurrent.current = true;
+    return () => {
+      isCurrent.current = false;
+    };
+  }, []);
   const [attachError, setAttachError] = useState<string>();
   const [isAttachingList, setIsAttachingList] = useState(false);
   const [detachingListId, setDetachingListId] = useState<string | null>(null);
+  const [isDetaching, setIsDetaching] = useState(false);
+  const [detachError, setDetachError] = useState<string>();
   const { closeModal, openModal } = useModal();
+  const store = useStore();
   const pickerInstanceId = `campaign-creator-lists-picker-${campaignId}`;
   const detachModalInstanceId = `campaign-list-detach-${campaignId}`;
-  const { data } = useQuery<
+  const {
+    data,
+    error: snapshotError,
+    loading: snapshotLoading,
+    refetch: refetchSnapshot,
+  } = useQuery<
     CampaignInfluencerSnapshotData,
     CampaignInfluencerSnapshotVariables
   >(SNAPSHOT, { variables: { input: { campaignId } } });
@@ -429,6 +543,29 @@ export const MyahCampaignAudienceControls = ({
       objectNameSingular: 'campaignCreator',
     });
   const { closeDropdown } = useCloseDropdown();
+  useEffect(
+    () => () => {
+      if (
+        store.get(
+          isDropdownOpenComponentState.atomFamily({
+            instanceId: pickerInstanceId,
+          }),
+        )
+      ) {
+        closeDropdown(pickerInstanceId);
+      }
+      if (
+        store.get(
+          isModalOpenedComponentState.atomFamily({
+            instanceId: detachModalInstanceId,
+          }),
+        )
+      ) {
+        closeModal(detachModalInstanceId);
+      }
+    },
+    [closeDropdown, closeModal, detachModalInstanceId, pickerInstanceId, store],
+  );
   const setMultipleRecordPickerSearchFilter = useSetAtomComponentState(
     multipleRecordPickerSearchFilterComponentState,
     pickerInstanceId,
@@ -468,33 +605,47 @@ export const MyahCampaignAudienceControls = ({
   };
 
   const openDetach = (creatorListId: string) => {
+    setDetachError(undefined);
     setDetachingListId(creatorListId);
     openModal(detachModalInstanceId);
   };
 
   const closeDetach = () => {
+    if (isDetaching) return;
     closeModal(detachModalInstanceId);
     setDetachingListId(null);
+    setDetachError(undefined);
   };
 
   const submitDetach = async () => {
-    if (!detachingListId) {
+    if (!canManage || !detachingListId || isDetaching) {
       return;
     }
 
-    await detach({
-      variables: { input: { campaignId, creatorListId: detachingListId } },
-      update: (cache, { data: mutationData }) => {
-        if (mutationData) {
-          writeCampaignInfluencerSnapshot({
-            cache,
-            campaignId,
-            snapshot: mutationData.detachCampaignCreatorList,
-          });
-        }
-      },
-    });
-    closeDetach();
+    setIsDetaching(true);
+    setDetachError(undefined);
+    try {
+      await detach({
+        variables: { input: { campaignId, creatorListId: detachingListId } },
+        update: (cache, { data: mutationData }) => {
+          if (mutationData) {
+            writeCampaignInfluencerSnapshot({
+              cache,
+              campaignId,
+              snapshot: mutationData.detachCampaignCreatorList,
+            });
+          }
+        },
+      });
+      if (!isCurrent.current) return;
+      closeModal(detachModalInstanceId);
+      setDetachingListId(null);
+    } catch {
+      if (isCurrent.current)
+        setDetachError('Could not detach Creator List. Try again.');
+    } finally {
+      if (isCurrent.current) setIsDetaching(false);
+    }
   };
 
   const openPicker = () => {
@@ -528,7 +679,12 @@ export const MyahCampaignAudienceControls = ({
     morphItem: RecordPickerPickableMorphItem,
   ) => {
     if (
+      !canManage ||
+      (morphItem.isSelected && !canAttach) ||
       isAttachingList ||
+      snapshotError ||
+      snapshotLoading ||
+      !data ||
       attachedListIds.includes(morphItem.recordId) === morphItem.isSelected
     ) {
       return;
@@ -560,14 +716,16 @@ export const MyahCampaignAudienceControls = ({
         },
       });
     } catch {
+      if (!isCurrent.current) return;
       setAttachError('Could not attach Creator List. Try again.');
       openPicker();
       setIsAttachingList(false);
       return;
     }
 
+    if (!isCurrent.current) return;
     await notifyAudienceChanged();
-    setIsAttachingList(false);
+    if (isCurrent.current) setIsAttachingList(false);
   };
 
   return (
@@ -576,64 +734,120 @@ export const MyahCampaignAudienceControls = ({
         dataTestId="creator-lists-section"
         link={undefined}
         rightAdornment={
-          <Dropdown
-            disableClickForClickableComponent={isAttachingList}
-            dropdownId={pickerInstanceId}
-            dropdownPlacement="left-start"
-            onClose={() => setMultipleRecordPickerSearchFilter('')}
-            onOpen={openPicker}
-            clickableComponent={
-              <LightIconButton
-                aria-label="Add Creator List"
-                Icon={IconPlus}
-                accent="tertiary"
-                disabled={isAttachingList}
-              />
-            }
-            dropdownComponents={
-              <MultipleRecordPicker
-                componentInstanceId={pickerInstanceId}
-                focusId={pickerInstanceId}
-                onChange={handleCreatorListSelection}
-                onSubmit={closePicker}
-                onClickOutside={closePicker}
-              />
-            }
-          />
+          canAttach ? (
+            <Dropdown
+              disableClickForClickableComponent={
+                isAttachingList || snapshotLoading || !!snapshotError || !data
+              }
+              dropdownId={pickerInstanceId}
+              dropdownPlacement="left-start"
+              onClose={() => setMultipleRecordPickerSearchFilter('')}
+              onOpen={openPicker}
+              clickableComponent={
+                <LightIconButton
+                  aria-label="Add Creator List"
+                  Icon={IconPlus}
+                  accent="tertiary"
+                  disabled={
+                    isAttachingList ||
+                    snapshotLoading ||
+                    !!snapshotError ||
+                    !data
+                  }
+                />
+              }
+              dropdownComponents={
+                <MultipleRecordPicker
+                  componentInstanceId={pickerInstanceId}
+                  focusId={pickerInstanceId}
+                  onChange={handleCreatorListSelection}
+                  onSubmit={closePicker}
+                  onClickOutside={closePicker}
+                />
+              }
+            />
+          ) : null
         }
         title="Creator Lists"
       >
+        <StyledAudienceHint>
+          Saved lists are reviewed sources. Later list additions require review;
+          detaching a list keeps existing campaign influencers.
+        </StyledAudienceHint>
+        {snapshotLoading ? (
+          <StyledAudienceHint role="status">
+            Loading Creator Lists…
+          </StyledAudienceHint>
+        ) : null}
+        {snapshotError ? (
+          <p role="alert">
+            Creator Lists could not load.{' '}
+            <Button
+              ariaLabel="Retry Creator Lists"
+              onClick={() => void refetchSnapshot()}
+              title="Retry Creator Lists"
+              type="button"
+              variant="secondary"
+            />
+          </p>
+        ) : null}
         {attachedLists.length > 0 ? (
           <StyledCreatorListTags data-testid="creator-list-tags">
-            {attachedLists.map((list) => (
-              <CreatorListAttachment
-                campaignId={campaignId}
-                creatorListId={list.creatorListId}
-                creatorListName={
-                  creatorListNames.get(list.creatorListId) ?? 'Creator List'
-                }
-                key={list.id}
-                onChanged={notifyAudienceChanged}
-                onDetach={openDetach}
-              />
-            ))}
+            {attachedLists.map((list) =>
+              canManage ? (
+                <CreatorListAttachment
+                  campaignId={campaignId}
+                  creatorListId={list.creatorListId}
+                  creatorListName={
+                    creatorListNames.get(list.creatorListId) ?? 'Creator List'
+                  }
+                  key={list.id}
+                  onChanged={notifyAudienceChanged}
+                  onDetach={openDetach}
+                />
+              ) : (
+                <StyledCreatorListTag key={list.id}>
+                  <StyledCreatorListChipBoundary>
+                    <Chip
+                      clickable={false}
+                      label={
+                        creatorListNames.get(list.creatorListId) ??
+                        'Creator List'
+                      }
+                      tooltipLabel={
+                        creatorListNames.get(list.creatorListId) ??
+                        'Creator List'
+                      }
+                      variant={ChipVariant.Static}
+                    />
+                  </StyledCreatorListChipBoundary>
+                </StyledCreatorListTag>
+              ),
+            )}
           </StyledCreatorListTags>
         ) : null}
         {attachError ? <p role="alert">{attachError}</p> : null}
       </RecordDetailSectionContainer>
-      {detachingListId ? (
+      {canManage && detachingListId ? (
         <ModalStatefulWrapper
           isClosable
           modalInstanceId={detachModalInstanceId}
           onClose={closeDetach}
+          shouldCloseModalOnClickOutsideOrEscape={!isDetaching}
         >
           <h2>{`Detach ${creatorListNames.get(detachingListId) ?? 'Creator List'}?`}</h2>
           <p>
             This only detaches the List. Existing Campaign influencers remain
             unchanged.
           </p>
+          <p>
+            Detaching does not exclude existing members from outreach or delete
+            creators globally.
+          </p>
+          {detachError ? <p role="alert">{detachError}</p> : null}
           <Button
             ariaLabel="Confirm Creator List detach"
+            disabled={isDetaching}
             onClick={() => void submitDetach()}
             title="Confirm Creator List detach"
             type="button"
@@ -641,6 +855,7 @@ export const MyahCampaignAudienceControls = ({
           />
           <Button
             ariaLabel="Cancel Creator List detach"
+            disabled={isDetaching}
             onClick={closeDetach}
             title="Cancel Creator List detach"
             type="button"

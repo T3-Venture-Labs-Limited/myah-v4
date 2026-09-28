@@ -4,6 +4,7 @@ import { ContextStoreComponentInstanceContext } from '@/context-store/states/con
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { CreatorListMembershipFilterEffect } from '@/myah/creator-crm/components/CreatorListMembershipFilterEffect';
 import { CreatorListWorkspace } from '@/myah/creator-crm/components/CreatorListWorkspace';
+import { CampaignIndexWorkspace } from '@/myah/campaign/components/CampaignIndexWorkspace';
 import { RecordIndexContainerGater } from '@/object-record/record-index/components/RecordIndexContainerGater';
 import { RecordIndexSkeletonLoader } from '@/object-record/record-index/components/RecordIndexSkeletonLoader';
 import { PageContainer } from '@/ui/layout/page/components/PageContainer';
@@ -40,6 +41,11 @@ export const RecordIndexPage = () => {
       >
         {objectMetadataItem.nameSingular === 'creatorList' ? (
           <CreatorListWorkspace />
+        ) : objectMetadataItem.nameSingular === 'campaign' ? (
+          <>
+            <CampaignIndexWorkspace />
+            <CreatorListMembershipFilterEffect />
+          </>
         ) : (
           <>
             <RecordIndexContainerGater />
