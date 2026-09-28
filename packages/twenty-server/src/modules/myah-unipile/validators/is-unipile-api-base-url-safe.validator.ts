@@ -5,6 +5,7 @@ type DecoratorTarget = { constructor: Function };
 const SAFE_UNIPILE_API_BASE_URLS = new Set([
   'https://api49.unipile.com:17981/api/v1/',
   'https://api46.unipile.com:17699/api/v1/',
+  'https://api26.unipile.com:15641/api/v1/',
 ]);
 
 export const isUnipileApiBaseUrlSafe = (value: unknown): boolean =>
