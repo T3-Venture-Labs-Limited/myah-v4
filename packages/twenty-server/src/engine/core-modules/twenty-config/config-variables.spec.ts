@@ -232,6 +232,16 @@ describe('Unipile Instagram configuration', () => {
     expect(getValidationProperties(config)).toContain('UNIPILE_DSN_BASE_URL');
   });
 
+  it('accepts the production Unipile API base URL when enabled', () => {
+    const config = createEnabledUnipileConfig({
+      UNIPILE_DSN_BASE_URL: 'https://api26.unipile.com:15641/api/v1/',
+    });
+
+    expect(getValidationProperties(config)).not.toContain(
+      'UNIPILE_DSN_BASE_URL',
+    );
+  });
+
   it('accepts an enabled configuration with a nonblank API key and an exact lowercase hexadecimal webhook secret', () => {
     expect(getValidationProperties(createEnabledUnipileConfig())).not.toEqual(
       expect.arrayContaining([

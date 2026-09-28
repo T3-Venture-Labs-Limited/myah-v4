@@ -24,6 +24,7 @@ describe('isUnipileApiBaseUrlSafe', () => {
   it.each([
     'https://api49.unipile.com:17981/api/v1/',
     'https://api46.unipile.com:17699/api/v1/',
+    'https://api26.unipile.com:15641/api/v1/',
   ])('accepts an allowlisted Unipile v1 API base URL', (url) => {
     expect(isSafeUnipileApiBaseUrl(url)).toBe(true);
   });
@@ -45,6 +46,11 @@ describe('isUnipileApiBaseUrlSafe', () => {
       'https://api46.unipile.com:17981/api/v1/',
     ],
     ['a different port', 'https://api49.unipile.com:443/api/v1/'],
+    [
+      'api26 paired with the api46 port',
+      'https://api26.unipile.com:17699/api/v1/',
+    ],
+    ['api26 without the v1 path', 'https://api26.unipile.com:15641'],
     ['a different path', 'https://api49.unipile.com:17981/api/v2/'],
     ['a nested v1 path', 'https://api49.unipile.com:17981/api/v1/accounts'],
     ['a malformed v1 path', 'https://api49.unipile.com:17981/api/v1-malformed'],
