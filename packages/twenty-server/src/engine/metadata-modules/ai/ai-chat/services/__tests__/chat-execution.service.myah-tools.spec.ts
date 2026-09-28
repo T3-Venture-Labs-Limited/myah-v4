@@ -199,16 +199,6 @@ const buildService = (extraCatalog: unknown[] = []) => {
     { captureExceptions: jest.fn() } as never,
     { bind: jest.fn().mockReturnValue({}) } as never,
     {
-      run: jest.fn().mockResolvedValue({
-        required: false,
-        called: false,
-        durationMs: 0,
-        cacheHit: false,
-        contextPart: null,
-      }),
-      injectContextIntoLastUserMessage: jest.fn((messages) => messages),
-    } as never,
-    {
       pruneIfOverContextWindowLimit: jest.fn((messages) => ({
         messages,
         wasPruned: false,

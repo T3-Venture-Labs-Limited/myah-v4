@@ -42,7 +42,6 @@ import { AgentChatStreamingService } from './services/agent-chat-streaming.servi
 import { AgentChatService } from './services/agent-chat.service';
 import { AgentTitleGenerationService } from './services/agent-title-generation.service';
 import { ChatExecutionService } from './services/chat-execution.service';
-import { BrandBrainPreflightService } from './services/brand-brain-preflight.service';
 import { MessagePruningService } from './services/message-pruning.service';
 import { SystemPromptBuilderService } from './services/system-prompt-builder.service';
 
@@ -86,7 +85,6 @@ import { SystemPromptBuilderService } from './services/system-prompt-builder.ser
     AgentChatStreamingService,
     AgentTitleGenerationService,
     ChatExecutionService,
-    BrandBrainPreflightService,
     MessagePruningService,
     StreamAgentChatJob,
     SystemPromptBuilderService,
