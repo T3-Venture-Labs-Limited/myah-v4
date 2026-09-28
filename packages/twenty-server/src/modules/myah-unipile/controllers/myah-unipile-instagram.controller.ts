@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Param,
   Post,
   UseGuards,
@@ -26,6 +27,15 @@ import {
   type WorkspaceInstagramAccountStatus,
 } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
 
+const hostedAuthKnownPaths = new Set([
+  'attemptId',
+  'body',
+  'account_id',
+  'name',
+  'status',
+]);
+const hostedAuthFields = ['account_id', 'name', 'status'] as const;
+
 const hostedAuthNotificationSchema = z.object({
   attemptId: z.uuid(),
   body: z
@@ -43,7 +53,7 @@ const hostedAuthNotificationSchema = z.object({
         .regex(/^[0-9a-f]+$/),
       status: z.enum(['CREATION_SUCCESS', 'RECONNECTED']),
     })
-    .strict(),
+    .strip(),
 });
 
 @Controller('rest/myah/unipile/instagram')
@@ -90,7 +100,7 @@ export class MyahUnipileInstagramController {
   ): Promise<{ attemptId: string; redirectUrl: string }> {
     const attempt = await this.hostedAuthService.createConnectionAttempt({
       userWorkspaceId,
-      workspaceId: workspace.id,
+      workspace,
     });
 
     return { attemptId: attempt.attemptId, redirectUrl: attempt.url };
@@ -103,7 +113,7 @@ export class MyahUnipileInstagramController {
   ): Promise<{ attemptId: string; redirectUrl: string }> {
     const attempt = await this.hostedAuthService.createReconnectAttempt({
       userWorkspaceId,
-      workspaceId: workspace.id,
+      workspace,
     });
 
     return { attemptId: attempt.attemptId, redirectUrl: attempt.url };
@@ -124,6 +134,10 @@ export class MyahUnipileInstagramController {
 @Controller('rest/myah/unipile/instagram')
 @UseGuards(PublicEndpointGuard, NoPermissionGuard)
 export class MyahUnipileInstagramPublicController {
+  private readonly logger = new Logger(
+    MyahUnipileInstagramPublicController.name,
+  );
+
   constructor(private readonly hostedAuthService: UnipileHostedAuthService) {}
 
   @Post('hosted-auth/:attemptId/notify')
@@ -138,6 +152,51 @@ export class MyahUnipileInstagramPublicController {
     });
 
     if (!notification.success) {
+      const fields =
+        body !== null && typeof body === 'object' && !Array.isArray(body)
+          ? (body as Record<string, unknown>)
+          : null;
+      const keys = fields ? Object.keys(fields) : [];
+      const knownKeys = hostedAuthFields.filter((key) =>
+        fields ? Object.prototype.hasOwnProperty.call(fields, key) : false,
+      );
+
+      this.logger.warn(
+        `UNIPILE_HOSTED_AUTH_NOTIFY_INVALID ${JSON.stringify({
+          issues: notification.error.issues.slice(0, 8).map((issue) => ({
+            code: issue.code,
+            path:
+              issue.path
+                .filter(
+                  (segment): segment is string =>
+                    typeof segment === 'string' &&
+                    hostedAuthKnownPaths.has(segment),
+                )
+                .join('.') || '$',
+            ...(issue.code === 'invalid_type'
+              ? { expected: issue.expected }
+              : {}),
+          })),
+          keyCount: Math.min(keys.length, 100),
+          knownKeys,
+          unknownKeyCount: Math.min(keys.length - knownKeys.length, 100),
+          fieldTypes: Object.fromEntries(
+            hostedAuthFields.map((key) => {
+              const value = fields?.[key];
+              return [
+                key,
+                !fields || !Object.prototype.hasOwnProperty.call(fields, key)
+                  ? 'missing'
+                  : value === null
+                    ? 'null'
+                    : Array.isArray(value)
+                      ? 'array'
+                      : typeof value,
+              ];
+            }),
+          ),
+        })}`,
+      );
       throw new BadRequestException('Invalid Hosted Auth notification');
     }
 

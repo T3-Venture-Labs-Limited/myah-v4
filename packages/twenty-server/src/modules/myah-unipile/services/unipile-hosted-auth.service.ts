@@ -2,6 +2,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -15,7 +16,9 @@ import {
   type Repository,
 } from 'typeorm';
 
+import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import {
   UnipileHostedAuthAttemptEntity,
   UnipileHostedAuthAttemptOperation,
@@ -35,6 +38,11 @@ import { type UnipileInstagramAccount } from 'src/modules/myah-unipile/types/uni
 export const UNIPILE_HOSTED_AUTH_ACCOUNT_FINALIZER = Symbol(
   'unipileHostedAuthAccountFinalizer',
 );
+
+type HostedAuthWorkspace = Pick<
+  FlatWorkspace,
+  'id' | 'subdomain' | 'customDomain' | 'isCustomDomainEnabled'
+>;
 
 type HostedAuthAccountService = {
   finalizeHostedAuthConnection(input: {
@@ -56,6 +64,8 @@ class DeferredHostedAuthTerminalizationError extends Error {
 
 @Injectable()
 export class UnipileHostedAuthService {
+  private readonly logger = new Logger(UnipileHostedAuthService.name);
+
   constructor(
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository -- Public callbacks and recovery resolve attempts without workspace auth context.
     @InjectRepository(UnipileHostedAuthAttemptEntity)
@@ -68,20 +78,21 @@ export class UnipileHostedAuthService {
     private readonly availabilityService: UnipileInstagramAvailabilityService,
     @Optional()
     @Inject(UNIPILE_HOSTED_AUTH_ACCOUNT_FINALIZER)
-    private readonly accountService?: HostedAuthAccountService,
+    private readonly accountService: HostedAuthAccountService | undefined,
+    private readonly workspaceDomainsService: WorkspaceDomainsService,
   ) {}
 
   async createConnectionAttempt({
-    workspaceId,
+    workspace,
     userWorkspaceId,
   }: {
-    workspaceId: string;
+    workspace: HostedAuthWorkspace;
     userWorkspaceId: string;
   }): Promise<{ attemptId: string; url: string }> {
     this.availabilityService.assertEnabled();
 
     const activeBinding = await this.bindingRepository.findOne({
-      where: { workspaceId, deactivatedAt: IsNull() },
+      where: { workspaceId: workspace.id, deactivatedAt: IsNull() },
     });
 
     if (activeBinding) {
@@ -91,7 +102,7 @@ export class UnipileHostedAuthService {
     }
 
     return this.createHostedAuthAttempt({
-      workspaceId,
+      workspace,
       userWorkspaceId,
       operation: UnipileHostedAuthAttemptOperation.CREATE,
       expectedBindingId: null,
@@ -99,17 +110,17 @@ export class UnipileHostedAuthService {
   }
 
   async createReconnectAttempt({
-    workspaceId,
+    workspace,
     userWorkspaceId,
   }: {
-    workspaceId: string;
+    workspace: HostedAuthWorkspace;
     userWorkspaceId: string;
   }): Promise<{ attemptId: string; url: string }> {
     this.availabilityService.assertEnabled();
 
     const bindings = await this.bindingRepository.find({
       where: {
-        workspaceId,
+        workspaceId: workspace.id,
         status: In([
           UnipileInstagramAccountBindingStatus.NEEDS_RECONNECT,
           UnipileInstagramAccountBindingStatus.ERROR,
@@ -123,7 +134,7 @@ export class UnipileHostedAuthService {
 
     const binding = bindings[0];
     return this.createHostedAuthAttempt({
-      workspaceId,
+      workspace,
       userWorkspaceId,
       operation: UnipileHostedAuthAttemptOperation.RECONNECT,
       expectedBindingId: binding.id,
@@ -132,13 +143,13 @@ export class UnipileHostedAuthService {
   }
 
   private async createHostedAuthAttempt({
-    workspaceId,
+    workspace,
     userWorkspaceId,
     operation,
     expectedBindingId,
     reconnectAccountId,
   }: {
-    workspaceId: string;
+    workspace: HostedAuthWorkspace;
     userWorkspaceId: string;
     operation: UnipileHostedAuthAttemptOperation;
     expectedBindingId: string | null;
@@ -149,7 +160,7 @@ export class UnipileHostedAuthService {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const attempt = this.attemptRepository.create({
       id: attemptId,
-      workspaceId,
+      workspaceId: workspace.id,
       userWorkspaceId,
       operation,
       expectedBindingId,
@@ -174,8 +185,20 @@ export class UnipileHostedAuthService {
       this.twentyConfigService.get('SERVER_URL');
     const input = {
       expiresOn: expiresAt,
-      successRedirectUrl: `${this.twentyConfigService.get('FRONTEND_URL')}/settings/accounts/instagram?connection=success&attemptId=${attemptId}`,
-      failureRedirectUrl: `${this.twentyConfigService.get('FRONTEND_URL')}/settings/accounts/instagram?connection=failed&attemptId=${attemptId}`,
+      successRedirectUrl: this.workspaceDomainsService
+        .buildWorkspaceURL({
+          workspace,
+          pathname: '/settings/accounts/instagram',
+          searchParams: { connection: 'success', attemptId },
+        })
+        .toString(),
+      failureRedirectUrl: this.workspaceDomainsService
+        .buildWorkspaceURL({
+          workspace,
+          pathname: '/settings/accounts/instagram',
+          searchParams: { connection: 'failed', attemptId },
+        })
+        .toString(),
       notifyUrl: `${callbackBaseUrl.replace(/\/+$/, '')}/rest/myah/unipile/instagram/hosted-auth/${attemptId}/notify`,
       name: callbackSecret,
     };
@@ -230,7 +253,7 @@ export class UnipileHostedAuthService {
       });
 
       if (!attempt) {
-        throw new ConflictException('Unable to process Hosted Auth callback');
+        this.rejectNotification('attempt_missing');
       }
 
       const isExpectedOperationStatus =
@@ -240,7 +263,7 @@ export class UnipileHostedAuthService {
           status === 'RECONNECTED');
 
       if (!isExpectedOperationStatus) {
-        throw new ConflictException('Unable to process Hosted Auth callback');
+        this.rejectNotification('operation_mismatch');
       }
 
       const isExactReplay =
@@ -253,18 +276,20 @@ export class UnipileHostedAuthService {
         attempt.status === UnipileHostedAuthAttemptStatus.PROCESSING
       ) {
         if (!isExactReplay) {
-          throw new ConflictException('Unable to process Hosted Auth callback');
+          this.rejectNotification('replay_mismatch');
         }
 
         return;
       }
 
-      if (
-        attempt.status !== UnipileHostedAuthAttemptStatus.PENDING ||
-        attempt.expiresAt <= new Date() ||
-        attempt.callbackSecretHash !== callbackDigest
-      ) {
-        throw new ConflictException('Unable to process Hosted Auth callback');
+      if (attempt.status !== UnipileHostedAuthAttemptStatus.PENDING) {
+        this.rejectNotification('attempt_not_pending');
+      }
+      if (attempt.expiresAt <= new Date()) {
+        this.rejectNotification('expired');
+      }
+      if (attempt.callbackSecretHash !== callbackDigest) {
+        this.rejectNotification('secret_mismatch');
       }
 
       attempt.callbackDigest = callbackDigest;
@@ -290,6 +315,19 @@ export class UnipileHostedAuthService {
     }
 
     return { attemptId, status: UnipileHostedAuthAttemptStatus.COMPLETED };
+  }
+
+  private rejectNotification(
+    reason:
+      | 'attempt_missing'
+      | 'operation_mismatch'
+      | 'replay_mismatch'
+      | 'attempt_not_pending'
+      | 'expired'
+      | 'secret_mismatch',
+  ): never {
+    this.logger.warn(`UNIPILE_HOSTED_AUTH_NOTIFY_REJECTED ${reason}`);
+    throw new ConflictException('Unable to process Hosted Auth callback');
   }
 
   async expirePendingAttempt(attemptId: string): Promise<void> {
