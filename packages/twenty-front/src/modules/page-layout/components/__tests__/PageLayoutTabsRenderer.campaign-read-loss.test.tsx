@@ -76,13 +76,28 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: () => ({
     objectMetadataItems: [
       {
+        id: 'membership-meta',
         nameSingular: 'campaignCreator',
         fields: [
+          { id: 'campaign-field', name: 'campaign' },
+          { id: 'creator-field', name: 'creator' },
           {
+            id: 'stage-field',
             name: 'stage',
             options: [{ value: 'NEGOTIATING', label: 'Negotiating' }],
           },
         ],
+      },
+      {
+        id: 'creator-meta',
+        nameSingular: 'creator',
+        fields: [
+          'name',
+          'email',
+          'instagramUsername',
+          'instagramBio',
+          'instagramFollowerCount',
+        ].map((name) => ({ id: `${name}-field`, name })),
       },
     ],
   }),
@@ -158,8 +173,8 @@ jest.mock('@/activities/timeline-activities/components/TimelineCard', () => ({
   TimelineCard: () => <div>Native Creator activity</div>,
 }));
 
-const permission = (canReadObjectRecords: boolean) => ({
-  objectMetadataId: 'campaign-meta',
+const permission = (objectMetadataId: string, canReadObjectRecords = true) => ({
+  objectMetadataId,
   canReadObjectRecords,
   canUpdateObjectRecords: true,
   canSoftDeleteObjectRecords: true,
@@ -168,6 +183,11 @@ const permission = (canReadObjectRecords: boolean) => ({
   rowLevelPermissionPredicates: [],
   rowLevelPermissionPredicateGroups: [],
 });
+const readablePermissions = [
+  permission('campaign-meta'),
+  permission('membership-meta'),
+  permission('creator-meta'),
+];
 
 it('closes a cached Creator panel on native Campaign read loss and requires a new selection on restore', async () => {
   const store = createStore();
@@ -175,7 +195,7 @@ it('closes a cached Creator panel on native Campaign read loss and requires a ne
   store.set(currentUserWorkspaceState.atom, {
     permissionFlags: [],
     twoFactorAuthenticationMethodSummary: null,
-    objectsPermissions: [permission(true)],
+    objectsPermissions: readablePermissions,
   });
   render(
     <Provider store={store}>
@@ -199,7 +219,11 @@ it('closes a cached Creator panel on native Campaign read loss and requires a ne
     store.set(currentUserWorkspaceState.atom, {
       permissionFlags: [],
       twoFactorAuthenticationMethodSummary: null,
-      objectsPermissions: [permission(false)],
+      objectsPermissions: [
+        permission('campaign-meta', false),
+        permission('membership-meta'),
+        permission('creator-meta'),
+      ],
     });
   });
   expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
@@ -219,7 +243,7 @@ it('closes a cached Creator panel on native Campaign read loss and requires a ne
     store.set(currentUserWorkspaceState.atom, {
       permissionFlags: [],
       twoFactorAuthenticationMethodSummary: null,
-      objectsPermissions: [permission(true)],
+      objectsPermissions: readablePermissions,
     });
   });
   expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
