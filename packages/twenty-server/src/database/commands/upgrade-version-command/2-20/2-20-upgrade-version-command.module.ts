@@ -28,6 +28,7 @@ import { MigrateMyahCreatorImportMetadataCommand } from 'src/database/commands/u
 import { SynchronizeMyahAssistantSkillsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788250000000-synchronize-myah-assistant-skills.command';
 import { RefreshMyahAssistantSkillsWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789645911006-refresh-myah-assistant-skills.command';
 import { RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790161829172-refresh-myah-assistant-skills-for-exact-approvals.command';
+import { ResynchronizeMyahCampaignLayoutCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790537642854-resynchronize-myah-campaign-layout.command';
 import { SynchronizeMyahCampaignAccountMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788537600000-synchronize-myah-campaign-account-metadata.command';
 import { SynchronizeCampaignSequenceMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789281428333-synchronize-campaign-sequence-metadata.command';
 import { RepairOrphanedObjectNavigationCommandsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788766265947-repair-orphaned-object-navigation-commands.command';
@@ -93,6 +94,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     SynchronizeInstagramSourceControlledMetadataCommand,
     RefreshMyahAssistantSkillsWorkspaceCommand,
     RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand,
+    ResynchronizeMyahCampaignLayoutCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,

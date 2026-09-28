@@ -1,3 +1,4 @@
+import { ActivityAttribution } from '@/activities/components/ActivityAttribution';
 import { ActivityRow } from '@/activities/components/ActivityRow';
 import { AttachmentDropdown } from '@/activities/files/components/AttachmentDropdown';
 import { downloadFile } from '@/activities/files/utils/downloadFile';
@@ -10,19 +11,17 @@ import {
 import { getFileCategoryFromExtension } from '@/object-record/record-field/ui/utils/getFileCategoryFromExtension';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { styled } from '@linaria/react';
-import { useState, useContext } from 'react';
+import { useState } from 'react';
 import { getSafeUrl, isDefined } from 'twenty-shared/utils';
 
 import { type AttachmentWithFile } from '@/activities/files/utils/filterAttachmentsWithFile';
 import { FileIcon } from '@/file/components/FileIcon';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { IconCalendar } from 'twenty-ui/icon';
 import { OverflowingTextWithTooltip } from 'twenty-ui/surfaces';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { isNavigationModifierPressed } from 'twenty-ui/utilities';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
-import { formatToHumanReadableDate } from '~/utils/date-utils';
 import { getFileNameAndExtension } from '~/utils/file/getFileNameAndExtension';
 
 const StyledLeftContent = styled.div`
@@ -39,12 +38,6 @@ const StyledRightContent = styled.div`
   align-items: center;
   display: flex;
   gap: ${themeCssVariables.spacing['0.5']};
-`;
-
-const StyledCalendarIconContainer = styled.div`
-  align-items: center;
-  color: ${themeCssVariables.font.color.light};
-  display: flex;
 `;
 
 const StyledLink = styled.a`
@@ -81,7 +74,6 @@ export const AttachmentRow = ({
   attachment,
   onPreview,
 }: AttachmentRowProps) => {
-  const { theme } = useContext(ThemeContext);
   const [isEditing, setIsEditing] = useState(false);
 
   const hasDownloadPermission = useHasPermissionFlag(
@@ -202,10 +194,10 @@ export const AttachmentRow = ({
           )}
         </StyledLeftContent>
         <StyledRightContent>
-          <StyledCalendarIconContainer>
-            <IconCalendar size={theme.icon.size.md} />
-          </StyledCalendarIconContainer>
-          {formatToHumanReadableDate(attachment.createdAt)}
+          <ActivityAttribution
+            createdAt={attachment.createdAt}
+            createdBy={attachment.createdBy}
+          />
           <AttachmentDropdown
             attachmentId={attachment.id}
             onDelete={handleDelete}

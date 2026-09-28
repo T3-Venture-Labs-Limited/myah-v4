@@ -8,7 +8,12 @@ export const useAttachments = (targetableObject: ActivityTargetableObject) => {
     nameSingular: targetableObject.targetObjectNameSingular,
   });
 
-  const { records: attachments, loading } = useFindManyRecords<Attachment>({
+  const {
+    records: attachments,
+    loading,
+    error,
+    hasReadPermission,
+  } = useFindManyRecords<Attachment>({
     objectNameSingular: CoreObjectNameSingular.Attachment,
     filter: {
       [targetableObjectFieldIdName]: {
@@ -25,5 +30,7 @@ export const useAttachments = (targetableObject: ActivityTargetableObject) => {
   return {
     attachments,
     loading,
+    error,
+    hasReadPermission,
   };
 };

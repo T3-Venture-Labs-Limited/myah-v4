@@ -35,6 +35,7 @@ const defaultActivityResult = {
   fetchMoreActivities: jest.fn(),
   hasNextPage: false,
   error: undefined,
+  hasReadPermission: true,
 };
 
 describe('useNotes', () => {
@@ -65,6 +66,17 @@ describe('useNotes', () => {
 
     expect(result.current.notes).toEqual([]);
     expect(result.current.error).toBeUndefined();
+  });
+
+  it('forwards the note-target read permission state', () => {
+    mockUseActivities.mockReturnValue({
+      ...defaultActivityResult,
+      hasReadPermission: false,
+    });
+
+    const { result } = renderHook(() => useNotes(targetableObject));
+
+    expect(result.current.hasReadPermission).toBe(false);
   });
 
   it('returns the query error', () => {

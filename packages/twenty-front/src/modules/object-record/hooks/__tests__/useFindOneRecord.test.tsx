@@ -1,3 +1,4 @@
+import { InMemoryCache } from '@apollo/client';
 import { renderHook, waitFor } from '@testing-library/react';
 
 import {
@@ -51,5 +52,45 @@ describe('useFindOneRecord', () => {
     });
 
     expect(mocks[0].result).toHaveBeenCalled();
+  });
+
+  it('does not surface a cached record before a fresh show read settles', async () => {
+    const cache = new InMemoryCache();
+    cache.writeQuery({
+      query,
+      variables,
+      data: {
+        person: generateMockRecordNode({
+          objectNameSingular: 'person',
+          input: { id: objectRecordId },
+          withDepthOneRelation: true,
+        }),
+      },
+    });
+    const networkResult = jest.fn(() => ({
+      data: {
+        person: generateMockRecordNode({
+          objectNameSingular: 'person',
+          input: { id: objectRecordId },
+          withDepthOneRelation: true,
+        }),
+      },
+    }));
+    const FreshWrapper = getJestMetadataAndApolloMocksWrapper({
+      cache,
+      apolloMocks: [{ request: { query, variables }, result: networkResult }],
+    });
+    const { result } = renderHook(
+      () =>
+        useFindOneRecord({
+          objectNameSingular: 'person',
+          objectRecordId,
+          freshRead: true,
+        }),
+      { wrapper: FreshWrapper },
+    );
+    expect(result.current.record).toBeUndefined();
+    await waitFor(() => expect(networkResult).toHaveBeenCalledTimes(1));
+    expect(result.current.record?.id).toBe(objectRecordId);
   });
 });
