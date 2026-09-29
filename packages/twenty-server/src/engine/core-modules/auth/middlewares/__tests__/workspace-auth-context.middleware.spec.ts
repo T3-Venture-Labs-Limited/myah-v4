@@ -169,6 +169,40 @@ describe('WorkspaceAuthContextMiddleware', () => {
     );
   });
 
+  it.each([
+    ['ordinary', undefined, true],
+    [
+      'impersonated',
+      {
+        impersonatorUserWorkspaceId: 'operator-id',
+        impersonatedUserWorkspaceId: 'user-workspace-id',
+      },
+      false,
+    ],
+  ] as const)(
+    'marks an %s HTTP user request as interactive only when no impersonation is active',
+    (_label, impersonationContext, expected) => {
+      const req = buildRequest({
+        user: mockUser,
+        userWorkspaceId: 'user-workspace-id',
+        workspaceMemberId: 'workspace-member-id',
+        workspaceMember: mockWorkspaceMember,
+        impersonationContext,
+      });
+      let capturedContext: unknown;
+      (mockNext as jest.Mock).mockImplementation(() => {
+        capturedContext = workspaceAuthContextStorage.getStore();
+      });
+      middleware.use(req, mockResponse, mockNext);
+      expect(capturedContext).toEqual(
+        expect.objectContaining({
+          type: 'user',
+          isInteractiveUserRequest: expected,
+        }),
+      );
+    },
+  );
+
   it('should create a pendingActivationUser auth context when user and userWorkspaceId are present without workspaceMember', () => {
     const req = buildRequest({
       user: mockUser,

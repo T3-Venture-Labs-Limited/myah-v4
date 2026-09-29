@@ -37,6 +37,28 @@ describe('SendInstagramReplyTool', () => {
     expect(Object.keys(sendService)).toEqual(['executeApproved']);
   });
 
+  it('never forwards caller-forged manual eligibility from an agent tool context', async () => {
+    const sendService = {
+      executeApproved: jest
+        .fn()
+        .mockRejectedValue(new Error('route permission denied')),
+    };
+    const tool = new SendInstagramReplyTool(sendService as never);
+    const forgedContext = {
+      ...context,
+      manualHumanAccess: {
+        userWorkspaceId: context.userWorkspaceId,
+        workspaceMemberId: 'member-id',
+      },
+    };
+    await expect(
+      tool.execute({ actionApprovalBindingId }, forgedContext),
+    ).resolves.toMatchObject({ success: false });
+    expect(sendService.executeApproved).toHaveBeenCalledWith(
+      expect.not.objectContaining({ manualHumanAccess: expect.anything() }),
+    );
+  });
+
   it('does not claim success for known failure, limit block, or Unknown outcomes', async () => {
     for (const status of ['FAILED', 'BLOCKED', 'UNKNOWN'] as const) {
       const sendService = {

@@ -13,23 +13,16 @@ import { InstagramMessageComposerAccountDocument } from '~/generated/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
 export const MessageOnInstagramCommand = () => {
-  const canSendFirstMessage = useHasPermissionFlag(
-    PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
-  );
-  const canSendReply = useHasPermissionFlag(
-    PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
-  );
   const canManageAccounts = useHasPermissionFlag(
     PermissionFlagType.CONNECTED_ACCOUNTS,
   );
-  const canMessage = canSendFirstMessage || canSendReply;
   const client = useApolloCoreClient();
   const { data, loading, error } = useQuery(
     InstagramMessageComposerAccountDocument,
     {
       client,
       fetchPolicy: 'network-only',
-      skip: !canMessage,
+      skip: false,
     },
   );
   const { openInstagramMessageInSidePanel } =
@@ -40,7 +33,6 @@ export const MessageOnInstagramCommand = () => {
     useHeadlessCommandContextApi();
 
   const handleExecute = () => {
-    if (!canMessage) return;
     const account = data?.instagramMessageComposerAccount;
     if (error || !account) {
       enqueueErrorSnackBar({

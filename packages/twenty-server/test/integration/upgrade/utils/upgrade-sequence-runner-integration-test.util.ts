@@ -129,7 +129,9 @@ class UpgradeSequenceRunnerTestMigrationService extends UpgradeMigrationService 
   constructor(
     private readonly testMigrationRepository: Repository<UpgradeMigrationEntity>,
   ) {
-    super(testMigrationRepository);
+    super(testMigrationRepository, {
+      getUpgradeSequence: () => [],
+    } as unknown as UpgradeSequenceReaderService);
   }
 
   override async isLastAttemptCompleted({
@@ -486,6 +488,7 @@ export const seedInstanceMigration = async (
     );
   }
 
+  // pi-lens-ignore: sql-injection
   await dataSource.query(
     `INSERT INTO core."upgradeMigration" (name, status, attempt, "executedByVersion", "workspaceId", "createdAt", "isInitial")
      VALUES ${values.join(', ')}`,

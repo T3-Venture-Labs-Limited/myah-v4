@@ -1,4 +1,5 @@
 import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { INSTAGRAM_MESSAGE_V3_DIRECT_INTERACTION_CONTEXT } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { computeInstagramActionTargetFingerprints } from 'src/engine/core-modules/instagram-action-budget/utils/instagram-action-target-fingerprint.util';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -22,7 +23,10 @@ import {
   type InstagramMessageAuthorityReader,
 } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.type';
 import { InstagramMessageDraftLockService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft-lock.service';
-import { InstagramMessagePermissionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
+import {
+  InstagramMessagePermissionService,
+  type ManualInstagramHumanAccess,
+} from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
 import { InstagramMessageReceiptProjectionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-receipt-projection.service';
 import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
@@ -36,6 +40,7 @@ export type ExecuteApprovedInstagramMessageInput = {
   interactionContextType?: InstagramMessageInteractionContextType | null;
   interactionContextId?: string | null;
   rolePermissionConfig: RolePermissionConfig;
+  manualHumanAccess?: ManualInstagramHumanAccess;
 };
 
 export type SendDirectInstagramMessageInput = {
@@ -44,6 +49,7 @@ export type SendDirectInstagramMessageInput = {
   draftId: string;
   expectedRevision: number;
   rolePermissionConfig: RolePermissionConfig;
+  manualHumanAccess?: ManualInstagramHumanAccess;
 };
 
 export type InstagramMessageSendResult =
@@ -68,6 +74,26 @@ export class InstagramMessageSendService {
     private readonly recordAccessService: InstagramMessageRecordAccessService,
   ) {}
 
+  private manualAccessForBinding(
+    input: ExecuteApprovedInstagramMessageInput,
+    binding: Extract<
+      ExpectedActionBindingWithWorkspace,
+      { actionName: 'send_instagram_message' }
+    >,
+  ): ManualInstagramHumanAccess | undefined {
+    const isReviewedComposer =
+      binding.actionVersion === 3 &&
+      input.interactionContextType ===
+        INSTAGRAM_MESSAGE_V3_DIRECT_INTERACTION_CONTEXT;
+    const isManualDraftReply =
+      binding.actionKind === 'REPLY' &&
+      input.interactionContextType === 'MYAH_INSTAGRAM_MESSAGE_DRAFT';
+
+    return input.threadId === null && (isReviewedComposer || isManualDraftReply)
+      ? input.manualHumanAccess
+      : undefined;
+  }
+
   async sendDirect(
     input: SendDirectInstagramMessageInput,
   ): Promise<InstagramMessageSendResult> {
@@ -80,6 +106,7 @@ export class InstagramMessageSendService {
       actionKind,
       rolePermissionConfig: input.rolePermissionConfig,
       workspaceId: input.workspaceId,
+      manualHumanAccess: input.manualHumanAccess,
     });
     if (actionKind === 'START_CHAT') {
       throw new Error('Instagram first-contact sending is unavailable');
@@ -108,6 +135,7 @@ export class InstagramMessageSendService {
       interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
       interactionContextId: input.draftId,
       rolePermissionConfig: input.rolePermissionConfig,
+      manualHumanAccess: input.manualHumanAccess,
     });
   }
 
@@ -129,6 +157,7 @@ export class InstagramMessageSendService {
       actionKind: binding.actionKind,
       rolePermissionConfig: input.rolePermissionConfig,
       workspaceId: input.workspaceId,
+      manualHumanAccess: this.manualAccessForBinding(input, binding),
     });
 
     return this.draftLockService.withLock(
@@ -182,6 +211,7 @@ export class InstagramMessageSendService {
       actionKind: binding.actionKind,
       workspaceId: input.workspaceId,
       rolePermissionConfig: input.rolePermissionConfig,
+      manualHumanAccess: this.manualAccessForBinding(input, binding),
     });
     const accessibleDraft =
       await this.recordAccessService.assertCanExecuteDraft({
@@ -263,6 +293,7 @@ export class InstagramMessageSendService {
         actionKind: binding.actionKind,
         workspaceId: input.workspaceId,
         rolePermissionConfig: input.rolePermissionConfig,
+        manualHumanAccess: this.manualAccessForBinding(input, binding),
       });
       if (binding.actionVersion === 3) {
         const currentDraft =

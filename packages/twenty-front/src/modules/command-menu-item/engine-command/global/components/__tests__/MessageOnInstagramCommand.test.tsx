@@ -88,23 +88,26 @@ it.each([
   [true, false],
   [false, true],
   [true, true],
-])('requires first=%s OR reply=%s, not settings permission', (first, reply) => {
-  mockPermission.mockImplementation((flag) =>
-    flag === PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL
-      ? first
-      : flag === PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL
-        ? reply
-        : false,
-  );
-  render(<MessageOnInstagramCommand />);
-  expect(mockOpen).toHaveBeenCalledTimes(first || reply ? 1 : 0);
-  expect(mockQuery.mock.calls[0][1]).toMatchObject({
-    client: mockClient,
-    skip: !(first || reply),
-    fetchPolicy: 'network-only',
-  });
-  expect(mockNavigate).not.toHaveBeenCalled();
-});
+])(
+  'opens for human members with first=%s reply=%s when account is ready',
+  (first, reply) => {
+    mockPermission.mockImplementation((flag) =>
+      flag === PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL
+        ? first
+        : flag === PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL
+          ? reply
+          : false,
+    );
+    render(<MessageOnInstagramCommand />);
+    expect(mockOpen).toHaveBeenCalledTimes(1);
+    expect(mockQuery.mock.calls[0][1]).toMatchObject({
+      client: mockClient,
+      skip: false,
+      fetchPolicy: 'network-only',
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  },
+);
 it.each(Object.values(ContextStorePageType))(
   'opens globally on %s; implicit page record never prefills',
   (pageType) => {

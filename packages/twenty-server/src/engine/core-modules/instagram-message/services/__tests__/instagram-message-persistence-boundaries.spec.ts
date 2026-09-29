@@ -354,6 +354,7 @@ const buildHarness = async (
     {
       canQueryComposerAccount: jest.fn(async () => true),
       canSend: jest.fn(async () => true),
+      isVerifiedManualHuman: jest.fn(() => false),
     } as never,
     { isTargetAvailable: jest.fn(async () => true) } as never,
     provider as never,

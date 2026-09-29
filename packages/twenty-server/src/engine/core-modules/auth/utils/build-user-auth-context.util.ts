@@ -8,6 +8,7 @@ type UserAuthContextInput = {
   workspaceMemberId: NonNullable<RawAuthContext['workspaceMemberId']>;
   workspaceMember: NonNullable<RawAuthContext['workspaceMember']>;
   workspaceMetadataVersion?: string;
+  isInteractiveUserRequest?: boolean;
 };
 
 export const buildUserAuthContext = (
@@ -21,5 +22,6 @@ export const buildUserAuthContext = (
     workspaceMemberId: input.workspaceMemberId,
     workspaceMember: input.workspaceMember,
     workspaceMetadataVersion: input.workspaceMetadataVersion,
+    isInteractiveUserRequest: input.isInteractiveUserRequest,
   };
 };

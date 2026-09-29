@@ -27,6 +27,7 @@ export type RegisteredFastInstanceCommand = {
   command: FastInstanceCommand;
   version: TwentyAllVersion;
   timestamp: number;
+  catchUpOnResume?: true;
 };
 
 export type RegisteredSlowInstanceCommand = {
@@ -108,6 +109,9 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
           name,
           version: instanceCommandMetadata.version,
           timestamp: instanceCommandMetadata.timestamp,
+          ...(instanceCommandMetadata.catchUpOnResume
+            ? { catchUpOnResume: true as const }
+            : {}),
         };
 
         if (instanceCommandMetadata.type === 'slow') {

@@ -1,4 +1,5 @@
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { type ManualInstagramHumanAccess } from './instagram-message-permission.service';
 
 export type InstagramComposerRecipient =
   | { creatorRecordId: string; rawHandle?: never }
@@ -27,6 +28,7 @@ export type InstagramComposerAuthenticatedContext = {
   initiatorUserWorkspaceId: string;
   workspaceMemberId: string;
   rolePermissionConfig: RolePermissionConfig;
+  manualHumanAccess?: ManualInstagramHumanAccess;
 };
 
 export type InstagramComposerBlockedCode =
