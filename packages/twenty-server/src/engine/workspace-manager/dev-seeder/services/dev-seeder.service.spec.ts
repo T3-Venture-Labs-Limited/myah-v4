@@ -18,7 +18,9 @@ describe('DevSeederService.seedDev', () => {
       .fn()
       .mockResolvedValue(undefined);
     const transaction = jest.fn(async (callback) => callback({ queryRunner }));
-    const executeInWorkspaceContext = jest.fn(async (callback) => callback());
+    const executeInWorkspaceContext = jest.fn(
+      async (callback: () => Promise<unknown>, _context: unknown) => callback(),
+    );
     const service = Object.assign(Object.create(DevSeederService.prototype), {
       twentyConfigService: { get: jest.fn(() => false) },
       upgradeMigrationService: {

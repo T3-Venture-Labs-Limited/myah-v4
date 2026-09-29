@@ -586,6 +586,7 @@ describe('InstagramMessageRecipientService real discovery permission boundary', 
           selectedCreatorRecordId: null,
           creatorRecordId: null,
           recipient: {
+            ...graph.recipient,
             sourceValues: [{ field: 'rawHandle', value: 'recipient' }],
           },
         },
