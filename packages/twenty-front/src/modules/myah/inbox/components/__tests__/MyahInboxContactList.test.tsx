@@ -1,6 +1,7 @@
 /* oxlint-disable react/jsx-props-no-spreading -- Tests reuse a typed baseline prop fixture. */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { type KeyboardEvent } from 'react';
+import { mockAllIsIntersecting } from 'react-intersection-observer/test-utils';
 
 import { MyahInboxContactHeader } from '@/myah/inbox/components/MyahInboxContactHeader';
 import { MyahInboxContactList } from '@/myah/inbox/components/MyahInboxContactList';
@@ -224,6 +225,7 @@ const defaultProps = {
   refreshStatus: 'idle' as const,
   refreshError: null,
   error: undefined,
+  loadMoreError: null,
   hasNextPage: false,
   onSelectContact: jest.fn(),
   onFiltersChange: jest.fn(),
@@ -358,33 +360,172 @@ describe('MyahInboxContactList', () => {
     expect(defaultProps.onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps pagination visible and focused while loading the next page', () => {
+  it('shows no persistent Load more contacts button anywhere in the normal list view', () => {
+    render(<MyahInboxContactList {...defaultProps} hasNextPage />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Load more contacts' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Loading more contacts' }),
+    ).not.toBeInTheDocument();
+
+    const listbox = screen.getByRole('listbox', { name: 'Inbox contacts' });
+
+    expect(within(listbox).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('triggers onLoadMore when the end-of-list sentinel comes into view, and not otherwise', () => {
+    const onLoadMore = jest.fn();
+
     const { rerender } = render(
-      <MyahInboxContactList {...defaultProps} hasNextPage />,
+      <MyahInboxContactList
+        {...defaultProps}
+        hasNextPage
+        onLoadMore={onLoadMore}
+      />,
     );
 
-    const loadMoreButton = screen.getByRole('button', {
-      name: 'Load more contacts',
+    act(() => {
+      mockAllIsIntersecting(true);
     });
-    expect(
-      within(
-        screen.getByRole('listbox', { name: 'Inbox contacts' }),
-      ).queryByRole('button', { name: 'Load more contacts' }),
-    ).not.toBeInTheDocument();
-    loadMoreButton.focus();
-    fireEvent.click(loadMoreButton);
-    expect(defaultProps.onLoadMore).toHaveBeenCalledTimes(1);
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+
+    onLoadMore.mockClear();
+    rerender(
+      <MyahInboxContactList {...defaultProps} onLoadMore={onLoadMore} />,
+    );
+    act(() => {
+      mockAllIsIntersecting(true);
+    });
+    expect(onLoadMore).not.toHaveBeenCalled();
 
     rerender(
-      <MyahInboxContactList {...defaultProps} hasNextPage loadingMore />,
+      <MyahInboxContactList
+        {...defaultProps}
+        hasNextPage
+        loadingMore
+        onLoadMore={onLoadMore}
+      />,
     );
+    act(() => {
+      mockAllIsIntersecting(true);
+    });
+    expect(onLoadMore).not.toHaveBeenCalled();
 
-    expect(loadMoreButton).toHaveFocus();
-    expect(loadMoreButton).toBeDisabled();
-    expect(loadMoreButton).toHaveTextContent('Loading more contacts');
+    rerender(
+      <MyahInboxContactList
+        {...defaultProps}
+        hasNextPage
+        isRefreshing
+        onLoadMore={onLoadMore}
+      />,
+    );
+    act(() => {
+      mockAllIsIntersecting(true);
+    });
+    expect(onLoadMore).not.toHaveBeenCalled();
+
+    rerender(
+      <MyahInboxContactList
+        {...defaultProps}
+        hasNextPage
+        loadMoreError="Could not load Inbox contacts."
+        onLoadMore={onLoadMore}
+      />,
+    );
+    act(() => {
+      mockAllIsIntersecting(true);
+    });
+    expect(onLoadMore).not.toHaveBeenCalled();
+
+    rerender(
+      <MyahInboxContactList
+        {...defaultProps}
+        hasNextPage
+        loadingMore
+        onLoadMore={onLoadMore}
+      />,
+    );
+    rerender(
+      <MyahInboxContactList
+        {...defaultProps}
+        hasNextPage
+        onLoadMore={onLoadMore}
+      />,
+    );
+    act(() => {
+      mockAllIsIntersecting(true);
+    });
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows quiet loading feedback while a next batch loads, keeping rows visible', () => {
+    render(<MyahInboxContactList {...defaultProps} hasNextPage loadingMore />);
+
     expect(screen.getByRole('status')).toHaveTextContent(
       'Loading more contacts',
     );
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+    expect(screen.queryByRole('alert', { name: '' })).not.toBeInTheDocument();
+  });
+
+  it('keeps loaded rows visible and focuses the tab-stop row without scrolling on retry', () => {
+    render(
+      <MyahInboxContactList
+        {...defaultProps}
+        hasNextPage
+        loadMoreError="Could not load more Inbox contacts."
+      />,
+    );
+
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent('Could not load more Inbox contacts.');
+
+    const retryButton = screen.getByRole('button', { name: 'Try again' });
+    const tabStop = screen.getByRole('option', { name: 'Ada Creator' });
+    const focus = jest.spyOn(tabStop, 'focus');
+
+    retryButton.focus();
+    fireEvent.click(retryButton);
+
+    expect(defaultProps.onLoadMore).toHaveBeenCalledTimes(1);
+    expect(tabStop).toHaveFocus();
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
+
+  it('keeps the selected row as the tab stop and keeps DOM focus on it when contacts are appended', () => {
+    const { rerender } = render(
+      <MyahInboxContactList {...defaultProps} selectedContactId="contact-2" />,
+    );
+
+    const secondRow = screen.getByRole('option', { name: 'Grace Hopper' });
+
+    secondRow.focus();
+    expect(secondRow).toHaveAttribute('tabindex', '0');
+
+    const thirdContact: MyahInboxContact = {
+      ...contacts[0],
+      id: 'contact-3',
+      displayName: 'New Contact',
+    };
+
+    rerender(
+      <MyahInboxContactList
+        {...defaultProps}
+        selectedContactId="contact-2"
+        contacts={[...contacts, thirdContact]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: 'Grace Hopper' })).toHaveFocus();
+    expect(
+      screen.getByRole('option', { name: 'Grace Hopper' }),
+    ).toHaveAttribute('tabindex', '0');
   });
 });
 

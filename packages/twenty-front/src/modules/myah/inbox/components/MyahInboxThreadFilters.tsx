@@ -147,7 +147,13 @@ export const MyahInboxThreadFilters = ({
             ariaLabel="Refresh Inbox"
             size="small"
             variant="tertiary"
-            disabled={loading || loadingMore || isRefreshing}
+            // Contact-list refresh takes priority over an in-flight next batch
+            // (see contact-inbox-contact-list spec) and must stay available
+            // while one loads. Conversations keep the prior behavior; they
+            // have no depth-preserving refresh to supersede a load with.
+            disabled={
+              loading || isRefreshing || (loadingMore && !isContactMode)
+            }
             onClick={onRefresh}
           />
         </StyledSearchActions>
