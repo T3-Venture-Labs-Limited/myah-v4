@@ -30,7 +30,6 @@ import { MyahInboxReplyApprovedExecutionService } from 'src/engine/core-modules/
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
 import { AiAgentExecutionModule } from 'src/engine/metadata-modules/ai/ai-agent-execution/ai-agent-execution.module';
 import { AiBillingModule } from 'src/engine/metadata-modules/ai/ai-billing/ai-billing.module';
-import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { AiModelsModule } from 'src/engine/metadata-modules/ai/ai-models/ai-models.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
@@ -107,7 +106,6 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
       inject: [MyahInboxReplyContextDraftService, ActionApprovalService],
     },
     MyahInboxToolWorkspaceService,
-    BrandBrainPreflightService,
     {
       provide: MYAH_INBOX_TOOL_SERVICE_TOKEN,
       useExisting: MyahInboxToolWorkspaceService,

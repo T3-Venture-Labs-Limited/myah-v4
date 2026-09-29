@@ -350,7 +350,7 @@ it('captures the selected context fingerprint and releases the target lock befor
   const Service = MyahInboxReplyProposalService as unknown as new (
     ...args: unknown[]
   ) => InstanceType<typeof MyahInboxReplyProposalService>;
-  const service = new Service({}, {}, {}, {}, {}, {}, {}, contexts, approvals);
+  const service = new Service({}, {}, {}, {}, {}, {}, contexts, approvals);
   const generate = jest
     .spyOn(service, 'generateReplyProposal')
     .mockImplementation(async () => {
