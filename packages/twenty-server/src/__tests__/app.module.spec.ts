@@ -55,12 +55,10 @@ describe('AppModule middleware configuration', () => {
     const response = { sendStatus: jest.fn() };
 
     expect(retired?.route.method).toBe(RequestMethod.ALL);
-    (
-      retired?.middleware as (
-        request: unknown,
-        response: typeof response,
-      ) => void
-    )({}, response);
+    (retired?.middleware as (request: unknown, res: typeof response) => void)(
+      {},
+      response,
+    );
     expect(response.sendStatus).toHaveBeenCalledWith(HttpStatus.GONE);
     const genericRestRoutes = registrations.filter(
       ({ route }) => route.path === 'rest/*path',

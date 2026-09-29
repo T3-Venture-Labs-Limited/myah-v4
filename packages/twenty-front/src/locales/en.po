@@ -1452,7 +1452,6 @@ msgstr "Account Deletion"
 #: src/pages/settings/accounts/SettingsAccountsCalendars.tsx
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/accounts/SettingsNewAccount.tsx
 msgid "Accounts"
 msgstr "Accounts"
@@ -4832,11 +4831,6 @@ msgstr "Chats"
 msgid "Check campaign"
 msgstr "Check campaign"
 
-#. js-lingui-id: d+fVrI
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Check connection"
-msgstr "Check connection"
-
 #. js-lingui-id: +Bjgte
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Check failed"
@@ -5784,16 +5778,6 @@ msgstr "Connect a customer-owned domain"
 msgid "Connect a new account to your workspace"
 msgstr "Connect a new account to your workspace"
 
-#. js-lingui-id: iLSXJ7
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Connect a Shopify store so Myah can read brand and product context."
-msgstr "Connect a Shopify store so Myah can read brand and product context."
-
-#. js-lingui-id: YTrDtl
-#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
-msgid "Connect a store so Myah can read brand and product context."
-msgstr "Connect a store so Myah can read brand and product context."
-
 #. js-lingui-id: CMrq4R
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 msgid "Connect additional MCP clients using install links or client docs."
@@ -5838,11 +5822,6 @@ msgstr "Connect Instagram messaging for your workspace."
 msgid "Connect mailbox locally"
 msgstr "Connect mailbox locally"
 
-#. js-lingui-id: HIjrUv
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Connect Shopify"
-msgstr "Connect Shopify"
-
 #. js-lingui-id: 56wt4g
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Connect the Instagram account you use for your business. You can review conversations and approve each reply before it is sent."
@@ -5875,7 +5854,6 @@ msgid "Connect your Instagram Business or Creator account to read conversations 
 msgstr "Connect your Instagram Business or Creator account to read conversations and reply with your approval."
 
 #. js-lingui-id: QHcLEN
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationConnectionsSection.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
@@ -6291,11 +6269,6 @@ msgstr "Could not create Campaign."
 msgid "Could not delete approved access domain"
 msgstr "Could not delete approved access domain"
 
-#. js-lingui-id: KgTGpb
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Could not disconnect Shopify."
-msgstr "Could not disconnect Shopify."
-
 #. js-lingui-id: F5pkuT
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -6312,11 +6285,6 @@ msgstr "Could not load Creators. Try searching again."
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not load Instagram connection status."
 msgstr "Could not load Instagram connection status."
-
-#. js-lingui-id: g3pHAg
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Could not load Shopify connection status."
-msgstr "Could not load Shopify connection status."
 
 #. js-lingui-id: KqYYBp
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -6348,11 +6316,6 @@ msgstr "Could not resolve this recipient safely. Refresh the recipient to check 
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not start Instagram authorization."
 msgstr "Could not start Instagram authorization."
-
-#. js-lingui-id: oJAw2x
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Could not start Shopify OAuth. Check the shop domain and server configuration."
-msgstr "Could not start Shopify OAuth. Check the shop domain and server configuration."
 
 #. js-lingui-id: PiYvMl
 #: src/modules/navigation-menu-item/edit/hooks/useNavigationMenuItemEditController.ts
@@ -8001,11 +7964,6 @@ msgstr "Disconnect mailbox {0}"
 msgid "Disconnect pending"
 msgstr "Disconnect pending"
 
-#. js-lingui-id: 0xMKx0
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Disconnect Shopify"
-msgstr "Disconnect Shopify"
-
 #. js-lingui-id: eU7YlA
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Disconnect this Instagram account?"
@@ -9093,11 +9051,6 @@ msgstr "Enter a positive whole-number capacity."
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Enter a positive whole-number quantity."
 msgstr "Enter a positive whole-number quantity."
-
-#. js-lingui-id: B5IUuN
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Enter a Shopify store domain first."
-msgstr "Enter a Shopify store domain first."
 
 #. js-lingui-id: 93ebCf
 #: src/modules/object-record/record-field/ui/form-types/components/FormUuidFieldInput.tsx
@@ -10635,11 +10588,6 @@ msgstr "First Name"
 #: src/pages/onboarding/CreateProfile.tsx
 msgid "First name can not be empty"
 msgstr "First name can not be empty"
-
-#. js-lingui-id: uMsB8B
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "First-party Shopify app"
-msgstr "First-party Shopify app"
 
 #. js-lingui-id: JREYkg
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -15808,7 +15756,6 @@ msgstr "Not available on Default View"
 
 #. js-lingui-id: S33tz3
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "Not connected"
 msgstr "Not connected"
@@ -17995,11 +17942,6 @@ msgstr "Reconnect Instagram"
 #: src/pages/settings/applications/tabs/SettingsApplicationConnectionsSection.tsx
 msgid "Reconnect needed"
 msgstr "Reconnect needed"
-
-#. js-lingui-id: S8Y+C0
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Reconnect Shopify"
-msgstr "Reconnect Shopify"
 
 #. js-lingui-id: hVS0gK
 #: src/modules/activities/timeline-activities/rows/generic/components/EventRowGenericLinked.tsx
@@ -20709,19 +20651,6 @@ msgstr "Shared addresses your workspace uses to send and receive email."
 #: src/pages/settings/applications/components/SettingsApplicationRegistrationShareLinkButtons.tsx
 msgid "Sharing link copied to clipboard"
 msgstr "Sharing link copied to clipboard"
-
-#. js-lingui-id: irL3dj
-#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Shopify"
-msgstr "Shopify"
-
-#. js-lingui-id: PfaJ0Q
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Shopify store"
-msgstr "Shopify store"
 
 #. js-lingui-id: RRXpo1
 #: src/modules/settings/data-model/fields/forms/number/constants/NumberDataModelSelectOptions.ts
@@ -24349,11 +24278,6 @@ msgstr "Use only letters, numbers, underscores, dots or hyphens (max 64 characte
 msgid "Use our API or add your first {objectLabel} manually"
 msgstr "Use our API or add your first {objectLabel} manually"
 
-#. js-lingui-id: 2PkBd7
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-msgid "Use our own Shopify app for OAuth first. We can fall back to Composio if the first-party flow blocks the spike."
-msgstr "Use our own Shopify app for OAuth first. We can fall back to Composio if the first-party flow blocks the spike."
-
 #. js-lingui-id: D3O8h7
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 msgid "Use policy capacity"
@@ -24410,7 +24334,6 @@ msgstr "Useful for pivot/junction tables"
 #: src/pages/settings/accounts/SettingsAccountsConfigurationStepEmail.tsx
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/accounts/SettingsNewAccount.tsx
 #: src/pages/settings/ai/SettingsAgentTurnDetail.tsx
 #: src/pages/settings/ai/SettingsAiPrompts.tsx
@@ -25951,8 +25874,6 @@ msgstr "You have scheduled a credit pack change. Do you want to cancel it?"
 #. js-lingui-id: 28Hr4M
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
-#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "You need to sign in again first."
 msgstr "You need to sign in again first."
 
