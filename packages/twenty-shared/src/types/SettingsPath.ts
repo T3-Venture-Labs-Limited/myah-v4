@@ -9,7 +9,6 @@ export enum SettingsPath {
   AccountsComposio = 'accounts/composio',
   AccountsInstagram = 'accounts/instagram',
   AccountsEmails = 'accounts/emails',
-  AccountsShopify = 'accounts/shopify',
   NewImapSmtpCaldavConnection = 'accounts/new-imap-smtp-caldav-connection',
   EditImapSmtpCaldavConnection = 'accounts/edit-imap-smtp-caldav-connection/:connectedAccountId',
   Billing = 'billing',

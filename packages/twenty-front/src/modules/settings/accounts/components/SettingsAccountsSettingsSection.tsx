@@ -9,7 +9,6 @@ import {
   IconBrandInstagram,
   IconCalendarEvent,
   IconMailCog,
-  IconTags,
 } from 'twenty-ui/icon';
 import { H2Title } from 'twenty-ui/typography';
 import { Section } from 'twenty-ui/layout';
@@ -84,20 +83,6 @@ export const SettingsAccountsSettingsSection = () => {
               }
               title={t`Instagram`}
               description={t`Connect Instagram messaging for your workspace.`}
-            />
-          </UndecoratedLink>
-        </StyledCardLinkSlot>
-        <StyledCardLinkSlot>
-          <UndecoratedLink to={getSettingsPath(SettingsPath.AccountsShopify)}>
-            <SettingsCard
-              Icon={
-                <IconTags
-                  size={theme.icon.size.lg}
-                  stroke={theme.icon.stroke.sm}
-                />
-              }
-              title={t`Shopify`}
-              description={t`Connect a store so Myah can read brand and product context.`}
             />
           </UndecoratedLink>
         </StyledCardLinkSlot>
