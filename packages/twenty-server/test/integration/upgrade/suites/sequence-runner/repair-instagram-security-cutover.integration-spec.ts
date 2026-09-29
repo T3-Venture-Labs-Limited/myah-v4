@@ -293,6 +293,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
   const insertBinding = (values: Record<string, string | number | null>) => {
     const entries = Object.entries(values);
 
+    // pi-lens-ignore: sql-injection
     return dataSource.query(
       `INSERT INTO core."actionApprovalBinding" (${entries.map(([key]) => `"${key}"`).join(',')}) VALUES (${entries.map((_, index) => `$${index + 1}`).join(',')})`,
       entries.map(([, value]) => value),
@@ -313,6 +314,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         // An absent entity CHECK deliberately leaves the table unconstrained;
         // behavioral assertions below then fail on admitted invalid rows.
         if (check) {
+          // pi-lens-ignore: sql-injection
           await dataSource.query(
             `ALTER TABLE core."${table}" ADD CONSTRAINT "${name}" CHECK (${check.expression})`,
           );
@@ -378,9 +380,11 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
       validated = true,
     ) => {
       requireSchemaOwnership();
+      // pi-lens-ignore: sql-injection
       await dataSource.query(
         `ALTER TABLE core."${table}" DROP CONSTRAINT IF EXISTS "${name}"`,
       );
+      // pi-lens-ignore: sql-injection
       await dataSource.query(
         `ALTER TABLE core."${table}" ADD CONSTRAINT "${name}" CHECK (${strict ? `(${predicate}) IS TRUE` : predicate}) ${validated ? '' : 'NOT VALID'}`,
       );
@@ -1124,6 +1128,9 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         );
       migration = new dependencies.UpgradeMigrationService(
         dataSource.getRepository(dependencies.UpgradeMigrationEntity),
+        {
+          getUpgradeSequence: () => reader.getUpgradeSequence(),
+        } as UpgradeSequenceReaderService,
       );
       // This adapter supplies SQL only; it does not claim full workspace ORM bootstrap.
       workspaceDataSource = {

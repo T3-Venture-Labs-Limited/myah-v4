@@ -415,6 +415,7 @@ export class ActionApprovalService {
     allowWorkspaceOperator?: boolean;
   }): Promise<{
     actionKind: 'START_CHAT' | 'REPLY';
+    actionVersion: 2 | 3;
     receipt: SafeActionExecutionReceipt;
     confirmedDestinationSource?: InstagramMessageConfirmedDestinationSource;
   }> {
@@ -447,6 +448,7 @@ export class ActionApprovalService {
 
     return {
       actionKind: binding.actionKind,
+      actionVersion: binding.actionVersion,
       receipt: this.redactionService.toSafeReceipt(receipt),
       ...(receipt.state === ActionExecutionReceiptState.SENT &&
       binding.actionVersion === 3 &&

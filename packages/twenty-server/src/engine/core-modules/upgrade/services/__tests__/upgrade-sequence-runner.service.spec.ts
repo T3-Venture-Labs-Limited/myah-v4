@@ -184,6 +184,174 @@ describe('UpgradeSequenceRunnerService', () => {
       workspaceCommand.name,
     ]);
   });
+  it('catches up a late instance repair before resuming an already-advanced workspace cursor', async () => {
+    const lateRepair = { ...repair, catchUpOnResume: true };
+    const sequenceReader = new UpgradeSequenceReaderService({
+      getBundleForVersion: (version: string) =>
+        version === VERSION
+          ? {
+              fastInstanceCommands: [pendingCheck, lateRepair],
+              slowInstanceCommands: [],
+              workspaceCommands: [workspaceCommand],
+            }
+          : {
+              fastInstanceCommands: [],
+              slowInstanceCommands: [],
+              workspaceCommands: [],
+            },
+    } as unknown as UpgradeCommandRegistryService);
+    const workspaceCursor = {
+      createdAt: new Date(),
+      errorMessage: null,
+      executedByVersion: VERSION,
+      isInitial: false,
+      name: workspaceCommand.name,
+      status: 'completed' as const,
+      workspaceId: WORKSPACE_ID,
+    };
+    const runFastInstanceCommand = jest.fn().mockResolvedValue({
+      status: 'success',
+    });
+    const runWorkspaceCommands = jest.fn().mockResolvedValue(undefined);
+    const isLastAttemptCompleted = jest
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const runner = new UpgradeSequenceRunnerService(
+      {
+        getLastAttemptedCommandNameOrThrow: jest.fn().mockResolvedValue({
+          name: workspaceCommand.name,
+          status: 'completed',
+        }),
+        getWorkspaceLastAttemptedCommandNameOrThrow: jest
+          .fn()
+          .mockResolvedValue(new Map([[WORKSPACE_ID, workspaceCursor]])),
+        isLastAttemptCompleted,
+      } as unknown as UpgradeMigrationService,
+      { runFastInstanceCommand } as unknown as InstanceCommandRunnerService,
+      { runWorkspaceCommands } as unknown as WorkspaceCommandRunnerService,
+      sequenceReader,
+      {
+        refresh: jest.fn().mockResolvedValue(undefined),
+      } as unknown as UpgradeAwareEntityMetadataAdapter,
+      {
+        iterate: async ({
+          callback,
+        }: {
+          callback: (context: unknown) => Promise<void>;
+        }) => {
+          await callback({ index: 0, total: 1, workspaceId: WORKSPACE_ID });
+          return { fail: [], success: [{ workspaceId: WORKSPACE_ID }] };
+        },
+      } as unknown as WorkspaceIteratorService,
+      {
+        getActiveOrSuspendedWorkspaceIds: jest
+          .fn()
+          .mockResolvedValue([WORKSPACE_ID]),
+      } as unknown as WorkspaceVersionService,
+    );
+    const sequence = sequenceReader.getUpgradeSequence();
+    await expect(
+      runner.run({ sequence, options: { workspaceIds: [WORKSPACE_ID] } }),
+    ).resolves.toEqual({ totalFailures: 0, totalSuccesses: 0 });
+    expect(runFastInstanceCommand).not.toHaveBeenCalled();
+    await runner.run({ sequence, options: {} });
+    await runner.run({ sequence, options: {} });
+    expect(isLastAttemptCompleted).toHaveBeenCalledWith({
+      name: lateRepair.name,
+      workspaceId: null,
+    });
+    expect(runFastInstanceCommand).toHaveBeenCalledTimes(1);
+    expect(runFastInstanceCommand).toHaveBeenCalledWith({
+      command: lateRepair.command,
+      name: lateRepair.name,
+      preserveWorkspaceCursors: true,
+    });
+    expect(runWorkspaceCommands).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceCommands: [] }),
+    );
+  });
+
+  it.each([false, true])(
+    'keeps an advanced workspace cursor at the next instance barrier (failedRetry=%s)',
+    async (failedRetry) => {
+      const lateRepair = { ...repair, catchUpOnResume: true };
+      const nextInstance = {
+        command: {},
+        name: '2.20.0_NextInstanceCommand_1784113000001',
+        timestamp: 1784113000001,
+        version: '2.20.0',
+      };
+      const reader = new UpgradeSequenceReaderService({
+        getBundleForVersion: (version: string) => ({
+          fastInstanceCommands:
+            version === VERSION
+              ? [pendingCheck, lateRepair]
+              : version === '2.20.0'
+                ? [nextInstance]
+                : [],
+          slowInstanceCommands: [],
+          workspaceCommands: version === VERSION ? [workspaceCommand] : [],
+        }),
+      } as unknown as UpgradeCommandRegistryService);
+      let workspaceCursor = {
+        name: workspaceCommand.name,
+        status: 'completed' as const,
+        workspaceId: WORKSPACE_ID,
+      };
+      const runFastInstanceCommand = jest.fn(
+        async ({ name, preserveWorkspaceCursors }) => {
+          if (name === lateRepair.name && !preserveWorkspaceCursors) {
+            workspaceCursor = {
+              name: lateRepair.name,
+              status: 'completed',
+              workspaceId: WORKSPACE_ID,
+            };
+          }
+          return { status: 'success' };
+        },
+      );
+      const runner = new UpgradeSequenceRunnerService(
+        {
+          getLastAttemptedCommandNameOrThrow: jest.fn().mockResolvedValue({
+            name: failedRetry ? lateRepair.name : workspaceCommand.name,
+            status: failedRetry ? 'failed' : 'completed',
+          }),
+          getWorkspaceLastAttemptedCommandNameOrThrow: jest.fn(
+            async () => new Map([[WORKSPACE_ID, workspaceCursor]]),
+          ),
+          isLastAttemptCompleted: jest.fn().mockResolvedValue(false),
+        } as unknown as UpgradeMigrationService,
+        { runFastInstanceCommand } as unknown as InstanceCommandRunnerService,
+        {
+          runWorkspaceCommands: jest.fn(),
+        } as unknown as WorkspaceCommandRunnerService,
+        reader,
+        { refresh: jest.fn() } as unknown as UpgradeAwareEntityMetadataAdapter,
+        {
+          iterate: jest.fn(async ({ callback }) => {
+            await callback({ index: 0, total: 1, workspaceId: WORKSPACE_ID });
+            return { fail: [], success: [{ workspaceId: WORKSPACE_ID }] };
+          }),
+        } as never,
+        {
+          getActiveOrSuspendedWorkspaceIds: jest
+            .fn()
+            .mockResolvedValue([WORKSPACE_ID]),
+        } as unknown as WorkspaceVersionService,
+      );
+
+      await expect(
+        runner.run({ sequence: reader.getUpgradeSequence(), options: {} }),
+      ).resolves.toEqual({ totalSuccesses: 1, totalFailures: 0 });
+      expect(
+        runFastInstanceCommand.mock.calls.map(([args]) => args.name),
+      ).toEqual([lateRepair.name, nextInstance.name]);
+      expect(workspaceCursor.name).toBe(workspaceCommand.name);
+    },
+  );
+
   it('simulates across an instance barrier without executing instance commands', async () => {
     const firstWorkspaceCommand = {
       command: {},

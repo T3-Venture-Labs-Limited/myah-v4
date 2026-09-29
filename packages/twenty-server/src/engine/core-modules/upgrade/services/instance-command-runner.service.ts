@@ -31,9 +31,11 @@ export class InstanceCommandRunnerService {
   async runFastInstanceCommand({
     command,
     name,
+    preserveWorkspaceCursors = false,
   }: {
     command: FastInstanceCommand;
     name: string;
+    preserveWorkspaceCursors?: boolean;
   }): Promise<RunSingleMigrationResult> {
     const executedByVersion =
       this.twentyConfigService.get('APP_VERSION') ?? 'unknown';
@@ -58,10 +60,11 @@ export class InstanceCommandRunnerService {
 
       await command.up(queryRunner);
 
-      const workspaceIds =
-        await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds({
-          queryRunner,
-        });
+      const workspaceIds = preserveWorkspaceCursors
+        ? []
+        : await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds({
+            queryRunner,
+          });
 
       await this.upgradeMigrationService.recordUpgradeMigration({
         name,
@@ -82,8 +85,9 @@ export class InstanceCommandRunnerService {
         await queryRunner.rollbackTransaction();
       }
 
-      const workspaceIds =
-        await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds();
+      const workspaceIds = preserveWorkspaceCursors
+        ? []
+        : await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds();
 
       await this.upgradeMigrationService.recordUpgradeMigration({
         name,

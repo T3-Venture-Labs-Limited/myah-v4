@@ -7,6 +7,7 @@ import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/c
 import type { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
+import { type UpgradeSequenceReaderService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import type { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
 import {
   type RunWorkspaceCommandsArgs,
@@ -70,6 +71,9 @@ const createHarness = () => {
     } as unknown as TwentyConfigService,
     new UpgradeMigrationService(
       repository as unknown as Repository<UpgradeMigrationEntity>,
+      {
+        getUpgradeSequence: () => [],
+      } as unknown as UpgradeSequenceReaderService,
     ),
     {
       invalidateInstanceAndAllWorkspacesStatus,
