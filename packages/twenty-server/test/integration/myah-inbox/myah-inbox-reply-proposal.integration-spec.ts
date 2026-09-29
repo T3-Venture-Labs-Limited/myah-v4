@@ -180,15 +180,12 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-// Stubs only model/billing/brand boundaries; the resolver/service graph is real.
+// Stubs only model/billing boundaries; the resolver/service graph is real.
 const stubProposalModel = () => {
   const modelRegistryService = getDomainService<{
     getDefaultSpeedModel: (...args: never[]) => unknown;
     getEffectiveModelConfig: (...args: never[]) => unknown;
   }>('AiModelRegistryService');
-  const brandBrainPreflightService = getDomainService<{
-    run: (...args: never[]) => Promise<unknown>;
-  }>('BrandBrainPreflightService');
   const billingUsageService = getDomainService<{
     hasAvailableCreditsOrThrow: (...args: never[]) => Promise<void>;
   }>('BillingUsageService');
@@ -217,11 +214,6 @@ const stubProposalModel = () => {
     doStream: jest.fn(),
   } as unknown as LanguageModel;
 
-  jest.spyOn(brandBrainPreflightService, 'run').mockResolvedValue({
-    required: true,
-    called: true,
-    contextPart: '<brand_brain_context>Warm voice.</brand_brain_context>',
-  } as never);
   jest.spyOn(modelRegistryService, 'getDefaultSpeedModel').mockReturnValue({
     modelId: 'fake/reply-model',
     model,

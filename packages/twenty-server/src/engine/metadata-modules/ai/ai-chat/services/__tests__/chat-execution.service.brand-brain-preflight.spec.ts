@@ -132,34 +132,6 @@ const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
   const nativeToolBinder = {
     bind: jest.fn().mockReturnValue({}),
   };
-  const brandBrainPreflightService = {
-    run: jest.fn().mockResolvedValue({
-      required: true,
-      called: true,
-      brandNameOrSlug: 'Acme Beauty Labs',
-      brandSlug: 'acme-beauty-labs',
-      pageCount: 11,
-      hasRoot: true,
-      hasIndex: true,
-      hasLog: true,
-      contextPart:
-        '<brand_brain_preflight required="true" called="true">Offer: 15% creator affiliate code</brand_brain_preflight>',
-      durationMs: 42,
-      cacheHit: false,
-      error: null,
-    }),
-    injectContextIntoLastUserMessage: jest.fn((messages, contextPart) => {
-      const lastMessage = messages[messages.length - 1];
-
-      return [
-        ...messages.slice(0, -1),
-        {
-          ...lastMessage,
-          parts: [...lastMessage.parts, { type: 'text', text: contextPart }],
-        },
-      ];
-    }),
-  };
   const messagePruningService = {
     pruneIfOverContextWindowLimit: jest.fn((messages) => ({
       messages,
@@ -191,7 +163,6 @@ const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
     systemPromptBuilder as never,
     exceptionHandlerService as never,
     nativeToolBinder as never,
-    brandBrainPreflightService as never,
     messagePruningService as never,
     metricsService as never,
     instagramReplyActionDefinition as never,
@@ -206,23 +177,17 @@ const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
     aiBillingService,
     managedOpenRouterModelService,
     toolRegistry,
-    brandBrainPreflightService,
     metricsService,
   };
 };
 
-describe('ChatExecutionService Brand Brain preflight integration', () => {
+describe('ChatExecutionService without Brand Brain preflight', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('injects Brand Brain preflight context before streaming the model response', async () => {
-    const {
-      service,
-      brandBrainPreflightService,
-      metricsService,
-      toolRegistry,
-    } = buildService();
+  it('streams with permitted actor tools without injecting Brand Brain context', async () => {
+    const { service, metricsService, toolRegistry } = buildService();
 
     await service.streamChat({
       workspace: {
@@ -250,17 +215,6 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
       lastUserMessageText: 'Draft creator outreach for Acme Beauty Labs.',
     });
 
-    expect(brandBrainPreflightService.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        lastUserMessageText: 'Draft creator outreach for Acme Beauty Labs.',
-        toolContext: expect.objectContaining({
-          authContext: expect.objectContaining({
-            type: 'user',
-            userWorkspaceId: 'user-workspace-id',
-          }),
-        }),
-      }),
-    );
     expect(toolRegistry.buildToolIndex).toHaveBeenCalledWith(
       'workspace-id',
       'role-id',
@@ -272,32 +226,16 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
         actorContext: { source: 'USER' },
       }),
     );
-    expect(
-      brandBrainPreflightService.injectContextIntoLastUserMessage,
-    ).toHaveBeenCalledWith(
-      expect.any(Array),
-      expect.stringContaining('<brand_brain_preflight'),
-    );
-
-    const streamTextCalls = (streamText as jest.Mock).mock.calls;
-    const streamTextCall = streamTextCalls[streamTextCalls.length - 1]?.[0];
+    const streamTextCall = getLastChatStreamTextOptions();
 
     expect(JSON.stringify(streamTextCall.messages)).toContain(
+      'Draft creator outreach for Acme Beauty Labs.',
+    );
+    expect(JSON.stringify(streamTextCall.messages)).not.toContain(
       '<brand_brain_preflight',
     );
-    expect(JSON.stringify(streamTextCall.messages)).toContain(
-      '15% creator affiliate code',
-    );
-    expect(metricsService.recordHistogram).toHaveBeenCalledWith(
-      expect.objectContaining({
-        key: MetricsKeys.AiChatBrandBrainPreflightMs,
-        value: 42,
-        attributes: expect.objectContaining({
-          required: 'true',
-          called: 'true',
-          cacheHit: 'false',
-        }),
-      }),
+    expect(metricsService.recordHistogram).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: MetricsKeys.AiChatBrandBrainPreflightMs }),
     );
   });
 
