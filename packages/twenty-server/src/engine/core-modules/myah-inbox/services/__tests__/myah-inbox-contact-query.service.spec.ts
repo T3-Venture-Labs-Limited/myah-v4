@@ -933,6 +933,24 @@ describe('MyahInboxContactQueryService', () => {
     );
   });
 
+  it('clamps the requested page size to the contact-list-specific maximum of 500', async () => {
+    const harness = buildHarness([]);
+
+    await harness.service.listContacts(request({ first: 500 }));
+
+    const [, parametersAt500] = harness.query.mock.calls[0];
+
+    expect(parametersAt500[parametersAt500.length - 1]).toBe(501);
+
+    harness.query.mockClear();
+
+    await harness.service.listContacts(request({ first: 5000 }));
+
+    const [, parametersOverMax] = harness.query.mock.calls[0];
+
+    expect(parametersOverMax[parametersOverMax.length - 1]).toBe(501);
+  });
+
   it('rejects malformed and cross-workspace contact IDs/cursors before opening workspace data', async () => {
     const harness = buildHarness([]);
     const foreignCursor = encodeMyahInboxContactCursor({

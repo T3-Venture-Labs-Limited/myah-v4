@@ -212,6 +212,7 @@ export const GET_MYAH_INBOX_CONTACTS = gql`
         hasNextPage
         endCursor
       }
+      totalCount
     }
   }
 `;

@@ -9,9 +9,14 @@ import {
 } from '@/myah/inbox/states/myahInboxSelectionState';
 import { type MyahInboxContact } from '@/myah/inbox/types/MyahInboxContact';
 import { styled } from '@linaria/react';
-import { useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useInView } from 'react-intersection-observer';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
+
+// Prefetch distance from the bottom of the loaded list before the next batch
+// is requested automatically; see contact-inbox-contact-list spec.
+const LOAD_MORE_ROOT_MARGIN = '0px 0px 200px 0px';
 
 const StyledListPanel = styled.section`
   background: ${themeCssVariables.background.primary};
@@ -22,12 +27,26 @@ const StyledListPanel = styled.section`
   min-width: 0;
 `;
 
-const StyledList = styled.div`
+const StyledScroller = styled.div`
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+const StyledList = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const StyledSentinel = styled.div`
+  height: 1px;
 `;
 
 const StyledStatus = styled.div`
@@ -47,10 +66,21 @@ const StyledStatusTitle = styled.strong`
   font-size: ${themeCssVariables.font.size.sm};
 `;
 
-const StyledLoadMore = styled.div`
-  display: flex;
-  justify-content: center;
+const StyledLoadMoreStatus = styled.div`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
   padding: ${themeCssVariables.spacing[3]};
+  text-align: center;
+`;
+
+const StyledLoadMoreError = styled.div`
+  align-items: center;
+  color: ${themeCssVariables.font.color.secondary};
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[3]};
+  text-align: center;
 `;
 
 export type MyahInboxContactListProps = {
@@ -63,6 +93,7 @@ export type MyahInboxContactListProps = {
   refreshStatus: MyahInboxRefreshStatus;
   refreshError: string | null;
   error: { message: string } | undefined;
+  loadMoreError: string | null;
   hasNextPage: boolean;
   onSelectContact: (
     contactId: string,
@@ -84,6 +115,7 @@ export const MyahInboxContactList = ({
   refreshStatus,
   refreshError,
   error,
+  loadMoreError,
   hasNextPage,
   onSelectContact,
   onFiltersChange,
@@ -93,6 +125,34 @@ export const MyahInboxContactList = ({
 }: MyahInboxContactListProps) => {
   // oxlint-disable-next-line twenty/no-state-useref -- DOM refs coordinate roving keyboard focus.
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  // The scroller element is the useInView root; a ref callback (not a plain
+  // ref) so the observer re-attaches once the node is available.
+  const [scrollerElement, setScrollerElement] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const { ref: sentinelRef, inView: sentinelInView } = useInView({
+    root: scrollerElement,
+    rootMargin: LOAD_MORE_ROOT_MARGIN,
+  });
+
+  useEffect(() => {
+    if (
+      sentinelInView &&
+      hasNextPage &&
+      !loadingMore &&
+      !isRefreshing &&
+      !loadMoreError
+    ) {
+      onLoadMore();
+    }
+  }, [
+    sentinelInView,
+    hasNextPage,
+    loadingMore,
+    isRefreshing,
+    loadMoreError,
+    onLoadMore,
+  ]);
 
   const handleRowKeyDown = (
     event: KeyboardEvent<HTMLButtonElement>,
@@ -168,52 +228,57 @@ export const MyahInboxContactList = ({
     const selectedContactIsVisible = contacts.some(
       (contact) => contact.id === selectedContactId,
     );
+    const tabStopIndex = selectedContactIsVisible
+      ? contacts.findIndex((contact) => contact.id === selectedContactId)
+      : 0;
+    const handleRetry = () => {
+      // Move focus off the disappearing Try again control before it unmounts,
+      // so keyboard users land on the list rather than <body>.
+      rowRefs.current[tabStopIndex]?.focus({ preventScroll: true });
+      onLoadMore();
+    };
 
     return (
-      <>
+      <StyledScroller ref={setScrollerElement}>
         <StyledList
           role="listbox"
           aria-label="Inbox contacts"
           aria-busy={loadingMore || isRefreshing}
         >
-          {contacts.map((contact, index) => {
-            const isSelected = selectedContactId === contact.id;
-
-            return (
-              <MyahInboxContactRow
-                key={contact.id}
-                contact={contact}
-                isSelected={isSelected}
-                tabIndex={
-                  isSelected || (!selectedContactIsVisible && index === 0)
-                    ? 0
-                    : -1
-                }
-                rowRef={(element) => {
-                  rowRefs.current[index] = element;
-                }}
-                onSelect={(contactId) =>
-                  onSelectContact(contactId, { openConversation: true })
-                }
-                onKeyDown={(event) => handleRowKeyDown(event, index)}
-              />
-            );
-          })}
-        </StyledList>
-        {(hasNextPage || loadingMore) && (
-          <StyledLoadMore role={loadingMore ? 'status' : undefined}>
-            <Button
-              title={
-                loadingMore ? 'Loading more contacts' : 'Load more contacts'
+          {contacts.map((contact, index) => (
+            <MyahInboxContactRow
+              key={contact.id}
+              contact={contact}
+              isSelected={selectedContactId === contact.id}
+              tabIndex={index === tabStopIndex ? 0 : -1}
+              rowRef={(element) => {
+                rowRefs.current[index] = element;
+              }}
+              onSelect={(contactId) =>
+                onSelectContact(contactId, { openConversation: true })
               }
+              onKeyDown={(event) => handleRowKeyDown(event, index)}
+            />
+          ))}
+        </StyledList>
+        {hasNextPage && <StyledSentinel aria-hidden="true" ref={sentinelRef} />}
+        {loadingMore && (
+          <StyledLoadMoreStatus role="status">
+            Loading more contacts
+          </StyledLoadMoreStatus>
+        )}
+        {loadMoreError && !loadingMore && (
+          <StyledLoadMoreError role="alert">
+            <span>{loadMoreError}</span>
+            <Button
+              title="Try again"
               variant="secondary"
               size="small"
-              disabled={loadingMore || isRefreshing}
-              onClick={onLoadMore}
+              onClick={handleRetry}
             />
-          </StyledLoadMore>
+          </StyledLoadMoreError>
         )}
-      </>
+      </StyledScroller>
     );
   };
 

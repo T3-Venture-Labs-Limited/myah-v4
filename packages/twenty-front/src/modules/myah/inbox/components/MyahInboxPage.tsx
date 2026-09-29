@@ -972,6 +972,7 @@ const MyahInboxPageContent = ({
       refreshStatus={contacts.refreshStatus}
       refreshError={contacts.refreshError?.message ?? null}
       error={contacts.error}
+      loadMoreError={contacts.loadMoreError?.message ?? null}
       hasNextPage={contacts.hasNextPage}
       onSelectContact={handleSelectContact}
       onFiltersChange={handleFiltersChange}
@@ -1084,7 +1085,8 @@ const MyahInboxPageContent = ({
       {pendingDestination ? (
         <StyledSelectionStatus role="status" aria-live="polite">
           Message sent. Waiting for its exact Instagram conversation. Refresh or
-          load more contacts, or adjust Inbox filters if it is not visible.
+          scroll to load more contacts, or adjust Inbox filters if it is not
+          visible.
           <Button
             title="Refresh Inbox"
             variant="secondary"
@@ -1127,7 +1129,7 @@ const MyahInboxPageContent = ({
           <StyledSelectionStatus role="status" aria-live="polite">
             {selectedContact
               ? `Selected: ${selectedContact.displayName}`
-              : `${contacts.contacts.length} contacts`}
+              : `${contacts.totalCount.toLocaleString()} contacts`}
           </StyledSelectionStatus>
           <StyledMobilePanel
             ref={mobilePanelRef}
