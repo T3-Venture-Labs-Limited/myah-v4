@@ -180,7 +180,7 @@ const firstMessageInput = {
 describe('InstagramMessageDraftService', () => {
   it('denies a row-hidden reply profile under the actual ORM predicate and actor role', async () => {
     const harness = buildHarness((sql) => {
-      if (sql.includes('"_myahSocialConversation"'))
+      if (sql.includes('"myahSocialConversation"'))
         return [
           {
             id: conversationId,
@@ -248,7 +248,7 @@ describe('InstagramMessageDraftService', () => {
     'refuses a REPLY draft targeting an unreadable %s despite a readable conversation',
     async (denied) => {
       const harness = buildHarness((sql) => {
-        if (sql.includes('"_myahSocialConversation"'))
+        if (sql.includes('"myahSocialConversation"'))
           return [
             {
               id: conversationId,
@@ -313,7 +313,7 @@ describe('InstagramMessageDraftService', () => {
 
   it('retains an exact reply recipient with two canonical profiles', async () => {
     const harness = buildHarness((sql) => {
-      if (sql.includes('"_myahSocialConversation"'))
+      if (sql.includes('"myahSocialConversation"'))
         return [
           {
             id: conversationId,

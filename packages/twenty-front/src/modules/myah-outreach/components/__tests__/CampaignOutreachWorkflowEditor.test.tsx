@@ -134,6 +134,10 @@ describe('CampaignOutreachWorkflowEditor', () => {
     expect(screen.getByText('Campaign Outreach')).toBeVisible();
     expect(screen.getByText('Sequence editor editable')).toBeVisible();
     expect(screen.getByText('Message editor editable')).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Ordered steps' })).toBeVisible();
+    expect(
+      screen.getByRole('region', { name: 'Message composer' }),
+    ).toBeVisible();
     expect(
       screen.queryByText(/native editable workflow canvas/i),
     ).not.toBeInTheDocument();

@@ -223,6 +223,28 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
         },
       },
     },
+    influencers: {
+      universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+      title: 'Influencers',
+      position: 20,
+      icon: 'IconUsers',
+      layoutMode: PageLayoutTabLayoutMode.CANVAS,
+      widgets: {
+        influencers: {
+          universalIdentifier: '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2',
+          title: 'Influencers',
+          type: WidgetType.FIELD,
+          fieldUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators
+              .universalIdentifier,
+          viewUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+              .universalIdentifier,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+        },
+      },
+    },
     outreach: {
       universalIdentifier: '8d749a63-24d8-481b-9a10-d98d9b959db1',
       title: 'Outreach',
@@ -313,35 +335,34 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
 
 export const MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG = {
   ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
+  defaultTabUniversalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
   tabs: {
-    home: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
-    outreach: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.outreach,
-    tasks: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.tasks,
-    influencers: {
-      universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
-      title: 'Influencers',
-      position: 35,
-      icon: 'IconUsers',
-      layoutMode: PageLayoutTabLayoutMode.CANVAS,
-      widgets: {
-        influencers: {
-          universalIdentifier: '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2',
-          title: 'Influencers',
-          type: WidgetType.FIELD,
-          fieldUniversalIdentifier:
-            MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators
-              .universalIdentifier,
-          viewUniversalIdentifier:
-            MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
-              .universalIdentifier,
-          gridPosition: GRID_POSITIONS.FULL_WIDTH,
-          position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
-        },
-      },
+    home: {
+      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
+      title: 'Campaign',
     },
-    notes: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.notes,
-    instructions: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.instructions,
-    operations: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.operations,
+    influencers: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.influencers,
+    outreach: {
+      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.outreach,
+      position: 30,
+    },
+    instructions: {
+      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.instructions,
+      position: 40,
+    },
+    operations: {
+      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.operations,
+      title: 'Settings',
+      position: 50,
+    },
+    tasks: {
+      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.tasks,
+      position: 60,
+    },
+    notes: {
+      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.notes,
+      position: 70,
+    },
   },
 } as const satisfies StandardPageLayoutConfig;
 

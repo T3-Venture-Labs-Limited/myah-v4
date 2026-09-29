@@ -421,6 +421,7 @@ const MyahInboxStorySurface = ({
       refreshStatus="idle"
       refreshError={null}
       error={error ? { message: error } : undefined}
+      loadMoreError={null}
       hasNextPage={false}
       onSelectContact={(contactId, options) => {
         const nextContact = contacts.find(({ id }) => id === contactId);

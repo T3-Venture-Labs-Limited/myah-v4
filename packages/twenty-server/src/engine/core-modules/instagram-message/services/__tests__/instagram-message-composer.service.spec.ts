@@ -245,6 +245,7 @@ const metadataDataSource = (responses: unknown[][]) => {
 // This fixture asserts protocol/visibility, not PostgreSQL lock semantics.
 const buildTransactionHarness = (
   route: 'START_CHAT' | 'REPLY' = 'START_CHAT',
+  verifiedManualHuman = false,
 ) => {
   const events: string[] = [];
   const runner = transactionRunner(events);
@@ -503,7 +504,11 @@ const buildTransactionHarness = (
     getGlobalWorkspaceDataSource: jest.fn(async () => dataSource),
     getRepository: jest.fn(async (workspace, name, role) => {
       expect(workspace).toBe(workspaceId);
-      expect(role).toBe(authenticatedContext.rolePermissionConfig);
+      if (verifiedManualHuman && ['creator', 'socialProfile'].includes(name)) {
+        expect(role).toEqual({ shouldBypassPermissionChecks: true });
+      } else {
+        expect(role).toBe(authenticatedContext.rolePermissionConfig);
+      }
       if (name === 'creator') return creatorRepository;
       if (name === 'socialProfile') return socialProfileRepository;
       if (name === 'myahSocialConversation') return conversationRepository;
@@ -515,7 +520,10 @@ const buildTransactionHarness = (
   const service = new InstagramMessageComposerService(
     orm as never,
     recipient as never,
-    { assertCanSend: jest.fn() } as never,
+    {
+      assertCanSend: jest.fn(),
+      isVerifiedManualHuman: jest.fn(() => verifiedManualHuman),
+    } as never,
     locks as never,
     approvals as never,
     send as never,
@@ -751,6 +759,21 @@ describe('InstagramMessageComposerService', () => {
       }),
     ]);
   });
+
+  it.each([true, false])(
+    'bypasses identity creation checks only for verified manual-human access (%s)',
+    async (verifiedManualHuman) => {
+      const h = buildTransactionHarness('START_CHAT', verifiedManualHuman);
+      await expect(
+        h.service.send(input, {
+          ...authenticatedContext,
+          manualHumanAccess: { userWorkspaceId, workspaceMemberId },
+        }),
+      ).rejects.toThrow('fresh v3 unavailable');
+      expect(h.creatorRepository.insert).toHaveBeenCalledTimes(1);
+      expect(h.socialProfileRepository.insert).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('resumes a committed draft after an approval crash only when current identity still matches its snapshot', async () => {
     const events: string[] = [];
@@ -2114,12 +2137,12 @@ describe('InstagramMessageComposerService write transaction boundary', () => {
         );
         expect(h.state.linkCommitted).toBe(true);
         expect(h.eventSnapshots).toHaveBeenCalledTimes(2);
+        // The repository double does not emit conversation ORM events.
         expect(
-          h.listener.mock.calls.filter(([name]) => name).map(([name]) => name),
-        ).toEqual([
-          'myahSocialConversation.updated',
-          'myahSocialConversation.upserted',
-        ]);
+          h.listener.mock.calls.filter(([name]) =>
+            String(name).startsWith('myahSocialConversation.'),
+          ),
+        ).toEqual([]);
       }
     },
   );

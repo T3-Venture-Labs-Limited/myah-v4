@@ -1,4 +1,4 @@
-import { gql } from '@apollo/client';
+import { CombinedGraphQLErrors, gql } from '@apollo/client';
 import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import { Button } from 'twenty-ui/input';
 
@@ -125,14 +125,23 @@ export const MyahCampaignActivity = ({
   >(EXCLUDE_CAMPAIGN_CREATOR, { client: metadataClient });
   const rows = activity.data?.campaignActivity.nodes ?? [];
   const pageInfo = activity.data?.campaignActivity.pageInfo;
+  const isDenied =
+    CombinedGraphQLErrors.is(activity.error) &&
+    activity.error.errors.some(
+      ({ extensions }) =>
+        extensions?.code === 'FORBIDDEN' ||
+        extensions?.code === 'UNAUTHENTICATED',
+    );
 
-  if (activity.loading && rows.length === 0) return <p>Loading activity…</p>;
-  if (activity.error && rows.length === 0)
+  if (isDenied)
     return (
       <p role="alert">
-        Campaign activity is unavailable or you no longer have permission.
+        You do not have permission to view Campaign creator activity.
       </p>
     );
+  if (activity.loading && rows.length === 0) return <p>Loading activity…</p>;
+  if (activity.error && rows.length === 0)
+    return <p role="alert">Campaign creator activity could not be loaded.</p>;
 
   return (
     <section aria-label="Campaign creator activity">
@@ -142,7 +151,12 @@ export const MyahCampaignActivity = ({
           Some Campaign activity is unavailable. Visible facts remain shown.
         </p>
       ) : null}
-      {rows.length === 0 ? <p>No Creators in this Campaign.</p> : null}
+      {rows.length === 0 ? (
+        <p>
+          No readable Creator activity on this page. Creators you cannot access
+          may not appear here; review Campaign memberships in Influencers.
+        </p>
+      ) : null}
       {rows.map((row) => (
         <article key={row.campaignCreatorId}>
           <strong>{row.creatorName ?? 'Creator unavailable'}</strong>

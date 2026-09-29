@@ -67,7 +67,9 @@ describe('useActivities', () => {
     );
 
     await act(async () => {
-      expect(await result.current.fetchMoreActivities()).toBeUndefined();
+      await expect(result.current.fetchMoreActivities()).rejects.toThrow(
+        'page failed',
+      );
       expect(await result.current.fetchMoreActivities()).toEqual([]);
     });
     expect(fetchMoreActivityTargets).toHaveBeenCalledTimes(2);

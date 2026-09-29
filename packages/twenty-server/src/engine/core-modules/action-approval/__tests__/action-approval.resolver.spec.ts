@@ -300,11 +300,14 @@ const draftRecord = {
   conversationId: 'conversation-id',
   sentAt: null,
 };
-const creatorRecord = {
-  id: 'creator-id',
-  instagramUsername: '@creator',
-  instagramUrl: null,
-  instagramLink: { primaryLinkUrl: null },
+const creatorRecord = { id: 'creator-id' };
+const socialProfileRecord = {
+  id: 'profile-id',
+  creatorId: creatorRecord.id,
+  platform: 'INSTAGRAM',
+  handle: '@creator',
+  profileUrl: null,
+  platformAccountId: null,
 };
 const conversationRecord = {
   id: 'conversation-id',
@@ -415,6 +418,7 @@ const createPreviewHarness = (
     draft?: Record<string, unknown>;
     conversation?: Record<string, unknown>;
     creator?: Record<string, unknown>;
+    socialProfile?: Record<string, unknown>;
     accountBinding?: Record<string, unknown>;
   } = {},
 ) => {
@@ -422,6 +426,7 @@ const createPreviewHarness = (
     myahInstagramReplyDraft: { ...draftRecord, ...input.draft },
     myahSocialConversation: { ...conversationRecord, ...input.conversation },
     creator: { ...creatorRecord, ...input.creator },
+    socialProfile: { ...socialProfileRecord, ...input.socialProfile },
     myahInstagramAccount: { ...accountRecord },
   };
   const expected = buildLegacyInstagramMessageActionAuthority({
@@ -439,7 +444,8 @@ const createPreviewHarness = (
       recipientUsername: draftRecord.recipientUsername,
       recipientProviderId: draftRecord.recipientProviderId,
       recipientSourceValues: [
-        { field: 'instagramUsername', value: '@creator' },
+        { field: 'socialProfile.id', value: socialProfileRecord.id },
+        { field: 'socialProfile.handle', value: socialProfileRecord.handle },
       ],
       conversationRecordId: draftRecord.conversationId,
       providerConversationId: conversationRecord.providerConversationId,
@@ -480,6 +486,24 @@ const createPreviewHarness = (
             : Object.fromEntries(
                 Object.keys(select).map((key) => [key, record[key]]),
               );
+        }),
+        find: jest.fn(async ({ select, where }) => {
+          validateSelection(
+            name,
+            record,
+            select,
+            input.deniedObject === name ? input.deniedField : 'unrelated',
+            input.deniedObject === name && !input.deniedField,
+          );
+          return name === 'socialProfile' &&
+            input.hiddenObject !== name &&
+            record.creatorId === where.creatorId
+            ? [
+                Object.fromEntries(
+                  Object.keys(select).map((key) => [key, record[key]]),
+                ),
+              ]
+            : [];
         }),
       },
     ]),
@@ -556,6 +580,7 @@ describe('ActionApprovalResolver Instagram preview authorization and identity', 
     'myahSocialConversation',
     'myahInstagramAccount',
     'creator',
+    'socialProfile',
   ])(
     'denies revoked %s object permission while the viewer still owns the binding',
     async (deniedObject) => {
@@ -573,7 +598,7 @@ describe('ActionApprovalResolver Instagram preview authorization and identity', 
     ['myahSocialConversation', 'providerConversationId'],
     ['myahInstagramAccount', 'label'],
     ['myahInstagramAccount', 'name'],
-    ['creator', 'instagramUsername'],
+    ['socialProfile', 'handle'],
   ])(
     'denies restricted %s.%s without exposing body or labels',
     async (deniedObject, deniedField) => {
@@ -587,6 +612,7 @@ describe('ActionApprovalResolver Instagram preview authorization and identity', 
     'myahSocialConversation',
     'myahInstagramAccount',
     'creator',
+    'socialProfile',
   ])('denies a deleted/record-hidden %s', async (hiddenObject) => {
     await expect(
       preview(createPreviewHarness({ hiddenObject })),
@@ -602,8 +628,8 @@ describe('ActionApprovalResolver Instagram preview authorization and identity', 
     { draft: { creatorId: 'other-creator' } },
     { conversation: { providerConversationId: 'other-chat' } },
     { conversation: { instagramAccountId: 'other-account' } },
-    { creator: { instagramUsername: '@other' } },
-    { creator: { instagramUsername: '@Creator' } },
+    { socialProfile: { handle: '@other' } },
+    { socialProfile: { handle: '@Creator' } },
     {
       draft: { conversationId: 'other-conversation' },
       conversation: { id: 'other-conversation' },
@@ -668,7 +694,7 @@ describe('ActionApprovalResolver local reader wiring and compatibility', () => {
     await module.close();
   });
 
-  it('keeps unchanged v2 history readable without send flags and uses exact field selections', async () => {
+  it('keeps canonical-profile v2 history readable without send flags and uses exact field selections', async () => {
     const harness = createPreviewHarness();
     harness.storedBinding.state = 'CONSUMED';
     await expect(preview(harness)).resolves.toMatchObject({

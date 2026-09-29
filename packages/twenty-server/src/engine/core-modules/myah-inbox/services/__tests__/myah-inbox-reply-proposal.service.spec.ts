@@ -16,7 +16,6 @@ import { MyahInboxResolver } from 'src/engine/core-modules/myah-inbox/resolvers/
 
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
-import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 
 jest.mock(
@@ -338,14 +337,6 @@ const createService = (
       },
     }),
   };
-  const brandBrainPreflightService = {
-    run: jest.fn().mockResolvedValue({
-      required: true,
-      called: true,
-      contextPart:
-        '<brand_brain_context>Use a warm, concise voice.</brand_brain_context>',
-    }),
-  };
   const aiModelRegistryService = {
     getDefaultSpeedModel: jest.fn().mockReturnValue({
       modelId: 'fake/reply-model',
@@ -383,7 +374,6 @@ const createService = (
   const service = new MyahInboxReplyProposalService(
     replyBriefingService,
     actorContextService as never,
-    brandBrainPreflightService as never,
     aiModelRegistryService as never,
     billingUsageService as never,
     aiBillingService as never,
@@ -400,7 +390,6 @@ const createService = (
     replyBriefingService,
     loadReplyBriefing,
     actorContextService,
-    brandBrainPreflightService,
     aiModelRegistryService,
     billingUsageService,
     aiBillingService,
@@ -482,18 +471,6 @@ describe('MyahInboxReplyProposalService', () => {
       workspaceMemberId,
       threadId,
     });
-    expect(setup.brandBrainPreflightService.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        lastUserMessageText: expect.stringContaining('Ada Creator'),
-        toolContext: expect.objectContaining({
-          workspaceId,
-          roleId,
-          userId,
-          userWorkspaceId,
-          authContext: userAuthContext,
-        }),
-      }),
-    );
     expect(setup.fakeModel.doGenerate).toHaveBeenCalledTimes(1);
     const modelRequest = JSON.stringify(setup.fakeModel.doGenerate.mock.calls);
     const orderedPromptParts = [
@@ -503,7 +480,6 @@ describe('MyahInboxReplyProposalService', () => {
       'Reference data — Campaign guidance',
       'Reference data — Campaign relationship',
       'Reference data — Creator profile',
-      'Reference data — Brand Brain',
     ];
 
     for (const [index, promptPart] of orderedPromptParts.entries()) {
@@ -528,6 +504,7 @@ describe('MyahInboxReplyProposalService', () => {
     );
     expect(modelRequest).toContain('Reference data — Campaign relationship');
     expect(modelRequest).toContain('Reference data — Creator profile');
+    expect(modelRequest).not.toContain('Reference data — Brand Brain');
     expect(modelRequest).toContain('Language: English');
     expect(modelRequest).toContain('Location: London');
     expect(modelRequest).not.toContain('Categories:');
@@ -969,43 +946,20 @@ describe('MyahInboxReplyProposalService', () => {
     expect(setup.messageRepositoryInsert).not.toHaveBeenCalled();
   });
 
-  it('lets the real Brand Brain preflight extract the operator-provided permitted brand', async () => {
-    const proposal = {
+  it('generates with a named creator and campaign without persisting a reply', async () => {
+    const setup = createService({
       body: { markdown: 'Warm reply', blocknote: null },
-    };
-    const setup = createService(proposal);
-    const resolveAndExecute = jest.fn().mockResolvedValue({
-      success: true,
-      message: 'ok',
-      result: {
-        brandSlug: 'acme-beauty-labs',
-        pageCount: 1,
-        hasRoot: true,
-        hasIndex: true,
-        hasLog: true,
-        contextMarkdown: 'Use a warm voice.',
-      },
     });
-    const realPreflight = new BrandBrainPreflightService({
-      get: jest.fn().mockReturnValue({ resolveAndExecute }),
-    } as never);
+    await expect(
+      setup.service.generateReplyProposal({
+        ...request,
+        operatorInstructions:
+          'Write creator outreach for Acme Beauty Labs with a warm voice.',
+      }),
+    ).resolves.toEqual({ body: { markdown: 'Warm reply', blocknote: null } });
 
-    setup.brandBrainPreflightService.run.mockImplementation((input) =>
-      realPreflight.run(input as never),
-    );
-
-    await setup.service.generateReplyProposal({
-      ...request,
-      operatorInstructions:
-        'Write creator outreach for Acme Beauty Labs with a warm voice.',
-    });
-
-    expect(resolveAndExecute).toHaveBeenCalledWith(
-      'app_brand_brain_get_context',
-      expect.objectContaining({ brandNameOrSlug: 'Acme Beauty Labs' }),
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(setup.messageRepositoryInsert).not.toHaveBeenCalled();
+    expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
   });
 
   it('rejects malformed structured model output instead of returning or persisting it', async () => {

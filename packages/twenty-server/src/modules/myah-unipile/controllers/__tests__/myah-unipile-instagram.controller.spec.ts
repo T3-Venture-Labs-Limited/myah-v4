@@ -1,5 +1,6 @@
 import {
   HttpStatus,
+  Logger,
   RequestMethod,
   type ExecutionContext,
 } from '@nestjs/common';
@@ -191,7 +192,7 @@ describe('MyahUnipileInstagramController', () => {
     });
     expect(hostedAuthService.createConnectionAttempt).toHaveBeenCalledWith({
       userWorkspaceId,
-      workspaceId: workspace.id,
+      workspace,
     });
   });
 
@@ -220,7 +221,7 @@ describe('MyahUnipileInstagramController', () => {
     });
     expect(hostedAuthService.createReconnectAttempt).toHaveBeenCalledWith({
       userWorkspaceId,
-      workspaceId: workspace.id,
+      workspace,
     });
   });
 
@@ -454,10 +455,6 @@ describe('MyahUnipileInstagramPublicController', () => {
     ['missing body', undefined],
     ['empty object', {}],
     ['array body', []],
-    [
-      'unknown field',
-      { ...notification, untrusted: 'synthetic-private-value' },
-    ],
     ['unsupported status', { ...notification, status: 'SYNC_SUCCESS' }],
     ['oversized status', { ...notification, status: 'x'.repeat(513) }],
     ['short nonce', { ...notification, name: 'ab'.repeat(31) }],
@@ -509,6 +506,50 @@ describe('MyahUnipileInstagramPublicController', () => {
     },
   );
 
+  it('logs one bounded, value-free warning on malformed provider notification', async () => {
+    const secret = 'a'.repeat(64);
+    const accountId = 'sensitive-account-id';
+    const unknownKey = `private_${secret}`;
+    const warning = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+
+    try {
+      await withHttpApp(async ({ post, processNotification }) => {
+        const response = await post(
+          JSON.stringify({
+            account_id: accountId,
+            name: 42,
+            status: 'CREATION_SUCCESS',
+            [unknownKey]: secret,
+          }),
+        );
+
+        expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+        expect(await response.json()).toEqual({
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: 'Invalid Hosted Auth notification',
+          error: 'Bad Request',
+        });
+        expect(processNotification).not.toHaveBeenCalled();
+      });
+
+      expect(warning).toHaveBeenCalledTimes(1);
+      const message = String(warning.mock.calls[0][0]);
+
+      expect(message).toContain('UNIPILE_HOSTED_AUTH_NOTIFY_INVALID');
+      expect(message).toContain('invalid_type');
+      expect(message).toContain('body.name');
+      expect(message).toContain('account_id');
+      expect(message).toContain('number');
+      expect(message).toContain('4');
+      expect(message.length).toBeLessThan(1024);
+      for (const sensitive of [secret, accountId, unknownKey]) {
+        expect(message).not.toContain(sensitive);
+      }
+    } finally {
+      warning.mockRestore();
+    }
+  });
+
   it.each([
     ['non-UUID', 'not-a-uuid'],
     ['compact UUID', attemptId.replace(/-/g, '')],
@@ -525,6 +566,26 @@ describe('MyahUnipileInstagramPublicController', () => {
         error: 'Bad Request',
       });
       expect(processNotification).not.toHaveBeenCalled();
+    });
+  });
+
+  it('accepts additive notification fields but forwards only validated fields', async () => {
+    await withHttpApp(async ({ post, processNotification }) => {
+      const response = await post(
+        JSON.stringify({
+          ...notification,
+          provider_metadata: { arbitrary: 'private-value' },
+        }),
+      );
+
+      expect(response.status).toBe(HttpStatus.OK);
+      expect(await response.json()).toEqual({ ok: true });
+      expect(processNotification).toHaveBeenCalledWith({
+        accountId: notification.account_id,
+        attemptId,
+        name: notification.name,
+        status: notification.status,
+      });
     });
   });
 

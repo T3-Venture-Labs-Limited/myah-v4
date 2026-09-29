@@ -92,6 +92,43 @@ export class UpgradeSequenceRunnerService {
       allActiveOrSuspendedWorkspaceIds,
     );
 
+    // A new same-version instance step may have been inserted before an
+    // installed workspace's cursor. Replay only explicitly opted-in repairs.
+    for (const step of sequence.slice(0, startCursor)) {
+      if (
+        step.kind !== 'fast-instance' ||
+        !step.catchUpOnResume ||
+        (await this.upgradeMigrationService.isLastAttemptCompleted({
+          name: step.name,
+          workspaceId: null,
+        }))
+      ) {
+        continue;
+      }
+      if (
+        (isDefined(options.workspaceIds) && options.workspaceIds.length > 0) ||
+        isDefined(options.startFromWorkspaceId) ||
+        isDefined(options.workspaceCountLimit)
+      ) {
+        this.logger.log(
+          `Stopping before catch-up instance step "${step.name}": workspace filter is active`,
+        );
+        return { totalSuccesses, totalFailures };
+      }
+      if (options.dryRun) {
+        this.logger.log(
+          `(dry run) Would catch up instance step "${step.name}"`,
+        );
+        continue;
+      }
+      await this.runInstanceStep({
+        instanceStep: step,
+        skipDataMigration: false,
+        preserveWorkspaceCursors: true,
+      });
+      await this.upgradeAwareEntityMetadataAdapter.refresh();
+    }
+
     while (cursor < sequence.length) {
       const step = sequence[cursor];
 
@@ -149,6 +186,20 @@ export class UpgradeSequenceRunnerService {
               step.kind === 'slow-instance' &&
               allActiveOrSuspendedWorkspaceIds.length === 0 &&
               !step.command.runDataMigrationWithoutWorkspaces,
+            // A failed late repair is retried at its normal sequence position;
+            // don't replace already-advanced workspace cursors on that retry.
+            preserveWorkspaceCursors:
+              step.kind === 'fast-instance' &&
+              step.catchUpOnResume &&
+              [...workspaceCursors.values()].some(
+                ({ name }) =>
+                  this.upgradeSequenceReaderService.locateStepInSequenceOrThrow(
+                    {
+                      sequence,
+                      stepName: name,
+                    },
+                  ) > cursor,
+              ),
           });
 
           await this.upgradeAwareEntityMetadataAdapter.refresh();
@@ -321,9 +372,11 @@ export class UpgradeSequenceRunnerService {
   private async runInstanceStep({
     instanceStep,
     skipDataMigration,
+    preserveWorkspaceCursors = false,
   }: {
     instanceStep: InstanceUpgradeStep;
     skipDataMigration: boolean;
+    preserveWorkspaceCursors?: boolean;
   }): Promise<void> {
     switch (instanceStep.kind) {
       case 'fast-instance': {
@@ -331,6 +384,7 @@ export class UpgradeSequenceRunnerService {
           await this.instanceCommandRunnerService.runFastInstanceCommand({
             command: instanceStep.command,
             name: instanceStep.name,
+            ...(preserveWorkspaceCursors && { preserveWorkspaceCursors }),
           });
 
         if (result.status === 'failed') {

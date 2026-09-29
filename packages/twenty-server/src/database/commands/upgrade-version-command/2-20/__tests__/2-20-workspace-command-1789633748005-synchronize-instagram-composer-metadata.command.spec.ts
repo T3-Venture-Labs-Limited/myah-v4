@@ -180,7 +180,7 @@ describe('SynchronizeInstagramComposerMetadataCommand', () => {
       label: 'Compose Email',
       icon: 'IconMail',
       isPinned: false,
-      position: 46,
+      position: 40.1,
       shortLabel: 'Compose',
       availabilityType: CommandMenuItemAvailabilityType.GLOBAL,
       conditionalAvailabilityExpression: 'permissionFlags.SEND_EMAIL_TOOL',
@@ -195,7 +195,7 @@ describe('SynchronizeInstagramComposerMetadataCommand', () => {
       [false, true].map((isInSidePanel) => ({ pageType, isInSidePanel })),
     ),
   )(
-    'is visible with either route permission in every menu context: %j',
+    'is visible to human members regardless of route grants in every menu context: %j',
     ({ pageType, isInSidePanel }) => {
       for (const [first, reply] of [
         [false, false],
@@ -242,7 +242,7 @@ describe('SynchronizeInstagramComposerMetadataCommand', () => {
               .conditionalAvailabilityExpression,
             context,
           ),
-        ).toBe(first || reply);
+        ).toBe(true);
       }
     },
   );

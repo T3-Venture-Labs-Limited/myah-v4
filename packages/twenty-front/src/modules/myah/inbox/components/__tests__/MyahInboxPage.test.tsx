@@ -12,7 +12,9 @@ import {
   within,
 } from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter, useLocation } from 'react-router-dom';
+import { AppPath } from 'twenty-shared/types';
+import { getAppPath } from 'twenty-shared/utils';
 
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
@@ -311,13 +313,33 @@ jest.mock('@/myah/inbox/components/MyahInboxContactLinkAction', () => ({
 }));
 
 jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
-  PageCardLayout: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+  PageCardLayout: ({
+    children,
+    header,
+  }: {
+    children: React.ReactNode;
+    header?: React.ReactNode;
+  }) => (
+    <div>
+      {header}
+      {children}
+    </div>
   ),
 }));
 
 jest.mock('@/ui/layout/page/components/PageCardHeader', () => ({
-  PageCardHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+  PageCardHeader: ({
+    title,
+    actionButton,
+  }: {
+    title: string;
+    actionButton?: React.ReactNode;
+  }) => (
+    <header>
+      <h1>{title}</h1>
+      {actionButton}
+    </header>
+  ),
 }));
 
 jest.mock('@/side-panel/components/SidePanelToggleButton', () => ({
@@ -449,7 +471,9 @@ const setDefaultHooks = () => {
     loading: false,
     loadingMore: false,
     error: undefined,
+    loadMoreError: undefined,
     hasNextPage: false,
+    totalCount: contacts.length,
     loadMore: loadMoreContacts,
     refresh: refreshContacts,
     ambientRefresh: ambientRefreshContacts,
@@ -541,7 +565,23 @@ const setDefaultHooks = () => {
   );
 };
 
-const renderPage = (store = createStore()) => {
+const LocationProbe = () => {
+  const location = useLocation();
+  return (
+    <>
+      <span data-testid="inbox-location">
+        {location.pathname}
+        {location.search}
+        {location.hash}
+      </span>
+      <Link to="/elsewhere">Leave Inbox</Link>
+    </>
+  );
+};
+const renderPage = (
+  store = createStore(),
+  entry: string | { pathname: string; state: unknown } = '/myah/inbox',
+) => {
   store.set(currentWorkspaceState.atom, { id: 'workspace-1' } as never);
 
   return {
@@ -549,11 +589,12 @@ const renderPage = (store = createStore()) => {
     ...render(
       <JotaiProvider store={store}>
         <MyahInboxPage />
+        <LocationProbe />
       </JotaiProvider>,
       {
         wrapper: ({ children }) => (
           <MemoryRouter
-            initialEntries={['/myah/inbox']}
+            initialEntries={[entry]}
             future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
           >
             {children}
@@ -800,6 +841,98 @@ describe('MyahInboxPage contact-first flow', () => {
       status: 'success',
       selectedContact: contacts[0],
     });
+  });
+
+  it('returns to the exact campaign creator route only after affected drafts flush', async () => {
+    const pathname = getAppPath(AppPath.RecordShowPage, {
+      objectNameSingular: 'campaign',
+      objectRecordId: 'campaign-a',
+    });
+    const target = {
+      workspaceId: 'workspace-1',
+      campaignId: 'campaign-a',
+      membershipId: 'membership-a',
+      influencerTabId: 'tab-a',
+      pathname,
+      search: '?view=list',
+    };
+    flushWorkspace.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    renderPage(createStore(), {
+      pathname: '/myah/inbox',
+      state: { campaignCreatorInboxReturnTarget: target },
+    });
+    const button = screen.getByRole('button', {
+      name: 'Return to Campaign creator',
+    });
+    await act(async () => fireEvent.click(button));
+    expect(screen.getByTestId('inbox-location')).toHaveTextContent(
+      '/myah/inbox',
+    );
+    expect(screen.getByText(/Resolve pending draft changes/)).toBeVisible();
+    await act(async () => fireEvent.click(button));
+    expect(screen.getByTestId('inbox-location')).toHaveTextContent(
+      `${pathname}?view=list#tab-a`,
+    );
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+  });
+
+  it('retains the MYAH-402 messages return and its draft-flush barrier', async () => {
+    const target = {
+      workspaceId: 'workspace-1',
+      occurrenceId: 'occurrence-a',
+      pathname: '/myah/messages' as const,
+      search: '?status=sent',
+    };
+    flushWorkspace.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    renderPage(createStore(), {
+      pathname: '/myah/inbox',
+      state: { campaignMessageOverviewReturnTarget: target },
+    });
+    const button = screen.getByRole('button', {
+      name: 'Return to Campaign messages',
+    });
+    await act(async () => fireEvent.click(button));
+    expect(screen.getByTestId('inbox-location')).toHaveTextContent(
+      '/myah/inbox',
+    );
+    await act(async () => fireEvent.click(button));
+    expect(screen.getByTestId('inbox-location')).toHaveTextContent(
+      '/myah/messages?status=sent',
+    );
+  });
+
+  it('does not return to Campaign after an in-flight draft flush outlives Inbox navigation', async () => {
+    const pathname = getAppPath(AppPath.RecordShowPage, {
+      objectNameSingular: 'campaign',
+      objectRecordId: 'campaign-a',
+    });
+    let completeFlush!: (saved: boolean) => void;
+    flushWorkspace.mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        completeFlush = resolve;
+      }),
+    );
+    renderPage(createStore(), {
+      pathname: '/myah/inbox',
+      state: {
+        campaignCreatorInboxReturnTarget: {
+          workspaceId: 'workspace-1',
+          campaignId: 'campaign-a',
+          membershipId: 'membership-a',
+          influencerTabId: 'tab-a',
+          pathname,
+          search: '',
+        },
+      },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Return to Campaign creator' }),
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Leave Inbox' }));
+    await act(async () => completeFlush(true));
+    expect(screen.getByTestId('inbox-location')).toHaveTextContent(
+      '/elsewhere',
+    );
   });
 
   it('checks for changes every 30 seconds while visible and re-authorizes history only on change or every 5 minutes', async () => {
@@ -1443,6 +1576,31 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(
       screen.getByRole('option', { name: 'Select contact-1' }),
     ).toHaveFocus();
+  });
+
+  it('shows the true total contact count on mobile and keeps it unchanged as more batches load', async () => {
+    isMobile = true;
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [],
+      totalCount: 1234,
+    });
+    const view = renderPage();
+
+    await screen.findByText('1,234 contacts');
+
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [contacts[0]],
+      totalCount: 1234,
+    });
+    view.rerender(
+      <JotaiProvider store={view.store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+
+    expect(screen.getByText('1,234 contacts')).toBeVisible();
   });
 
   it('opens the current mobile conversation when recommendation reapply is draft-blocked', async () => {

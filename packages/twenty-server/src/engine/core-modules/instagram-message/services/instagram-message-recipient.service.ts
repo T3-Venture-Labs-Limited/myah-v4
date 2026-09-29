@@ -109,6 +109,7 @@ export class InstagramMessageRecipientService {
       recipient,
       workspaceId: authenticatedContext.workspaceId,
       rolePermissionConfig: authenticatedContext.rolePermissionConfig,
+      manualHumanAccess: authenticatedContext.manualHumanAccess,
     });
 
     return creator?.normalizedHandle ?? recipient.normalizedHandle;
@@ -147,6 +148,7 @@ export class InstagramMessageRecipientService {
       !(await this.permissionService.canQueryComposerAccount({
         workspaceId: authenticatedContext.workspaceId,
         rolePermissionConfig: authenticatedContext.rolePermissionConfig,
+        manualHumanAccess: authenticatedContext.manualHumanAccess,
       }))
     ) {
       throw new ComposerResolutionError('MISSING_ROUTE_PERMISSION');
@@ -162,6 +164,7 @@ export class InstagramMessageRecipientService {
       recipient,
       workspaceId: authenticatedContext.workspaceId,
       rolePermissionConfig: authenticatedContext.rolePermissionConfig,
+      manualHumanAccess: authenticatedContext.manualHumanAccess,
     });
     const profile = await this.resolveProfile(
       account.unipileAccountId,
@@ -193,6 +196,7 @@ export class InstagramMessageRecipientService {
       actionKind,
       rolePermissionConfig: authenticatedContext.rolePermissionConfig,
       workspaceId: authenticatedContext.workspaceId,
+      manualHumanAccess: authenticatedContext.manualHumanAccess,
     });
     if (!hasPermission) {
       throw new ComposerResolutionError('MISSING_ROUTE_PERMISSION');
@@ -275,6 +279,7 @@ export class InstagramMessageRecipientService {
       recipient,
       workspaceId: context.workspaceId,
       rolePermissionConfig: context.rolePermissionConfig,
+      manualHumanAccess: context.manualHumanAccess,
       manager,
       beforeQuery,
     });
@@ -327,6 +332,7 @@ export class InstagramMessageRecipientService {
     beforeQuery?: () => Promise<void>;
     workspaceId: string;
     rolePermissionConfig: InstagramComposerAuthenticatedContext['rolePermissionConfig'];
+    manualHumanAccess?: InstagramComposerAuthenticatedContext['manualHumanAccess'];
   }): Promise<
     | (CreatorIdentity & {
         normalizedHandle: string;
@@ -361,7 +367,10 @@ export class InstagramMessageRecipientService {
     if (input.recipient.creatorRecordId) {
       throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
     }
-    if (!(await this.canCreateCreator(readableCreators))) {
+    if (
+      !this.permissionService.isVerifiedManualHuman(input) &&
+      !(await this.canCreateCreator(readableCreators))
+    ) {
       throw new ComposerResolutionError('RECIPIENT_UNAVAILABLE');
     }
     // The raw handle is only a preparation input. The transaction creates a

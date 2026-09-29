@@ -154,6 +154,17 @@ describe('useNotes', () => {
     expect(result.current.error).toBeUndefined();
   });
 
+  it('forwards the note-target read permission state', () => {
+    mockUseActivities.mockReturnValue({
+      ...defaultActivityResult,
+      hasReadPermission: false,
+    });
+
+    const { result } = renderHook(() => useNotes(targetableObject));
+
+    expect(result.current.hasReadPermission).toBe(false);
+  });
+
   it('returns the query error', () => {
     const error = new Error('Unable to load notes');
 

@@ -1,7 +1,7 @@
 import { SettingsPath } from '../SettingsPath';
 
 describe('SettingsPath', () => {
-  it('defines a nested Shopify settings route under Accounts', () => {
-    expect(SettingsPath.AccountsShopify).toBe('accounts/shopify');
+  it('does not expose a Shopify settings destination', () => {
+    expect(Object.values(SettingsPath)).not.toContain('accounts/shopify');
   });
 });

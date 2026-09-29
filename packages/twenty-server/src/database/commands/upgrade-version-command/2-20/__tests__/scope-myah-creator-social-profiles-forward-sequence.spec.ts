@@ -106,13 +106,12 @@ describe('MYAH-409 2.20 forward scope upgrade', () => {
     const previousIndex = sequence.findIndex((step) => step.name === PREVIOUS);
     expect(previousIndex).toBeGreaterThan(-1);
     expect(sequence.filter((step) => step.name === FORWARD)).toHaveLength(1);
-    expect(sequence[sequence.length - 1]).toMatchObject({
+    expect(sequence[previousIndex + 1]).toMatchObject({
       name: FORWARD,
       kind: 'workspace',
       version: '2.20.0',
       timestamp: 1789645911012,
     });
-    expect(sequence[previousIndex + 1]?.name).toBe(FORWARD);
   });
 
   it.each([
@@ -124,7 +123,10 @@ describe('MYAH-409 2.20 forward scope upgrade', () => {
     async ({ cursor, status, expected }) => {
       const reader = buildReader();
       const sequence = reader.getUpgradeSequence();
-      const forwardStep = sequence.find((step) => step.name === FORWARD);
+      const forwardIndex = sequence.findIndex((step) => step.name === FORWARD);
+      expect(forwardIndex).toBeGreaterThan(-1);
+      const segmentThroughForward = sequence.slice(0, forwardIndex + 1);
+      const forwardStep = segmentThroughForward[forwardIndex];
       expect(forwardStep?.kind).toBe('workspace');
       const execute = jest.fn().mockResolvedValue(undefined);
       // The production command body would mutate metadata; intercept only that external effect.
@@ -182,7 +184,9 @@ describe('MYAH-409 2.20 forward scope upgrade', () => {
             .mockResolvedValue([WORKSPACE_ID]),
         } as unknown as WorkspaceVersionService,
       );
-      await expect(runner.run({ sequence, options: {} })).resolves.toEqual({
+      await expect(
+        runner.run({ sequence: segmentThroughForward, options: {} }),
+      ).resolves.toEqual({
         // The iterator reports the workspace as visited even with no pending command.
         totalSuccesses: 1,
         totalFailures: 0,

@@ -13,6 +13,7 @@ import {
 import { SpreadsheetColumnType } from '@/spreadsheet-import/types/SpreadsheetColumnType';
 import { type SpreadsheetImportField } from '@/spreadsheet-import/types/SpreadsheetImportField';
 import { FieldMetadataType } from 'twenty-shared/types';
+import { isServerEmail } from 'twenty-shared/utils';
 import { type SpreadsheetImportFields } from '@/spreadsheet-import/types/SpreadsheetImportFields';
 import { type SpreadsheetImportHeaderAlias } from '@/spreadsheet-import/types/SpreadsheetImportHeaderProfile';
 import { type ImportedStructuredRow } from '@/spreadsheet-import/types/SpreadsheetImportImportedStructuredRow';
@@ -520,10 +521,7 @@ export const buildCreatorSpreadsheetImportSession = ({
           continue;
         }
 
-        if (
-          destinationKey === 'email' &&
-          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value)
-        ) {
+        if (destinationKey === 'email' && !isServerEmail(value)) {
           addError(rowIndex, fieldKey, {
             level: 'error',
             message: 'Enter a valid email address',

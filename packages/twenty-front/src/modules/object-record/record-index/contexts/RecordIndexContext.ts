@@ -20,6 +20,7 @@ export type RecordIndexEmbeddedSurfaceOptions = {
   hideAddNew?: boolean;
   toolbarAction?: ReactNode;
   compactTable?: boolean;
+  showInitialReadError?: boolean;
   hideQueryOnlyRecordFilters?: boolean;
   hideViewPicker?: boolean;
   hideCurrentRecordFilter?: Pick<
@@ -31,6 +32,7 @@ export type RecordIndexEmbeddedSurfaceOptions = {
 export type RecordIndexContextValue = {
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+  openFirstColumnRelationInIndex?: boolean;
   shouldPreserveParentViewStateOnOpen?: boolean;
   shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
   embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;

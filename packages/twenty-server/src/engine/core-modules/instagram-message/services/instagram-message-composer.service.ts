@@ -299,6 +299,7 @@ export class InstagramMessageComposerService {
                 workspaceId: authenticatedContext.workspaceId,
                 actionKind: existing.actionKind,
                 rolePermissionConfig: authenticatedContext.rolePermissionConfig,
+                manualHumanAccess: authenticatedContext.manualHumanAccess,
               });
               return this.sendService.executeApprovedWithDraftLockHeld(
                 {
@@ -312,6 +313,7 @@ export class InstagramMessageComposerService {
                   interactionContextId: input.draftId,
                   rolePermissionConfig:
                     authenticatedContext.rolePermissionConfig,
+                  manualHumanAccess: authenticatedContext.manualHumanAccess,
                 },
                 binding,
               );
@@ -362,6 +364,7 @@ export class InstagramMessageComposerService {
               workspaceId: authenticatedContext.workspaceId,
               actionKind: graph.actionKind,
               rolePermissionConfig: authenticatedContext.rolePermissionConfig,
+              manualHumanAccess: authenticatedContext.manualHumanAccess,
             });
 
             const persisted = resumesCommittedAttempt
@@ -397,6 +400,7 @@ export class InstagramMessageComposerService {
                   INSTAGRAM_MESSAGE_V3_DIRECT_INTERACTION_CONTEXT,
                 interactionContextId: input.draftId,
                 rolePermissionConfig: authenticatedContext.rolePermissionConfig,
+                manualHumanAccess: authenticatedContext.manualHumanAccess,
               },
               authority.expectedActionBinding,
             );
@@ -859,11 +863,19 @@ export class InstagramMessageComposerService {
           );
           let creatorRecordId = input.graph.creatorRecordId;
           if (!creatorRecordId) {
+            const permissionForNewIdentity =
+              input.authenticatedContext.manualHumanAccess &&
+              this.permissionService.isVerifiedManualHuman({
+                workspaceId: input.authenticatedContext.workspaceId,
+                manualHumanAccess: input.authenticatedContext.manualHumanAccess,
+              })
+                ? ({ shouldBypassPermissionChecks: true } as const)
+                : input.authenticatedContext.rolePermissionConfig;
             const creatorRepository =
               await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
                 input.authenticatedContext.workspaceId,
                 'creator',
-                input.authenticatedContext.rolePermissionConfig,
+                permissionForNewIdentity,
               );
             await beforeQuery();
             const inserted = await creatorRepository.insert({}, manager, [
@@ -878,7 +890,7 @@ export class InstagramMessageComposerService {
               await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
                 input.authenticatedContext.workspaceId,
                 'socialProfile',
-                input.authenticatedContext.rolePermissionConfig,
+                permissionForNewIdentity,
               );
             await beforeQuery();
             const profile = await profileRepository.insert(

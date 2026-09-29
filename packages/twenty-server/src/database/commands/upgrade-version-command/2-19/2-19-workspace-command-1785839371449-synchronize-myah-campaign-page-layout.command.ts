@@ -15,7 +15,9 @@ const campaignPageLayoutTabs = Object.values(
 );
 const campaignPageLayoutWidgets = new Set(
   campaignPageLayoutTabs.flatMap(({ widgets }) =>
-    Object.values(widgets).map(({ universalIdentifier }) => universalIdentifier),
+    Object.values(widgets).map(
+      ({ universalIdentifier }) => universalIdentifier,
+    ),
   ),
 );
 const campaignViews = [
@@ -51,9 +53,10 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
       return;
     }
 
-    const { flatObjectMetadataMaps } =
+    const { flatObjectMetadataMaps, flatViewMaps } =
       await this.workspaceCacheService.getOrRecompute(args.workspaceId, [
         'flatObjectMetadataMaps',
+        'flatViewMaps',
       ]);
 
     if (
@@ -64,17 +67,35 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
       return;
     }
 
-    const campaignChildSelection = {
-      pageLayoutTab: new Set(
-        campaignPageLayoutTabs.map(({ universalIdentifier }) =>
-          universalIdentifier,
-        ),
-      ),
-      pageLayoutWidget: campaignPageLayoutWidgets,
+    const campaignViewSelection = {
       view: new Set(
         campaignViews.map(({ universalIdentifier }) => universalIdentifier),
       ),
       viewField: campaignViewFieldUniversalIdentifiers,
+    };
+
+    // The audience command runs later and installs its view and full layout.
+    if (
+      flatViewMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+          .universalIdentifier
+      ] === undefined
+    ) {
+      await this.synchronizeSourceControlledMyahMetadataService.synchronizeWorkspace(
+        args,
+        campaignViewSelection,
+      );
+      return;
+    }
+
+    const campaignChildSelection = {
+      pageLayoutTab: new Set(
+        campaignPageLayoutTabs.map(
+          ({ universalIdentifier }) => universalIdentifier,
+        ),
+      ),
+      pageLayoutWidget: campaignPageLayoutWidgets,
+      ...campaignViewSelection,
     };
 
     await this.synchronizeSourceControlledMyahMetadataService.synchronizeWorkspace(

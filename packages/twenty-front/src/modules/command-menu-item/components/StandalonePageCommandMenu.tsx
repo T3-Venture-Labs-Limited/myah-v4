@@ -6,6 +6,7 @@ import { CommandMenuContext } from '@/command-menu-item/contexts/CommandMenuCont
 import { PinnedCommandMenuItemButtons } from '@/command-menu-item/display/components/PinnedCommandMenuItemButtons';
 import { CommandMenuItemEditButton } from '@/command-menu-item/edit/components/CommandMenuItemEditButton';
 import { commandMenuItemsSelector } from '@/command-menu-item/states/commandMenuItemsSelector';
+import { isInternalInstagramNavigationCommandMenuItem } from '@/command-menu-item/utils/isInternalInstagramNavigationCommandMenuItem';
 import { doesCommandMenuItemMatchObjectMetadataId } from '@/command-menu-item/utils/doesCommandMenuItemMatchObjectMetadataId';
 import { doesCommandMenuItemMatchPageLayoutId } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageLayoutId';
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
@@ -103,7 +104,23 @@ export const StandalonePageCommandMenu = () => {
   ]);
 
   const filteredCommandMenuItems = useMemo(() => {
+    const internalInstagramObjectIds = new Set(
+      objectMetadataItems.flatMap(({ id, nameSingular }) =>
+        nameSingular === 'myahInstagramAccount' ||
+        nameSingular === 'myahInstagramReplyDraft'
+          ? [id]
+          : [],
+      ),
+    );
+
     return commandMenuItems
+      .filter(
+        (item) =>
+          !isInternalInstagramNavigationCommandMenuItem(
+            item,
+            internalInstagramObjectIds,
+          ),
+      )
       .filter(doesCommandMenuItemMatchObjectMetadataId(undefined))
       .filter(
         (item) =>
@@ -122,7 +139,12 @@ export const StandalonePageCommandMenu = () => {
       .sort(
         (firstItem, secondItem) => firstItem.position - secondItem.position,
       );
-  }, [commandMenuItems, commandMenuContextApi, currentPageLayoutId]);
+  }, [
+    commandMenuItems,
+    commandMenuContextApi,
+    currentPageLayoutId,
+    objectMetadataItems,
+  ]);
 
   return (
     <CommandMenuContext.Provider

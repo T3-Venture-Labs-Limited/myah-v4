@@ -7,6 +7,8 @@ import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/
 import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
 import { CatchUpCampaignActivityControlMetadataWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748003-catch-up-campaign-activity-control-metadata.command';
 import { SynchronizeMyahAssistantSkillsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788250000000-synchronize-myah-assistant-skills.command';
+import { ResynchronizeMyahCampaignLayoutCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790537642854-resynchronize-myah-campaign-layout.command';
+import { CreateMyahInboxReplyContextDraftsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789645911001-create-myah-inbox-reply-context-drafts';
 import { CreateCampaignForecastProjectionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172618-create-campaign-forecast-projection';
 import { AddConnectedAccountSendingPolicyRevisionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172619-add-connected-account-sending-policy-revision';
 import { RepairInstagramSecurityCutoverCommand } from 'src/database/commands/upgrade-version-command/2-20/repair-instagram-security-cutover.command';
@@ -128,6 +130,88 @@ describe('V2_20_UpgradeVersionCommandModule', () => {
     ).toMatchObject({
       name: 'upgrade:2-20:synchronize-myah-assistant-skills',
     });
+  });
+
+  it('appends the distinct layout-only Campaign workspace upgrade after applied commands', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      V2_20_UpgradeVersionCommandModule,
+    ) as Function[];
+    expect(providers).toContain(ResynchronizeMyahCampaignLayoutCommand);
+    expect(
+      getRegisteredWorkspaceCommandMetadata(
+        ResynchronizeMyahCampaignLayoutCommand,
+      ),
+    ).toEqual({ version: '2.20.0', timestamp: 1790537642854 });
+    expect(
+      Reflect.getMetadata(CommandMeta, ResynchronizeMyahCampaignLayoutCommand),
+    ).toMatchObject({
+      name: 'upgrade:2-20:resynchronize-myah-campaign-layout',
+    });
+    expect(1790537642854).toBeGreaterThan(1790491923604);
+  });
+
+  it('preserves pre-existing v3 bindings when the original Inbox migration has not run yet', async () => {
+    const query = jest.fn().mockResolvedValue([]);
+    await new CreateMyahInboxReplyContextDraftsFastInstanceCommand().up({
+      query,
+    } as never);
+    const contextSql = query.mock.calls
+      .map(([statement]) => statement as string)
+      .find((statement) =>
+        statement.includes('ADD CONSTRAINT "CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT"'),
+      );
+    expect(contextSql).toContain('"actionVersion" = 2');
+    expect(contextSql).toContain('"actionVersion" = 3');
+    expect(contextSql).toContain('MYAH_INSTAGRAM_MESSAGE_DRAFT');
+    expect(contextSql).toContain('"actionName" = \'send_inbox_reply\'');
+    expect(
+      getRegisteredInstanceCommandMetadata(
+        CreateMyahInboxReplyContextDraftsFastInstanceCommand,
+      ),
+    ).toMatchObject({ version: '2.20.0', timestamp: 1789645911001 });
+  });
+
+  it('appends an instance repair after the Inbox migration that replaced the Instagram v3 check', async () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      V2_20_UpgradeVersionCommandModule,
+    ) as Function[];
+    const repair = providers.find(
+      (provider) =>
+        provider.name ===
+        'RestoreInstagramV3ApprovalContextFastInstanceCommand',
+    );
+
+    expect(repair).toBeDefined();
+    expect(getRegisteredInstanceCommandMetadata(repair!)).toEqual({
+      version: '2.20.0',
+      timestamp: 1790577600427,
+      type: 'fast',
+      runAfterWorkspace: false,
+      catchUpOnResume: true,
+    });
+    const overwritten = providers.find(
+      (provider) =>
+        provider.name ===
+        'CreateMyahInboxReplyContextDraftsFastInstanceCommand',
+    );
+    expect(
+      getRegisteredInstanceCommandMetadata(overwritten!)!.timestamp,
+    ).toBeLessThan(getRegisteredInstanceCommandMetadata(repair!)!.timestamp);
+    const query = jest.fn().mockResolvedValue([]);
+    const command = new (repair as new () => {
+      up: (runner: { query: typeof query }) => Promise<void>;
+    })();
+    await command.up({ query });
+    const sql = query.mock.calls
+      .map(([statement]) => statement as string)
+      .join('\n');
+    expect(sql).toContain('"actionVersion" = 3');
+    expect(sql).toContain("'MYAH_INSTAGRAM_MESSAGE_DRAFT'");
+    expect(sql).toContain('"actionVersion" = 2');
+    expect(sql).toContain("'send_inbox_reply'");
+    expect(sql).toContain(') IS TRUE');
   });
 
   it('registers the Campaign forecast and sending-policy instance commands', () => {
@@ -311,6 +395,11 @@ describe('Instagram production upgrade provider compatibility', () => {
     registry.onModuleInit();
     const reader = new UpgradeSequenceReaderService(registry);
     const sequence = reader.getUpgradeSequence();
+    expect(
+      sequence.find((step) =>
+        step.name.includes('RestoreInstagramV3ApprovalContextFastInstanceCommand'),
+      ),
+    ).toMatchObject({ kind: 'fast-instance', catchUpOnResume: true });
     const kindOrder = ['fast-instance', 'slow-instance', 'workspace'];
     const expected = decorated
       .filter((entry) =>
@@ -403,9 +492,8 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // Preserve both appended Creator profile commands and later upstream
-    // exact-approval and Instagram adoption identities in timestamp order.
-    expect(sequence.slice(-13).map(({ name }) => name)).toEqual([
+    // Both profile commands, Campaign layout and outreach defaults remain append-only.
+    const expectedTail = [
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
       '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
       '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
@@ -419,7 +507,12 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_ScopeMyahCreatorSocialProfilesForwardCommand_1789645911012',
       '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
       '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
-    ]);
+      '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',
+      '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
+    ];
+    expect(
+      sequence.slice(-expectedTail.length).map(({ name }) => name),
+    ).toEqual(expectedTail);
     const workspaceCommands = sequence
       .filter((step) => step.kind === 'workspace')
       .filter((step) => step.version === '2.20.0');
@@ -442,20 +535,37 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_ScopeMyahCreatorSocialProfilesForwardCommand_1789645911012',
       '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
       '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
+      '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',
+      '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
     ]);
-    // Workspaces already completed through MYAH-315 still run Instagram adoption.
+    // An existing workspace already through Instagram adoption receives the
+    // new layout command without moving the upgrade cursor backwards.
     expect(
       reader
         .getPendingWorkspaceCommands({
           workspaceCommands,
           workspaceCursor: {
-            name: '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
+            name: '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
             status: 'completed',
           },
         })
         .map(({ name }) => name),
     ).toEqual([
-      '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
+      '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',
+      '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
+    ]);
+    expect(
+      reader
+        .getPendingWorkspaceCommands({
+          workspaceCommands,
+          workspaceCursor: {
+            name: '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',
+            status: 'completed',
+          },
+        })
+        .map(({ name }) => name),
+    ).toEqual([
+      '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(

@@ -3,7 +3,7 @@ import {
   GraphQLSchemaBuilderModule,
   GraphQLSchemaFactory,
 } from '@nestjs/graphql';
-import { buildSchema, graphql, printSchema } from 'graphql';
+import { buildSchema, graphql, parse, printSchema, validate } from 'graphql';
 
 import { MyahInboxContactResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-contact.resolver';
 
@@ -14,6 +14,33 @@ const attemptId = '00000000-0000-4000-8000-000000000003';
 // Execute static client operations against the schema generated from the real resolver
 // metadata. PG service tests separately establish authorization and group selection.
 describe('Myah Inbox Email GraphQL old/new operation compatibility', () => {
+  it('exposes the current contact display handle but rejects the retired Creator username', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [GraphQLSchemaBuilderModule],
+    }).compile();
+    try {
+      const generated = await moduleRef
+        .get(GraphQLSchemaFactory)
+        .create([MyahInboxContactResolver]);
+      const schema = buildSchema(printSchema(generated));
+      const contactQuery = (field: string) =>
+        parse(`query { myahInboxContact(contactId: "contact") { ${field} } }`);
+
+      expect(validate(schema, contactQuery('instagramDisplayHandle'))).toEqual(
+        [],
+      );
+      expect(
+        validate(schema, contactQuery('instagramUsername')).map(
+          (error) => error.message,
+        ),
+      ).toEqual([
+        'Cannot query field "instagramUsername" on type "MyahInboxContactSummary".',
+      ]);
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
   it('validates and executes old thread-only and new keyed card/page operations', async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [GraphQLSchemaBuilderModule],

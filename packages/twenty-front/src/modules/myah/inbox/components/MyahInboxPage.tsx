@@ -1,5 +1,6 @@
 import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
 import { isCampaignMessageOverviewReturnTarget } from '@/myah/campaign-messages/types/CampaignMessageOverviewReturnTarget';
+import { isCampaignCreatorInboxReturnTarget } from '@/myah/inbox/types/CampaignCreatorInboxReturnTarget';
 import {
   useCallback,
   useContext,
@@ -193,6 +194,12 @@ const MyahInboxPageContent = ({
   const canReturnToMessages =
     workspaceId !== null &&
     isCampaignMessageOverviewReturnTarget(returnTarget, workspaceId);
+  const creatorReturnTarget = workspaceId
+    ? location.state?.campaignCreatorInboxReturnTarget
+    : null;
+  const canReturnToCreator =
+    workspaceId !== null &&
+    isCampaignCreatorInboxReturnTarget(creatorReturnTarget, workspaceId);
   const store = useStore();
   const [
     myahInboxPendingInstagramSelection,
@@ -578,6 +585,14 @@ const MyahInboxPageContent = ({
   // A later click or a forced scope transition must not commit an older awaited navigation.
   // oxlint-disable-next-line twenty/no-state-useref
   const transitionRef = useRef<symbol | null>(null);
+  useEffect(
+    () => () => {
+      // A pending flush cannot complete a return after this Inbox route leaves
+      // or its history entry changes (including an unmount).
+      transitionRef.current = null;
+    },
+    [location.key, location.pathname],
+  );
   // oxlint-disable-next-line twenty/no-state-useref
   const workspaceRef = useRef(workspaceId);
   workspaceRef.current = workspaceId;
@@ -957,6 +972,7 @@ const MyahInboxPageContent = ({
       refreshStatus={contacts.refreshStatus}
       refreshError={contacts.refreshError?.message ?? null}
       error={contacts.error}
+      loadMoreError={contacts.loadMoreError?.message ?? null}
       hasNextPage={contacts.hasNextPage}
       onSelectContact={handleSelectContact}
       onFiltersChange={handleFiltersChange}
@@ -1023,6 +1039,24 @@ const MyahInboxPageContent = ({
           title="Inbox"
           actionButton={
             <>
+              {canReturnToCreator ? (
+                <Button
+                  title="Return to Campaign creator"
+                  variant="secondary"
+                  size="small"
+                  onClick={async () => {
+                    if (!(await flushAffectedDrafts())) return;
+                    navigate(
+                      `${creatorReturnTarget.pathname}${creatorReturnTarget.search}#${creatorReturnTarget.influencerTabId}`,
+                      {
+                        state: {
+                          campaignCreatorInboxReturnTarget: creatorReturnTarget,
+                        },
+                      },
+                    );
+                  }}
+                />
+              ) : null}
               {canReturnToMessages ? (
                 <Button
                   title="Return to Campaign messages"
@@ -1051,7 +1085,8 @@ const MyahInboxPageContent = ({
       {pendingDestination ? (
         <StyledSelectionStatus role="status" aria-live="polite">
           Message sent. Waiting for its exact Instagram conversation. Refresh or
-          load more contacts, or adjust Inbox filters if it is not visible.
+          scroll to load more contacts, or adjust Inbox filters if it is not
+          visible.
           <Button
             title="Refresh Inbox"
             variant="secondary"
@@ -1094,7 +1129,7 @@ const MyahInboxPageContent = ({
           <StyledSelectionStatus role="status" aria-live="polite">
             {selectedContact
               ? `Selected: ${selectedContact.displayName}`
-              : `${contacts.contacts.length} contacts`}
+              : `${contacts.totalCount.toLocaleString()} contacts`}
           </StyledSelectionStatus>
           <StyledMobilePanel
             ref={mobilePanelRef}

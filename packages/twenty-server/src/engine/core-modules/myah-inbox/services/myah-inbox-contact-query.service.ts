@@ -18,8 +18,8 @@ import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-a
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import {
+  MYAH_INBOX_CONTACT_MAX_PAGE_SIZE,
   MYAH_INBOX_DEFAULT_PAGE_SIZE,
-  MYAH_INBOX_MAX_PAGE_SIZE,
 } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 import { type MyahInboxContactConnection } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-contact-connection.dto';
 import { type MyahInboxContactsInput } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-contact-filter.input';
@@ -237,7 +237,7 @@ export class MyahInboxContactQueryService {
       : undefined;
     const pageSize = Math.min(
       input.first ?? MYAH_INBOX_DEFAULT_PAGE_SIZE,
-      MYAH_INBOX_MAX_PAGE_SIZE,
+      MYAH_INBOX_CONTACT_MAX_PAGE_SIZE,
     );
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(

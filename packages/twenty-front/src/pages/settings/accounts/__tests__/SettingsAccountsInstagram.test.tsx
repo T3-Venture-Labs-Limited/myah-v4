@@ -635,12 +635,12 @@ describe('SettingsAccountsInstagram', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('polls an attempt before loading the account and reloads it once on completion', async () => {
+  it('ignores the provider account_id query and loads the authenticated workspace account on completion', async () => {
     jest.useFakeTimers();
     window.history.replaceState(
       {},
       '',
-      '/settings/accounts/instagram?attemptId=attempt-id',
+      '/settings/accounts/instagram?connection=success&attemptId=attempt-id&account_id=untrusted-provider-id',
     );
     fetchMock.mockResponseOnce(JSON.stringify({ status: 'PROCESSING' }));
     fetchMock.mockResponseOnce(JSON.stringify({ status: 'PENDING' }));
@@ -686,6 +686,8 @@ describe('SettingsAccountsInstagram', () => {
       await jest.advanceTimersByTimeAsync(1_000);
     });
     expect(await screen.findByText('Active')).toBeVisible();
+    expect(await screen.findByText('@myah_test_account')).toBeVisible();
+    expect(screen.queryByText('untrusted-provider-id')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,

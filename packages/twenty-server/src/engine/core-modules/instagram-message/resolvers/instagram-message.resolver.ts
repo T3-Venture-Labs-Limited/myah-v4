@@ -24,7 +24,10 @@ import {
 } from 'src/engine/core-modules/instagram-message/dtos/instagram-message.dto';
 import { InstagramMessageDraftService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft.service';
 import { InstagramMessageComposerService } from 'src/engine/core-modules/instagram-message/services/instagram-message-composer.service';
-import { InstagramMessagePermissionService } from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
+import {
+  InstagramMessagePermissionService,
+  type ManualInstagramHumanAccess,
+} from 'src/engine/core-modules/instagram-message/services/instagram-message-permission.service';
 import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
 import { InstagramMessageRecipientService } from 'src/engine/core-modules/instagram-message/services/instagram-message-recipient.service';
 import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
@@ -66,11 +69,12 @@ export class InstagramMessageResolver {
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-      async (rolePermissionConfig) => {
+      async (rolePermissionConfig, manualHumanAccess) => {
         if (
           !(await this.permissionService.canQueryComposerAccount({
             workspaceId: workspace.id,
             rolePermissionConfig,
+            manualHumanAccess,
           }))
         ) {
           return {
@@ -108,7 +112,7 @@ export class InstagramMessageResolver {
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-      async (rolePermissionConfig) => {
+      async (rolePermissionConfig, manualHumanAccess) => {
         const hasCreator = typeof input.creatorRecordId === 'string';
         const hasRaw = typeof input.rawHandle === 'string';
         if (hasCreator === hasRaw) {
@@ -136,6 +140,7 @@ export class InstagramMessageResolver {
             initiatorUserWorkspaceId: userWorkspaceId,
             workspaceMemberId,
             rolePermissionConfig,
+            manualHumanAccess,
           },
         );
         if (result.status === 'BLOCKED') {
@@ -165,7 +170,7 @@ export class InstagramMessageResolver {
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-      async (rolePermissionConfig) => {
+      async (rolePermissionConfig, manualHumanAccess) => {
         if (!this.composerService) {
           throw new Error('Instagram composer orchestration is unavailable');
         }
@@ -190,6 +195,7 @@ export class InstagramMessageResolver {
             initiatorUserWorkspaceId: userWorkspaceId,
             workspaceMemberId,
             rolePermissionConfig,
+            manualHumanAccess,
           },
         );
       },
@@ -232,11 +238,13 @@ export class InstagramMessageResolver {
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-      async (rolePermissionConfig) => {
+      async (rolePermissionConfig, manualHumanAccess) => {
         await this.permissionService.assertCanSend({
           actionKind: input.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
           rolePermissionConfig,
           workspaceId: workspace.id,
+          manualHumanAccess:
+            input.kind === 'REPLY' ? manualHumanAccess : undefined,
         });
         await this.recordAccessService.assertCanSaveDraft({
           ...input,
@@ -279,11 +287,13 @@ export class InstagramMessageResolver {
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-      async (rolePermissionConfig) => {
+      async (rolePermissionConfig, manualHumanAccess) => {
         await this.permissionService.assertCanSend({
           actionKind: input.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
           rolePermissionConfig,
           workspaceId: workspace.id,
+          manualHumanAccess:
+            input.kind === 'REPLY' ? manualHumanAccess : undefined,
         });
         await this.recordAccessService.assertCanSaveDraft({
           ...input,
@@ -321,7 +331,7 @@ export class InstagramMessageResolver {
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-      async (rolePermissionConfig) => {
+      async (rolePermissionConfig, manualHumanAccess) => {
         await this.recordAccessService.assertCanReadDraft({
           workspaceId: workspace.id,
           draftId: input.draftId,
@@ -334,6 +344,7 @@ export class InstagramMessageResolver {
           draftId: input.draftId,
           expectedRevision: input.expectedRevision,
           rolePermissionConfig,
+          manualHumanAccess,
         });
       },
     );
@@ -350,7 +361,7 @@ export class InstagramMessageResolver {
       workspace,
       userWorkspaceId,
       workspaceMemberId,
-      async (rolePermissionConfig) => {
+      async (rolePermissionConfig, manualHumanAccess) => {
         const authContext = getWorkspaceAuthContext();
         const isWorkspaceOperator =
           isUserAuthContext(authContext) &&
@@ -366,6 +377,10 @@ export class InstagramMessageResolver {
           actionKind: result.actionKind,
           rolePermissionConfig,
           workspaceId: workspace.id,
+          manualHumanAccess:
+            result.actionVersion === 3 || result.actionKind === 'REPLY'
+              ? manualHumanAccess
+              : undefined,
         });
 
         const destination = result.confirmedDestinationSource
@@ -391,7 +406,10 @@ export class InstagramMessageResolver {
     workspace: WorkspaceEntity,
     userWorkspaceId: string,
     workspaceMemberId: string,
-    callback: (rolePermissionConfig: RolePermissionConfig) => Promise<T>,
+    callback: (
+      rolePermissionConfig: RolePermissionConfig,
+      manualHumanAccess?: ManualInstagramHumanAccess,
+    ) => Promise<T>,
   ): Promise<T> {
     const authContext = getWorkspaceAuthContext();
 
@@ -422,7 +440,12 @@ export class InstagramMessageResolver {
           );
         }
 
-        return callback(rolePermissionConfig);
+        return callback(
+          rolePermissionConfig,
+          authContext.isInteractiveUserRequest === true
+            ? { userWorkspaceId, workspaceMemberId }
+            : undefined,
+        );
       },
       authContext,
     );

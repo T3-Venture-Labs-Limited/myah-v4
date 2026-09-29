@@ -53,6 +53,7 @@ export type RecordIndexSurfaceProps = {
   viewId: string;
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+  openFirstColumnRelationInIndex?: boolean;
   shouldPreserveParentViewStateOnOpen?: boolean;
   shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
   shouldCloseAfterCreation?: boolean;
@@ -63,6 +64,9 @@ export type RecordIndexSurfaceProps = {
   hideEmptyStateSubtitle?: boolean;
   headerTitle?: string;
   headerLeadingAction?: ReactNode;
+  campaignCreationAction?: ReactNode;
+  campaignOverviewSummary?: ReactNode;
+  campaignOverviewContent?: ReactNode;
   embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;
 };
 
@@ -168,6 +172,7 @@ const RecordIndexSurfaceInstance = ({
   viewId,
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
+  openFirstColumnRelationInIndex,
   shouldPreserveParentViewStateOnOpen,
   shouldUseIndexIdentifierUrlOnFullPageOpen,
   shouldCloseAfterCreation,
@@ -178,6 +183,9 @@ const RecordIndexSurfaceInstance = ({
   hideEmptyStateSubtitle,
   headerTitle,
   headerLeadingAction,
+  campaignCreationAction,
+  campaignOverviewSummary,
+  campaignOverviewContent,
   embeddedSurfaceOptions,
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
@@ -255,9 +263,14 @@ const RecordIndexSurfaceInstance = ({
                 onIndexRecordsLoaded: handleIndexRecordsLoaded,
                 indexIdentifierUrl,
                 onOpenRecordFromIndexView,
+                openFirstColumnRelationInIndex,
                 shouldPreserveParentViewStateOnOpen,
                 shouldUseIndexIdentifierUrlOnFullPageOpen,
-                embeddedSurfaceOptions,
+                embeddedSurfaceOptions:
+                  campaignCreationAction !== undefined &&
+                  objectNameSingular === 'campaign'
+                    ? { ...embeddedSurfaceOptions, hideAddNew: true }
+                    : embeddedSurfaceOptions,
                 hideEmptyStateSubtitle,
                 onViewChange,
                 recordFieldByFieldMetadataItemId,
@@ -302,12 +315,18 @@ const RecordIndexSurfaceInstance = ({
                           <RecordIndexPageHeader
                             contextStoreInstanceId={contextStoreInstanceId}
                             headerLeadingAction={headerLeadingAction}
+                            campaignCreationAction={
+                              objectNameSingular === 'campaign'
+                                ? campaignCreationAction
+                                : undefined
+                            }
                             headerTitle={headerTitle}
                           />
                         )
                       }
                       secondaryBar={
                         objectPermissions.canReadObjectRecords &&
+                        campaignOverviewContent === undefined &&
                         (!isIsolatedSurface ||
                           areInitialQueryOnlyRecordFiltersInitialized) && (
                           <RecordIndexViewBar
@@ -322,6 +341,7 @@ const RecordIndexSurfaceInstance = ({
                         )
                       }
                     >
+                      {campaignOverviewSummary}
                       <StyledIndexContainer
                         className={RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS}
                       >
@@ -329,12 +349,18 @@ const RecordIndexSurfaceInstance = ({
                           (!isIsolatedSurface ||
                             areInitialQueryOnlyRecordFiltersInitialized) && (
                             <>
-                              <RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect />
-                              <RecordIndexContainer
-                                recordIndexViewTypeOverride={
-                                  isIsolatedSurface ? ViewType.TABLE : undefined
-                                }
-                              />
+                              {campaignOverviewContent ?? (
+                                <>
+                                  <RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect />
+                                  <RecordIndexContainer
+                                    recordIndexViewTypeOverride={
+                                      isIsolatedSurface
+                                        ? ViewType.TABLE
+                                        : undefined
+                                    }
+                                  />
+                                </>
+                              )}
                             </>
                           )
                         ) : (
@@ -367,6 +393,7 @@ export const RecordIndexSurface = ({
   viewId,
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
+  openFirstColumnRelationInIndex,
   shouldPreserveParentViewStateOnOpen,
   shouldUseIndexIdentifierUrlOnFullPageOpen,
   shouldCloseAfterCreation,
@@ -377,6 +404,9 @@ export const RecordIndexSurface = ({
   hideEmptyStateSubtitle,
   headerTitle,
   headerLeadingAction,
+  campaignCreationAction,
+  campaignOverviewSummary,
+  campaignOverviewContent,
   embeddedSurfaceOptions,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -400,6 +430,7 @@ export const RecordIndexSurface = ({
       viewId={viewId}
       indexIdentifierUrl={indexIdentifierUrl}
       onOpenRecordFromIndexView={onOpenRecordFromIndexView}
+      openFirstColumnRelationInIndex={openFirstColumnRelationInIndex}
       shouldPreserveParentViewStateOnOpen={shouldPreserveParentViewStateOnOpen}
       shouldUseIndexIdentifierUrlOnFullPageOpen={
         shouldUseIndexIdentifierUrlOnFullPageOpen
@@ -411,6 +442,9 @@ export const RecordIndexSurface = ({
       hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
       hideEmptyStateSubtitle={hideEmptyStateSubtitle}
       headerLeadingAction={headerLeadingAction}
+      campaignCreationAction={campaignCreationAction}
+      campaignOverviewSummary={campaignOverviewSummary}
+      campaignOverviewContent={campaignOverviewContent}
       headerTitle={headerTitle}
       embeddedSurfaceOptions={embeddedSurfaceOptions}
     />

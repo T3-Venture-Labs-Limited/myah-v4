@@ -25,8 +25,10 @@ import { useMemo } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
 const StyledEmptyStateContainer = styled.div<{ width: number }>`
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
   width: ${({ width }) => width}px;
 `;
 

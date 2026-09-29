@@ -175,6 +175,115 @@ const executeInput = {
 };
 
 describe('InstagramMessageSendService', () => {
+  it.each([
+    ['START_CHAT', 3, 'MYAH_INSTAGRAM_MESSAGE_DRAFT', true],
+    ['REPLY', 3, 'MYAH_INSTAGRAM_MESSAGE_DRAFT', true],
+    ['REPLY', 2, 'MYAH_INSTAGRAM_MESSAGE_DRAFT', true],
+    ['REPLY', 2, 'MYAH_INBOX_INSTAGRAM_DRAFT', false],
+  ] as const)(
+    'restricts manual access at approved %s v%s %s binding execution',
+    async (
+      actionKind,
+      actionVersion,
+      interactionContextType,
+      manualAllowed,
+    ) => {
+      const h = buildHarness();
+      const manualHumanAccess = {
+        userWorkspaceId,
+        workspaceMemberId: 'member-id',
+      };
+      const binding = {
+        ...authority.expectedActionBinding,
+        actionKind,
+        actionVersion,
+        interactionContextType,
+      };
+      h.permissionService.assertCanSend.mockRejectedValueOnce(
+        new Error('permission boundary reached'),
+      );
+      await expect(
+        h.service.executeApprovedWithDraftLockHeld(
+          {
+            ...executeInput,
+            interactionContextType,
+            manualHumanAccess,
+          },
+          binding,
+        ),
+      ).rejects.toThrow('permission boundary reached');
+      expect(h.permissionService.assertCanSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionKind,
+          manualHumanAccess: manualAllowed ? manualHumanAccess : undefined,
+        }),
+      );
+      expect(h.client.startChat).not.toHaveBeenCalled();
+      expect(h.client.sendMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it('retains manual human authority at the post-reservation permission check', async () => {
+    const h = buildHarness();
+    const manualHumanAccess = {
+      userWorkspaceId,
+      workspaceMemberId: 'member-id',
+    };
+    const binding = {
+      ...authority.expectedActionBinding,
+      interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT' as const,
+    };
+    h.permissionService.assertCanSend.mockImplementation(async (input) => {
+      if (input.manualHumanAccess !== manualHumanAccess) {
+        throw new Error('human authority missing');
+      }
+    });
+
+    await expect(
+      h.service.executeApprovedWithDraftLockHeld(
+        {
+          ...executeInput,
+          interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+          manualHumanAccess,
+        },
+        binding,
+      ),
+    ).resolves.toEqual({ status: 'SENT', receiptId });
+    expect(h.permissionService.assertCanSend).toHaveBeenCalledTimes(2);
+    expect(h.client.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['ordinary', 'myah-team'] as const)(
+    'passes %s manual Inbox reply provenance into the direct-send permission gate',
+    async () => {
+      const h = buildHarness();
+      const manualHumanAccess = {
+        userWorkspaceId,
+        workspaceMemberId: 'member-id',
+      };
+      h.permissionService.assertCanSend.mockRejectedValueOnce(
+        new Error('permission boundary reached'),
+      );
+      await expect(
+        h.service.sendDirect({
+          workspaceId,
+          initiatorUserWorkspaceId: userWorkspaceId,
+          draftId,
+          expectedRevision: 2,
+          rolePermissionConfig: executeInput.rolePermissionConfig,
+          manualHumanAccess,
+        }),
+      ).rejects.toThrow('permission boundary reached');
+      expect(h.permissionService.assertCanSend).toHaveBeenCalledWith({
+        workspaceId,
+        actionKind: 'REPLY',
+        rolePermissionConfig: executeInput.rolePermissionConfig,
+        manualHumanAccess,
+      });
+      expect(h.client.sendMessage).not.toHaveBeenCalled();
+    },
+  );
+
   it('fails closed when v3 START authority reconstruction is unavailable; receipt recovery remains first', async () => {
     const harness = buildHarness();
     const forbiddenWork = [

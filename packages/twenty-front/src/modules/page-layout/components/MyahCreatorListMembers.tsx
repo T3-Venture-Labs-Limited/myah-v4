@@ -6,6 +6,7 @@ import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useState } from 'react';
+import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { Button } from 'twenty-ui/input';
 
 const ADD_MEMBER = gql`
@@ -42,9 +43,8 @@ export const MyahCreatorListMembers = ({
 }: {
   creatorListId: string;
 }) => {
-  const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(
-    null,
-  );
+  const [isAdding, setIsAdding] = useState(false);
+  const { enqueueErrorSnackBar } = useSnackBar();
   const [removingCreatorId, setRemovingCreatorId] = useState<string | null>(
     null,
   );
@@ -76,15 +76,22 @@ export const MyahCreatorListMembers = ({
     setRemovingCreatorId(creatorId);
   };
 
-  const submitAdd = async () => {
-    if (!selectedCreatorId) return;
-    await addMember({
-      variables: {
-        input: { creatorListId, creatorId: selectedCreatorId },
-      },
-    });
-    setSelectedCreatorId(null);
-    await refetchMemberships();
+  const submitAdd = async (creatorId: string) => {
+    if (isAdding) return;
+    setIsAdding(true);
+    try {
+      await addMember({
+        variables: { input: { creatorListId, creatorId } },
+      });
+      await refetchMemberships();
+    } catch {
+      enqueueErrorSnackBar({
+        message:
+          'Could not confirm the Creator was added. Refresh the List before trying again.',
+      });
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   const submitRemoval = async () => {
@@ -156,29 +163,20 @@ export const MyahCreatorListMembers = ({
       <ModalStatefulWrapper
         isClosable
         modalInstanceId="creator-list-member-picker"
-        onClose={() => setSelectedCreatorId(null)}
       >
         <SingleRecordPicker
           focusId="creator-list-member-picker"
           componentInstanceId="creator-list-member-picker"
           objectNameSingulars={['creator']}
           recordPickerInstanceId="creator-list-member-picker"
-          onCancel={() => setSelectedCreatorId(null)}
+          onCancel={() => closeModal('creator-list-member-picker')}
           onMorphItemSelected={(item) => {
-            setSelectedCreatorId(item?.recordId ?? null);
+            if (!item?.recordId) return;
             closeModal('creator-list-member-picker');
+            void submitAdd(item.recordId);
           }}
         />
       </ModalStatefulWrapper>
-      {selectedCreatorId ? (
-        <Button
-          title="Add selected Creator"
-          ariaLabel="Add selected Creator"
-          onClick={() => void submitAdd()}
-          type="button"
-          variant="primary"
-        />
-      ) : null}
       {removingCreatorId ? (
         <div role="alertdialog" aria-label="Confirm Creator removal">
           <p>Remove {creatorNames.get(removingCreatorId) ?? 'Creator'}?</p>

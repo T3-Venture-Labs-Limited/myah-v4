@@ -9,6 +9,7 @@ const mockOpenModal = jest.fn();
 const mockCloseModal = jest.fn();
 const mockAddMember = jest.fn();
 const mockRemoveMember = jest.fn();
+const mockEnqueueErrorSnackBar = jest.fn();
 const refetchMembers = jest.fn().mockResolvedValue(undefined);
 const fetchMoreMembers = jest.fn().mockResolvedValue(undefined);
 
@@ -24,6 +25,9 @@ jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
 }));
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
   useModal: () => ({ openModal: mockOpenModal, closeModal: mockCloseModal }),
+}));
+jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
+  useSnackBar: () => ({ enqueueErrorSnackBar: mockEnqueueErrorSnackBar }),
 }));
 jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
   ModalStatefulWrapper: ({ children }: { children: ReactNode }) => (
@@ -128,10 +132,6 @@ describe('MyahCreatorListMembers', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Select native Creator' }),
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Add selected Creator' }),
-    );
-
     await waitFor(() =>
       expect(mockAddMember).toHaveBeenCalledWith({
         variables: {
@@ -144,6 +144,21 @@ describe('MyahCreatorListMembers', () => {
     );
     expect(refetchMembers).toHaveBeenCalled();
     expect(mockOpenModal).toHaveBeenCalledWith('creator-list-member-picker');
+  });
+
+  it('reports an uncertain add instead of silently dropping the selection', async () => {
+    mockAddMember.mockRejectedValue(new Error('response lost'));
+    render(<MyahCreatorListMembers creatorListId="creator-list-1" />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select native Creator' }),
+    );
+
+    await waitFor(() =>
+      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
+        message:
+          'Could not confirm the Creator was added. Refresh the List before trying again.',
+      }),
+    );
   });
 
   it('removes only the List membership without querying Campaign impact', async () => {

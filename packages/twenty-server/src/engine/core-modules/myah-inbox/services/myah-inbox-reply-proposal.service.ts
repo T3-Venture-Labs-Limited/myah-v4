@@ -13,7 +13,6 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
 import { generateText, Output } from 'ai';
-import { type APP_LOCALES } from 'twenty-shared/translations';
 import { z } from 'zod';
 
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
@@ -39,7 +38,6 @@ import {
   AgentActorContextService,
 } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-actor-context.service';
 import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/services/ai-billing.service';
-import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { MANAGED_OPENROUTER_PROVIDER_NAME } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import {
   AI_TELEMETRY_CONFIG,
@@ -86,7 +84,6 @@ export class MyahInboxReplyProposalService {
   constructor(
     private readonly myahInboxReplyBriefingService: MyahInboxReplyBriefingService,
     private readonly agentActorContextService: AgentActorContextService,
-    private readonly brandBrainPreflightService: BrandBrainPreflightService,
     private readonly aiModelRegistryService: AiModelRegistryService,
     private readonly billingUsageService: BillingUsageService,
     private readonly aiBillingService: AiBillingService,
@@ -201,27 +198,6 @@ export class MyahInboxReplyProposalService {
     const isUnlinkedConversation = !hasCampaignLink;
     const shouldAppendActorName =
       isUnlinkedConversation && actorFullName.length > 0;
-    const brandTask = [
-      parsedInput.operatorInstructions,
-      ...(thread.creator?.name
-        ? [`Selected creator: ${thread.creator.name}.`]
-        : []),
-      ...(thread.campaign?.name
-        ? [`Selected campaign: ${thread.campaign.name}.`]
-        : []),
-    ].join('\n');
-    const brandBrain = await this.brandBrainPreflightService.run({
-      lastUserMessageText: brandTask,
-      toolContext: {
-        workspaceId: input.authContext.workspace.id,
-        roleId: actor.roleId,
-        authContext: actor.authContext,
-        actorContext: actor.actorContext,
-        userId: actor.userId,
-        userWorkspaceId: actor.userWorkspaceId,
-        locale: actor.userContext.locale as keyof typeof APP_LOCALES,
-      },
-    });
     const registeredModel = this.aiModelRegistryService.getDefaultSpeedModel(
       input.authContext.workspace.id,
     );
@@ -275,10 +251,7 @@ export class MyahInboxReplyProposalService {
           : undefined,
       prompt: [
         `Operator request:\n${parsedInput.operatorInstructions}`,
-        this.formatReplyBriefingForPrompt(
-          briefing,
-          brandBrain.contextPart ?? null,
-        ),
+        this.formatReplyBriefingForPrompt(briefing),
       ].join('\n\n'),
       output: Output.object({
         schema: MyahInboxReplyProposalModelOutputSchema,
@@ -335,7 +308,6 @@ export class MyahInboxReplyProposalService {
 
   private formatReplyBriefingForPrompt(
     briefing: MyahInboxReplyBriefing,
-    brandBrainContext: string | null,
   ): string {
     const formatFields = (
       fields: Array<readonly [string, string | string[] | null]>,
@@ -411,10 +383,6 @@ export class MyahInboxReplyProposalService {
 
     if (creatorProfile) {
       sections.push(`Reference data — Creator profile:\n${creatorProfile}`);
-    }
-
-    if (brandBrainContext) {
-      sections.push(`Reference data — Brand Brain:\n${brandBrainContext}`);
     }
 
     return sections.join('\n\n');

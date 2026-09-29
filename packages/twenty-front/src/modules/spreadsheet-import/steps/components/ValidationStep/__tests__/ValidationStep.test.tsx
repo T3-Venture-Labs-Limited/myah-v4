@@ -284,6 +284,25 @@ describe('ValidationStep pre-submit hooks', () => {
     expect(mockOnClose).not.toHaveBeenCalled();
   });
 
+  it('does not call a partial import a validation refresh failure', async () => {
+    mockGetSubmissionBlockReason.mockReturnValue(undefined);
+    mockAddErrorsAndRunHooks.mockReset().mockReturnValue(initialRows);
+    mockOnSubmit.mockRejectedValue(new Error('a later row failed'));
+    renderStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() =>
+      expect(mockEnqueueDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Import may be incomplete',
+          message:
+            'Some rows may already have been imported. Review your records before starting another import.',
+        }),
+      ),
+    );
+    expect(mockOnClose).not.toHaveBeenCalled();
+  });
+
   it('preserves generic submission when optional callbacks are absent', async () => {
     mockContext.beforeSubmitHook = undefined;
     mockContext.getSubmissionBlockReason = undefined;

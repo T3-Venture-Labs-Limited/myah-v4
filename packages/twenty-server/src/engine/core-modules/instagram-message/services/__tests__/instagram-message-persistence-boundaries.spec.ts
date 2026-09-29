@@ -35,10 +35,14 @@ const context = {
   rolePermissionConfig,
 };
 const graph = {
+  selectedCreatorRecordId: creatorId,
   normalizedHandle: 'recipient',
   creatorRecordId: creatorId,
   recipient: {
-    sourceValues: [{ field: 'instagramUsername', value: 'recipient' }],
+    sourceValues: [
+      { field: 'socialProfile.id', value: 'profile-id' },
+      { field: 'socialProfile.handle', value: 'recipient' },
+    ],
   },
 } as ResolvedInstagramComposerGraph;
 
@@ -52,7 +56,7 @@ const buildHarness = async (
     | 'update'
     | 'field'
     | 'RLS'
-    | 'linkRead'
+    | 'profileUrlRead'
     | 'linkRLS'
     | 'conversationRead'
     | 'conversationRLS',
@@ -66,11 +70,22 @@ const buildHarness = async (
         schema: 'workspace_test',
         columns: {
           id: { type: 'uuid', primary: true },
-          instagramUsername: { type: String },
-          instagramUrl: { type: String, nullable: true },
-          instagramLinkPrimaryLinkUrl: { type: String, nullable: true },
-          instagramLinkPrimaryLinkLabel: { type: String, nullable: true },
-          instagramLinkSecondaryLinks: { type: 'jsonb', nullable: true },
+          name: { type: String },
+          deletedAt: { type: Date, nullable: true },
+        },
+      }),
+      new EntitySchema({
+        name: 'socialProfile',
+        tableName: 'socialProfile',
+        schema: 'workspace_test',
+        columns: {
+          id: { type: 'uuid', primary: true },
+          creatorId: { type: 'uuid' },
+          platform: { type: String },
+          normalizedLocator: { type: String },
+          handle: { type: String, nullable: true },
+          profileUrl: { type: String, nullable: true },
+          platformAccountId: { type: String, nullable: true },
           deletedAt: { type: Date, nullable: true },
         },
       }),
@@ -103,11 +118,23 @@ const buildHarness = async (
   const fields = [
     ...[
       ['id', FieldMetadataType.UUID],
-      ['instagramUsername', FieldMetadataType.TEXT],
-      ['instagramUrl', FieldMetadataType.TEXT],
-      ['instagramLink', FieldMetadataType.LINKS],
+      ['name', FieldMetadataType.TEXT],
       ['deletedAt', FieldMetadataType.DATE_TIME],
     ].map(([name, type]) => ({ name, type, objectMetadataId: 'creator' })),
+    ...[
+      ['id', FieldMetadataType.UUID],
+      ['creatorId', FieldMetadataType.UUID],
+      ['platform', FieldMetadataType.TEXT],
+      ['normalizedLocator', FieldMetadataType.TEXT],
+      ['handle', FieldMetadataType.TEXT],
+      ['profileUrl', FieldMetadataType.TEXT],
+      ['platformAccountId', FieldMetadataType.TEXT],
+      ['deletedAt', FieldMetadataType.DATE_TIME],
+    ].map(([name, type]) => ({
+      name,
+      type,
+      objectMetadataId: 'socialProfile',
+    })),
     ...[
       ['id', FieldMetadataType.UUID],
       ['creator', FieldMetadataType.RELATION],
@@ -135,17 +162,19 @@ const buildHarness = async (
         }
       : {}),
   }));
-  const objects = ['creator', 'myahSocialConversation'].map((name) => ({
-    id: name,
-    universalIdentifier: name,
-    nameSingular: name,
-    namePlural: `${name}s`,
-    isSystem: false,
-    isCustom: name !== 'creator',
-    fieldIds: fields
-      .filter((field) => field.objectMetadataId === name)
-      .map((field) => field.id),
-  }));
+  const objects = ['creator', 'socialProfile', 'myahSocialConversation'].map(
+    (name) => ({
+      id: name,
+      universalIdentifier: name,
+      nameSingular: name,
+      namePlural: `${name}s`,
+      isSystem: false,
+      isCustom: name === 'myahSocialConversation',
+      fieldIds: fields
+        .filter((field) => field.objectMetadataId === name)
+        .map((field) => field.id),
+    }),
+  );
   const maps = <T extends { id: string }>(items: T[]) => ({
     byUniversalIdentifier: Object.fromEntries(
       items.map((item) => [item.id, item]),
@@ -162,7 +191,6 @@ const buildHarness = async (
     released: false,
     username: 'recipient' as string | null,
     url: null as string | null,
-    link: null as string | null,
     conversationIds: [conversationId],
   };
   const listener = jest.fn((_name: string, _event: unknown) => {
@@ -191,7 +219,7 @@ const buildHarness = async (
               id: 'predicate',
               roleId: 'role',
               objectMetadataId: 'creator',
-              fieldMetadataId: 'creator-instagramUsername',
+              fieldMetadataId: 'creator-name',
               operand: 'CONTAINS',
               value: 'hidden',
             },
@@ -233,8 +261,13 @@ const buildHarness = async (
                   canUpdate: false,
                 },
               }
-            : denial === 'linkRead'
-              ? { 'creator-instagramLink': { canRead: false, canUpdate: true } }
+            : denial === 'profileUrlRead'
+              ? {
+                  'socialProfile-profileUrl': {
+                    canRead: false,
+                    canUpdate: true,
+                  },
+                }
               : ({} as ObjectsPermissions[string]['restrictedFields']),
         rowLevelPermissionPredicates: [],
         rowLevelPermissionPredicateGroups: [],
@@ -269,21 +302,37 @@ const buildHarness = async (
         expect(sql).toContain('"creatorId" IS NULL');
         state.linked = true;
         result.affected = 1;
-        result.records = [{ id: conversationId }];
+        result.records = [
+          { id: conversationId, __twentyOrmUpdatedRecordId: conversationId },
+        ];
+      } else if (sql.includes('"workspace_test"."socialProfile"')) {
+        expect(sql).toMatch(/^SELECT /);
+        result.records =
+          state.hasCreator && !sql.includes('LIKE')
+            ? [
+                {
+                  socialProfile_id: 'profile-id',
+                  socialProfile_creatorId: creatorId,
+                  socialProfile_platform: 'INSTAGRAM',
+                  socialProfile_normalizedLocator: 'handle:recipient',
+                  socialProfile_handle: state.username,
+                  socialProfile_profileUrl: state.url,
+                  socialProfile_platformAccountId: null,
+                  socialProfile_deletedAt: null,
+                },
+              ]
+            : [];
       } else if (sql.includes('"workspace_test"."creator"')) {
         expect(sql).toMatch(/^SELECT /);
         expect(sql).not.toContain(' AS "creator_deletedAt"');
-        expect(sql).not.toContain('instagramLinkPrimaryLinkLabel');
-        expect(sql).not.toContain('instagramLinkSecondaryLinks');
+        expect(sql).not.toMatch(/instagramUsername|instagramUrl|instagramLink/);
         const hidden = sql.includes('LIKE');
         result.records =
           state.hasCreator && !hidden
             ? [
                 {
                   creator_id: creatorId,
-                  creator_instagramUsername: state.username,
-                  creator_instagramUrl: state.url,
-                  creator_instagramLinkPrimaryLinkUrl: state.link,
+                  creator_name: 'Creator',
                 },
               ]
             : [];
@@ -354,6 +403,7 @@ const buildHarness = async (
     {
       canQueryComposerAccount: jest.fn(async () => true),
       canSend: jest.fn(async () => true),
+      isVerifiedManualHuman: jest.fn(() => false),
     } as never,
     { isTargetAvailable: jest.fn(async () => true) } as never,
     provider as never,
@@ -417,10 +467,11 @@ describe('InstagramMessageRecipientService real discovery permission boundary', 
       h.beforeQuery,
     );
     expect(h.getRepository.mock.calls.map((call) => call[2])).toEqual([
+      rolePermissionConfig,
       { shouldBypassPermissionChecks: true },
       rolePermissionConfig,
     ]);
-    expect(h.query).toHaveBeenCalledTimes(2);
+    expect(h.query).toHaveBeenCalledTimes(3);
     expect(h.checkout).not.toHaveBeenCalled();
   });
 
@@ -448,26 +499,26 @@ describe('InstagramMessageRecipientService real discovery permission boundary', 
       ).rejects.toThrow(
         denial === 'read' ? /permission|Permission/ : 'RECIPIENT_UNAVAILABLE',
       );
-      expect(h.query).toHaveBeenCalledTimes(denial === 'read' ? 1 : 2);
+      expect(h.query).toHaveBeenCalledTimes(denial === 'read' ? 1 : 3);
       expect(h.state.linked).toBe(false);
     },
   );
 
-  it.each(['read', 'RLS', 'linkRead'] as const)(
+  it.each(['read', 'RLS'] as const)(
     'returns only generic blocked evidence for a hidden match (%s)',
     async (denial) => {
       const h = await buildHarness(denial);
       await expect(
         h.recipient.prepare({ recipient: { rawHandle: 'recipient' } }, context),
       ).resolves.toEqual({ status: 'BLOCKED', code: 'RECIPIENT_UNAVAILABLE' });
-      expect(h.query).toHaveBeenCalledTimes(denial === 'RLS' ? 2 : 1);
+      expect(h.query).toHaveBeenCalledTimes(denial === 'RLS' ? 3 : 1);
     },
   );
 
-  it('reconstructs a primary-link-only canonical identity in both selected and under-lock lookup', async () => {
+  it('reconstructs a profile-URL-only canonical identity in both selected and under-lock lookup', async () => {
     const h = await buildHarness();
     h.state.username = null;
-    h.state.link = 'https://www.instagram.com/recipient/';
+    h.state.url = 'https://www.instagram.com/recipient/';
     await expect(
       h.recipient.resolveNormalizedHandle(
         { recipient: { creatorRecordId: creatorId } },
@@ -480,7 +531,10 @@ describe('InstagramMessageRecipientService real discovery permission boundary', 
           ...graph,
           recipient: {
             ...graph.recipient,
-            sourceValues: [{ field: 'instagramLink', value: h.state.link }],
+            sourceValues: [
+              { field: 'socialProfile.id', value: 'profile-id' },
+              { field: 'socialProfile.profileUrl', value: h.state.url },
+            ],
           },
         },
         context,
@@ -488,40 +542,37 @@ describe('InstagramMessageRecipientService real discovery permission boundary', 
         h.beforeQuery,
       ),
     ).resolves.toBeUndefined();
-    expect(h.query).toHaveBeenCalledTimes(3);
+    expect(h.query).toHaveBeenCalledTimes(6);
   });
 
-  it.each(['url', 'link'] as const)(
-    'rejects username disagreement with canonical %s evidence',
-    async (source) => {
-      const h = await buildHarness();
-      h.state[source] = 'https://www.instagram.com/another/';
-      await expect(
-        h.recipient.assertCreatorMatchesUnderLock(
-          graph,
-          context,
-          h.manager,
-          h.beforeQuery,
-        ),
-      ).rejects.toThrow('CREATOR_AMBIGUOUS');
-      await expect(
-        h.recipient.resolveNormalizedHandle(
-          { recipient: { creatorRecordId: creatorId } },
-          context,
-        ),
-      ).rejects.toThrow('RECIPIENT_UNAVAILABLE');
-    },
-  );
+  it('rejects username disagreement with canonical profile URL evidence', async () => {
+    const h = await buildHarness();
+    h.state.url = 'https://www.instagram.com/another/';
+    await expect(
+      h.recipient.assertCreatorMatchesUnderLock(
+        graph,
+        context,
+        h.manager,
+        h.beforeQuery,
+      ),
+    ).rejects.toThrow('RECIPIENT_UNAVAILABLE');
+    await expect(
+      h.recipient.resolveNormalizedHandle(
+        { recipient: { creatorRecordId: creatorId } },
+        context,
+      ),
+    ).rejects.toThrow('RECIPIENT_UNAVAILABLE');
+  });
 
-  it('enforces composite read permission on the selected physical primary-link subcolumn', async () => {
-    const h = await buildHarness('linkRead');
+  it('enforces read permission on the selected canonical profile URL', async () => {
+    const h = await buildHarness('profileUrlRead');
     await expect(
       h.recipient.resolveNormalizedHandle(
         { recipient: { creatorRecordId: creatorId } },
         context,
       ),
     ).rejects.toThrow(/permission|Permission/);
-    expect(h.query).not.toHaveBeenCalled();
+    expect(h.query).toHaveBeenCalledTimes(1);
   });
 
   it.each(['allowed', 'create'] as const)(
@@ -530,14 +581,21 @@ describe('InstagramMessageRecipientService real discovery permission boundary', 
       const h = await buildHarness(denial === 'allowed' ? undefined : denial);
       h.state.hasCreator = false;
       const result = h.recipient.assertCreatorMatchesUnderLock(
-        { ...graph, creatorRecordId: null },
+        {
+          ...graph,
+          selectedCreatorRecordId: null,
+          creatorRecordId: null,
+          recipient: {
+            sourceValues: [{ field: 'rawHandle', value: 'recipient' }],
+          },
+        },
         context,
         h.manager,
         h.beforeQuery,
       );
       if (denial === 'allowed') await expect(result).resolves.toBeUndefined();
       else await expect(result).rejects.toThrow('RECIPIENT_UNAVAILABLE');
-      expect(h.query).toHaveBeenCalledTimes(1);
+      expect(h.query).toHaveBeenCalledTimes(2);
     },
   );
 });
@@ -686,14 +744,14 @@ describe('InstagramMessageRecipientService real conversation discovery permissio
 });
 
 describe('Instagram composer real conditional update event boundary', () => {
-  it('documents the shared builder keeps the now-false null predicate for its after-read', async () => {
+  it('reads the changed row by ID after the null predicate becomes false', async () => {
     const h = await buildHarness();
     const { bufferedEvents } = await runWithWorkspaceDatabaseEventBuffer(
       h.update,
     );
     expect(h.state.linked).toBe(true);
-    expect(h.emitted.mock.calls).toEqual([[undefined], [undefined]]);
-    expect(bufferedEvents).toHaveLength(0);
+    expect(bufferedEvents).toHaveLength(2);
+    expect(h.emitted).toHaveBeenCalledTimes(2);
   });
 
   it('buffers exactly one UPDATED and UPSERTED link event with canonical metadata/auth and by-ID snapshots', async () => {

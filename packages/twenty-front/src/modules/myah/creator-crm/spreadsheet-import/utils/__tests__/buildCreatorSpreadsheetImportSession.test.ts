@@ -562,6 +562,21 @@ describe('buildCreatorSpreadsheetImportSession', () => {
     ]);
   });
 
+  it('rejects Creator emails that the server would reject before importing any rows', async () => {
+    const session = createSession();
+    const rows = await session.matchColumnsStepHook(
+      [{ email: 'person@domain..com' }, { email: 'person@domain.c' }],
+      [[], []],
+      columnsFor(['email']),
+      undefined,
+    );
+
+    const { errors } = runTableHook(session, rows);
+    expect(errors.filter(({ fieldKey }) => fieldKey === 'email')).toHaveLength(
+      2,
+    );
+  });
+
   it('preserves unmatched Gender source values for explicit validation', async () => {
     const session = createSession();
     const genderField = spreadsheetImportFields.find(

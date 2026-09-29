@@ -1,3 +1,5 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
+
 import { CustomResolverFetchMoreLoader } from '@/activities/components/CustomResolverFetchMoreLoader';
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
 import { useOpenCreateActivityDrawer } from '@/activities/hooks/useOpenCreateActivityDrawer';
@@ -7,7 +9,6 @@ import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadata
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useTargetRecord } from '@/ui/layout/contexts/useTargetRecord';
-import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { IconPlus } from 'twenty-ui/icon';
@@ -59,7 +60,6 @@ export const NotesCard = () => {
   const objectPermissions = useObjectPermissionsForObject(
     objectMetadataItem.id,
   );
-
   const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
   const isReadDenied =
     !objectPermissions.canReadObjectRecords ||
@@ -102,6 +102,19 @@ export const NotesCard = () => {
           <AnimatedPlaceholderEmptySubTitle>
             {t`Please refresh the page.`}
           </AnimatedPlaceholderEmptySubTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
+  }
+
+  if (isNotesEmpty && totalCountNotes > 0) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            {t`Notes are unavailable`}
+          </AnimatedPlaceholderEmptyTitle>
         </AnimatedPlaceholderEmptyTextContainer>
       </AnimatedPlaceholderEmptyContainer>
     );

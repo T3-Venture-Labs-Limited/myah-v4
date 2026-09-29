@@ -1094,9 +1094,9 @@ describe('Myah standard metadata contract', () => {
       position: 20,
     });
     expect(
-      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.tasks.position,
-    ).toBeLessThan(
       MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.influencers.position,
+    ).toBeLessThan(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.tasks.position,
     );
     const fields = Object.values(
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
@@ -1418,7 +1418,7 @@ describe('Myah standard metadata contract', () => {
       objectMetadataUniversalIdentifier:
         MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
       defaultTabToFocusOnMobileAndSidePanelUniversalIdentifier:
-        '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+        '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
     });
     if (
       overviewFieldsWidget?.configuration.configurationType !==
@@ -1514,7 +1514,7 @@ describe('Myah standard metadata contract', () => {
         expect.arrayContaining([
           expect.objectContaining({
             universalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
-            title: 'Home',
+            title: 'Campaign',
           }),
           expect.objectContaining({
             universalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
@@ -1534,7 +1534,7 @@ describe('Myah standard metadata contract', () => {
           }),
           expect.objectContaining({
             universalIdentifier: 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
-            title: 'Operations',
+            title: 'Settings',
           }),
         ]),
       );

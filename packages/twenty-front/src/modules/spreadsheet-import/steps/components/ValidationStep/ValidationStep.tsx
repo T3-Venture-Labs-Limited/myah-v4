@@ -310,14 +310,20 @@ export const ValidationStep = ({
       });
       hideStepBar();
       onClose();
-    } catch (error) {
+    } catch {
+      // Retry within this dialog reuses the exact rows and Creator attempt key.
       setFailedSubmissionRows(rows);
       setCurrentStepState({
         type: SpreadsheetImportStepType.validateData,
         data: rows,
         importedColumns,
       });
-      throw error;
+      enqueueDialog({
+        title: 'Import may be incomplete',
+        message:
+          'Some rows may already have been imported. Review your records before starting another import.',
+        buttons: [{ title: t`Return` }],
+      });
     }
   };
   const onContinue = async () => {

@@ -181,8 +181,12 @@ export const DesktopLongSignature: Story = {
     const { editorCard, group, surface } = getSurfaceElements(canvasElement);
 
     await expect(window.innerWidth).toBeGreaterThan(MOBILE_VIEWPORT);
-    await expect(getComputedStyle(group).gridTemplateColumns).toMatch(
-      /^220px\s+.+$/,
+    await expect(
+      getComputedStyle(group).gridTemplateColumns.trim().split(/\s+/),
+    ).toHaveLength(1);
+    await expect(editorCard.getBoundingClientRect().width).toBeCloseTo(
+      group.getBoundingClientRect().width,
+      0,
     );
     await expectEditorCardScrollContract(editorCard);
     await expect(surface.scrollWidth).toBeLessThanOrEqual(surface.clientWidth);

@@ -9,6 +9,7 @@ import {
   UpgradeMigrationEntity,
   UpgradeMigrationStatus,
 } from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
+import { UpgradeSequenceReaderService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import { formatUpgradeErrorForStorage } from 'src/engine/core-modules/upgrade/utils/format-upgrade-error-for-storage.util';
 import { extractVersionFromCommandName } from 'src/engine/core-modules/upgrade/utils/extract-version-from-command-name.util';
 
@@ -29,6 +30,7 @@ export class UpgradeMigrationService {
   constructor(
     @InjectRepository(UpgradeMigrationEntity)
     private readonly upgradeMigrationRepository: Repository<UpgradeMigrationEntity>,
+    private readonly upgradeSequenceReaderService: UpgradeSequenceReaderService,
   ) {}
 
   async getInferredVersion(commandName?: string): Promise<string | null> {
@@ -351,7 +353,7 @@ export class UpgradeMigrationService {
     errorMessage: string | null;
     createdAt: Date;
   } | null> {
-    const migration = await this.upgradeMigrationRepository
+    const migrations = await this.upgradeMigrationRepository
       .createQueryBuilder('migration')
       .select([
         'migration.name',
@@ -371,10 +373,37 @@ export class UpgradeMigrationService {
         )`,
       )
       .orderBy('migration.createdAt', 'DESC')
-      .getOne();
+      .getMany();
 
-    if (!migration) {
+    const latest = migrations[0];
+
+    if (!latest) {
       return null;
+    }
+
+    let migration = latest;
+
+    if (latest.status === 'completed') {
+      const sequence = this.upgradeSequenceReaderService.getUpgradeSequence();
+      const catchUpIndex = sequence.findIndex(
+        (step) =>
+          step.kind === 'fast-instance' &&
+          step.catchUpOnResume &&
+          step.name === latest.name,
+      );
+
+      if (catchUpIndex !== -1) {
+        // A late catch-up must not move the instance cursor behind completed slow commands.
+        const byName = new Map(migrations.map((row) => [row.name, row]));
+        const laterInstanceStep = sequence
+          .slice(catchUpIndex + 1)
+          .reverse()
+          .find((step) => step.kind !== 'workspace' && byName.has(step.name));
+
+        if (laterInstanceStep) {
+          migration = byName.get(laterInstanceStep.name) ?? latest;
+        }
+      }
     }
 
     return {

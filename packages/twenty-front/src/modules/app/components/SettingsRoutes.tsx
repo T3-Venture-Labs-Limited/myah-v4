@@ -411,13 +411,6 @@ const SettingsAccountsInstagram = lazy(() =>
     }),
   ),
 );
-const SettingsAccountsShopify = lazy(() =>
-  import('~/pages/settings/accounts/SettingsAccountsShopify').then(
-    (module) => ({
-      default: module.SettingsAccountsShopify,
-    }),
-  ),
-);
 
 const SettingsBilling = lazy(() =>
   import('~/pages/settings/billing/SettingsBilling').then((module) => ({
@@ -701,8 +694,10 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
           element={<SettingsAccountsInstagram />}
         />
         <Route
-          path={SettingsPath.AccountsShopify}
-          element={<SettingsAccountsShopify />}
+          path="accounts/shopify"
+          element={
+            <Navigate to={getSettingsPath(SettingsPath.Accounts)} replace />
+          }
         />
         <Route
           path={SettingsPath.NewAccount}
