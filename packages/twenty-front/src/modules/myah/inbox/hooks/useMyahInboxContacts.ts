@@ -24,7 +24,13 @@ type MyahInboxContactsQuery = {
 type MyahInboxContactsConnection = {
   edges: MyahInboxContactEdge[];
   pageInfo: { hasNextPage: boolean; endCursor: string | null };
+  totalCount: number;
 };
+
+const MYAH_INBOX_CONTACT_PAGE_SIZE = 50;
+// Matches the server's contact-list-only ceiling (MYAH_INBOX_CONTACT_MAX_PAGE_SIZE)
+// so a depth-preserving refresh never requests more than the server will return.
+const MYAH_INBOX_CONTACT_REFRESH_MAX_PAGE_SIZE = 500;
 
 type MyahInboxContactEdge = {
   cursor: string;
@@ -36,8 +42,15 @@ export type MyahInboxContactRefreshResult = {
   selectedContact: MyahInboxContact | null;
 };
 
+type MyahInboxContactsOperationKind =
+  | 'initial'
+  | 'loadMore'
+  | 'refresh'
+  | 'ambient';
+
 type MyahInboxContactsOperation = {
   scopeKey: string;
+  kind: MyahInboxContactsOperationKind;
   abortController: AbortController;
 };
 
@@ -85,7 +98,7 @@ export const useMyahInboxContacts = (
   const apolloCoreClient = useApolloCoreClient();
   const baseVariables = useMemo(
     () => ({
-      first: 50,
+      first: MYAH_INBOX_CONTACT_PAGE_SIZE,
       owner: filters.owner || undefined,
       campaignId:
         filters.campaignWorkspaceId === currentWorkspaceId
@@ -138,6 +151,10 @@ export const useMyahInboxContacts = (
     error: null,
   });
   const [listError, setListError] = useState<ScopedListError>({
+    scopeKey,
+    error: undefined,
+  });
+  const [loadMoreError, setLoadMoreError] = useState<ScopedListError>({
     scopeKey,
     error: undefined,
   });
@@ -196,9 +213,11 @@ export const useMyahInboxContacts = (
       error: null,
     });
     setListError({ scopeKey, error: undefined });
+    setLoadMoreError({ scopeKey, error: undefined });
 
     const operation: MyahInboxContactsOperation = {
       scopeKey,
+      kind: 'initial',
       abortController: new AbortController(),
     };
     operationInFlightRef.current = operation;
@@ -253,12 +272,20 @@ export const useMyahInboxContacts = (
       selectedContactId: string | null,
       options?: { force?: boolean },
     ): Promise<MyahInboxContactRefreshResult> => {
-      if (operationInFlightRef.current) {
-        if (!options?.force) {
+      const inFlight = operationInFlightRef.current;
+
+      if (inFlight) {
+        // An action refresh takes priority over a next batch or background
+        // refresh; it still defers to an initial load or another action refresh.
+        const supersedesBackground =
+          !options?.force &&
+          (inFlight.kind === 'loadMore' || inFlight.kind === 'ambient');
+
+        if (!options?.force && !supersedesBackground) {
           return { status: 'ignored', selectedContact: null };
         }
 
-        operationInFlightRef.current.abortController.abort();
+        inFlight.abortController.abort();
         operationInFlightRef.current = null;
         setLoadMoreState({
           scopeKey: scopeKeyRef.current,
@@ -266,8 +293,23 @@ export const useMyahInboxContacts = (
         });
       }
 
+      const loadedConnection =
+        connectionRef.current?.scopeKey === scopeKeyRef.current
+          ? connectionRef.current.connection
+          : null;
+      // ponytail: a 500-row action refresh may drop deeper rows; raise the
+      // cap or add cursor-anchored refresh/virtualization if that matters.
+      const refreshPageSize = Math.min(
+        Math.max(
+          loadedConnection?.edges.length ?? 0,
+          MYAH_INBOX_CONTACT_PAGE_SIZE,
+        ),
+        MYAH_INBOX_CONTACT_REFRESH_MAX_PAGE_SIZE,
+      );
+
       const operation: MyahInboxContactsOperation = {
         scopeKey: scopeKeyRef.current,
+        kind: 'refresh',
         abortController: new AbortController(),
       };
       operationInFlightRef.current = operation;
@@ -280,7 +322,7 @@ export const useMyahInboxContacts = (
 
       try {
         const data = await queryContacts(
-          baseVariablesRef.current,
+          { ...baseVariablesRef.current, first: refreshPageSize },
           operation.abortController,
         );
 
@@ -294,6 +336,7 @@ export const useMyahInboxContacts = (
           connection: refreshedConnection,
         });
         setListError({ scopeKey: operation.scopeKey, error: undefined });
+        setLoadMoreError({ scopeKey: operation.scopeKey, error: undefined });
 
         const selectedContact = selectedContactId
           ? refreshedConnection.edges.find(
@@ -376,6 +419,7 @@ export const useMyahInboxContacts = (
         return { status: 'ignored', selectedContact: null };
       const operation: MyahInboxContactsOperation = {
         scopeKey: current.scopeKey,
+        kind: 'ambient',
         abortController: new AbortController(),
       };
       operationInFlightRef.current = operation;
@@ -387,13 +431,16 @@ export const useMyahInboxContacts = (
       try {
         let edges: MyahInboxContactEdge[] = [];
         let pageInfo = current.connection.pageInfo;
+        let totalCount = current.connection.totalCount;
         let after: string | undefined;
         do {
           const data = await queryContacts(
             {
               ...baseVariablesRef.current,
-              // The server clamps each page to 100 rows.
-              first: Math.min(100, loaded - edges.length),
+              first: Math.min(
+                MYAH_INBOX_CONTACT_REFRESH_MAX_PAGE_SIZE,
+                loaded - edges.length,
+              ),
               after,
             },
             operation.abortController,
@@ -402,6 +449,7 @@ export const useMyahInboxContacts = (
             return { status: 'ignored', selectedContact: null };
           edges = mergeEdges(edges, data.myahInboxContacts.edges);
           pageInfo = data.myahInboxContacts.pageInfo;
+          totalCount = data.myahInboxContacts.totalCount;
           after = pageInfo.endCursor ?? undefined;
         } while (edges.length < loaded && pageInfo.hasNextPage && after);
         let selectedContact =
@@ -423,9 +471,13 @@ export const useMyahInboxContacts = (
         operationInFlightRef.current = null;
         setConnection({
           scopeKey: operation.scopeKey,
-          connection: { edges, pageInfo },
+          connection: { edges, pageInfo, totalCount },
         });
         setListError({ scopeKey: operation.scopeKey, error: undefined });
+        // Keep a failed batch paused while more pages exist; dismiss its
+        // stale retry control when the refreshed scope has no next page.
+        if (!pageInfo.hasNextPage)
+          setLoadMoreError({ scopeKey: operation.scopeKey, error: undefined });
         return { status: 'success', selectedContact };
       } catch {
         if (!isOperationCurrent(operation))
@@ -446,6 +498,17 @@ export const useMyahInboxContacts = (
   const loadMore = useCallback(async () => {
     const scopeKey = scopeKeyRef.current;
     const currentConnection = connectionRef.current;
+    const inFlight = operationInFlightRef.current;
+    // The sentinel is paused while an error exists, so this is an explicit
+    // retry. Let it take priority over a background poll of the same scope.
+    if (
+      inFlight?.kind === 'ambient' &&
+      loadMoreError.scopeKey === scopeKey &&
+      loadMoreError.error
+    ) {
+      inFlight.abortController.abort();
+      operationInFlightRef.current = null;
+    }
 
     if (
       operationInFlightRef.current ||
@@ -456,18 +519,21 @@ export const useMyahInboxContacts = (
       return;
     }
 
+    const requestedAfter = currentConnection.connection.pageInfo.endCursor;
     const operation: MyahInboxContactsOperation = {
       scopeKey,
+      kind: 'loadMore',
       abortController: new AbortController(),
     };
     operationInFlightRef.current = operation;
     setLoadMoreState({ scopeKey, loading: true });
+    setLoadMoreError({ scopeKey, error: undefined });
 
     try {
       const data = await queryContacts(
         {
           ...baseVariablesRef.current,
-          after: currentConnection.connection.pageInfo.endCursor,
+          after: requestedAfter,
         },
         operation.abortController,
       );
@@ -479,10 +545,20 @@ export const useMyahInboxContacts = (
         return;
       }
 
+      // A next batch whose cursor does not advance past the one just
+      // requested indicates the end of the list even when the server
+      // reports hasNextPage; stop automatic loading rather than loop.
+      const cursorAdvanced =
+        data.myahInboxContacts.pageInfo.endCursor !== requestedAfter;
+      const pageInfo = cursorAdvanced
+        ? data.myahInboxContacts.pageInfo
+        : { ...data.myahInboxContacts.pageInfo, hasNextPage: false };
+
       setConnection({
         scopeKey: operation.scopeKey,
         connection: {
-          ...data.myahInboxContacts,
+          totalCount: data.myahInboxContacts.totalCount,
+          pageInfo,
           edges: mergeEdges(
             connectionRef.current.connection.edges,
             data.myahInboxContacts.edges,
@@ -495,7 +571,7 @@ export const useMyahInboxContacts = (
         return;
       }
 
-      setListError({
+      setLoadMoreError({
         scopeKey: operation.scopeKey,
         error:
           reason instanceof Error
@@ -510,7 +586,7 @@ export const useMyahInboxContacts = (
       operationInFlightRef.current = null;
       setLoadMoreState({ scopeKey: operation.scopeKey, loading: false });
     }
-  }, [isOperationCurrent, queryContacts, setConnection]);
+  }, [isOperationCurrent, loadMoreError, queryContacts, setConnection]);
 
   const connection =
     scopedConnection?.scopeKey === scopeKey
@@ -539,7 +615,10 @@ export const useMyahInboxContacts = (
     loadingMore,
     isLoadingMore: loadingMore,
     error: listError.scopeKey === scopeKey ? listError.error : undefined,
+    loadMoreError:
+      loadMoreError.scopeKey === scopeKey ? loadMoreError.error : undefined,
     hasNextPage: connection?.pageInfo.hasNextPage ?? false,
+    totalCount: connection?.totalCount ?? 0,
     loadMore,
     refresh,
     ambientRefresh,

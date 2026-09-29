@@ -471,7 +471,9 @@ const setDefaultHooks = () => {
     loading: false,
     loadingMore: false,
     error: undefined,
+    loadMoreError: undefined,
     hasNextPage: false,
+    totalCount: contacts.length,
     loadMore: loadMoreContacts,
     refresh: refreshContacts,
     ambientRefresh: ambientRefreshContacts,
@@ -1574,6 +1576,31 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(
       screen.getByRole('option', { name: 'Select contact-1' }),
     ).toHaveFocus();
+  });
+
+  it('shows the true total contact count on mobile and keeps it unchanged as more batches load', async () => {
+    isMobile = true;
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [],
+      totalCount: 1234,
+    });
+    const view = renderPage();
+
+    await screen.findByText('1,234 contacts');
+
+    mockUseMyahInboxContacts.mockReturnValue({
+      ...mockUseMyahInboxContacts(),
+      contacts: [contacts[0]],
+      totalCount: 1234,
+    });
+    view.rerender(
+      <JotaiProvider store={view.store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+
+    expect(screen.getByText('1,234 contacts')).toBeVisible();
   });
 
   it('opens the current mobile conversation when recommendation reapply is draft-blocked', async () => {
