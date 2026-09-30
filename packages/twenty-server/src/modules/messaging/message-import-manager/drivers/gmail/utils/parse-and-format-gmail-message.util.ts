@@ -8,6 +8,7 @@ import { computeMessageDirection } from 'src/modules/messaging/message-import-ma
 import { parseGmailMessage } from 'src/modules/messaging/message-import-manager/drivers/gmail/utils/parse-gmail-message.util';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
 import { buildReplyToParticipants } from 'src/modules/messaging/message-import-manager/utils/build-reply-to-participants.util';
+import { extractInReplyToTokens } from 'src/modules/messaging/message-import-manager/utils/extract-in-reply-to-tokens.util';
 import { extractMessageBodyText } from 'src/modules/messaging/message-import-manager/utils/extract-message-body-text.util';
 import { formatAddressObjectAsParticipants } from 'src/modules/messaging/message-import-manager/utils/format-address-object-as-participants.util';
 
@@ -45,6 +46,7 @@ export const parseAndFormatGmailMessage = (
     cc,
     bcc,
     headerMessageId,
+    inReplyTo,
     body,
     isHtml,
     attachments,
@@ -95,6 +97,7 @@ export const parseAndFormatGmailMessage = (
   return {
     externalId: id,
     headerMessageId: resolvedHeaderMessageId,
+    inReplyToTokens: extractInReplyToTokens(inReplyTo),
     subject: subject || '',
     messageThreadExternalId: threadId,
     receivedAt: new Date(parseInt(internalDate)),

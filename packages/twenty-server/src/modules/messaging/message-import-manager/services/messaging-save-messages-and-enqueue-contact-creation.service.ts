@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Optional } from '@nestjs/common';
 
 import { type MyahInboxTriageMode } from 'src/engine/core-modules/myah-inbox/types/myah-inbox-contact-triage.types';
+import { MYAH_COMPOSE_REPLY_EVIDENCE_PORT } from 'src/engine/core-modules/myah-inbox/myah-compose-email.module';
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
 import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
@@ -8,6 +9,7 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { ModuleRef } from '@nestjs/core';
 
 import {
+  ConnectedAccountProvider,
   FieldActorSource,
   MessageChannelContactAutoCreationPolicy,
   MessageParticipantRole,
@@ -40,6 +42,30 @@ import { MessagingMessageParticipantService } from 'src/modules/messaging/messag
 import { CAMPAIGN_REPLY_EVIDENCE_PORT } from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 import { isWorkEmail } from 'src/utils/is-work-email';
+
+type ReplyEvidencePort = {
+  prepareInboundCandidateCreatorsInTransaction: (
+    input: {
+      workspaceId: string;
+      messageChannelId: string;
+      candidates: Array<{ threadExternalId: string; normalizedSender: string }>;
+    },
+    manager: WorkspaceEntityManager,
+  ) => Promise<string[]>;
+  reconcileInboundMessageInTransaction: (
+    input: {
+      workspaceId: string;
+      messageChannelId: string;
+      threadExternalId: string;
+      fromHandle: string;
+      inboundEvidenceId: string;
+      inboundMessageThreadId: string;
+      inReplyToTokens?: string[];
+      coveredCreatorIds?: string[];
+    },
+    manager: WorkspaceEntityManager,
+  ) => Promise<void>;
+};
 
 @Injectable()
 export class MessagingSaveMessagesAndEnqueueContactCreationService {
@@ -98,32 +124,19 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
           )
         : false;
 
-      const replyEvidence = this.moduleRef?.get<{
-        prepareInboundCandidateCreatorsInTransaction: (
-          input: {
-            workspaceId: string;
-            messageChannelId: string;
-            candidates: Array<{
-              threadExternalId: string;
-              normalizedSender: string;
-            }>;
-          },
-          manager: WorkspaceEntityManager,
-        ) => Promise<string[]>;
-        reconcileInboundMessageInTransaction: (
-          input: {
-            workspaceId: string;
-            messageChannelId: string;
-            threadExternalId: string;
-            fromHandle: string;
-            inboundEvidenceId: string;
-            inboundMessageThreadId: string;
-            inReplyToTokens?: string[];
-            coveredCreatorIds?: string[];
-          },
-          manager: WorkspaceEntityManager,
-        ) => Promise<void>;
-      }>(CAMPAIGN_REPLY_EVIDENCE_PORT, { strict: false });
+      const replyEvidence = this.moduleRef?.get<ReplyEvidencePort>(
+        CAMPAIGN_REPLY_EVIDENCE_PORT,
+        { strict: false },
+      );
+      let composeReplyEvidence: ReplyEvidencePort | undefined;
+      try {
+        composeReplyEvidence = this.moduleRef?.get<ReplyEvidencePort>(
+          MYAH_COMPOSE_REPLY_EVIDENCE_PORT,
+          { strict: false },
+        );
+      } catch {
+        // Older deployments without the additive Compose module keep importing.
+      }
       const candidates = messagesToSave.flatMap((message) => {
         if (message.direction !== MessageDirection.INCOMING) return [];
         const from = message.participants
@@ -145,6 +158,12 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
       if (recordTriageSource && candidates.length > 0) {
         const attemptCreatorIds = replyEvidence
           ? await replyEvidence.prepareInboundCandidateCreatorsInTransaction(
+              { workspaceId, messageChannelId: messageChannel.id, candidates },
+              transactionManager,
+            )
+          : [];
+        const composeCreatorIds = composeReplyEvidence
+          ? await composeReplyEvidence.prepareInboundCandidateCreatorsInTransaction(
               { workspaceId, messageChannelId: messageChannel.id, candidates },
               transactionManager,
             )
@@ -188,6 +207,7 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         coveredCreatorIds = [
           ...new Set([
             ...attemptCreatorIds,
+            ...composeCreatorIds,
             ...currentSourceCreators.map((source) => source.creatorId),
           ]),
         ].sort();
@@ -252,21 +272,33 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         if (!inboundMessageThreadId) {
           throw new Error('Persisted inbound Message must have a Thread');
         }
+        const evidenceInput = {
+          workspaceId,
+          messageChannelId: messageChannel.id,
+          threadExternalId: message.messageThreadExternalId,
+          fromHandle,
+          inboundEvidenceId,
+          inboundMessageThreadId,
+          ...(message.inReplyToTokens === undefined
+            ? {}
+            : { inReplyToTokens: message.inReplyToTokens }),
+          ...(recordTriageSource && candidates.length > 0
+            ? { coveredCreatorIds }
+            : {}),
+        };
+        // Gmail/Microsoft reply-parent tokens are new and Compose-only; Campaign
+        // keeps its pre-existing IMAP-only token matching.
+        const { inReplyToTokens: _composeOnlyTokens, ...campaignInput } =
+          evidenceInput;
         await replyEvidence?.reconcileInboundMessageInTransaction(
-          {
-            workspaceId,
-            messageChannelId: messageChannel.id,
-            threadExternalId: message.messageThreadExternalId,
-            fromHandle,
-            inboundEvidenceId,
-            inboundMessageThreadId,
-            ...(message.inReplyToTokens === undefined
-              ? {}
-              : { inReplyToTokens: message.inReplyToTokens }),
-            ...(recordTriageSource && candidates.length > 0
-              ? { coveredCreatorIds }
-              : {}),
-          },
+          connectedAccount.provider === ConnectedAccountProvider.GOOGLE ||
+            connectedAccount.provider === ConnectedAccountProvider.MICROSOFT
+            ? campaignInput
+            : evidenceInput,
+          transactionManager,
+        );
+        await composeReplyEvidence?.reconcileInboundMessageInTransaction(
+          evidenceInput,
           transactionManager,
         );
       }

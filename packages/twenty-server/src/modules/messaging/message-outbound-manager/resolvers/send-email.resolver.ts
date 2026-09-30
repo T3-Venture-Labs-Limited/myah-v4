@@ -11,7 +11,10 @@ import { PermissionFlagType } from 'twenty-shared/constants';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
+import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
 import { FileEmailAttachmentService } from 'src/engine/core-modules/file/file-email-attachment/services/file-email-attachment.service';
+import { MyahComposeEmailSendService } from 'src/engine/core-modules/myah-inbox/services/myah-compose-email-send.service';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
@@ -23,6 +26,7 @@ import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/con
 import { SendEmailOutputDTO } from 'src/modules/messaging/message-outbound-manager/dtos/send-email-output.dto';
 import { SendEmailInput } from 'src/modules/messaging/message-outbound-manager/dtos/send-email.input';
 import { SendEmailService } from 'src/modules/messaging/message-outbound-manager/services/send-email.service';
+import { resolveOutboundThreadExternalId } from 'src/modules/messaging/message-outbound-manager/utils/resolve-outbound-thread-external-id.util';
 import { isDefined } from 'twenty-shared/utils';
 import { isNonEmptyString } from '@sniptt/guards';
 
@@ -41,6 +45,7 @@ export class SendEmailResolver {
     private readonly emailComposerService: EmailComposerService,
     private readonly fileEmailAttachmentService: FileEmailAttachmentService,
     private readonly sendEmailService: SendEmailService,
+    private readonly composeSendService: MyahComposeEmailSendService,
   ) {}
 
   @Mutation(() => SendEmailOutputDTO)
@@ -80,6 +85,30 @@ export class SendEmailResolver {
       }
 
       const { data } = result;
+      const authContext = getWorkspaceAuthContext();
+
+      if (
+        authContext.workspace.id !== workspace.id ||
+        (isUserAuthContext(authContext) &&
+          authContext.userWorkspaceId !== userWorkspaceId)
+      ) {
+        throw new ForbiddenException(
+          'A matching user is required to send email',
+        );
+      }
+      // Creator origin needs the user's own permissions; other callers send
+      // without one.
+      const userAuthContext = isUserAuthContext(authContext)
+        ? authContext
+        : null;
+      let creatorId = userAuthContext
+        ? await this.composeSendService.verifyCreatorOrigin({
+            creatorId: input.creatorId,
+            to: data.recipients.to,
+            authContext: userAuthContext,
+          })
+        : null;
+      const sendStartedAt = new Date();
 
       const sendResult = isDefined(input.draftMessageId)
         ? await this.sendEmailService.sendComposedDraft(
@@ -89,15 +118,64 @@ export class SendEmailResolver {
           )
         : await this.sendEmailService.sendComposedEmail(data);
 
+      let recordedReceiptId: string | null = null;
+      if (data.messageChannelId) {
+        try {
+          const to = sendResult.deliveredRecipients?.to ?? data.recipients.to;
+          if (sendResult.deliveredRecipients && creatorId && userAuthContext) {
+            creatorId = await this.composeSendService.verifyCreatorOrigin({
+              creatorId,
+              to,
+              authContext: userAuthContext,
+            });
+          }
+          recordedReceiptId = await this.composeSendService.recordAcceptedSend({
+            workspaceId: workspace.id,
+            messageChannelId: data.messageChannelId,
+            connectedAccountId: input.connectedAccountId,
+            userWorkspaceId,
+            connectedAccountHandle: data.connectedAccount.handle,
+            providerHeaderMessageId: sendResult.headerMessageId,
+            providerMessageExternalId: sendResult.messageExternalId,
+            resolvedThreadExternalId: resolveOutboundThreadExternalId({
+              sendResult,
+              parentThreadExternalId: data.threadExternalId,
+              inReplyTo: data.inReplyTo,
+            }),
+            to,
+            creatorId,
+            sendStartedAt,
+            authContext,
+          });
+        } catch (error) {
+          this.logger.error(
+            `Compose receipt failed after send (workspace=${workspace.id}, channel=${data.messageChannelId}, error=${error instanceof Error ? error.constructor.name : 'unknown'})`,
+          );
+        }
+      }
+
       let messageThreadId: string | undefined;
 
       try {
-        if (data.shouldPersistMessage) {
-          await this.sendEmailService.persistSentMessage(
-            sendResult,
-            data,
-            workspace.id,
-          );
+        const persisted = data.shouldPersistMessage
+          ? await this.sendEmailService.persistSentMessage(
+              sendResult,
+              data,
+              workspace.id,
+            )
+          : undefined;
+        if (persisted?.messageThreadId && creatorId && recordedReceiptId) {
+          try {
+            await this.composeSendService.bindThreadCreator(
+              workspace.id,
+              persisted.messageThreadId,
+              creatorId,
+            );
+          } catch (error) {
+            this.logger.error(
+              `Compose thread binding failed after send (workspace=${workspace.id}, error=${error instanceof Error ? error.constructor.name : 'unknown'})`,
+            );
+          }
         }
 
         if (isDefined(input.draftMessageId)) {
