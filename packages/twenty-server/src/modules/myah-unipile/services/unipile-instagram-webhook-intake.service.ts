@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'crypto';
 
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -399,11 +400,22 @@ export class UnipileInstagramWebhookIntakeService {
           deactivatedAt: IsNull(),
         },
       });
+      if (!binding) {
+        if (
+          payload.eventType === UnipileInstagramWebhookEventType.ACCOUNT_STATUS
+        ) {
+          this.logger.warn('UNIPILE_INSTAGRAM_WEBHOOK_ACCOUNT_NOT_LINKED');
+          throw new ConflictException(
+            'Unipile Instagram account is not linked yet',
+          );
+        }
+        throw new BadRequestException(
+          'Unipile Instagram account is unavailable',
+        );
+      }
       if (
-        !binding ||
-        (payload.eventType !==
-          UnipileInstagramWebhookEventType.ACCOUNT_STATUS &&
-          binding.status !== UnipileInstagramAccountBindingStatus.ACTIVE)
+        payload.eventType !== UnipileInstagramWebhookEventType.ACCOUNT_STATUS &&
+        binding.status !== UnipileInstagramAccountBindingStatus.ACTIVE
       ) {
         throw new BadRequestException(
           'Unipile Instagram account is unavailable',

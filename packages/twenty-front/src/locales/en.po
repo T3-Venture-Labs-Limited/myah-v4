@@ -4891,6 +4891,11 @@ msgstr "Checking existing memberships…"
 msgid "Checking status"
 msgstr "Checking status"
 
+#. js-lingui-id: g7bjmd
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Checking your Instagram connection."
+msgstr "Checking your Instagram connection."
+
 #. js-lingui-id: RLe7Vk
 #: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
 #: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
@@ -5816,6 +5821,12 @@ msgstr "Connect Instagram"
 #: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
 msgid "Connect Instagram messaging for your workspace."
 msgstr "Connect Instagram messaging for your workspace."
+
+#. js-lingui-id: SPHpSG
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Connect Instagram to start syncing conversations."
+msgstr "Connect Instagram to start syncing conversations."
 
 #. js-lingui-id: wXCbGj
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -11894,6 +11905,26 @@ msgstr "Instagram did not send this message. Your message and recipient have bee
 msgid "Instagram disconnect is still being confirmed."
 msgstr "Instagram disconnect is still being confirmed."
 
+#. js-lingui-id: fJAub+
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Instagram is connected and syncing."
+msgstr "Instagram is connected and syncing."
+
+#. js-lingui-id: nJ3fnA
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Instagram is finishing the connection."
+msgstr "Instagram is finishing the connection."
+
+#. js-lingui-id: 7Z/ktq
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Instagram is still confirming the disconnect."
+msgstr "Instagram is still confirming the disconnect."
+
+#. js-lingui-id: +2To+Q
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Instagram is still finishing the connection. This can take a few minutes. Use Refresh status to check again."
+msgstr "Instagram is still finishing the connection. This can take a few minutes. Use Refresh status to check again."
+
 #. js-lingui-id: ZEZf5o
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Instagram messaging"
@@ -11904,6 +11935,11 @@ msgstr "Instagram messaging"
 msgid "Instagram messaging is unavailable."
 msgstr "Instagram messaging is unavailable."
 
+#. js-lingui-id: 9Qu6AN
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Instagram needs you to sign in again. Your login may have expired or access may have been removed."
+msgstr "Instagram needs you to sign in again. Your login may have expired or access may have been removed."
+
 #. js-lingui-id: LnUacG
 #: src/modules/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput.tsx
 msgid "Instagram recipients"
@@ -11913,6 +11949,11 @@ msgstr "Instagram recipients"
 #: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
 msgid "Instagram sending is blocked. Your message and recipient have been kept. Check status before starting another attempt."
 msgstr "Instagram sending is blocked. Your message and recipient have been kept. Check status before starting another attempt."
+
+#. js-lingui-id: W19Jts
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Instagram stopped working for this account. Reconnect to try again."
+msgstr "Instagram stopped working for this account. Reconnect to try again."
 
 #. js-lingui-id: TKQ7K+
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -12604,6 +12645,11 @@ msgstr "Last message"
 msgid "Last message {lastMessageSentAtFormatted}"
 msgstr "Last message {lastMessageSentAtFormatted}"
 
+#. js-lingui-id: r/gLXl
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Last message received"
+msgstr "Last message received"
+
 #. js-lingui-id: 1ZaQUH
 #: src/modules/object-metadata/hooks/useSortSubFieldChoicesForField.ts
 #: src/modules/settings/members/components/MemberNameFields.tsx
@@ -12642,6 +12688,11 @@ msgstr "Last refreshed"
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 msgid "Last signed in"
 msgstr "Last signed in"
+
+#. js-lingui-id: erTMh7
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Last synced"
+msgstr "Last synced"
 
 #. js-lingui-id: C3yOz3
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
@@ -15336,6 +15387,11 @@ msgstr "No messages found for this turn"
 msgid "No messages found."
 msgstr "No messages found."
 
+#. js-lingui-id: 3zrll0
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "No messages received yet"
+msgstr "No messages received yet"
+
 #. js-lingui-id: 0NudpV
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminWorkerMetricsGraph.tsx
 msgid "No metrics data available"
@@ -15824,6 +15880,11 @@ msgstr "Not started"
 #: src/modules/settings/accounts/components/SettingsAccountsConnectedAccountsRowRightContainer.tsx
 msgid "Not synced"
 msgstr "Not synced"
+
+#. js-lingui-id: oL535e
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Not synced yet"
+msgstr "Not synced yet"
 
 #. js-lingui-id: dswCrr
 #: src/modules/activities/notes/components/NotesCard.tsx
@@ -18130,6 +18191,11 @@ msgstr "Refresh recipient"
 #: src/pages/settings/admin-panel/SettingsAdminWorkspacesStatus.tsx
 msgid "Refresh status"
 msgstr "Refresh status"
+
+#. js-lingui-id: aWz66p
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Refresh status to check this connection."
+msgstr "Refresh status to check this connection."
 
 #. js-lingui-id: /BI0y9
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
@@ -23303,6 +23369,7 @@ msgstr "True"
 
 #. js-lingui-id: KDw4GX
 #: src/modules/myah/campaign/components/CampaignIndexWorkspace.tsx
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Try again"
 msgstr "Try again"
 
@@ -25825,6 +25892,11 @@ msgstr "You do not have permission for this Instagram message route."
 #: src/modules/page-layout/widgets/components/PageLayoutWidgetForbiddenDisplay.tsx
 msgid "You do not have permission to access the {objectName} object"
 msgstr "You do not have permission to access the {objectName} object"
+
+#. js-lingui-id: emt57M
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "You do not have permission to manage Instagram."
+msgstr "You do not have permission to manage Instagram."
 
 #. js-lingui-id: /IlYOv
 #: src/modules/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage.tsx
