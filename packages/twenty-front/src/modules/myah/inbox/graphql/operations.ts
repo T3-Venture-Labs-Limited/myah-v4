@@ -260,6 +260,8 @@ export const GET_MYAH_INBOX_INSTAGRAM_MESSAGES = gql`
           sentVia
           provider
           deliveryState
+          providerMessageId
+          replyReceiptId
           providerCreatedAt
           createdAt
           hasAttachments
@@ -513,6 +515,7 @@ export const GET_INSTAGRAM_MESSAGE_SEND_STATUS = gql`
       receiptId
       state
       providerCode
+      providerMessageId
       outcome
       creatorRecordId
       conversationRecordId

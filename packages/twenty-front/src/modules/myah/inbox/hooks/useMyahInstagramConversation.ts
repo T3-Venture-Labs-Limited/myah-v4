@@ -20,6 +20,7 @@ type InstagramConversationOperation = {
   abortController: AbortController;
   // Intent belongs to this operation, so cancellation discards it too.
   refreshRequested?: boolean;
+  preserveLoadedPages?: boolean;
 };
 
 const effectiveTimestamp = (message: {
@@ -37,6 +38,8 @@ const toInstagramConversationMessage = (
   provider: message.provider as MyahInstagramConversationMessage['provider'],
   deliveryState:
     message.deliveryState as MyahInstagramConversationMessage['deliveryState'],
+  providerMessageId: message.providerMessageId ?? null,
+  replyReceiptId: message.replyReceiptId ?? null,
   providerCreatedAt: message.providerCreatedAt ?? null,
   createdAt: message.createdAt,
   hasAttachments: message.hasAttachments,
@@ -75,6 +78,8 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
   // Keeps pagination based on the latest accepted native page connection.
   // oxlint-disable-next-line twenty/no-state-useref
   const connectionRef = useRef<MyahInstagramMessageConnection | null>(null);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const loadedOlderPagesRef = useRef(false);
   // Avoids turning an Apollo client identity change into a stale request.
   // oxlint-disable-next-line twenty/no-state-useref
   const apolloCoreClientRef = useRef(apolloCoreClient);
@@ -126,13 +131,14 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
   );
 
   const startInitialRead = useCallback(
-    async function readInitialPage() {
+    async function readInitialPage(preserveLoadedPages = false) {
       const requestedConversationId = scopeKeyRef.current;
 
       if (!requestedConversationId) return;
       if (operationRef.current) {
         if (operationRef.current.scopeKey === requestedConversationId) {
           operationRef.current.refreshRequested = true;
+          operationRef.current.preserveLoadedPages ||= preserveLoadedPages;
         }
         // Preserve the existing immediate settlement for busy refetch callers.
         return;
@@ -157,7 +163,24 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
         ) {
           return;
         }
-        publishConnection(nextConnection);
+        if (
+          preserveLoadedPages &&
+          loadedOlderPagesRef.current &&
+          connectionRef.current
+        ) {
+          const loadedConnection = connectionRef.current;
+          publishConnection({
+            ...nextConnection,
+            edges: mergeChronologically(
+              nextConnection.edges,
+              loadedConnection.edges,
+            ),
+            pageInfo: loadedConnection.pageInfo,
+          });
+        } else {
+          loadedOlderPagesRef.current = false;
+          publishConnection(nextConnection);
+        }
       } catch (reason: unknown) {
         if (
           operationRef.current !== operation ||
@@ -178,7 +201,7 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
             operation.refreshRequested &&
             scopeKeyRef.current === operation.scopeKey
           ) {
-            void readInitialPage();
+            void readInitialPage(operation.preserveLoadedPages);
           }
         }
       }
@@ -190,6 +213,7 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
     operationRef.current?.abortController.abort();
     operationRef.current = null;
     connectionRef.current = null;
+    loadedOlderPagesRef.current = false;
     setConnection(null);
     setError(null);
     setLoadingMore(false);
@@ -247,6 +271,7 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
       ) {
         return;
       }
+      loadedOlderPagesRef.current = true;
       publishConnection({
         ...nextPage,
         edges: mergeChronologically(currentConnection.edges, nextPage.edges),

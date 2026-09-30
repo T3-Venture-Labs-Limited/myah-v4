@@ -417,6 +417,7 @@ export class ActionApprovalService {
     actionKind: 'START_CHAT' | 'REPLY';
     actionVersion: 2 | 3;
     receipt: SafeActionExecutionReceipt;
+    providerMessageId: string | null;
     confirmedDestinationSource?: InstagramMessageConfirmedDestinationSource;
   }> {
     const receipt = await this.dataSource
@@ -450,6 +451,7 @@ export class ActionApprovalService {
       actionKind: binding.actionKind,
       actionVersion: binding.actionVersion,
       receipt: this.redactionService.toSafeReceipt(receipt),
+      providerMessageId: receipt.providerExternalMessageId,
       ...(receipt.state === ActionExecutionReceiptState.SENT &&
       binding.actionVersion === 3 &&
       isInstagramMessageIdentitySnapshot(binding.instagramMessageSnapshot) &&
@@ -959,6 +961,35 @@ export class ActionApprovalService {
     }
 
     return this.redactionService.toSafeReceipt(receipt);
+  }
+
+  async isDraftProviderAccepted({
+    workspaceId,
+    actionName,
+    draftId,
+  }: {
+    workspaceId: string;
+    actionName: 'send_instagram_message';
+    draftId: string;
+  }): Promise<boolean> {
+    const bindings = await this.dataSource
+      .getRepository(ActionApprovalBindingEntity)
+      .find({
+        where: {
+          workspaceId,
+          actionName,
+          draftId,
+          state: ActionApprovalBindingState.CONSUMED,
+        },
+        relations: { receipts: true },
+      });
+
+    return bindings.some((binding) =>
+      binding.receipts.some(
+        (receipt) =>
+          receipt.state === ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      ),
+    );
   }
 
   async isDraftExecutionLocked({

@@ -1,7 +1,7 @@
 import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { INSTAGRAM_MESSAGE_V3_DIRECT_INTERACTION_CONTEXT } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { computeInstagramActionTargetFingerprints } from 'src/engine/core-modules/instagram-action-budget/utils/instagram-action-target-fingerprint.util';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { INSTAGRAM_MESSAGE_MAX_BODY_BYTES } from 'twenty-shared/constants';
 import { getUtf8ByteLength } from 'twenty-shared/utils';
@@ -61,6 +61,8 @@ export type InstagramMessageSendResult =
 
 @Injectable()
 export class InstagramMessageSendService {
+  private readonly logger = new Logger(InstagramMessageSendService.name);
+
   constructor(
     private readonly actionApprovalService: ActionApprovalService,
     @Inject(INSTAGRAM_MESSAGE_AUTHORITY_READER)
@@ -453,7 +455,10 @@ export class InstagramMessageSendService {
         }
 
         return { status: 'SENT', receiptId };
-      } catch {
+      } catch (error) {
+        this.logger.warn(
+          `Instagram receipt ${receiptId} inline-send ${error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error'}`,
+        );
         return { status: 'PROVIDER_ACCEPTED', receiptId };
       }
     } catch {
@@ -518,7 +523,10 @@ export class InstagramMessageSendService {
         });
 
         return { status: 'SENT', receiptId };
-      } catch {
+      } catch (error) {
+        this.logger.warn(
+          `Instagram receipt ${receiptId} finish-existing ${error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error'}`,
+        );
         return { status: 'PROVIDER_ACCEPTED', receiptId };
       }
     }

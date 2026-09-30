@@ -135,6 +135,7 @@ export class MyahInboxInstagramMessageQueryService {
             .addSelect('message.sentVia', 'sentVia')
             .addSelect('message.provider', 'provider')
             .addSelect('message.deliveryState', 'deliveryState')
+            .addSelect('message.providerMessageId', 'providerMessageId')
             .addSelect('message.providerCreatedAt', 'providerCreatedAt')
             .addSelect('message.createdAt', 'createdAt')
             .addSelect('message.hasAttachments', 'hasAttachments')
@@ -159,10 +160,16 @@ export class MyahInboxInstagramMessageQueryService {
         const cursorCondition = cursor
           ? `AND (COALESCE(message."providerCreatedAt", message."createdAt"), message.id) < (${add(cursor.effectiveTimestamp)}, ${add(cursor.messageId)}::uuid)`
           : '';
+        const receiptWorkspaceId = add(input.workspace.id);
+        const receiptViewerId = add(
+          input.authContext.type === 'user'
+            ? input.authContext.userWorkspaceId
+            : null,
+        );
         const limit = add(first + 1);
         const sql = `WITH readable_conversation AS (${conversationSql}), readable_messages AS (${messagesSql})
 SELECT message.id, message.text, message.direction, message."sentVia", message.provider,
-  message."deliveryState", message."providerCreatedAt", message."createdAt",
+  message."deliveryState", message."providerMessageId", reply_receipt.id AS "replyReceiptId", message."providerCreatedAt", message."createdAt",
   message."hasAttachments", message."attachmentCount",
   COALESCE(message."providerCreatedAt", message."createdAt") AS "effectiveTimestamp",
   to_char(
@@ -171,6 +178,22 @@ SELECT message.id, message.text, message.direction, message."sentVia", message.p
   ) AS "effectiveCursorTimestamp"
 FROM readable_messages message
 INNER JOIN readable_conversation conversation ON conversation.id = message."conversationId"
+LEFT JOIN (
+  SELECT DISTINCT ON (receipt."providerExternalMessageId")
+    receipt.id, receipt."providerExternalMessageId"
+  FROM core."actionExecutionReceipt" receipt
+  INNER JOIN core."actionApprovalBinding" binding ON binding.id = receipt."actionApprovalBindingId"
+  WHERE receipt."workspaceId" = ${receiptWorkspaceId}::uuid
+    AND binding."workspaceId" = receipt."workspaceId"
+    AND binding."initiatorUserWorkspaceId" = ${receiptViewerId}::uuid
+    AND binding."actionName" = 'send_instagram_message'
+    AND binding."actionVersion" = 3 AND binding."actionKind" = 'REPLY'
+    AND binding."instagramMessageSnapshot"->>'conversationRecordId' = $1::text
+    AND receipt."providerExternalMessageId" IS NOT NULL
+    AND receipt.state IN ('PROVIDER_ACCEPTED', 'SENT')
+  ORDER BY receipt."providerExternalMessageId", receipt."createdAt" DESC, receipt.id DESC
+) reply_receipt ON message.direction = 'OUTBOUND' AND message.provider = 'UNIPILE'
+  AND reply_receipt."providerExternalMessageId" = message."providerMessageId"
 WHERE conversation.id = $1::uuid
 ${cursorCondition}
 ORDER BY COALESCE(message."providerCreatedAt", message."createdAt") DESC, message.id DESC
@@ -198,6 +221,8 @@ LIMIT ${limit}`;
             sentVia: row.sentVia,
             provider: row.provider,
             deliveryState: row.deliveryState,
+            providerMessageId: row.providerMessageId ?? null,
+            replyReceiptId: row.replyReceiptId ?? null,
             providerCreatedAt: row.providerCreatedAt
               ? toIsoString(row.providerCreatedAt)
               : null,
