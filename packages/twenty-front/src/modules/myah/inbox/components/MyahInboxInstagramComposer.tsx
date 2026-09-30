@@ -31,7 +31,7 @@ export type MyahInboxInstagramComposerProps = {
   previewScope?: string;
   conflict?: { revision: number; body: string } | null;
   onBodyChange: (body: string) => void;
-  onReviewAndSend: () => void;
+  onSend: () => void;
   onReloadConflict?: () => void;
   // Membership-scoped Campaign guidance selection (MYAH-413 owns evidence-
   // backed context/draft/send authority). Selecting a Campaign here only
@@ -56,7 +56,7 @@ export const MyahInboxInstagramComposer = ({
   previewScope = '',
   conflict = null,
   onBodyChange,
-  onReviewAndSend,
+  onSend,
   onReloadConflict,
   campaignOptions = [],
   selectedCampaignId = null,
@@ -101,11 +101,11 @@ export const MyahInboxInstagramComposer = ({
       primaryActions={
         <Button
           disabled={cannotSend}
-          onClick={onReviewAndSend}
+          onClick={onSend}
           size="small"
-          title="Review"
-          ariaLabel="Review and send"
+          title="Send reply"
           variant="primary"
+          accent="brand"
         />
       }
       centerContext={

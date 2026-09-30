@@ -135,7 +135,7 @@ const MyahInboxInstagramComposerView = ({
     previewScope={composerProps.previewScope}
     conflict={composerProps.conflict}
     onBodyChange={composerProps.onBodyChange}
-    onReviewAndSend={composerProps.onReviewAndSend}
+    onSend={composerProps.onSend}
     onReloadConflict={composerProps.onReloadConflict}
     campaignOptions={campaignOptions}
     selectedCampaignId={selectedCampaignId}
@@ -696,7 +696,7 @@ const MyahInboxInstagramReplyPanel = ({
                 }
                 draft.setBody(body);
               },
-              onReviewAndSend: () => void handleSend(),
+              onSend: () => void handleSend(),
             }}
           />
         )}

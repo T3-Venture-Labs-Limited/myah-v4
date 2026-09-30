@@ -57,7 +57,7 @@ jest.mock('@/myah/inbox/components/MyahInboxInstagramComposer', () => ({
     error,
     conflict,
     onReloadConflict,
-    onReviewAndSend,
+    onSend,
     campaignOptions,
     selectedCampaignId,
     onSelectCampaign,
@@ -70,7 +70,7 @@ jest.mock('@/myah/inbox/components/MyahInboxInstagramComposer', () => ({
     error: string | null;
     conflict?: { revision: number; body: string } | null;
     onReloadConflict?: () => void;
-    onReviewAndSend: () => void;
+    onSend: () => void;
     campaignOptions?: Array<{ value: string; label: string }>;
     selectedCampaignId?: string | null;
     onSelectCampaign?: (value: string) => void;
@@ -80,7 +80,7 @@ jest.mock('@/myah/inbox/components/MyahInboxInstagramComposer', () => ({
   }) => (
     <div>
       Composer {username} {disabled ? 'disabled' : 'ready'}
-      <button onClick={onReviewAndSend}>Review and send</button>
+      <button onClick={onSend}>Send reply</button>
       {error ? <span>{error}</span> : null}
       {conflict ? (
         <div data-testid="shared-conflict" role="alert" tabIndex={-1}>
@@ -294,7 +294,7 @@ describe('MyahInboxInstagramConversationPanel', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
     expect(refetch).not.toHaveBeenCalled();
     resolveSend?.({ status: 'SENT', error: null });
 
@@ -1068,7 +1068,7 @@ describe('MyahInboxInstagramConversationPanel', () => {
         'Message on Instagram',
       );
       expect(
-        screen.queryByRole('button', { name: 'Review and send' }),
+        screen.queryByRole('button', { name: 'Send reply' }),
       ).not.toBeInTheDocument();
       expect(mockUseDraft).not.toHaveBeenCalled();
       expect(mockUseSend).not.toHaveBeenCalled();

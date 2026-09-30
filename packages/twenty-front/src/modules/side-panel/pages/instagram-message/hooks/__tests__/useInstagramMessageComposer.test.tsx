@@ -320,14 +320,14 @@ it('suppresses late response state and navigation after workspace change or unmo
   expect(view.store.get(atom)?.attempt?.result?.status).not.toBe('SENT');
 });
 
-it('does not prepare or send without either messaging permission', async () => {
+it('prepares and sends for a human without either tool route flag when account is ready', async () => {
   mockPermission = false;
   const view = setup();
+  await waitFor(() => expect(view.result.current.canSend).toBe(true));
   await act(async () => {
     await view.result.current.send();
   });
-  expect(view.result.current.canSend).toBe(false);
-  expect(calls).toHaveLength(0);
+  expect(mutations()).toHaveLength(1);
 });
 
 it('invalidates preparation before a same-tick recipient change followed by send', async () => {
@@ -601,13 +601,15 @@ it('locks UNKNOWN across a second mounted instance and only checks status read-o
 });
 
 it.each([
-  ['START_CHAT', false, true, false],
-  ['REPLY', true, false, false],
-  ['START_CHAT', true, false, true],
-  ['REPLY', false, true, true],
+  ['START_CHAT', false, true],
+  ['REPLY', true, false],
+  ['START_CHAT', true, false],
+  ['REPLY', false, true],
+  ['START_CHAT', false, false],
+  ['REPLY', false, false],
 ] as const)(
-  'gates %s with first=%s reply=%s',
-  async (actionKind, first, reply, allowed) => {
+  'accepts server-approved %s with first=%s reply=%s',
+  async (actionKind, first, reply) => {
     mockFirstPermission = first;
     mockReplyPermission = reply;
     const original = respond;
@@ -619,7 +621,7 @@ it.each([
     await waitFor(() =>
       expect(view.result.current.preparation?.status).toBe('READY'),
     );
-    expect(view.result.current.canSend).toBe(allowed);
+    expect(view.result.current.canSend).toBe(true);
   },
 );
 

@@ -104,6 +104,7 @@ const buildHarness = (input?: {
   readableLocalChats?: object[];
   pages?: Array<{ chats: object[]; nextCursor: string | null }>;
   permission?: boolean | ((kind: string) => boolean);
+  manualPermission?: boolean;
   account?: object | null;
   creatorInsertPermission?: CreatorInsertPermission;
   targetAvailable?: boolean | ((input: object) => boolean);
@@ -164,11 +165,16 @@ const buildHarness = (input?: {
   };
   const permissionService = {
     canQueryComposerAccount: jest.fn().mockResolvedValue(true),
-    canSend: jest.fn(({ actionKind }) =>
+    isVerifiedManualHuman: jest.fn(({ manualHumanAccess }) =>
+      Boolean(manualHumanAccess),
+    ),
+    canSend: jest.fn(({ actionKind, manualHumanAccess }) =>
       Promise.resolve(
-        typeof input?.permission === 'function'
-          ? input.permission(actionKind)
-          : (input?.permission ?? true),
+        input?.manualPermission && manualHumanAccess
+          ? true
+          : typeof input?.permission === 'function'
+            ? input.permission(actionKind)
+            : (input?.permission ?? true),
       ),
     ),
   };
@@ -369,6 +375,48 @@ describe('InstagramMessageRecipientService', () => {
       expect(harness.unipileClient.sendMessage).not.toHaveBeenCalled();
     },
   );
+
+  it('prepares an unmatched raw handle for a human without broad Creator-create permission', async () => {
+    const harness = buildHarness({
+      allCreators: [],
+      readableCreator: null,
+      creatorInsertPermission: 'objectDenied',
+      profile: {
+        username: 'new.creator',
+        providerId: 'provider-id',
+        providerMessagingId: 'provider-messaging-id',
+      },
+    });
+    const result = await harness.service.prepare(
+      { recipient: { rawHandle: 'new.creator' } },
+      {
+        ...context,
+        manualHumanAccess: {
+          userWorkspaceId: context.initiatorUserWorkspaceId,
+          workspaceMemberId: context.workspaceMemberId,
+        },
+      },
+    );
+
+    expect(result).toMatchObject({ status: 'READY', actionKind: 'START_CHAT' });
+    expect(harness.creatorRepository.insert).not.toHaveBeenCalled();
+  });
+
+  it('prepares a human first message without the route-specific tool permission', async () => {
+    const harness = buildHarness({ permission: false, manualPermission: true });
+    await expect(
+      harness.service.prepare(
+        { recipient: { rawHandle: 'creator.name' } },
+        {
+          ...context,
+          manualHumanAccess: {
+            userWorkspaceId: context.initiatorUserWorkspaceId,
+            workspaceMemberId: context.workspaceMemberId,
+          },
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'READY', actionKind: 'START_CHAT' });
+  });
 
   it('does not require prospective Creator insert permission to reuse a readable Creator', async () => {
     const harness = buildHarness({

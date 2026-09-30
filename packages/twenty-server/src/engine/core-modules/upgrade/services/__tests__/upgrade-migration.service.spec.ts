@@ -71,6 +71,14 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
         workspaceId: null,
         isInitial: false,
       }),
+      getMany: jest.fn().mockResolvedValue([
+        {
+          ...historical,
+          name: INSTAGRAM_SLOW_D,
+          workspaceId: null,
+          isInitial: false,
+        },
+      ]),
     };
     const repository = {
       findOne: jest.fn(),
@@ -82,11 +90,88 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
       manager: { query: jest.fn().mockResolvedValue([historical]) },
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
     };
+    const reader = buildInstagramSequenceReader();
     const service = new UpgradeMigrationService(
       repository as unknown as Repository<UpgradeMigrationEntity>,
+      reader,
     );
-    return { service, repository, queryBuilder };
+    return { service, repository, queryBuilder, reader };
   };
+
+  it.each(['completed', 'failed'] as const)(
+    'uses the furthest later %s instance attempt after a late catch-up',
+    async (status) => {
+      const { service, queryBuilder, reader } = setup();
+      const slow = {
+        ...historical,
+        name: INSTAGRAM_SLOW_D,
+        workspaceId: null,
+        isInitial: false,
+        createdAt: new Date('2026-09-12T00:00:00Z'),
+        status,
+      };
+      const catchUp = {
+        ...slow,
+        name: INSTAGRAM_FAST_D,
+        status: 'completed',
+        createdAt: new Date('2026-09-13T00:00:00Z'),
+      };
+      queryBuilder.getOne.mockResolvedValue(catchUp);
+      queryBuilder.getMany.mockResolvedValue([catchUp, slow]);
+      jest
+        .spyOn(reader, 'getUpgradeSequence')
+        .mockReturnValue(
+          reader
+            .getUpgradeSequence()
+            .map((step) =>
+              step.name === INSTAGRAM_FAST_D
+                ? { ...step, catchUpOnResume: true as const }
+                : step,
+            ),
+        );
+
+      const cursor = await service.getLastAttemptedInstanceCommand();
+
+      expect(cursor).toMatchObject({
+        name: INSTAGRAM_SLOW_D,
+        status,
+      });
+      expect(reader.getInitialCursorForNewWorkspace(cursor!)).toEqual(
+        status === 'completed'
+          ? { name: INSTAGRAM_WORKSPACE_D, status: 'completed' }
+          : { name: INSTAGRAM_SLOW_D, status: 'failed' },
+      );
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT MAX(sub.attempt)'),
+      );
+    },
+  );
+
+  it('does not hide an unresolved failed catch-up behind a later completed instance step', async () => {
+    const { service, queryBuilder } = setup();
+    queryBuilder.getMany.mockResolvedValue([
+      {
+        ...historical,
+        name: INSTAGRAM_FAST_D,
+        workspaceId: null,
+        isInitial: false,
+        status: 'failed',
+        createdAt: new Date('2026-09-13T00:00:00Z'),
+      },
+      {
+        ...historical,
+        name: INSTAGRAM_SLOW_D,
+        workspaceId: null,
+        isInitial: false,
+        createdAt: new Date('2026-09-12T00:00:00Z'),
+      },
+    ]);
+
+    expect(await service.getLastAttemptedInstanceCommand()).toMatchObject({
+      name: INSTAGRAM_FAST_D,
+      status: 'failed',
+    });
+  });
 
   it.each([null, workspaceId])(
     'uses exact D and existing scope %s for completion lookup',
@@ -166,6 +251,65 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
       expect(repository.delete).not.toHaveBeenCalled();
       expect(repository.remove).not.toHaveBeenCalled();
       expect(historical).toEqual(original);
+    },
+  );
+
+  it.each([false, true])(
+    'records a catch-up instance attempt only at the global scope (fails=%s)',
+    async (fails) => {
+      const { service, repository } = setup();
+      repository.findOne.mockResolvedValue(null);
+      repository.count.mockResolvedValue(0);
+      const queryRunner = {
+        connect: jest.fn(),
+        startTransaction: jest.fn(),
+        commitTransaction: jest.fn(),
+        rollbackTransaction: jest.fn(),
+        release: jest.fn(),
+        isTransactionActive: false,
+        manager: { getRepository: jest.fn().mockReturnValue(repository) },
+      };
+      const getActiveOrSuspendedWorkspaceIds = jest
+        .fn()
+        .mockResolvedValue([workspaceId]);
+      const runner = new InstanceCommandRunnerService(
+        {
+          createQueryRunner: jest.fn().mockReturnValue(queryRunner),
+        } as unknown as DataSource,
+        {
+          get: jest.fn().mockReturnValue(executedByVersion),
+        } as unknown as TwentyConfigService,
+        service,
+        {
+          getActiveOrSuspendedWorkspaceIds,
+        } as unknown as WorkspaceVersionService,
+        {
+          invalidateInstanceAndAllWorkspacesStatus: jest.fn(),
+        } as unknown as UpgradeStatusService,
+      );
+      const error = new Error('fixture failure');
+      const command = {
+        up: fails ? jest.fn().mockRejectedValue(error) : jest.fn(),
+        down: jest.fn(),
+      };
+
+      expect(
+        await runner.runFastInstanceCommand({
+          command,
+          name: INSTAGRAM_FAST_D,
+          preserveWorkspaceCursors: true,
+        }),
+      ).toMatchObject(
+        fails ? { status: 'failed', error } : { status: 'success' },
+      );
+      expect(getActiveOrSuspendedWorkspaceIds).not.toHaveBeenCalled();
+      expect(repository.save).toHaveBeenCalledWith([
+        expect.objectContaining({
+          name: INSTAGRAM_FAST_D,
+          workspaceId: null,
+          status: fails ? 'failed' : 'completed',
+        }),
+      ]);
     },
   );
 

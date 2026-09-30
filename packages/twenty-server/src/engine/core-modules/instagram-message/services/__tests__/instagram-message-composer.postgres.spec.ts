@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER } from 'twenty-shared/application';
+import { FieldMetadataType } from 'twenty-shared/types';
 import {
   DataSource,
   EntitySchema,
@@ -13,10 +14,15 @@ import { ActionApprovalBindingEvidenceLinkEntity } from 'src/engine/core-modules
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { InstagramActionLimitBlockEntity } from 'src/engine/core-modules/instagram-action-budget/entities/instagram-action-limit-block.entity';
 import { InstagramActionReservationEntity } from 'src/engine/core-modules/instagram-action-budget/entities/instagram-action-reservation.entity';
 import { InstagramActionBudgetService } from 'src/engine/core-modules/instagram-action-budget/services/instagram-action-budget.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/workspace-internal-context.interface';
 import { workspaceContextStorage } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { InstagramMessageAuthorityReaderService } from '../instagram-message-authority-reader.service';
@@ -641,6 +647,15 @@ describePostgres('InstagramMessageComposer isolated PostgreSQL', () => {
           lifecycle: text,
           deletedAt: date,
         }),
+        entity('myahSocialMessage', 'myahSocialMessage', {
+          conversationId: uuid,
+          provider: text,
+          providerMessageId: text,
+          text,
+          direction: text,
+          providerCreatedAt: date,
+          deletedAt: date,
+        }),
         entity('myahInstagramReplyDraft', 'myahInstagramReplyDraft', {
           name: text,
           title: text,
@@ -1014,6 +1029,268 @@ describePostgres('InstagramMessageComposer isolated PostgreSQL', () => {
     for (const fixtureSchema of fixtureSchemas.splice(0))
       await executeFixtureSql(`DROP SCHEMA "${fixtureSchema}" CASCADE`);
   });
+
+  it.each(['ordinaryMember', 'myahTeamMember'])(
+    'executes %s ORM reads on real account, Creator, reply draft and confirmed destination rows without granting Creator creation',
+    async (memberRole) => {
+      const h = await createComposerFixture();
+      const creatorId = randomUUID();
+      const draftRecordId = randomUUID();
+      const conversationId = randomUUID();
+      await h.source
+        .getRepository('creator')
+        .insert({ id: creatorId, instagramUsername: 'recipient' });
+      await h.source.getRepository('myahInstagramReplyDraft').insert({
+        id: draftRecordId,
+        revision: 1,
+        body: 'Reply',
+        kind: 'REPLY',
+        status: 'DRAFT',
+        source: 'MANUAL',
+        creatorId,
+        conversationId,
+      });
+      await h.source.getRepository('myahSocialConversation').insert({
+        id: conversationId,
+        creatorId,
+        instagramAccountId: h.accountId,
+        providerConversationId: 'fake-chat',
+        recipientIgsid: 'messaging-009',
+        provider: 'UNIPILE',
+        lifecycle: 'ACTIVE',
+      });
+      const messageId = randomUUID();
+      await h.source.getRepository('myahSocialMessage').insert({
+        id: messageId,
+        conversationId,
+        provider: 'UNIPILE',
+        providerMessageId: 'fake-message',
+        text: 'Reply',
+        direction: 'OUTBOUND',
+        providerCreatedAt: new Date(),
+      });
+      const names = [
+        'myahInstagramAccount',
+        'creator',
+        'myahInstagramReplyDraft',
+        'myahSocialConversation',
+        'myahSocialMessage',
+      ];
+      const fields = names.flatMap((name) =>
+        h.source.getMetadata(name).columns.map((column) => ({
+          id: `${name}-${column.propertyName}`,
+          universalIdentifier: `${name}-${column.propertyName}`,
+          objectMetadataId: name,
+          name: column.propertyName,
+          type:
+            column.type === 'uuid'
+              ? FieldMetadataType.UUID
+              : column.type === 'timestamptz'
+                ? FieldMetadataType.DATE_TIME
+                : FieldMetadataType.TEXT,
+          isActive: true,
+        })),
+      );
+      const objects = names.map((name) => ({
+        id: name,
+        universalIdentifier: name,
+        nameSingular: name,
+        namePlural: `${name}s`,
+        isSystem: false,
+        isCustom: true,
+        fieldIds: fields
+          .filter((field) => field.objectMetadataId === name)
+          .map((field) => field.id),
+      }));
+      const maps = <T extends { id: string }>(rows: T[]) => ({
+        byUniversalIdentifier: Object.fromEntries(
+          rows.map((row) => [row.id, row]),
+        ),
+        universalIdentifierById: Object.fromEntries(
+          rows.map((row) => [row.id, row.id]),
+        ),
+        universalIdentifiersByApplicationId: {},
+      });
+      const permission = (canUpdateObjectRecords: boolean) => ({
+        canReadObjectRecords: true,
+        canUpdateObjectRecords,
+        canSoftDeleteObjectRecords: false,
+        canDestroyObjectRecords: false,
+        restrictedFields: {},
+        rowLevelPermissionPredicates: [],
+        rowLevelPermissionPredicateGroups: [],
+      });
+      Object.assign(h.source, {
+        permissionsPerRoleId: {
+          [memberRole]: Object.fromEntries(
+            names.map((name) => [
+              name,
+              permission(name === 'myahInstagramReplyDraft'),
+            ]),
+          ),
+        },
+        featureFlagMap: {},
+      });
+      const manager = new WorkspaceEntityManager(
+        h.source as unknown as GlobalWorkspaceDataSource,
+      );
+      jest.spyOn(manager, 'internalContext', 'get').mockReturnValue({
+        workspaceId: h.fixtureWorkspaceId,
+        objectIdByNameSingular: Object.fromEntries(
+          names.map((name) => [name, name]),
+        ),
+        flatObjectMetadataMaps: maps(objects),
+        flatFieldMetadataMaps: maps(fields),
+        flatRowLevelPermissionPredicateMaps: maps([]),
+        flatRowLevelPermissionPredicateGroupMaps: maps([]),
+        userWorkspaceRoleMap: {},
+        apiKeyRoleMap: {},
+      } as unknown as WorkspaceInternalContext);
+      const auth = {
+        type: 'user',
+        userWorkspaceId: h.authenticatedContext.initiatorUserWorkspaceId,
+        workspaceMemberId: h.authenticatedContext.workspaceMemberId,
+      } as unknown as WorkspaceAuthContext;
+      jest.spyOn(manager, 'authContext', 'get').mockReturnValue(auth);
+      const role = { unionOf: [memberRole] };
+      for (const [name, id] of [
+        ['myahInstagramAccount', h.accountId],
+        ['creator', creatorId],
+        ['myahInstagramReplyDraft', draftRecordId],
+        ['myahSocialConversation', conversationId],
+        ['myahSocialMessage', messageId],
+      ]) {
+        expect(
+          await manager.getRepository(name, role, auth).findOne({
+            where: { id },
+            select: { id: true },
+          }),
+        ).toMatchObject({ id });
+      }
+      const recordAccess = new InstagramMessageRecordAccessService(
+        {
+          getGlobalWorkspaceDataSource: async () => h.source,
+          getRepository: async (
+            _workspaceId: string,
+            name: string,
+            permissions: typeof role,
+          ) => manager.getRepository(name, permissions, auth),
+        } as never,
+        {
+          find: (_workspaceId: string, options: never) =>
+            h.source.getRepository('accountBinding').find(options),
+          findOne: (_workspaceId: string, options: never) =>
+            h.source.getRepository('accountBinding').findOne(options),
+        } as never,
+      );
+      await expect(
+        h.run(() =>
+          recordAccess.getComposerAccount({
+            workspaceId: h.fixtureWorkspaceId,
+            rolePermissionConfig: role,
+          }),
+        ),
+      ).resolves.toMatchObject({ instagramAccountRecordId: h.accountId });
+      await expect(
+        recordAccess.assertCanSaveDraft({
+          workspaceId: h.fixtureWorkspaceId,
+          draftId: randomUUID(),
+          expectedRevision: 0,
+          kind: 'FIRST_MESSAGE',
+          creatorRecordId: creatorId,
+          conversationRecordId: null,
+          rolePermissionConfig: role,
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        recordAccess.assertCanReadDraft({
+          workspaceId: h.fixtureWorkspaceId,
+          draftId: draftRecordId,
+          rolePermissionConfig: role,
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        recordAccess.assertCanExecuteDraft({
+          workspaceId: h.fixtureWorkspaceId,
+          draftId: draftRecordId,
+          rolePermissionConfig: role,
+        }),
+      ).resolves.toMatchObject({ instagramAccountRecordId: h.accountId });
+      await expect(
+        recordAccess.getConfirmedDestination({
+          workspaceId: h.fixtureWorkspaceId,
+          rolePermissionConfig: role,
+          source: {
+            snapshot: {
+              actionKind: 'REPLY',
+              accountBindingId: h.bindingId,
+              instagramAccountRecordId: h.accountId,
+              unipileAccountId: 'fake-account',
+              instagramUserId: 'fake-instagram-user',
+              creatorRecordId: creatorId,
+              conversationRecordId: conversationId,
+              providerChatId: 'fake-chat',
+              providerMessagingId: 'messaging-009',
+            },
+            providerChatId: 'fake-chat',
+            providerMessageId: 'fake-message',
+            contentDigest: computeActionContentDigest('Reply'),
+          } as never,
+        }),
+      ).resolves.toEqual({
+        creatorRecordId: creatorId,
+        conversationRecordId: conversationId,
+      });
+      await expect(
+        manager.getRepository('creator', role, auth).insert({
+          id: randomUUID(),
+          instagramUsername: 'unauthorized',
+        }),
+      ).rejects.toThrow(/permission/i);
+      const noConversationRole = { unionOf: ['withoutConversation'] };
+      (
+        h.source as unknown as { permissionsPerRoleId: Record<string, unknown> }
+      ).permissionsPerRoleId.withoutConversation = Object.fromEntries(
+        names.map((name) => [
+          name,
+          {
+            ...permission(false),
+            canReadObjectRecords: name !== 'myahSocialConversation',
+          },
+        ]),
+      );
+      await expect(
+        recordAccess.assertCanExecuteDraft({
+          workspaceId: h.fixtureWorkspaceId,
+          draftId: draftRecordId,
+          rolePermissionConfig: noConversationRole,
+        }),
+      ).rejects.toThrow(/permission/i);
+      await expect(
+        recordAccess.getConfirmedDestination({
+          workspaceId: h.fixtureWorkspaceId,
+          rolePermissionConfig: noConversationRole,
+          source: {
+            snapshot: {
+              actionKind: 'REPLY',
+              accountBindingId: h.bindingId,
+              instagramAccountRecordId: h.accountId,
+              unipileAccountId: 'fake-account',
+              instagramUserId: 'fake-instagram-user',
+              creatorRecordId: creatorId,
+              conversationRecordId: conversationId,
+              providerChatId: 'fake-chat',
+              providerMessagingId: 'messaging-009',
+            },
+            providerChatId: 'fake-chat',
+            providerMessageId: 'fake-message',
+            contentDigest: computeActionContentDigest('Reply'),
+          } as never,
+        }),
+      ).resolves.toBeNull();
+      expect(h.writes).toHaveLength(0);
+    },
+  );
 
   it('runs the actual composer/approval/budget/sender chain with one durable receipt and reservation', async () => {
     const h = await createComposerFixture();

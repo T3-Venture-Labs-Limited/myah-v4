@@ -81,6 +81,12 @@ export class CreateMyahInboxReplyContextDraftsFastInstanceCommand implements Fas
             OR ("threadId" IS NULL AND "interactionContextType" = 'MYAH_INBOX_INSTAGRAM_DRAFT' AND "interactionContextId" = "draftId"))
           AND "myahReplyContextSnapshot" IS NULL
         ) OR (
+          "actionName" = 'send_instagram_message' AND "actionVersion" = 3
+          AND "actionKind" IN ('START_CHAT', 'REPLY')
+          AND (("threadId" IS NOT NULL AND "interactionContextType" IS NULL AND "interactionContextId" IS NULL)
+            OR ("threadId" IS NULL AND "interactionContextType" = 'MYAH_INSTAGRAM_MESSAGE_DRAFT' AND "interactionContextId" = "draftId"))
+          AND "myahReplyContextSnapshot" IS NULL
+        ) OR (
           "actionName" = 'send_inbox_reply' AND "actionVersion" = 1
           AND "actionKind" IS NULL AND "threadId" IS NOT NULL
           AND "interactionContextType" IS NULL AND "interactionContextId" IS NULL

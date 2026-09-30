@@ -12,7 +12,6 @@ import {
 } from '@/myah/inbox/utils/pollInstagramMessageSendStatus';
 import { MYAH_NAVIGATION_ROUTES } from '@/myah/navigation/myah-navigation-registry';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
-import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import {
   GET_INSTAGRAM_MESSAGE_COMPOSER_ATTEMPT,
   PREPARE_INSTAGRAM_MESSAGE_COMPOSER,
@@ -26,7 +25,6 @@ import { SidePanelPageComponentInstanceContext } from '@/side-panel/states/conte
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { PermissionFlagType } from '~/generated-metadata/graphql';
 import {
   InstagramMessageComposerAccountDocument,
   type InstagramMessageComposerAccountQuery,
@@ -47,12 +45,6 @@ export const useInstagramMessageComposer = () => {
     instagramMessageComposerState,
   );
   const workspaceId = useAtomStateValue(currentWorkspaceState)?.id ?? null;
-  const canFirst = useHasPermissionFlag(
-    PermissionFlagType.SEND_INSTAGRAM_FIRST_MESSAGE_TOOL,
-  );
-  const canReply = useHasPermissionFlag(
-    PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
-  );
   const [refreshGeneration, setRefreshGeneration] = useState(0);
   const [accountState, setAccountState] = useState<{
     scope: string;
@@ -69,12 +61,7 @@ export const useInstagramMessageComposer = () => {
     null,
   );
   const checking = checkingWorkspaceId === workspaceId && workspaceId !== null;
-  const accountScope = JSON.stringify([
-    workspaceId,
-    canFirst,
-    canReply,
-    refreshGeneration,
-  ]);
+  const accountScope = JSON.stringify([workspaceId, refreshGeneration]);
   const account =
     accountState?.scope === accountScope ? accountState.account : null;
   const scope = JSON.stringify([
@@ -108,7 +95,7 @@ export const useInstagramMessageComposer = () => {
 
   useEffect(() => {
     let active = true;
-    if (workspaceId && (canFirst || canReply)) {
+    if (workspaceId) {
       void client
         .query({
           query: InstagramMessageComposerAccountDocument,
@@ -129,7 +116,7 @@ export const useInstagramMessageComposer = () => {
     return () => {
       active = false;
     };
-  }, [client, accountScope, workspaceId, canFirst, canReply]);
+  }, [client, accountScope, workspaceId]);
 
   const refreshPreparation = () => {
     lifecycle.current.generation += 1;
@@ -205,12 +192,6 @@ export const useInstagramMessageComposer = () => {
     preparedState.generation === lifecycle.current.generation
       ? preparedState.value
       : null;
-  const routeAllowed =
-    preparation?.actionKind === 'START_CHAT'
-      ? canFirst
-      : preparation?.actionKind === 'REPLY'
-        ? canReply
-        : false;
   const canSend = Boolean(
     workspaceId &&
     instagramMessageComposer &&
@@ -221,8 +202,7 @@ export const useInstagramMessageComposer = () => {
     preparation.sender &&
     preparation.normalizedHandle &&
     preparation.preparationFingerprint &&
-    preparation.sender?.accountRecordId === account?.sender?.accountRecordId &&
-    routeAllowed,
+    preparation.sender?.accountRecordId === account?.sender?.accountRecordId,
   );
   const attempt = instagramMessageComposer?.attempt;
   const attemptInWorkspace = attempt?.workspaceId === workspaceId;
@@ -468,7 +448,7 @@ export const useInstagramMessageComposer = () => {
     refreshPreparation,
     openInbox,
     accountLoading: accountState?.scope !== accountScope,
-    canMessage: canFirst || canReply,
+    canMessage: Boolean(workspaceId),
     attemptInWorkspace,
   };
 };

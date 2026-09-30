@@ -28,7 +28,7 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
   useApolloCoreClient: () => mockClient,
 }));
 jest.mock('@/settings/roles/hooks/useHasPermissionFlag', () => ({
-  useHasPermissionFlag: () => true,
+  useHasPermissionFlag: () => false,
 }));
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -211,8 +211,9 @@ it('selects a Creator with keyboard through the picker search boundary, not a ge
   expect(screen.queryByText('Add New')).not.toBeInTheDocument();
 });
 
-it('rejects invalid raw handles without provider preparation and lets keyboard users dismiss results', () => {
+it('rejects invalid raw handles without provider preparation and lets keyboard users dismiss results', async () => {
   setup();
+  await screen.findByText('@sender');
   const input = screen.getByRole('combobox', { name: 'To' });
   fireEvent.change(input, { target: { value: '@not a handle' } });
   expect(screen.queryByRole('option')).not.toBeInTheDocument();
@@ -220,6 +221,6 @@ it('rejects invalid raw handles without provider preparation and lets keyboard u
   fireEvent.keyDown(input, { key: 'Escape' });
   expect(input).toHaveAttribute('aria-expanded', 'false');
   const refresh = screen.getByRole('button', { name: 'Refresh recipient' });
-  refresh.focus();
+  act(() => refresh.focus());
   expect(refresh).toHaveFocus();
 });

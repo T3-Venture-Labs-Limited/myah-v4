@@ -20,6 +20,8 @@ export interface ApiKeyWorkspaceAuthContext extends BaseWorkspaceAuthContext {
 
 export interface UserWorkspaceAuthContext extends BaseWorkspaceAuthContext {
   type: 'user';
+  // Authenticated HTTP request provenance; delegated tools and jobs omit it.
+  isInteractiveUserRequest?: boolean;
   userWorkspaceId: NonNullable<RawAuthContext['userWorkspaceId']>;
   user: NonNullable<RawAuthContext['user']>;
   workspaceMemberId: NonNullable<RawAuthContext['workspaceMemberId']>;

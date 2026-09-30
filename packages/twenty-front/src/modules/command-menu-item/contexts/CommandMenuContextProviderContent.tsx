@@ -4,15 +4,18 @@ import {
 } from '@/command-menu-item/contexts/CommandMenuContext';
 import { commandMenuItemsDraftState } from '@/command-menu-item/edit/states/commandMenuItemsDraftState';
 import { commandMenuItemsSelector } from '@/command-menu-item/states/commandMenuItemsSelector';
+import { isInternalInstagramNavigationCommandMenuItem } from '@/command-menu-item/utils/isInternalInstagramNavigationCommandMenuItem';
 import { doesCommandMenuItemMatchObjectMetadataId } from '@/command-menu-item/utils/doesCommandMenuItemMatchObjectMetadataId';
 import { doesCommandMenuItemMatchPageLayoutId } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageLayoutId';
 import { doesCommandMenuItemMatchPageType } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageType';
 import { doesCommandMenuItemMatchSelectionState } from '@/command-menu-item/utils/doesCommandMenuItemMatchSelectionState';
 import { currentPageLayoutIdState } from '@/page-layout/states/currentPageLayoutIdState';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useMemo } from 'react';
 import { type CommandMenuContextApi } from 'twenty-shared/types';
 import { evaluateConditionalAvailabilityExpression } from 'twenty-shared/utils';
+import { EngineComponentKey } from '~/generated-metadata/graphql';
 
 type CommandMenuContextProviderContentProps = {
   displayType: CommandMenuContextType['displayType'];
@@ -32,8 +35,20 @@ export const CommandMenuContextProviderContent = ({
   const commandMenuItems = useAtomStateValue(commandMenuItemsSelector);
   const commandMenuItemsDraft = useAtomStateValue(commandMenuItemsDraftState);
   const currentPageLayoutId = useAtomStateValue(currentPageLayoutIdState);
+  const { objectMetadataItems } = useObjectMetadataItems();
 
   const filteredCommandMenuItems = useMemo(() => {
+    const internalInstagramObjectIds = new Set(
+      objectMetadataItems.flatMap(({ id, nameSingular }) =>
+        nameSingular === 'myahInstagramAccount' ||
+        nameSingular === 'myahInstagramReplyDraft'
+          ? [id]
+          : [],
+      ),
+    );
+    const isInstagramAccountIndex =
+      commandMenuContextApi.objectMetadataItem.nameSingular ===
+      'myahInstagramAccount';
     const currentObjectMetadataItemId =
       commandMenuContextApi.objectMetadataItem.id;
     const hasSelectedRecords =
@@ -43,6 +58,20 @@ export const CommandMenuContextProviderContent = ({
       : commandMenuItems;
 
     return commandMenuItemsToDisplay
+      .filter((item) => {
+        if (
+          isInstagramAccountIndex &&
+          (item.engineComponentKey === EngineComponentKey.CREATE_NEW_RECORD ||
+            item.engineComponentKey === EngineComponentKey.IMPORT_RECORDS ||
+            item.engineComponentKey === EngineComponentKey.SEE_DELETED_RECORDS)
+        ) {
+          return false;
+        }
+        return !isInternalInstagramNavigationCommandMenuItem(
+          item,
+          internalInstagramObjectIds,
+        );
+      })
       .filter(
         doesCommandMenuItemMatchObjectMetadataId(currentObjectMetadataItemId),
       )
@@ -64,6 +93,7 @@ export const CommandMenuContextProviderContent = ({
     commandMenuItemsDraft,
     currentPageLayoutId,
     isInPreviewMode,
+    objectMetadataItems,
   ]);
 
   return (

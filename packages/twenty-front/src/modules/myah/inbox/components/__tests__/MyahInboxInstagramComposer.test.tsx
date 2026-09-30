@@ -155,7 +155,7 @@ const renderComposer = (
   > = {},
 ) => {
   const defaultOnBodyChange = jest.fn();
-  const defaultOnReviewAndSend = jest.fn();
+  const defaultOnSend = jest.fn();
   const {
     body = 'Existing draft',
     channelState = 'READY',
@@ -174,7 +174,7 @@ const renderComposer = (
     guidanceUnavailableReason,
     onBodyChange = defaultOnBodyChange,
     onReloadConflict,
-    onReviewAndSend = defaultOnReviewAndSend,
+    onSend = defaultOnSend,
   } = overrides;
   render(
     <MyahInboxInstagramComposer
@@ -195,13 +195,23 @@ const renderComposer = (
       guidanceUnavailableReason={guidanceUnavailableReason}
       onBodyChange={onBodyChange}
       onReloadConflict={onReloadConflict}
-      onReviewAndSend={onReviewAndSend}
+      onSend={onSend}
     />,
   );
-  return { onBodyChange, onReviewAndSend };
+  return { onBodyChange, onSend };
 };
 
 describe('MyahInboxInstagramComposer', () => {
+  it('matches the Email reply send label and brand styling', () => {
+    renderComposer();
+    const send = screen.getByRole('button', { name: 'Send reply' });
+    expect(send).toHaveAttribute('data-variant', 'primary');
+    expect(send).toHaveAttribute('data-accent', 'brand');
+    expect(
+      screen.queryByRole('button', { name: /review/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('uses the shared reply box with an inert preview and Instagram-specific slots', () => {
     renderComposer();
     expect(screen.getByTestId('myah-inbox-reply-box')).toBeInTheDocument();
@@ -283,17 +293,17 @@ describe('MyahInboxInstagramComposer', () => {
     );
   });
 
-  it('maps plain-text edits and review actions through the shared surface', () => {
-    const { onBodyChange, onReviewAndSend } = renderComposer();
+  it('maps plain-text edits and send actions through the shared surface', () => {
+    const { onBodyChange, onSend } = renderComposer();
     fireEvent.click(screen.getByRole('button', { name: 'Edit reply' }));
     const editor = screen.getByRole('textbox', {
       name: 'Message @creator via Instagram',
     });
     expect(editor).toHaveAttribute('data-mode', 'plain-text');
     fireEvent.change(editor, { target: { value: 'Hello' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
     expect(onBodyChange).toHaveBeenCalledWith('Hello');
-    expect(onReviewAndSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledTimes(1);
   });
 
   it.each([999, 1000])(
@@ -301,9 +311,7 @@ describe('MyahInboxInstagramComposer', () => {
     (length) => {
       renderComposer({ body: 'a'.repeat(length) });
       expect(screen.getByText(`${length} / 1000`)).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: 'Review and send' }),
-      ).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Send reply' })).toBeEnabled();
     },
   );
 
@@ -313,9 +321,7 @@ describe('MyahInboxInstagramComposer', () => {
       error: 'Could not save the Instagram draft',
     });
     expect(screen.getByText('1004 / 1000')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Review and send' }),
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send reply' })).toBeDisabled();
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(screen.getByRole('alert')).toHaveTextContent(/too long/i);
   });
@@ -339,10 +345,8 @@ describe('MyahInboxInstagramComposer', () => {
     [{ sending: true }],
     [{ channelState: 'AMBIGUOUS' as const }],
     [{ provider: 'COMPOSIO_HISTORY' as const }],
-  ])('disables review when input is blocked: %j', (overrides) => {
+  ])('disables send when input is blocked: %j', (overrides) => {
     renderComposer(overrides);
-    expect(
-      screen.getByRole('button', { name: 'Review and send' }),
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send reply' })).toBeDisabled();
   });
 });
