@@ -40,19 +40,19 @@ describe('MessageChannelSyncStatusService forecast invalidation', () => {
         }),
       },
     };
-    const dataSource = {
-      transaction: jest.fn((operation) => operation(manager)),
-    };
+    const transaction = jest.fn((operation) => operation(manager));
     const service = new MessageChannelSyncStatusService(
       {} as never,
       {
         executeInWorkspaceContext: jest.fn((operation) => operation()),
-        getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
+        getGlobalWorkspaceDataSource: jest.fn(() => {
+          throw new Error('Workspace data source cannot resolve core entities');
+        }),
         getRepository: jest.fn().mockResolvedValue({
           findOne: jest.fn().mockResolvedValue(null),
         }),
       } as never,
-      channels as never,
+      { ...channels, manager: { transaction } } as never,
       {} as never,
       accounts as never,
       {} as never,
@@ -60,11 +60,11 @@ describe('MessageChannelSyncStatusService forecast invalidation', () => {
       {} as never,
       { incrementCounterForEvents: jest.fn() } as never,
     );
-    return { accounts, channels, dataSource, events, queries, service };
+    return { accounts, channels, transaction, events, queries, service };
   };
 
   it('invalidates in the same transaction as an insufficient-permissions readiness loss', async () => {
-    const { accounts, channels, dataSource, events, queries, service } =
+    const { accounts, channels, transaction, events, queries, service } =
       makeService();
 
     await service.markAsFailed(
@@ -73,7 +73,7 @@ describe('MessageChannelSyncStatusService forecast invalidation', () => {
       MessageChannelSyncStatus.FAILED_INSUFFICIENT_PERMISSIONS,
     );
 
-    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(transaction).toHaveBeenCalledTimes(1);
     expect(channels.update).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId }),
       expect.objectContaining({
@@ -91,11 +91,11 @@ describe('MessageChannelSyncStatusService forecast invalidation', () => {
   });
 
   it('invalidates in the same transaction as sender readiness restoration', async () => {
-    const { channels, dataSource, events, queries, service } = makeService();
+    const { channels, transaction, events, queries, service } = makeService();
 
     await service.markAsMessageSyncCompleted([channelId], workspaceId);
 
-    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(transaction).toHaveBeenCalledTimes(1);
     expect(channels.update).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId }),
       expect.objectContaining({ syncStatus: MessageChannelSyncStatus.ACTIVE }),
@@ -125,11 +125,11 @@ describe('MessageChannelSyncStatusService forecast invalidation', () => {
   ])(
     '%s and invalidates with the identical transaction manager',
     async (_description, method, syncStage) => {
-      const { channels, dataSource, events, queries, service } = makeService();
+      const { channels, transaction, events, queries, service } = makeService();
 
       await service[method]([channelId], workspaceId);
 
-      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(transaction).toHaveBeenCalledTimes(1);
       expect(channels.update).toHaveBeenCalledWith(
         expect.objectContaining({ workspaceId }),
         expect.objectContaining({
