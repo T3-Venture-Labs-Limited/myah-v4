@@ -226,9 +226,18 @@ jest.mock(
   () => ({
     MyahInboxInstagramConversationPanel: ({
       contact,
+      arrivalEpoch,
     }: {
       contact: MyahInboxContact;
-    }) => <div>Instagram timeline {contact.displayName}</div>,
+      arrivalEpoch?: number;
+    }) => (
+      <div
+        data-testid="instagram-arrival"
+        data-arrival={String(arrivalEpoch ?? 0)}
+      >
+        Instagram timeline {contact.displayName}
+      </div>
+    ),
   }),
 );
 
@@ -933,6 +942,36 @@ describe('MyahInboxPage contact-first flow', () => {
     expect(screen.getByTestId('inbox-location')).toHaveTextContent(
       '/elsewhere',
     );
+  });
+
+  it('ticks the selected Instagram timeline on unchanged visible contact arrivals, not hidden tabs', async () => {
+    jest.useFakeTimers();
+    let visibility: DocumentVisibilityState = 'visible';
+    jest
+      .spyOn(document, 'visibilityState', 'get')
+      .mockImplementation(() => visibility);
+    ambientRefreshContacts.mockResolvedValue({
+      status: 'success',
+      selectedContact: contacts[1],
+    });
+    try {
+      renderPage();
+      await act(async () => jest.advanceTimersByTimeAsync(0));
+      fireEvent.click(screen.getByRole('option', { name: 'Select contact-2' }));
+      await screen.findByText('Instagram timeline contact-2');
+      const arrival = () =>
+        screen.getByTestId('instagram-arrival').getAttribute('data-arrival');
+      const initial = Number(arrival());
+      await act(async () => jest.advanceTimersByTimeAsync(30_000));
+      expect(Number(arrival())).toBe(initial + 1);
+      expect(ambientRefreshEmail).not.toHaveBeenCalled();
+      visibility = 'hidden';
+      await act(async () => jest.advanceTimersByTimeAsync(60_000));
+      expect(Number(arrival())).toBe(initial + 1);
+    } finally {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    }
   });
 
   it('checks for changes every 30 seconds while visible and re-authorizes history only on change or every 5 minutes', async () => {

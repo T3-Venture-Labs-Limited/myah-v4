@@ -80,9 +80,44 @@ export class MyahInboxContactTriageSchemaService {
       `,
     ];
 
-    for (const statement of statements) {
+    // Keep the triage marker last: a fresh workspace installs every private
+    // Inbox relation before marking provisioning complete.
+    for (const statement of statements.slice(0, -1)) {
       await queryRunner.query(statement);
     }
+    await this.ensureReactionTable(queryRunner, workspaceId);
+    await queryRunner.query(statements[statements.length - 1]);
+  }
+
+  async ensureReactionTable(
+    queryRunner: QueryRunner,
+    workspaceId: string,
+  ): Promise<void> {
+    const schema = escapeIdentifier(getWorkspaceSchemaName(workspaceId));
+
+    // PostgreSQL DDL cannot bind identifiers; the schema comes only from the
+    // workspace UUID and is quoted by escapeIdentifier.
+    // pi-lens-ignore: sql-injection, no-sql-in-code
+    await queryRunner.query(`
+      CREATE TABLE IF NOT EXISTS ${schema}."myahInboxInstagramReaction" (
+        "id" uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+        "messageRecordId" uuid NOT NULL,
+        "conversationRecordId" uuid NOT NULL,
+        "bindingId" uuid NOT NULL,
+        "actorProviderId" text NOT NULL CHECK (length("actorProviderId") BETWEEN 1 AND 256),
+        "emoji" text NOT NULL CHECK (length("emoji") BETWEEN 1 AND 64),
+        "occurredAt" timestamptz(3) NOT NULL,
+        "version" text NOT NULL CHECK ("version" ~ '^[0-9a-f]{64}$'),
+        "viewedVersion" text NULL,
+        "updatedAt" timestamptz(3) NOT NULL DEFAULT now(),
+        UNIQUE ("messageRecordId", "actorProviderId"),
+        FOREIGN KEY ("messageRecordId") REFERENCES ${schema}."myahSocialMessage"("id") ON DELETE CASCADE,
+        FOREIGN KEY ("conversationRecordId") REFERENCES ${schema}."myahSocialConversation"("id") ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS "myahInboxInstagramReaction_unseen"
+        ON ${schema}."myahInboxInstagramReaction" ("conversationRecordId")
+        WHERE "viewedVersion" IS DISTINCT FROM "version";
+    `);
   }
 
   async initializeNewWorkspaceInTransaction(

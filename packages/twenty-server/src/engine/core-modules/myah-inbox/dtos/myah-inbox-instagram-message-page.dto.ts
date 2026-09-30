@@ -1,5 +1,12 @@
-import { ArgsType, Field, Int, ObjectType } from '@nestjs/graphql';
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { ArgsType, Field, InputType, Int, ObjectType } from '@nestjs/graphql';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Min,
+} from 'class-validator';
 
 @ArgsType()
 export class MyahInboxInstagramMessagesInput {
@@ -17,6 +24,25 @@ export class MyahInboxInstagramMessagesInput {
   @IsOptional()
   @IsString()
   after?: string;
+}
+
+@InputType()
+export class AcknowledgeMyahInboxInstagramReactionInput {
+  @Field(() => String)
+  @IsUUID()
+  expectedWorkspaceId: string;
+
+  @Field(() => String)
+  @IsUUID()
+  conversationId: string;
+
+  @Field(() => String)
+  @IsUUID()
+  messageId: string;
+
+  @Field(() => String)
+  @Matches(/^[a-f0-9]{64}$/)
+  version: string;
 }
 
 @ObjectType('MyahInboxInstagramMessage')
@@ -50,6 +76,15 @@ export class MyahInboxInstagramMessage {
 
   @Field(() => Int)
   attachmentCount: number;
+
+  @Field(() => String, { nullable: true })
+  reactionEmoji: string | null;
+
+  @Field(() => String, { nullable: true })
+  reactionActorLabel: string | null;
+
+  @Field(() => String, { nullable: true })
+  reactionVersion: string | null;
 }
 
 @ObjectType('MyahInboxInstagramMessageEdge')

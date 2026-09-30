@@ -1,3 +1,5 @@
+import { AddInstagramReactionEventFastInstanceCommand } from './2-20-instance-command-fast-1790742251000-add-instagram-reaction-event';
+import { InstallInstagramReactionWorkspaceCommand } from './2-20-workspace-command-1790742251001-install-instagram-reaction.command';
 import { RestoreInstagramV3ApprovalContextFastInstanceCommand } from './2-20-instance-command-fast-1790577600427-restore-instagram-v3-approval-context';
 import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
 import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from './2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
@@ -99,6 +101,8 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     RefreshMyahAssistantSkillsWorkspaceCommand,
     RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand,
     ResynchronizeMyahCampaignLayoutCommand,
+    AddInstagramReactionEventFastInstanceCommand,
+    InstallInstagramReactionWorkspaceCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,

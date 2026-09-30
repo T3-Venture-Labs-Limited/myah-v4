@@ -53,6 +53,7 @@ const userAuthContext = {
 } as unknown as UserWorkspaceAuthContext;
 
 type InstagramService = {
+  acknowledgeReaction: (input: Record<string, unknown>) => Promise<boolean>;
   listMessages: (input: Record<string, unknown>) => Promise<{
     edges: { cursor: string; node: { id: string } }[];
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
@@ -318,6 +319,77 @@ describe('MyahInboxInstagramMessageQueryService', () => {
     expect(harness.builders.myahSocialMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('acknowledges only the exact readable parent, actor and current version', async () => {
+    const harness = buildHarness([[{ id: 'reaction-id' }]]);
+
+    await expect(
+      harness.service.acknowledgeReaction({
+        ...request(),
+        messageId: messageId(12),
+        version: 'a'.repeat(64),
+      }),
+    ).resolves.toBe(true);
+    const [sql, parameters] = harness.query.mock.calls[0];
+    expect(sql).toContain(
+      'UPDATE "workspace_1d7tmz9j2abdrls1"."myahInboxInstagramReaction"',
+    );
+    expect(sql).toContain('reaction."version" = $3');
+    expect(sql).toContain(
+      'reaction."actorProviderId" = authorized."actorProviderId"',
+    );
+    expect(sql).toContain('readable_messages AS');
+    expect(sql).toContain('readable_conversation AS');
+    expect(parameters).toEqual([conversationId, messageId(12), 'a'.repeat(64)]);
+    expect(harness.builders.myahSocialConversation).toHaveBeenCalledTimes(1);
+    expect(harness.builders.myahSocialMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects stale versions and malformed parent input without clearing newer attention', async () => {
+    const harness = buildHarness([[]]);
+    await expect(
+      harness.service.acknowledgeReaction({
+        ...request(),
+        messageId: messageId(12),
+        version: 'a'.repeat(64),
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      harness.service.acknowledgeReaction({
+        ...request(),
+        messageId: 'not-a-uuid',
+        version: 'a'.repeat(64),
+      }),
+    ).rejects.toThrow('Invalid Instagram reaction');
+    expect(harness.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a current verified reaction only through the readable parent page', async () => {
+    const harness = buildHarness([
+      [
+        {
+          ...row(12, '2026-09-05T12:00:00.000Z'),
+          reactionEmoji: '👍',
+          reactionVersion: 'a'.repeat(64),
+          reactionActorLabel: 'Instagram participant',
+        },
+      ],
+    ]);
+    const page = await harness.service.listMessages(request({ first: 1 }));
+    const node = page.edges[0].node as unknown as Record<string, unknown>;
+
+    expect(node).toMatchObject({
+      reactionEmoji: '👍',
+      reactionVersion: 'a'.repeat(64),
+      reactionActorLabel: 'Instagram participant',
+    });
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'myahInboxInstagramReaction',
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'WHERE reaction."messageRecordId" = message.id',
+    );
+  });
+
   it('normalizes PostgreSQL Date timestamps before GraphQL String serialization', async () => {
     const timestamp = new Date('2026-09-05T12:00:00.000Z');
     const dateRow = {
@@ -444,7 +516,19 @@ describePostgres(
           buildMetadatas: () => Promise<void>;
         }
       ).buildMetadatas();
-      await client.query(`CREATE TEMP TABLE ig_conversation_fixture (
+      await client.query(`CREATE SCHEMA "workspace_1d7tmz9j2abdrls1";
+    CREATE TABLE "workspace_1d7tmz9j2abdrls1"."myahInboxInstagramReaction" (
+      id uuid, "messageRecordId" uuid, "conversationRecordId" uuid,
+      "actorProviderId" text, "viewedVersion" text,
+      "emoji" text, "version" text, "occurredAt" timestamptz
+    );
+    CREATE TABLE "workspace_1d7tmz9j2abdrls1"."myahSocialConversation" (
+      id uuid, "recipientIgsid" text, "deletedAt" timestamptz
+    );
+    INSERT INTO "workspace_1d7tmz9j2abdrls1"."myahSocialConversation" VALUES
+      ('00000000-0000-4000-8000-000000000002', 'creator-ig', NULL),
+      ('00000000-0000-4000-8000-000000000003', 'other-ig', NULL);
+    CREATE TEMP TABLE ig_conversation_fixture (
       id uuid, "workspaceId" uuid, readable boolean DEFAULT TRUE, "deletedAt" timestamptz
     ) ON COMMIT DROP;
     CREATE TEMP TABLE ig_message_fixture (
@@ -471,7 +555,12 @@ describePostgres(
       ('00000000-0000-4000-8000-000000009001','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','tie-high','INBOUND','UNIPILE','UNIPILE','RECEIVED','2026-09-06T00:00:00Z','2026-09-01T00:00:00Z',FALSE,0,TRUE,NULL),
       ('00000000-0000-4000-8000-000000009000','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','tie-low','INBOUND','UNIPILE','UNIPILE','RECEIVED','2026-09-06T00:00:00Z','2026-09-01T00:00:00Z',FALSE,0,TRUE,NULL),
       ('00000000-0000-4000-8000-000000008889','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000003','other-conversation','INBOUND','UNIPILE','UNIPILE','RECEIVED',now(),now(),FALSE,0,TRUE,NULL),
-      ('00000000-0000-4000-8000-000000008888','00000000-0000-4000-8000-000000000099','00000000-0000-4000-8000-000000000002','other-workspace','INBOUND','UNIPILE','UNIPILE','RECEIVED',now(),now(),FALSE,0,TRUE,NULL);`);
+      ('00000000-0000-4000-8000-000000008888','00000000-0000-4000-8000-000000000099','00000000-0000-4000-8000-000000000002','other-workspace','INBOUND','UNIPILE','UNIPILE','RECEIVED',now(),now(),FALSE,0,TRUE,NULL);
+    INSERT INTO "workspace_1d7tmz9j2abdrls1"."myahInboxInstagramReaction"
+      (id, "messageRecordId", "conversationRecordId", "actorProviderId", "emoji", "version", "occurredAt") VALUES
+      ('00000000-0000-4000-8000-000000008201','00000000-0000-4000-8000-000000000205','00000000-0000-4000-8000-000000000002','creator-ig','👍','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',now()),
+      ('00000000-0000-4000-8000-000000008202','00000000-0000-4000-8000-000000008889','00000000-0000-4000-8000-000000000003','other-ig','🔥','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',now()),
+      ('00000000-0000-4000-8000-000000008203','00000000-0000-4000-8000-000000008888','00000000-0000-4000-8000-000000000002','creator-ig','😯','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',now());`);
     }, 15000);
     afterAll(async () => {
       if (!client) return;
@@ -628,6 +717,231 @@ describePostgres(
       }
     }, 15000);
 
+    it('acknowledges only a readable exact parent, actor and version without altering message state', async () => {
+      await client.query('SAVEPOINT reaction_ack');
+      try {
+        const target = fixture();
+        const reactionMessageId = '00000000-0000-4000-8000-000000000205';
+        const reaction = {
+          ...request(),
+          messageId: reactionMessageId,
+          version: 'a'.repeat(64),
+        };
+        const viewed = async () =>
+          (
+            await client.query<{ viewedVersion: string | null }>(
+              `SELECT "viewedVersion" FROM "workspace_1d7tmz9j2abdrls1"."myahInboxInstagramReaction"
+         WHERE "messageRecordId" = $1`,
+              [reactionMessageId],
+            )
+          ).rows[0]?.viewedVersion;
+        await expect(
+          target.service.acknowledgeReaction(reaction),
+        ).resolves.toBe(true);
+        expect(await viewed()).toBe('a'.repeat(64));
+        await expect(
+          target.service.acknowledgeReaction(reaction),
+        ).resolves.toBe(false);
+        await client.query(
+          `UPDATE "workspace_1d7tmz9j2abdrls1"."myahInboxInstagramReaction"
+        SET "version" = $1 WHERE "messageRecordId" = $2`,
+          ['b'.repeat(64), reactionMessageId],
+        );
+        await expect(
+          target.service.acknowledgeReaction(reaction),
+        ).resolves.toBe(false);
+        expect(await viewed()).toBe('a'.repeat(64));
+        await expect(
+          target.service.acknowledgeReaction({
+            ...reaction,
+            version: 'b'.repeat(64),
+          }),
+        ).resolves.toBe(true);
+        expect(await viewed()).toBe('b'.repeat(64));
+        await client.query(
+          `UPDATE "workspace_1d7tmz9j2abdrls1"."myahInboxInstagramReaction"
+        SET "version" = $1 WHERE "messageRecordId" = $2`,
+          ['c'.repeat(64), reactionMessageId],
+        );
+        await expect(
+          target.service.acknowledgeReaction({
+            ...reaction,
+            version: 'c'.repeat(64),
+            conversationId: otherConversationId,
+          }),
+        ).resolves.toBe(false);
+        await expect(
+          target.service.acknowledgeReaction({
+            ...reaction,
+            messageId: '00000000-0000-4000-8000-000000008888',
+            version: 'c'.repeat(64),
+          }),
+        ).resolves.toBe(false);
+        await client.query(
+          `UPDATE pg_temp.ig_message_fixture SET readable = FALSE WHERE id = $1`,
+          [reactionMessageId],
+        );
+        await expect(
+          target.service.acknowledgeReaction({
+            ...reaction,
+            version: 'c'.repeat(64),
+          }),
+        ).resolves.toBe(false);
+        await client.query(
+          `UPDATE pg_temp.ig_message_fixture SET readable = TRUE WHERE id = $1`,
+          [reactionMessageId],
+        );
+        await client.query(
+          `UPDATE pg_temp.ig_message_fixture SET "deletedAt" = now() WHERE id = $1`,
+          [reactionMessageId],
+        );
+        await expect(
+          target.service.acknowledgeReaction({
+            ...reaction,
+            version: 'c'.repeat(64),
+          }),
+        ).resolves.toBe(false);
+        await client.query(
+          `UPDATE pg_temp.ig_message_fixture SET "deletedAt" = NULL WHERE id = $1`,
+          [reactionMessageId],
+        );
+        await client.query(
+          `UPDATE pg_temp.ig_conversation_fixture SET readable = FALSE WHERE id = $1 AND "workspaceId" = $2`,
+          [conversationId, workspaceId],
+        );
+        await expect(
+          target.service.acknowledgeReaction({
+            ...reaction,
+            version: 'c'.repeat(64),
+          }),
+        ).resolves.toBe(false);
+        await client.query(
+          `UPDATE pg_temp.ig_conversation_fixture SET readable = TRUE WHERE id = $1 AND "workspaceId" = $2`,
+          [conversationId, workspaceId],
+        );
+        await client.query(
+          `UPDATE "workspace_1d7tmz9j2abdrls1"."myahSocialConversation"
+        SET "recipientIgsid" = 'wrong-actor' WHERE id = $1`,
+          [conversationId],
+        );
+        await expect(
+          target.service.acknowledgeReaction({
+            ...reaction,
+            version: 'c'.repeat(64),
+          }),
+        ).resolves.toBe(false);
+        await client.query(
+          `UPDATE "workspace_1d7tmz9j2abdrls1"."myahSocialConversation"
+        SET "recipientIgsid" = 'creator-ig' WHERE id = $1`,
+          [conversationId],
+        );
+        const denied = fixture(new Set(['myahSocialMessage.object']));
+        await expect(
+          denied.service.acknowledgeReaction(reaction),
+        ).rejects.toBeInstanceOf(PermissionsException);
+        expect(denied.statements()).toBe(0);
+        expect(
+          (
+            await client.query<{ deliveryState: string }>(
+              `SELECT "deliveryState" FROM pg_temp.ig_message_fixture WHERE id = $1`,
+              [reactionMessageId],
+            )
+          ).rows[0]?.deliveryState,
+        ).toBe('RECEIVED');
+        const otherReactions = await client.query<{
+          viewedVersion: string | null;
+        }>(
+          `SELECT "viewedVersion" FROM "workspace_1d7tmz9j2abdrls1"."myahInboxInstagramReaction"
+          WHERE "messageRecordId" IN ($1, $2)`,
+          [
+            '00000000-0000-4000-8000-000000008888',
+            '00000000-0000-4000-8000-000000008889',
+          ],
+        );
+        expect(otherReactions.rows).toEqual([
+          { viewedVersion: null },
+          { viewedVersion: null },
+        ]);
+      } finally {
+        await client.query('ROLLBACK TO SAVEPOINT reaction_ack');
+      }
+    });
+
+    it('keeps legacy and Composio messages reaction-null, deduplicates reaction rows, and omits unreadable or deleted parents', async () => {
+      await client.query('SAVEPOINT reaction_read_variants');
+      try {
+        const composioId = '00000000-0000-4000-8000-000000008877';
+        const reactionParentId = '00000000-0000-4000-8000-000000009001';
+        await client.query(
+          `INSERT INTO pg_temp.ig_message_fixture
+          SELECT $1::uuid, "workspaceId", "conversationId", text, direction,
+            'COMPOSIO', 'COMPOSIO', "deliveryState", '2026-09-07T00:00:00Z'::timestamptz,
+            "createdAt", "hasAttachments", "attachmentCount", readable, "deletedAt"
+          FROM pg_temp.ig_message_fixture WHERE id = $2`,
+          [composioId, reactionParentId],
+        );
+        await client.query(
+          `INSERT INTO "workspace_1d7tmz9j2abdrls1"."myahInboxInstagramReaction"
+          (id, "messageRecordId", "conversationRecordId", "actorProviderId", "emoji", "version", "occurredAt")
+          VALUES ($1, $2, $3, 'creator-ig', '😯', $4, now()),
+            ($5, $6, $3, 'creator-ig', '👍', $7, now()),
+            ($8, $6, $3, 'creator-ig', '🎉', $9, now() + interval '1 minute')`,
+          [
+            '00000000-0000-4000-8000-000000008210',
+            composioId,
+            conversationId,
+            'c'.repeat(64),
+            '00000000-0000-4000-8000-000000008211',
+            reactionParentId,
+            'a'.repeat(64),
+            '00000000-0000-4000-8000-000000008212',
+            'b'.repeat(64),
+          ],
+        );
+        const target = fixture();
+        const top = await target.service.listMessages(request({ first: 3 }));
+        expect(top.edges.map(({ node }) => node.id)).toEqual([
+          composioId,
+          reactionParentId,
+          '00000000-0000-4000-8000-000000009000',
+        ]);
+        expect(top.edges[0].node).toMatchObject({
+          provider: 'COMPOSIO',
+          reactionEmoji: null,
+          reactionVersion: null,
+        });
+        expect(top.edges[1].node).toMatchObject({
+          reactionEmoji: '🎉',
+          reactionVersion: 'b'.repeat(64),
+        });
+        expect(top.edges[2].node).toMatchObject({
+          reactionEmoji: null,
+          reactionVersion: null,
+        });
+
+        await client.query(
+          'UPDATE pg_temp.ig_message_fixture SET readable = FALSE WHERE id = $1',
+          [reactionParentId],
+        );
+        expect(
+          (await target.service.listMessages(request({ first: 3 }))).edges.map(
+            ({ node }) => node.id,
+          ),
+        ).not.toContain(reactionParentId);
+        await client.query(
+          'UPDATE pg_temp.ig_message_fixture SET readable = TRUE, "deletedAt" = now() WHERE id = $1',
+          [reactionParentId],
+        );
+        expect(
+          (await target.service.listMessages(request({ first: 3 }))).edges.map(
+            ({ node }) => node.id,
+          ),
+        ).not.toContain(reactionParentId);
+      } finally {
+        await client.query('ROLLBACK TO SAVEPOINT reaction_read_variants');
+      }
+    });
+
     it('executes real PostgreSQL CTE pagination, Date hydration, fallback/ties, workspace filtering, and validator denials', async () => {
       const target = fixture();
       const first = await target.service.listMessages(request());
@@ -647,6 +961,11 @@ describePostgres(
       expect(new Set(ids).size).toBe(109);
       expect(ids).not.toContain('00000000-0000-4000-8000-000000008889');
       expect(ids).not.toContain('00000000-0000-4000-8000-000000008888');
+      expect(
+        [...first.edges, ...second.edges].find(
+          ({ node }) => node.id === '00000000-0000-4000-8000-000000000205',
+        )?.node,
+      ).toMatchObject({ reactionEmoji: '👍', reactionVersion: 'a'.repeat(64) });
       expect(ids.slice(0, 2)).toEqual([
         '00000000-0000-4000-8000-000000009001',
         '00000000-0000-4000-8000-000000009000',
@@ -693,6 +1012,13 @@ describePostgres(
       expect(filtered.edges.map(({ node }) => node.id)).not.toContain(
         '00000000-0000-4000-8000-000000000205',
       );
+      expect(
+        filtered.edges.every(
+          ({ node }) =>
+            !(node as unknown as { reactionEmoji: string | null })
+              .reactionEmoji,
+        ),
+      ).toBe(true);
     });
   },
 );

@@ -99,6 +99,7 @@ type UnipileInstagramMessage = {
   isEvent: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
+  reactions?: Array<{ value: string; senderId: string; isSender: boolean }>;
 };
 
 type UnipileListMessagesInput = {
@@ -1480,6 +1481,9 @@ describe('UnipileV1ClientService', () => {
             sender_id: 'instagram-user-456',
             is_sender: 1,
             text: null,
+            reactions: [
+              { value: '👍', sender_id: 'creator-id', is_sender: false },
+            ],
             attachments: [
               {
                 id: 'unipile-attachment-123',
@@ -1529,6 +1533,7 @@ describe('UnipileV1ClientService', () => {
       isEvent: false,
       hasAttachments: true,
       attachmentCount: 1,
+      reactions: [{ value: '👍', senderId: 'creator-id', isSender: false }],
     });
     expect(JSON.stringify(message)).not.toContain(providerAttachmentUrl);
     expect(fetch).toHaveBeenCalledTimes(1);

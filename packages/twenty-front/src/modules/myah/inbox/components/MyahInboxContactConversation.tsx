@@ -89,6 +89,7 @@ export type MyahInboxContactConversationProps = {
   onReplyToCard: (threadId: string) => void;
   onContactLinked: (resultingContactId: string) => Promise<void>;
   onActivity: () => Promise<void>;
+  onReactionViewed?: () => Promise<void>;
   renderInstagramPanel?: () => ReactNode;
   renderEmailReplyWorkspace?: () => ReactNode;
   onThreadUpdated: (message: string) => void;
@@ -111,6 +112,7 @@ export const MyahInboxContactConversation = ({
   onReplyToCard,
   onContactLinked,
   onActivity,
+  onReactionViewed,
   renderInstagramPanel,
   renderEmailReplyWorkspace,
   onThreadUpdated,
@@ -255,6 +257,8 @@ export const MyahInboxContactConversation = ({
               workspaceId={workspaceId}
               contact={contact}
               onActivity={onActivity}
+              onReactionViewed={onReactionViewed}
+              arrivalEpoch={draftArrivalEpoch}
             />
           )}
         </StyledChannelPanel>

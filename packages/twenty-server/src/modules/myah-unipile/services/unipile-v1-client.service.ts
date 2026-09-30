@@ -73,6 +73,8 @@ export class UnipileV1ClientService {
     this.availabilityService.assertEnabled();
 
     const apiBaseUrl = this.availabilityService.config.apiBaseUrl;
+    // Config is validated by availabilityService; invalid config must fail closed.
+    // pi-lens-ignore: unchecked-throwing-call
     const apiUrl = new URL(apiBaseUrl).origin;
     const payload =
       input.operation === 'RECONNECT'
@@ -424,6 +426,15 @@ export class UnipileV1ClientService {
         isEvent: message.is_event,
         hasAttachments: message.attachments.length > 0,
         attachmentCount: message.attachments.length,
+        ...(message.reactions === undefined
+          ? {}
+          : {
+              reactions: message.reactions.map((reaction) => ({
+                value: reaction.value,
+                senderId: reaction.sender_id,
+                isSender: reaction.is_sender,
+              })),
+            }),
       })),
       nextCursor: messageList.cursor,
     };
@@ -484,6 +495,15 @@ export class UnipileV1ClientService {
       isEvent: message.data.is_event,
       hasAttachments: message.data.attachments.length > 0,
       attachmentCount: message.data.attachments.length,
+      ...(message.data.reactions === undefined
+        ? {}
+        : {
+            reactions: message.data.reactions.map((reaction) => ({
+              value: reaction.value,
+              senderId: reaction.sender_id,
+              isSender: reaction.is_sender,
+            })),
+          }),
     };
   }
 

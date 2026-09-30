@@ -23,7 +23,7 @@ describe('MyahInboxContactTriageSchemaService', () => {
       String(statement),
     );
 
-    expect(statements).toHaveLength(7);
+    expect(statements).toHaveLength(8);
     expect(statements).toEqual(
       expect.arrayContaining([
         expect.stringContaining('"myahInboxContactIdentity"'),
@@ -31,11 +31,14 @@ describe('MyahInboxContactTriageSchemaService', () => {
         expect.stringContaining('"myahInboxTriageTransitionReceipt"'),
         expect.stringContaining('"myahInboxTriageEmailChannelProvenance"'),
         expect.stringContaining('"myahInboxTriageMigration"'),
+        expect.stringContaining('"myahInboxInstagramReaction"'),
       ]),
     );
     const ddl = statements.join('\n');
 
     expect(ddl).toContain('timestamptz(3)');
+    expect(ddl).toContain('UNIQUE ("messageRecordId", "actorProviderId")');
+    expect(ddl).toContain('"myahSocialMessage"("id")');
     expect(ddl).toContain("\"status\" IN ('MIGRATING','READY')");
     expect(ddl).not.toContain("'CATCH_UP'");
   });

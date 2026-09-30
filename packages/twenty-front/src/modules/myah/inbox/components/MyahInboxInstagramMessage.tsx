@@ -64,6 +64,18 @@ const StyledUnknownMessage = styled(StyledMessage)`
   color: ${themeCssVariables.font.color.secondary};
 `;
 
+const StyledReaction = styled.span`
+  background: ${themeCssVariables.background.transparent.lighter};
+  border-radius: ${themeCssVariables.border.radius.sm};
+  color: ${themeCssVariables.font.color.secondary};
+  display: inline-block;
+  font-size: ${themeCssVariables.font.size.xs};
+  margin-top: ${themeCssVariables.spacing[1]};
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
+`;
+
 const StyledMetadata = styled.span`
   color: ${themeCssVariables.font.color.secondary};
   display: block;
@@ -121,6 +133,20 @@ export const MyahInboxInstagramMessage = ({
       ) : null}
       <MessageBubble $grouped={groupedWithPrevious}>
         <span>{message.text || 'No message text.'}</span>
+        {message.provider === 'UNIPILE' &&
+        message.reactionEmoji &&
+        message.reactionVersion ? (
+          <div>
+            <StyledReaction
+              role="img"
+              aria-label={`${message.reactionActorLabel ?? 'Instagram participant'} reacted ${message.reactionEmoji}`}
+              data-reaction-version={message.reactionVersion}
+            >
+              {message.reactionEmoji}{' '}
+              {message.reactionActorLabel ?? 'Instagram participant'}
+            </StyledReaction>
+          </div>
+        ) : null}
         {message.hasAttachments ? (
           <StyledMetadata>
             Attachments are not supported ({message.attachmentCount}).

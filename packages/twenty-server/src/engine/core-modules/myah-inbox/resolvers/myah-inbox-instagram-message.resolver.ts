@@ -1,13 +1,15 @@
 import { ForbiddenException, UseGuards } from '@nestjs/common';
-import { Args, Query } from '@nestjs/graphql';
+import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import {
+  AcknowledgeMyahInboxInstagramReactionInput,
   MyahInboxInstagramMessageConnection,
   MyahInboxInstagramMessagesInput,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-instagram-message-page.dto';
 import { MyahInboxInstagramMessageQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-instagram-message-query.service';
+import { assertMyahInboxExpectedWorkspace } from 'src/engine/core-modules/myah-inbox/utils/assert-myah-inbox-expected-workspace.util';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace-member-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
@@ -22,6 +24,29 @@ export class MyahInboxInstagramMessageResolver {
   constructor(
     private readonly instagramMessageQueryService: MyahInboxInstagramMessageQueryService,
   ) {}
+
+  @Mutation(() => Boolean)
+  async acknowledgeMyahInboxInstagramReaction(
+    @Args('input') input: AcknowledgeMyahInboxInstagramReactionInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<boolean> {
+    const authContext = getWorkspaceAuthContext();
+    if (!isUserAuthContext(authContext) || !authContext.user) {
+      throw new ForbiddenException(
+        'The Myah Inbox requires authenticated user context',
+      );
+    }
+    assertMyahInboxExpectedWorkspace(
+      authContext.workspace.id,
+      input.expectedWorkspaceId,
+    );
+    return this.instagramMessageQueryService.acknowledgeReaction({
+      ...input,
+      authContext,
+      user: authContext.user,
+      workspace,
+    });
+  }
 
   @Query(() => MyahInboxInstagramMessageConnection)
   async myahInboxInstagramMessages(

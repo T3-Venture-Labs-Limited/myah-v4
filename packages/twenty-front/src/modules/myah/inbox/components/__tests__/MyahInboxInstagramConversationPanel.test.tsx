@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { type forwardRef as ReactForwardRef } from 'react';
 
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -19,6 +20,11 @@ const mockUseSend = jest.fn();
 const mockUseCampaignSelection = jest.fn();
 const mockUseGuidanceNavigation = jest.fn();
 const mockUseObjectMetadataItems = jest.fn();
+const mockMutate = jest.fn();
+
+jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
+  useApolloCoreClient: () => ({ mutate: mockMutate }),
+}));
 
 jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: () => mockUseObjectMetadataItems(),
@@ -250,6 +256,227 @@ describe('MyahInboxInstagramConversationPanel', () => {
       runtimeAgentTabId: undefined,
       openGuidance: jest.fn(),
     });
+  });
+
+  it('acknowledges only a visible current reaction version, never an off-screen or hidden one', async () => {
+    let notify: IntersectionObserverCallback = () => undefined;
+    const observe = jest.fn();
+    const disconnect = jest.fn();
+    const original = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = class {
+      constructor(callback: IntersectionObserverCallback) {
+        notify = callback;
+      }
+      observe = observe;
+      unobserve = jest.fn();
+      disconnect = disconnect;
+    } as unknown as typeof IntersectionObserver;
+    const onReactionViewed = jest.fn();
+    mockMutate.mockResolvedValue({
+      data: { acknowledgeMyahInboxInstagramReaction: true },
+    });
+    mockUseConversation.mockReturnValue({
+      ...mockUseConversation(),
+      messages: [
+        {
+          id: 'parent-1',
+          text: 'Sent',
+          direction: 'OUTBOUND',
+          sentVia: 'UNIPILE',
+          provider: 'UNIPILE',
+          deliveryState: 'SENT',
+          providerCreatedAt: '2026-09-05T12:00:00.000Z',
+          createdAt: '2026-09-05T12:00:00.000Z',
+          hasAttachments: false,
+          attachmentCount: 0,
+          reactionEmoji: '👍',
+          reactionActorLabel: 'Instagram participant',
+          reactionVersion: 'a'.repeat(64),
+        },
+      ],
+    });
+    const selectedContact = contact({
+      instagram: {
+        isAvailable: true,
+        state: 'READY',
+        needsAttention: false,
+        reactionNeedsAttention: true,
+        conversations: [conversation('conversation-1')],
+      },
+    });
+    try {
+      const panel = (selected = selectedContact) => (
+        <MyahInboxInstagramConversationPanel
+          workspaceId="workspace-1"
+          contact={selected}
+          onActivity={jest.fn()}
+          onReactionViewed={onReactionViewed}
+        />
+      );
+      const { rerender } = render(panel());
+      const reaction = screen.getByRole('img', {
+        name: 'Instagram participant reacted 👍',
+      });
+      expect(observe).toHaveBeenCalledWith(reaction);
+      const entry = (
+        ratio: number,
+        target: Element = reaction,
+      ): IntersectionObserverEntry => ({
+        target,
+        isIntersecting: ratio > 0,
+        intersectionRatio: ratio,
+        boundingClientRect: target.getBoundingClientRect(),
+        intersectionRect: target.getBoundingClientRect(),
+        rootBounds: null,
+        time: 0,
+      });
+      await act(async () => {
+        notify([entry(0.4)], {} as IntersectionObserver);
+      });
+      expect(mockMutate).not.toHaveBeenCalled();
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        value: 'hidden',
+      });
+      await act(async () => {
+        notify([entry(1)], {} as IntersectionObserver);
+      });
+      expect(mockMutate).not.toHaveBeenCalled();
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        value: 'visible',
+      });
+      const oldObserver = notify;
+      const readablePage = mockUseConversation();
+      mockUseConversation.mockReturnValue({
+        ...readablePage,
+        error: 'Read denied',
+      });
+      rerender(panel());
+      await act(async () => {
+        oldObserver([entry(1)], {} as IntersectionObserver);
+      });
+      expect(mockMutate).not.toHaveBeenCalled();
+      mockUseConversation.mockReturnValue({ ...readablePage, messages: [] });
+      rerender(panel());
+      await act(async () => {
+        oldObserver([entry(1)], {} as IntersectionObserver);
+      });
+      expect(mockMutate).not.toHaveBeenCalled();
+      mockUseConversation.mockReturnValue(readablePage);
+      rerender(panel({ ...selectedContact, id: 'other-contact' }));
+      await act(async () => {
+        oldObserver([entry(1)], {} as IntersectionObserver);
+      });
+      expect(mockMutate).not.toHaveBeenCalled();
+      rerender(panel());
+      await act(async () => {
+        notify([entry(1)], {} as IntersectionObserver);
+      });
+      await waitFor(() => expect(onReactionViewed).toHaveBeenCalledTimes(1));
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variables: {
+            input: {
+              expectedWorkspaceId: 'workspace-1',
+              conversationId: 'conversation-1',
+              messageId: 'parent-1',
+              version: 'a'.repeat(64),
+            },
+          },
+        }),
+      );
+      mockUseConversation.mockReturnValue({
+        ...readablePage,
+        messages: readablePage.messages.map((message: { id: string }) => ({
+          ...message,
+          reactionVersion: 'b'.repeat(64),
+        })),
+      });
+      mockMutate.mockResolvedValueOnce({
+        data: { acknowledgeMyahInboxInstagramReaction: false },
+      });
+      rerender(panel());
+      const currentReaction = screen.getByRole('img', {
+        name: 'Instagram participant reacted 👍',
+      });
+      await act(async () => {
+        notify([entry(1, currentReaction)], {} as IntersectionObserver);
+      });
+      expect(mockMutate).toHaveBeenCalledTimes(2);
+      expect(onReactionViewed).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.IntersectionObserver = original;
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        value: 'visible',
+      });
+    }
+  });
+
+  it('reuses the visible Inbox arrival epoch for the selected Instagram page without stacking reads', () => {
+    const refetch = jest.fn();
+    mockUseConversation.mockReturnValue({ ...mockUseConversation(), refetch });
+    const selectedContact = contact({
+      instagram: {
+        isAvailable: true,
+        state: 'READY',
+        needsAttention: false,
+        reactionNeedsAttention: true,
+        conversations: [conversation('conversation-1')],
+      },
+    });
+    const { rerender } = render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={selectedContact}
+        onActivity={jest.fn()}
+        arrivalEpoch={0}
+      />,
+    );
+    expect(refetch).not.toHaveBeenCalled();
+    mockUseConversation.mockReturnValue({
+      ...mockUseConversation(),
+      refetch,
+      messages: [
+        {
+          id: 'arrived-parent',
+          text: 'Creator arrived',
+          direction: 'INBOUND',
+          provider: 'UNIPILE',
+          sentVia: 'UNIPILE',
+          deliveryState: 'RECEIVED',
+          providerCreatedAt: '2026-09-05T12:00:00.000Z',
+          createdAt: '2026-09-05T12:00:00.000Z',
+          hasAttachments: false,
+          attachmentCount: 0,
+          reactionEmoji: '❤️',
+          reactionActorLabel: 'Instagram participant',
+          reactionVersion: 'a'.repeat(64),
+        },
+      ],
+    });
+    rerender(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={selectedContact}
+        onActivity={jest.fn()}
+        arrivalEpoch={1}
+      />,
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('img', { name: 'Instagram participant reacted ❤️' }),
+    ).toBeVisible();
+    rerender(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={selectedContact}
+        onActivity={jest.fn()}
+        arrivalEpoch={1}
+      />,
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('refetches the saved conversation page only after delayed confirmed projection', async () => {

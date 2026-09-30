@@ -310,6 +310,140 @@ const request = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('MyahInboxContactQueryService', () => {
+  it('exposes reaction attention separately without changing canonical New message state', async () => {
+    const harness = buildHarness([
+      {
+        ...rawRows[0],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+        triageIsAvailable: true,
+        triageInboxState: 'WAITING_ON_CREATOR',
+      },
+    ]);
+    const result = await harness.service.listContacts(request());
+
+    expect(result).toMatchObject({
+      edges: [
+        {
+          node: {
+            needsAttention: true,
+            triage: { inboxState: 'WAITING_ON_CREATOR' },
+            instagram: { needsAttention: false, reactionNeedsAttention: true },
+          },
+        },
+      ],
+    });
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'unseen_reactions_by_conversation AS',
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'FROM readable_social_messages message',
+    );
+    const sql = harness.query.mock.calls[0][0] as string;
+    expect(sql).toContain('"viewedVersion"');
+    expect(sql).toContain("message.provider = 'UNIPILE'");
+    expect(sql).toContain('reaction."conversationRecordId" = conversation.id');
+    expect(sql).toContain(
+      'reaction."actorProviderId" = source."recipientIgsid"',
+    );
+    expect(sql).toContain(
+      'INNER JOIN readable_social_conversations conversation',
+    );
+  });
+
+  it('keeps reaction-only attention on linked Creator groups and unlinked conversations without changing the message reason', async () => {
+    const linked = buildHarness([
+      {
+        ...rawRows[0],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+      },
+    ]);
+    const linkedPage = await linked.service.listContacts(request());
+    expect(linkedPage).toMatchObject({
+      edges: [
+        {
+          node: {
+            creator: { id: creatorId },
+            needsAttention: true,
+            instagram: {
+              needsAttention: false,
+              reactionNeedsAttention: true,
+              conversations: [{ id: instagramAId }, { id: instagramBId }],
+            },
+          },
+        },
+      ],
+    });
+    const unlinked = buildHarness([
+      {
+        ...rawRows[2],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+      },
+    ]);
+    const unlinkedPage = await unlinked.service.listContacts(request());
+    expect(unlinkedPage).toMatchObject({
+      edges: [
+        {
+          node: {
+            creator: null,
+            needsAttention: true,
+            instagram: { needsAttention: false, reactionNeedsAttention: true },
+          },
+        },
+      ],
+    });
+  });
+
+  it('clears only reaction attention while retaining independent New message or manual-triage attention', async () => {
+    for (const [row, needsAttention] of [
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: false,
+          triageIsAvailable: true,
+          triageInboxState: 'WAITING_ON_CREATOR',
+        },
+        false,
+      ],
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: false,
+          triageIsAvailable: true,
+          triageInboxState: 'NEEDS_REPLY',
+        },
+        true,
+      ],
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: true,
+          triageIsAvailable: false,
+        },
+        true,
+      ],
+    ] as const) {
+      const page = await buildHarness([row]).service.listContacts(request());
+      expect(
+        (
+          page.edges as Array<{
+            node: {
+              needsAttention: boolean;
+              instagram: { reactionNeedsAttention: boolean };
+            };
+          }>
+        )[0].node,
+      ).toMatchObject({
+        needsAttention,
+        instagram: { reactionNeedsAttention: false },
+      });
+    }
+  });
   it('emits exact SQL cursor text separately from the Date display timestamp', async () => {
     const exactTimestamp = '2026-09-05T12:30:00.000900Z';
     const harness = buildHarness([

@@ -41,6 +41,9 @@ const toInstagramConversationMessage = (
   createdAt: message.createdAt,
   hasAttachments: message.hasAttachments,
   attachmentCount: message.attachmentCount,
+  reactionEmoji: message.reactionEmoji ?? null,
+  reactionActorLabel: message.reactionActorLabel ?? null,
+  reactionVersion: message.reactionVersion ?? null,
 });
 
 const mergeChronologically = (
