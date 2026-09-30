@@ -55,20 +55,24 @@ export class CampaignForecastRefreshService {
 
   async refreshStaleForecasts(limit = 10): Promise<void> {
     const dataSource = await this.orm.getGlobalWorkspaceDataSource();
-    const stale = await dataSource.transaction((manager) =>
-      manager.query(
-        `WITH active AS (
-           SELECT DISTINCT "workspaceId" FROM core."campaignOccurrence"
-            WHERE state IN ('PENDING','HELD','IN_FLIGHT','UNKNOWN')
-         ), ensured AS (
-           INSERT INTO core."campaignForecastHead" ("workspaceId","scopeKey","inputRevision")
-           SELECT "workspaceId",'workspace:' || "workspaceId"::text,1 FROM active
-           ON CONFLICT ("workspaceId","scopeKey") DO NOTHING
-           RETURNING "workspaceId"
-         )
-         SELECT head."workspaceId",head."scopeKey",head."inputRevision"::text AS "inputRevision"
+    const stale = await dataSource.transaction(async (manager) => {
+      const runner = manager.queryRunner;
+      if (!runner || runner.isReleased || !runner.isTransactionActive) {
+        throw new Error('Campaign forecast refresh requires a transaction');
+      }
+      await runner.query(
+        `INSERT INTO core."campaignForecastHead" ("workspaceId","scopeKey","inputRevision")
+         SELECT DISTINCT "workspaceId",'workspace:' || "workspaceId"::text,1
+           FROM core."campaignOccurrence"
+          WHERE state IN ('PENDING','HELD','IN_FLIGHT','UNKNOWN')
+         ON CONFLICT ("workspaceId","scopeKey") DO NOTHING`,
+      );
+      return runner.query(
+        `SELECT head."workspaceId",head."scopeKey",head."inputRevision"::text AS "inputRevision"
            FROM core."campaignForecastHead" head
-           JOIN active ON active."workspaceId"=head."workspaceId"
+           JOIN (SELECT DISTINCT "workspaceId" FROM core."campaignOccurrence"
+                  WHERE state IN ('PENDING','HELD','IN_FLIGHT','UNKNOWN')) active
+             ON active."workspaceId"=head."workspaceId"
            LEFT JOIN core."campaignForecastGeneration" generation ON generation.id=head."currentGenerationId"
           WHERE head."scopeKey"='workspace:' || head."workspaceId"::text
             AND (generation.id IS NULL
@@ -76,8 +80,8 @@ export class CampaignForecastRefreshService {
               OR generation."generatedAt" <= clock_timestamp() - ($2::integer * interval '1 millisecond'))
           ORDER BY head."updatedAt" NULLS FIRST,head."workspaceId" LIMIT $1`,
         [limit, FORECAST_REFRESH_MAX_AGE_MS],
-      ),
-    );
+      );
+    });
 
     for (const head of rows<StaleHead>(stale)) {
       const runner = dataSource.createQueryRunner();
@@ -107,6 +111,14 @@ export class CampaignForecastRefreshService {
     head: StaleHead,
     manager: EntityManager,
   ): Promise<Parameters<CampaignForecastProjectionService['publish']>[0]> {
+    const queryRunner = manager.queryRunner;
+    if (
+      !queryRunner ||
+      queryRunner.isReleased ||
+      !queryRunner.isTransactionActive
+    ) {
+      throw new Error('Campaign forecast refresh requires a transaction');
+    }
     const generatedAt = new Date();
     const deadline = this.monotonicNow() + FORECAST_REFRESH_TIME_BUDGET_MS;
     const horizonEndsAt = new Date(generatedAt.getTime() + HORIZON_MS);
@@ -168,7 +180,7 @@ export class CampaignForecastRefreshService {
       accountIds.length === 0
         ? []
         : rows<CapacityRow>(
-            await manager.query(
+            await queryRunner.query(
               `SELECT account.id AS "connectedAccountId",day."localDate"::text AS "localDate",
                       COALESCE(day."reservedCount",0)::integer AS "reservedCount",
                       COALESCE(day."acceptedCount",0)::integer AS "acceptedCount",
@@ -192,7 +204,7 @@ export class CampaignForecastRefreshService {
       campaignId: string;
       campaignCapacityTimeZone: string;
     }>(
-      await manager.query(
+      await queryRunner.query(
         `SELECT "campaignId","campaignCapacityTimeZone" FROM core."campaignExecution"
           WHERE "workspaceId"=$1 AND "campaignId"=ANY($2::uuid[])`,
         [head.workspaceId, campaignIds],
