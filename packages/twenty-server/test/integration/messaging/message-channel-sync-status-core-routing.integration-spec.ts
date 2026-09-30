@@ -9,6 +9,7 @@ import {
 } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { MESSAGE_CHANNEL_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/constants/message-channel-seed-ids.constant';
 import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/services/message-channel-sync-status.service';
+import { AccountsToReconnectKeys } from 'src/modules/connected-account/types/accounts-to-reconnect-key-value.type';
 
 import { getDomainService } from 'test/integration/myah-inbox/utils/seed-myah-inbox-task-7-fixture.util';
 
@@ -26,6 +27,10 @@ describe('Email sync status uses core metadata and atomically invalidates foreca
   let otherBefore: Record<string, unknown>;
   let otherAccountBefore: Record<string, unknown>;
   let accountId: string;
+  let reconnectUserId: string;
+  let reconnectBefore:
+    | { id: string; value: string | null; updatedAt: string }
+    | undefined;
 
   const channel = async (id: string = channelId) => {
     const [row] = await global.testDataSource.query(
@@ -54,9 +59,30 @@ describe('Email sync status uses core metadata and atomically invalidates foreca
       throw new Error('Seed channels missing');
     accountId = channelBefore.connectedAccountId as string;
     [accountBefore] = await global.testDataSource.query(
-      `SELECT "authFailedAt" FROM core."connectedAccount" WHERE id=$1`,
+      `SELECT "authFailedAt","userWorkspaceId" FROM core."connectedAccount" WHERE id=$1`,
       [accountId],
     );
+    const [userWorkspace] = await global.testDataSource.query(
+      `SELECT "userId" FROM core."userWorkspace" WHERE id=$1`,
+      [accountBefore.userWorkspaceId],
+    );
+    if (!userWorkspace) throw new Error('Seed account owner missing');
+    reconnectUserId = userWorkspace.userId;
+    [reconnectBefore] = await global.testDataSource.query(
+      `SELECT id,value::text AS value,"updatedAt"::text AS "updatedAt" FROM core."keyValuePair"
+        WHERE "userId"=$1 AND "workspaceId"=$2 AND key=$3 AND type='USER_VARIABLE'`,
+      [
+        reconnectUserId,
+        workspaceId,
+        AccountsToReconnectKeys.ACCOUNTS_TO_RECONNECT_INSUFFICIENT_PERMISSIONS,
+      ],
+    );
+    if (reconnectBefore) {
+      await global.testDataSource.query(
+        `UPDATE core."keyValuePair" SET value=COALESCE(value,'[]'::jsonb) - $2 WHERE id=$1`,
+        [reconnectBefore.id, accountId],
+      );
+    }
     [otherAccountBefore] = await global.testDataSource.query(
       `SELECT "authFailedAt" FROM core."connectedAccount" WHERE id=$1`,
       [otherBefore.connectedAccountId],
@@ -88,6 +114,22 @@ describe('Email sync status uses core metadata and atomically invalidates foreca
       `UPDATE core."connectedAccount" SET "authFailedAt"=$2 WHERE id=$1 AND "workspaceId"=$3`,
       [accountId, accountBefore.authFailedAt, workspaceId],
     );
+    if (reconnectBefore) {
+      await global.testDataSource.query(
+        `UPDATE core."keyValuePair" SET value=$2::jsonb,"updatedAt"=$3::timestamptz WHERE id=$1`,
+        [reconnectBefore.id, reconnectBefore.value, reconnectBefore.updatedAt],
+      );
+    } else if (reconnectUserId) {
+      await global.testDataSource.query(
+        `DELETE FROM core."keyValuePair"
+          WHERE "userId"=$1 AND "workspaceId"=$2 AND key=$3 AND type='USER_VARIABLE'`,
+        [
+          reconnectUserId,
+          workspaceId,
+          AccountsToReconnectKeys.ACCOUNTS_TO_RECONNECT_INSUFFICIENT_PERMISSIONS,
+        ],
+      );
+    }
     if (headBefore) {
       await global.testDataSource.query(
         `UPDATE core."campaignForecastHead" SET "inputRevision"=$3 WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
@@ -164,6 +206,16 @@ describe('Email sync status uses core metadata and atomically invalidates foreca
       [accountId],
     );
     expect(new Date(account.authFailedAt).getTime()).toBeGreaterThan(0);
+    const [reconnect] = await global.testDataSource.query(
+      `SELECT value FROM core."keyValuePair"
+        WHERE "userId"=$1 AND "workspaceId"=$2 AND key=$3 AND type='USER_VARIABLE'`,
+      [
+        reconnectUserId,
+        workspaceId,
+        AccountsToReconnectKeys.ACCOUNTS_TO_RECONNECT_INSUFFICIENT_PERMISSIONS,
+      ],
+    );
+    expect(reconnect.value).toContain(accountId);
     expect(await channel(otherChannelId)).toEqual(otherBefore);
     expect(otherWorkspaceId).not.toBe(workspaceId);
     const [otherAccount] = await global.testDataSource.query(
