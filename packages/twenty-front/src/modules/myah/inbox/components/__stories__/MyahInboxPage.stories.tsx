@@ -513,7 +513,7 @@ const MyahInboxStorySurface = ({
                   disabled={instagramComposerDisabled}
                   editorVersion={0}
                   onBodyChange={setInstagramBody}
-                  onReviewAndSend={fn()}
+                  onSend={fn()}
                   campaignOptions={
                     selectedContact.creator
                       ? [
@@ -707,7 +707,7 @@ export const DuplicateChats: Story = {
       /Multiple Instagram conversations found/,
     );
     await expect(
-      canvas.queryByRole('button', { name: 'Review and send' }),
+      canvas.queryByRole('button', { name: 'Send reply' }),
     ).not.toBeInTheDocument();
   },
 };
