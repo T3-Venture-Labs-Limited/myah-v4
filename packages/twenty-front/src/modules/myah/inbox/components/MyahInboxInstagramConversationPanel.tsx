@@ -19,6 +19,7 @@ import { AcknowledgeMyahInboxInstagramReactionDocument } from '~/generated/graph
 import {
   type MyahInboxContact,
   type MyahInboxContactInstagramConversation,
+  type MyahInstagramConversationMessage,
 } from '@/myah/inbox/types/MyahInboxContact';
 import { styled } from '@linaria/react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -420,7 +421,7 @@ const MyahInboxInstagramReplyPanel = ({
   // oxlint-disable-next-line twenty/no-state-useref
   const previousLoadingMoreRef = useRef(false);
   // oxlint-disable-next-line twenty/no-state-useref
-  const previousLastMessageIdRef = useRef<string | null>(null);
+  const previousLastMessageRef = useRef<MyahInstagramConversationMessage>(null);
   // oxlint-disable-next-line twenty/no-state-useref
   const wasAtBottomRef = useRef(true);
   const [hasNewerMessages, setHasNewerMessages] = useState(false);
@@ -563,7 +564,7 @@ const MyahInboxInstagramReplyPanel = ({
     )
       return;
     lastArrivalEpochRef.current = arrivalEpoch;
-    if (document.visibilityState === 'visible') void refetch();
+    if (document.visibilityState === 'visible') void refetch(true);
   }, [arrivalEpoch, refetch]);
 
   flushRef.current = draft.flush;
@@ -645,25 +646,35 @@ const MyahInboxInstagramReplyPanel = ({
     if (settledOlderPage) {
       restoreMessageAnchor(pendingPageAnchorRef.current);
       pendingPageAnchorRef.current = null;
+    } else if (!instagram.loadingMore && !wasAtBottomRef.current) {
+      restoreMessageAnchor(readingAnchorRef.current);
     }
 
-    const lastMessageId = instagram.messages.at(-1)?.id ?? null;
-    const previousLastMessageId = previousLastMessageIdRef.current;
+    const lastMessage = instagram.messages.at(-1) ?? null;
+    const previousLastMessage = previousLastMessageRef.current;
+    const lastTimestamp = lastMessage
+      ? Date.parse(lastMessage.providerCreatedAt ?? lastMessage.createdAt)
+      : 0;
+    const previousTimestamp = previousLastMessage
+      ? Date.parse(
+          previousLastMessage.providerCreatedAt ??
+            previousLastMessage.createdAt,
+        )
+      : 0;
     const didReceiveNewerMessage =
-      previousLastMessageId !== null &&
-      lastMessageId !== null &&
-      lastMessageId !== previousLastMessageId &&
-      instagram.messages.some(
-        (message) => message.id === previousLastMessageId,
-      );
+      previousLastMessage !== null &&
+      lastMessage !== null &&
+      (lastTimestamp > previousTimestamp ||
+        (lastTimestamp === previousTimestamp &&
+          lastMessage.id.localeCompare(previousLastMessage.id) > 0));
 
-    if (previousLastMessageId === null || wasAtBottomRef.current) {
+    if (previousLastMessage === null || wasAtBottomRef.current) {
       messages.scrollTop = messages.scrollHeight;
       setHasNewerMessages(false);
     } else if (didReceiveNewerMessage) {
       setHasNewerMessages(true);
     }
-    previousLastMessageIdRef.current = lastMessageId;
+    previousLastMessageRef.current = lastMessage;
     previousLoadingMoreRef.current = instagram.loadingMore;
     captureVisibleMessageAnchor();
   }, [
@@ -793,6 +804,7 @@ const MyahInboxInstagramReplyPanel = ({
               lifecycle={activeConversation.lifecycle}
               hasNextPage={instagram.hasNextPage}
               loadingMore={instagram.loadingMore}
+              refreshing={instagram.refreshing}
               onLoadMore={handleLoadMore}
             />
           )}

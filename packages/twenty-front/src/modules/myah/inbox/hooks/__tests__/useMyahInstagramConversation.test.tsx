@@ -168,6 +168,190 @@ describe('useMyahInstagramConversation', () => {
     ]);
   });
 
+  it('refreshes a loaded older page without hiding it, losing its cursor, or retaining stale reaction values', async () => {
+    const refreshRead = createDeferred<ReturnType<typeof response>>();
+    const older = message('older', '2026-09-05T10:00:00.000Z');
+    const parent = message('parent', '2026-09-05T12:00:00.000Z', {
+      reactionEmoji: '👍',
+      reactionVersion: 'old-version',
+    });
+    mockQuery
+      .mockResolvedValueOnce(
+        response([parent], { hasNextPage: true, endCursor: 'first-cursor' }),
+      )
+      .mockResolvedValueOnce(
+        response([older], { hasNextPage: true, endCursor: 'older-cursor' }),
+      )
+      .mockReturnValueOnce(refreshRead.promise)
+      .mockResolvedValueOnce(
+        response([message('oldest', '2026-09-05T09:00:00.000Z')]),
+      );
+    const hook = renderHook(() =>
+      useMyahInstagramConversation(firstConversationId),
+    );
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    await act(async () => {
+      await hook.result.current.loadMore();
+    });
+    let refreshPromise: Promise<void> | undefined;
+    act(() => {
+      refreshPromise = hook.result.current.refetch(true);
+    });
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'older',
+      'parent',
+    ]);
+    await act(async () => {
+      refreshRead.resolve(
+        response(
+          [
+            message('newest', '2026-09-05T13:00:00.000Z'),
+            message('parent', '2026-09-05T12:00:00.000Z', {
+              reactionEmoji: '❤️',
+              reactionVersion: 'new-version',
+            }),
+          ],
+          { hasNextPage: true, endCursor: 'refreshed-first-cursor' },
+        ),
+      );
+      await refreshPromise;
+    });
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'older',
+      'parent',
+      'newest',
+    ]);
+    expect(hook.result.current.messages[1].reactionVersion).toBe('new-version');
+    await act(async () => {
+      await hook.result.current.loadMore();
+    });
+    expect(mockQuery.mock.calls[3][0].variables.after).toBe('older-cursor');
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'oldest',
+      'older',
+      'parent',
+      'newest',
+    ]);
+  });
+
+  it('drops missing messages from an authoritative refresh while retaining older pages', async () => {
+    const old = message('old', '2026-09-05T09:00:00.000Z');
+    const removed = message('removed', '2026-09-05T11:00:00.000Z');
+    const newest = message('newest', '2026-09-05T12:00:00.000Z');
+    mockQuery
+      .mockResolvedValueOnce(
+        response([newest, removed], {
+          hasNextPage: true,
+          endCursor: 'first-cursor',
+        }),
+      )
+      .mockResolvedValueOnce(
+        response([old], { hasNextPage: true, endCursor: 'older-cursor' }),
+      )
+      .mockResolvedValueOnce(
+        response([newest, message('boundary', '2026-09-05T10:00:00.000Z')], {
+          hasNextPage: true,
+          endCursor: 'new-first-cursor',
+        }),
+      );
+    const hook = renderHook(() =>
+      useMyahInstagramConversation(firstConversationId),
+    );
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    await act(async () => {
+      await hook.result.current.loadMore();
+      await hook.result.current.refetch(true);
+    });
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'old',
+      'boundary',
+      'newest',
+    ]);
+    expect(hook.result.current.hasNextPage).toBe(true);
+  });
+
+  it('replaces an exhausted page when a message is deleted', async () => {
+    mockQuery
+      .mockResolvedValueOnce(
+        response([
+          message('deleted', '2026-09-05T11:00:00.000Z'),
+          message('remaining', '2026-09-05T12:00:00.000Z'),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        response([message('remaining', '2026-09-05T12:00:00.000Z')]),
+      );
+    const hook = renderHook(() =>
+      useMyahInstagramConversation(firstConversationId),
+    );
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    await act(async () => {
+      await hook.result.current.refetch(true);
+    });
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'remaining',
+    ]);
+  });
+
+  it('uses the new first page cursor when a burst leaves no safe overlap', async () => {
+    mockQuery
+      .mockResolvedValueOnce(
+        response([message('old', '2026-09-05T10:00:00.000Z')], {
+          hasNextPage: true,
+          endCursor: 'old-cursor',
+        }),
+      )
+      .mockResolvedValueOnce(
+        response([message('new', '2026-09-05T12:00:00.000Z')], {
+          hasNextPage: true,
+          endCursor: 'new-cursor',
+        }),
+      )
+      .mockResolvedValueOnce(response([]));
+    const hook = renderHook(() =>
+      useMyahInstagramConversation(firstConversationId),
+    );
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    await act(async () => {
+      await hook.result.current.refetch(true);
+    });
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual(['new']);
+    await act(async () => {
+      await hook.result.current.loadMore();
+    });
+    expect(mockQuery.mock.calls[2][0].variables.after).toBe('new-cursor');
+  });
+
+  it('rebases pagination instead of guessing order across a same-millisecond boundary', async () => {
+    mockQuery
+      .mockResolvedValueOnce(
+        response([message('z-old', '2026-09-05T12:00:00.000Z')], {
+          hasNextPage: true,
+          endCursor: 'old-cursor',
+        }),
+      )
+      .mockResolvedValueOnce(
+        response([message('a-new', '2026-09-05T12:00:00.000Z')], {
+          hasNextPage: true,
+          endCursor: 'new-cursor',
+        }),
+      )
+      .mockResolvedValueOnce(response([]));
+    const hook = renderHook(() =>
+      useMyahInstagramConversation(firstConversationId),
+    );
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    await act(async () => {
+      await hook.result.current.refetch(true);
+    });
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual(['a-new']);
+    await act(async () => {
+      await hook.result.current.loadMore();
+    });
+    expect(mockQuery.mock.calls[2][0].variables.after).toBe('new-cursor');
+  });
+
   it('retains the existing page when an older-page request fails', async () => {
     mockQuery
       .mockResolvedValueOnce(
@@ -195,6 +379,60 @@ describe('useMyahInstagramConversation', () => {
       '00000000-0000-4000-8000-000000000003',
     ]);
     expect(hook.result.current.error).toBe('Older page denied');
+  });
+
+  it('coalesces an ambient refresh behind load-more without masking the thread', async () => {
+    const olderRead = createDeferred<ReturnType<typeof response>>();
+    const backgroundRead = createDeferred<ReturnType<typeof response>>();
+    mockQuery
+      .mockResolvedValueOnce(
+        response([message('parent', '2026-09-05T12:00:00.000Z')], {
+          hasNextPage: true,
+          endCursor: 'first-cursor',
+        }),
+      )
+      .mockReturnValueOnce(olderRead.promise)
+      .mockReturnValueOnce(backgroundRead.promise);
+    const hook = renderHook(() =>
+      useMyahInstagramConversation(firstConversationId),
+    );
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    let olderPromise: Promise<void> | undefined;
+    act(() => {
+      olderPromise = hook.result.current.loadMore();
+    });
+    await act(async () => {
+      await hook.result.current.refetch(true);
+    });
+    await act(async () => {
+      olderRead.resolve(
+        response([message('older', '2026-09-05T11:00:00.000Z')], {
+          hasNextPage: false,
+          endCursor: null,
+        }),
+      );
+      await olderPromise;
+    });
+    expect(mockQuery).toHaveBeenCalledTimes(3);
+    expect(hook.result.current.loading).toBe(false);
+    expect(hook.result.current.refreshing).toBe(true);
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'older',
+      'parent',
+    ]);
+    await act(async () => {
+      backgroundRead.resolve(
+        response([message('parent', '2026-09-05T12:00:00.000Z')], {
+          hasNextPage: true,
+          endCursor: 'new-cursor',
+        }),
+      );
+    });
+    expect(hook.result.current.refreshing).toBe(false);
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'older',
+      'parent',
+    ]);
   });
 
   describe.each(['initial', 'loadMore'] as const)(

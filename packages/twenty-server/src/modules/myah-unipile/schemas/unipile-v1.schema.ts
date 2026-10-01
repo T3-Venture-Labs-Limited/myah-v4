@@ -159,7 +159,9 @@ export const unipileInstagramMessageSchema = z.object({
       }),
     )
     .max(50)
-    .optional(),
+    .optional()
+    // Invalid optional evidence is not an authoritative empty snapshot.
+    .catch(undefined),
   timestamp: unipileTimestampSchema,
   seen: unipileBinaryBooleanSchema,
   delivered: unipileBinaryBooleanSchema,
