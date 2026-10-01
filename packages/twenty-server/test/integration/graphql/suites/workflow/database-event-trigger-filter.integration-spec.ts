@@ -146,7 +146,7 @@ describe('Database event trigger filter (e2e)', () => {
     if (createdWorkflowId) {
       await graphql(
         `
-          mutation DestroyWorkflow($id: ID!) {
+          mutation DestroyWorkflow($id: UUID!) {
             destroyWorkflow(id: $id) {
               id
             }

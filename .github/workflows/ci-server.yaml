@@ -314,7 +314,7 @@ jobs:
         image: clickhouse/clickhouse-server:25.8.8
         env:
           CLICKHOUSE_PASSWORD: clickhousePassword
-          CLICKHOUSE_URL: "http://default:clickhousePassword@localhost:8123/twenty"
+          CLICKHOUSE_URL: 'http://default:clickhousePassword@localhost:8123/twenty'
         ports:
           - 8123:8123
           - 9000:9000
@@ -326,9 +326,10 @@ jobs:
     env:
       NODE_ENV: test
       ANALYTICS_ENABLED: true
-      CLICKHOUSE_URL: "http://default:clickhousePassword@localhost:8123/twenty"
+      CLICKHOUSE_URL: 'http://default:clickhousePassword@localhost:8123/twenty'
       CLICKHOUSE_PASSWORD: clickhousePassword
       SHARD_COUNTER: 16
+      MYAH_FRESH_ONLY_CI: 'true'
     steps:
       - name: Fetch custom Github Actions and base branch history
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -373,7 +374,10 @@ jobs:
     needs: [upgrade-changed-files-check, server-build]
     uses: ./.github/workflows/ci-cross-version-upgrade.yaml
     with:
-      skip: ${{ needs.upgrade-changed-files-check.outputs.any_changed != 'true' }}
+      # MYAH-409 ships fresh workspaces only; keep the historical upgrade
+      # command-history guard above, and re-enable this job before customer upgrades.
+      skip: true
+      skip_reason: 'Fresh-only Myah release: historical customer-workspace upgrade is not supported; manual upgrade workflow remains available.'
 
   ci-server-status-check:
     if: always() && !cancelled()

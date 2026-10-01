@@ -200,7 +200,7 @@ describe('Pick Record Workflow - round robin (e2e)', () => {
         .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
         .send({
           query: `
-            mutation DestroyWorkflow($id: ID!) {
+            mutation DestroyWorkflow($id: UUID!) {
               destroyWorkflow(id: $id) {
                 id
               }

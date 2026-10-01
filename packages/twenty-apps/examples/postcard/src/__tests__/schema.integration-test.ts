@@ -1,56 +1,31 @@
-import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/application.config';
+import { appDevOnce } from 'twenty-sdk/cli';
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { describe, expect, it } from 'vitest';
 
-describe('App installation', () => {
-  it('should find the installed app in the applications list', async () => {
-    const client = new MetadataApiClient();
-
-    const result = await client.query({
-      findManyApplications: { id: true, name: true, universalIdentifier: true },
-    });
-
-    const app = result.findManyApplications.find(
-      (a: { universalIdentifier: string }) =>
-        a.universalIdentifier === APPLICATION_UNIVERSAL_IDENTIFIER,
-    );
-
-    expect(app).toBeDefined();
+const readObjectNames = async () => {
+  const client = new MetadataApiClient();
+  const { objects } = await client.query({
+    objects: {
+      __args: { paging: { first: 1000 }, filter: {} },
+      edges: { node: { nameSingular: true } },
+    },
   });
-});
 
-describe('PostCard object', () => {
-  it('should exist with expected fields and relations', async () => {
-    const client = new MetadataApiClient();
+  return objects.edges.map((edge) => edge.node.nameSingular).sort();
+};
 
-    const { objects } = await client.query({
-      objects: {
-        __args: { paging: { first: 50 }, filter: {} },
-        edges: {
-          node: {
-            nameSingular: true,
-            fields: {
-              __args: { paging: { first: 500 }, filter: {} },
-              edges: { node: { name: true } },
-            },
-          },
-        },
-      },
-    });
+describe('Postcard on fresh product-owned schema', () => {
+  it('rejects customer app schema sync without adding an object', async () => {
+    const before = await readObjectNames();
+    expect(before).not.toContain('postCard');
 
-    const obj = objects.edges
-      .map((e) => e.node)
-      .find((n: { nameSingular: string }) => n.nameSingular === 'postCard');
-    expect(obj).toBeDefined();
+    const result = await appDevOnce({ appPath: process.cwd() });
 
-    const names = obj!.fields.edges.map(
-      (e: { node: { name: string } }) => e.node.name,
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.message).toContain(
+      'Schema definitions are managed by the product and cannot be changed by customers',
     );
-    console.log('names', names);
-    expect(names).toContain('name');
-    expect(names).toContain('content');
-    expect(names).toContain('status');
-    expect(names).toContain('deliveredAt');
-    expect(names).toContain('recipient');
+    expect(await readObjectNames()).toEqual(before);
   });
 });

@@ -9,6 +9,11 @@ on:
         required: false
         default: false
         description: 'Set to true to skip the upgrade check and report success immediately'
+      skip_reason:
+        type: string
+        required: false
+        default: 'upgrade path not touched'
+        description: 'Explain why this old-workspace check is intentionally not required'
       from_version:
         type: string
         required: false
@@ -43,7 +48,8 @@ jobs:
     if: format('{0}', inputs.skip) == 'true'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Cross-version upgrade check skipped (upgrade path not touched)"
+      - run: |
+          echo "::notice::Cross-version upgrade not run: ${{ inputs.skip_reason }}"
 
   cross-version-upgrade:
     if: format('{0}', inputs.skip) != 'true'

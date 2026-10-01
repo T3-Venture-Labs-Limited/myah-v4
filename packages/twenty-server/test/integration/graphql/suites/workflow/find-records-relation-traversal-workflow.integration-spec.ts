@@ -298,7 +298,7 @@ describe('FindRecords workflow action with relation-traversal filter (e2e)', () 
         .post('/graphql')
         .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
         .send({
-          query: `mutation DestroyWorkflow($id: ID!) { destroyWorkflow(id: $id) { id } }`,
+          query: `mutation DestroyWorkflow($id: UUID!) { destroyWorkflow(id: $id) { id } }`,
           variables: { id: createdWorkflowId },
         });
     }

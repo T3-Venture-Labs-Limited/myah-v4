@@ -146,7 +146,7 @@ describe('Pick Record Workflow - load balanced (e2e)', () => {
 
     const opportunityData = await graphql(
       `
-        mutation CreateOpportunity($companyId: UUID!) {
+        mutation CreateOpportunity($companyId: ID!) {
           createOpportunity(
             data: { name: "Pick Record LB Opportunity", companyId: $companyId }
           ) {
@@ -233,7 +233,7 @@ describe('Pick Record Workflow - load balanced (e2e)', () => {
     if (createdWorkflowId) {
       await graphql(
         `
-          mutation DestroyWorkflow($id: ID!) {
+          mutation DestroyWorkflow($id: UUID!) {
             destroyWorkflow(id: $id) {
               id
             }
@@ -401,7 +401,7 @@ describe('Pick Record Workflow - load balanced (e2e)', () => {
     } finally {
       await graphql(
         `
-          mutation DestroyWorkflow($id: ID!) {
+          mutation DestroyWorkflow($id: UUID!) {
             destroyWorkflow(id: $id) {
               id
             }

@@ -281,13 +281,12 @@ const seedMyahAssistantSkillsFixture = async (): Promise<Fixture> => {
     createOneOperationFactory({
       objectMetadataSingularName: 'creator',
       data: {
-        creatorStatus: 'REVIEWING',
         email: creatorEmail,
         location: 'Dublin',
         language: 'English',
         name: creatorName,
       },
-      gqlFields: 'id creatorStatus',
+      gqlFields: 'id location',
     }),
     workspaceAccessToken,
   );
@@ -355,13 +354,13 @@ const seedMyahAssistantSkillsFixture = async (): Promise<Fixture> => {
   };
 };
 
-const readCreatorQualification = async (fixture: Fixture) => {
+const readCreatorLocation = async (fixture: Fixture) => {
   const [creator] = await global.testDataSource.query(
-    `SELECT "creatorStatus" FROM "${fixture.schemaName}"."creator" WHERE id = $1`,
+    `SELECT "location" FROM "${fixture.schemaName}"."creator" WHERE id = $1`,
     [fixture.creatorId],
   );
 
-  return creator?.creatorStatus;
+  return creator?.location;
 };
 
 const runScriptedChat = async ({
@@ -587,14 +586,7 @@ describe('Myah assistant skills scripted model integration', () => {
             toolName: 'find_many_creators',
             arguments: {
               name: { eq: fixture.creatorName },
-              select: [
-                'id',
-                'name',
-                'email',
-                'creatorStatus',
-                'location',
-                'language',
-              ],
+              select: ['id', 'name', 'email', 'location', 'language'],
             },
           },
         },
@@ -610,7 +602,6 @@ describe('Myah assistant skills scripted model integration', () => {
 
     expect(result).toContain(fixture.creatorName);
     expect(result).toContain(fixture.creatorEmail);
-    expect(result).toContain('REVIEWING');
     expect(result).toContain('Dublin');
     expect(result).toContain('English');
   });
@@ -669,7 +660,7 @@ describe('Myah assistant skills scripted model integration', () => {
     expect(result).toContain('MYAH-156 campaign signature');
   });
 
-  it('streams skill discovery and a persisted Creator qualification update through ChatExecutionService', async () => {
+  it('streams skill discovery and a persisted Creator location update through ChatExecutionService', async () => {
     if (!fixture) {
       throw new Error('Expected dynamic workspace fixture');
     }
@@ -692,7 +683,7 @@ describe('Myah assistant skills scripted model integration', () => {
             toolName: 'update_one_creator',
             arguments: {
               id: fixture.creatorId,
-              creatorStatus: 'QUALIFIED',
+              location: 'Lisbon',
             },
           },
         },
@@ -710,7 +701,7 @@ describe('Myah assistant skills scripted model integration', () => {
         expect.objectContaining({ type: 'tool-result' }),
       ]),
     );
-    expect(await readCreatorQualification(fixture)).toBe('QUALIFIED');
+    expect(await readCreatorLocation(fixture)).toBe('Lisbon');
   });
 
   it('uses separate approved turns to create native Campaign Tasks, Notes, and targets', async () => {

@@ -77,7 +77,7 @@ describe('real registered workspace upgrade schema writes', () => {
         total: number;
       }) => Promise<void>;
     }) => callback({ workspaceId, index: 0, total: 1 }),
-  } as WorkspaceIteratorService;
+  } as unknown as WorkspaceIteratorService;
   const receipt = jest.fn().mockResolvedValue(undefined);
   const invalidate = jest.fn().mockResolvedValue(undefined);
   const runner = new WorkspaceCommandRunnerService(
@@ -127,9 +127,7 @@ describe('real registered workspace upgrade schema writes', () => {
       ObjectMetadataService.prototype,
     ) as ObjectMetadataService;
     // Stub the migration/DDL below the real public authority check, not deleteOneObject.
-    jest
-      .spyOn(service as never, 'deleteManyObjectMetadatas')
-      .mockImplementation(deleteMany);
+    Object.assign(service, { deleteManyObjectMetadatas: deleteMany });
     const command = new DropFavoriteObjectsCommand(
       iterator,
       application,
@@ -185,7 +183,7 @@ describe('real registered workspace upgrade schema writes', () => {
             flatFieldMetadataMaps: { byUniversalIdentifier: {} },
           };
         }),
-    } as never;
+    };
     const service = Object.create(
       FieldMetadataService.prototype,
     ) as FieldMetadataService;
@@ -196,7 +194,7 @@ describe('real registered workspace upgrade schema writes', () => {
     const command = new AddWorkflowRunStepLogsFieldCommand(
       iterator,
       application,
-      cache,
+      cache as never,
       service,
     );
     entry(command, '2.9.0', 1799000035000);
@@ -309,7 +307,7 @@ describe('registered workspace upgrade schema-write scope', () => {
           total: number;
         }) => Promise<void>;
       }) => callback({ workspaceId, index: 0, total: 1 }),
-    } as WorkspaceIteratorService;
+    } as unknown as WorkspaceIteratorService;
     const command = createCommand(async () => {
       started();
       await pending;
@@ -340,7 +338,7 @@ describe('registered workspace upgrade schema-write scope', () => {
           total: number;
         }) => Promise<void>;
       }) => callback({ workspaceId, index: 0, total: 1 }),
-    } as WorkspaceIteratorService;
+    } as unknown as WorkspaceIteratorService;
     await expect(
       new UnregisteredCommand(iterator, []).run([], {}),
     ).rejects.toBeInstanceOf(ForbiddenException);

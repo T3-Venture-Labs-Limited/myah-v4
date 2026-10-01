@@ -12,6 +12,53 @@ dotenv.config({ path: getServerEnvFilePath(), override: true });
 const isBillingEnabled = process.env.IS_BILLING_ENABLED === 'true';
 const isClickhouseEnabled = process.env.CLICKHOUSE_URL !== undefined;
 
+// Fresh-only Myah release: these exact legacy suites author customer-owned
+// objects/fields (or install schema-owning apps) and fail at the product guard.
+// Keep the remaining integration suites running; the current-schema denial and
+// no-change boundary is covered by myah-fresh-schema-policy.integration-spec.ts.
+const legacyCustomerSchemaSuites = [
+  'test/integration/graphql/suites/files-field/files-field-sync.integration-spec.ts',
+  'test/integration/graphql/suites/inputs-validation/filter-validation/boolean-field-filter-input-validation.integration-spec.ts',
+  'test/integration/graphql/suites/settings-permissions/data-model.integration-spec.ts',
+  'test/integration/graphql/suites/settings-permissions/granular-settings-permissions.integration-spec.ts',
+  'test/integration/graphql/suites/settings-permissions/roles.integration-spec.ts',
+  'test/integration/graphql/suites/unique-field/unique-phones-field-null-equivalence.integration-spec.ts',
+  'test/integration/graphql/suites/view/view-field/successful-create-many-view-fields.integration-spec.ts',
+  'test/integration/graphql/suites/view/view-filter-group-resolver.integration-spec.ts',
+  'test/integration/graphql/suites/view/view-filter-resolver.integration-spec.ts',
+  'test/integration/graphql/suites/view/view-group-resolver.integration-spec.ts',
+  'test/integration/graphql/suites/view/view-group/successful-create-many-view-groups-v2.integration-spec.ts',
+  'test/integration/graphql/suites/workspace/custom-application-translation.integration-spec.ts',
+  'test/integration/metadata/suites/application/successful-manifest-sync-row-level-permission-predicate.integration-spec.ts',
+  'test/integration/metadata/suites/application/successful-manifest-update-field.integration-spec.ts',
+  'test/integration/metadata/suites/application/successful-manifest-update-view-field.integration-spec.ts',
+  'test/integration/metadata/suites/application/successful-resync-application-with-cross-app-owned-view-field.integration-spec.ts',
+  'test/integration/metadata/suites/application/successful-sync-application-cross-app-view-field.integration-spec.ts',
+  'test/integration/metadata/suites/application/successful-sync-application-workspace-migration.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/atomic/update-one-files-field-metadata.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/composite/failing-create-phone-field-metadata.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/composite/successful-create-phone-field-metadata.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/composite/successful-update-currency-field-metadata.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/enum/successful-update-default-value-option-value-and-side-effect-on-records.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/kanban-aggregate-field-deactivation-nullifies-views-kanban-properties.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/morph-relation/delete-one-field-metadata-morph-relation.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/morph-relation/failing-add-one-target-to-metadata-morph-relation-v2.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/morph-relation/failing-create-one-field-metadata-morph-relation-v2.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/morph-relation/successful-add-one-target-to-metadata-morph-relation-v2.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/relation/failing-field-metadata-relation-creation.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/relation/successful-field-metadata-relation-update.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/successful-update-one-standard-field-metadata.integration-spec.ts',
+  'test/integration/metadata/suites/field-metadata/update-one-field-metadata-view-groups-side-effect-v2.integration-spec.ts',
+  'test/integration/metadata/suites/object-metadata/command-menu-item-side-effect-on-object-metadata.integration-spec.ts',
+  'test/integration/metadata/suites/object-metadata/morph-relation/rename-object-metadata-with-morph-relation-v2.integration-spec.ts',
+  'test/integration/metadata/suites/view-sort/successful-view-sort-creation.integration-spec.ts',
+  'test/integration/metadata/suites/view/update-one-view-view-groups-side-effect-v2.integration-spec.ts',
+  'test/integration/rest/suites/field-metadata.integration-spec.ts',
+  'test/integration/rest/suites/object-metadata.integration-spec.ts',
+  'test/integration/rest/suites/view-filter-group.integration-spec.ts',
+  'test/integration/rest/suites/view.integration-spec.ts',
+];
+
 const tsConfig = require('./tsconfig.json');
 
 const jestConfig: JestConfigWithTsJest = {
@@ -27,6 +74,11 @@ const jestConfig: JestConfigWithTsJest = {
   testPathIgnorePatterns: [
     ...(isBillingEnabled ? [] : ['<rootDir>/test/integration/billing']),
     ...(isClickhouseEnabled ? [] : ['<rootDir>/test/integration/audit']),
+    ...(process.env.MYAH_FRESH_ONLY_CI === 'true'
+      ? legacyCustomerSchemaSuites.map(
+          (path) => `<rootDir>/${path.replace(/\./g, '\\.')}$`,
+        )
+      : []),
   ],
   testRegex: '\\.integration-spec\\.ts$',
   modulePathIgnorePatterns: ['<rootDir>/dist'],

@@ -5,8 +5,14 @@ describe('server listen host wiring (no bootstrap)', () => {
   it('passes the validated optional host to the HTTP listener', () => {
     const source = readFileSync(join(__dirname, '..', 'main.ts'), 'utf8');
 
+    expect(source).toContain(
+      "const port = twentyConfigService.get('NODE_PORT');",
+    );
+    expect(source).toContain(
+      "const host = twentyConfigService.get('NODE_HOST');",
+    );
     expect(source).toMatch(
-      /app\.listen\(\s*twentyConfigService\.get\('NODE_PORT'\),\s*twentyConfigService\.get\('NODE_HOST'\),?\s*\)/,
+      /host === undefined\s*\? app\.listen\(port\)\s*: app\.listen\(port, host\)/,
     );
   });
 });

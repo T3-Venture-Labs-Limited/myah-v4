@@ -1,7 +1,6 @@
-import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/application-config';
-import { appBuild, appDeploy, appInstall, appUninstall } from 'twenty-sdk/cli';
+import { appBuild, appDeploy, appInstall } from 'twenty-sdk/cli';
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 const APP_PATH = process.cwd();
 
@@ -29,43 +28,25 @@ describe('App installation', () => {
         `Deploy failed: ${deployResult.error?.message ?? 'Unknown error'}`,
       );
     }
-
-    const installResult = await appInstall({ appPath: APP_PATH });
-
-    if (!installResult.success) {
-      throw new Error(
-        `Install failed: ${installResult.error?.message ?? 'Unknown error'}`,
-      );
-    }
   });
 
-  afterAll(async () => {
-    const uninstallResult = await appUninstall({ appPath: APP_PATH });
-
-    if (!uninstallResult.success) {
-      console.warn(
-        `App uninstall failed: ${uninstallResult.error?.message ?? 'Unknown error'}`,
-      );
-    }
-  });
-
-  it('should find the installed app in the applications list', async () => {
+  it('denies installing a schema-owning customer app without changing installed applications', async () => {
     const metadataClient = new MetadataApiClient();
-
-    const result = await metadataClient.query({
+    const query = {
       findManyApplications: {
         id: true,
         name: true,
         universalIdentifier: true,
       },
-    });
+    } as const;
+    const before = await metadataClient.query(query);
+    const installResult = await appInstall({ appPath: APP_PATH });
 
-    const installedApp = result.findManyApplications.find(
-      (application: { universalIdentifier: string }) =>
-        application.universalIdentifier ===
-        APPLICATION_UNIVERSAL_IDENTIFIER,
+    expect(installResult.success).toBe(false);
+    if (installResult.success) return;
+    expect(installResult.error.message).toContain(
+      'Schema definitions are managed by the product and cannot be changed by customers',
     );
-
-    expect(installedApp).toBeDefined();
+    expect(await metadataClient.query(query)).toEqual(before);
   });
 });

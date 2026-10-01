@@ -1,8 +1,14 @@
 import { ApiClient } from '@/cli/utilities/api/api-client';
+import { promptForReauthentication } from '@/cli/utilities/auth/reauth-helper';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/cli/utilities/auth/reauth-helper', () => ({
+  promptForReauthentication: vi.fn().mockResolvedValue('cancelled'),
+}));
 
 vi.mock('@/cli/utilities/config/config-service', () => ({
   ConfigService: class {
+    static getActiveRemote = vi.fn().mockReturnValue('test');
     getConfig = vi.fn().mockResolvedValue({ apiUrl: 'http://localhost:2020' });
     setConfig = vi.fn();
   },
@@ -13,6 +19,33 @@ describe('ApiClient — frontend URL resolution', () => {
 
   beforeEach(() => {
     client = new ApiClient({ disableInterceptors: true });
+  });
+
+  it('keeps GraphQL FORBIDDEN as an authorization error without retrying authentication', async () => {
+    const client = new ApiClient({ skipAuth: true });
+    const response = await client.client.post(
+      '/metadata',
+      {},
+      {
+        adapter: async (config) => ({
+          config,
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          data: {
+            errors: [
+              {
+                message: 'Product-owned schema',
+                extensions: { code: 'FORBIDDEN' },
+              },
+            ],
+          },
+        }),
+      },
+    );
+
+    expect(response.data.errors[0].extensions.code).toBe('FORBIDDEN');
+    expect(promptForReauthentication).not.toHaveBeenCalled();
   });
 
   describe('getFrontendUrl', () => {
