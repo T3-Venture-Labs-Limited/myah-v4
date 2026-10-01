@@ -2,6 +2,7 @@ import { getTokenPair } from '@/apollo/utils/getTokenPair';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { DateTimeDisplay } from '@/ui/field/display/components/DateTimeDisplay';
 import { navigateToHostedAuth } from '~/pages/settings/accounts/utils/navigateToHostedAuth';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
@@ -9,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
 import { IconExternalLink, IconMessage, IconRefresh } from 'twenty-ui/icon';
+import { Status } from 'twenty-ui/data-display';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -31,6 +33,7 @@ const StyledCardHeader = styled.div`
   display: flex;
   gap: ${themeCssVariables.spacing[3]};
   justify-content: space-between;
+  min-width: 0;
   width: 100%;
 `;
 
@@ -38,6 +41,7 @@ const StyledTitleRow = styled.div`
   align-items: center;
   display: flex;
   gap: ${themeCssVariables.spacing[3]};
+  min-width: 0;
 `;
 
 const StyledIconContainer = styled.div`
@@ -56,25 +60,14 @@ const StyledTitle = styled.div`
   color: ${themeCssVariables.font.color.primary};
   font-size: ${themeCssVariables.font.size.md};
   font-weight: ${themeCssVariables.font.weight.semiBold};
+  overflow-wrap: anywhere;
 `;
 
 const StyledDescription = styled.div`
   color: ${themeCssVariables.font.color.secondary};
   font-size: ${themeCssVariables.font.size.sm};
   line-height: 1.5;
-`;
-
-const StyledStatusPill = styled.div<{ connected: boolean }>`
-  background: ${({ connected }) =>
-    connected
-      ? themeCssVariables.color.green10
-      : themeCssVariables.background.tertiary};
-  border-radius: ${themeCssVariables.border.radius.pill};
-  color: ${({ connected }) =>
-    connected ? 'white' : themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
+  overflow-wrap: anywhere;
 `;
 
 const StyledAccountRow = styled.div`
@@ -85,6 +78,13 @@ const StyledAccountRow = styled.div`
   flex-direction: column;
   gap: ${themeCssVariables.spacing[1]};
   padding: ${themeCssVariables.spacing[3]};
+`;
+
+const StyledMetadataRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[1]};
+  min-width: 0;
 `;
 
 type HostedAuthResponse = {
@@ -102,7 +102,11 @@ type InstagramAccount = {
   status: string;
   lastCheckedAt: string | null;
   lastError: string | null;
+  lastSyncedAt?: string | null;
+  lastMessageReceivedAt?: string | null;
 };
+
+const CONNECTING_REFRESH_WINDOW_MS = 6 * 60_000;
 
 const getAccessToken = () =>
   getTokenPair()?.accessOrWorkspaceAgnosticToken?.token;
@@ -116,23 +120,31 @@ export const SettingsAccountsInstagram = () => {
   } = useSnackBar();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [loadError, setLoadError] = useState<'forbidden' | 'failed' | null>(
+    null,
+  );
   const [account, setAccount] = useState<InstagramAccount | null>(null);
+  const [connectingRefreshExpired, setConnectingRefreshExpired] =
+    useState(false);
   const isDisconnectPending = account?.status === 'DELETE_UNKNOWN';
   const hostedAuthReturn = new URLSearchParams(window.location.search);
   const attemptId = hostedAuthReturn.get('attemptId');
   const didHostedAuthFail = hostedAuthReturn.get('connection') === 'failed';
 
-  const loadAccounts = async () => {
+  const loadAccount = async ({
+    silent = false,
+    isCurrent = () => true,
+  }: { silent?: boolean; isCurrent?: () => boolean } = {}) => {
     const token = getAccessToken();
 
-    if (!token) {
-      setIsLoadingAccounts(false);
-      return;
+    if (!silent) {
+      setIsLoadingAccounts(true);
     }
 
-    setIsLoadingAccounts(true);
-
+    let forbidden = false;
     try {
+      if (!token) throw new Error('Missing session');
+
       const response = await fetch(
         `${REACT_APP_SERVER_BASE_URL}/rest/myah/unipile/instagram/account`,
         {
@@ -145,27 +157,36 @@ export const SettingsAccountsInstagram = () => {
       );
 
       if (!response.ok) {
+        forbidden = response.status === 403;
         throw new Error('Instagram account status request failed.');
       }
 
       const body = await response.text();
-      setAccount(
-        body === '' ? null : (JSON.parse(body) as InstagramAccount | null),
-      );
+      const parsed: unknown = body === '' ? null : JSON.parse(body);
+      if (
+        parsed !== null &&
+        (typeof parsed !== 'object' ||
+          typeof (parsed as InstagramAccount).id !== 'string' ||
+          typeof (parsed as InstagramAccount).status !== 'string')
+      ) {
+        throw new Error('Invalid Instagram account response');
+      }
+      if (isCurrent()) {
+        setAccount(parsed as InstagramAccount | null);
+        if (!silent) setLoadError(null);
+      }
     } catch {
-      enqueueErrorSnackBar({
-        message: t`Could not load Instagram connection status.`,
-      });
+      if (!silent) setLoadError(forbidden ? 'forbidden' : 'failed');
     } finally {
-      setIsLoadingAccounts(false);
+      if (!silent) setIsLoadingAccounts(false);
     }
   };
 
   useEffect(() => {
     if (!attemptId || didHostedAuthFail) {
-      void loadAccounts();
+      void loadAccount();
     }
-    // loadAccounts depends on snackbar callbacks; run once on page entry.
+    // loadAccount is scoped to this page entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptId, didHostedAuthFail]);
 
@@ -194,7 +215,7 @@ export const SettingsAccountsInstagram = () => {
       if (attempts >= 30) {
         stopPolling();
         showPollingError();
-        await loadAccounts();
+        await loadAccount();
         return;
       }
 
@@ -238,14 +259,14 @@ export const SettingsAccountsInstagram = () => {
 
         if (status === 'COMPLETED') {
           stopPolling();
-          await loadAccounts();
+          await loadAccount();
           return;
         }
 
         if (status === 'FAILED') {
           stopPolling();
           showPollingError();
-          await loadAccounts();
+          await loadAccount();
           return;
         }
 
@@ -270,9 +291,40 @@ export const SettingsAccountsInstagram = () => {
       isCancelled = true;
       stopPolling();
     };
-    // loadAccounts depends on snackbar callbacks; run once per authorization attempt.
+    // loadAccount is scoped to this authorization attempt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptId, didHostedAuthFail]);
+
+  useEffect(() => {
+    if (account?.status !== 'CONNECTING') return;
+
+    setConnectingRefreshExpired(false);
+    const startedAt = Date.now();
+    let isPolling = false;
+    let isCancelled = false;
+    // ponytail: fixed 5-second reads; back off only if this shows up in load.
+    const interval = setInterval(async () => {
+      if (Date.now() - startedAt >= CONNECTING_REFRESH_WINDOW_MS) {
+        clearInterval(interval);
+        setConnectingRefreshExpired(true);
+        return;
+      }
+      if (isPolling) return;
+      isPolling = true;
+      try {
+        await loadAccount({ silent: true, isCurrent: () => !isCancelled });
+      } finally {
+        isPolling = false;
+      }
+    }, 5_000);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+    // Only restart the window if the account enters Connecting again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account?.status]);
 
   const handleHostedAuth = async (
     path: 'connect' | 'reconnect',
@@ -357,7 +409,7 @@ export const SettingsAccountsInstagram = () => {
         enqueueSuccessSnackBar({
           message: t`Instagram account disconnected.`,
         });
-        await loadAccounts();
+        await loadAccount();
         return;
       }
 
@@ -370,7 +422,7 @@ export const SettingsAccountsInstagram = () => {
         enqueueWarningSnackBar({
           message: t`Instagram disconnect is still being confirmed.`,
         });
-        await loadAccounts();
+        await loadAccount();
         return;
       }
 
@@ -386,24 +438,65 @@ export const SettingsAccountsInstagram = () => {
     }
   };
 
-  const isActive = account?.status === 'ACTIVE';
-  const statusLabel = isLoadingAccounts
-    ? t`Checking status`
-    : account === null
-      ? t`Not connected`
-      : account.status === 'ACTIVE'
-        ? t`Active`
-        : account.status === 'INACTIVE'
-          ? t`Inactive`
-          : account.status === 'DELETE_UNKNOWN'
-            ? t`Disconnect pending`
-            : account.status === 'NEEDS_RECONNECT'
-              ? t`Needs reconnect`
-              : account.status === 'CONNECTING'
-                ? t`Connecting`
-                : account.status === 'ERROR'
-                  ? t`Error`
-                  : t`Connection unavailable`;
+  const statusPresentation = {
+    LOADING: {
+      label: t`Checking status`,
+      color: 'gray',
+      explanation: t`Checking your Instagram connection.`,
+    },
+    NOT_CONNECTED: {
+      label: t`Not connected`,
+      color: 'gray',
+      explanation: t`Connect Instagram to start syncing conversations.`,
+    },
+    ACTIVE: {
+      label: t`Active`,
+      color: 'green',
+      explanation: t`Instagram is connected and syncing.`,
+    },
+    CONNECTING: {
+      label: t`Connecting`,
+      color: 'turquoise',
+      explanation: t`Instagram is finishing the connection.`,
+      isLoaderVisible: true,
+    },
+    NEEDS_RECONNECT: {
+      label: t`Needs reconnect`,
+      color: 'orange',
+      explanation: t`Instagram needs you to sign in again. Your login may have expired or access may have been removed.`,
+    },
+    ERROR: {
+      label: t`Error`,
+      color: 'red',
+      explanation: t`Instagram stopped working for this account. Reconnect to try again.`,
+    },
+    DELETE_UNKNOWN: {
+      label: t`Disconnect pending`,
+      color: 'turquoise',
+      explanation: t`Instagram is still confirming the disconnect.`,
+      isLoaderVisible: true,
+    },
+    INACTIVE: {
+      label: t`Inactive`,
+      color: 'gray',
+      explanation: t`Connect Instagram to start syncing conversations.`,
+    },
+    UNKNOWN: {
+      label: t`Connection unavailable`,
+      color: 'gray',
+      explanation: t`Refresh status to check this connection.`,
+    },
+  } as const;
+  const presentation =
+    statusPresentation[
+      (isLoadingAccounts
+        ? 'LOADING'
+        : loadError
+          ? 'UNKNOWN'
+          : (account?.status ??
+            'NOT_CONNECTED')) as keyof typeof statusPresentation
+    ] ?? statusPresentation.UNKNOWN;
+  const statusLabel = presentation.label;
 
   return (
     <SettingsPageLayout
@@ -439,14 +532,35 @@ export const SettingsAccountsInstagram = () => {
                   </StyledDescription>
                 </div>
               </StyledTitleRow>
-              <StyledStatusPill connected={isActive}>
-                {statusLabel}
-              </StyledStatusPill>
             </StyledCardHeader>
+            <div role="status">
+              <Status
+                color={presentation.color}
+                text={statusLabel}
+                isLoaderVisible={
+                  'isLoaderVisible' in presentation &&
+                  presentation.isLoaderVisible
+                }
+              />
+              <StyledDescription>
+                {loadError === 'forbidden'
+                  ? t`You do not have permission to manage Instagram.`
+                  : loadError === 'failed'
+                    ? t`Could not load Instagram connection status.`
+                    : presentation.explanation}
+              </StyledDescription>
+              {connectingRefreshExpired &&
+                account?.status === 'CONNECTING' &&
+                !loadError && (
+                  <StyledDescription>
+                    {t`Instagram is still finishing the connection. This can take a few minutes. Use Refresh status to check again.`}
+                  </StyledDescription>
+                )}
+            </div>
             <StyledDescription>
               {t`Read your existing Instagram conversations and reply when you're ready. Myah will always ask for your approval before sending a reply.`}
             </StyledDescription>
-            {account && (
+            {account && !loadError && (
               <StyledAccountRow>
                 <StyledTitle>
                   {account.username
@@ -456,20 +570,44 @@ export const SettingsAccountsInstagram = () => {
                 <StyledDescription>
                   {t`Status`}: {statusLabel}
                 </StyledDescription>
+                <StyledMetadataRow>
+                  <StyledDescription>{t`Last synced`}</StyledDescription>
+                  {account.lastSyncedAt ? (
+                    <DateTimeDisplay value={account.lastSyncedAt} />
+                  ) : (
+                    <StyledDescription>{t`Not synced yet`}</StyledDescription>
+                  )}
+                </StyledMetadataRow>
+                <StyledMetadataRow>
+                  <StyledDescription>{t`Last message received`}</StyledDescription>
+                  {account.lastMessageReceivedAt ? (
+                    <DateTimeDisplay value={account.lastMessageReceivedAt} />
+                  ) : (
+                    <StyledDescription>{t`No messages received yet`}</StyledDescription>
+                  )}
+                </StyledMetadataRow>
                 {account.lastCheckedAt && (
-                  <StyledDescription>
-                    {t`Last checked`}: {account.lastCheckedAt}
-                  </StyledDescription>
+                  <StyledMetadataRow>
+                    <StyledDescription>{t`Last checked`}</StyledDescription>
+                    <DateTimeDisplay value={account.lastCheckedAt} />
+                  </StyledMetadataRow>
                 )}
               </StyledAccountRow>
             )}
-            {account === null || account.status === 'INACTIVE' ? (
+            {loadError ? (
+              <Button
+                title={t`Try again`}
+                variant="secondary"
+                disabled={isLoadingAccounts}
+                onClick={() => void loadAccount()}
+              />
+            ) : account === null || account.status === 'INACTIVE' ? (
               <Button
                 Icon={IconExternalLink}
                 title={t`Connect Instagram`}
                 variant="primary"
                 accent="brand"
-                disabled={isLoadingAccounts}
+                disabled={isLoadingAccounts || isConnecting}
                 isLoading={isConnecting}
                 onClick={() =>
                   void handleHostedAuth(
@@ -486,6 +624,7 @@ export const SettingsAccountsInstagram = () => {
                   title={t`Reconnect Instagram`}
                   variant="primary"
                   accent="brand"
+                  disabled={isConnecting}
                   isLoading={isConnecting}
                   onClick={() =>
                     void handleHostedAuth(
@@ -499,6 +638,7 @@ export const SettingsAccountsInstagram = () => {
                   title={t`Disconnect Instagram`}
                   variant="primary"
                   accent="brand"
+                  disabled={isConnecting}
                   isLoading={isConnecting}
                   onClick={handleDisconnectInstagram}
                 />
@@ -509,17 +649,19 @@ export const SettingsAccountsInstagram = () => {
                 title={t`Disconnect Instagram`}
                 variant="primary"
                 accent="brand"
-                disabled={isDisconnectPending}
+                disabled={isDisconnectPending || isConnecting}
                 isLoading={isConnecting}
                 onClick={handleDisconnectInstagram}
               />
             )}
-            <Button
-              Icon={IconRefresh}
-              title={t`Refresh status`}
-              variant="secondary"
-              onClick={loadAccounts}
-            />
+            {!loadError && (
+              <Button
+                Icon={IconRefresh}
+                title={t`Refresh status`}
+                variant="secondary"
+                onClick={() => void loadAccount()}
+              />
+            )}
           </StyledConnectionCard>
         </Section>
       </SettingsPageContainer>
