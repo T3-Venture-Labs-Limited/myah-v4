@@ -1,4 +1,8 @@
-import { Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 
 type WebhookEvent = {
   id: string;
@@ -566,6 +570,55 @@ describe('UnipileInstagramWebhookIntakeService', () => {
         unipileMessageId: null,
       }),
     );
+  });
+
+  it('asks Unipile to retry an account status until its binding is linked', async () => {
+    const harness = createHarness();
+    harness.bindingRepository.findOne.mockResolvedValue(null);
+    const service = createService(harness);
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const body = {
+      AccountStatus: {
+        account_id: activeBinding.unipileAccountId,
+        account_type: 'INSTAGRAM',
+        message: 'CREDENTIALS',
+      },
+    };
+
+    try {
+      await expect(
+        service.intake({ body, secret: 'invalid-secret' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(
+        service.intake({
+          body: { AccountStatus: {} },
+          secret: 'shared-webhook-secret',
+        }),
+      ).rejects.toHaveProperty('status', 400);
+      expect(harness.bindingRepository.findOne).not.toHaveBeenCalled();
+
+      await expect(
+        service.intake({ body, secret: 'shared-webhook-secret' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(harness.eventRepository.save).not.toHaveBeenCalled();
+      expect(harness.webhookQueue.enqueue).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        'UNIPILE_INSTAGRAM_WEBHOOK_ACCOUNT_NOT_LINKED',
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(
+        activeBinding.unipileAccountId,
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('CREDENTIALS');
+
+      harness.bindingRepository.findOne.mockResolvedValue(activeBinding);
+      await expect(
+        service.intake({ body, secret: 'shared-webhook-secret' }),
+      ).resolves.toEqual({ ok: true, duplicate: false });
+      expect(harness.eventRepository.save).toHaveBeenCalledTimes(1);
+      expect(harness.webhookQueue.enqueue).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('leaves a newly committed event enqueued when queueing fails', async () => {

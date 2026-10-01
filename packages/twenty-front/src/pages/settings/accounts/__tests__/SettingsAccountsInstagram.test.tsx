@@ -72,6 +72,18 @@ jest.mock(
   { virtual: true },
 );
 
+jest.mock('@/ui/field/display/components/DateTimeDisplay', () => ({
+  DateTimeDisplay: ({ value }: { value: string }) => (
+    <time data-testid="instagram-date" dateTime={value}>
+      Formatted date
+    </time>
+  ),
+}));
+
+jest.mock('twenty-ui/data-display', () => ({
+  Status: ({ text }: { text: string }) => <span>{text}</span>,
+}));
+
 jest.mock(
   'twenty-ui/input',
   () => ({
@@ -86,7 +98,7 @@ jest.mock(
       disabled?: boolean;
       isLoading?: boolean;
     }) => (
-      <button disabled={disabled || isLoading} onClick={onClick}>
+      <button disabled={disabled} aria-busy={isLoading} onClick={onClick}>
         {title}
       </button>
     ),
@@ -375,23 +387,35 @@ describe('SettingsAccountsInstagram', () => {
           },
         );
       });
-      expect(
-        await screen.findByText('Disconnect pending', { exact: true }),
-      ).toBeVisible();
-      const disconnect = screen.getByRole('button', {
-        name: 'Disconnect Instagram',
-      });
-      expect(disconnect).toBeDisabled();
+      if (refreshSucceeds) {
+        expect(
+          await screen.findByText('Disconnect pending', { exact: true }),
+        ).toBeVisible();
+        const disconnect = screen.getByRole('button', {
+          name: 'Disconnect Instagram',
+        });
+        expect(disconnect).toBeDisabled();
+        expect(
+          screen.getByRole('button', { name: 'Refresh status' }),
+        ).toBeEnabled();
+        await user.click(disconnect);
+      } else {
+        expect(
+          await screen.findByText(
+            'Could not load Instagram connection status.',
+          ),
+        ).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
+        expect(
+          screen.queryByRole('button', { name: 'Disconnect Instagram' }),
+        ).not.toBeInTheDocument();
+      }
       expect(
         screen.queryByRole('button', { name: 'Connect Instagram' }),
       ).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: 'Reconnect Instagram' }),
       ).not.toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: 'Refresh status' }),
-      ).toBeEnabled();
-      await user.click(disconnect);
       expect(mockWindowConfirm).toHaveBeenCalledTimes(1);
       expect(fetchMock).toHaveBeenCalledTimes(3);
     },
@@ -519,6 +543,68 @@ describe('SettingsAccountsInstagram', () => {
     });
   });
 
+  it('tabs through recovery actions, refreshes read-only, and disables changes during reconnect', async () => {
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'NEEDS_RECONNECT',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'NEEDS_RECONNECT',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    const user = userEvent.setup();
+    renderInstagramSettings();
+    const reconnect = await screen.findByRole('button', {
+      name: 'Reconnect Instagram',
+    });
+    const disconnect = screen.getByRole('button', {
+      name: 'Disconnect Instagram',
+    });
+    const refresh = screen.getByRole('button', { name: 'Refresh status' });
+
+    await user.tab();
+    expect(reconnect).toHaveFocus();
+    await user.tab();
+    expect(disconnect).toHaveFocus();
+    await user.tab();
+    expect(refresh).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(
+      fetchMock.mock.calls.every(([, options]) => options?.method === 'GET'),
+    ).toBe(true);
+
+    let resolvePost: (value: string) => void = () => undefined;
+    fetchMock.mockResponseOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolvePost = resolve;
+        }),
+    );
+    await user.click(reconnect);
+    expect(disconnect).toBeDisabled();
+    expect(reconnect).toBeDisabled();
+    expect(mockWindowConfirm).not.toHaveBeenCalled();
+    await act(async () => {
+      resolvePost(
+        JSON.stringify({
+          attemptId: 'a',
+          redirectUrl: 'https://hosted-auth.example/reconnect',
+        }),
+      );
+    });
+  });
+
   it('offers disconnect without another connection action while connecting', async () => {
     fetchMock.mockResponseOnce(
       JSON.stringify({
@@ -545,6 +631,201 @@ describe('SettingsAccountsInstagram', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('settles a completed Hosted Auth connection without refreshing or flashing loading', async () => {
+    jest.useFakeTimers();
+    window.history.replaceState(
+      {},
+      '',
+      '/settings/accounts/instagram?attemptId=attempt-id',
+    );
+    fetchMock.mockResponseOnce(JSON.stringify({ status: 'COMPLETED' }));
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'CONNECTING',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'ACTIVE',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    renderInstagramSettings();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(100);
+    });
+    expect(screen.getByText('Connecting')).toBeVisible();
+    expect(screen.queryByText('Checking status')).not.toBeInTheDocument();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5_000);
+    });
+    expect(screen.getByText('Active')).toBeVisible();
+    expect(screen.queryByText('Checking status')).not.toBeInTheDocument();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps Connecting on a failed silent read and settles on the next read', async () => {
+    jest.useFakeTimers();
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'CONNECTING',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    fetchMock.mockResponseOnce('', { status: 500 });
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'ACTIVE',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    renderInstagramSettings();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(100);
+    });
+    expect(screen.getByText('Connecting')).toBeVisible();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5_000);
+    });
+    expect(screen.getByText('Connecting')).toBeVisible();
+    expect(mockEnqueueErrorSnackBar).not.toHaveBeenCalled();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5_000);
+    });
+    expect(screen.getByText('Active')).toBeVisible();
+    expect(
+      fetchMock.mock.calls.every(([, options]) => options?.method === 'GET'),
+    ).toBe(true);
+  });
+
+  it('ignores an old automatic response after a newer manual status read settles', async () => {
+    jest.useFakeTimers();
+    const connecting = JSON.stringify({
+      id: 'binding-id',
+      username: null,
+      status: 'CONNECTING',
+      lastCheckedAt: null,
+      lastError: null,
+    });
+    fetchMock.mockResponseOnce(connecting);
+    let resolveOldRead: (value: string) => void = () => undefined;
+    fetchMock.mockResponseOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveOldRead = resolve;
+        }),
+    );
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'ACTIVE',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    renderInstagramSettings();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(100);
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      screen.getByRole('button', { name: 'Refresh status' }).click();
+    });
+    expect(screen.getByText('Active')).toBeVisible();
+    await act(async () => {
+      resolveOldRead(connecting);
+    });
+    expect(screen.getByText('Active')).toBeVisible();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('stops auto-refresh after six minutes or unmount and leaves manual Refresh available', async () => {
+    jest.useFakeTimers();
+    const connecting = JSON.stringify({
+      id: 'binding-id',
+      username: null,
+      status: 'CONNECTING',
+      lastCheckedAt: null,
+      lastError: null,
+    });
+    fetchMock.mockResponse(connecting);
+    const view = renderInstagramSettings();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(100);
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(360_000);
+    });
+    expect(
+      screen.getByText(/Instagram is still finishing the connection/),
+    ).toBeVisible();
+    const atExpiry = fetchMock.mock.calls.length;
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(atExpiry);
+    await act(async () => {
+      screen.getByRole('button', { name: 'Refresh status' }).click();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(atExpiry + 1);
+    view.unmount();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(atExpiry + 1);
+  });
+
+  it('stops polling when a Connecting page unmounts', async () => {
+    jest.useFakeTimers();
+    fetchMock.mockResponse(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'CONNECTING',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    const view = renderInstagramSettings();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(100);
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5_000);
+    });
+    const reads = fetchMock.mock.calls.length;
+    expect(reads).toBe(2);
+    view.unmount();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(reads);
+  });
+
   it('labels an errored account Error and offers recovery or disconnect', async () => {
     fetchMock.mockResponseOnce(
       JSON.stringify({
@@ -566,6 +847,56 @@ describe('SettingsAccountsInstagram', () => {
       screen.getByRole('button', { name: 'Disconnect Instagram' }),
     ).toBeVisible();
   });
+
+  it.each([
+    ['ACTIVE', 'Instagram is connected and syncing.', 'Disconnect Instagram'],
+    [
+      'CONNECTING',
+      'Instagram is finishing the connection.',
+      'Disconnect Instagram',
+    ],
+    [
+      'NEEDS_RECONNECT',
+      'Instagram needs you to sign in again. Your login may have expired or access may have been removed.',
+      'Reconnect Instagram',
+    ],
+    [
+      'ERROR',
+      'Instagram stopped working for this account. Reconnect to try again.',
+      'Reconnect Instagram',
+    ],
+    [
+      'DELETE_UNKNOWN',
+      'Instagram is still confirming the disconnect.',
+      'Refresh status',
+    ],
+    [
+      'INACTIVE',
+      'Connect Instagram to start syncing conversations.',
+      'Connect Instagram',
+    ],
+  ])(
+    'explains %s with a safe next step',
+    async (status, explanation, action) => {
+      fetchMock.mockResponseOnce(
+        JSON.stringify({
+          id: 'binding-id',
+          username: null,
+          status,
+          lastCheckedAt: null,
+          lastError: 'Unable to verify Instagram account connection',
+        }),
+      );
+      renderInstagramSettings();
+
+      expect(await screen.findByText(explanation)).toBeVisible();
+      expect(screen.getByRole('status')).toHaveTextContent(explanation);
+      expect(screen.getByRole('button', { name: action })).toBeInTheDocument();
+      expect(
+        screen.queryByText('Unable to verify Instagram account connection'),
+      ).not.toBeInTheDocument();
+    },
+  );
 
   it('treats an empty successful account response as no connected account', async () => {
     fetchMock.mockResponseOnce('');
@@ -823,27 +1154,176 @@ describe('SettingsAccountsInstagram', () => {
     expect(fetchMock).toHaveBeenCalledTimes(31);
   });
 
-  it('shows a safe error when loading the account status fails', async () => {
+  it('formats the three activity times and shows explicit empty states', async () => {
+    const lastSyncedAt = '2026-09-29T04:00:46.000Z';
+    const lastMessageReceivedAt = '2026-09-29T04:09:27.000Z';
+    const lastCheckedAt = '2026-09-29T04:10:00.000Z';
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'ACTIVE',
+        lastError: null,
+        lastSyncedAt,
+        lastMessageReceivedAt,
+        lastCheckedAt,
+      }),
+    );
+    renderInstagramSettings();
+
+    expect(await screen.findByText('Last synced')).toBeVisible();
+    expect(screen.getByText('Last message received')).toBeVisible();
+    expect(screen.getByText('Last checked')).toBeVisible();
+    expect(
+      screen
+        .getAllByTestId('instagram-date')
+        .map((element) => element.getAttribute('datetime')),
+    ).toEqual([lastSyncedAt, lastMessageReceivedAt, lastCheckedAt]);
+    expect(screen.queryByText(lastSyncedAt)).not.toBeInTheDocument();
+
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: null,
+        status: 'ACTIVE',
+        lastError: null,
+        lastSyncedAt: null,
+        lastMessageReceivedAt: null,
+        lastCheckedAt: null,
+      }),
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Refresh status' }));
+    expect(await screen.findByText('Not synced yet')).toBeVisible();
+    expect(screen.getByText('No messages received yet')).toBeVisible();
+    expect(screen.queryByText('Last checked')).not.toBeInTheDocument();
+  });
+
+  it('shows an announced error without stale actions when Refresh fails for a loaded account', async () => {
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'binding-id',
+        username: 'myah_test_account',
+        status: 'ACTIVE',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
     fetchMock.mockResponseOnce('', { status: 500 });
-
+    const user = userEvent.setup();
     renderInstagramSettings();
 
-    await waitFor(() => {
-      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
-        message: 'Could not load Instagram connection status.',
-      });
-    });
+    await screen.findByRole('button', { name: 'Disconnect Instagram' });
+    await user.click(screen.getByRole('button', { name: 'Refresh status' }));
+
+    expect(
+      await screen.findByText('Could not load Instagram connection status.'),
+    ).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Could not load Instagram connection status.',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Disconnect Instagram' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
   });
 
-  it('shows a safe error for a malformed nonempty account response', async () => {
-    fetchMock.mockResponseOnce('not-json');
-
+  it('does not offer Connect on a failed load and recovers through Try again', async () => {
+    fetchMock.mockResponseOnce('', { status: 500 });
+    let resolveRetry: (value: string) => void = () => undefined;
+    fetchMock.mockResponseOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveRetry = resolve;
+        }),
+    );
+    const user = userEvent.setup();
     renderInstagramSettings();
 
-    await waitFor(() => {
-      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
-        message: 'Could not load Instagram connection status.',
-      });
+    expect(
+      await screen.findByText('Could not load Instagram connection status.'),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Connect Instagram' }),
+    ).not.toBeInTheDocument();
+    expect(mockEnqueueErrorSnackBar).not.toHaveBeenCalled();
+    const retry = screen.getByRole('button', { name: 'Try again' });
+    await user.click(retry);
+    expect(retry).toBeInTheDocument();
+    expect(retry).toBeDisabled();
+    await act(async () => {
+      resolveRetry(
+        JSON.stringify({
+          id: 'binding-id',
+          username: 'myah_test_account',
+          status: 'ACTIVE',
+          lastCheckedAt: null,
+          lastError: null,
+        }),
+      );
     });
+    expect(await screen.findByText('@myah_test_account')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Disconnect Instagram' }),
+    ).toBeEnabled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('explains forbidden access without offering any connection action', async () => {
+    fetchMock.mockResponseOnce('', { status: 403 });
+    renderInstagramSettings();
+
+    expect(
+      await screen.findByText(
+        'You do not have permission to manage Instagram.',
+      ),
+    ).toBeVisible();
+    for (const name of [
+      'Connect Instagram',
+      'Reconnect Instagram',
+      'Disconnect Instagram',
+    ]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'You do not have permission to manage Instagram.',
+    );
+  });
+
+  it('updates the error explanation when a permission retry fails for another reason', async () => {
+    fetchMock.mockResponseOnce('', { status: 403 });
+    fetchMock.mockResponseOnce('', { status: 500 });
+    const user = userEvent.setup();
+    renderInstagramSettings();
+
+    expect(
+      await screen.findByText(
+        'You do not have permission to manage Instagram.',
+      ),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      await screen.findByText('Could not load Instagram connection status.'),
+    ).toBeVisible();
+    expect(screen.getByRole('status')).not.toHaveTextContent(
+      'You do not have permission to manage Instagram.',
+    );
+  });
+
+  it.each(['not-json', '{}'])(
+    'shows an inline error for a malformed account response: %s',
+    async (body) => {
+      fetchMock.mockResponseOnce(body);
+      renderInstagramSettings();
+
+      expect(
+        await screen.findByText('Could not load Instagram connection status.'),
+      ).toBeVisible();
+      expect(
+        screen.queryByRole('button', { name: 'Connect Instagram' }),
+      ).not.toBeInTheDocument();
+      expect(mockEnqueueErrorSnackBar).not.toHaveBeenCalled();
+    },
+  );
 });

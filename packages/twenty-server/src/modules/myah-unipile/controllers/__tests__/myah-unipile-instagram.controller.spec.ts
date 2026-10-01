@@ -5,6 +5,7 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import {
+  EXCEPTION_FILTERS_METADATA,
   GUARDS_METADATA,
   HTTP_CODE_METADATA,
   METHOD_METADATA,
@@ -22,6 +23,7 @@ import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { redactJsonParserErrorMiddleware } from 'src/engine/middlewares/redact-json-parser-error.middleware';
+import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-rest-api-exception.filter';
 import { UnhandledExceptionFilter } from 'src/filters/unhandled-exception.filter';
 import { UnipileHostedAuthAttemptStatus } from 'src/modules/myah-unipile/entities/unipile-hosted-auth-attempt.entity';
 import { UnipileHostedAuthService } from 'src/modules/myah-unipile/services/unipile-hosted-auth.service';
@@ -292,6 +294,12 @@ describe('MyahUnipileInstagramController', () => {
 
     expect(guards).toHaveLength(3);
     expect(guards.slice(0, 2)).toEqual([JwtAuthGuard, WorkspaceAuthGuard]);
+    expect(
+      Reflect.getMetadata(
+        EXCEPTION_FILTERS_METADATA,
+        controllerModule.MyahUnipileInstagramController,
+      ),
+    ).toContain(PermissionsRestApiExceptionFilter);
     expect(guards).not.toContain(PublicEndpointGuard);
     expect(guards).not.toContain(NoPermissionGuard);
     await expect(

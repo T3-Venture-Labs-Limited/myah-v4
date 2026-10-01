@@ -8,6 +8,7 @@ import {
   Logger,
   Param,
   Post,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { PermissionFlagType } from 'twenty-shared/constants';
@@ -20,6 +21,7 @@ import { JwtAuthGuard } from 'src/engine/guards/jwt-auth.guard';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
+import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-rest-api-exception.filter';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { UnipileHostedAuthService } from 'src/modules/myah-unipile/services/unipile-hosted-auth.service';
 import {
@@ -62,6 +64,7 @@ const hostedAuthNotificationSchema = z.object({
   WorkspaceAuthGuard,
   SettingsPermissionGuard(PermissionFlagType.CONNECTED_ACCOUNTS),
 )
+@UseFilters(PermissionsRestApiExceptionFilter)
 export class MyahUnipileInstagramController {
   constructor(
     private readonly hostedAuthService: UnipileHostedAuthService,
