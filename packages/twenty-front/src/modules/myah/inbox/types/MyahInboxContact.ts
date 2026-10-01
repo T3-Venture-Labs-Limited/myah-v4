@@ -92,6 +92,8 @@ export type MyahInstagramConversationMessage = {
   sentVia: 'MANUAL' | 'COMPOSIO' | 'UNIPILE' | 'UNKNOWN';
   provider: 'COMPOSIO_HISTORY' | 'UNIPILE';
   deliveryState: 'UNKNOWN' | 'RECEIVED' | 'SENT' | 'DELIVERED' | 'READ';
+  providerMessageId: string | null;
+  replyReceiptId?: string | null;
   providerCreatedAt: string | null;
   createdAt: string;
   hasAttachments: boolean;

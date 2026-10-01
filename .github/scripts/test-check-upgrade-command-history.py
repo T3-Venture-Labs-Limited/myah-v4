@@ -8,7 +8,7 @@ SPEC = importlib.util.spec_from_file_location('upgrade_guard', SCRIPT)
 GUARD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(GUARD)
 PREFIX = 'packages/twenty-server/src/database/commands/upgrade-version-command/'
-BASE = '7e1b6ed0c11ac9850ca5e04ebc8b7f0714d5be1d'
+BASE = 'bd427cced1c7a98bff7d18a8d7598a608cc79a00'
 OLD = {
     PREFIX + '2-19/2-19-upgrade-version-command.module.ts': 'M',
     PREFIX + '2-19/2-19-workspace-command-1786155607568-scope-myah-creator-social-profiles.command.ts': 'A',
@@ -68,7 +68,8 @@ class GuardTest(unittest.TestCase):
                         self.base_paths, self.now_ms, 'version', require_snapshot=True)
 
     def test_wrong_base_and_malformed_context_are_denied(self):
-        for base in ('', 'not-a-sha', '0' * 40):
+        for base in ('', 'not-a-sha', '0' * 40,
+                     '7e1b6ed0c11ac9850ca5e04ebc8b7f0714d5be1d'):
             with self.subTest(base=base), self.assertRaises(GUARD.GuardFailure):
                 self.check(base=base)
         with self.assertRaises(GUARD.GuardFailure):

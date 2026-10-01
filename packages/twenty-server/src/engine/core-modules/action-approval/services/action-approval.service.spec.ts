@@ -855,6 +855,109 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
   });
 });
 
+describe('ActionApprovalService provider-accepted Instagram draft', () => {
+  it('shares provider identity only with the authorized direct-send viewer, not the safe receipt', async () => {
+    const receipt = {
+      id: 'receipt-1',
+      workspaceId,
+      state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      providerCode: 'accepted',
+      redactedOutcome: null,
+      providerExternalMessageId: 'provider-message-1',
+      updatedAt: new Date(),
+      actionApprovalBindingId: 'binding-1',
+      actionApprovalBinding: {
+        id: 'binding-1',
+        workspaceId,
+        actionName: 'send_instagram_message',
+        actionVersion: 3,
+        actionKind: 'REPLY',
+        threadId: null,
+        interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
+        interactionContextId: 'draft-1',
+        draftId: 'draft-1',
+        initiatorUserWorkspaceId: userWorkspaceId,
+      },
+    };
+    const service = new ActionApprovalService(
+      {
+        getRepository: jest
+          .fn()
+          .mockReturnValue({ findOne: jest.fn().mockResolvedValue(receipt) }),
+      } as never,
+      {} as never,
+    );
+    const input = { receiptId: receipt.id, workspaceId, userWorkspaceId };
+    const result = await service.getDirectInstagramReceiptForViewer(input);
+    expect(result.providerMessageId).toBe('provider-message-1');
+    expect(result.receipt).not.toHaveProperty('providerExternalMessageId');
+    await expect(
+      service.getDirectInstagramReceiptForViewer({
+        ...input,
+        userWorkspaceId: 'other-user',
+      }),
+    ).rejects.toThrow('Instagram message receipt was not found');
+  });
+
+  it.each([
+    ['PROVIDER_ACCEPTED', true],
+    ['PROCESSING', false],
+    ['UNKNOWN', false],
+    ['SENT', false],
+  ] as const)(
+    'recognizes only consumed %s as accepted',
+    async (state, expected) => {
+      const repository = {
+        find: jest.fn().mockResolvedValue([
+          {
+            state: ActionApprovalBindingState.CONSUMED,
+            receipts: [{ state }],
+          },
+        ]),
+      };
+      const service = new ActionApprovalService(
+        { getRepository: jest.fn().mockReturnValue(repository) } as never,
+        {} as never,
+      );
+
+      await expect(
+        service.isDraftProviderAccepted({
+          workspaceId,
+          actionName: 'send_instagram_message',
+          draftId: 'draft-1',
+        }),
+      ).resolves.toBe(expected);
+      expect(repository.find).toHaveBeenCalledWith({
+        where: {
+          workspaceId,
+          actionName: 'send_instagram_message',
+          draftId: 'draft-1',
+          state: ActionApprovalBindingState.CONSUMED,
+        },
+        relations: { receipts: true },
+      });
+    },
+  );
+
+  it('does not treat an unconsumed approval as accepted', async () => {
+    const service = new ActionApprovalService(
+      {
+        getRepository: jest
+          .fn()
+          .mockReturnValue({ find: jest.fn().mockResolvedValue([]) }),
+      } as never,
+      {} as never,
+    );
+    await expect(
+      service.isDraftProviderAccepted({
+        workspaceId,
+        actionName: 'send_instagram_message',
+        draftId: 'draft-1',
+      }),
+    ).resolves.toBe(false);
+  });
+});
+
 describe('ActionApprovalService Instagram message v2 authority', () => {
   const directBinding = {
     workspaceId,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic CI policy fixtures; optionally check the exact PR #193 report."""
+"""Deterministic CI policy fixtures; optionally check the prior-base PR report."""
 
 import importlib.util
 import sys
@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('policy', Path(__file__).with_name('check-myah-409-graphql-diff.py'))
 policy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(policy)
-BASE = '7e1b6ed0c11ac9850ca5e04ebc8b7f0714d5be1d'
+BASE = 'bd427cced1c7a98bff7d18a8d7598a608cc79a00'
 
 
 def check(text, code, allow_creator, base=BASE, pr=193):
@@ -66,8 +66,9 @@ class PolicyTest(unittest.TestCase):
 
     def test_wrong_base_and_other_pr_cannot_use_creator_exception(self):
         retirement = diff(('✖', 'Field instagramUsername was removed from object type Creator'))
-        with self.assertRaises(ValueError):
-            check(retirement, 1, True, base='0' * 40)
+        for base in ('0' * 40, '7e1b6ed0c11ac9850ca5e04ebc8b7f0714d5be1d'):
+            with self.subTest(base=base), self.assertRaises(ValueError):
+                check(retirement, 1, True, base=base)
         with self.assertRaises(ValueError):
             check(retirement, 1, True, pr=194)
 
@@ -95,8 +96,8 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual(check('[success] No changes detected', 0, False), 0)
         self.assertEqual(check(diff(('⚠', 'Enum value TWO was added to enum A')), 0, False), 0)
 
-    @unittest.skipUnless(len(sys.argv) > 1, 'pass the exact PR report path to audit it')
-    def test_exact_pr_report_first_invocation(self):
+    @unittest.skipUnless(len(sys.argv) > 1, 'pass the prior-base PR report as a parser fixture')
+    def test_prior_base_pr_report_parser_fixture(self):
         report = Path(sys.argv[1]).read_text().splitlines()
         first = next(i for i, line in enumerate(report) if line.startswith('Detected the following changes'))
         end = next(i for i, line in enumerate(report[first:], first) if line.startswith('[error] Detected'))

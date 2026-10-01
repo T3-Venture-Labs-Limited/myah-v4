@@ -537,6 +537,9 @@ it.each(['PROCESSING', 'PENDING', 'PROVIDER_ACCEPTED'])(
       expect(
         calls.filter(({ name }) => name === 'InstagramMessageSendStatus'),
       ).toHaveLength(15);
+      expect(view.store.get(atom)?.attempt?.result?.status).toBe(
+        status === 'PROVIDER_ACCEPTED' ? 'PROVIDER_ACCEPTED' : 'UNKNOWN',
+      );
       expect(view.result.current.canSend).toBe(false);
       expect(view.result.current.canStartNewAttempt).toBe(false);
       await act(async () => {
@@ -551,6 +554,38 @@ it.each(['PROCESSING', 'PENDING', 'PROVIDER_ACCEPTED'])(
     }
   },
 );
+
+it('keeps an accepted first-message attempt when the status request fails', async () => {
+  const original = respond;
+  respond = async (name, variables) => {
+    if (name === 'SendInstagramMessageComposer')
+      return {
+        sendInstagramMessageComposer: { ...sent, status: 'PROVIDER_ACCEPTED' },
+      };
+    if (name === 'InstagramMessageSendStatus') throw new Error('offline');
+    return original(name, variables);
+  };
+  const view = setup();
+  await waitFor(() => expect(view.result.current.canSend).toBe(true));
+  jest.useFakeTimers();
+  try {
+    let pending: Promise<void>;
+    await act(async () => {
+      pending = view.result.current.send();
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1_000);
+      await pending;
+    });
+    expect(view.store.get(atom)?.attempt?.result?.status).toBe(
+      'PROVIDER_ACCEPTED',
+    );
+    expect(view.result.current.canStartNewAttempt).toBe(false);
+    expect(mutations()).toHaveLength(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});
 
 it('locks UNKNOWN across a second mounted instance and only checks status read-only', async () => {
   const original = respond;

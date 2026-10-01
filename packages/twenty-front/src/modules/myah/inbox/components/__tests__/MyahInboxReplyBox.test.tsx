@@ -79,7 +79,7 @@ describe('MyahInboxReplyBox', () => {
       onReloadConflict,
       onRetry,
       presentation,
-      primaryActions = <button>Review and send</button>,
+      primaryActions = <button>Send reply</button>,
       previewScope,
       reloadConflictLabel,
       trailingActions = <span>11 / 1000</span>,
@@ -167,7 +167,7 @@ describe('MyahInboxReplyBox', () => {
       bodyAriaLabel: 'Message @ada via Instagram',
       editorVersion: 1,
       onBodyChange: jest.fn(),
-      primaryActions: <button>Review and send</button>,
+      primaryActions: <button>Send reply</button>,
       conflict: {
         revision: 2,
         body: { markdown: 'saved', blocknote: null },

@@ -9,6 +9,10 @@ import {
   UnipileInstagramAccountBindingStatus,
 } from 'src/modules/myah-unipile/entities/unipile-instagram-account-binding.entity';
 import { UnipileInstagramAvailabilityService } from 'src/modules/myah-unipile/services/unipile-instagram-availability.service';
+import {
+  UnipileInstagramSyncRunEntity,
+  UnipileInstagramSyncRunStatus,
+} from 'src/modules/myah-unipile/entities/unipile-instagram-sync-run.entity';
 
 import { UnipileInstagramAccountFinalizationLockService } from 'src/modules/myah-unipile/services/unipile-instagram-account-finalization-lock.service';
 import { UnipileInstagramAccountProjectionService } from 'src/modules/myah-unipile/services/unipile-instagram-account-projection.service';
@@ -25,6 +29,8 @@ export type WorkspaceInstagramAccountStatus = {
   status: UnipileInstagramAccountBindingStatus;
   lastCheckedAt: string | null;
   lastError: string | null;
+  lastSyncedAt: string | null;
+  lastMessageReceivedAt: string | null;
 };
 export type UnipileInstagramWebhookAccountStatus =
   | 'OK'
@@ -64,6 +70,9 @@ export class UnipileInstagramAccountService {
     private readonly accountClient: UnipileV1ClientService,
     private readonly finalizationLockService: UnipileInstagramAccountFinalizationLockService,
     private readonly availabilityService: UnipileInstagramAvailabilityService,
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository -- Sync runs live in core and are scoped by the binding ID.
+    @InjectRepository(UnipileInstagramSyncRunEntity)
+    private readonly syncRunRepository: Repository<UnipileInstagramSyncRunEntity>,
   ) {}
 
   async getWorkspaceAccountStatus(
@@ -106,7 +115,15 @@ export class UnipileInstagramAccountService {
       return null;
     }
 
-    const { id, username, lastCheckedAt, lastError } = accountStatus;
+    const { id, username, lastCheckedAt, lastError, lastMessageReceivedAt } =
+      accountStatus;
+    const latestSync = await this.syncRunRepository.findOne({
+      where: {
+        bindingId: binding.id,
+        status: UnipileInstagramSyncRunStatus.COMPLETED,
+      },
+      order: { completedAt: 'DESC' },
+    });
 
     return {
       id,
@@ -114,6 +131,8 @@ export class UnipileInstagramAccountService {
       status: binding.status,
       lastCheckedAt,
       lastError,
+      lastSyncedAt: latestSync?.completedAt?.toISOString() ?? null,
+      lastMessageReceivedAt: lastMessageReceivedAt ?? null,
     };
   }
 

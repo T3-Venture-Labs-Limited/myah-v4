@@ -685,7 +685,10 @@ const buildFieldPermissionHarness = (deniedField?: string) => {
   const draftService = new InstagramMessageDraftService(
     { findOneBy: jest.fn().mockResolvedValue(workspace) } as never,
     globalWorkspaceOrmManager as never,
-    { isDraftExecutionLocked: jest.fn().mockResolvedValue(false) } as never,
+    {
+      isDraftExecutionLocked: jest.fn().mockResolvedValue(false),
+      isDraftProviderAccepted: jest.fn().mockResolvedValue(false),
+    } as never,
     { withLock: jest.fn(async (_input, callback) => callback()) } as never,
   );
   const recordAccessService = new InstagramMessageRecordAccessService(
@@ -871,6 +874,7 @@ const buildFirstContactResolverHarness = () => {
     id: 'receipt-id',
     state: 'PROVIDER_ACCEPTED',
     providerCode: 'accepted',
+    providerExternalMessageId: 'provider-message',
     outcome: null,
   };
   const approval = {
@@ -885,9 +889,11 @@ const buildFirstContactResolverHarness = () => {
     }),
     recordProviderAccepted: jest.fn(),
     recordProviderTerminalState: jest.fn(),
-    getDirectInstagramReceiptForViewer: jest
-      .fn()
-      .mockResolvedValue({ actionKind: 'START_CHAT', receipt: storedReceipt }),
+    getDirectInstagramReceiptForViewer: jest.fn().mockResolvedValue({
+      actionKind: 'START_CHAT',
+      receipt: storedReceipt,
+      providerMessageId: storedReceipt.providerExternalMessageId,
+    }),
   };
   const permission = { assertCanSend: jest.fn().mockResolvedValue(undefined) };
   const access = {
@@ -1034,6 +1040,7 @@ describe('InstagramMessageResolver first-contact execution and authorized recove
       receiptId: 'receipt-id',
       state: 'PROVIDER_ACCEPTED',
       providerCode: 'accepted',
+      providerMessageId: 'provider-message',
       outcome: null,
       creatorRecordId: null,
       conversationRecordId: null,

@@ -14,8 +14,9 @@ import sys
 import time
 
 ROOT = 'packages/twenty-server/src/database/commands/upgrade-version-command/'
-PRESERVED_BASE = '7e1b6ed0c11ac9850ca5e04ebc8b7f0714d5be1d'
-# Audited against origin/main -> MYAH-409 HEAD 582545b92 + the current local candidate.
+PRESERVED_BASE = 'bd427cced1c7a98bff7d18a8d7598a608cc79a00'
+# No upgrade paths changed between the previously audited and current PR bases;
+# the eight exact migration paths, statuses and content hashes remain required.
 PRESERVED = {
     ROOT + '2-19/2-19-upgrade-version-command.module.ts': ('M', 'a19c0e592960854b58c4aa0021cf00e7023eec3b2c37d875efee5cd0b2789e00'),
     ROOT + '2-19/2-19-workspace-command-1786155607568-scope-myah-creator-social-profiles.command.ts': ('A', 'd234deaf6a53cfb86a692901f808bf969240116fde5aa703e4abc33693e16500'),

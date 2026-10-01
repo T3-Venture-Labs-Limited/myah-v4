@@ -5,9 +5,10 @@ import re
 import sys
 from pathlib import Path
 
-# Audited against PR #193's clean Creator schema and exact PR base. Do not infer
-# permission from a Creator prefix: new removals require a new explicit review.
-REVIEWED_BASE = '7e1b6ed0c11ac9850ca5e04ebc8b7f0714d5be1d'
+# New PR base adds only unrelated Instagram DTO fields; the Creator metadata
+# builders are unchanged. Still reject any breaking removal outside the audited
+# Creator list; the exact new-base Inspector report remains a CI acceptance gate.
+REVIEWED_BASE = 'bd427cced1c7a98bff7d18a8d7598a608cc79a00'
 RETIRED = {
     'categories', 'creatorStatus', 'externalUrls', 'gender', 'hasBrandDeals',
     'hasLinkInBio', 'hasMerch', 'hashtagsUsed', 'instagramAvgComments',

@@ -1,3 +1,7 @@
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { CampaignForecastRefreshService } from 'src/modules/campaign-execution/services/campaign-forecast-refresh.service';
 import { CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
 
@@ -33,27 +37,8 @@ const buildHarness = (input?: {
     isTransactionActive: false,
     isReleased: false,
     connect: jest.fn(),
-    query: jest.fn().mockResolvedValue([]),
-    startTransaction: jest.fn(),
-    commitTransaction: jest.fn(),
-    rollbackTransaction: jest.fn(),
-    release: jest.fn(),
-  };
-  runner.startTransaction.mockImplementation(() => {
-    runner.isTransactionActive = true;
-  });
-  runner.commitTransaction.mockImplementation(() => {
-    runner.isTransactionActive = false;
-  });
-  runner.rollbackTransaction.mockImplementation(() => {
-    runner.isTransactionActive = false;
-  });
-  runner.release.mockImplementation(() => {
-    runner.isReleased = true;
-  });
-  const manager = {
-    queryRunner: runner,
     query: jest.fn((sql: string) => {
+      if (sql.startsWith('INSERT INTO core."campaignForecastHead"')) return [];
       if (sql.includes('campaignForecastHead')) {
         if (input?.selectedHeads === false) return [];
         return [
@@ -80,7 +65,36 @@ const buildHarness = (input?: {
           input?.zones ?? [{ campaignId, campaignCapacityTimeZone: 'UTC' }]
         );
       }
-      throw new Error(`Unexpected query: ${sql}`);
+      return [];
+    }),
+    startTransaction: jest.fn(),
+    commitTransaction: jest.fn(),
+    rollbackTransaction: jest.fn(),
+    release: jest.fn(),
+  };
+  let planningTransactionActive = false;
+  runner.startTransaction.mockImplementation(() => {
+    runner.isTransactionActive = true;
+    planningTransactionActive = true;
+  });
+  runner.commitTransaction.mockImplementation(() => {
+    runner.isTransactionActive = false;
+    planningTransactionActive = false;
+  });
+  runner.rollbackTransaction.mockImplementation(() => {
+    runner.isTransactionActive = false;
+    planningTransactionActive = false;
+  });
+  runner.release.mockImplementation(() => {
+    runner.isReleased = true;
+  });
+  const manager = {
+    queryRunner: runner,
+    query: jest.fn(() => {
+      throw new PermissionsException(
+        'Method not allowed.',
+        PermissionsExceptionCode.RAW_SQL_NOT_ALLOWED,
+      );
     }),
   };
   const candidates = {
@@ -98,7 +112,7 @@ const buildHarness = (input?: {
   const forecast = { forecast: jest.fn().mockReturnValue(forecastResult) };
   const projection = {
     publish: jest.fn().mockImplementation(async () => {
-      if (runner.isTransactionActive)
+      if (planningTransactionActive)
         throw new Error('Planning transaction still active at publication');
       return { status: 'PUBLISHED' };
     }),
@@ -148,7 +162,14 @@ const buildHarness = (input?: {
     {
       getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
         createQueryRunner: jest.fn(() => Object.assign(runner, { manager })),
-        transaction: jest.fn((callback) => callback(manager)),
+        transaction: jest.fn(async (callback) => {
+          runner.isTransactionActive = true;
+          try {
+            return await callback(manager);
+          } finally {
+            runner.isTransactionActive = false;
+          }
+        }),
       }),
     } as never,
     candidates as never,
@@ -318,13 +339,16 @@ describe('CampaignForecastRefreshService', () => {
   });
 
   it('selects an aged current generation using the bounded rolling-age policy', async () => {
-    const { manager, service } = buildHarness();
+    const { runner, service } = buildHarness();
     await service.refreshStaleForecasts();
-    expect(manager.query.mock.calls[0][0]).toContain(
+    expect(runner.query.mock.calls[0][0]).toContain(
+      'INSERT INTO core."campaignForecastHead"',
+    );
+    expect(runner.query.mock.calls[1][0]).toContain(
       'generation."generatedAt" <= clock_timestamp()',
     );
     expect(
-      (manager.query.mock.calls[0] as unknown as [string, unknown[]])[1],
+      (runner.query.mock.calls[1] as unknown as [string, unknown[]])[1],
     ).toEqual([10, 60_000]);
   });
 

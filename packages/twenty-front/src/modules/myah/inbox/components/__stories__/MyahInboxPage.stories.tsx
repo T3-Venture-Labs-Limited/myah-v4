@@ -219,6 +219,7 @@ const instagramMessages: MyahInstagramConversationMessage[] = [
     sentVia: 'UNIPILE',
     provider: 'UNIPILE',
     deliveryState: 'RECEIVED',
+    providerMessageId: null,
     providerCreatedAt: '2026-09-05T11:45:00.000Z',
     createdAt: '2026-09-05T11:45:00.000Z',
     hasAttachments: false,
@@ -231,6 +232,7 @@ const instagramMessages: MyahInstagramConversationMessage[] = [
     sentVia: 'UNIPILE',
     provider: 'UNIPILE',
     deliveryState: 'SENT',
+    providerMessageId: 'story-outbound-message',
     providerCreatedAt: '2026-09-05T11:50:00.000Z',
     createdAt: '2026-09-05T11:50:00.000Z',
     hasAttachments: false,
@@ -515,7 +517,7 @@ const MyahInboxStorySurface = ({
                   disabled={instagramComposerDisabled}
                   editorVersion={0}
                   onBodyChange={setInstagramBody}
-                  onReviewAndSend={fn()}
+                  onSend={fn()}
                   campaignOptions={
                     selectedContact.creator
                       ? [
@@ -709,7 +711,7 @@ export const DuplicateChats: Story = {
       /Multiple Instagram conversations found/,
     );
     await expect(
-      canvas.queryByRole('button', { name: 'Review and send' }),
+      canvas.queryByRole('button', { name: 'Send reply' }),
     ).not.toBeInTheDocument();
   },
 };

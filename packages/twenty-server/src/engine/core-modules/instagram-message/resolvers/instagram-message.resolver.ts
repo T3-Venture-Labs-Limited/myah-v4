@@ -396,6 +396,7 @@ export class InstagramMessageResolver {
           conversationRecordId: destination?.conversationRecordId ?? null,
           state: result.receipt.state,
           providerCode: result.receipt.providerCode,
+          providerMessageId: result.providerMessageId ?? null,
           outcome: result.receipt.outcome,
         };
       },
