@@ -35,6 +35,7 @@ const message = (
   sentVia: 'UNIPILE',
   provider: 'UNIPILE',
   deliveryState: 'RECEIVED',
+  providerMessageId: null,
   providerCreatedAt: effectiveTimestamp,
   createdAt: '2026-09-05T01:00:00.000Z',
   hasAttachments: false,
@@ -75,6 +76,7 @@ describe('useMyahInstagramConversation', () => {
         message(
           '00000000-0000-4000-8000-000000000003',
           '2026-09-05T12:00:00.000Z',
+          { providerMessageId: 'provider-3', replyReceiptId: 'receipt-3' },
         ),
         message(
           '00000000-0000-4000-8000-000000000002',
@@ -109,6 +111,12 @@ describe('useMyahInstagramConversation', () => {
       '00000000-0000-4000-8000-000000000001',
       '00000000-0000-4000-8000-000000000003',
     ]);
+    expect(hook.result.current.messages.at(-1)?.providerMessageId).toBe(
+      'provider-3',
+    );
+    expect(hook.result.current.messages.at(-1)?.replyReceiptId).toBe(
+      'receipt-3',
+    );
   });
 
   it('merges older pages without duplicates and keeps the rendered reader order stable', async () => {
@@ -166,6 +174,35 @@ describe('useMyahInstagramConversation', () => {
       '00000000-0000-4000-8000-000000000002',
       '00000000-0000-4000-8000-000000000003',
     ]);
+  });
+
+  it('retains loaded older history while refreshing for an accepted reply', async () => {
+    const older = message('older', '2026-09-05T10:00:00.000Z');
+    const recent = message('recent', '2026-09-05T11:00:00.000Z');
+    const sent = message('sent', '2026-09-05T12:00:00.000Z');
+    mockQuery
+      .mockResolvedValueOnce(
+        response([recent], { hasNextPage: true, endCursor: 'older-page' }),
+      )
+      .mockResolvedValueOnce(response([older]))
+      .mockResolvedValueOnce(response([sent, recent]));
+    const hook = renderHook(() =>
+      useMyahInstagramConversation(firstConversationId),
+    );
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    await act(async () => hook.result.current.loadMore());
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'older',
+      'recent',
+    ]);
+
+    await act(async () => hook.result.current.refetch(true));
+    expect(hook.result.current.messages.map(({ id }) => id)).toEqual([
+      'older',
+      'recent',
+      'sent',
+    ]);
+    expect(hook.result.current.hasNextPage).toBe(false);
   });
 
   it('retains the existing page when an older-page request fails', async () => {

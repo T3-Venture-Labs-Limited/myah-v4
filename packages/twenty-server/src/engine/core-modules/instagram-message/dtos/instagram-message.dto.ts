@@ -116,6 +116,9 @@ export class InstagramMessageSendStatusDto {
   providerCode: string | null;
 
   @Field(() => String, { nullable: true })
+  providerMessageId: string | null;
+
+  @Field(() => String, { nullable: true })
   outcome: string | null;
 }
 

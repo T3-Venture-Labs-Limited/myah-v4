@@ -84,6 +84,7 @@ const row = (
   sentVia: 'UNIPILE',
   provider: 'UNIPILE',
   deliveryState: 'RECEIVED',
+  providerMessageId: null,
   providerCreatedAt,
   createdAt: effectiveTimestamp,
   hasAttachments: false,
@@ -219,6 +220,7 @@ const messageFields = [
   'sentVia',
   'provider',
   'deliveryState',
+  'providerMessageId',
   'providerCreatedAt',
   'createdAt',
   'hasAttachments',
@@ -316,6 +318,73 @@ describe('MyahInboxInstagramMessageQueryService', () => {
     );
     expect(harness.builders.myahSocialConversation).toHaveBeenCalledTimes(1);
     expect(harness.builders.myahSocialMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes provider message identity for matching outbound bubbles, and null for history', async () => {
+    const timestamp = '2026-09-05T12:00:00.000Z';
+    const harness = buildHarness([
+      [
+        {
+          ...row(2, timestamp),
+          direction: 'OUTBOUND',
+          providerMessageId: 'unipile-message-2',
+        },
+        { ...row(1, timestamp), provider: 'COMPOSIO_HISTORY' },
+      ],
+    ]);
+
+    const page = await harness.service.listMessages(request({ first: 2 }));
+    expect(
+      page.edges.map(
+        ({ node }) =>
+          (node as typeof node & { providerMessageId: string | null })
+            .providerMessageId,
+      ),
+    ).toEqual(['unipile-message-2', null]);
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'message."providerMessageId"',
+    );
+  });
+
+  it('projects a reply receipt only for the same workspace, initiator, and conversation', async () => {
+    const harness = buildHarness([
+      [
+        {
+          ...row(2, '2026-09-05T12:00:00.000Z'),
+          direction: 'OUTBOUND',
+          providerMessageId: 'provider-2',
+          replyReceiptId: 'receipt-2',
+        },
+        { ...row(1, '2026-09-05T11:00:00.000Z'), replyReceiptId: null },
+      ],
+    ]);
+    const page = await harness.service.listMessages(request());
+    expect(
+      page.edges.map(
+        ({ node }) =>
+          (node as typeof node & { replyReceiptId: string | null })
+            .replyReceiptId,
+      ),
+    ).toEqual(['receipt-2', null]);
+    const [sql, parameters] = harness.query.mock.calls[0];
+    expect(sql).toContain('receipt."workspaceId" =');
+    expect(sql).toContain('binding."initiatorUserWorkspaceId" =');
+    expect(sql).toContain(
+      'binding."instagramMessageSnapshot"->>\'conversationRecordId\' = $1::text',
+    );
+    expect(sql).toContain(
+      'reply_receipt."providerExternalMessageId" = message."providerMessageId"',
+    );
+    expect(sql).toContain("message.direction = 'OUTBOUND'");
+    expect(parameters).toContain(userAuthContext.userWorkspaceId);
+    expect(parameters).toContain(workspaceId);
+    const apiKey = buildHarness([
+      [{ ...row(1, '2026-09-05T12:00:00.000Z'), replyReceiptId: null }],
+    ]);
+    await apiKey.service.listMessages(
+      request({ authContext: { type: 'apiKey' } }),
+    );
+    expect(apiKey.query.mock.calls[0][1]).toContain(null);
   });
 
   it('normalizes PostgreSQL Date timestamps before GraphQL String serialization', async () => {
@@ -449,7 +518,7 @@ describePostgres(
     ) ON COMMIT DROP;
     CREATE TEMP TABLE ig_message_fixture (
       id uuid, "workspaceId" uuid, "conversationId" uuid, text text, direction text,
-      "sentVia" text, provider text, "deliveryState" text, "providerCreatedAt" timestamptz,
+      "sentVia" text, provider text, "deliveryState" text, "providerMessageId" text, "providerCreatedAt" timestamptz,
       "createdAt" timestamptz, "hasAttachments" boolean, "attachmentCount" integer,
       readable boolean DEFAULT TRUE, "deletedAt" timestamptz
     ) ON COMMIT DROP;
@@ -458,6 +527,7 @@ describePostgres(
       ('00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000001',TRUE,NULL),
       ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000099',TRUE,NULL);
     INSERT INTO ig_message_fixture
+      (id, "workspaceId", "conversationId", text, direction, "sentVia", provider, "deliveryState", "providerCreatedAt", "createdAt", "hasAttachments", "attachmentCount", readable, "deletedAt")
       SELECT ('00000000-0000-4000-8000-' || lpad((i + 100)::text,12,'0'))::uuid,
         '00000000-0000-4000-8000-000000000001'::uuid,
         '00000000-0000-4000-8000-000000000002'::uuid, 'message-' || i, 'INBOUND',
@@ -465,7 +535,8 @@ describePostgres(
         CASE WHEN i = 50 THEN NULL ELSE '2026-09-05T12:00:00Z'::timestamptz - i * interval '1 minute' END,
         '2026-09-01T00:00:00Z'::timestamptz + i * interval '1 minute', FALSE, 0, TRUE, NULL
       FROM generate_series(1,105) i;
-    INSERT INTO ig_message_fixture VALUES
+    INSERT INTO ig_message_fixture
+      (id, "workspaceId", "conversationId", text, direction, "sentVia", provider, "deliveryState", "providerCreatedAt", "createdAt", "hasAttachments", "attachmentCount", readable, "deletedAt") VALUES
       ('00000000-0000-4000-8000-000000009800','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','microsecond-boundary-newer','INBOUND','UNIPILE','UNIPILE','RECEIVED','2026-09-05T10:21:00.000900Z','2026-09-01T00:00:00Z',FALSE,0,TRUE,NULL),
       ('00000000-0000-4000-8000-000000009799','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','microsecond-boundary-older','INBOUND','UNIPILE','UNIPILE','RECEIVED','2026-09-05T10:21:00.000800Z','2026-09-01T00:00:00Z',FALSE,0,TRUE,NULL),
       ('00000000-0000-4000-8000-000000009001','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','tie-high','INBOUND','UNIPILE','UNIPILE','RECEIVED','2026-09-06T00:00:00Z','2026-09-01T00:00:00Z',FALSE,0,TRUE,NULL),
@@ -561,8 +632,8 @@ describePostgres(
           myahSocialMessage: createNativePermissionContext(
             'myahSocialMessage',
             messageFields,
-            denied.field === 'text'
-              ? { 'myahSocialMessage-text': { canRead: false } }
+            denied.field
+              ? { [`myahSocialMessage-${denied.field}`]: { canRead: false } }
               : {},
             denied.object !== 'myahSocialMessage',
           ),
@@ -612,6 +683,7 @@ describePostgres(
           { object: 'myahSocialConversation' },
           { object: 'myahSocialMessage' },
           { field: 'text' },
+          { field: 'providerMessageId' },
         ]) {
           const blocked = createManager(denied);
           const blockedService = new Service!(blocked.manager as never);

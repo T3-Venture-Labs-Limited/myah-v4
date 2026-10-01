@@ -114,6 +114,15 @@ export class InstagramMessageDraftService {
         if (!draft) {
           return null;
         }
+        if (
+          await this.actionApprovalService.isDraftProviderAccepted({
+            workspaceId: input.workspaceId,
+            actionName: 'send_instagram_message',
+            draftId: draft.id,
+          })
+        ) {
+          return null;
+        }
 
         const executionLocked =
           await this.actionApprovalService.isDraftExecutionLocked({
