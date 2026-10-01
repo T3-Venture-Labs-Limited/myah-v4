@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 import { createV3RecoveryFixture } from '../../services/__tests__/instagram-message-v3-recovery.fixture';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import {
@@ -88,6 +90,50 @@ describe('InstagramMessageReconciliationJob', () => {
     );
     expect(queryRunner.release).toHaveBeenCalledTimes(1);
     expect(updateQueryBuilder.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs an accepted receipt confirmation failure and defers that receipt', async () => {
+    const receipt = {
+      id: 'receipt-accepted',
+      workspaceId: 'workspace-1',
+      state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+    };
+    const queryRunner = {
+      connect: jest.fn(),
+      query: jest.fn().mockResolvedValueOnce([{ locked: true }]),
+      release: jest.fn(),
+    };
+    const updateQueryBuilder = buildUpdateQueryBuilder();
+    const reconciliationService = {
+      finalizeProviderAccepted: jest
+        .fn()
+        .mockRejectedValue(new Error('read unavailable')),
+    };
+    const warning = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const job = new InstagramMessageReconciliationJob(
+      {
+        createQueryRunner: jest.fn().mockReturnValue(queryRunner),
+        getRepository: jest.fn().mockReturnValue({
+          createQueryBuilder: jest
+            .fn()
+            .mockReturnValue(buildQueryBuilder([receipt])),
+        }),
+        createQueryBuilder: jest.fn().mockReturnValue(updateQueryBuilder),
+      } as never,
+      reconciliationService as never,
+    );
+
+    try {
+      await job.handle();
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'receipt-accepted PROVIDER_ACCEPTED Error: read unavailable',
+        ),
+      );
+      expect(updateQueryBuilder.execute).toHaveBeenCalledTimes(1);
+    } finally {
+      warning.mockRestore();
+    }
   });
 
   it('does no reconciliation when another worker holds the lock', async () => {

@@ -285,6 +285,8 @@ export const useInstagramMessageComposer = () => {
   ): Promise<InstagramMessageSendResult> => {
     if (!isCurrent(draftId, originWorkspaceId))
       return unconfirmedInstagramMessageResult(null);
+    const previous = store.get(atom)?.attempt?.result;
+    const accepted = previous?.status === 'PROVIDER_ACCEPTED' ? previous : null;
     try {
       const { data } = await client.query<{
         instagramMessageComposerAttempt: InstagramMessageComposerAttemptDto | null;
@@ -300,6 +302,8 @@ export const useInstagramMessageComposer = () => {
         client,
         receiptId,
         () => isCurrent(draftId, originWorkspaceId),
+        accepted !== null ||
+          data.instagramMessageComposerAttempt?.state === 'PROVIDER_ACCEPTED',
       );
       publish(
         draftId,
@@ -309,7 +313,7 @@ export const useInstagramMessageComposer = () => {
       );
       return result;
     } catch {
-      return unconfirmedInstagramMessageResult(null);
+      return accepted ?? unconfirmedInstagramMessageResult(null);
     }
   };
   const checkStatus = async () => {
@@ -401,6 +405,7 @@ export const useInstagramMessageComposer = () => {
           client,
           result.receiptId,
           () => isCurrent(current.draftId, workspaceId),
+          result.status === 'PROVIDER_ACCEPTED',
         );
         result = confirmedSent && polled.status !== 'SENT' ? result : polled;
         publish(

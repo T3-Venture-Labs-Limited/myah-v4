@@ -7,6 +7,7 @@ export type InstagramMessageSendResult = {
   code: string | null;
   nextEligibleAt: string | null;
   error: string | null;
+  providerMessageId?: string | null;
   creatorRecordId?: string | null;
   conversationRecordId?: string | null;
 };
@@ -27,7 +28,18 @@ export const pollInstagramMessageSendStatus = async (
   client: ApolloClient,
   receiptId: string,
   isCurrent: () => boolean = () => true,
+  alreadyAccepted = false,
 ): Promise<InstagramMessageSendResult> => {
+  let accepted: InstagramMessageSendResult | null = alreadyAccepted
+    ? {
+        status: 'PROVIDER_ACCEPTED',
+        receiptId,
+        code: null,
+        nextEligibleAt: null,
+        error: null,
+        providerMessageId: null,
+      }
+    : null;
   for (let poll = 0; poll < 15; poll++) {
     await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
     if (!isCurrent()) return unconfirmedInstagramMessageResult(receiptId);
@@ -37,6 +49,7 @@ export const pollInstagramMessageSendStatus = async (
           receiptId: string;
           state: string;
           providerCode: string | null;
+          providerMessageId: string | null;
           creatorRecordId?: string | null;
           conversationRecordId?: string | null;
         };
@@ -47,15 +60,26 @@ export const pollInstagramMessageSendStatus = async (
       });
       const status = response.data?.instagramMessageSendStatus;
       if (!status || status.state === 'UNKNOWN')
-        return unconfirmedInstagramMessageResult(receiptId);
-      if (['PENDING', 'PROCESSING', 'PROVIDER_ACCEPTED'].includes(status.state))
+        return accepted ?? unconfirmedInstagramMessageResult(receiptId);
+      if (status.state === 'PROVIDER_ACCEPTED') {
+        accepted = {
+          status: 'PROVIDER_ACCEPTED',
+          receiptId: status.receiptId,
+          code: status.providerCode,
+          nextEligibleAt: null,
+          error: null,
+          providerMessageId: status.providerMessageId ?? null,
+        };
         continue;
+      }
+      if (['PENDING', 'PROCESSING'].includes(status.state)) continue;
       return {
         status: status.state,
         receiptId: status.receiptId,
         code: status.providerCode,
         nextEligibleAt: null,
         error: status.state === 'BLOCKED' ? status.providerCode : null,
+        providerMessageId: status.providerMessageId ?? null,
         ...(status.creatorRecordId !== undefined
           ? { creatorRecordId: status.creatorRecordId }
           : {}),
@@ -64,8 +88,8 @@ export const pollInstagramMessageSendStatus = async (
           : {}),
       };
     } catch {
-      return unconfirmedInstagramMessageResult(receiptId);
+      return accepted ?? unconfirmedInstagramMessageResult(receiptId);
     }
   }
-  return unconfirmedInstagramMessageResult(receiptId);
+  return accepted ?? unconfirmedInstagramMessageResult(receiptId);
 };
