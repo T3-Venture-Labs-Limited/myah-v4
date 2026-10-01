@@ -7,11 +7,11 @@ import { type MyahInstagramConversationMessage } from '@/myah/inbox/types/MyahIn
 
 jest.mock('twenty-ui/theme-constants', () => ({
   themeCssVariables: {
-    background: { transparent: { lighter: 'transparent' } },
+    background: { quaternary: 'gray', transparent: { lighter: 'transparent' } },
     border: { color: { medium: 'gray' }, radius: { sm: '2px', lg: '12px' } },
     font: {
       color: { primary: 'black', secondary: 'gray' },
-      size: { xs: '12px' },
+      size: { xs: '12px', md: '16px' },
       weight: { semiBold: 600 },
     },
     tag: { background: { violet: 'lavender' }, text: { violet: 'indigo' } },
@@ -118,7 +118,7 @@ describe('MyahInboxInstagramTimeline', () => {
     expect(screen.getByLabelText('Inbound Instagram message')).toBeVisible();
   });
 
-  it('shows an accessible creator reaction on only its persisted parent, including outbound messages', () => {
+  it('shows an emoji-only accessible reaction on only its persisted parent, including outbound messages', () => {
     render(
       <MyahInboxInstagramTimeline
         channelState="READY"
@@ -139,6 +139,7 @@ describe('MyahInboxInstagramTimeline', () => {
       name: 'Instagram participant reacted 👍',
     });
     expect(reaction).toBeVisible();
+    expect(reaction).toHaveTextContent(/^👍$/);
     expect(reaction).toHaveAttribute('data-reaction-version', 'a'.repeat(64));
     expect(
       screen.getByLabelText('Outbound Instagram message'),
