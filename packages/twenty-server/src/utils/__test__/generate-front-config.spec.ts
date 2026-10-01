@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 
+import { config } from 'dotenv';
+
 import { generateFrontConfig } from 'src/utils/generate-front-config';
 
 // dotenv runs at import time with override: true, which would clobber the
@@ -43,6 +45,38 @@ describe('generateFrontConfig', () => {
 
   afterAll(() => {
     process.env = ORIGINAL_ENV;
+  });
+
+  it('loads the selected test env instead of the conflicting default test env', () => {
+    process.env.NODE_ENV = 'test';
+    process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE = '/synthetic/selected.env';
+    process.env.SERVER_URL = 'http://shell.example';
+    const dotenvConfig = jest.mocked(config);
+
+    dotenvConfig.mockImplementation((options) => {
+      process.env.SERVER_URL =
+        options?.path === '/synthetic/selected.env'
+          ? 'http://selected.example'
+          : 'http://stale.example';
+
+      return { parsed: {} };
+    });
+
+    jest.isolateModules(() => {
+      const {
+        generateFrontConfig: isolatedGenerateFrontConfig,
+      } = require('src/utils/generate-front-config');
+
+      isolatedGenerateFrontConfig();
+    });
+
+    expect(dotenvConfig).toHaveBeenCalledWith({
+      path: '/synthetic/selected.env',
+      override: true,
+    });
+    expect(getInjectedEnv()).toBe(
+      '{"REACT_APP_SERVER_BASE_URL":"http://selected.example"}',
+    );
   });
 
   it('should inject the absolute SERVER_URL when set and the toggle is unset', () => {

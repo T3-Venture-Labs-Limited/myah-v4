@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
@@ -13,6 +13,15 @@ import {
 import { CreatorDataOperationService } from 'src/modules/myah-creator-social-profile/services/creator-data-operation.service';
 import { CreatorDataOperationWriterService } from 'src/modules/myah-creator-social-profile/services/creator-data-operation-writer.service';
 import { normalizeSocialProfileIdentity } from 'src/modules/myah-creator-social-profile/utils/social-profile-identity.util';
+
+const PROFILE_MATCH_READ_FIELDS = [
+  'id',
+  'creator',
+  'platform',
+  'normalizedLocator',
+  'platformAccountId',
+  'deletedAt',
+] as const;
 
 const CREATOR_IMPORT_FIELDS = [
   'name',
@@ -149,7 +158,8 @@ export class CreatorImportService {
       apiKeyRoleMap: context.apiKeyRoleMap,
     });
 
-    if (!permissionConfig) throw new Error('Role could not be resolved');
+    if (!permissionConfig)
+      throw new ForbiddenException('Role could not be resolved');
     if ('shouldBypassPermissionChecks' in permissionConfig) return;
 
     const requiredFieldsByObject = new Map<string, string[]>([
@@ -193,6 +203,28 @@ export class CreatorImportService {
         ? permissionConfig.unionOf
         : permissionConfig.intersectionOf;
     const isUnion = 'unionOf' in permissionConfig;
+    const writtenObjectIds = [...requiredFieldsByObject]
+      .filter(([, fieldNames]) => fieldNames.length > 0)
+      .map(([objectName]) => context.objectIdByNameSingular[objectName]);
+
+    // The transactional raw writer cannot enforce Twenty's row predicates on
+    // inserts or identity-matched updates. Reject scoped roles rather than
+    // silently granting broader access than the workspace ORM.
+    if (
+      Object.values(
+        context.flatRowLevelPermissionPredicateMaps.byUniversalIdentifier,
+      ).some(
+        (predicate) =>
+          predicate &&
+          !predicate.deletedAt &&
+          roleIds.includes(predicate.roleId) &&
+          writtenObjectIds.includes(predicate.objectMetadataId),
+      )
+    ) {
+      throw new ForbiddenException(
+        'Creator import cannot use row-scoped write permissions',
+      );
+    }
 
     for (const [objectName, fieldNames] of requiredFieldsByObject) {
       if (fieldNames.length === 0) continue;
@@ -208,7 +240,26 @@ export class CreatorImportService {
         )
         .map((field) => field!.id);
 
-      if (!objectId || fieldIds.length !== new Set(fieldNames).size) {
+      const matchReadFieldIds =
+        objectName === 'socialProfile'
+          ? Object.values(context.flatFieldMetadataMaps.byUniversalIdentifier)
+              .filter(
+                (field) =>
+                  field?.objectMetadataId === objectId &&
+                  field.isActive &&
+                  PROFILE_MATCH_READ_FIELDS.includes(
+                    field.name as (typeof PROFILE_MATCH_READ_FIELDS)[number],
+                  ),
+              )
+              .map((field) => field!.id)
+          : [];
+
+      if (
+        !objectId ||
+        fieldIds.length !== new Set(fieldNames).size ||
+        (objectName === 'socialProfile' &&
+          matchReadFieldIds.length !== PROFILE_MATCH_READ_FIELDS.length)
+      ) {
         throw new Error('Creator import metadata is unavailable');
       }
 
@@ -217,6 +268,12 @@ export class CreatorImportService {
 
         return (
           permission?.canUpdateObjectRecords === true &&
+          (objectName !== 'socialProfile' ||
+            (permission.canReadObjectRecords === true &&
+              matchReadFieldIds.every(
+                (fieldId) =>
+                  permission.restrictedFields?.[fieldId]?.canRead !== false,
+              ))) &&
           fieldIds.every(
             (fieldId) =>
               permission.restrictedFields?.[fieldId]?.canUpdate !== false,
@@ -225,7 +282,9 @@ export class CreatorImportService {
       });
 
       if (isUnion ? !decisions.some(Boolean) : !decisions.every(Boolean)) {
-        throw new Error('Creator import write permission is required');
+        throw new ForbiddenException(
+          'Creator import write permission is required',
+        );
       }
     }
   }

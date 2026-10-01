@@ -382,6 +382,9 @@ export const CampaignInfluencerIndex = ({
   const creatorMetadataItem = objectMetadataItems.find(
     (item) => item.nameSingular === 'creator',
   );
+  const socialProfileMetadataItem = objectMetadataItems.find(
+    (item) => item.nameSingular === 'socialProfile',
+  );
   const [selectedCampaignView, setSelectedCampaignView] = useState<
     { campaignId: string; viewId: string } | undefined
   >();
@@ -526,8 +529,20 @@ export const CampaignInfluencerIndex = ({
                 name: creatorMetadataItem?.fields.find(
                   (field) => field.name === 'name',
                 )?.id,
-                instagramUsername: creatorMetadataItem?.fields.find(
-                  (field) => field.name === 'instagramUsername',
+                socialProfiles: creatorMetadataItem?.fields.find(
+                  (field) => field.name === 'socialProfiles',
+                )?.id,
+              }}
+              socialProfileMetadataId={socialProfileMetadataItem?.id}
+              socialProfileFieldIds={{
+                creator: socialProfileMetadataItem?.fields.find(
+                  (field) => field.name === 'creator',
+                )?.id,
+                platform: socialProfileMetadataItem?.fields.find(
+                  (field) => field.name === 'platform',
+                )?.id,
+                handle: socialProfileMetadataItem?.fields.find(
+                  (field) => field.name === 'handle',
                 )?.id,
               }}
               stageOptions={

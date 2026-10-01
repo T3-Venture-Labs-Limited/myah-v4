@@ -10,7 +10,6 @@ import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/deco
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
-import { PRODUCT_SCHEMA_WRITE_AUTHORITY } from 'src/engine/metadata-modules/utils/product-schema-write-authority.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 // Hard-coded because the matching STANDARD_OBJECTS entries no longer exist
@@ -98,7 +97,6 @@ export class DropFavoriteObjectsCommand extends ActiveOrSuspendedWorkspaceComman
         workspaceId,
         isSystemBuild: true,
         ownerFlatApplication: twentyStandardFlatApplication,
-        schemaWriteAuthority: PRODUCT_SCHEMA_WRITE_AUTHORITY,
       });
 
       this.logger.log(`Deleted ${label} object for workspace ${workspaceId}`);

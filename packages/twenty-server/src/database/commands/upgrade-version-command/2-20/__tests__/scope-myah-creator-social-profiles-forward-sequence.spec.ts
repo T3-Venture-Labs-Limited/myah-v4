@@ -144,6 +144,8 @@ describe('MYAH-409 2.20 forward scope upgrade', () => {
       });
       const recordUpgradeMigration = jest.fn().mockResolvedValue(undefined);
       const migration = {
+        // Earlier catch-up instance repairs are already completed at this workspace cursor.
+        isLastAttemptCompleted: jest.fn().mockResolvedValue(true),
         getLastAttemptedCommandNameOrThrow: jest
           .fn()
           .mockResolvedValue({ name: cursor, status }),

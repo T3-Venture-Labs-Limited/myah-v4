@@ -30,6 +30,7 @@ import {
   assertProductSchemaWriteAuthority,
   type ProductSchemaWriteAuthority,
 } from 'src/engine/metadata-modules/utils/product-schema-write-authority.util';
+import { resolveWorkspaceUpgradeSchemaWriteAuthority } from 'src/engine/metadata-modules/utils/workspace-upgrade-schema-write-scope.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { EMPTY_ORCHESTRATOR_FAILURE_REPORT } from 'src/engine/workspace-manager/workspace-migration/constant/empty-orchestrator-failure-report.constant';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
@@ -383,7 +384,11 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
     isSystemBuild?: boolean;
     schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatFieldMetadata[]> {
-    assertProductSchemaWriteAuthority(schemaWriteAuthority);
+    assertProductSchemaWriteAuthority(
+      schemaWriteAuthority === undefined
+        ? resolveWorkspaceUpgradeSchemaWriteAuthority(workspaceId)
+        : schemaWriteAuthority,
+    );
 
     if (createFieldInputs.length === 0) {
       return [];

@@ -17,11 +17,6 @@ export type CreatorDataOperationActor = {
   name: string;
 };
 
-type StoredSocialProfile = SocialProfileIdentityRecord & {
-  handle: string | null;
-  profileUrl: string | null;
-};
-
 export type CreatorImportRecordInput = {
   name: string;
   email?: string;
@@ -109,10 +104,9 @@ export class CreatorDataOperationWriterService {
 
     // SAFETY: schemaName comes from getWorkspaceSchemaName and is escaped by the active PostgreSQL driver.
     // pi-lens-ignore: sql-injection, no-sql-in-code
-    const matches = await manager.query<StoredSocialProfile[]>(
+    const matches = await manager.query<SocialProfileIdentityRecord[]>(
       `SELECT
-        "id", "creatorId", "platform", "handle", "profileUrl",
-        "normalizedLocator", "platformAccountId"
+        "id", "creatorId", "platform", "normalizedLocator", "platformAccountId"
       FROM ${escapedSchemaName}."socialProfile"
       WHERE "deletedAt" IS NULL
         AND "platform" = $1

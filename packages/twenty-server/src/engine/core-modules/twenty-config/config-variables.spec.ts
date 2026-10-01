@@ -1,8 +1,12 @@
+import { Logger } from '@nestjs/common';
 import { plainToClass } from 'class-transformer';
 
 import { validateSync } from 'class-validator';
 
-import { ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
+import {
+  ConfigVariables,
+  validate,
+} from 'src/engine/core-modules/twenty-config/config-variables';
 import { ConfigVariableType } from 'src/engine/core-modules/twenty-config/enums/config-variable-type.enum';
 import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
 import { TypedReflect } from 'src/utils/typed-reflect';
@@ -836,5 +840,64 @@ describe('managed email catalog configuration', () => {
         isHiddenInAdminPanel: true,
       }),
     );
+  });
+});
+
+describe('server listen host', () => {
+  it('defaults to an omitted host, preserving the platform listen default', () => {
+    const config = new ConfigVariables();
+
+    expect(config.NODE_HOST).toBeUndefined();
+    expect(getValidationProperties(config)).not.toContain('NODE_HOST');
+    expect(
+      TypedReflect.getMetadata('config-variables', ConfigVariables)?.NODE_HOST,
+    ).toMatchObject({
+      group: ConfigVariablesGroup.SERVER_CONFIG,
+      isEnvOnly: true,
+      type: ConfigVariableType.STRING,
+    });
+  });
+
+  it.each(['127.0.0.1', '::1', 'localhost', '0.0.0.0', 'server.internal'])(
+    'accepts a valid listen host: %s',
+    (host) => {
+      expect(
+        getValidationProperties(
+          Object.assign(new ConfigVariables(), { NODE_HOST: host }),
+        ),
+      ).not.toContain('NODE_HOST');
+    },
+  );
+
+  it.each([
+    '',
+    ' ',
+    'http://localhost',
+    'localhost:3000',
+    'invalid host',
+    '999.999.999.999',
+  ])('rejects an invalid listen host: %s', (host) => {
+    expect(
+      getValidationProperties(
+        Object.assign(new ConfigVariables(), { NODE_HOST: host }),
+      ),
+    ).toContain('NODE_HOST');
+  });
+
+  it('does not log a supplied invalid host value', () => {
+    const errorLog = jest.spyOn(Logger, 'error').mockImplementation();
+    const invalidHost = 'synthetic-sensitive-host !';
+
+    try {
+      expect(() => validate({ NODE_HOST: invalidHost })).toThrow(
+        'Config variables validation failed',
+      );
+      expect(errorLog).toHaveBeenCalledWith(
+        'NODE_HOST must be a valid IP address or hostname',
+      );
+      expect(JSON.stringify(errorLog.mock.calls)).not.toContain(invalidHost);
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 });

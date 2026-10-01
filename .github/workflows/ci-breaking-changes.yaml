@@ -13,6 +13,8 @@ concurrency:
 env:
   MAIN_SERVER_PORT: 3000
   CURRENT_SERVER_PORT: 3002
+  PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  PR_NUMBER: ${{ github.event.pull_request.number }}
 
 permissions:
   contents: read
@@ -27,6 +29,8 @@ jobs:
         packages/twenty-emails/**
         packages/twenty-shared/**
         .github/workflows/ci-breaking-changes.yaml
+        .github/scripts/check-myah-409-graphql-diff.py
+        .github/scripts/test-check-myah-409-graphql-diff.py
 
   api-breaking-changes:
     needs: changed-files-check
@@ -77,12 +81,13 @@ jobs:
 
           git config user.email "ci@twenty.com"
           git config user.name "CI"
-          git fetch origin main
+          git fetch --no-tags origin "$PR_BASE_SHA"
+          git cat-file -e "${PR_BASE_SHA}^{commit}"
 
           CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
           echo "Current branch: $CURRENT_BRANCH"
 
-          if git merge origin/main --no-edit; then
+          if git merge "$PR_BASE_SHA" --no-edit; then
             echo "✅ Successfully merged main into current branch"
             echo "merged=true" >> $GITHUB_OUTPUT
             echo "BRANCH_STATE=merged" >> $GITHUB_ENV
@@ -247,6 +252,8 @@ jobs:
 
           # Move current branch files to temp directory
           mv current-* /tmp/current-branch-files/ 2>/dev/null || echo "No current-* files to preserve"
+          cp .github/scripts/check-myah-409-graphql-diff.py \
+            /tmp/check-myah-409-graphql-diff.py
 
           echo "Preserved current branch files for later restoration"
 
@@ -273,7 +280,7 @@ jobs:
       - name: Checkout main branch
         run: |
           git stash
-          git checkout origin/main
+          git checkout --detach "$PR_BASE_SHA"
           git reset --hard
           git clean -xfd -ff
           rm -rf node_modules packages/*/node_modules packages/*/dist dist .nx/cache
@@ -420,6 +427,11 @@ jobs:
           echo "All API files restored:"
           ls -la current-* main-* 2>/dev/null || echo "Some files may be missing"
 
+          # The main checkout does not contain this PR's targeted policy script.
+          mkdir -p .github/scripts
+          cp /tmp/check-myah-409-graphql-diff.py \
+            .github/scripts/check-myah-409-graphql-diff.py
+
           # Clean up temp directory
           rm -rf /tmp/current-branch-files
 
@@ -431,10 +443,10 @@ jobs:
           for file in main-schema-introspection.json current-schema-introspection.json \
                       main-metadata-schema-introspection.json current-metadata-schema-introspection.json; do
             if [ ! -f "$file" ]; then
-              echo "::warning::Missing GraphQL schema file: $file"
+              echo "::error::Missing GraphQL schema file: $file"
               valid=false
-            elif ! jq -e '.data.__schema' "$file" >/dev/null 2>&1; then
-              echo "::warning::File $file is not a valid GraphQL introspection result. First 200 bytes: $(head -c 200 "$file")"
+            elif ! jq -e '.errors == null and (.data.__schema.types | type == "array") and (.data.__schema.types | length > 0)' "$file" >/dev/null 2>&1; then
+              echo "::error::File $file is not a valid GraphQL introspection result"
               valid=false
             fi
           done
@@ -442,15 +454,16 @@ jobs:
           for file in main-rest-api.json current-rest-api.json \
                       main-rest-metadata-api.json current-rest-metadata-api.json; do
             if [ ! -f "$file" ]; then
-              echo "::warning::Missing OpenAPI spec file: $file"
+              echo "::error::Missing OpenAPI spec file: $file"
               valid=false
-            elif ! jq -e '.openapi // .swagger' "$file" >/dev/null 2>&1; then
-              echo "::warning::File $file is not a valid OpenAPI spec. First 200 bytes: $(head -c 200 "$file")"
+            elif ! jq -e '((.openapi // .swagger) | type == "string") and (.paths | type == "object")' "$file" >/dev/null 2>&1; then
+              echo "::error::File $file is not a valid OpenAPI spec"
               valid=false
             fi
           done
 
           echo "valid=$valid" >> $GITHUB_OUTPUT
+          [ "$valid" = true ] || exit 1
 
       - name: Install OpenAPI Diff Tool
         run: |
@@ -462,49 +475,36 @@ jobs:
         if: steps.validate-schemas.outputs.valid == 'true'
         run: |
           echo "=== INSTALLING GRAPHQL INSPECTOR CLI ==="
-          npm install -g @graphql-inspector/cli
+          npm install -g @graphql-inspector/cli@7.0.0
 
           echo "=== GENERATING GRAPHQL DIFF REPORTS ==="
 
-          # Check if GraphQL schema has changes
-          echo "Checking GraphQL schema for changes..."
-          if graphql-inspector diff main-schema-introspection.json current-schema-introspection.json >/dev/null 2>&1; then
-            echo "✅ No changes in GraphQL schema"
-          else
-            echo "⚠️ Changes detected in GraphQL schema, generating report..."
-            echo "core_breaking=true" >> $GITHUB_OUTPUT
-            echo "# GraphQL Schema Changes" > graphql-schema-diff.md
-            echo "" >> graphql-schema-diff.md
-            graphql-inspector diff main-schema-introspection.json current-schema-introspection.json >> graphql-schema-diff.md 2>&1 || {
-              echo "⚠️ **Breaking changes or errors detected in GraphQL schema**" >> graphql-schema-diff.md
-              echo "" >> graphql-schema-diff.md
-              echo "\`\`\`" >> graphql-schema-diff.md
-              graphql-inspector diff main-schema-introspection.json current-schema-introspection.json 2>&1 >> graphql-schema-diff.md || echo "Error generating diff" >> graphql-schema-diff.md
-              echo "\`\`\`" >> graphql-schema-diff.md
-            }
-          fi
-
-          # Check if GraphQL metadata schema has changes
-          echo "Checking GraphQL metadata schema for changes..."
-          if graphql-inspector diff main-metadata-schema-introspection.json current-metadata-schema-introspection.json >/dev/null 2>&1; then
-            echo "✅ No changes in GraphQL metadata schema"
-          else
-            echo "⚠️ Changes detected in GraphQL metadata schema, generating report..."
-            echo "metadata_breaking=true" >> $GITHUB_OUTPUT
-            echo "# GraphQL Metadata Schema Changes" > graphql-metadata-diff.md
-            echo "" >> graphql-metadata-diff.md
-            graphql-inspector diff main-metadata-schema-introspection.json current-metadata-schema-introspection.json >> graphql-metadata-diff.md 2>&1 || {
-              echo "⚠️ **Breaking changes or errors detected in GraphQL metadata schema**" >> graphql-metadata-diff.md
-              echo "" >> graphql-metadata-diff.md
-              echo "\`\`\`" >> graphql-metadata-diff.md
-              graphql-inspector diff main-metadata-schema-introspection.json current-metadata-schema-introspection.json 2>&1 >> graphql-metadata-diff.md || echo "Error generating diff" >> graphql-metadata-diff.md
-              echo "\`\`\`" >> graphql-metadata-diff.md
-            }
-          fi
-
-          # Show summary
-          echo "Generated diff files:"
-          ls -la *-diff.md 2>/dev/null || echo "No diff files generated (no changes detected)"
+          # Keep output from exactly one invocation, including failures.
+          check_graphql() {
+            local scope="$1" old="$2" new="$3" report="$4" status=0
+            graphql-inspector diff "$old" "$new" > "$report.log" 2>&1 ||
+              status=$?
+            if [ "$status" -ne 0 ] || grep -q '✖' "$report.log"; then
+              {
+                echo "# GraphQL ${scope} Schema Changes"
+                echo
+                cat "$report.log"
+              } > "$report"
+            fi
+            if ! python3 .github/scripts/check-myah-409-graphql-diff.py \
+              "$scope" "$status" "$report.log" "$PR_BASE_SHA" "$PR_NUMBER"; then
+              {
+                echo "# GraphQL ${scope} Analysis Error"
+                echo
+                cat "$report.log"
+              } > "$report"
+              return 1
+            fi
+          }
+          check_graphql core main-schema-introspection.json \
+            current-schema-introspection.json graphql-schema-diff.md
+          check_graphql metadata main-metadata-schema-introspection.json \
+            current-metadata-schema-introspection.json graphql-metadata-diff.md
 
       - name: Check REST API Breaking Changes
         id: rest-diff
@@ -513,68 +513,42 @@ jobs:
           echo "=== CHECKING REST API FOR BREAKING CHANGES ==="
 
           # Use the Java-based openapi-diff via Docker
+          status=0
           docker run --rm -v "$(pwd):/specs" openapitools/openapi-diff:latest \
             --json /specs/rest-api-diff.json \
-            /specs/main-rest-api.json /specs/current-rest-api.json || echo "OpenAPI diff completed with exit code $?"
+            /specs/main-rest-api.json /specs/current-rest-api.json \
+            > rest-api-diff.log 2>&1 || status=$?
+          if [ "$status" -ne 0 ] || ! jq -e '
+              (.incompatible | type == "boolean") and
+              (.different | type == "boolean") and
+              (.compatible | type == "boolean") and
+              (.incompatible != .compatible) and
+              (.newEndpoints | type == "array") and
+              (.missingEndpoints | type == "array") and
+              (.changedOperations | type == "array")
+            ' rest-api-diff.json >/dev/null 2>&1; then
+            {
+              echo "# REST API Analysis Error"
+              cat rest-api-diff.log
+            } > rest-api-diff.md
+            echo "::error::REST core diff failed (exit $status or invalid JSON)"
+            exit 1
+          fi
 
-          # Check if the output file was created and is valid JSON
-          if [ -f "rest-api-diff.json" ] && jq empty rest-api-diff.json 2>/dev/null; then
-            # Check for breaking changes using Java openapi-diff JSON structure
-            incompatible=$(jq -r '.incompatible // false' rest-api-diff.json)
-            different=$(jq -r '.different // false' rest-api-diff.json)
-
-            # Count changes
-            new_endpoints=$(jq -r '.newEndpoints | length' rest-api-diff.json 2>/dev/null || echo "0")
-            missing_endpoints=$(jq -r '.missingEndpoints | length' rest-api-diff.json 2>/dev/null || echo "0")
-            changed_operations=$(jq -r '.changedOperations | length' rest-api-diff.json 2>/dev/null || echo "0")
-
-            if [ "$incompatible" = "true" ]; then
-              echo "❌ Breaking changes detected in REST API"
-              echo "breaking=true" >> $GITHUB_OUTPUT
-
-              # Generate breaking changes report
-              echo "# REST API Breaking Changes" > rest-api-diff.md
-              echo "" >> rest-api-diff.md
-              echo "⚠️ **Breaking changes detected that may affect existing API consumers**" >> rest-api-diff.md
-              echo "" >> rest-api-diff.md
-
-              # Parse and format the changes from Java openapi-diff
-              jq -r '
-                if (.missingEndpoints | length) > 0 then
-                  "## 🚨 Removed Endpoints (" + (.missingEndpoints | length | tostring) + ")\n" +
-                  (.missingEndpoints | map("- **" + .method + " " + .pathUrl + "**: " + (.summary // "")) | join("\n"))
-                else "" end,
-                if (.changedOperations | length) > 0 then
-                  "\n## ⚠️ Changed Operations (" + (.changedOperations | length | tostring) + ")\n" +
-                  (.changedOperations | map("- **" + .method + " " + .pathUrl + "**: " + (.summary // "Modified operation")) | join("\n"))
-                else "" end,
-                if (.newEndpoints | length) > 0 then
-                  "\n## ✅ New Endpoints (" + (.newEndpoints | length | tostring) + ")\n" +
-                  (.newEndpoints | map("- " + .method + " " + .pathUrl + ": " + (.summary // "")) | join("\n"))
-                else "" end
-              ' rest-api-diff.json >> rest-api-diff.md
-
-            elif [ "$different" = "true" ]; then
-              echo "📝 Non-breaking changes detected ($new_endpoints new endpoints, $missing_endpoints removed, $changed_operations changed) - no PR comment will be posted"
-              # Don't create markdown file for non-breaking changes to avoid PR comments
-            else
-              echo "✅ No changes detected in REST API"
-              # Don't create diff file for no changes
-            fi
+          if jq -e '.incompatible' rest-api-diff.json >/dev/null; then
+            echo "breaking=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "# REST API Breaking Changes"
+              echo
+              echo "Incompatible OpenAPI changes (full JSON attached)."
+              jq -r '(.missingEndpoints[]? |
+                  "- Removed: \(.method) \(.pathUrl)"),
+                (.changedOperations[]? |
+                  "- Changed: \(.method) \(.pathUrl)")' \
+                rest-api-diff.json
+            } > rest-api-diff.md
           else
-            echo "⚠️ OpenAPI diff tool could not process the files"
-
-            echo "# REST API Analysis Error" > rest-api-diff.md
-            echo "" >> rest-api-diff.md
-            echo "⚠️ **Error occurred while analyzing REST API changes**" >> rest-api-diff.md
-            echo "" >> rest-api-diff.md
-            echo "## Error Output" >> rest-api-diff.md
-            echo "\`\`\`" >> rest-api-diff.md
-            docker run --rm -v "$(pwd):/specs" openapitools/openapi-diff:latest /specs/main-rest-api.json /specs/current-rest-api.json 2>&1 >> rest-api-diff.md || echo "Could not capture error output"
-            echo "\`\`\`" >> rest-api-diff.md
-
-            # Don't fail the workflow for tool errors
-            echo "::warning::REST API analysis tool error - continuing workflow"
+            echo "REST core has no incompatible changes"
           fi
 
       - name: Check REST Metadata API Breaking Changes
@@ -584,152 +558,67 @@ jobs:
           echo "=== CHECKING REST METADATA API FOR BREAKING CHANGES ==="
 
           # Use the Java-based openapi-diff for metadata API as well
+          status=0
           docker run --rm -v "$(pwd):/specs" openapitools/openapi-diff:latest \
             --json /specs/rest-metadata-api-diff.json \
-            /specs/main-rest-metadata-api.json /specs/current-rest-metadata-api.json || echo "OpenAPI diff completed with exit code $?"
+            /specs/main-rest-metadata-api.json \
+            /specs/current-rest-metadata-api.json \
+            > rest-metadata-api-diff.log 2>&1 || status=$?
+          if [ "$status" -ne 0 ] || ! jq -e '
+              (.incompatible | type == "boolean") and
+              (.different | type == "boolean") and
+              (.compatible | type == "boolean") and
+              (.incompatible != .compatible) and
+              (.newEndpoints | type == "array") and
+              (.missingEndpoints | type == "array") and
+              (.changedOperations | type == "array")
+            ' rest-metadata-api-diff.json >/dev/null 2>&1; then
+            {
+              echo "# REST Metadata API Analysis Error"
+              cat rest-metadata-api-diff.log
+            } > rest-metadata-api-diff.md
+            echo "::error::REST metadata diff failed (exit $status or bad JSON)"
+            exit 1
+          fi
 
-          # Check if the output file was created and is valid JSON
-          if [ -f "rest-metadata-api-diff.json" ] && jq empty rest-metadata-api-diff.json 2>/dev/null; then
-            # Check for breaking changes using Java openapi-diff JSON structure
-            incompatible=$(jq -r '.incompatible // false' rest-metadata-api-diff.json)
-            different=$(jq -r '.different // false' rest-metadata-api-diff.json)
-
-            # Count changes
-            new_endpoints=$(jq -r '.newEndpoints | length' rest-metadata-api-diff.json 2>/dev/null || echo "0")
-            missing_endpoints=$(jq -r '.missingEndpoints | length' rest-metadata-api-diff.json 2>/dev/null || echo "0")
-            changed_operations=$(jq -r '.changedOperations | length' rest-metadata-api-diff.json 2>/dev/null || echo "0")
-
-            if [ "$incompatible" = "true" ]; then
-              echo "❌ Breaking changes detected in REST Metadata API"
-              echo "breaking=true" >> $GITHUB_OUTPUT
-
-              # Generate breaking changes report (only for breaking changes)
-              echo "# REST Metadata API Breaking Changes" > rest-metadata-api-diff.md
-              echo "" >> rest-metadata-api-diff.md
-              echo "⚠️ **Breaking changes detected that may affect existing API consumers**" >> rest-metadata-api-diff.md
-              echo "" >> rest-metadata-api-diff.md
-
-              # Parse and format the changes from Java openapi-diff
-              jq -r '
-                if (.missingEndpoints | length) > 0 then
-                  "## 🚨 Removed Endpoints (" + (.missingEndpoints | length | tostring) + ")\n" +
-                  (.missingEndpoints | map("- **" + .method + " " + .pathUrl + "**: " + (.summary // "")) | join("\n"))
-                else "" end,
-                if (.changedOperations | length) > 0 then
-                  "\n## ⚠️ Changed Operations (" + (.changedOperations | length | tostring) + ")\n" +
-                  (.changedOperations | map("- **" + .method + " " + .pathUrl + "**: " + (.summary // "Modified operation")) | join("\n"))
-                else "" end,
-                if (.newEndpoints | length) > 0 then
-                  "\n## ✅ New Endpoints (" + (.newEndpoints | length | tostring) + ")\n" +
-                  (.newEndpoints | map("- " + .method + " " + .pathUrl + ": " + (.summary // "")) | join("\n"))
-                else "" end
-              ' rest-metadata-api-diff.json >> rest-metadata-api-diff.md
-
-            elif [ "$different" = "true" ]; then
-              echo "📝 Non-breaking changes detected ($new_endpoints new endpoints, $missing_endpoints removed, $changed_operations changed) - no PR comment will be posted"
-              # Don't create markdown file for non-breaking changes to avoid PR comments
-            else
-              echo "✅ No changes detected in REST Metadata API"
-            fi
+          if jq -e '.incompatible' rest-metadata-api-diff.json >/dev/null; then
+            echo "breaking=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "# REST Metadata API Breaking Changes"
+              echo
+              echo "Incompatible OpenAPI changes (full JSON attached)."
+              jq -r '(.missingEndpoints[]? |
+                  "- Removed: \(.method) \(.pathUrl)"),
+                (.changedOperations[]? |
+                  "- Changed: \(.method) \(.pathUrl)")' \
+                rest-metadata-api-diff.json
+            } > rest-metadata-api-diff.md
           else
-            echo "⚠️ OpenAPI diff tool could not process the metadata API files"
-
-            echo "# REST Metadata API Analysis Error" > rest-metadata-api-diff.md
-            echo "" >> rest-metadata-api-diff.md
-            echo "⚠️ **Error occurred while analyzing REST Metadata API changes**" >> rest-metadata-api-diff.md
-            echo "" >> rest-metadata-api-diff.md
-            echo "## Error Output" >> rest-metadata-api-diff.md
-            echo "\`\`\`" >> rest-metadata-api-diff.md
-            docker run --rm -v "$(pwd):/specs" openapitools/openapi-diff:latest /specs/main-rest-metadata-api.json /specs/current-rest-metadata-api.json 2>&1 >> rest-metadata-api-diff.md || echo "Could not capture error output"
-            echo "\`\`\`" >> rest-metadata-api-diff.md
-
-            # Don't fail the workflow for tool errors
-            echo "::warning::REST Metadata API analysis tool error - continuing workflow"
+            echo "REST metadata has no incompatible changes"
           fi
 
       - name: Fail on breaking changes
         if: steps.validate-schemas.outputs.valid == 'true'
         run: |
-          breaking=false
-
-          if [ "${{ steps.graphql-diff.outputs.core_breaking }}" = "true" ]; then
-            echo "❌ GraphQL core schema has breaking changes"
-            breaking=true
-            if [ -f graphql-schema-diff.md ]; then
-              echo ""
-              cat graphql-schema-diff.md
-              echo ""
-            fi
-          fi
-
-          if [ "${{ steps.graphql-diff.outputs.metadata_breaking }}" = "true" ]; then
-            echo "❌ GraphQL metadata schema has breaking changes"
-            breaking=true
-            if [ -f graphql-metadata-diff.md ]; then
-              echo ""
-              cat graphql-metadata-diff.md
-              echo ""
-            fi
-          fi
-
-          if [ "${{ steps.rest-diff.outputs.breaking }}" = "true" ]; then
-            echo "❌ REST core API has breaking changes"
-            breaking=true
-            if [ -f rest-api-diff.json ]; then
-              echo ""
-              jq -r '
-                (if (.missingEndpoints | length) > 0 then
-                  "  Removed endpoints:\n" +
-                  (.missingEndpoints | map("    - " + (.method // "?") + " " + (.pathUrl // "?")) | join("\n"))
-                else "" end),
-                (if (.changedOperations | length) > 0 then
-                  "  Changed operations:\n" +
-                  (.changedOperations | map("    - " + (.method // "?") + " " + (.pathUrl // "?")) | join("\n"))
-                else "" end)
-              ' rest-api-diff.json | sed '/^$/d'
-              echo ""
-            fi
-          fi
-
-          if [ "${{ steps.rest-metadata-diff.outputs.breaking }}" = "true" ]; then
-            echo "❌ REST metadata API has breaking changes"
-            breaking=true
-            if [ -f rest-metadata-api-diff.json ]; then
-              echo ""
-              jq -r '
-                (if (.missingEndpoints | length) > 0 then
-                  "  Removed endpoints:\n" +
-                  (.missingEndpoints | map("    - " + (.method // "?") + " " + (.pathUrl // "?")) | join("\n"))
-                else "" end),
-                (if (.changedOperations | length) > 0 then
-                  "  Changed operations:\n" +
-                  (.changedOperations | map("    - " + (.method // "?") + " " + (.pathUrl // "?")) | join("\n"))
-                else "" end)
-              ' rest-metadata-api-diff.json | sed '/^$/d'
-              echo ""
-            fi
-          fi
-
-          if [ "$breaking" = "true" ]; then
-            echo ""
-            echo "This PR introduces breaking changes to the public API."
-            echo "If intentional, deprecate the old endpoint and introduce a new one."
-            echo "See the breaking changes report artifact and PR comment for details."
+          # GraphQL analysis fails in its own step on any unaudited break.
+          if [ "${{ steps.rest-diff.outputs.breaking }}" = true ] ||
+             [ "${{ steps.rest-metadata-diff.outputs.breaking }}" = true ]; then
+            echo "❌ Unapproved breaking REST API changes (see report)."
             exit 1
           fi
-
-          echo "✅ No breaking API changes detected"
+          echo "✅ No unapproved breaking API changes detected"
 
       - name: Upload breaking changes report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: breaking-changes-report
-          path: |
-            *-diff.md
-            *-diff.json
-          if-no-files-found: ignore
-          retention-days: 3
+         name: breaking-changes-report
+         path: |
+           *-diff.md
+           *-diff.json
+         if-no-files-found: ignore
+         retention-days: 3
 
       - name: Cleanup servers
         if: always()

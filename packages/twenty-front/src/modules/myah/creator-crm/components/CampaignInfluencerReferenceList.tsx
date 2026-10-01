@@ -7,6 +7,12 @@ import { styled } from '@linaria/react';
 import { useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
+type SocialProfile = ObjectRecord & {
+  creatorId: string;
+  platform: string;
+  handle?: string | null;
+};
+
 type Membership = ObjectRecord & {
   campaignId: string;
   creatorId: string | null;
@@ -14,7 +20,6 @@ type Membership = ObjectRecord & {
   creator?: {
     id: string;
     name?: string | null;
-    instagramUsername?: string | null;
   } | null;
 };
 
@@ -147,13 +152,21 @@ export const CampaignInfluencerReferenceList = ({
   campaignCreatorMetadataId,
   creatorMetadataId,
   creatorFieldIds,
+  socialProfileMetadataId,
+  socialProfileFieldIds,
   stageOptions,
   onOpenCreatorContext,
 }: {
   campaignId: string;
   campaignCreatorMetadataId: string;
   creatorMetadataId?: string;
-  creatorFieldIds?: { name?: string; instagramUsername?: string };
+  creatorFieldIds?: { name?: string; socialProfiles?: string };
+  socialProfileMetadataId?: string;
+  socialProfileFieldIds?: {
+    creator?: string;
+    platform?: string;
+    handle?: string;
+  };
   stageOptions: Array<{ value: string; label: string }>;
   onOpenCreatorContext?: (request: RecordIndexOpenRequest) => void;
 }) => {
@@ -179,11 +192,27 @@ export const CampaignInfluencerReferenceList = ({
     !!creatorFieldIds?.name &&
     creatorPermissions.restrictedFields?.[creatorFieldIds.name]?.canRead !==
       false;
+  const profilePermissions = useObjectPermissionsForObject(
+    socialProfileMetadataId ?? '',
+  );
   const canReadCreatorHandle =
     canReadCreator &&
-    !!creatorFieldIds?.instagramUsername &&
-    creatorPermissions.restrictedFields?.[creatorFieldIds.instagramUsername]
-      ?.canRead !== false;
+    !!creatorFieldIds?.socialProfiles &&
+    creatorPermissions.restrictedFields?.[creatorFieldIds.socialProfiles]
+      ?.canRead !== false &&
+    !!socialProfileMetadataId &&
+    profilePermissions.canReadObjectRecords &&
+    !!socialProfileFieldIds?.creator &&
+    !!socialProfileFieldIds.platform &&
+    !!socialProfileFieldIds.handle &&
+    [
+      socialProfileFieldIds.creator,
+      socialProfileFieldIds.platform,
+      socialProfileFieldIds.handle,
+    ].every(
+      (fieldId) =>
+        profilePermissions.restrictedFields?.[fieldId]?.canRead !== false,
+    );
   const {
     records,
     totalCount,
@@ -207,7 +236,6 @@ export const CampaignInfluencerReferenceList = ({
             creator: {
               id: true,
               ...(canReadCreatorName ? { name: true } : {}),
-              ...(canReadCreatorHandle ? { instagramUsername: true } : {}),
             },
           }
         : {}),
@@ -218,17 +246,75 @@ export const CampaignInfluencerReferenceList = ({
     hasReadPermission && !error
       ? records.filter((record) => record.campaignId === campaignId)
       : [];
+  const creatorIds = [
+    ...new Set(
+      safeRecords.flatMap((record) =>
+        canReadCreator &&
+        record.creator?.id === record.creatorId &&
+        record.creatorId
+          ? [record.creatorId]
+          : [],
+      ),
+    ),
+  ];
+  const {
+    records: profiles,
+    totalCount: profileTotalCount,
+    loading: profilesLoading,
+    error: profilesError,
+    hasReadPermission: hasProfileReadPermission,
+    hasNextPage: hasMoreProfiles,
+    isFetchingMoreRecords: isFetchingMoreProfiles,
+    fetchMoreRecords: fetchMoreProfiles,
+    refetch: refetchProfiles,
+  } = useFindManyRecords<SocialProfile>({
+    objectNameSingular: 'socialProfile',
+    filter: {
+      and: [
+        { creatorId: { in: creatorIds } },
+        { platform: { eq: 'INSTAGRAM' } },
+      ],
+    },
+    recordGqlFields: {
+      id: true,
+      creatorId: true,
+      platform: true,
+      handle: true,
+    },
+    limit: 60,
+    skip: !canReadCreatorHandle || creatorIds.length === 0,
+  });
+  const profilesComplete =
+    canReadCreatorHandle &&
+    hasProfileReadPermission &&
+    !profilesLoading &&
+    !profilesError &&
+    !hasMoreProfiles &&
+    typeof profileTotalCount === 'number' &&
+    profiles.length === profileTotalCount;
+  const instagramProfiles = (record: Membership) =>
+    canReadCreatorHandle &&
+    hasProfileReadPermission &&
+    !profilesError &&
+    record.creator?.id === record.creatorId
+      ? profiles.filter(
+          (profile) =>
+            profile.creatorId === record.creatorId &&
+            profile.platform === 'INSTAGRAM',
+        )
+      : [];
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const shownRecords = safeRecords.filter(
     (record) =>
       !normalizedSearch ||
       (canReadCreator &&
-        [
-          canReadCreatorName ? record.creator?.name : null,
-          canReadCreatorHandle ? record.creator?.instagramUsername : null,
-        ].some((value) =>
-          value?.toLocaleLowerCase().includes(normalizedSearch),
-        )),
+        ((canReadCreatorName &&
+          record.creator?.name
+            ?.toLocaleLowerCase()
+            .includes(normalizedSearch)) ||
+          instagramProfiles(record).some((profile) =>
+            profile.handle?.toLocaleLowerCase().includes(normalizedSearch),
+          ))),
   );
 
   if (!hasReadPermission) {
@@ -253,6 +339,22 @@ export const CampaignInfluencerReferenceList = ({
             ? `${safeRecords.length} loaded of ${totalCount}`
             : `${safeRecords.length} loaded · total unknown`}
         </span>
+        {canReadCreatorHandle && hasMoreProfiles && !profilesError && (
+          <button
+            type="button"
+            disabled={isFetchingMoreProfiles}
+            onClick={() => void fetchMoreProfiles()}
+          >
+            {isFetchingMoreProfiles
+              ? 'Loading more profiles…'
+              : 'Load more profiles'}
+          </button>
+        )}
+        {canReadCreatorHandle && profilesError && (
+          <button type="button" onClick={() => void refetchProfiles()}>
+            Retry profiles
+          </button>
+        )}
       </StyledToolbar>
       {!error && !loading && safeRecords.length > 0 && (
         <StyledColumnHeaders aria-hidden="true">
@@ -281,9 +383,11 @@ export const CampaignInfluencerReferenceList = ({
             const name =
               (canReadCreatorName && creator?.name?.trim()) ||
               'Creator unavailable';
-            const handle = canReadCreatorHandle
-              ? creator?.instagramUsername?.trim()
-              : null;
+            const profiles = instagramProfiles(record);
+            const handle =
+              profilesComplete && profiles.length === 1
+                ? profiles[0].handle?.trim()
+                : null;
             const stage =
               (canReadStage &&
                 stageOptions.find((option) => option.value === record.stage)
@@ -312,9 +416,18 @@ export const CampaignInfluencerReferenceList = ({
                   <StyledIdentity>
                     <StyledName>{name}</StyledName>
                     <span>
-                      {handle
-                        ? `@${handle.replace(/^@/, '')}`
-                        : 'Handle unavailable'}
+                      {!creator ||
+                      !canReadCreatorHandle ||
+                      !hasProfileReadPermission ||
+                      profilesError
+                        ? 'Handle unavailable'
+                        : !profilesComplete
+                          ? 'Instagram profiles still loading'
+                          : profiles.length > 1
+                            ? `${profiles.length} Instagram accounts`
+                            : handle
+                              ? `@${handle.replace(/^@/, '')}`
+                              : 'Handle unavailable'}
                     </span>
                   </StyledIdentity>
                 </StyledCreator>
@@ -331,7 +444,11 @@ export const CampaignInfluencerReferenceList = ({
           {shownRecords.length === 0 && (
             <StyledFeedback>
               {normalizedSearch
-                ? 'No matches in loaded influencers. Load more to search further.'
+                ? canReadCreatorHandle && profilesError
+                  ? 'Profile search is unavailable. Retry profiles.'
+                  : hasMoreProfiles && canReadCreatorHandle
+                    ? 'No matches in loaded influencers or profiles. Load more profiles to search further.'
+                    : 'No matches in loaded influencers. Load more to search further.'
                 : hasNextPage
                   ? 'No influencers in the loaded page. Load more to continue.'
                   : totalCount === 0

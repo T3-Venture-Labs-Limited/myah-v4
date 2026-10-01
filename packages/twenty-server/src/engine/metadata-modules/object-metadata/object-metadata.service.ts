@@ -45,6 +45,7 @@ import {
 import { computeFlatDefaultRecordPageLayoutToCreate } from 'src/engine/metadata-modules/object-metadata/utils/compute-flat-default-record-page-layout-to-create.util';
 import { computeFlatRecordPageFieldsViewToCreate } from 'src/engine/metadata-modules/object-metadata/utils/compute-flat-record-page-fields-view-to-create.util';
 import { computeFlatViewFieldsToCreate } from 'src/engine/metadata-modules/object-metadata/utils/compute-flat-view-fields-to-create.util';
+import { resolveWorkspaceUpgradeSchemaWriteAuthority } from 'src/engine/metadata-modules/utils/workspace-upgrade-schema-write-scope.util';
 import {
   assertProductSchemaWriteAuthority,
   type ProductSchemaWriteAuthority,
@@ -284,7 +285,11 @@ export class ObjectMetadataService extends TypeOrmQueryService<ObjectMetadataEnt
     ownerFlatApplication?: FlatApplication;
     schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatObjectMetadata> {
-    assertProductSchemaWriteAuthority(schemaWriteAuthority);
+    assertProductSchemaWriteAuthority(
+      schemaWriteAuthority === undefined
+        ? resolveWorkspaceUpgradeSchemaWriteAuthority(workspaceId)
+        : schemaWriteAuthority,
+    );
 
     const deletedObjectMetadataDtos = await this.deleteManyObjectMetadatas({
       deleteObjectInputs: [deleteObjectInput],

@@ -5,6 +5,7 @@ import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { CommandLogger } from 'src/database/commands/logger';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+import { runRegisteredWorkspaceUpgrade } from 'src/engine/metadata-modules/utils/workspace-upgrade-schema-write-scope.util';
 
 export type WorkspaceCommandOptions = {
   workspaceId?: Set<string>;
@@ -119,13 +120,15 @@ export abstract class WorkspaceCommandRunner<
         workspaceCountLimit: options.workspaceCountLimit,
         dryRun: options.dryRun,
         callback: async (context) => {
-          await this.runOnWorkspace({
-            options,
-            workspaceId: context.workspaceId,
-            dataSource: context.dataSource,
-            index: context.index,
-            total: context.total,
-          });
+          await runRegisteredWorkspaceUpgrade(this, context.workspaceId, () =>
+            this.runOnWorkspace({
+              options,
+              workspaceId: context.workspaceId,
+              dataSource: context.dataSource,
+              index: context.index,
+              total: context.total,
+            }),
+          );
         },
       });
 

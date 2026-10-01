@@ -1,3 +1,5 @@
+import { ForbiddenException } from '@nestjs/common';
+
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { CreatorImportService } from 'src/modules/myah-creator-social-profile/services/creator-import.service';
 
@@ -24,6 +26,8 @@ const objectIds = {
 const fields = [
   ['creator-name', objectIds.creator, 'name'],
   ['creator-email', objectIds.creator, 'email'],
+  ['profile-id', objectIds.socialProfile, 'id'],
+  ['profile-deleted', objectIds.socialProfile, 'deletedAt'],
   ['profile-name', objectIds.socialProfile, 'name'],
   ['profile-creator', objectIds.socialProfile, 'creator'],
   ['profile-platform', objectIds.socialProfile, 'platform'],
@@ -100,6 +104,9 @@ const createService = () => {
 const setPermissions = (
   canUpdateObjectRecords: boolean,
   restrictedFieldIds: string[] = [],
+  rowPredicates: Array<{ roleId: string; objectMetadataId: string }> = [],
+  canReadProfiles = true,
+  unreadableFieldIds: string[] = [],
 ) => {
   (getWorkspaceContext as jest.Mock).mockReturnValue({
     objectIdByNameSingular: objectIds,
@@ -110,18 +117,29 @@ const setPermissions = (
     },
     userWorkspaceRoleMap: {},
     apiKeyRoleMap: {},
+    flatRowLevelPermissionPredicateMaps: {
+      byUniversalIdentifier: Object.fromEntries(
+        rowPredicates.map((predicate, index) => [index, predicate]),
+      ),
+    },
     permissionsPerRoleId: {
       'role-1': Object.fromEntries(
         Object.values(objectIds).map((objectId) => [
           objectId,
           {
             canUpdateObjectRecords,
-            restrictedFields: Object.fromEntries(
-              restrictedFieldIds.map((fieldId) => [
+            canReadObjectRecords:
+              objectId !== objectIds.socialProfile || canReadProfiles,
+            restrictedFields: Object.fromEntries([
+              ...restrictedFieldIds.map((fieldId) => [
                 fieldId,
                 { canUpdate: false },
               ]),
-            ),
+              ...unreadableFieldIds.map((fieldId) => [
+                fieldId,
+                { canRead: false },
+              ]),
+            ]),
           },
         ]),
       ),
@@ -163,6 +181,59 @@ describe('CreatorImportService', () => {
 
     await expect(service.commit(input, authContext)).rejects.toThrow(
       'Creator import write permission is required',
+    );
+    expect(operationService.execute).not.toHaveBeenCalled();
+  });
+
+  it('rejects row-scoped writes to any imported record before raw writes', async () => {
+    for (const objectMetadataId of Object.values(objectIds)) {
+      setPermissions(true, [], [{ roleId: 'role-1', objectMetadataId }]);
+      const { service, operationService, writer } = createService();
+
+      await expect(service.commit(input, authContext)).rejects.toThrow(
+        'Creator import cannot use row-scoped write permissions',
+      );
+      expect(operationService.execute).not.toHaveBeenCalled();
+      expect(writer.createCreator).not.toHaveBeenCalled();
+    }
+  });
+
+  it('rejects imports when matching existing profiles would bypass read permission', async () => {
+    setPermissions(true, [], [], false);
+    const { service, operationService } = createService();
+
+    await expect(service.commit(input, authContext)).rejects.toThrow(
+      'Creator import write permission is required',
+    );
+    expect(operationService.execute).not.toHaveBeenCalled();
+  });
+
+  it('rejects a role unable to read any raw identity-match field before lookup', async () => {
+    for (const fieldId of [
+      'profile-id',
+      'profile-creator',
+      'profile-platform',
+      'profile-locator',
+      'profile-account',
+      'profile-deleted',
+    ]) {
+      setPermissions(true, [], [], true, [fieldId]);
+      const { service, operationService, writer } = createService();
+
+      await expect(service.commit(input, authContext)).rejects.toThrow(
+        'Creator import write permission is required',
+      );
+      expect(operationService.execute).not.toHaveBeenCalled();
+      expect(writer.preserveSocialProfile).not.toHaveBeenCalled();
+    }
+  });
+
+  it('reports a restricted identity match as forbidden, before any write', async () => {
+    setPermissions(true, [], [], true, ['profile-deleted']);
+    const { service, operationService } = createService();
+
+    await expect(service.commit(input, authContext)).rejects.toBeInstanceOf(
+      ForbiddenException,
     );
     expect(operationService.execute).not.toHaveBeenCalled();
   });
