@@ -11,10 +11,9 @@ export type CreatorImportClassification =
 
 export type ExistingCreatorSocialProfile = {
   id: string;
-  instagramLink?: { primaryLinkUrl?: string | null } | null;
-  tiktokLink?: { primaryLinkUrl?: string | null } | null;
-  youtubeLink?: { primaryLinkUrl?: string | null } | null;
-  twitterLink?: { primaryLinkUrl?: string | null } | null;
+  creatorId: string;
+  platform: string;
+  profileUrl?: string | null;
 };
 
 export type CreatorImportCommitPlan = {

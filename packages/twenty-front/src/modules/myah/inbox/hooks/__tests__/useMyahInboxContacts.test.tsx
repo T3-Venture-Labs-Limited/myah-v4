@@ -43,7 +43,7 @@ const contact = (id: string): MyahInboxContact => ({
   id,
   identityKind: 'CREATOR',
   displayName: id,
-  instagramUsername: id,
+  instagramDisplayHandle: id,
   creator: { id: `creator-${id}`, name: id },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'EMAIL',

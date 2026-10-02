@@ -1,6 +1,11 @@
 import { useCallback } from 'react';
+import { useApolloClient } from '@apollo/client/react';
 
 import { triggerUpdateRecordOptimisticEffect } from '@/apollo/optimistic-effect/utils/triggerUpdateRecordOptimisticEffect';
+import {
+  RETIRE_SOCIAL_PROFILE,
+  toCanonicalSocialProfileRecord,
+} from '@/myah/creator-crm/socialProfileOperations';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
@@ -27,6 +32,7 @@ export const useDeleteOneRecord = ({
 }: useDeleteOneRecordProps) => {
   const { upsertRecordsInStore } = useUpsertRecordsInStore();
   const apolloCoreClient = useApolloCoreClient();
+  const apolloMetadataClient = useApolloClient();
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -44,8 +50,10 @@ export const useDeleteOneRecord = ({
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
   const { refetchAggregateQueries } = useRefetchAggregateQueries();
 
-  const mutationResponseField =
-    getDeleteOneRecordMutationResponseField(objectNameSingular);
+  const isManagedSocialProfile = objectNameSingular === 'socialProfile';
+  const mutationResponseField = isManagedSocialProfile
+    ? 'retireSocialProfile'
+    : getDeleteOneRecordMutationResponseField(objectNameSingular);
 
   const deleteOneRecord = useCallback(
     async (idToDelete: string) => {
@@ -103,30 +111,40 @@ export const useDeleteOneRecord = ({
         });
       }
 
-      const deletedRecord = await apolloCoreClient
+      const deletedRecord = await (
+        isManagedSocialProfile ? apolloMetadataClient : apolloCoreClient
+      )
         .mutate({
-          mutation: deleteOneRecordMutation,
-          variables: {
-            idToDelete: idToDelete,
-          },
-          update: (cache, { data }) => {
-            const record = (data as Record<string, any>)?.[
-              mutationResponseField
-            ];
-            if (!isDefined(record) || !shouldHandleOptimisticCache) {
-              return;
-            }
+          mutation: isManagedSocialProfile
+            ? RETIRE_SOCIAL_PROFILE
+            : deleteOneRecordMutation,
+          fetchPolicy: isManagedSocialProfile ? 'no-cache' : undefined,
+          variables: isManagedSocialProfile
+            ? { input: { id: idToDelete } }
+            : { idToDelete: idToDelete },
+          update: isManagedSocialProfile
+            ? undefined
+            : (cache, { data }) => {
+                const responseRecord = (
+                  data as Record<string, ObjectRecord | undefined>
+                )?.[mutationResponseField];
+                if (
+                  !isDefined(responseRecord) ||
+                  !shouldHandleOptimisticCache
+                ) {
+                  return;
+                }
 
-            triggerUpdateRecordOptimisticEffect({
-              cache,
-              objectMetadataItem,
-              currentRecord: optimisticRecordNode,
-              updatedRecord: record,
-              objectMetadataItems,
-              objectPermissionsByObjectMetadataId,
-              upsertRecordsInStore,
-            });
-          },
+                triggerUpdateRecordOptimisticEffect({
+                  cache,
+                  objectMetadataItem,
+                  currentRecord: optimisticRecordNode,
+                  updatedRecord: responseRecord,
+                  objectMetadataItems,
+                  objectPermissionsByObjectMetadataId,
+                  upsertRecordsInStore,
+                });
+              },
         })
         .catch((error) => {
           if (!shouldHandleOptimisticCache) {
@@ -173,17 +191,44 @@ export const useDeleteOneRecord = ({
         },
       });
 
-      return (
-        (deletedRecord.data as Record<string, any>)?.[mutationResponseField] ??
-        null
-      );
+      const responseRecord = (
+        deletedRecord.data as Record<string, ObjectRecord | undefined>
+      )?.[mutationResponseField];
+
+      if (isManagedSocialProfile && isDefined(responseRecord)) {
+        const record = toCanonicalSocialProfileRecord(responseRecord);
+        updateRecordFromCache({
+          objectMetadataItems,
+          objectMetadataItem,
+          cache: apolloCoreClient.cache,
+          record,
+          recordGqlFields: { deletedAt: true },
+          objectPermissionsByObjectMetadataId,
+        });
+        upsertRecordsInStore({ partialRecords: [record] });
+        if (shouldHandleOptimisticCache) {
+          triggerUpdateRecordOptimisticEffect({
+            cache: apolloCoreClient.cache,
+            objectMetadataItem,
+            currentRecord: optimisticRecordNode,
+            updatedRecord: record,
+            objectMetadataItems,
+            objectPermissionsByObjectMetadataId,
+            upsertRecordsInStore,
+          });
+        }
+        return record;
+      }
+      return responseRecord ?? null;
     },
     [
       getRecordFromCache,
       apolloCoreClient,
+      apolloMetadataClient,
       objectMetadataItem,
       objectMetadataItems,
       deleteOneRecordMutation,
+      isManagedSocialProfile,
       refetchAggregateQueries,
       mutationResponseField,
       objectPermissionsByObjectMetadataId,

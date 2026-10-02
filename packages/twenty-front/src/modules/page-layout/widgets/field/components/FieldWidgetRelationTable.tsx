@@ -1,3 +1,9 @@
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
+import { buildFieldWidgetRelationTableScope } from '@/page-layout/widgets/field/utils/buildFieldWidgetRelationTableScope';
 import { RecordFilterValueDependenciesContext } from '@/object-record/record-filter/contexts/RecordFilterValueDependenciesContext';
 import { type FieldDefinition } from '@/object-record/record-field/ui/types/FieldDefinition';
 import { type FieldRelationMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
@@ -34,6 +40,10 @@ export const FieldWidgetRelationTable = ({
   const widget = useCurrentWidget();
 
   const isPageLayoutInEditMode = useIsPageLayoutInEditMode();
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const currentUserWorkspace = useAtomStateValue(currentUserWorkspaceState);
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
 
   const viewId = isFieldWidget(widget)
     ? widget.configuration.viewId
@@ -44,10 +54,27 @@ export const FieldWidgetRelationTable = ({
   const recordPageObjectMetadataNameSingular =
     fieldDefinition.metadata.objectMetadataNameSingular;
 
+  const source = objectMetadataItems.find(
+    (item) => item.nameSingular === recordPageObjectMetadataNameSingular,
+  );
+  const target = objectMetadataItems.find(
+    (item) => item.id === relationObjectMetadataId,
+  );
+  const scope = buildFieldWidgetRelationTableScope({
+    recordId,
+    source,
+    target,
+    definition: fieldDefinition,
+    permissions: isDefined(currentUserWorkspace?.objectsPermissions)
+      ? objectPermissionsByObjectMetadataId
+      : undefined,
+  });
+
   if (
     !isDefined(viewId) ||
-    !isDefined(relationObjectMetadataId) ||
-    !isDefined(recordPageObjectMetadataNameSingular)
+    !isDefined(recordPageObjectMetadataNameSingular) ||
+    !isDefined(currentWorkspace?.id) ||
+    !isDefined(scope)
   ) {
     return null;
   }
@@ -68,6 +95,9 @@ export const FieldWidgetRelationTable = ({
           widgetId={widget.id}
           isReadOnly={isPageLayoutInEditMode}
           isEmptyStateHidden
+          queryOnlyRecordFilters={[scope.filter]}
+          requiredCreationInput={scope.creationInput}
+          scopeInstanceId={`${currentWorkspace.id}-${widget.id}-${recordId}`}
         />
       </StyledContainer>
     </RecordFilterValueDependenciesContext.Provider>

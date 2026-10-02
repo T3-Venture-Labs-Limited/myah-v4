@@ -159,6 +159,49 @@ describe('useCreateNewIndexRecord', () => {
     mockOnRecordCreated.mockResolvedValue(undefined);
   });
 
+  it('forces widget relation ownership after editable saved filters and rejects caller reassignment', async () => {
+    const ownedId = '048c7cbe-676d-40f1-98a2-4c3444996381';
+    const conflictingId = '148c7cbe-676d-40f1-98a2-4c3444996381';
+    mockBuildRecordInputFromFilters.mockReturnValue({
+      creatorId: conflictingId,
+    });
+    const wrapper = ({ children }: ScopedContextStoreWrapperProps) => (
+      <StoreWrapper>
+        <RecordIndexContextProvider
+          value={{
+            ...recordIndexContextValue,
+            requiredCreationInput: { creatorId: ownedId },
+          }}
+        >
+          {children}
+        </RecordIndexContextProvider>
+      </StoreWrapper>
+    );
+    try {
+      const { result } = renderHook(
+        () =>
+          useCreateNewIndexRecord({
+            objectMetadataItem,
+            instanceId: 'creator-index-list-a',
+          }),
+        { wrapper },
+      );
+      await act(async () => {
+        await result.current.createNewIndexRecord();
+      });
+      expect(mockCreateOneRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ creatorId: ownedId }),
+      );
+      mockCreateOneRecord.mockClear();
+      await expect(
+        result.current.createNewIndexRecord({ creatorId: conflictingId }),
+      ).rejects.toThrow('different owner');
+      expect(mockCreateOneRecord).not.toHaveBeenCalled();
+    } finally {
+      mockBuildRecordInputFromFilters.mockReturnValue({});
+    }
+  });
+
   it('uses the scoped current view Open In choice instead of the main index state', async () => {
     const { result } = renderHook(
       () =>

@@ -1,8 +1,15 @@
+import { Injectable, Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+
 import { plainToClass } from 'class-transformer';
 
 import { validateSync } from 'class-validator';
 
-import { ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
+import {
+  ConfigVariables,
+  validate,
+} from 'src/engine/core-modules/twenty-config/config-variables';
 import { ConfigVariableType } from 'src/engine/core-modules/twenty-config/enums/config-variable-type.enum';
 import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
 import { TypedReflect } from 'src/utils/typed-reflect';
@@ -765,6 +772,179 @@ describe('managed email configuration', () => {
         'BILLING_STRIPE_PUBLISHABLE_KEY',
       ]),
     );
+  });
+});
+
+describe('opt-in bootstrap config attestation', () => {
+  const key = Symbol.for('myah.bootstrap.config.attestor');
+  const flag = 'MYAH_BOOTSTRAP_CONFIG_ATTESTATION';
+  const denied = 'Bootstrap configuration attestation failed';
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { NODE_ENV: 'test' };
+    Reflect.deleteProperty(globalThis, key);
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    Reflect.deleteProperty(globalThis, key);
+    jest.dontMock('dotenv');
+  });
+
+  it('leaves normal validation unchanged when not requested', () => {
+    expect(validate({ NODE_PORT: '31415' }).NODE_PORT).toBe(31415);
+  });
+
+  it.each([undefined, '0', '', 'yes'])(
+    'fails closed for a missing or invalid attestor (result %s)',
+    (result) => {
+      process.env[flag] = '1';
+      if (result !== undefined) {
+        Reflect.set(globalThis, key, () => result);
+      }
+      expect(() => validate({ NODE_PORT: '31415' })).toThrow(denied);
+    },
+  );
+
+  it('rejects asynchronous and throwing attestors without leaking their errors', async () => {
+    jest.useRealTimers();
+    const unhandled: unknown[] = [];
+    const captureUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', captureUnhandled);
+    try {
+      process.env[flag] = '1';
+      for (const attest of [
+        () => Promise.resolve(true),
+        () => Promise.reject(new Error('synthetic-secret')),
+        async () => {
+          throw new Error('synthetic-secret');
+        },
+        () => {
+          throw new Error('synthetic-secret');
+        },
+      ]) {
+        Reflect.set(globalThis, key, attest);
+        expect(() => validate({})).toThrow(denied);
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(unhandled).toEqual([]);
+      process.env[flag] = 'invalid';
+      expect(() => validate({})).toThrow(denied);
+    } finally {
+      process.off('unhandledRejection', captureUnhandled);
+      jest.useFakeTimers();
+    }
+  });
+
+  it('attests the actual ConfigModule validated object before a provider constructor', async () => {
+    jest.useRealTimers();
+    try {
+      process.env[flag] = '1';
+      process.env.NODE_PORT = '31415';
+      let inspected: ConfigVariables | undefined;
+      const events: string[] = [];
+      Reflect.set(globalThis, key, (_raw: unknown, config: ConfigVariables) => {
+        events.push('attest');
+        inspected = config;
+        return config.NODE_PORT === 31415;
+      });
+      @Injectable()
+      class ConstructorSentinel {
+        constructor(private readonly config: ConfigService) {
+          events.push('construct');
+          expect(config.get('NODE_PORT')).toBe(31415);
+          expect(inspected).toBeDefined();
+        }
+      }
+      // Import resolution runs ConfigModule.forRoot's real validate callback.
+      @Module({
+        imports: [ConfigModule.forRoot({ ignoreEnvFile: true, validate })],
+        providers: [ConstructorSentinel],
+      })
+      class FixtureModule {}
+      const app = await NestFactory.createApplicationContext(FixtureModule, {
+        logger: false,
+        abortOnError: false,
+      });
+      try {
+        expect(events).toEqual(['attest', 'construct']);
+        expect(app.get(ConfigService).get('NODE_PORT')).toBe(31415);
+      } finally {
+        await app.close();
+      }
+    } finally {
+      jest.useFakeTimers();
+    }
+  });
+
+  it('stops before a provider constructor on the actual ConfigModule path', async () => {
+    jest.useRealTimers();
+    try {
+      process.env[flag] = '1';
+      let constructed = false;
+      class ConstructorSentinel {
+        constructor() {
+          constructed = true;
+        }
+      }
+      @Module({
+        imports: [ConfigModule.forRoot({ ignoreEnvFile: true, validate })],
+        providers: [ConstructorSentinel],
+      })
+      class FixtureModule {}
+      await expect(
+        NestFactory.createApplicationContext(FixtureModule, {
+          logger: false,
+          abortOnError: false,
+        }),
+      ).rejects.toThrow(denied);
+      expect(constructed).toBe(false);
+    } finally {
+      jest.useFakeTimers();
+    }
+  });
+
+  it('checks raw PG/Redis and detects a changed real captured core target', () => {
+    const first = 'postgres://dummy:dummy@127.0.0.1:5432/first';
+    const second = 'postgres://dummy:dummy@127.0.0.1:5432/second';
+    const redis = 'redis://127.0.0.1:6379';
+    process.env.PG_DATABASE_URL = first;
+    process.env.REDIS_URL = redis;
+    jest.doMock('dotenv', () => ({ config: () => ({ parsed: {} }) }));
+    let captured: typeof import('src/database/typeorm/core/core.datasource');
+    jest.isolateModules(() => {
+      captured = require('src/database/typeorm/core/core.datasource');
+    });
+    process.env[flag] = '1';
+    Reflect.set(
+      globalThis,
+      key,
+      (raw: Record<string, unknown>, config: ConfigVariables) =>
+        raw.PG_DATABASE_URL === process.env.PG_DATABASE_URL &&
+        config.PG_DATABASE_URL === process.env.PG_DATABASE_URL &&
+        raw.REDIS_URL === process.env.REDIS_URL &&
+        config.REDIS_URL === process.env.REDIS_URL &&
+        captured.typeORMCoreModuleOptions.type === 'postgres' &&
+        captured.typeORMCoreModuleOptions.url === process.env.PG_DATABASE_URL &&
+        captured.connectionSource.options.type === 'postgres' &&
+        captured.connectionSource.options.url === process.env.PG_DATABASE_URL,
+    );
+    expect(
+      validate({ PG_DATABASE_URL: first, REDIS_URL: redis }),
+    ).toBeDefined();
+    process.env.PG_DATABASE_URL = second;
+    expect(captured!.typeORMCoreModuleOptions).toMatchObject({ url: first });
+    expect(captured!.connectionSource.options).toMatchObject({ url: first });
+    expect(() =>
+      validate({ PG_DATABASE_URL: second, REDIS_URL: redis }),
+    ).toThrow(denied);
+    process.env.PG_DATABASE_URL = first;
+    process.env.REDIS_URL = 'redis://127.0.0.1:6380';
+    expect(() =>
+      validate({ PG_DATABASE_URL: first, REDIS_URL: redis }),
+    ).toThrow(denied);
   });
 });
 

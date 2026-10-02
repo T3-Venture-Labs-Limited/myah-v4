@@ -38,6 +38,7 @@ import { assertUpdateOneArgs } from 'src/engine/api/graphql/direct-execution/uti
 import { type ResolverNameMapEntry } from 'src/engine/api/graphql/direct-execution/utils/build-resolver-name-map.util';
 import { buildWorkspaceSchemaBuilderContext } from 'src/engine/api/graphql/direct-execution/utils/build-workspace-schema-builder-context.util';
 import { extractArgumentsFromAst } from 'src/engine/api/graphql/direct-execution/utils/extract-arguments-from-ast.util';
+import { validateWorkspaceOperation } from 'src/engine/api/graphql/direct-execution/utils/validate-workspace-operation.util';
 import { graphQLBuildFragmentMap } from 'src/engine/api/graphql/direct-execution/utils/graphql-build-fragment-map.util';
 import { graphQLBuildPartialResolveInfo } from 'src/engine/api/graphql/direct-execution/utils/graphql-build-partial-resolve-info.util';
 import { graphQLExtractTopLevelFields } from 'src/engine/api/graphql/direct-execution/utils/graphql-extract-top-level-fields.util';
@@ -167,11 +168,101 @@ export class DirectExecutionService {
     hasIntrospectionFields: boolean,
     hasWorkspaceFields: boolean,
   ): Promise<DirectExecutionResult | null> {
+    let checkedVariables: Record<string, unknown> = {};
+    let activeWorkspaceFields: FieldNode[] = [];
+    if (hasWorkspaceFields || hasIntrospectionFields) {
+      if (!req.workspace) {
+        return {
+          errors: [
+            {
+              message: 'Workspace schema unavailable.',
+              extensions: { code: 'INTERNAL_SERVER_ERROR' },
+            },
+          ],
+        };
+      }
+      try {
+        const schemaSDLResult =
+          await this.workspaceGraphqlSchemaSDLService.getOrComputeSchemaSDL(
+            req.workspace,
+            req.application?.id ?? undefined,
+          );
+        if (!schemaSDLResult) {
+          return {
+            errors: [
+              {
+                message: 'Workspace schema unavailable.',
+                extensions: { code: 'INTERNAL_SERVER_ERROR' },
+              },
+            ],
+          };
+        }
+        const validation = validateWorkspaceOperation({
+          document,
+          operationName: req.body.operationName,
+          variables: req.body.variables ?? {},
+          workspaceId: req.workspace.id,
+          applicationId: req.application?.id,
+          sdl: schemaSDLResult.sdl,
+          usedScalarNames: schemaSDLResult.usedScalarNames,
+        });
+        if (validation.errors) return { errors: validation.errors };
+        checkedVariables = validation.variables;
+      } catch {
+        return {
+          errors: [
+            {
+              message: 'Workspace schema validation unavailable.',
+              extensions: { code: 'INTERNAL_SERVER_ERROR' },
+            },
+          ],
+        };
+      }
+    }
+
+    if (hasWorkspaceFields || hasIntrospectionFields) {
+      try {
+        const activeFields = graphQLExtractTopLevelFields(
+          document,
+          req.body.operationName,
+          { checkedVariables },
+        );
+        // Native introspection is handled by GraphQL.js, never by a workspace factory.
+        activeWorkspaceFields = activeFields.filter(
+          (field) =>
+            field.name.value !== '__schema' && field.name.value !== '__type',
+        );
+      } catch {
+        return {
+          errors: [
+            {
+              message: 'Invalid GraphQL root directive.',
+              extensions: { code: 'GRAPHQL_VALIDATION_FAILED' },
+            },
+          ],
+        };
+      }
+      if (hasWorkspaceFields) {
+        try {
+          this.checkRootResolverLimitsOrThrow(activeWorkspaceFields);
+        } catch (error) {
+          return { errors: [this.formatError(error, req)] };
+        }
+      }
+    }
+
     const [introspectionResult, workspaceResult] = await Promise.all([
       hasIntrospectionFields
-        ? this.executeIntrospectionQuery(req, document)
+        ? this.executeIntrospectionQuery(req, document, checkedVariables)
         : null,
-      hasWorkspaceFields ? this.executeWorkspaceQuery(req, document) : null,
+      hasWorkspaceFields
+        ? this.executeWorkspaceQuery(
+            req,
+            document,
+            checkedVariables,
+            activeWorkspaceFields,
+          )
+        : null,
     ]);
 
     return this.mergeDirectExecutionResults(
@@ -183,7 +274,11 @@ export class DirectExecutionService {
   private async executeWorkspaceQuery(
     req: Request,
     document: DocumentNode,
+    variables: Record<string, unknown>,
+    topLevelFields: FieldNode[],
   ): Promise<DirectExecutionResult | null> {
+    if (topLevelFields.length === 0) return { data: {} };
+
     try {
       const workspaceId = req.workspace?.id;
 
@@ -191,15 +286,7 @@ export class DirectExecutionService {
         return null;
       }
 
-      const topLevelFields = graphQLExtractTopLevelFields(
-        document,
-        req.body.operationName,
-      );
-
-      this.checkRootResolverLimitsOrThrow(topLevelFields);
-
       const fragmentMap = graphQLBuildFragmentMap(document);
-      const variables = req.body.variables ?? {};
       const data: Record<string, unknown> = {};
 
       const {
@@ -228,6 +315,7 @@ export class DirectExecutionService {
             const graphqlPartialResolveInfo = graphQLBuildPartialResolveInfo(
               field,
               fragmentMap,
+              variables,
             );
 
             const workspaceSchemaBuilderContext =
@@ -282,6 +370,7 @@ export class DirectExecutionService {
   private async executeIntrospectionQuery(
     req: Request,
     document: DocumentNode,
+    variables: Record<string, unknown>,
   ): Promise<DirectExecutionResult | null> {
     try {
       if (!isDefined(req.workspace)) {
@@ -303,7 +392,7 @@ export class DirectExecutionService {
         schema,
         document,
         operationName: req.body?.operationName as string | undefined,
-        variableValues: (req.body?.variables as Record<string, unknown>) ?? {},
+        variableValues: variables,
       });
 
       return {
@@ -347,7 +436,7 @@ export class DirectExecutionService {
     args: Record<string, unknown>;
     graphqlPartialResolveInfo: Pick<
       GraphQLResolveInfo,
-      'fieldNodes' | 'fragments'
+      'fieldNodes' | 'fragments' | 'variableValues'
     >;
     workspaceSchemaBuilderContext: WorkspaceSchemaBuilderContext;
   }): Promise<unknown> {

@@ -1020,6 +1020,21 @@ describe('Email reply context persisted evidence and fingerprint', () => {
     expect(rows.get(creatorB)?.body.markdown).toBe('B draft');
   });
 
+  it('selects only retained Creator fields for clean-schema reply evidence', async () => {
+    const { resolver, repositories } = setup();
+    await resolver.resolveCurrentEvidence(readRequest);
+    expect(repositories.creator.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: {
+          id: true,
+          name: true,
+          language: true,
+          location: true,
+        },
+      }),
+    );
+  });
+
   it('includes readable Creator generation guidance in the context fingerprint', async () => {
     const { resolver, repositories } = setup();
     repositories.creator.findOne.mockResolvedValue({

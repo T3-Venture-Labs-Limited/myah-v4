@@ -34,6 +34,7 @@ import { CommandMenuComponentInstanceContext } from '@/command-menu/states/conte
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
 import { ViewType } from '@/views/types/ViewType';
 import { ViewBarControlIdsProvider } from '@/views/contexts/ViewBarControlIdsContext';
+import { ConnectedCreatorRecordIndexReferenceGate } from '@/views/components/CreatorRecordIndexReferenceGate';
 import { styled } from '@linaria/react';
 import { useStore } from 'jotai';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
@@ -136,6 +137,31 @@ export const RecordIndexSurfaceCreationOptionsEffect = ({
   return null;
 };
 
+const RecordIndexCreatorReferenceGate = ({
+  objectMetadataItem,
+  viewId,
+  checkUrl,
+  children,
+}: {
+  objectMetadataItem: ReturnType<
+    typeof useObjectMetadataItem
+  >['objectMetadataItem'];
+  viewId: string;
+  checkUrl: boolean;
+  children: ReactNode;
+}) =>
+  objectMetadataItem.nameSingular === 'creator' ? (
+    <ConnectedCreatorRecordIndexReferenceGate
+      objectMetadataItem={objectMetadataItem}
+      viewId={viewId}
+      checkUrl={checkUrl}
+    >
+      {children}
+    </ConnectedCreatorRecordIndexReferenceGate>
+  ) : (
+    <>{children}</>
+  );
+
 const RecordIndexSurfaceInstance = ({
   contextStoreInstanceId,
   objectNameSingular,
@@ -212,118 +238,124 @@ const RecordIndexSurfaceInstance = ({
         />
       )}
       {(!isIsolatedSurface || isContextStoreInitialized) && (
-        <ViewBarControlIdsProvider viewBarId={recordIndexId}>
-          <RecordIndexContextProvider
-            value={{
-              objectPermissionsByObjectMetadataId,
-              recordIndexId,
-              viewBarInstanceId: recordIndexId,
-              objectNamePlural: objectMetadataItem.namePlural,
-              objectNameSingular,
-              objectMetadataItem,
-              onIndexRecordsLoaded: handleIndexRecordsLoaded,
-              indexIdentifierUrl,
-              onOpenRecordFromIndexView,
-              shouldPreserveParentViewStateOnOpen,
-              shouldUseIndexIdentifierUrlOnFullPageOpen,
-              embeddedSurfaceOptions,
-              hideEmptyStateSubtitle,
-              onViewChange,
-              recordFieldByFieldMetadataItemId,
-              labelIdentifierFieldMetadataItem,
-              fieldMetadataItemByFieldMetadataItemId,
-              fieldDefinitionByFieldMetadataItemId,
-            }}
-          >
-            <ViewComponentInstanceContext.Provider
-              value={{ instanceId: recordIndexId }}
+        <RecordIndexCreatorReferenceGate
+          objectMetadataItem={objectMetadataItem}
+          viewId={viewId}
+          checkUrl={!isIsolatedSurface}
+        >
+          <ViewBarControlIdsProvider viewBarId={recordIndexId}>
+            <RecordIndexContextProvider
+              value={{
+                objectPermissionsByObjectMetadataId,
+                recordIndexId,
+                viewBarInstanceId: recordIndexId,
+                objectNamePlural: objectMetadataItem.namePlural,
+                objectNameSingular,
+                objectMetadataItem,
+                onIndexRecordsLoaded: handleIndexRecordsLoaded,
+                indexIdentifierUrl,
+                onOpenRecordFromIndexView,
+                shouldPreserveParentViewStateOnOpen,
+                shouldUseIndexIdentifierUrlOnFullPageOpen,
+                embeddedSurfaceOptions,
+                hideEmptyStateSubtitle,
+                onViewChange,
+                recordFieldByFieldMetadataItemId,
+                labelIdentifierFieldMetadataItem,
+                fieldMetadataItemByFieldMetadataItemId,
+                fieldDefinitionByFieldMetadataItemId,
+              }}
             >
-              <RecordComponentInstanceContextsWrapper
-                componentInstanceId={recordIndexId}
+              <ViewComponentInstanceContext.Provider
+                value={{ instanceId: recordIndexId }}
               >
-                {isIsolatedSurface && (
-                  <RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect
-                    initialQueryOnlyRecordFilters={
-                      initialQueryOnlyRecordFilters
-                    }
-                    recordIndexId={recordIndexId}
-                    onInitialized={
-                      handleInitialQueryOnlyRecordFiltersInitialized
-                    }
-                  />
-                )}
-                <CommandMenuComponentInstanceContext.Provider
-                  value={{
-                    instanceId:
-                      getCommandMenuIdFromRecordIndexId(recordIndexId),
-                  }}
+                <RecordComponentInstanceContextsWrapper
+                  componentInstanceId={recordIndexId}
                 >
-                  <PageTitleEffect
-                    key={recordIndexId}
-                    title={headerTitle ?? objectMetadataItem.labelPlural}
-                  />
-                  <PageCardLayout
-                    showInformationBanner={
-                      embeddedSurfaceOptions?.showInformationBanner
-                    }
-                    header={
-                      embeddedSurfaceOptions?.hidePageHeader ? undefined : (
-                        <RecordIndexPageHeader
-                          contextStoreInstanceId={contextStoreInstanceId}
-                          headerLeadingAction={headerLeadingAction}
-                          headerTitle={headerTitle}
-                        />
-                      )
-                    }
-                    secondaryBar={
-                      objectPermissions.canReadObjectRecords &&
-                      (!isIsolatedSurface ||
-                        areInitialQueryOnlyRecordFiltersInitialized) && (
-                        <RecordIndexViewBar
-                          hideQueryOnlyRecordFilters={
-                            embeddedSurfaceOptions?.hideQueryOnlyRecordFilters ??
-                            hideQueryOnlyRecordFilters
-                          }
-                          recordIndexViewTypeOverride={
-                            isIsolatedSurface ? ViewType.TABLE : undefined
-                          }
-                        />
-                      )
-                    }
+                  {isIsolatedSurface && (
+                    <RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect
+                      initialQueryOnlyRecordFilters={
+                        initialQueryOnlyRecordFilters
+                      }
+                      recordIndexId={recordIndexId}
+                      onInitialized={
+                        handleInitialQueryOnlyRecordFiltersInitialized
+                      }
+                    />
+                  )}
+                  <CommandMenuComponentInstanceContext.Provider
+                    value={{
+                      instanceId:
+                        getCommandMenuIdFromRecordIndexId(recordIndexId),
+                    }}
                   >
-                    <StyledIndexContainer
-                      className={RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS}
-                    >
-                      {objectPermissions.canReadObjectRecords ? (
+                    <PageTitleEffect
+                      key={recordIndexId}
+                      title={headerTitle ?? objectMetadataItem.labelPlural}
+                    />
+                    <PageCardLayout
+                      showInformationBanner={
+                        embeddedSurfaceOptions?.showInformationBanner
+                      }
+                      header={
+                        embeddedSurfaceOptions?.hidePageHeader ? undefined : (
+                          <RecordIndexPageHeader
+                            contextStoreInstanceId={contextStoreInstanceId}
+                            headerLeadingAction={headerLeadingAction}
+                            headerTitle={headerTitle}
+                          />
+                        )
+                      }
+                      secondaryBar={
+                        objectPermissions.canReadObjectRecords &&
                         (!isIsolatedSurface ||
                           areInitialQueryOnlyRecordFiltersInitialized) && (
-                          <>
-                            <RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect />
-                            <RecordIndexContainer
-                              recordIndexViewTypeOverride={
-                                isIsolatedSurface ? ViewType.TABLE : undefined
-                              }
-                            />
-                          </>
+                          <RecordIndexViewBar
+                            hideQueryOnlyRecordFilters={
+                              embeddedSurfaceOptions?.hideQueryOnlyRecordFilters ??
+                              hideQueryOnlyRecordFilters
+                            }
+                            recordIndexViewTypeOverride={
+                              isIsolatedSurface ? ViewType.TABLE : undefined
+                            }
+                          />
                         )
-                      ) : (
-                        <RecordIndexEmptyStateNotShared />
-                      )}
-                    </StyledIndexContainer>
-                  </PageCardLayout>
-                </CommandMenuComponentInstanceContext.Provider>
-                <RecordIndexLoadBaseOnContextStoreEffect
-                  recordIndexId={recordIndexId}
-                  skipGlobalIndexStates={isIsolatedSurface}
-                />
-                <RecordIndexViewFieldsSSESyncEffect
-                  recordIndexId={recordIndexId}
-                  skipGlobalIndexStates={isIsolatedSurface}
-                />
-              </RecordComponentInstanceContextsWrapper>
-            </ViewComponentInstanceContext.Provider>
-          </RecordIndexContextProvider>
-        </ViewBarControlIdsProvider>
+                      }
+                    >
+                      <StyledIndexContainer
+                        className={RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS}
+                      >
+                        {objectPermissions.canReadObjectRecords ? (
+                          (!isIsolatedSurface ||
+                            areInitialQueryOnlyRecordFiltersInitialized) && (
+                            <>
+                              <RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect />
+                              <RecordIndexContainer
+                                recordIndexViewTypeOverride={
+                                  isIsolatedSurface ? ViewType.TABLE : undefined
+                                }
+                              />
+                            </>
+                          )
+                        ) : (
+                          <RecordIndexEmptyStateNotShared />
+                        )}
+                      </StyledIndexContainer>
+                    </PageCardLayout>
+                  </CommandMenuComponentInstanceContext.Provider>
+                  <RecordIndexLoadBaseOnContextStoreEffect
+                    recordIndexId={recordIndexId}
+                    skipGlobalIndexStates={isIsolatedSurface}
+                  />
+                  <RecordIndexViewFieldsSSESyncEffect
+                    recordIndexId={recordIndexId}
+                    skipGlobalIndexStates={isIsolatedSurface}
+                  />
+                </RecordComponentInstanceContextsWrapper>
+              </ViewComponentInstanceContext.Provider>
+            </RecordIndexContextProvider>
+          </ViewBarControlIdsProvider>
+        </RecordIndexCreatorReferenceGate>
       )}
     </ContextStoreComponentInstanceContext.Provider>
   );

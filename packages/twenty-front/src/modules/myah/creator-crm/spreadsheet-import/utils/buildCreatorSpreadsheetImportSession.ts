@@ -11,6 +11,8 @@ import {
   type ExistingCreatorSocialProfile,
 } from '@/myah/creator-crm/spreadsheet-import/types/CreatorSpreadsheetImportSession';
 import { SpreadsheetColumnType } from '@/spreadsheet-import/types/SpreadsheetColumnType';
+import { type SpreadsheetImportField } from '@/spreadsheet-import/types/SpreadsheetImportField';
+import { FieldMetadataType } from 'twenty-shared/types';
 import { type SpreadsheetImportFields } from '@/spreadsheet-import/types/SpreadsheetImportFields';
 import { type SpreadsheetImportHeaderAlias } from '@/spreadsheet-import/types/SpreadsheetImportHeaderProfile';
 import { type ImportedStructuredRow } from '@/spreadsheet-import/types/SpreadsheetImportImportedStructuredRow';
@@ -24,25 +26,14 @@ const HEADER_DESTINATIONS = {
   location: { fieldName: 'location' },
   gender: { fieldName: 'gender' },
   contact_phone_number: { fieldName: 'phone' },
-  instagram_link: {
-    fieldName: 'instagramLink',
-    compositeSubFieldKey: 'primaryLinkUrl',
-  },
-  tiktok_link: {
-    fieldName: 'tiktokLink',
-    compositeSubFieldKey: 'primaryLinkUrl',
-  },
-  youtube_link: {
-    fieldName: 'youtubeLink',
-    compositeSubFieldKey: 'primaryLinkUrl',
-  },
-  twitter_link: {
-    fieldName: 'twitterLink',
-    compositeSubFieldKey: 'primaryLinkUrl',
-  },
 } as const;
 
-type HeaderDestinationKey = keyof typeof HEADER_DESTINATIONS;
+type HeaderDestinationKey =
+  | keyof typeof HEADER_DESTINATIONS
+  | 'instagram_link'
+  | 'tiktok_link'
+  | 'youtube_link'
+  | 'twitter_link';
 
 type CreatorFieldMetadata = {
   id: string;
@@ -93,26 +84,31 @@ const INFLUENCER_CLUB_PROFILE_HEADER_DESTINATION_KEYS = {
 
 const SOCIAL_DESTINATIONS: ReadonlyArray<{
   destinationKey: HeaderDestinationKey;
-  fieldName: keyof ExistingCreatorSocialProfile;
+  fieldKey: string;
+  fieldName: string;
   provider: CreatorSocialProvider;
 }> = [
   {
     destinationKey: 'instagram_link',
+    fieldKey: 'instagram',
     fieldName: 'instagramLink',
     provider: 'instagram',
   },
   {
     destinationKey: 'tiktok_link',
+    fieldKey: 'tiktok',
     fieldName: 'tiktokLink',
     provider: 'tiktok',
   },
   {
     destinationKey: 'youtube_link',
+    fieldKey: 'youtube',
     fieldName: 'youtubeLink',
     provider: 'youtube',
   },
   {
     destinationKey: 'twitter_link',
+    fieldKey: 'twitter',
     fieldName: 'twitterLink',
     provider: 'twitter',
   },
@@ -156,28 +152,28 @@ const SOCIAL_PROFILE_PREVIEW_CONFIG = [
   {
     platform: 'Instagram',
     platformValue: 'INSTAGRAM',
-    urlFieldNames: ['instagramLink', 'instagramUrl'],
+    urlFieldNames: ['instagram', 'instagramUrl'],
     handleFieldNames: ['instagramUsername'],
     observationFieldNames: ['instagramFollowerCount'],
   },
   {
     platform: 'TikTok',
     platformValue: 'TIKTOK',
-    urlFieldNames: ['tiktokLink', 'tiktokUrl'],
+    urlFieldNames: ['tiktok', 'tiktokUrl'],
     handleFieldNames: ['tiktokUsername'],
     observationFieldNames: ['tiktokFollowerCount'],
   },
   {
     platform: 'YouTube',
     platformValue: 'YOUTUBE',
-    urlFieldNames: ['youtubeLink', 'youtubeUrl'],
+    urlFieldNames: ['youtube', 'youtubeUrl'],
     handleFieldNames: ['youtubeCustomUrl'],
     observationFieldNames: ['youtubeSubscriberCount'],
   },
   {
     platform: 'Twitter/X',
     platformValue: 'TWITTER',
-    urlFieldNames: ['twitterLink', 'twitterUrl'],
+    urlFieldNames: ['twitter', 'twitterUrl'],
     handleFieldNames: ['twitterUsername'],
     observationFieldNames: ['twitterFollowerCount'],
   },
@@ -209,6 +205,26 @@ export const buildCreatorSpreadsheetImportSession = ({
     ]),
   );
 
+  // UI-only destinations. These are not Creator metadata fields and are never sent
+  // to the Creator record mutation; commitCreatorImport creates SocialProfiles.
+  const socialImportFields: SpreadsheetImportField[] = SOCIAL_DESTINATIONS.map(
+    ({ fieldKey, provider }) => ({
+      key: fieldKey,
+      label: `${provider[0].toUpperCase()}${provider.slice(1)} profile URL`,
+      Icon: undefined,
+      fieldMetadataItemId: `virtual:social-profile:${provider}`,
+      fieldMetadataType: FieldMetadataType.TEXT,
+      fieldType: { type: 'input' },
+      isNestedField: false,
+    }),
+  );
+  const importFields = [
+    ...spreadsheetImportFields.filter(
+      (field) =>
+        !SOCIAL_DESTINATIONS.some(({ fieldKey }) => field.key === fieldKey),
+    ),
+    ...socialImportFields,
+  ];
   const fieldByDestinationKey = new Map<
     HeaderDestinationKey,
     SpreadsheetImportFields[number]
@@ -217,10 +233,10 @@ export const buildCreatorSpreadsheetImportSession = ({
   for (const [destinationKey, destination] of Object.entries(
     HEADER_DESTINATIONS,
   ) as [
-    HeaderDestinationKey,
-    (typeof HEADER_DESTINATIONS)[HeaderDestinationKey],
+    keyof typeof HEADER_DESTINATIONS,
+    (typeof HEADER_DESTINATIONS)[keyof typeof HEADER_DESTINATIONS],
   ][]) {
-    const field = spreadsheetImportFields.find((spreadsheetImportField) => {
+    const field = importFields.find((spreadsheetImportField) => {
       const fieldMetadataItem = fieldMetadataById.get(
         spreadsheetImportField.fieldMetadataItemId,
       );
@@ -237,6 +253,14 @@ export const buildCreatorSpreadsheetImportSession = ({
     if (field) {
       fieldByDestinationKey.set(destinationKey, field);
     }
+  }
+
+  for (const socialDestination of SOCIAL_DESTINATIONS) {
+    const field = socialImportFields.find(
+      ({ key }) => key === socialDestination.fieldKey,
+    );
+    if (field)
+      fieldByDestinationKey.set(socialDestination.destinationKey, field);
   }
 
   const headerAliases: Record<string, SpreadsheetImportHeaderAlias> = {};
@@ -312,8 +336,12 @@ export const buildCreatorSpreadsheetImportSession = ({
         'lastImportedAt' && !field.isCompositeSubField,
   );
   const previewMetadataByFieldKey = new Map(
-    spreadsheetImportFields.flatMap((field) => {
-      const metadata = fieldMetadataById.get(field.fieldMetadataItemId);
+    importFields.flatMap((field) => {
+      const metadata =
+        fieldMetadataById.get(field.fieldMetadataItemId) ??
+        (SOCIAL_DESTINATIONS.some(({ fieldKey }) => field.key === fieldKey)
+          ? { name: field.key, label: field.label }
+          : undefined);
 
       return metadata
         ? [
@@ -343,32 +371,20 @@ export const buildCreatorSpreadsheetImportSession = ({
   ) => {
     const nextIndex = new Map<string, Set<string>>();
 
-    for (const creator of existingCreators) {
-      for (const socialDestination of SOCIAL_DESTINATIONS) {
-        const socialLink = creator[socialDestination.fieldName];
-        const storedUrl =
-          typeof socialLink === 'object' && socialLink
-            ? socialLink.primaryLinkUrl
-            : undefined;
-
-        if (!storedUrl) {
-          continue;
-        }
-
-        const canonicalUrl = normalizeCreatorSocialProfileUrl(
-          socialDestination.provider,
-          storedUrl,
-        );
-
-        if (!canonicalUrl) {
-          continue;
-        }
-
-        const identity = `${socialDestination.provider}:${canonicalUrl}`;
-        const creatorIds = nextIndex.get(identity) ?? new Set<string>();
-        creatorIds.add(creator.id);
-        nextIndex.set(identity, creatorIds);
-      }
+    for (const profile of existingCreators) {
+      const provider = SOCIAL_DESTINATIONS.find(
+        ({ provider }) => provider.toUpperCase() === profile.platform,
+      )?.provider;
+      if (!provider || !profile.creatorId || !profile.profileUrl) continue;
+      const canonicalUrl = normalizeCreatorSocialProfileUrl(
+        provider,
+        profile.profileUrl,
+      );
+      if (!canonicalUrl) continue;
+      const identity = `${provider}:${canonicalUrl}`;
+      const creatorIds = nextIndex.get(identity) ?? new Set<string>();
+      creatorIds.add(profile.creatorId);
+      nextIndex.set(identity, creatorIds);
     }
 
     existingCreatorIdsByIdentity = nextIndex;
@@ -654,20 +670,45 @@ export const buildCreatorSpreadsheetImportSession = ({
       hasRecognizedSocialIdentityMapping = false;
 
       for (const column of columns) {
-        if (!('value' in column)) {
-          continue;
-        }
-
         const normalizedHeader = normalizeCreatorImportHeader(column.header);
         const alias = headerAliases[normalizedHeader];
-        if (alias?.fieldKey !== column.value) {
-          continue;
-        }
-
         const destinationKey =
           SOURCE_HEADER_DESTINATION_KEYS[
             normalizedHeader as keyof typeof SOURCE_HEADER_DESTINATION_KEYS
           ];
+        if (
+          destinationKey &&
+          SOCIAL_DESTINATIONS.some(
+            ({ destinationKey: socialKey }) => socialKey === destinationKey,
+          ) &&
+          alias?.fieldKey !== ('value' in column ? column.value : undefined) &&
+          rawRows.some((rawRow) => {
+            const value = rawRow[column.index];
+            return value != null && String(value).trim().length > 0;
+          })
+        ) {
+          throw new Error(
+            `Map ${column.header} to its Social profile URL destination before importing`,
+          );
+        }
+        if (!('value' in column)) {
+          continue;
+        }
+        if (alias?.fieldKey !== column.value) {
+          if (
+            socialDestinationByFieldKey.has(column.value) &&
+            rawRows.some(
+              (rawRow) =>
+                rawRow[column.index] != null &&
+                String(rawRow[column.index]).trim().length > 0,
+            )
+          )
+            throw new Error(
+              `Social profile column ${column.header} must use a supported vendor header`,
+            );
+          continue;
+        }
+
         if (destinationKey) {
           recognizedMappingsByFieldKey.set(column.value, destinationKey);
           hasRecognizedSocialIdentityMapping ||=
@@ -915,7 +956,7 @@ export const buildCreatorSpreadsheetImportSession = ({
   };
 
   return {
-    spreadsheetImportFields,
+    spreadsheetImportFields: importFields,
     headerAliases,
     headerProfile,
     matchColumnsStepHook,

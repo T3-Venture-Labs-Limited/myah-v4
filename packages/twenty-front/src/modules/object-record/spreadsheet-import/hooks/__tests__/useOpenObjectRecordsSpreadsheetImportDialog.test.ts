@@ -15,6 +15,20 @@ jest.mock('uuid', () => ({
 }));
 
 const mockBatchCreateManyRecords = jest.fn().mockResolvedValue([]);
+const mockApolloCoreClient = {
+  mutate: jest.fn(),
+  refetchQueries: jest.fn(),
+};
+const mockApolloMetadataClient = { mutate: jest.fn() };
+
+jest.mock('@apollo/client/react', () => ({
+  ...jest.requireActual('@apollo/client/react'),
+  useApolloClient: () => mockApolloMetadataClient,
+}));
+
+jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
+  useApolloCoreClient: () => mockApolloCoreClient,
+}));
 
 jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
   useBatchCreateManyRecords: () => ({
@@ -237,6 +251,10 @@ const Wrapper = getJestMetadataAndApolloMocksWrapper({
 describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockApolloCoreClient.mutate.mockReset();
+    mockApolloMetadataClient.mutate.mockReset();
+    mockApolloCoreClient.refetchQueries.mockReset();
+    mockApolloCoreClient.refetchQueries.mockResolvedValue(undefined);
     mockCreatorSession = {
       spreadsheetImportFields: [],
       headerAliases: { first_name: { fieldKey: 'name' } },
@@ -371,6 +389,9 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
   });
 
   it('activates Creator-specific matching, preflight, and durable row submission', async () => {
+    mockCreatorSession.spreadsheetImportFields = [
+      { key: 'instagram', label: 'Instagram profile URL' },
+    ];
     (mockCreatorSession.getSummary as jest.Mock).mockReturnValue({
       existing: 2,
       conflicts: 1,
@@ -397,6 +418,7 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     expect(options).toEqual(
       expect.objectContaining({
         headerAliases: mockCreatorSession.headerAliases,
+        spreadsheetImportFields: mockCreatorSession.spreadsheetImportFields,
         headerProfile: mockCreatorSession.headerProfile,
         matchColumnsStepHook: mockCreatorSession.matchColumnsStepHook,
         beforeSubmitHook: mockCreatorSession.beforeSubmitHook,
@@ -433,7 +455,77 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     });
   });
 
+  it('routes Creator import commits through the metadata Apollo client', async () => {
+    mockApolloMetadataClient.mutate.mockResolvedValue({
+      data: {
+        commitCreatorImport: {
+          receiptId: 'receipt-core',
+          creatorId: 'creator-core',
+          socialProfileIds: [],
+          noteId: null,
+          noteTargetId: null,
+          replayed: false,
+        },
+      },
+    });
+    const { result } = renderHook(
+      () =>
+        useOpenObjectRecordsSpreadsheetImportDialog('creator')
+          .openObjectRecordsSpreadsheetImportDialog,
+      { wrapper: Wrapper },
+    );
+
+    await act(async () => {
+      result.current();
+    });
+
+    const options = jotaiStore.get(spreadsheetImportDialogState.atom).options;
+
+    await act(async () => {
+      await options?.onSubmit(
+        {
+          validStructuredRows: [{ name: 'Ada' }],
+          validStructuredRowIndexes: ['row-core'],
+          invalidStructuredRows: [],
+          allStructuredRows: [{ name: 'Ada', __index: 'row-core' }],
+        },
+        fakeCsv(),
+      );
+    });
+
+    expect(mockApolloMetadataClient.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: {
+          input: {
+            attemptKey: COMPANY_ID,
+            operationKey: 'row-row-core',
+            creator: { name: 'Ada' },
+            profiles: [],
+          },
+        },
+      }),
+    );
+    expect(mockApolloCoreClient.mutate).not.toHaveBeenCalled();
+    expect(mockApolloCoreClient.refetchQueries).toHaveBeenCalledWith(
+      expect.objectContaining({ updateCache: expect.any(Function) }),
+    );
+  });
+
   it('reuses the attempt and stable source-row identity after response loss', async () => {
+    mockApolloMetadataClient.mutate
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce({
+        data: {
+          commitCreatorImport: {
+            receiptId: 'receipt-retry',
+            creatorId: 'creator-retry',
+            socialProfileIds: [],
+            noteId: null,
+            noteTargetId: null,
+            replayed: true,
+          },
+        },
+      });
     const { result } = renderHook(
       () =>
         useOpenObjectRecordsSpreadsheetImportDialog('creator')
@@ -458,6 +550,8 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     await expect(
       options?.onSubmit(validationResult, fakeCsv()),
     ).resolves.toBeUndefined();
+    expect(mockApolloMetadataClient.mutate).toHaveBeenCalledTimes(2);
+    expect(mockApolloCoreClient.mutate).not.toHaveBeenCalled();
   });
 
   it('skips the Creator mutation when every row already exists', async () => {

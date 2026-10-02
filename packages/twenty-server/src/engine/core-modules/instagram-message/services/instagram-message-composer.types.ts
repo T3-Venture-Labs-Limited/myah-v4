@@ -59,6 +59,9 @@ export type InstagramComposerPreparation =
   | InstagramComposerBlocked;
 
 export type ResolvedInstagramComposerGraph = InstagramComposerPrepared & {
+  // Preparation input discriminant; never infer Creator selection from the
+  // canonical profile source values or resolved handle.
+  selectedCreatorRecordId?: string | null;
   account: {
     bindingId: string;
     instagramAccountRecordId: string;

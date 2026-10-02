@@ -118,8 +118,6 @@ const allowedCreator = {
   name: 'Amina Skincare',
   language: 'English',
   location: 'London',
-  categories: 'Beauty, Skincare',
-  niches: 'Dry skin, Sensitive skin',
   email: 'PRIVATE_EMAIL_MUST_NOT_LEAK',
   phone: 'PRIVATE_PHONE_MUST_NOT_LEAK',
   notes: 'PRIVATE_NOTES_MUST_NOT_LEAK',
@@ -368,8 +366,6 @@ describe('MyahInboxReplyBriefingService', () => {
         name: 'Amina Skincare',
         language: 'English',
         location: 'London',
-        categories: ['Beauty, Skincare'],
-        niches: ['Dry skin, Sensitive skin'],
       },
       replyRecipient: 'Matthew Matthews',
     });
@@ -464,8 +460,6 @@ describe('MyahInboxReplyBriefingService', () => {
         name: true,
         language: true,
         location: true,
-        categories: true,
-        niches: true,
       },
     });
     expect(repositories.campaignCreator.findOne).toHaveBeenCalledWith({
@@ -919,7 +913,7 @@ describe('MyahInboxReplyBriefingService', () => {
   it('keeps readable Creator fields when another allowlisted field is denied', async () => {
     const { repositories, service } = createService();
     const fieldPermissionDenied = new PermissionsException(
-      'Creator categories are unreadable',
+      'Creator location is unreadable',
       PermissionsExceptionCode.PERMISSION_DENIED,
     );
 
@@ -927,7 +921,7 @@ describe('MyahInboxReplyBriefingService', () => {
       ({ select }: { select: Record<string, boolean> }) => {
         const fields = Object.keys(select);
 
-        if (fields.includes('categories')) {
+        if (fields.includes('location')) {
           return Promise.reject(fieldPermissionDenied);
         }
 
@@ -953,19 +947,17 @@ describe('MyahInboxReplyBriefingService', () => {
     expect(briefing.creator).toEqual({
       name: 'Amina Skincare',
       language: 'English',
-      location: 'London',
-      categories: [],
-      niches: ['Dry skin, Sensitive skin'],
+      location: null,
     });
     expect(repositories.creator.findOne).toHaveBeenCalledWith({
       where: { id: creatorId },
-      select: { categories: true },
+      select: { location: true },
     });
   });
 
   it('truncates oversized Agent fields and Creator text deterministically', async () => {
     const oversizedCampaignBrief = 'A'.repeat(10_000);
-    const oversizedCreatorCategories = 'B'.repeat(10_000);
+    const oversizedCreatorLanguage = 'B'.repeat(10_000);
     const oversizedCampaign = {
       ...allowedCampaign,
       campaignBrief: {
@@ -975,7 +967,7 @@ describe('MyahInboxReplyBriefingService', () => {
     };
     const oversizedCreator = {
       ...allowedCreator,
-      categories: oversizedCreatorCategories,
+      language: oversizedCreatorLanguage,
     };
     const { service } = createService({
       campaign: oversizedCampaign,
@@ -992,7 +984,7 @@ describe('MyahInboxReplyBriefingService', () => {
       2_000 - '[…truncated]'.length,
     );
     const expectedCampaignBrief = `${expectedCampaignBriefPrefix}[…truncated]`;
-    const expectedCreatorCategories = `${oversizedCreatorCategories.slice(
+    const expectedCreatorLanguage = `${oversizedCreatorLanguage.slice(
       0,
       1_000 - '[…truncated]'.length,
     )}[…truncated]`;
@@ -1010,9 +1002,9 @@ describe('MyahInboxReplyBriefingService', () => {
     expect(second.campaign?.agent.campaignBrief).toBe(
       first.campaign?.agent.campaignBrief,
     );
-    expect(first.creator?.categories).toEqual([expectedCreatorCategories]);
-    expect(first.creator?.categories[0]).toHaveLength(1_000);
-    expect(second.creator?.categories).toEqual(first.creator?.categories);
+    expect(first.creator?.language).toBe(expectedCreatorLanguage);
+    expect(first.creator?.language).toHaveLength(1_000);
+    expect(second.creator?.language).toBe(first.creator?.language);
   });
 });
 

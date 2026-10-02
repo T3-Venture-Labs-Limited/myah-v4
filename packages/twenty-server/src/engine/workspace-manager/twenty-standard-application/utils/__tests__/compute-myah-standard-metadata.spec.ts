@@ -44,29 +44,8 @@ const BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER =
 const CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER =
   '802cf87a-e4c5-559b-89c5-2172e3e5cc2f';
 const PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS = [
-  'c4bccf25-cfd1-5648-918e-bf20b32ed375',
-  'ccdc5be6-6c2b-5920-acd8-fa0ad52eeb29',
-  '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b',
-  'f0d18169-7558-487c-bafd-eb0e6adaf63a',
-  '1186d5b4-385f-5566-a4ba-87b8f65cdee5',
-  'd383c2c2-9617-548f-a0ab-266b7dbe0789',
-  'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31',
-  '184b0e66-11d9-45bd-8dde-e694355c57f1',
-  '3db5e356-13b9-539d-8320-7c6606e3c574',
-  '52162ce6-20b6-536d-b6b1-c21271c96006',
-  'af645cc7-31fc-5175-af8d-427845ebe1ed',
-  'dcb35d52-cad9-4871-8ae2-8e97e38578f1',
-  'cba072b8-6758-5eaa-bc1c-72e94a75b112',
-  '6430e3f1-71aa-5b6a-bc7a-b635d4f2c3ab',
-  'bdaf9a54-8931-5e51-836f-eb1cf6b11fcb',
-  'bbfda234-327c-5d9d-ac39-8a33fd06779d',
-  '8bb2d28c-cecf-4111-b043-89b6c7255710',
-  'cba84727-9219-502a-9880-a14bee741515',
-  'b286bdf2-3024-575d-b852-adf935061749',
-  'fa743d1a-aa43-5976-b6b2-8131a533ae5b',
-  '789717de-3c12-59c3-b91a-ca4a70d00886',
-  'f10ed5aa-ff19-5cbe-b176-ae4bf642edf1',
-  'd68083f5-0db1-5c77-ac35-640a2fdb1f3f',
+  MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.creator.fields.phone.universalIdentifier,
 ] as const;
 const ROLE_UNIVERSAL_IDENTIFIER_NAMESPACE =
   'b403ec59-4d80-4f22-85e6-717a192dc9cb';
@@ -76,7 +55,170 @@ const mapsWithPermissions = result.allFlatEntityMaps as unknown as {
   flatRolePermissionFlagMaps: FlatEntityMaps<FlatRolePermissionFlag>;
 };
 
+const RETIRED_CREATOR_FIELDS = [
+  'gender',
+  'profileType',
+  'creatorStatus',
+  'hasLinkInBio',
+  'hasBrandDeals',
+  'promotesAffiliateLinks',
+  'hasMerch',
+  'linksInBio',
+  'externalUrls',
+  'hashtagsUsed',
+  'categories',
+  'niches',
+  'notes',
+  'instagramUrl',
+  'instagramLink',
+  'instagramUsername',
+  'instagramFollowerCount',
+  'instagramBio',
+  'instagramEngagementPercent',
+  'instagramMostRecentPostDate',
+  'instagramMediaCount',
+  'instagramAvgLikes',
+  'instagramAvgComments',
+  'instagramReelsPercent',
+  'instagramReelsAvgViewCount',
+  'instagramPostingFrequencyRecentMonths',
+  'instagramEstimatedIncomeMin',
+  'instagramEstimatedIncomeMax',
+  'tiktokUrl',
+  'tiktokLink',
+  'tiktokUsername',
+  'tiktokFollowerCount',
+  'tiktokBio',
+  'tiktokMostRecentPostDate',
+  'tiktokEngagementPercent',
+  'tiktokVideoCount',
+  'tiktokPlayCountMedian',
+  'tiktokAvgLikes',
+  'tiktokAvgComments',
+  'tiktokAvgDownloads',
+  'tiktokPostingFrequencyRecentMonths',
+  'youtubeUrl',
+  'youtubeLink',
+  'youtubeCustomUrl',
+  'youtubeTitle',
+  'youtubeSubscriberCount',
+  'youtubeDescription',
+  'youtubeTopicDetails',
+  'youtubeLastUploadDate',
+  'youtubeLastStreamUploadDate',
+  'youtubeShortsPercentage',
+  'youtubeVideoCount',
+  'youtubeEngagementPercent',
+  'youtubeAvgViewsLong',
+  'youtubeAvgViewsShorts',
+  'youtubeAvgStreamViews',
+  'youtubeAvgStreamDuration',
+  'youtubePostingFrequencyRecentMonths',
+  'youtubeEstimatedIncomeMin',
+  'youtubeEstimatedIncomeMax',
+  'twitterUrl',
+  'twitterLink',
+  'twitterUsername',
+  'twitterFollowerCount',
+  'twitterBio',
+  'twitterEngagementPercent',
+  'twitchUrl',
+  'twitchUsername',
+  'twitchDisplayName',
+  'twitchTotalFollowers',
+  'patreonUrl',
+] as const;
+
 describe('Myah standard metadata contract', () => {
+  it('provisions only retained Creator fields and never broadens the obsolete qualified audience', () => {
+    const retained = [
+      'id',
+      'createdAt',
+      'updatedAt',
+      'deletedAt',
+      'position',
+      'createdBy',
+      'updatedBy',
+      'searchVector',
+      'name',
+      'email',
+      'phone',
+      'location',
+      'language',
+      'owner',
+      'source',
+      'sourceUrl',
+      'importSource',
+      'lastImportedAt',
+      'listMemberships',
+      'campaignCreators',
+      'inboxThreads',
+      'timelineActivities',
+      'attachments',
+      'noteTargets',
+      'taskTargets',
+      'socialProfiles',
+    ];
+    expect(RETIRED_CREATOR_FIELDS).toHaveLength(71);
+    expect(Object.keys(MYAH_STANDARD_OBJECTS.creator.fields).sort()).toEqual(
+      [...retained].sort(),
+    );
+    const creatorFields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(
+      (field) =>
+        field?.objectMetadataUniversalIdentifier ===
+        MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+    );
+    expect(creatorFields.map((field) => field?.name).sort()).toEqual(
+      [...retained].sort(),
+    );
+    for (const name of RETIRED_CREATOR_FIELDS) {
+      expect(creatorFields.some((field) => field?.name === name)).toBe(false);
+    }
+    expect(Object.keys(MYAH_STANDARD_OBJECTS.creator.views).sort()).toEqual(
+      ['creatorRecordPageFields', 'viewa5abdae3'].sort(),
+    );
+    for (const retiredFilterId of [
+      '03ddcbb7-42dd-4078-bc0a-c985c6a9c131',
+      'd1319af0-eeb2-4ca3-8afc-31e66c8a4277',
+    ]) {
+      expect(
+        result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier[
+          retiredFilterId
+        ],
+      ).toBeUndefined();
+    }
+    const creatorViewIds = new Set<string>(
+      Object.values(MYAH_STANDARD_OBJECTS.creator.views).map(
+        (view) => view.universalIdentifier,
+      ),
+    );
+    const viewFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    ).filter(
+      (field) => field && creatorViewIds.has(field.viewUniversalIdentifier),
+    );
+    expect(
+      viewFields.every(
+        (field) =>
+          field &&
+          creatorFields.some(
+            (creatorField) =>
+              creatorField?.universalIdentifier ===
+              field.fieldMetadataUniversalIdentifier,
+          ),
+      ),
+    ).toBe(true);
+    expect(
+      Object.values(
+        result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
+      ).some(
+        (view) =>
+          view?.universalIdentifier === '19483764-6f84-4d09-8f03-945e7d0a4b28',
+      ),
+    ).toBe(false);
+  });
   const categories = Object.entries(contract).filter(([key]) =>
     key.startsWith('flat'),
   ) as [keyof TwentyStandardAllFlatEntityMaps, readonly string[]][];
@@ -366,30 +508,6 @@ describe('Myah standard metadata contract', () => {
 
     expect(creatorFields).toContainEqual(
       expect.objectContaining({
-        name: 'instagramReelsAvgViewCount',
-        universalIdentifier:
-          MYAH_STANDARD_OBJECTS.creator.fields.instagramReelsAvgViewCount
-            .universalIdentifier,
-      }),
-    );
-    for (const [name, universalIdentifier] of [
-      ['instagramUrl', '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b'],
-      ['tiktokUrl', 'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31'],
-      ['youtubeUrl', 'af645cc7-31fc-5175-af8d-427845ebe1ed'],
-      ['twitterUrl', 'bbfda234-327c-5d9d-ac39-8a33fd06779d'],
-    ]) {
-      expect(creatorFields).toContainEqual(
-        expect.objectContaining({
-          name,
-          universalIdentifier,
-          type: FieldMetadataType.TEXT,
-          isNullable: true,
-          isUIEditable: true,
-        }),
-      );
-    }
-    expect(creatorFields).toContainEqual(
-      expect.objectContaining({
         name: 'owner',
         universalIdentifier: '654e0df0-0c1f-4083-bc30-f85252269092',
         objectMetadataUniversalIdentifier:
@@ -436,13 +554,33 @@ describe('Myah standard metadata contract', () => {
     }
     expect(
       result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
-    ).toHaveProperty('19483764-6f84-4d09-8f03-945e7d0a4b28');
-    expect(
+    ).not.toHaveProperty('19483764-6f84-4d09-8f03-945e7d0a4b28');
+  });
+
+  it('scopes the embedded SocialProfile table to its current Creator through the inverse relation', () => {
+    const view = MYAH_STANDARD_OBJECTS.socialProfile.views.socialProfiles;
+    const filter = Object.values(
       result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
-    ).toHaveProperty('03ddcbb7-42dd-4078-bc0a-c985c6a9c131');
+    )
+      .filter(isDefined)
+      .filter(
+        (item) => item.viewUniversalIdentifier === view.universalIdentifier,
+      );
+
+    expect(filter).toHaveLength(1);
+    expect(filter[0]).toMatchObject({
+      fieldMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.socialProfile.fields.creator.universalIdentifier,
+      viewUniversalIdentifier: view.universalIdentifier,
+      operand: 'IS',
+      value: JSON.stringify({
+        selectedRecordIds: [],
+        isCurrentRecordSelected: true,
+      }),
+    });
     expect(
-      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
-    ).toHaveProperty('d1319af0-eeb2-4ca3-8afc-31e66c8a4277');
+      recoveryResult.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+    ).toHaveProperty(filter[0].universalIdentifier);
   });
 
   it('adds SocialProfile metadata without removing legacy Creator fields', () => {
@@ -476,7 +614,7 @@ describe('Myah standard metadata contract', () => {
           relationTargetFieldMetadataUniversalIdentifier:
             creatorSocialProfilesFieldId,
         }),
-        expect.objectContaining({ name: 'platform' }),
+        expect.objectContaining({ name: 'platform', isUIEditable: false }),
         expect.objectContaining({ name: 'handle' }),
         expect.objectContaining({ name: 'profileUrl' }),
         expect.objectContaining({ name: 'platformAccountId' }),
@@ -503,7 +641,7 @@ describe('Myah standard metadata contract', () => {
         result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[indexId],
       ).toBeDefined();
     }
-    expect(MYAH_STANDARD_OBJECTS.creator.fields).toHaveProperty(
+    expect(MYAH_STANDARD_OBJECTS.creator.fields).not.toHaveProperty(
       'instagramUsername',
     );
   });
@@ -586,12 +724,7 @@ describe('Myah standard metadata contract', () => {
       expect.arrayContaining([
         MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
-        MYAH_STANDARD_OBJECTS.creator.fields.creatorStatus.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.socialProfiles.universalIdentifier,
-        MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
-          .universalIdentifier,
-        MYAH_STANDARD_OBJECTS.creator.fields.tiktokUsername.universalIdentifier,
-        MYAH_STANDARD_OBJECTS.creator.fields.youtubeUrl.universalIdentifier,
       ]),
     );
 
@@ -615,6 +748,15 @@ describe('Myah standard metadata contract', () => {
         }),
       ]),
     );
+    expect(
+      creatorTableFields.every((field) =>
+        Object.values(MYAH_STANDARD_OBJECTS.creator.fields).some(
+          (definition) =>
+            definition.universalIdentifier ===
+            field.fieldMetadataUniversalIdentifier,
+        ),
+      ),
+    ).toBe(true);
 
     const socialProfileTableFields = Object.values(
       result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
@@ -1215,8 +1357,6 @@ describe('Myah standard metadata contract', () => {
       '531d9732-7614-472c-ae02-8fc806d92c0a': "'DRAFT'",
       '5601c017-6a85-4211-b2b2-9fda0bf9f0c6': "'UPDATE_PAGE'",
       '5d00b029-7a0d-4320-acf4-036a634a44ab': "'PENDING'",
-      'ec240f13-8462-54ad-be55-b27275f0f58a': "'CREATOR'",
-      'b887feac-6623-5e8f-b84e-bd502abb8972': "'NEW'",
     });
 
     for (const field of fields) {
@@ -1568,14 +1708,9 @@ describe('Myah standard metadata contract', () => {
         MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
     );
 
-    expect(creatorSearchFieldMetadata).toHaveLength(3);
+    expect(creatorSearchFieldMetadata).toHaveLength(2);
     expect(creatorSearchFieldMetadata).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          fieldMetadataUniversalIdentifier:
-            MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
-              .universalIdentifier,
-        }),
         expect.objectContaining({
           fieldMetadataUniversalIdentifier:
             MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,

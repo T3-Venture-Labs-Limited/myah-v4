@@ -65,8 +65,6 @@ export type MyahInboxCreatorReplyContext = {
   name: string | null;
   language: string | null;
   location: string | null;
-  categories: string[];
-  niches: string[];
 };
 
 export type MyahInboxReplyBriefing = {
@@ -125,8 +123,6 @@ type MyahInboxReplyBriefingCreatorRecord = ObjectLiteral & {
   name: string | null;
   language: string | null;
   location: string | null;
-  categories: string | null;
-  niches: string | null;
 };
 
 type MyahInboxReplyBriefingMessageParticipantRecord = ObjectLiteral & {
@@ -191,8 +187,6 @@ const MYAH_INBOX_REPLY_BRIEFING_CREATOR_FIELDS = [
   'name',
   'language',
   'location',
-  'categories',
-  'niches',
 ] as const satisfies readonly (keyof MyahInboxReplyBriefingCreatorRecord)[];
 const MYAH_INBOX_REPLY_BRIEFING_MESSAGE_PARTICIPANT_FIELDS = [
   'personId',
@@ -217,19 +211,6 @@ const getCampaignReplyBriefingSelect = (
       true,
     ]),
   ) as FindOptionsSelect<MyahInboxReplyBriefingCampaignRecord>;
-
-const normalizeCreatorReplyBriefingText = (value: unknown): string[] => {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    return [];
-  }
-
-  const normalizedValue = truncateReplyBriefingValue(
-    value.trim(),
-    MYAH_INBOX_REPLY_BRIEFING_MAX_TEXT_FIELD_LENGTH,
-  );
-
-  return normalizedValue ? [normalizedValue] : [];
-};
 
 const formatReplyBriefingSender = (
   participant: MyahInboxReplyBriefingMessageParticipantRecord,
@@ -667,10 +648,6 @@ export class MyahInboxReplyBriefingService {
                   creatorRecord.location,
                   MYAH_INBOX_REPLY_BRIEFING_MAX_TEXT_FIELD_LENGTH,
                 ),
-                categories: normalizeCreatorReplyBriefingText(
-                  creatorRecord.categories,
-                ),
-                niches: normalizeCreatorReplyBriefingText(creatorRecord.niches),
               }
             : null,
         };

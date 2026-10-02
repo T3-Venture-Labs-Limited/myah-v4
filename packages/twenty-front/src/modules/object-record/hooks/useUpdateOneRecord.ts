@@ -1,4 +1,9 @@
 import { triggerUpdateRecordOptimisticEffect } from '@/apollo/optimistic-effect/utils/triggerUpdateRecordOptimisticEffect';
+import {
+  getSocialProfileIdentityInput,
+  toCanonicalSocialProfileRecord,
+  UPDATE_SOCIAL_PROFILE_IDENTITY,
+} from '@/myah/creator-crm/socialProfileOperations';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
@@ -21,6 +26,7 @@ import { getUpdatedFieldsFromRecordInput } from '@/object-record/utils/getUpdate
 import { getUpdateOneRecordMutationResponseField } from '@/object-record/utils/getUpdateOneRecordMutationResponseField';
 import { sanitizeRecordInput } from '@/object-record/utils/sanitizeRecordInput';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useApolloClient } from '@apollo/client/react';
 import { isNull } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
 import { buildRecordFromKeysWithSameValue } from '~/utils/array/buildRecordFromKeysWithSameValue';
@@ -35,6 +41,7 @@ type UpdateOneRecordArgs<UpdatedObjectRecord> = {
 
 export const useUpdateOneRecord = () => {
   const apolloCoreClient = useApolloCoreClient();
+  const apolloMetadataClient = useApolloClient();
   const { upsertRecordsInStore } = useUpsertRecordsInStore();
 
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
@@ -147,8 +154,14 @@ export const useUpdateOneRecord = () => {
       });
     }
 
-    const mutationResponseField =
-      getUpdateOneRecordMutationResponseField(objectNameSingular);
+    const socialProfileIdentityInput =
+      objectNameSingular === 'socialProfile'
+        ? getSocialProfileIdentityInput(updateOneRecordInput)
+        : null;
+
+    const mutationResponseField = socialProfileIdentityInput
+      ? 'updateSocialProfileIdentity'
+      : getUpdateOneRecordMutationResponseField(objectNameSingular);
 
     const sanitizedInput = {
       ...sanitizeRecordInput({
@@ -157,40 +170,56 @@ export const useUpdateOneRecord = () => {
       }),
     };
 
-    const updateOneRecordMutation = generateUpdateOneRecordMutation({
-      objectMetadataItem,
-      objectMetadataItems,
-      recordGqlFields: computedRecordGqlFields,
-      computeReferences: false,
-      objectPermissionsByObjectMetadataId,
-    });
+    const updateOneRecordMutation = socialProfileIdentityInput
+      ? UPDATE_SOCIAL_PROFILE_IDENTITY
+      : generateUpdateOneRecordMutation({
+          objectMetadataItem,
+          objectMetadataItems,
+          recordGqlFields: computedRecordGqlFields,
+          computeReferences: false,
+          objectPermissionsByObjectMetadataId,
+        });
 
-    const updatedRecord = await apolloCoreClient
+    const updatedRecord = await (
+      socialProfileIdentityInput ? apolloMetadataClient : apolloCoreClient
+    )
       .mutate({
         mutation: updateOneRecordMutation,
-        variables: {
-          idToUpdate,
-          input: sanitizedInput,
-        },
-        update: (cache, { data }) => {
-          const record = (data as Record<string, any>)?.[mutationResponseField];
-          if (!isDefined(record)) return;
+        fetchPolicy: socialProfileIdentityInput ? 'no-cache' : undefined,
+        variables: socialProfileIdentityInput
+          ? {
+              input: {
+                id: idToUpdate,
+                ...socialProfileIdentityInput,
+              },
+            }
+          : {
+              idToUpdate,
+              input: sanitizedInput,
+            },
+        update: socialProfileIdentityInput
+          ? undefined
+          : (cache, { data }) => {
+              const responseRecord = (data as Record<string, unknown>)?.[
+                mutationResponseField
+              ] as any;
+              if (!isDefined(responseRecord)) return;
 
-          const recordToUpsert = getRecordFromRecordNode({
-            recordNode: record,
-          });
-          upsertRecordsInStore({ partialRecords: [recordToUpsert] });
+              const recordToUpsert = getRecordFromRecordNode({
+                recordNode: responseRecord,
+              });
+              upsertRecordsInStore({ partialRecords: [recordToUpsert] });
 
-          triggerUpdateRecordOptimisticEffect({
-            cache,
-            objectMetadataItem,
-            currentRecord: computedOptimisticRecord,
-            updatedRecord: record,
-            objectMetadataItems,
-            objectPermissionsByObjectMetadataId,
-            upsertRecordsInStore,
-          });
-        },
+              triggerUpdateRecordOptimisticEffect({
+                cache,
+                objectMetadataItem,
+                currentRecord: computedOptimisticRecord,
+                updatedRecord: responseRecord,
+                objectMetadataItems,
+                objectPermissionsByObjectMetadataId,
+                upsertRecordsInStore,
+              });
+            },
       })
       .catch((error: Error) => {
         if (!shouldHandleOptimisticCache) {
@@ -268,9 +297,41 @@ export const useUpdateOneRecord = () => {
       objectMetadataNamePlural: objectMetadataItem.namePlural,
     });
 
+    const responseRecord = ((updatedRecord?.data as Record<string, unknown>)?.[
+      mutationResponseField
+    ] ?? null) as any;
     const resultRecord =
-      (updatedRecord?.data as Record<string, any>)?.[mutationResponseField] ??
-      null;
+      socialProfileIdentityInput && isDefined(responseRecord)
+        ? toCanonicalSocialProfileRecord(responseRecord)
+        : responseRecord;
+
+    if (socialProfileIdentityInput && isDefined(resultRecord)) {
+      updateRecordFromCache({
+        objectMetadataItems,
+        objectMetadataItem,
+        cache: apolloCoreClient.cache,
+        record: resultRecord,
+        recordGqlFields: generateDepthRecordGqlFieldsFromRecord({
+          objectMetadataItem,
+          objectMetadataItems,
+          record: resultRecord,
+          depth: 1,
+        }),
+        objectPermissionsByObjectMetadataId,
+      });
+      upsertRecordsInStore({
+        partialRecords: [getRecordFromRecordNode({ recordNode: resultRecord })],
+      });
+      triggerUpdateRecordOptimisticEffect({
+        cache: apolloCoreClient.cache,
+        objectMetadataItem,
+        currentRecord: computedOptimisticRecord,
+        updatedRecord: resultRecord,
+        objectMetadataItems,
+        objectPermissionsByObjectMetadataId,
+        upsertRecordsInStore,
+      });
+    }
 
     dispatchObjectRecordOperationBrowserEvent({
       objectMetadataItem,

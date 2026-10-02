@@ -154,6 +154,8 @@ export class WorkspaceUpdateQueryBuilder<
       }) as WhereClause[];
 
       const nestedRelationQueryBuilder = new WorkspaceSelectQueryBuilder(
+        // SAFETY: the select wrapper shares the TypeORM expression map and
+        // runner; it is used only for nested relation reads.
         this as unknown as WorkspaceSelectQueryBuilder<T>,
         this.objectRecordsPermissions,
         this.internalContext,
@@ -229,16 +231,65 @@ export class WorkspaceUpdateQueryBuilder<
         updatedRecords,
       });
 
-      const result = await super.execute();
+      // The event readback needs the IDs of rows actually changed by the SQL
+      // UPDATE, not the original WHERE (which may no longer match after CAS).
+      // Preserve the caller's RETURNING projection (permission validation
+      // already rejects a missing RETURNING).
+      const callerReturning = this.expressionMap.returning;
+      const eventIdAlias = '__twentyOrmUpdatedRecordId';
+      const hasReturningAll = callerReturning === '*';
+      let hasCallerProjection = hasReturningAll;
+
+      if (!hasReturningAll) {
+        const eventIdReturning = `"id" AS "${eventIdAlias}"`;
+        // TypeORM ignores non-metadata expressions in a RETURNING array.
+        // Render its resolved database columns exactly as TypeORM does, then
+        // append the private ID alias in a SQL RETURNING string.
+        const callerProjection = Array.isArray(callerReturning)
+          ? callerReturning
+              .flatMap(
+                (path) =>
+                  this.expressionMap.mainAlias?.metadata
+                    .findColumnsWithPropertyPath(path)
+                    .map((column) => this.escape(column.databaseName)) ?? [],
+              )
+              .join(', ')
+          : callerReturning;
+
+        hasCallerProjection = Boolean(callerProjection);
+        this.expressionMap.returning = callerProjection
+          ? `${callerProjection}, ${eventIdReturning}`
+          : eventIdReturning;
+      }
+
+      let result: UpdateResult;
+
+      try {
+        result = await super.execute();
+      } finally {
+        this.expressionMap.returning = callerReturning;
+      }
+
+      const affectedIds = hasReturningAll
+        ? result.raw.map((record: { id: string }) => record.id)
+        : result.raw.map(
+            (record: Record<string, unknown>) => record[eventIdAlias] as string,
+          );
 
       if (isDefined(filesFieldFileIds)) {
         await this.filesFieldSync.updateFileEntityRecords(filesFieldFileIds);
       }
 
-      const after = await eventSelectQueryBuilder.getMany({
-        noFormatting: true,
-      });
+      const after = affectedIds.length
+        ? await eventSelectQueryBuilder.whereInIds(affectedIds).getMany({
+            noFormatting: true,
+          })
+        : [];
 
+      const affectedIdSet = new Set(affectedIds);
+      const formattedAffectedBefore = formattedBefore.filter((record) =>
+        affectedIdSet.has(record.id),
+      );
       const formattedAfter = formatResult<T[]>(
         after,
         objectMetadata,
@@ -253,7 +304,7 @@ export class WorkspaceUpdateQueryBuilder<
           flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
           workspaceId: this.internalContext.workspaceId,
           recordsAfter: formattedAfter,
-          recordsBefore: formattedBefore,
+          recordsBefore: formattedAffectedBefore,
           authContext: this.authContext,
         }),
       );
@@ -265,20 +316,29 @@ export class WorkspaceUpdateQueryBuilder<
           flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
           workspaceId: this.internalContext.workspaceId,
           recordsAfter: formattedAfter,
-          recordsBefore: formattedBefore,
+          recordsBefore: formattedAffectedBefore,
           authContext: this.authContext,
         }),
       );
 
+      const callerRaw = hasReturningAll
+        ? result.raw
+        : hasCallerProjection
+          ? result.raw.map((record: Record<string, unknown>) => {
+              const { [eventIdAlias]: _eventId, ...callerRecord } = record;
+
+              return callerRecord;
+            })
+          : [];
       const formattedResult = formatResult<T[]>(
-        result.raw,
+        callerRaw,
         objectMetadata,
         this.internalContext.flatObjectMetadataMaps,
         this.internalContext.flatFieldMetadataMaps,
       );
 
       return {
-        raw: result.raw,
+        raw: callerRaw,
         generatedMaps: formattedResult,
         affected: result.affected,
       };
@@ -353,6 +413,8 @@ export class WorkspaceUpdateQueryBuilder<
       const results: UpdateResult[] = [];
 
       const nestedRelationQueryBuilder = new WorkspaceSelectQueryBuilder(
+        // SAFETY: the select wrapper shares the TypeORM expression map and
+        // runner; it is used only for nested relation reads.
         this as unknown as WorkspaceSelectQueryBuilder<T>,
         this.objectRecordsPermissions,
         this.internalContext,
@@ -632,6 +694,7 @@ export class WorkspaceUpdateQueryBuilder<
     );
 
     applyRowLevelPermissionPredicates({
+      // SAFETY: the RLS helper only augments the shared TypeORM WHERE map.
       queryBuilder: this as unknown as WorkspaceSelectQueryBuilder<T>,
       objectMetadata,
       internalContext: this.internalContext,

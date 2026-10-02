@@ -1802,6 +1802,17 @@ export class ConfigVariables {
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.SERVER_CONFIG,
+    description: 'Optional interface address for the node server',
+    type: ConfigVariableType.STRING,
+    isEnvOnly: true,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  NODE_HOST?: string;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.SERVER_CONFIG,
     description:
       'Idle keep-alive timeout (ms) for the HTTP server. Should be higher ' +
       'than the idle timeout of any reverse proxy / load balancer in front ' +
@@ -2605,6 +2616,40 @@ export const validate = (config: Record<string, unknown>): ConfigVariables => {
       'Config variables validation failed',
       ConfigVariableExceptionCode.VALIDATION_FAILED,
     );
+  }
+
+  // Opt-in migration bootstrap fence: the caller attests this exact object
+  // before Nest can construct providers. Ordinary startup does not use it.
+  if (process.env.MYAH_BOOTSTRAP_CONFIG_ATTESTATION !== undefined) {
+    try {
+      const attest: unknown = Object.getOwnPropertyDescriptor(
+        globalThis,
+        Symbol.for('myah.bootstrap.config.attestor'),
+      )?.value;
+
+      if (
+        process.env.MYAH_BOOTSTRAP_CONFIG_ATTESTATION !== '1' ||
+        typeof attest !== 'function'
+      ) {
+        throw new Error();
+      }
+
+      const result: unknown = attest(config, validatedConfig);
+
+      if (result !== true) {
+        // An async attestor is never accepted; consume its rejection so its
+        // original error cannot escape as an unhandled rejection later.
+        if (
+          result !== null &&
+          (typeof result === 'object' || typeof result === 'function')
+        ) {
+          void Promise.resolve(result).catch(() => {});
+        }
+        throw new Error();
+      }
+    } catch {
+      throw new Error('Bootstrap configuration attestation failed');
+    }
   }
 
   return validatedConfig;

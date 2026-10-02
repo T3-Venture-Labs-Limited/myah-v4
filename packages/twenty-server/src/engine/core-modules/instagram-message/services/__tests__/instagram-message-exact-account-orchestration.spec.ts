@@ -17,6 +17,7 @@ import { InstagramMessageAuthorityReaderService } from 'src/engine/core-modules/
 import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
 import { InstagramMessageSendService } from 'src/engine/core-modules/instagram-message/services/instagram-message-send.service';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
 // Seed historical receipt authority without invoking the fresh provider-aware producer.
 class LegacyReceiptAuthorityReaderFixture extends InstagramMessageAuthorityReaderService {
@@ -25,6 +26,7 @@ class LegacyReceiptAuthorityReaderFixture extends InstagramMessageAuthorityReade
     initiatorUserWorkspaceId: string;
     draftId: string;
     expectedRevision: number;
+    rolePermissionConfig?: RolePermissionConfig;
   }) {
     const workspace = await this.getWorkspace(input.workspaceId);
     const accountBinding = await this.getActiveAccountBinding(
@@ -37,6 +39,7 @@ class LegacyReceiptAuthorityReaderFixture extends InstagramMessageAuthorityReade
       workspace,
       accountBinding,
       draft,
+      rolePermissionConfig: input.rolePermissionConfig,
       approvalContext: {
         initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
         threadId: null,
@@ -57,6 +60,8 @@ const fixtureAccountId = '00000000-0000-4000-8000-000000000007';
 const bindingId = '00000000-0000-4000-8000-000000000008';
 const approvalBindingId = '00000000-0000-4000-8000-000000000009';
 const receiptId = '00000000-0000-4000-8000-000000000010';
+const profileId = '00000000-0000-4000-8000-000000000011';
+const rolePermissionConfig = { unionOf: ['role-id'] };
 
 const objectMetadata = [
   ['2d357469-831a-4629-ad4b-47335900e883', 'account-metadata'],
@@ -111,6 +116,39 @@ const buildHarness = () => {
     },
   ];
   const repositories = {
+    socialProfile: {
+      find: jest.fn(
+        async ({
+          where,
+        }: {
+          where: {
+            creatorId: string;
+            platform: string;
+            deletedAt: { type: string };
+          };
+        }) =>
+          where.creatorId === creatorId &&
+          where.platform === 'INSTAGRAM' &&
+          where.deletedAt.type === 'isNull'
+            ? [
+                {
+                  id: profileId,
+                  creatorId,
+                  platform: 'INSTAGRAM',
+                  handle: 'creator.name',
+                  profileUrl: null,
+                  platformAccountId: null,
+                  deletedAt: null,
+                },
+              ]
+            : [],
+      ),
+    },
+    creator: {
+      findOne: jest.fn(async ({ where }: { where: { id: string } }) =>
+        where.id === creatorId ? { id: creatorId } : null,
+      ),
+    },
     myahInstagramReplyDraft: {
       findOne: jest.fn().mockResolvedValue({
         id: draftId,
@@ -162,7 +200,13 @@ const buildHarness = () => {
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(async (callback) => callback()),
     getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
-    getRepository: jest.fn(async (_workspaceId, objectName) => {
+    getRepository: jest.fn(async (_workspaceId, objectName, permissions) => {
+      if (
+        (objectName === 'socialProfile' || objectName === 'creator') &&
+        permissions !== rolePermissionConfig
+      ) {
+        throw new Error('Expected role-scoped recipient lookup');
+      }
       return repositories[objectName as keyof typeof repositories];
     }),
   };
@@ -223,6 +267,7 @@ const buildHarness = () => {
     authorityReader,
     budgetService,
     dataSource,
+    globalWorkspaceOrmManager,
     providerClient,
     queryRunner,
     repositories,
@@ -231,7 +276,7 @@ const buildHarness = () => {
 };
 
 describe('Instagram historical v2 exact-account non-sending orchestration', () => {
-  it('retains a second account fixture, selects the canonical reply account, and stops at budget BLOCKED before provider I/O', async () => {
+  it('selects the canonical reply account while historical v2 execution fails closed before budget and provider I/O', async () => {
     const harness = buildHarness();
 
     expect(() => harness.dataSource.query('SELECT 1')).toThrow(
@@ -243,10 +288,19 @@ describe('Instagram historical v2 exact-account non-sending orchestration', () =
       initiatorUserWorkspaceId: userWorkspaceId,
       draftId,
       expectedRevision: 1,
+      rolePermissionConfig,
     });
+    expect(authority.expectedActionBinding.actionVersion).toBe(2);
+    expect(
+      authority.canonicalGraph.account.workspaceInstagramAccountRecordId,
+    ).toBe(canonicalAccountId);
+    expect(authority.canonicalGraph.draft.recipientSourceValues).toEqual(
+      expect.arrayContaining([{ field: 'socialProfile.id', value: profileId }]),
+    );
     harness.actionApprovalService.getApprovedBinding.mockResolvedValue(
       authority.expectedActionBinding,
     );
+    harness.queryRunner.query.mockClear();
 
     await expect(
       harness.sendService.executeApproved({
@@ -256,12 +310,9 @@ describe('Instagram historical v2 exact-account non-sending orchestration', () =
         threadId: null,
         interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
         interactionContextId: draftId,
-        rolePermissionConfig: { unionOf: ['role-id'] },
+        rolePermissionConfig,
       }),
-    ).resolves.toMatchObject({
-      status: 'BLOCKED',
-      receiptId,
-    });
+    ).rejects.toThrow('Instagram historical recipient is unavailable');
 
     expect(harness.accounts).toEqual(
       expect.arrayContaining([
@@ -275,12 +326,28 @@ describe('Instagram historical v2 exact-account non-sending orchestration', () =
         where: expect.objectContaining({ id: canonicalAccountId }),
       }),
     );
-    expect(harness.budgetService.reserve).toHaveBeenCalledWith(
+    expect(harness.repositories.socialProfile.find).toHaveBeenCalledWith(
       expect.objectContaining({
-        instagramAccountRecordId: canonicalAccountId,
+        where: expect.objectContaining({ creatorId, platform: 'INSTAGRAM' }),
       }),
     );
-    expect(harness.queryRunner.query).toHaveBeenCalled();
+    expect(
+      harness.globalWorkspaceOrmManager.getRepository,
+    ).toHaveBeenCalledWith(workspaceId, 'socialProfile', rolePermissionConfig);
+    expect(
+      harness.globalWorkspaceOrmManager.getRepository,
+    ).toHaveBeenCalledWith(workspaceId, 'creator', rolePermissionConfig);
+    expect(harness.budgetService.reserve).not.toHaveBeenCalled();
+    expect(
+      harness.actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expect(
+      harness.actionApprovalService.recordProviderAccepted,
+    ).not.toHaveBeenCalled();
+    expect(
+      harness.actionApprovalService.recordProviderTerminalState,
+    ).not.toHaveBeenCalled();
+    expect(harness.queryRunner.query).not.toHaveBeenCalled();
     expect(harness.providerClient.getChat).not.toHaveBeenCalled();
     expect(harness.providerClient.listChats).not.toHaveBeenCalled();
     expect(harness.providerClient.sendMessage).not.toHaveBeenCalled();

@@ -134,7 +134,24 @@ const createSession = (
   buildCreatorSpreadsheetImportSession({
     availableFieldMetadataItems: metadataItems,
     spreadsheetImportFields,
-    queryExistingCreators,
+    queryExistingCreators: async () => {
+      const fixtures = await queryExistingCreators();
+      return fixtures.flatMap((creator: { id: string; [key: string]: any }) =>
+        ['instagram', 'tiktok', 'youtube', 'twitter'].flatMap((provider) => {
+          const url = creator[`${provider}Link`]?.primaryLinkUrl;
+          return url
+            ? [
+                {
+                  id: `${creator.id}-${provider}`,
+                  creatorId: creator.id,
+                  platform: provider.toUpperCase(),
+                  profileUrl: url,
+                },
+              ]
+            : [];
+        }),
+      );
+    },
   });
 
 const runTableHook = (
@@ -150,6 +167,121 @@ const runTableHook = (
 };
 
 describe('buildCreatorSpreadsheetImportSession', () => {
+  it('maps clean Creator metadata social URLs to UI-only fields and canonical profiles', async () => {
+    const session = buildCreatorSpreadsheetImportSession({
+      availableFieldMetadataItems: metadataItems.filter(
+        ({ name }) =>
+          ![
+            'instagramLink',
+            'tiktokLink',
+            'youtubeLink',
+            'twitterLink',
+          ].includes(name),
+      ),
+      spreadsheetImportFields: spreadsheetImportFields.filter(
+        ({ key }) =>
+          !['instagram', 'tiktok', 'youtube', 'twitter'].includes(key),
+      ),
+      queryExistingCreators: jest.fn().mockResolvedValue([]),
+    });
+    expect(session.spreadsheetImportFields.map(({ key }) => key)).toEqual(
+      expect.arrayContaining(['instagram', 'tiktok', 'youtube', 'twitter']),
+    );
+    expect(session.headerAliases.instagram_link.fieldKey).toBe('instagram');
+    const rows = await session.matchColumnsStepHook(
+      [
+        {
+          name: 'Ada',
+          instagram: 'https://www.instagram.com/ada/?ref=csv',
+          tiktok: 'https://tiktok.com/@ada',
+        },
+      ],
+      [[]],
+      columnsFor(['first_name', 'instagram_link', 'tiktok_link']),
+      undefined,
+    );
+    const { rows: validated, errors } = runTableHook(session, rows);
+    expect(errors).toEqual([]);
+    expect(session.buildRowCommitPlan(validated[0]).profiles).toEqual([
+      { platform: 'INSTAGRAM', profileUrl: 'https://instagram.com/ada' },
+      { platform: 'TIKTOK', profileUrl: 'https://tiktok.com/@ada' },
+    ]);
+    const invalidRows = await session.matchColumnsStepHook(
+      [{ name: 'Ada', instagram: 'https://not-instagram.example/ada' }],
+      [['Ada', 'https://not-instagram.example/ada']],
+      columnsFor(['first_name', 'instagram_link']),
+      undefined,
+    );
+    expect(runTableHook(session, invalidRows).errors).toEqual([
+      expect.objectContaining({
+        fieldKey: 'instagram',
+        message: 'Enter a valid social profile URL',
+      }),
+    ]);
+  });
+
+  it('fails visibly rather than discarding a populated supported social header', async () => {
+    const session = createSession();
+    await expect(
+      session.matchColumnsStepHook(
+        [{ name: 'Ada' }],
+        [['Ada', 'https://instagram.com/ada']],
+        [
+          columnsFor(['first_name'])[0],
+          {
+            index: 1,
+            header: 'instagram_link',
+            type: SpreadsheetColumnType.ignored,
+          },
+        ],
+        undefined,
+      ),
+    ).rejects.toThrow(
+      'Map instagram_link to its Social profile URL destination',
+    );
+  });
+
+  it('indexes two profiles of one Creator and rejects a cross-Creator collision', async () => {
+    const session = buildCreatorSpreadsheetImportSession({
+      availableFieldMetadataItems: metadataItems,
+      spreadsheetImportFields,
+      queryExistingCreators: jest.fn().mockResolvedValue([
+        {
+          id: 'p1',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          profileUrl: 'https://instagram.com/ada',
+        },
+        {
+          id: 'p2',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          profileUrl: 'https://instagram.com/ada.two',
+        },
+        {
+          id: 'p3',
+          creatorId: 'creator-b',
+          platform: 'INSTAGRAM',
+          profileUrl: 'https://instagram.com/ada.two/',
+        },
+      ]),
+    });
+    const rows = await session.matchColumnsStepHook(
+      [
+        { instagram: 'https://instagram.com/ada' },
+        { instagram: 'https://instagram.com/ada.two' },
+      ],
+      [[], []],
+      columnsFor(['instagram_link']),
+      undefined,
+    );
+    const { errors } = runTableHook(session, rows);
+    expect(errors.map(({ message }) => message)).toEqual([
+      'Creator already exists for this social profile',
+      'Social profiles match different or ambiguous Creators',
+    ]);
+  });
+
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-24T12:00:00.000Z'));
   });

@@ -1,32 +1,38 @@
 import { renderHook } from '@testing-library/react';
-
 import { useQueryExistingCreatorSocialProfiles } from '@/myah/creator-crm/spreadsheet-import/hooks/useQueryExistingCreatorSocialProfiles';
 
 const mockUseLazyFindManyRecords = jest.fn();
 const mockFindManyRecordsLazy = jest.fn();
 const mockFetchMoreRecordsLazy = jest.fn();
 const mockUseObjectMetadataItem = jest.fn();
-
 jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
   useObjectMetadataItem: () => mockUseObjectMetadataItem(),
 }));
-
 jest.mock('@/object-record/hooks/useLazyFindManyRecords', () => ({
   useLazyFindManyRecords: (options: unknown) =>
     mockUseLazyFindManyRecords(options),
 }));
+
+const profile = (id: string, creatorId: string, profileUrl: string) => ({
+  id,
+  creatorId,
+  platform: 'INSTAGRAM',
+  profileUrl,
+});
+
+const query = () =>
+  renderHook(() =>
+    useQueryExistingCreatorSocialProfiles(),
+  ).result.current.queryExistingCreatorSocialProfiles();
 
 describe('useQueryExistingCreatorSocialProfiles', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseObjectMetadataItem.mockReturnValue({
       objectMetadataItem: {
-        readableFields: [
-          { name: 'instagramLink' },
-          { name: 'tiktokLink' },
-          { name: 'youtubeLink' },
-          { name: 'twitterLink' },
-        ],
+        readableFields: ['id', 'creator', 'platform', 'profileUrl'].map(
+          (name) => ({ name }),
+        ),
       },
     });
     mockUseLazyFindManyRecords.mockReturnValue({
@@ -35,63 +41,32 @@ describe('useQueryExistingCreatorSocialProfiles', () => {
     });
   });
 
-  it('requests only the four social primary URLs and cursor-paginates all records', async () => {
+  it('reads every canonical profile independently across pages, including two Instagram profiles on one Creator', async () => {
     mockFindManyRecordsLazy.mockResolvedValue({
       records: [
-        {
-          id: 'creator-a',
-          instagramLink: {
-            primaryLinkUrl: 'https://www.instagram.com/Ada/?ref=stored#bio',
-          },
-        },
+        profile('p1', 'creator-a', 'https://www.instagram.com/ada/?ref=csv'),
       ],
-      totalCount: 2,
+      totalCount: 3,
       hasNextPage: true,
-      error: undefined,
     });
     mockFetchMoreRecordsLazy.mockResolvedValue({
       records: [
-        {
-          id: 'creator-b',
-          twitterLink: {
-            primaryLinkUrl: 'https://twitter.com/Bob/',
-          },
-        },
+        profile('p2', 'creator-a', 'https://instagram.com/ada.two'),
+        profile('p3', 'creator-b', 'https://instagram.com/bob'),
       ],
-      error: undefined,
     });
-
-    const { result } = renderHook(() =>
-      useQueryExistingCreatorSocialProfiles(),
-    );
-
-    await expect(
-      result.current.queryExistingCreatorSocialProfiles(),
-    ).resolves.toEqual([
-      {
-        id: 'creator-a',
-        instagramLink: { primaryLinkUrl: 'https://instagram.com/Ada' },
-        tiktokLink: undefined,
-        youtubeLink: undefined,
-        twitterLink: undefined,
-      },
-      {
-        id: 'creator-b',
-        instagramLink: undefined,
-        tiktokLink: undefined,
-        youtubeLink: undefined,
-        twitterLink: { primaryLinkUrl: 'https://x.com/Bob' },
-      },
+    await expect(query()).resolves.toEqual([
+      profile('p1', 'creator-a', 'https://instagram.com/ada'),
+      profile('p2', 'creator-a', 'https://instagram.com/ada.two'),
+      profile('p3', 'creator-b', 'https://instagram.com/bob'),
     ]);
-
     expect(mockUseLazyFindManyRecords).toHaveBeenCalledWith({
-      objectNameSingular: 'creator',
+      objectNameSingular: 'socialProfile',
       recordGqlFields: {
         id: true,
-        instagramLink: { primaryLinkUrl: true },
-        tiktokLink: { primaryLinkUrl: true },
-        youtubeLink: { primaryLinkUrl: true },
-        twitterLink: { primaryLinkUrl: true },
+        creatorId: true,
+        platform: true,
+        profileUrl: true,
       },
       limit: 500,
       fetchPolicy: 'network-only',
@@ -99,90 +74,42 @@ describe('useQueryExistingCreatorSocialProfiles', () => {
     expect(mockFetchMoreRecordsLazy).toHaveBeenCalledWith(500);
   });
 
-  it('drops records without a permission-visible valid social identity', async () => {
-    mockFindManyRecordsLazy.mockResolvedValue({
-      records: [
-        { id: 'creator-a' },
-        {
-          id: 'creator-b',
-          youtubeLink: { primaryLinkUrl: 'https://youtube.com/watch?v=video' },
-        },
-      ],
-      totalCount: 2,
-      hasNextPage: false,
-      error: undefined,
-    });
-
-    const { result } = renderHook(() =>
-      useQueryExistingCreatorSocialProfiles(),
-    );
-
-    await expect(
-      result.current.queryExistingCreatorSocialProfiles(),
-    ).resolves.toEqual([]);
-  });
-
-  it('rejects before querying when any social identity field is unreadable', async () => {
+  it('fails closed when a required SocialProfile field is unreadable', async () => {
     mockUseObjectMetadataItem.mockReturnValue({
       objectMetadataItem: {
-        readableFields: [
-          { name: 'instagramLink' },
-          { name: 'tiktokLink' },
-          { name: 'youtubeLink' },
-        ],
+        readableFields: ['id', 'creatorId', 'platform', 'profileUrl'].map(
+          (name) => ({ name }),
+        ),
       },
     });
-    const { result } = renderHook(() =>
-      useQueryExistingCreatorSocialProfiles(),
+    await expect(query()).rejects.toThrow(
+      'Unable to verify existing Creators for this import',
     );
-
-    await expect(
-      result.current.queryExistingCreatorSocialProfiles(),
-    ).rejects.toThrow('Unable to verify existing Creators for this import');
     expect(mockFindManyRecordsLazy).not.toHaveBeenCalled();
   });
 
   it.each([
-    [
-      'query rejection',
-      () =>
-        mockFindManyRecordsLazy.mockRejectedValue(
-          new Error('secret record value'),
-        ),
-    ],
-    [
-      'missing object permission',
-      () =>
-        mockFindManyRecordsLazy.mockResolvedValue({
-          records: null,
-          totalCount: 0,
-          hasNextPage: false,
-          error: undefined,
-        }),
-    ],
-    [
-      'incomplete later page',
-      () => {
-        mockFindManyRecordsLazy.mockResolvedValue({
-          records: [{ id: 'creator-a' }],
-          totalCount: 2,
-          hasNextPage: true,
-          error: undefined,
-        });
-        mockFetchMoreRecordsLazy.mockResolvedValue({
-          records: undefined,
-          error: new Error('forbidden field'),
-        });
-      },
-    ],
-  ])('rejects with a generic error on %s', async (_label, arrange) => {
-    arrange();
-    const { result } = renderHook(() =>
-      useQueryExistingCreatorSocialProfiles(),
+    { records: null, totalCount: 0, hasNextPage: false },
+    { records: [], totalCount: 2, hasNextPage: false },
+  ])('fails closed on incomplete visibility %#', async (page) => {
+    mockFindManyRecordsLazy.mockResolvedValue(page);
+    await expect(query()).rejects.toThrow(
+      'Unable to verify existing Creators for this import',
     );
+  });
 
-    await expect(
-      result.current.queryExistingCreatorSocialProfiles(),
-    ).rejects.toThrow('Unable to verify existing Creators for this import');
+  it('fails closed on an incomplete later page', async () => {
+    mockFindManyRecordsLazy.mockResolvedValue({
+      records: [profile('p1', 'creator-a', 'https://instagram.com/ada')],
+      totalCount: 2,
+      hasNextPage: true,
+    });
+    mockFetchMoreRecordsLazy.mockResolvedValue({
+      records: [],
+      error: undefined,
+    });
+    await expect(query()).rejects.toThrow(
+      'Unable to verify existing Creators for this import',
+    );
   });
 });

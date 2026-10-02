@@ -54,6 +54,8 @@ export type RecordIndexContextValue = {
     ColumnDefinition<FieldMetadata>
   >;
   recordLimit?: number;
+  queryOnlyRecordFilters?: RecordFilter[];
+  requiredCreationInput?: Record<string, string>;
 };
 
 export const [

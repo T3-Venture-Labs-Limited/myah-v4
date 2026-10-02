@@ -21,7 +21,8 @@ import { useCallback, useMemo } from 'react';
 import { computeRecordGqlOperationFilter } from 'twenty-shared/utils';
 
 export const RecordTableEmptyHasNewRecordEffect = () => {
-  const { objectMetadataItem } = useRecordIndexContextOrThrow();
+  const { objectMetadataItem, recordIndexId, queryOnlyRecordFilters } =
+    useRecordIndexContextOrThrow();
 
   const store = useStore();
 
@@ -54,7 +55,7 @@ export const RecordTableEmptyHasNewRecordEffect = () => {
     currentRecordFilterGroupsComponentState,
   );
 
-  const queryId = `record-table-empty-${objectMetadataItem.nameSingular}`;
+  const queryId = `record-table-empty-${objectMetadataItem.nameSingular}${queryOnlyRecordFilters?.length ? `-${recordIndexId}` : ''}`;
 
   const operationSignature = useMemo(
     () => ({

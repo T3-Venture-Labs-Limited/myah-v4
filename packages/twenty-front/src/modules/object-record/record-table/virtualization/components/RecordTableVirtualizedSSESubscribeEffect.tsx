@@ -13,7 +13,8 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { computeRecordGqlOperationFilter } from 'twenty-shared/utils';
 
 export const RecordTableVirtualizedSSESubscribeEffect = () => {
-  const { objectMetadataItem } = useRecordIndexContextOrThrow();
+  const { objectMetadataItem, recordIndexId, queryOnlyRecordFilters } =
+    useRecordIndexContextOrThrow();
   const { filterValueDependencies } = useFilterValueDependencies();
 
   const flattenedFieldMetadataItems = useAtomStateValue(
@@ -30,7 +31,7 @@ export const RecordTableVirtualizedSSESubscribeEffect = () => {
     currentRecordFilterGroupsComponentState,
   );
 
-  const queryId = `record-table-virtualized-${objectMetadataItem.nameSingular}`;
+  const queryId = `record-table-virtualized-${objectMetadataItem.nameSingular}${queryOnlyRecordFilters?.length ? `-${recordIndexId}` : ''}`;
 
   const operationSignature = useMemo(
     () => ({

@@ -117,7 +117,7 @@ export const MyahInboxContactConversation = ({
   const { openMyahInboxContextInSidePanel } =
     useOpenMyahInboxContextInSidePanel();
   const canStartInstagram = Boolean(
-    contact.creator && contact.instagramUsername,
+    contact.creator && contact.instagramDisplayHandle,
   );
 
   const replyTargets = getMyahInboxOutreachCards(email).map(

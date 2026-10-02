@@ -83,7 +83,7 @@ const contact = (
   id,
   identityKind: creator ? 'CREATOR' : 'EMAIL_THREAD',
   displayName: creator?.name ?? 'Unlinked contact',
-  instagramUsername: creator ? `${id}.ig` : null,
+  instagramDisplayHandle: creator ? `${id}.ig` : null,
   creator,
   lastActivityAt: '2026-09-08T00:00:00Z',
   latestChannel: 'EMAIL',

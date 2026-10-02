@@ -21,26 +21,44 @@ export function useDirectExecution(
 ): Plugin {
   return {
     onRequest: async ({ endResponse, serverContext }) => {
+      // SAFETY: The Express Yoga serverContext for this plugin is constructed with req.
       const req = (serverContext as unknown as { req: Request }).req;
 
       if (!req.workspace?.id || !req.body?.query) {
         return;
       }
 
-      const queryString = req.body.query as string;
+      const queryString = req.body.query;
       const operationName = req.body.operationName as string | undefined;
+      const invalidDocument = () =>
+        endResponse(
+          Response.json({
+            errors: [
+              {
+                message: 'Invalid or oversized GraphQL document.',
+                extensions: { code: 'GRAPHQL_VALIDATION_FAILED' },
+              },
+            ],
+          }),
+        );
+
+      if (typeof queryString !== 'string' || queryString.length > 64_000) {
+        return invalidDocument();
+      }
 
       let document: DocumentNode;
       try {
-        document = parse(queryString);
+        document = parse(queryString, { maxTokens: 2500 });
       } catch {
-        return;
+        return invalidDocument();
       }
 
-      const operationDefinition = findOperationDefinition(
-        document,
-        operationName,
-      );
+      let operationDefinition;
+      try {
+        operationDefinition = findOperationDefinition(document, operationName);
+      } catch {
+        return invalidDocument();
+      }
 
       if (
         !operationDefinition ||

@@ -9,7 +9,8 @@ type MyahViewFilterObjectName =
   | 'brandBrainUpdateProposal'
   | 'creator'
   | 'campaignCreator'
-  | 'campaignCreatorList';
+  | 'campaignCreatorList'
+  | 'socialProfile';
 type Args = Omit<
   CreateStandardViewFilterArgs<MyahViewFilterObjectName>,
   'context'
@@ -34,34 +35,6 @@ export const computeMyahViewFilters = (
           }),
       }
     : {}),
-  ...(args.objectName === 'creator'
-    ? {
-        qualifiedCreatorsWithEmailCreatorStatusIs:
-          createStandardViewFilterFlatMetadata({
-            ...args,
-            objectName: 'creator',
-            context: {
-              viewName: 'qualifiedCreatorsWithEmail',
-              viewFilterName: 'creatorStatus',
-              fieldName: 'creatorStatus',
-              operand: ViewFilterOperand.IS,
-              value: JSON.stringify(['QUALIFIED']),
-            },
-          }),
-        qualifiedCreatorsWithEmailEmailIsNotEmpty:
-          createStandardViewFilterFlatMetadata({
-            ...args,
-            objectName: 'creator',
-            context: {
-              viewName: 'qualifiedCreatorsWithEmail',
-              viewFilterName: 'email',
-              fieldName: 'email',
-              operand: ViewFilterOperand.IS_NOT_EMPTY,
-              value: JSON.stringify([]),
-            },
-          }),
-      }
-    : {}),
   ...(args.objectName === 'campaignCreator'
     ? {
         campaignInfluencersCampaignIsCurrentRecord:
@@ -72,6 +45,25 @@ export const computeMyahViewFilters = (
               viewName: 'campaignInfluencers',
               viewFilterName: 'campaignCurrentRecord',
               fieldName: 'campaign',
+              operand: ViewFilterOperand.IS,
+              value: JSON.stringify({
+                selectedRecordIds: [],
+                isCurrentRecordSelected: true,
+              }),
+            },
+          }),
+      }
+    : {}),
+  ...(args.objectName === 'socialProfile'
+    ? {
+        socialProfilesCreatorIsCurrentRecord:
+          createStandardViewFilterFlatMetadata({
+            ...args,
+            objectName: 'socialProfile',
+            context: {
+              viewName: 'socialProfiles',
+              viewFilterName: 'creatorCurrentRecord',
+              fieldName: 'creator',
               operand: ViewFilterOperand.IS,
               value: JSON.stringify({
                 selectedRecordIds: [],

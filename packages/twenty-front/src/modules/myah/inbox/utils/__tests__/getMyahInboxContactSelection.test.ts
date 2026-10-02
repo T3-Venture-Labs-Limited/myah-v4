@@ -9,7 +9,7 @@ const contact: MyahInboxContact = {
   id: 'contact-1',
   identityKind: 'CREATOR',
   displayName: 'Creator One',
-  instagramUsername: 'creator',
+  instagramDisplayHandle: 'creator',
   creator: { id: 'creator-1', name: 'Creator One' },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
@@ -73,6 +73,19 @@ describe('getMyahInboxContactSelection', () => {
       contactId: 'contact-1',
       channel: 'INSTAGRAM',
       emailThreadId: null,
+      instagramConversationId: 'conversation-1',
+    });
+  });
+
+  it('keeps the exact readable conversation available even without a contact display handle', () => {
+    expect(
+      getMyahInboxContactSelection({
+        workspaceId: 'workspace-1',
+        contact: { ...contact, instagramDisplayHandle: null },
+        previousSelection: null,
+      }),
+    ).toMatchObject({
+      channel: 'INSTAGRAM',
       instagramConversationId: 'conversation-1',
     });
   });
@@ -195,7 +208,7 @@ describe('getMyahInboxContactSelection', () => {
         workspaceId: 'workspace-1',
         contact: {
           ...contact,
-          instagramUsername: null,
+          instagramDisplayHandle: null,
           instagram: {
             isAvailable: false,
             state: 'UNAVAILABLE',

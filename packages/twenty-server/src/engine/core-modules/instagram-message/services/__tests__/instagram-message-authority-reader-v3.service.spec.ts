@@ -98,6 +98,7 @@ const buildHarness = () => {
     getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
     getRepository: jest.fn(
       async (_workspaceId, name, _rolePermissionConfig) => ({
+        find: async () => (name === 'socialProfile' ? [socialProfile] : []),
         findOne: async () =>
           ({
             myahInstagramReplyDraft: draft,
@@ -147,14 +148,60 @@ const buildHarness = () => {
   return { service, client, draft, socialProfile, account, query, orm };
 };
 
+const rolePermissionConfig = { unionOf: ['role'] };
 const input = {
   workspaceId,
   initiatorUserWorkspaceId: actorId,
   draftId,
   expectedRevision: 1,
+  rolePermissionConfig,
 };
 
 describe('InstagramMessageAuthorityReaderService fresh v3 cutover', () => {
+  it.each(['socialProfile', 'creator'] as const)(
+    'rejects an unreadable %s with a readable reply conversation before provider lookup',
+    async (denied) => {
+      const h = buildHarness();
+      const original = h.orm.getRepository.getMockImplementation()!;
+      h.orm.getRepository.mockImplementation(async (...args) => {
+        const repository = await original(...args);
+        if (args[1] === denied && args[2] === rolePermissionConfig)
+          return {
+            ...repository,
+            findOne: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue([]),
+          };
+        return repository;
+      });
+      await expect(h.service.createDirectAuthority(input)).rejects.toThrow();
+      expect(h.client.getInstagramMessagingProfile).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a historical scalar-only snapshot without dispatching to the provider', async () => {
+    const h = buildHarness();
+    const authority = await h.service.createDirectAuthority(input);
+    const binding = authority.expectedActionBinding;
+    if (binding.actionVersion !== 3) throw new Error('Expected v3 binding');
+    h.client.getInstagramMessagingProfile.mockClear();
+    await expect(
+      h.service.rebuildExecutionAuthority({
+        rolePermissionConfig,
+        workspaceId,
+        binding: {
+          ...binding,
+          instagramMessageSnapshot: {
+            ...binding.instagramMessageSnapshot,
+            recipientSourceValues: [
+              { field: 'instagramUsername', value: 'creator.name' },
+            ],
+          },
+        },
+      }),
+    ).rejects.toThrow('historical recipient is unavailable');
+    expect(h.client.getInstagramMessagingProfile).not.toHaveBeenCalled();
+  });
+
   it.each(['direct', 'thread'] as const)(
     'resolves complete immutable identity for a fresh %s REPLY without confusing profile and messaging IDs',
     async (producer) => {
@@ -184,7 +231,12 @@ describe('InstagramMessageAuthorityReaderService fresh v3 cutover', () => {
           providerChatId: 'provider-chat',
           actionKind: 'REPLY',
           recipientSourceValues: [
-            { field: 'instagramUsername', value: 'creator.name' },
+            { field: 'socialProfile.id', value: socialProfileId },
+            { field: 'socialProfile.handle', value: 'creator.name' },
+            {
+              field: 'socialProfile.profileUrl',
+              value: 'https://www.instagram.com/creator.name/',
+            },
           ],
         },
       });
@@ -234,7 +286,7 @@ describe('InstagramMessageAuthorityReaderService fresh v3 cutover', () => {
       providerMessagingId: 'reassigned-messaging',
     });
     await expect(
-      h.service.assertReadyAfterReservation(authority),
+      h.service.assertReadyAfterReservation(authority, rolePermissionConfig),
     ).rejects.toThrow();
   });
 });
@@ -733,6 +785,7 @@ describe('Instagram v3 thread approval and local proposal boundary', () => {
       threadId,
     });
     for (const mock of Object.values(h.client)) mock.mockClear();
+    h.orm.getRepository.mockClear();
     const proposal = new InstagramMessageProposalReaderService(
       h.orm as never,
       h.service,
@@ -755,7 +808,7 @@ describe('Instagram v3 thread approval and local proposal boundary', () => {
       expect(call[2]).toEqual({ intersectionOf: ['role'] });
     for (const mock of Object.values(h.client))
       expect(mock).not.toHaveBeenCalled();
-    h.draft.creatorInstagramUsername = 'reassigned.name';
+    h.socialProfile.handle = 'reassigned.name';
     await expect(read()).rejects.toThrow();
     for (const mock of Object.values(h.client))
       expect(mock).not.toHaveBeenCalled();

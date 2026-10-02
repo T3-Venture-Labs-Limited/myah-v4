@@ -142,7 +142,7 @@ describe('request_approval tool', () => {
         actionApprovalService,
         instagramMessagePermissionService,
         instagramMessageRecordAccessService,
-        rolePermissionConfig: { shouldBypassPermissionChecks: true },
+        rolePermissionConfig: { unionOf: ['role'] },
       }).execute(input),
     ).resolves.toEqual({
       success: true,
@@ -172,6 +172,7 @@ describe('request_approval tool', () => {
         initiatorUserWorkspaceId: 'member-id',
         threadId: 'thread-id',
         draftId,
+        rolePermissionConfig: { unionOf: ['role'] },
       },
     );
     expect(outreachDefinition.propose).not.toHaveBeenCalled();

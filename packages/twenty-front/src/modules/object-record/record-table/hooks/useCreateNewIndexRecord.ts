@@ -496,6 +496,24 @@ export const useCreateNewIndexRecord = ({
         ...recordInputFromFilters,
         ...recordInput,
       };
+      const requiredCreationInput =
+        recordIndexContext?.recordIndexId === recordIndexId
+          ? recordIndexContext?.requiredCreationInput
+          : undefined;
+      for (const [field, value] of Object.entries(
+        requiredCreationInput ?? {},
+      )) {
+        if (
+          (isDefined(recordInput?.[field]) && recordInput?.[field] !== value) ||
+          (isDefined(recordInputFromRLSPredicates[field]) &&
+            recordInputFromRLSPredicates[field] !== value)
+        ) {
+          throw new Error(
+            t`This record cannot be created under a different owner.`,
+          );
+        }
+        mergedRecordInput[field] = value;
+      }
 
       const recordIndexOpenRecordIn =
         contextStoreInstance?.instanceId &&
@@ -603,6 +621,7 @@ export const useCreateNewIndexRecord = ({
       closeSidePanelMenu,
       currentView?.openRecordIn,
       recordIndexId,
+      recordIndexContext,
       contextStoreInstance?.instanceId,
     ],
   );

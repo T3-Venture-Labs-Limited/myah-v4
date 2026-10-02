@@ -1,3 +1,4 @@
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { useObjectMetadataItemById } from '@/object-metadata/hooks/useObjectMetadataItemById';
 import { RecordTableWidget } from '@/object-record/record-table-widget/components/RecordTableWidget';
 import { RecordTableWidgetProvider } from '@/object-record/record-table-widget/components/RecordTableWidgetProvider';
@@ -10,6 +11,9 @@ type RecordTableWidgetRendererContentProps = {
   isReadOnly?: boolean;
   isEmptyStateHidden?: boolean;
   recordLimit?: number;
+  queryOnlyRecordFilters?: RecordFilter[];
+  requiredCreationInput?: Record<string, string>;
+  scopeInstanceId?: string;
 };
 
 export const RecordTableWidgetRendererContent = ({
@@ -19,6 +23,9 @@ export const RecordTableWidgetRendererContent = ({
   isReadOnly = true,
   isEmptyStateHidden = false,
   recordLimit,
+  queryOnlyRecordFilters,
+  requiredCreationInput,
+  scopeInstanceId,
 }: RecordTableWidgetRendererContentProps) => {
   const { objectMetadataItem } = useObjectMetadataItemById({
     objectId: objectMetadataId,
@@ -35,6 +42,9 @@ export const RecordTableWidgetRendererContent = ({
         viewId={viewId}
         widgetId={widgetId}
         recordLimit={recordLimit}
+        queryOnlyRecordFilters={queryOnlyRecordFilters}
+        requiredCreationInput={requiredCreationInput}
+        scopeInstanceId={scopeInstanceId}
       >
         <RecordTableWidget
           isReadOnly={isReadOnly}

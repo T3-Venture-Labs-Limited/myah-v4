@@ -1,10 +1,13 @@
 import * as fs from 'fs';
+import { config } from 'dotenv';
 
 import { generateFrontConfig } from 'src/utils/generate-front-config';
 
 // dotenv runs at import time with override: true, which would clobber the
 // per-test process.env we set below. Neutralize it so each test controls env.
 jest.mock('dotenv', () => ({ config: jest.fn() }));
+
+const mockedDotenvConfig = config as jest.MockedFunction<typeof config>;
 jest.mock('fs');
 
 const mockedFs = fs as jest.Mocked<typeof fs>;
@@ -43,6 +46,78 @@ describe('generateFrontConfig', () => {
 
   afterAll(() => {
     process.env = ORIGINAL_ENV;
+  });
+
+  it('loads the selected task env rather than the package .env.test at import time', () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousSelector = process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE;
+
+    try {
+      process.env.NODE_ENV = 'test';
+      process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE =
+        '/synthetic/task-owned/server.env';
+      jest.isolateModules(() => {
+        require('src/utils/generate-front-config');
+      });
+
+      expect(mockedDotenvConfig).toHaveBeenCalledTimes(1);
+      expect(mockedDotenvConfig).toHaveBeenCalledWith({
+        path: '/synthetic/task-owned/server.env',
+        override: true,
+      });
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousSelector === undefined)
+        delete process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE;
+      else process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE = previousSelector;
+    }
+  });
+
+  it.each([
+    ['test', '.env.test'],
+    ['production', '.env'],
+  ])('retains the %s default env path', (nodeEnv, expectedPath) => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousSelector = process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE;
+
+    try {
+      process.env.NODE_ENV = nodeEnv;
+      delete process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE;
+      jest.isolateModules(() => {
+        require('src/utils/generate-front-config');
+      });
+      expect(mockedDotenvConfig).toHaveBeenCalledWith({
+        path: expectedPath,
+        override: true,
+      });
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousSelector === undefined)
+        delete process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE;
+      else process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE = previousSelector;
+    }
+  });
+
+  it('rejects a blank test selector before loading any env file', () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousSelector = process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE;
+
+    try {
+      process.env.NODE_ENV = 'test';
+      process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE = '  ';
+      expect(() =>
+        jest.isolateModules(() => require('src/utils/generate-front-config')),
+      ).toThrow('TWENTY_SERVER_INTEGRATION_ENV_FILE must be a non-empty path');
+      expect(mockedDotenvConfig).not.toHaveBeenCalled();
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousSelector === undefined)
+        delete process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE;
+      else process.env.TWENTY_SERVER_INTEGRATION_ENV_FILE = previousSelector;
+    }
   });
 
   it('should inject the absolute SERVER_URL when set and the toggle is unset', () => {

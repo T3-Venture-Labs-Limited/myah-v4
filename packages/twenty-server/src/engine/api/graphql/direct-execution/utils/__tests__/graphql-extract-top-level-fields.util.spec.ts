@@ -92,6 +92,31 @@ describe('graphQLExtractTopLevelFields', () => {
     expect(fields[1].name.value).toBe('companies');
   });
 
+  it('expands transitive spreads and inline fragments at the selected root', () => {
+    const document = parse(`
+      query First { ...A }
+      query Second { coreOnly }
+      fragment A on Query { ... on Query { ...B } }
+      fragment B on Query { creators { id } }
+    `);
+    expect(
+      graphQLExtractTopLevelFields(document, 'First').map(
+        (field) => field.name.value,
+      ),
+    ).toEqual(['creators']);
+  });
+
+  it('terminates on a root fragment cycle without duplicating its field', () => {
+    const document = parse(
+      `query First { ...A } fragment A on Query { creators { id } ...B } fragment B on Query { ...A }`,
+    );
+    expect(
+      graphQLExtractTopLevelFields(document, 'First').map(
+        (field) => field.name.value,
+      ),
+    ).toEqual(['creators']);
+  });
+
   it('should expand inline fragments at the top level', () => {
     const query = `
       query {

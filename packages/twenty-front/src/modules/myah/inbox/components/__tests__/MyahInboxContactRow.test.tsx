@@ -53,7 +53,7 @@ const contact: MyahInboxContact = {
   id: 'contact-1',
   identityKind: 'CREATOR',
   displayName: 'Ada Creator',
-  instagramUsername: 'ada',
+  instagramDisplayHandle: 'ada',
   creator: { id: 'creator-1', name: 'Ada Creator' },
   lastActivityAt: '2026-07-24T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',

@@ -26,7 +26,7 @@ export const useFiltersFromQueryParams = () => {
   });
 
   const queryParamsValidation = filterUrlQueryParamsSchema.safeParse(
-    qs.parse(searchParams.toString()),
+    qs.parse(searchParams.toString(), { depth: 20 }),
   );
 
   const getFiltersFromQueryParams = useCallback(async (): Promise<

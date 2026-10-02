@@ -8,7 +8,7 @@ export const useHasFiltersInQueryParams = () => {
   const [searchParams] = useSearchParams();
 
   const queryParamsValidation = filterUrlQueryParamsSchema.safeParse(
-    qs.parse(searchParams.toString()),
+    qs.parse(searchParams.toString(), { depth: 20 }),
   );
 
   const filterQueryParams = queryParamsValidation.success

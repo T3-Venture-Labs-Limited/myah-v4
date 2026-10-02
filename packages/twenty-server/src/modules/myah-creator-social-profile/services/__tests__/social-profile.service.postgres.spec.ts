@@ -765,6 +765,76 @@ describeIsolated('SocialProfileService (isolated PostgreSQL)', () => {
     expect(rows.rows).toEqual([{ id: initial.id, platformAccountId }]);
   });
 
+  it('rejects managed enrichment if the legacy migration commits a different stable ID after its read', async () => {
+    const handle = locator('crosswriter');
+    const managedId = `ig-managed-${randomUUID()}`;
+    const migratedId = `ig-migrated-${randomUUID()}`;
+    const initial = await service.upsert(
+      { creatorId, platform: 'instagram', handle },
+      authContext(),
+    );
+    const locatorLockKey = `${workspaceId}:INSTAGRAM:locator:handle:${handle}`;
+    let lockOpen = false;
+    let managed: Promise<unknown> | undefined;
+
+    await client.query('BEGIN');
+    lockOpen = true;
+    try {
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [locatorLockKey],
+      );
+      managed = service.updateIdentity(
+        { id: initial.id, platformAccountId: managedId },
+        authContext(),
+      );
+      // Managed has read NULL but cannot yet issue its guarded update.
+      await waitForAdvisoryWait(fixtureApplicationName);
+
+      const migrated = await operationService.execute({
+        workspaceId,
+        kind: 'LEGACY_MIGRATION',
+        actorWorkspaceMemberId: null,
+        attemptKey: randomUUID(),
+        operationKey: `cross-writer-${randomUUID()}`,
+        sourceDigest: 'e'.repeat(64),
+        write: async (manager, schemaName) => ({
+          creatorId,
+          socialProfileIds: [
+            await operationWriter.preserveSocialProfile(
+              manager,
+              schemaName,
+              creatorId,
+              { platform: 'instagram', handle, platformAccountId: migratedId },
+              {
+                source: 'SYSTEM',
+                workspaceMemberId: null,
+                name: 'MYAH-409',
+              },
+            ),
+          ],
+          noteId: null,
+          noteTargetId: null,
+        }),
+      });
+      expect(migrated.socialProfileIds).toEqual([initial.id]);
+      await client.query('COMMIT');
+      lockOpen = false;
+      await expect(managed).rejects.toThrow(
+        'Social profile identity changed during update',
+      );
+      const persisted = await executeFixtureSql<{ platformAccountId: string }>(
+        client,
+        `SELECT "platformAccountId" FROM "${workspaceSchema}"."socialProfile" WHERE id=$1`,
+        [initial.id],
+      );
+      expect(persisted.rows[0]?.platformAccountId).toBe(migratedId);
+    } finally {
+      if (lockOpen) await client.query('ROLLBACK');
+      if (managed) await Promise.allSettled([managed]);
+    }
+  });
+
   it('atomically recovers import results after response loss and preserves user edits', async () => {
     const attemptKey = randomUUID();
     const operationKey = `row-${randomUUID()}`;
@@ -949,8 +1019,8 @@ describeIsolated('SocialProfileService (isolated PostgreSQL)', () => {
     await client.query(
       `INSERT INTO "${workspaceSchema}"."creator" (
         id, name, "instagramUsername", "instagramFollowerCount",
-        "tiktokUsername", "tiktokFollowerCount", notes, "instagramBio"
-      ) VALUES ($1, 'Legacy Creator', $2, 1200, $3, 500, 'inline note', 'legacy bio')`,
+        "tiktokUsername", "tiktokFollowerCount", notes, "instagramBio", "tiktokBio"
+      ) VALUES ($1, 'Legacy Creator', $2, 1200, $3, 500, 'inline note', 'legacy bio', 'private tiktok bio')`,
       [legacyCreatorId, instagramHandle, tiktokHandle],
     );
     // pi-lens-ignore: sql-injection, no-sql-in-code -- schema is derived from an allowlisted isolated workspace UUID.

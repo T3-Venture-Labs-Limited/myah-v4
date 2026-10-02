@@ -17,7 +17,6 @@ export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
   creator: [
     { name: 'name', type: FieldMetadataType.TEXT },
     { name: 'email', type: FieldMetadataType.TEXT },
-    { name: 'instagramUsername', type: FieldMetadataType.TEXT },
   ],
   creatorList: [{ name: 'name', type: FieldMetadataType.TEXT }],
   creatorListMember: [],

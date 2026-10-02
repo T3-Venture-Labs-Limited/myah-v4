@@ -4,6 +4,7 @@ import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
 import { contextStoreCurrentViewTypeComponentState } from '@/context-store/states/contextStoreCurrentViewTypeComponentState';
 import { ContextStoreViewType } from '@/context-store/types/ContextStoreViewType';
+import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordTableWidgetProvider } from '@/object-record/record-table-widget/components/RecordTableWidgetProvider';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
@@ -75,7 +76,40 @@ const ContextStoreState = () => {
   );
 };
 
+const ScopedIndexId = () => {
+  const { recordIndexId } = useRecordIndexContextOrThrow();
+  return <output data-testid="scoped-index-id">{recordIndexId}</output>;
+};
+
 describe('RecordTableWidgetProvider', () => {
+  it('isolates the same widget view by current record while leaving unscoped IDs unchanged', () => {
+    const wrapper = getJestMetadataAndApolloMocksWrapper({ apolloMocks: [] });
+    const renderScoped = (scopeInstanceId?: string) =>
+      render(
+        <RecordTableWidgetProvider
+          objectNameSingular="creator"
+          viewId="creator-default-view"
+          widgetId="widget-a"
+          scopeInstanceId={scopeInstanceId}
+        >
+          <ScopedIndexId />
+        </RecordTableWidgetProvider>,
+        { wrapper },
+      );
+    const first = renderScoped('widget-a-creator-a');
+    const a = first.getByTestId('scoped-index-id').textContent;
+    first.unmount();
+    const second = renderScoped('widget-a-creator-b');
+    const b = second.getByTestId('scoped-index-id').textContent;
+    second.unmount();
+    const ordinary = renderScoped();
+    const original = ordinary.getByTestId('scoped-index-id').textContent;
+    ordinary.unmount();
+    expect(a).not.toBe(b);
+    expect(a).toContain('widget-a-creator-a');
+    expect(b).toContain('widget-a-creator-b');
+    expect(original).not.toContain('widget-a-creator-');
+  });
   it('preserves widget context-store initialization', async () => {
     render(
       <RecordTableWidgetProvider

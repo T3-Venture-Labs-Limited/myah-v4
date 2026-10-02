@@ -120,7 +120,14 @@ const bootstrap = async () => {
   httpServer.keepAliveTimeout = keepAliveTimeout;
   httpServer.headersTimeout = keepAliveTimeout + 1000;
 
-  await app.listen(twentyConfigService.get('NODE_PORT'));
+  const port = twentyConfigService.get('NODE_PORT');
+  const host = twentyConfigService.get('NODE_HOST');
+
+  if (host) {
+    await app.listen(port, host);
+  } else {
+    await app.listen(port);
+  }
 };
 
 void bootstrap();

@@ -406,8 +406,6 @@ export class MyahInboxReplyProposalService {
           ['Name', briefing.creator.name],
           ['Language', briefing.creator.language],
           ['Location', briefing.creator.location],
-          ['Categories', briefing.creator.categories],
-          ['Niches', briefing.creator.niches],
         ])
       : '';
 
