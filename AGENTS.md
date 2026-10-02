@@ -20,7 +20,7 @@ Versions come from `.nvmrc`, root `package.json` (`packageManager`), `yarn.lock`
 - **Frontend:** React, Apollo Client/GraphQL, Jotai, Linaria, Lingui, Vite. Shared components and theme tokens: `packages/twenty-ui`.
 - **Backend:** NestJS (GraphQL and REST), PostgreSQL via TypeORM and Twenty's workspace-aware ORM/metadata layer, Redis with BullMQ for background jobs. The API and queue worker are separate processes.
 - **AI:** AI SDK with provider adapters: `packages/twenty-server/src/engine/metadata-modules/ai`.
-- **Tests and checks:** Jest, Playwright (E2E), Storybook/Vitest; Oxlint/Oxfmt; native `tsgo` for typechecking.
+- **Tests and checks:** Jest, Vitest; Oxlint/Oxfmt; native `tsgo` for typechecking.
 - **Hosting:** Docker image (`packages/twenty-docker/twenty/Dockerfile`) deployed on Railway (`railway.toml`); GitHub Actions CI.
 
 ## Where things are
@@ -45,7 +45,6 @@ Paths are repository-relative.
 | Shared types and constants | `packages/twenty-shared` |
 | Generated clients and SDKs | `packages/twenty-client-sdk`, `packages/twenty-sdk` (regenerate, do not hand-edit) |
 | Error monitoring / analytics | Sentry `packages/twenty-server/src/engine/core-modules/sentry`, `packages/twenty-front/src/instrument.ts`; ClickHouse `packages/twenty-server/src/database/clickHouse` |
-| End-to-end tests | `packages/twenty-e2e-testing` |
 
 ## Local development
 
@@ -54,10 +53,10 @@ Run commands from the repository root with the Node version in `.nvmrc` and the 
 ```bash
 yarn install
 yarn nx database:reset twenty-server   # create schema and seed a dev workspace (destroys local data)
-yarn nx start twenty-server            # API
-yarn nx worker twenty-server           # background jobs
-yarn nx start twenty-front             # frontend
+yarn start                             # API, frontend and worker together
 ```
+
+To run them separately: `yarn nx start twenty-server`, `yarn nx start twenty-front`, `yarn nx worker twenty-server`.
 
 Services (PostgreSQL, Redis) and environment variables: `packages/twenty-docker/docker-compose.dev.yml`, `packages/twenty-server/.env.example`, `packages/twenty-front/.env.example`.
 
