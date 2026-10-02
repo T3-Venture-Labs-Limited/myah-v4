@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import {
-  CalendarChannelSyncStage,
   ConnectedAccountProvider,
   MessageChannelSyncStage,
 } from 'twenty-shared/types';
@@ -10,7 +9,6 @@ import { isDefined } from 'twenty-shared/utils';
 import { EntityManager, IsNull, Repository } from 'typeorm';
 import { v4 } from 'uuid';
 
-import { CreateCalendarChannelService } from 'src/engine/core-modules/auth/services/create-calendar-channel.service';
 import { CreateMessageChannelService } from 'src/engine/core-modules/auth/services/create-message-channel.service';
 import { NotFoundError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { type PlaintextImapSmtpCaldavParams } from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
@@ -18,16 +16,10 @@ import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decora
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
-import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
-import {
-  CalendarEventListFetchJob,
-  type CalendarEventListFetchJobData,
-} from 'src/modules/calendar/calendar-event-import-manager/jobs/calendar-event-list-fetch.job';
-import { CalendarChannelSyncStatusService } from 'src/modules/calendar/common/services/calendar-channel-sync-status.service';
 import { WorkspaceSharedConnectedAccountConflictError } from 'src/modules/connected-account/exceptions/workspace-shared-connected-account-conflict.error';
 import { WorkspaceSharedConnectedAccountNotFoundError } from 'src/modules/connected-account/exceptions/workspace-shared-connected-account-not-found.error';
 import { AccountsToReconnectService } from 'src/modules/connected-account/services/accounts-to-reconnect.service';
@@ -62,8 +54,6 @@ export class ImapSmtpCalDavAPIService {
   private readonly logger = new Logger(ImapSmtpCalDavAPIService.name);
 
   constructor(
-    @InjectRepository(CalendarChannelEntity)
-    private readonly calendarChannelRepository: Repository<CalendarChannelEntity>,
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     @InjectRepository(MessageChannelEntity)
@@ -72,14 +62,10 @@ export class ImapSmtpCalDavAPIService {
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     @InjectMessageQueue(MessageQueue.messagingQueue)
     private readonly messageQueueService: MessageQueueService,
-    @InjectMessageQueue(MessageQueue.calendarQueue)
-    private readonly calendarQueueService: MessageQueueService,
     private readonly createMessageChannelService: CreateMessageChannelService,
-    private readonly createCalendarChannelService: CreateCalendarChannelService,
     private readonly syncMessageFoldersService: SyncMessageFoldersService,
     private readonly accountsToReconnectService: AccountsToReconnectService,
     private readonly messagingChannelSyncStatusService: MessageChannelSyncStatusService,
-    private readonly calendarChannelSyncStatusService: CalendarChannelSyncStatusService,
     private readonly connectedAccountTokenEncryptionService: ConnectedAccountTokenEncryptionService,
   ) {}
 
@@ -120,14 +106,6 @@ export class ImapSmtpCalDavAPIService {
           },
         })
       : null;
-    const userScopedExistingCalendarChannel = userScopedExistingAccount
-      ? await this.calendarChannelRepository.findOne({
-          where: {
-            connectedAccountId: userScopedExistingAccount.id,
-            workspaceId,
-          },
-        })
-      : null;
 
     const transactionResult =
       await this.connectedAccountRepository.manager.transaction(
@@ -137,9 +115,6 @@ export class ImapSmtpCalDavAPIService {
           );
           const messageChannelRepository =
             transactionManager.getRepository(MessageChannelEntity);
-          const calendarChannelRepository = transactionManager.getRepository(
-            CalendarChannelEntity,
-          );
           let existingAccount = userScopedExistingAccount;
 
           if (visibility === 'workspace') {
@@ -185,15 +160,6 @@ export class ImapSmtpCalDavAPIService {
                   },
                 })
               : userScopedExistingMessageChannel;
-          const existingCalendarChannel =
-            visibility === 'workspace' && isDefined(existingAccount)
-              ? await calendarChannelRepository.findOne({
-                  where: {
-                    connectedAccountId: existingAccount.id,
-                    workspaceId,
-                  },
-                })
-              : userScopedExistingCalendarChannel;
           const connectedAccountId = existingAccount?.id ?? v4();
           const encryptedConnectionParameters =
             this.connectedAccountTokenEncryptionService.encryptConnectionParameters(
@@ -232,22 +198,9 @@ export class ImapSmtpCalDavAPIService {
                 })
               : null);
 
-          if (
-            !isDefined(existingCalendarChannel) &&
-            isDefined(input.connectionParameters.CALDAV)
-          ) {
-            await this.createCalendarChannelService.createCalendarChannel({
-              workspaceId,
-              connectedAccountId,
-              handle,
-              transactionManager,
-            });
-          }
-
           return {
             connectedAccountId,
             existingAccount,
-            existingCalendarChannel,
             existingMessageChannel,
             messageChannelId,
             shouldCreateMessageChannel:
@@ -259,7 +212,6 @@ export class ImapSmtpCalDavAPIService {
     const {
       connectedAccountId,
       existingAccount,
-      existingCalendarChannel,
       existingMessageChannel,
       messageChannelId,
       shouldCreateMessageChannel,
@@ -322,23 +274,6 @@ export class ImapSmtpCalDavAPIService {
       await this.messageQueueService.add<MessagingMessageListFetchJobData>(
         MessagingMessageListFetchJob.name,
         { workspaceId, messageChannelId: existingMessageChannel.id },
-      );
-    }
-
-    if (
-      isDefined(existingCalendarChannel) &&
-      isDefined(input.connectionParameters.CALDAV) &&
-      existingCalendarChannel.syncStage !==
-        CalendarChannelSyncStage.PENDING_CONFIGURATION
-    ) {
-      await this.calendarChannelSyncStatusService.resetAndMarkAsCalendarEventListFetchPending(
-        [existingCalendarChannel.id],
-        workspaceId,
-      );
-
-      await this.calendarQueueService.add<CalendarEventListFetchJobData>(
-        CalendarEventListFetchJob.name,
-        { workspaceId, calendarChannelId: existingCalendarChannel.id },
       );
     }
 

@@ -2980,14 +2980,6 @@ export interface ChannelSyncSuccess {
     __typename: 'ChannelSyncSuccess'
 }
 
-export interface CreateCalendarEventOutput {
-    success: Scalars['Boolean']
-    iCalUid?: Scalars['String']
-    conferenceLink?: Scalars['String']
-    error?: Scalars['String']
-    __typename: 'CreateCalendarEventOutput'
-}
-
 export interface BarChartSeries {
     key: Scalars['String']
     label: Scalars['String']
@@ -3681,7 +3673,6 @@ export interface Mutation {
     startCampaignExecution: CampaignExecutionMutationResultDTO
     updateCampaignSendingWindow: CampaignSendingWindowMutationResultDTO
     stopCampaignExecution: CampaignExecutionMutationResultDTO
-    createCalendarEvent: CreateCalendarEventOutput
     sendEmail: SendEmailOutput
     startChannelSync: ChannelSyncSuccess
     updateLabPublicFeatureFlag: FeatureFlag
@@ -6863,15 +6854,6 @@ export interface ChannelSyncSuccessGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface CreateCalendarEventOutputGenqlSelection{
-    success?: boolean | number
-    iCalUid?: boolean | number
-    conferenceLink?: boolean | number
-    error?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface BarChartSeriesGenqlSelection{
     key?: boolean | number
     label?: boolean | number
@@ -7653,7 +7635,6 @@ export interface MutationGenqlSelection{
     startCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StartCampaignExecutionInput} })
     updateCampaignSendingWindow?: (CampaignSendingWindowMutationResultDTOGenqlSelection & { __args: {input: UpdateCampaignSendingWindowInput} })
     stopCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StopCampaignExecutionInput} })
-    createCalendarEvent?: (CreateCalendarEventOutputGenqlSelection & { __args: {input: CreateCalendarEventInput} })
     sendEmail?: (SendEmailOutputGenqlSelection & { __args: {input: SendEmailInput} })
     startChannelSync?: (ChannelSyncSuccessGenqlSelection & { __args: {connectedAccountId: Scalars['UUID']} })
     updateLabPublicFeatureFlag?: (FeatureFlagGenqlSelection & { __args: {input: UpdateLabPublicFeatureFlagInput} })
@@ -8088,8 +8069,6 @@ export interface StartCampaignExecutionInput {campaignId: Scalars['UUID'],startI
 export interface UpdateCampaignSendingWindowInput {campaignId: Scalars['UUID'],timeZone: Scalars['String'],startLocalTime: Scalars['String'],endLocalTime: Scalars['String']}
 
 export interface StopCampaignExecutionInput {campaignId: Scalars['UUID']}
-
-export interface CreateCalendarEventInput {connectedAccountId: Scalars['String'],title: Scalars['String'],description?: (Scalars['String'] | null),location?: (Scalars['String'] | null),startsAt: Scalars['String'],endsAt: Scalars['String'],isFullDay?: (Scalars['Boolean'] | null),timeZone?: (Scalars['String'] | null),attendees?: (Scalars['String'] | null),sendInvitations?: (Scalars['Boolean'] | null),addConferencing?: (Scalars['Boolean'] | null)}
 
 export interface SendEmailInput {connectedAccountId: Scalars['String'],to: Scalars['String'],cc?: (Scalars['String'] | null),bcc?: (Scalars['String'] | null),subject: Scalars['String'],body: Scalars['String'],inReplyTo?: (Scalars['String'] | null),draftMessageId?: (Scalars['String'] | null),creatorId?: (Scalars['String'] | null),files?: (SendEmailAttachmentInput[] | null)}
 
@@ -10383,14 +10362,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isChannelSyncSuccess = (obj?: { __typename?: any } | null): obj is ChannelSyncSuccess => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isChannelSyncSuccess"')
       return ChannelSyncSuccess_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const CreateCalendarEventOutput_possibleTypes: string[] = ['CreateCalendarEventOutput']
-    export const isCreateCalendarEventOutput = (obj?: { __typename?: any } | null): obj is CreateCalendarEventOutput => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCreateCalendarEventOutput"')
-      return CreateCalendarEventOutput_possibleTypes.includes(obj.__typename)
     }
 
 

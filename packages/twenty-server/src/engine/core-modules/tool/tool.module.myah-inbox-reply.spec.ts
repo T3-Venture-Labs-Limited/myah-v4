@@ -7,7 +7,6 @@ import { MyahInboxModule } from 'src/engine/core-modules/myah-inbox/myah-inbox.m
 import { MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-reply-execution-service.token';
 import { ActionToolProvider } from 'src/engine/core-modules/tool-provider/providers/action-tool.provider';
 import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
-import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
 import { CodeInterpreterTool } from 'src/engine/core-modules/tool/tools/code-interpreter-tool/code-interpreter-tool';
 import { DraftEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/draft-email-tool';
 import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
@@ -65,7 +64,6 @@ describe('ToolModule Inbox reply registration', () => {
           HttpTool,
           SendEmailTool,
           DraftEmailTool,
-          CreateCalendarEventTool,
           SearchHelpCenterTool,
           CodeInterpreterTool,
           NavigateAppTool,

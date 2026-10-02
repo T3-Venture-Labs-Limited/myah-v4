@@ -1445,28 +1445,6 @@ export type CreateApprovedAccessDomainInput = {
   email: Scalars['String']['input'];
 };
 
-export type CreateCalendarEventInput = {
-  addConferencing?: InputMaybe<Scalars['Boolean']['input']>;
-  attendees?: InputMaybe<Scalars['String']['input']>;
-  connectedAccountId: Scalars['String']['input'];
-  description?: InputMaybe<Scalars['String']['input']>;
-  endsAt: Scalars['String']['input'];
-  isFullDay?: InputMaybe<Scalars['Boolean']['input']>;
-  location?: InputMaybe<Scalars['String']['input']>;
-  sendInvitations?: InputMaybe<Scalars['Boolean']['input']>;
-  startsAt: Scalars['String']['input'];
-  timeZone?: InputMaybe<Scalars['String']['input']>;
-  title: Scalars['String']['input'];
-};
-
-export type CreateCalendarEventOutput = {
-  __typename?: 'CreateCalendarEventOutput';
-  conferenceLink?: Maybe<Scalars['String']['output']>;
-  error?: Maybe<Scalars['String']['output']>;
-  iCalUid?: Maybe<Scalars['String']['output']>;
-  success: Scalars['Boolean']['output'];
-};
-
 export type CreateCommandMenuItemInput = {
   availabilityObjectMetadataId?: InputMaybe<Scalars['UUID']['input']>;
   availabilityType?: InputMaybe<CommandMenuItemAvailabilityType>;
@@ -3285,7 +3263,6 @@ export type Mutation = {
   createApplicationRegistrationVariable: ApplicationRegistrationVariable;
   createApprovedAccessDomain: ApprovedAccessDomain;
   createBillingPaymentMethodSetupIntent: BillingPaymentIntent;
-  createCalendarEvent: CreateCalendarEventOutput;
   createChatThread: AgentChatThread;
   createCommandMenuItem: CommandMenuItem;
   createDevelopmentApplication: DevelopmentApplication;
@@ -3675,11 +3652,6 @@ export type MutationCreateApplicationRegistrationVariableArgs = {
 
 export type MutationCreateApprovedAccessDomainArgs = {
   input: CreateApprovedAccessDomainInput;
-};
-
-
-export type MutationCreateCalendarEventArgs = {
-  input: CreateCalendarEventInput;
 };
 
 

@@ -29,7 +29,6 @@ const buildProvider = ({
       createTool() as never,
       createTool() as never,
       createTool() as never,
-      createTool() as never,
       { isEnabled: jest.fn().mockReturnValue(true) } as never,
       createTool() as never,
       createTool() as never,
