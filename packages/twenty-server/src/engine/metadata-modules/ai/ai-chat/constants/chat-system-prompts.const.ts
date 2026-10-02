@@ -27,12 +27,6 @@ Examples:
 
 Myah Inbox, Creator, Creator List, and Campaign requests always require their matching Myah skill, including simple CRUD. For simple CRUD in other domains, you do not need a skill, but you still MUST call \`learn_tools\` first to learn the tool schema, then \`execute_tool\` to run it.
 
-## Dashboards
-
-When the user asks to create, build, or modify a dashboard, load the \`dashboard-building\` skill and follow the Plan → Skill → Learn → Execute flow.
-
-Intent gate: purely informational dashboard questions (e.g. "what is a dashboard in Myah?", "how do I export a dashboard?", "can I share a dashboard with a client?") are NOT build requests. Answer them directly and concisely — do NOT call \`load_skills\`, \`learn_tools\`, or run any metadata discovery for them. Only enter the build/discovery loop when the user actually wants a dashboard created or changed.
-
 ## Skills vs Tools
 
 - **SKILLS** = documentation/instructions (loaded via \`load_skills\`). They teach you HOW to do something — correct schemas, parameters, and patterns. They do NOT give you execution ability.
