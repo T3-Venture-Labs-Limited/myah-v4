@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# One-command local Myah environment per worktree.
+#
+#   scripts/myah-dev up [--reset]   start Postgres/Redis containers, API, worker and frontend
+#   scripts/myah-dev down           stop everything and delete this environment's data
+#   scripts/myah-dev status         show URLs and process state
+#   scripts/myah-dev logs [api|worker|front]
+#
+# Each worktree gets its own containers, ports and .env files, so several can run at once.
+# Data is disposable: `up --reset` (or the first `up`) recreates the schema and seeds the
+# demo workspace. Login: tim@apple.dev / tim@apple.dev.
+#
+# Real sends stay off: Instagram (Unipile) and Gmail providers are disabled and email uses
+# the logger driver unless you override them in ~/.config/myah-dev/env.
+# Extra variables (e.g. AI provider keys) in ~/.config/myah-dev/env are appended to the
+# server .env.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+NAME="$(basename "$ROOT" | tr -c 'a-zA-Z0-9-\n' '-')"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/myah-dev/$NAME"
+EXTRA_ENV="${MYAH_DEV_EXTRA_ENV:-$HOME/.config/myah-dev/env}"
+
+# ponytail: hash-based port slots, may collide across ~200 worktrees; `up` checks ports first.
+SLOT=$(( $(printf '%s' "$NAME" | cksum | cut -d' ' -f1) % 200 ))
+BASE=$(( 42000 + SLOT * 10 ))
+PG_PORT=$BASE REDIS_PORT=$((BASE + 1)) API_PORT=$((BASE + 2)) FRONT_PORT=$((BASE + 3))
+PG="myah-dev-$NAME-pg"
+REDIS="myah-dev-$NAME-redis"
+
+# Node from .nvmrc (via mise when available) and the Yarn pinned in package.json (via corepack).
+NODE_VERSION="$(cat "$ROOT/.nvmrc")"
+yarn_cmd() {
+  if command -v mise >/dev/null; then echo mise exec "node@$NODE_VERSION" -- corepack yarn; else echo corepack yarn; fi
+}
+run_yarn() { (cd "$ROOT" && $(yarn_cmd) "$@"); }
+
+port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+running() { [ -f "$STATE/$1.pid" ] && kill -0 "$(cat "$STATE/$1.pid")" 2>/dev/null; }
+
+start_bg() { # name, command...
+  local name=$1; shift
+  running "$name" && return 0
+  cd "$ROOT"
+  setsid nohup "$@" >"$STATE/$name.log" 2>&1 </dev/null &
+  echo $! >"$STATE/$name.pid"
+}
+
+stop_bg() {
+  running "$1" && kill -- "-$(cat "$STATE/$1.pid")" 2>/dev/null || true
+  rm -f "$STATE/$1.pid"
+}
+
+wait_http() { # url, seconds
+  for _ in $(seq 1 "$2"); do curl -sf -o /dev/null "$1" && return 0; sleep 1; done
+  return 1
+}
+
+write_env() {
+  local secret
+  secret=$(openssl rand -hex 24)
+  {
+    grep -v -E '^(PG_DATABASE_URL|REDIS_URL|APP_SECRET|NODE_PORT|SERVER_URL|FRONTEND_URL)=' \
+      "$ROOT/packages/twenty-server/.env.example"
+    cat <<EOF
+PG_DATABASE_URL=postgres://postgres:postgres@localhost:$PG_PORT/default
+REDIS_URL=redis://localhost:$REDIS_PORT
+APP_SECRET=$secret
+NODE_PORT=$API_PORT
+SERVER_URL=http://localhost:$API_PORT
+FRONTEND_URL=http://localhost:$FRONT_PORT
+UNIPILE_INSTAGRAM_ENABLED=false
+MESSAGING_PROVIDER_GMAIL_ENABLED=false
+MESSAGING_PROVIDER_MICROSOFT_ENABLED=false
+EMAIL_DRIVER=logger
+EOF
+    [ -f "$EXTRA_ENV" ] && cat "$EXTRA_ENV"
+  } >"$ROOT/packages/twenty-server/.env"
+  printf 'REACT_APP_SERVER_BASE_URL=http://localhost:%s\nREACT_APP_PORT=%s\n' \
+    "$API_PORT" "$FRONT_PORT" >"$ROOT/packages/twenty-front/.env"
+}
+
+up() {
+  local reset=${1:-}
+  mkdir -p "$STATE"
+
+  if ! docker inspect "$PG" >/dev/null 2>&1; then
+    for p in $PG_PORT $REDIS_PORT $API_PORT $FRONT_PORT; do
+      port_busy "$p" && { echo "Port $p is in use; stop whatever uses it or rename the worktree." >&2; exit 1; }
+    done
+    docker run -d --name "$PG" --label myah-dev="$NAME" -p "127.0.0.1:$PG_PORT:5432" \
+      -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=default postgres:16 >/dev/null
+    docker run -d --name "$REDIS" --label myah-dev="$NAME" -p "127.0.0.1:$REDIS_PORT:6379" \
+      redis:7 --maxmemory-policy noeviction >/dev/null
+    reset=--reset
+  fi
+  docker start "$PG" "$REDIS" >/dev/null
+  until docker exec "$PG" pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+
+  write_env
+  [ -d "$ROOT/node_modules" ] || run_yarn install
+
+  if [ "$reset" = --reset ]; then
+    echo "Resetting database and seeding the demo workspace..."
+    stop_bg api; stop_bg worker
+    run_yarn nx database:reset twenty-server >"$STATE/reset.log" 2>&1 ||
+      { echo "database:reset failed, see $STATE/reset.log" >&2; exit 1; }
+  fi
+
+  start_bg api $(yarn_cmd) nx start twenty-server
+  echo "Waiting for the API (first start builds the server)..."
+  wait_http "http://localhost:$API_PORT/healthz" 600 ||
+    { echo "API did not start, see $STATE/api.log" >&2; exit 1; }
+  start_bg worker $(yarn_cmd) nx worker twenty-server
+  start_bg front $(yarn_cmd) nx start twenty-front
+  wait_http "http://localhost:$FRONT_PORT" 300 || echo "Frontend still starting, see $STATE/front.log" >&2
+  status
+}
+
+down() {
+  stop_bg front; stop_bg worker; stop_bg api
+  docker rm -f "$PG" "$REDIS" >/dev/null 2>&1 || true
+  rm -rf "$STATE"
+  echo "Stopped $NAME and deleted its data."
+}
+
+status() {
+  echo "Environment: $NAME"
+  echo "  App:    http://localhost:$FRONT_PORT  (login tim@apple.dev / tim@apple.dev)"
+  echo "  API:    http://localhost:$API_PORT"
+  echo "  DB:     postgres://postgres:postgres@localhost:$PG_PORT/default"
+  echo "  Redis:  redis://localhost:$REDIS_PORT"
+  for p in api worker front; do
+    if running "$p"; then echo "  $p: running (log $STATE/$p.log)"; else echo "  $p: stopped"; fi
+  done
+}
+
+case "${1:-}" in
+  up) up "${2:-}" ;;
+  down) down ;;
+  status) status ;;
+  logs) tail -n 100 -f "$STATE/${2:-api}.log" ;;
+  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac
