@@ -26,9 +26,18 @@ runs:
     - name: Cache primary key builder
       id: globals
       shell: bash
+      env:
+        CACHE_INPUT_HASH: >-
+          ${{ hashFiles('yarn.lock', '**/package.json', '.yarnrc.yml',
+          'yarn.config.cjs', '**/patches/**', '.yarn/releases/**') }}
+        NODE_VERSION: ${{ inputs.node-version }}
+        CACHE_EVENT: ${{ github.event_name }}
       run: |
         echo "ACTION_SHELL=bash" >> "${GITHUB_OUTPUT}"
-        echo "CACHE_KEY_PREFIX=node_modules-cache-node-${{ inputs.node-version }}-${{ hashFiles('yarn.lock', '**/package.json', '.yarnrc.yml', 'yarn.config.cjs', '**/patches/**', '.yarn/releases/**') }}" >> "${GITHUB_OUTPUT}"
+        prefix="node_modules-cache-${CACHE_EVENT}-${RUNNER_OS}"
+        prefix="${prefix}-${RUNNER_ARCH}-node-${NODE_VERSION}"
+        echo "CACHE_KEY_PREFIX=${prefix}-${CACHE_INPUT_HASH}" \
+          >> "${GITHUB_OUTPUT}"
         echo 'PATH_TO_CACHE<<EOF' >> $GITHUB_OUTPUT
         echo "node_modules" >> $GITHUB_OUTPUT
         echo "packages/*/node_modules" >> $GITHUB_OUTPUT
@@ -40,23 +49,32 @@ runs:
     - name: Restore node_modules
       if: inputs.cache-node-modules == 'true'
       id: cache-node-modules
-      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (restore)
+      # actions/cache v4.3.0 (restore)
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         key: v4-${{ steps.globals.outputs.CACHE_KEY_PREFIX }}-${{github.sha}}
         restore-keys: v4-${{ steps.globals.outputs.CACHE_KEY_PREFIX }}-
         path: ${{ steps.globals.outputs.PATH_TO_CACHE }}
     - name: Install Dependencies
-      if: inputs.cache-node-modules != 'true' || (steps.cache-node-modules.outputs.cache-hit != 'true' && steps.cache-node-modules.outputs.cache-matched-key == '')
+      if: >-
+        inputs.cache-node-modules != 'true' ||
+        (steps.cache-node-modules.outputs.cache-hit != 'true' &&
+        steps.cache-node-modules.outputs.cache-matched-key == '')
       shell: ${{ steps.globals.outputs.ACTION_SHELL }}
       run: |
         yarn config set enableHardenedMode true
         yarn config set enableScripts false
         yarn --immutable --check-cache
-    # Fork PRs on pull_request already can't write to the base repo's cache (GitHub built-in).
-    # The fork guard is defense-in-depth for pull_request_target, which does have write access.
+    # Fork PRs on pull_request cannot write to the base repo's cache.
+    # The fork guard also protects pull_request_target's write access.
     - name: Save cache
-      if: inputs.cache-node-modules == 'true' && steps.cache-node-modules.outputs.cache-hit != 'true' && steps.cache-node-modules.outputs.cache-matched-key == '' && format('{0}', github.event.pull_request.head.repo.fork) != 'true'
-      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (save)
+      if: >-
+        inputs.cache-node-modules == 'true' &&
+        steps.cache-node-modules.outputs.cache-hit != 'true' &&
+        steps.cache-node-modules.outputs.cache-matched-key == '' &&
+        format('{0}', github.event.pull_request.head.repo.fork) != 'true'
+      # actions/cache v4.3.0 (save)
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         key: ${{ steps.cache-node-modules.outputs.cache-primary-key }}
         path: ${{ steps.globals.outputs.PATH_TO_CACHE }}

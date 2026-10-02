@@ -48,6 +48,21 @@ describe('ResynchronizeMyahStandardApplicationCommand', () => {
     });
   });
 
+  it('passes the pinned runner and after-commit registrar to the real metadata synchronizer', async () => {
+    const queryRunner = { isTransactionActive: true } as never;
+    const afterCommit = jest.fn();
+    await command.runOnWorkspaceInUpgradeTransaction(
+      { workspaceId, options: {}, index: 0, total: 1 },
+      queryRunner,
+      afterCommit,
+    );
+    expect(synchronizeTwentyStandardApplicationOrThrow).toHaveBeenCalledWith({
+      workspaceId,
+      profile: 'myah',
+      upgradeTransaction: { queryRunner, afterCommit },
+    });
+  });
+
   it('skips a workspace without canonical Myah metadata', async () => {
     getOrRecompute.mockResolvedValueOnce({
       flatObjectMetadataMaps: { byUniversalIdentifier: {} },
@@ -63,7 +78,7 @@ describe('ResynchronizeMyahStandardApplicationCommand', () => {
     expect(synchronizeTwentyStandardApplicationOrThrow).not.toHaveBeenCalled();
   });
 
-  it('preserves the full profile when resynchronizing a CRM workspace', async () => {
+  it('uses the non-destructive Myah profile when retained Company metadata exists', async () => {
     getOrRecompute.mockResolvedValueOnce({
       flatObjectMetadataMaps: {
         byUniversalIdentifier: {
@@ -88,7 +103,7 @@ describe('ResynchronizeMyahStandardApplicationCommand', () => {
 
     expect(synchronizeTwentyStandardApplicationOrThrow).toHaveBeenCalledWith({
       workspaceId,
-      profile: 'full',
+      profile: 'myah',
     });
   });
 

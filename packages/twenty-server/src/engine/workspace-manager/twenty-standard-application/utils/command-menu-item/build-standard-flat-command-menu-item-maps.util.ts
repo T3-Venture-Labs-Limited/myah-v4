@@ -1,4 +1,5 @@
 import { TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER } from 'twenty-shared/application';
+import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
 
@@ -21,6 +22,7 @@ export const buildStandardFlatCommandMenuItemMaps = ({
   workspaceId,
   twentyStandardApplicationId,
   dependencyFlatEntityMaps: { flatObjectMetadataMaps },
+  omitDashboardComposition = false,
 }: {
   now: string;
   workspaceId: string;
@@ -28,6 +30,7 @@ export const buildStandardFlatCommandMenuItemMaps = ({
   dependencyFlatEntityMaps: {
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
   };
+  omitDashboardComposition?: boolean;
 }): FlatCommandMenuItemMaps => {
   const flatCommandMenuItemMaps: FlatCommandMenuItemMaps =
     createEmptyFlatEntityMaps();
@@ -55,6 +58,12 @@ export const buildStandardFlatCommandMenuItemMaps = ({
   )
     .filter(isDefined)
     .filter((flatObject) => flatObject.isActive)
+    .filter(
+      (flatObject) =>
+        !omitDashboardComposition ||
+        flatObject.universalIdentifier !==
+          STANDARD_OBJECTS.dashboard.universalIdentifier,
+    )
     .sort(seedCompareObjectMetadataForNavigationPosition);
 
   const maxStandardPosition = Object.values(

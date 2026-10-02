@@ -9,7 +9,7 @@ type GraphqlOperation = {
 
 export const makeMetadataAPIRequest = (
   graphqlOperation: GraphqlOperation,
-  token: string | undefined = APPLE_JANE_ADMIN_ACCESS_TOKEN,
+  token: string | null | undefined = APPLE_JANE_ADMIN_ACCESS_TOKEN,
 ) => {
   const client = request(`http://localhost:${APP_PORT}`);
 

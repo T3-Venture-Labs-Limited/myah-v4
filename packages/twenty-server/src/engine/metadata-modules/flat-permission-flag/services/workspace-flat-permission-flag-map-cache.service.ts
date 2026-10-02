@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { createEmptyFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-flat-entity-maps.constant';
@@ -32,17 +32,27 @@ export class WorkspaceFlatPermissionFlagMapCacheService extends WorkspaceCachePr
   }
 
   async computeForCache(workspaceId: string): Promise<FlatPermissionFlagMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatPermissionFlagMaps> {
     const [permissionFlags, applications, rolePermissionFlags] =
       await Promise.all([
-        this.permissionFlagRepository.find(workspaceId, {
+        this.permissionFlagRepository.withManager(manager).find(workspaceId, {
           withDeleted: true,
         }),
-        this.applicationRepository.find({
+        manager.getRepository(ApplicationEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.rolePermissionFlagRepository.find({
+        manager.getRepository(RolePermissionFlagEntity).find({
           where: { workspaceId },
           withDeleted: true,
         }),

@@ -46,5 +46,4 @@ export class CalendarChannelResolver {
       workspaceId: workspace.id,
     });
   }
-
 }

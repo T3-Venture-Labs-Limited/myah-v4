@@ -8,6 +8,7 @@ import { type FastInstanceCommand } from 'src/engine/core-modules/upgrade/interf
 import { type SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
+import { UpgradeWriteLockService } from 'src/engine/core-modules/upgrade/services/upgrade-write-lock.service';
 import { WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
 
 type RunSingleMigrationResult =
@@ -26,6 +27,7 @@ export class InstanceCommandRunnerService {
     private readonly upgradeMigrationService: UpgradeMigrationService,
     private readonly workspaceVersionService: WorkspaceVersionService,
     private readonly upgradeStatusService: UpgradeStatusService,
+    private readonly upgradeWriteLockService: UpgradeWriteLockService,
   ) {}
 
   async runFastInstanceCommand({
@@ -35,6 +37,19 @@ export class InstanceCommandRunnerService {
     command: FastInstanceCommand;
     name: string;
   }): Promise<RunSingleMigrationResult> {
+    return this.upgradeWriteLockService.withLock(() =>
+      this.runFastInstanceCommandUnderLock({ command, name }),
+    );
+  }
+
+  private async runFastInstanceCommandUnderLock({
+    command,
+    name,
+  }: {
+    command: FastInstanceCommand;
+    name: string;
+  }): Promise<RunSingleMigrationResult> {
+    const queryRunner = this.upgradeWriteLockService.currentRunner();
     const executedByVersion =
       this.twentyConfigService.get('APP_VERSION') ?? 'unknown';
 
@@ -42,6 +57,7 @@ export class InstanceCommandRunnerService {
       await this.upgradeMigrationService.isLastAttemptCompleted({
         name,
         workspaceId: null,
+        queryRunner,
       });
 
     if (isAlreadyCompleted) {
@@ -50,10 +66,9 @@ export class InstanceCommandRunnerService {
       return { status: 'already-executed' };
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
+    let commitStarted = false;
 
     try {
-      await queryRunner.connect();
       await queryRunner.startTransaction();
 
       await command.up(queryRunner);
@@ -72,27 +87,42 @@ export class InstanceCommandRunnerService {
         queryRunner,
       });
 
+      commitStarted = true;
       await queryRunner.commitTransaction();
 
       this.logger.log(`${name} executed successfully`);
 
       return { status: 'success' };
     } catch (error) {
+      // An uncertain COMMIT response must be inspected on a new session, not
+      // interpreted as a rollback followed by a fabricated failed receipt.
+      if (commitStarted) throw error;
       if (queryRunner.isTransactionActive) {
         await queryRunner.rollbackTransaction();
       }
 
       const workspaceIds =
-        await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds();
+        await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds({
+          queryRunner,
+        });
 
-      await this.upgradeMigrationService.recordUpgradeMigration({
-        name,
-        workspaceIds,
-        isInstance: true,
-        status: 'failed',
-        executedByVersion,
-        error,
-      });
+      await queryRunner.startTransaction();
+      try {
+        await this.upgradeMigrationService.recordUpgradeMigration({
+          name,
+          workspaceIds,
+          isInstance: true,
+          status: 'failed',
+          executedByVersion,
+          error,
+          queryRunner,
+        });
+        await queryRunner.commitTransaction();
+      } catch (receiptError) {
+        if (queryRunner.isTransactionActive)
+          await queryRunner.rollbackTransaction();
+        throw receiptError;
+      }
 
       this.logger.error(
         `${name} failed`,
@@ -101,7 +131,6 @@ export class InstanceCommandRunnerService {
 
       return { status: 'failed', error };
     } finally {
-      await queryRunner.release();
       await this.safeInvalidateUpgradeStatusCache();
     }
   }
@@ -127,10 +156,30 @@ export class InstanceCommandRunnerService {
     name: string;
     skipDataMigration?: boolean;
   }): Promise<RunSingleMigrationResult> {
+    return this.upgradeWriteLockService.withLock(() =>
+      this.runSlowInstanceCommandUnderLock({
+        command,
+        name,
+        skipDataMigration,
+      }),
+    );
+  }
+
+  private async runSlowInstanceCommandUnderLock({
+    command,
+    name,
+    skipDataMigration,
+  }: {
+    command: SlowInstanceCommand;
+    name: string;
+    skipDataMigration?: boolean;
+  }): Promise<RunSingleMigrationResult> {
+    const queryRunner = this.upgradeWriteLockService.currentRunner();
     const isAlreadyCompleted =
       await this.upgradeMigrationService.isLastAttemptCompleted({
         name,
         workspaceId: null,
+        queryRunner,
       });
 
     if (isAlreadyCompleted) {
@@ -145,11 +194,13 @@ export class InstanceCommandRunnerService {
 
       try {
         this.logger.log(`${name} starting data migration...`);
-        await command.runDataMigration(this.dataSource);
+        await command.runDataMigration(this.dataSource, queryRunner);
         this.logger.log(`${name} data migration completed`);
       } catch (error) {
         const workspaceIds =
-          await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds();
+          await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds({
+            queryRunner,
+          });
 
         await this.upgradeMigrationService.recordUpgradeMigration({
           name,
@@ -158,6 +209,7 @@ export class InstanceCommandRunnerService {
           status: 'failed',
           executedByVersion,
           error,
+          queryRunner,
         });
 
         this.logger.error(

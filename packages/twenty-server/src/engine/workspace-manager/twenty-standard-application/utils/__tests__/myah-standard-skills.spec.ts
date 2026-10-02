@@ -18,6 +18,13 @@ const expectedMyahToolNames: Record<string, true> = Object.fromEntries(
 );
 
 describe('Myah standard skills', () => {
+  it('does not provision the retired dashboard-building skill', () => {
+    expect(STANDARD_SKILL).not.toHaveProperty('dashboard-building');
+    expect(
+      STANDARD_FLAT_SKILL_METADATA_BUILDERS_BY_SKILL_NAME,
+    ).not.toHaveProperty('dashboard-building');
+  });
+
   it.each([
     ['myah-inbox', 'Myah Inbox', 'IconInbox'],
     ['myah-creators', 'Myah Creators', 'IconUsers'],
@@ -71,12 +78,32 @@ describe('Myah standard skills', () => {
       expect.stringContaining('request_approval'),
     );
     expect(myahInbox.content).toEqual(
+      expect.stringContaining('list_myah_inbox_reply_contexts'),
+    );
+    expect(myahInbox.content).toEqual(
       expect.stringContaining(
-        'Before saving, call get_myah_inbox_reply_send_readiness and use its exact numeric revision',
+        'Choose one exact Campaign ID or available General',
       ),
     );
     expect(myahInbox.content).toEqual(
-      expect.stringContaining('body: { markdown: string, blocknote: null }'),
+      expect.stringContaining(
+        'never infer a context from the UI, conversation, chronology, default context, or Campaign name',
+      ),
+    );
+    expect(myahInbox.content).toEqual(
+      expect.stringContaining(
+        'messageThreadId, replyContext, expectedContextFingerprint, expectedRevision, and body: { markdown: string, blocknote: null }',
+      ),
+    );
+    expect(myahInbox.content).toEqual(
+      expect.stringContaining(
+        'After either a Campaign or General save, read back the same selected context',
+      ),
+    );
+    expect(myahInbox.content).toEqual(
+      expect.stringContaining(
+        'Do not continue into get_myah_inbox_reply_send_readiness or send_myah_inbox_reply',
+      ),
     );
     expect(myahInbox.content).toEqual(
       expect.stringContaining(
@@ -292,6 +319,31 @@ describe('Myah standard skills', () => {
       expect(buildSkill(skillName).content).toEqual(
         expect.stringContaining(
           'Call request_approval immediately before every internal/generated write',
+        ),
+      );
+    }
+  });
+
+  it('binds each generic approval to the exact proposed arguments', () => {
+    for (const skillName of [
+      'myah-inbox',
+      'myah-creators',
+      'myah-creator-lists',
+      'myah-campaigns',
+    ] as const) {
+      const { content } = buildSkill(skillName);
+
+      expect(content).toEqual(
+        expect.stringContaining('the exact proposedArguments'),
+      );
+      expect(content).toEqual(
+        expect.stringContaining(
+          'execute exactly that one write with the identical arguments',
+        ),
+      );
+      expect(content).toEqual(
+        expect.stringContaining(
+          'If the approved write is refused, do not retry with changes',
         ),
       );
     }

@@ -10562,45 +10562,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nivo/polar-axes@npm:0.99.0":
-  version: 0.99.0
-  resolution: "@nivo/polar-axes@npm:0.99.0"
-  dependencies:
-    "@nivo/arcs": "npm:0.99.0"
-    "@nivo/core": "npm:0.99.0"
-    "@nivo/scales": "npm:0.99.0"
-    "@nivo/text": "npm:0.99.0"
-    "@nivo/theming": "npm:0.99.0"
-    "@react-spring/web": "npm:9.4.5 || ^9.7.2 || ^10.0"
-  peerDependencies:
-    react: ^16.14 || ^17.0 || ^18.0 || ^19.0
-  checksum: 10c0/29bba26e4529faef9d9b9bc7fef9cf23ff56f06c5fe108497f84a6ac91e31bfc8d4df60ad0de489d850a7d6e7fe786bda2f57f006db76a211f426349247f55f9
-  languageName: node
-  linkType: hard
-
-"@nivo/radial-bar@npm:^0.99.0":
-  version: 0.99.0
-  resolution: "@nivo/radial-bar@npm:0.99.0"
-  dependencies:
-    "@nivo/arcs": "npm:0.99.0"
-    "@nivo/colors": "npm:0.99.0"
-    "@nivo/core": "npm:0.99.0"
-    "@nivo/legends": "npm:0.99.0"
-    "@nivo/polar-axes": "npm:0.99.0"
-    "@nivo/scales": "npm:0.99.0"
-    "@nivo/theming": "npm:0.99.0"
-    "@nivo/tooltip": "npm:0.99.0"
-    "@react-spring/web": "npm:9.4.5 || ^9.7.2 || ^10.0"
-    "@types/d3-scale": "npm:^4.0.8"
-    "@types/d3-shape": "npm:^3.1.6"
-    d3-scale: "npm:^4.0.2"
-    d3-shape: "npm:^3.2.0"
-  peerDependencies:
-    react: ^16.14 || ^17.0 || ^18.0 || ^19.0
-  checksum: 10c0/85387e839074c27f09041ed446d8afb8715eed39812dcf29e61608b89177cf92559eb550172442cf899196f608c70278d720258f37373d6a72700398d4b5157c
-  languageName: node
-  linkType: hard
-
 "@nivo/scales@npm:0.99.0":
   version: 0.99.0
   resolution: "@nivo/scales@npm:0.99.0"
@@ -43951,12 +43912,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"twenty-cli@workspace:packages/twenty-cli":
-  version: 0.0.0-use.local
-  resolution: "twenty-cli@workspace:packages/twenty-cli"
-  languageName: unknown
-  linkType: soft
-
 "twenty-client-sdk@workspace:*, twenty-client-sdk@workspace:packages/twenty-client-sdk":
   version: 0.0.0-use.local
   resolution: "twenty-client-sdk@workspace:packages/twenty-client-sdk"
@@ -44107,7 +44062,6 @@ __metadata:
     "@nivo/core": "npm:^0.99.0"
     "@nivo/line": "npm:^0.99.0"
     "@nivo/pie": "npm:^0.99.0"
-    "@nivo/radial-bar": "npm:^0.99.0"
     "@playwright/test": "npm:^1.60.0"
     "@react-email/components": "npm:^0.5.3"
     "@react-pdf/renderer": "npm:^4.1.6"

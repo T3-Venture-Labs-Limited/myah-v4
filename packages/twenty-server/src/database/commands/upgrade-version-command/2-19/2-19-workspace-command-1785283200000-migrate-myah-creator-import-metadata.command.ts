@@ -17,6 +17,7 @@ const CREATOR_IMPORT_SYNC_OPTIONS = {
     MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
   ]),
   migrateLegacyMyahApplication: false,
+  preserveCreatorImportPermissions: true as const,
 };
 
 @RegisteredWorkspaceCommand('2.19.0', 1785283200000)

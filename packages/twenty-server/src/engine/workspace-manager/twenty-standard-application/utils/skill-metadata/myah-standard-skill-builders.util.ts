@@ -45,6 +45,7 @@ const [
 
 const [
   searchMyahInboxThreads,
+  listMyahInboxReplyContexts,
   getMyahInboxThreadContext,
   generateMyahInboxReplyProposal,
   updateMyahInboxThread,
@@ -64,7 +65,7 @@ if (sendMyahInboxReply === undefined) {
   throw new Error('Missing Myah Inbox registered action tool');
 }
 
-const internalWriteApproval = `Call ${REQUEST_APPROVAL_TOOL_NAME} immediately before every internal/generated write in its own step; after approval, execute exactly that one write and read back its returned state. Never authorize or describe more than one write tool call in the same approval.`;
+export const internalWriteApproval = `Call ${REQUEST_APPROVAL_TOOL_NAME} immediately before every internal/generated write in its own step, with toolName and the exact proposedArguments (learn the write tool's schema first); after approval, execute exactly that one write with the identical arguments and read back its returned state. If the approved write is refused, do not retry with changes; propose it again for a new approval. Never authorize or describe more than one write tool call in the same approval.`;
 
 const commonFailureHandling = `## Failure handling
 
@@ -93,11 +94,13 @@ Inbox owns contact-wide triage state, drafts, send readiness, and send receipts.
 
 ## Procedure
 
-1. For the current Inbox selection, call ${getMyahInboxThreadContext} directly without search and omit messageThreadId. Otherwise, find the thread with ${searchMyahInboxThreads}, resolve it from returned IDs, participants, channel, and recent context, then load ${getMyahInboxThreadContext}; use ${generateMyahInboxReplyProposal} only after the record is unambiguous.
-2. Owner, State, and Snooze are contact-wide and these tools cannot change them: never claim or attempt a triage change. ${internalWriteApproval} Changing a thread's Creator or Campaign link is a write — call ${updateMyahInboxThread}, then read ${getMyahInboxThreadContext}.
-3. Before saving, call ${getMyahInboxReplySendReadiness} and use its exact numeric revision. Preview the exact save input in the approval card: messageThreadId, expectedRevision, and body: { markdown: string, blocknote: null }. Then ${internalWriteApproval} Call ${saveMyahInboxReplyDraft}. If save returns CONFLICT, stop without retrying, present the returned current draft and revision, and ask whether to replace or reconcile it. If save returns SAVED, retain its returned draft revision and read ${getMyahInboxReplySendReadiness} again.
-4. Delivery is registered: call ${REQUEST_APPROVAL_TOOL_NAME} in its own step with only toolName: "send_myah_inbox_reply" and actionInput: { messageThreadId, expectedDraftRevision }. Wait for approval, then call ${sendMyahInboxReply} with the actionApprovalBindingId. Never use a generic Inbox send.
-5. Read ${getMyahInboxReplySendStatus} and report only its returned receipt/status.
+1. For the current Inbox selection, use its exact messageThreadId without search. Otherwise, find the thread with ${searchMyahInboxThreads} and resolve it from returned IDs, participants, channel, and recent context.
+2. Before drafting, call ${listMyahInboxReplyContexts} for that exact thread. Choose one exact Campaign ID or available General only from the returned options; never infer a context from the UI, conversation, chronology, default context, or Campaign name. If the operator has not explicitly selected one available context, ask and stop.
+3. Call ${getMyahInboxThreadContext} with the exact messageThreadId and selected replyContext. Use its contextFingerprint, draftRevision, and draftBody as the only save baseline; use ${generateMyahInboxReplyProposal} only after the record and context are unambiguous.
+4. Owner, State, and Snooze are contact-wide and these tools cannot change them: never claim or attempt a triage change. ${internalWriteApproval} Changing a thread's Creator or Campaign link is a write — call ${updateMyahInboxThread}, then read ${getMyahInboxThreadContext}.
+5. Preview the exact save input in the approval card: messageThreadId, replyContext, expectedContextFingerprint, expectedRevision, and body: { markdown: string, blocknote: null }. Then ${internalWriteApproval} Call ${saveMyahInboxReplyDraft}. If save returns CONFLICT, stop without retrying, present the returned current draft and revision, and ask whether to replace or reconcile it. After either a Campaign or General save, read back the same selected context with ${getMyahInboxThreadContext}, report it, and stop. Do not continue into ${getMyahInboxReplySendReadiness} or ${sendMyahInboxReply}.
+6. For a separate explicit delivery request, call ${getMyahInboxReplySendReadiness}, then call ${REQUEST_APPROVAL_TOOL_NAME} in its own step with only toolName: "send_myah_inbox_reply" and actionInput: { messageThreadId, expectedDraftRevision }. Wait for approval, then call ${sendMyahInboxReply} with the actionApprovalBindingId. Never use a generic Inbox send.
+7. Read ${getMyahInboxReplySendStatus} and report only its returned receipt/status.
 
 ## Safety
 

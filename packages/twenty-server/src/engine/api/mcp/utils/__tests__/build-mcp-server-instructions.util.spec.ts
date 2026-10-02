@@ -14,5 +14,7 @@ describe('buildMcpServerInstructions', () => {
     expect(instructions).toContain('Available skills: campaign-management.');
     expect(instructions).not.toContain('Twenty CRM workspace');
     expect(instructions).not.toContain('Twenty primitives:');
+    expect(instructions).not.toContain('dashboard-building');
+    expect(instructions).not.toContain('create_complete_dashboard');
   });
 });

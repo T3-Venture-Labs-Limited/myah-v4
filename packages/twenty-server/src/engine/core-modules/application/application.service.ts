@@ -31,6 +31,7 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import type { UpgradeWorkspaceTransaction } from 'src/engine/workspace-manager/workspace-migration/types/upgrade-workspace-transaction.type';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 
 @Injectable()
@@ -604,14 +605,29 @@ export class ApplicationService {
     data: Parameters<typeof this.applicationRepository.update>[1] & {
       workspaceId: string;
     },
+    upgradeTransaction?: UpgradeWorkspaceTransaction,
   ): Promise<ApplicationEntity> {
-    await this.applicationRepository.update({ id }, data);
+    const repository = upgradeTransaction
+      ? upgradeTransaction.queryRunner.manager.getRepository(ApplicationEntity)
+      : this.applicationRepository;
 
-    await this.workspaceCacheService.invalidateAndRecompute(data.workspaceId, [
-      'flatApplicationMaps',
-    ]);
+    await repository.update(
+      upgradeTransaction ? { id, workspaceId: data.workspaceId } : { id },
+      data,
+    );
 
-    const updatedApplication = await this.findById(id);
+    const invalidate = () =>
+      this.workspaceCacheService.invalidateAndRecompute(data.workspaceId, [
+        'flatApplicationMaps',
+      ]);
+    if (upgradeTransaction) upgradeTransaction.afterCommit(invalidate);
+    else await invalidate();
+
+    const updatedApplication = upgradeTransaction
+      ? await repository.findOne({
+          where: { id, workspaceId: data.workspaceId },
+        })
+      : await this.findById(id);
 
     if (!isDefined(updatedApplication)) {
       throw new ApplicationException(

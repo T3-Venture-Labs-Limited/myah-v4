@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -32,16 +32,26 @@ export class WorkspaceFlatRoleTargetMapCacheService extends WorkspaceCacheProvid
   }
 
   async computeForCache(workspaceId: string): Promise<FlatRoleTargetMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatRoleTargetMaps> {
     const [roleTargets, applications, roles] = await Promise.all([
-      this.roleTargetRepository.find(workspaceId, {
+      this.roleTargetRepository.withManager(manager).find(workspaceId, {
         withDeleted: true,
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.roleRepository.find(workspaceId, {
+      this.roleRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),

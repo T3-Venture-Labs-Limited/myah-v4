@@ -9,6 +9,7 @@ import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata
 import { FlatPageLayoutTabModule } from 'src/engine/metadata-modules/flat-page-layout-tab/flat-page-layout-tab.module';
 import { FlatPageLayoutWidgetModule } from 'src/engine/metadata-modules/flat-page-layout-widget/flat-page-layout-widget.module';
 import { FlatPageLayoutModule } from 'src/engine/metadata-modules/flat-page-layout/flat-page-layout.module';
+import { PageLayoutChartDataModule } from 'src/engine/metadata-modules/page-layout-widget/chart-data/page-layout-chart-data.module';
 import { PageLayoutController } from 'src/engine/metadata-modules/page-layout/controllers/page-layout.controller';
 import { PageLayoutEntity } from 'src/engine/metadata-modules/page-layout/entities/page-layout.entity';
 import { PageLayoutResolver } from 'src/engine/metadata-modules/page-layout/resolvers/page-layout.resolver';
@@ -22,7 +23,6 @@ import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { WorkspaceMigrationGraphqlApiExceptionInterceptor } from 'src/engine/workspace-manager/workspace-migration/interceptors/workspace-migration-graphql-api-exception.interceptor';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
-import { DashboardSyncModule } from 'src/modules/dashboard-sync/dashboard-sync.module';
 
 @Module({
   imports: [
@@ -37,8 +37,8 @@ import { DashboardSyncModule } from 'src/modules/dashboard-sync/dashboard-sync.m
     FlatPageLayoutModule,
     FlatPageLayoutTabModule,
     FlatPageLayoutWidgetModule,
+    PageLayoutChartDataModule,
     ApplicationModule,
-    DashboardSyncModule,
     ViewModule,
   ],
   controllers: [PageLayoutController],

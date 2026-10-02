@@ -5,6 +5,7 @@ import { type EmailDriverInterface } from 'src/engine/core-modules/email/drivers
 import { LoggerDriver } from 'src/engine/core-modules/email/drivers/logger.driver';
 import { SmtpDriver } from 'src/engine/core-modules/email/drivers/smtp.driver';
 import { EmailDriver } from 'src/engine/core-modules/email/enums/email-driver.enum';
+import { isE2eTestFixturesEnabled } from 'src/engine/core-modules/twenty-config/utils/is-e2e-test-fixtures-enabled.util';
 import { DriverFactoryBase } from 'src/engine/core-modules/twenty-config/dynamic-factory.base';
 import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
 import { ConfigGroupHashService } from 'src/engine/core-modules/twenty-config/services/config-group-hash.service';
@@ -22,11 +23,16 @@ export class EmailDriverFactory extends DriverFactoryBase<EmailDriverInterface> 
   protected buildConfigKey(): string {
     const driver = this.twentyConfigService.get('EMAIL_DRIVER');
 
+    const fixtureMode = isE2eTestFixturesEnabled();
+
     if (driver === EmailDriver.LOGGER) {
       return 'logger';
     }
 
     if (driver === EmailDriver.SMTP) {
+      if (fixtureMode) {
+        return 'fixture-logger';
+      }
       const emailConfigHash = this.configGroupHashService.computeHash(
         ConfigVariablesGroup.EMAIL_SETTINGS,
       );
@@ -39,12 +45,16 @@ export class EmailDriverFactory extends DriverFactoryBase<EmailDriverInterface> 
 
   protected createDriver(): EmailDriverInterface {
     const driver = this.twentyConfigService.get('EMAIL_DRIVER');
+    const fixtureMode = isE2eTestFixturesEnabled();
 
     switch (driver) {
       case EmailDriver.LOGGER:
         return new LoggerDriver();
 
       case EmailDriver.SMTP: {
+        if (fixtureMode) {
+          return new LoggerDriver();
+        }
         const host = this.twentyConfigService.get('EMAIL_SMTP_HOST');
         const port = this.twentyConfigService.get('EMAIL_SMTP_PORT');
         const user = this.twentyConfigService.get('EMAIL_SMTP_USER');

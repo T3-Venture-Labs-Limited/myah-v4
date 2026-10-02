@@ -39,6 +39,14 @@ describe('ConnectionProviderOAuthFlowService', () => {
     verifyJwtToken: jest.Mock;
   };
   let secureHttpClientService: { createSsrfSafeFetch: jest.Mock };
+  let reconnectManager: {
+    getRepository: jest.Mock;
+    queryRunner: {
+      isReleased: boolean;
+      isTransactionActive: boolean;
+      query: jest.Mock;
+    };
+  };
   let connectedAccountRepository: {
     count: jest.Mock;
     update: jest.Mock;
@@ -46,6 +54,7 @@ describe('ConnectionProviderOAuthFlowService', () => {
     save: jest.Mock;
     findOne: jest.Mock;
     findOneByOrFail: jest.Mock;
+    manager: { transaction: jest.Mock };
   };
 
   const baseProvider: ConnectionProviderEntity = {
@@ -94,7 +103,19 @@ describe('ConnectionProviderOAuthFlowService', () => {
         id,
         provider: ConnectedAccountProvider.APP,
       })),
+      manager: { transaction: jest.fn() },
     };
+    reconnectManager = {
+      getRepository: jest.fn(() => connectedAccountRepository),
+      queryRunner: {
+        isReleased: false,
+        isTransactionActive: true,
+        query: jest.fn(),
+      },
+    };
+    connectedAccountRepository.manager.transaction.mockImplementation(
+      (operation) => operation(reconnectManager),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -386,6 +407,18 @@ describe('ConnectionProviderOAuthFlowService', () => {
         id: 'existing-account-id',
         workspaceId: 'workspace-1',
       });
+      expect(
+        connectedAccountRepository.manager.transaction,
+      ).toHaveBeenCalledTimes(1);
+      expect(reconnectManager.queryRunner.query).toHaveBeenCalledWith(
+        expect.stringContaining('campaignForecastHead'),
+        ['workspace-1', 'workspace:workspace-1'],
+      );
+      expect(
+        connectedAccountRepository.update.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        reconnectManager.queryRunner.query.mock.invocationCallOrder[0],
+      );
       expect(connectedAccountRepository.create).not.toHaveBeenCalled();
     });
 

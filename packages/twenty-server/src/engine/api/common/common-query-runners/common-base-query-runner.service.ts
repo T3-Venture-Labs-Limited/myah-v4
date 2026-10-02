@@ -112,6 +112,16 @@ export const isRetiredBrandBrainMutation = (
     objectUniversalIdentifier,
   );
 
+const RETIRED_DASHBOARD_OBJECT_UNIVERSAL_IDENTIFIER =
+  STANDARD_OBJECTS.dashboard.universalIdentifier;
+
+export const isRetiredDashboardMutation = (
+  operationName: CommonQueryNames,
+  objectUniversalIdentifier: string,
+) =>
+  PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
+  objectUniversalIdentifier === RETIRED_DASHBOARD_OBJECT_UNIVERSAL_IDENTIFIER;
+
 const RETIRED_CALENDAR_OBJECT_UNIVERSAL_IDENTIFIERS = new Set<string>([
   STANDARD_OBJECTS.calendarChannelEventAssociation.universalIdentifier,
   STANDARD_OBJECTS.calendarEventParticipant.universalIdentifier,
@@ -383,6 +393,14 @@ export abstract class CommonBaseQueryRunnerService<
     ) {
       throw new PermissionsException(
         'Brand Brain records are read-only after feature retirement',
+        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
+      );
+    }
+    if (
+      isRetiredDashboardMutation(this.operationName, objectUniversalIdentifier)
+    ) {
+      throw new PermissionsException(
+        'Dashboard records are read-only after feature retirement',
         PermissionsExceptionCode.METHOD_NOT_ALLOWED,
       );
     }

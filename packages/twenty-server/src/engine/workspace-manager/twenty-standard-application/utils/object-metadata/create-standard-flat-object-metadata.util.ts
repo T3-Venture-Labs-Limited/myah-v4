@@ -8,15 +8,22 @@ import {
   buildMyahCampaignCreatorListStandardFlatObjectMetadata,
   buildMyahCampaignCreatorListSourceStandardFlatObjectMetadata,
   buildMyahCreatorListStandardFlatObjectMetadata,
+  buildMyahCampaignEmailConversationBindingStandardFlatObjectMetadata,
   buildMyahCampaignCreatorStandardFlatObjectMetadata,
   buildMyahCampaignStandardFlatObjectMetadata,
   buildMyahCreatorListMemberStandardFlatObjectMetadata,
   buildMyahCreatorStandardFlatObjectMetadata,
   buildMyahOfferStandardFlatObjectMetadata,
+  buildMyahPartnershipOfferVersionStandardFlatObjectMetadata,
+  buildMyahPartnershipObligationStandardFlatObjectMetadata,
   buildMyahOutreachActionStandardFlatObjectMetadata,
   buildMyahOutreachSequenceStandardFlatObjectMetadata,
   buildMyahOutreachStepStandardFlatObjectMetadata,
   buildMyahPromotedAssetStandardFlatObjectMetadata,
+  buildMyahInstagramAccountStandardFlatObjectMetadata,
+  buildMyahSocialConversationStandardFlatObjectMetadata,
+  buildMyahSocialMessageStandardFlatObjectMetadata,
+  buildMyahInstagramReplyDraftStandardFlatObjectMetadata,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/myah-standard-object-field-builders.util';
 
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
@@ -880,11 +887,17 @@ export const STANDARD_FLAT_OBJECT_METADATA_BUILDERS_BY_OBJECT_NAME = {
   brandBrainUpdateProposal:
     buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata,
   offer: buildMyahOfferStandardFlatObjectMetadata,
+  partnershipOfferVersion:
+    buildMyahPartnershipOfferVersionStandardFlatObjectMetadata,
+  partnershipObligation:
+    buildMyahPartnershipObligationStandardFlatObjectMetadata,
   outreachAction: buildMyahOutreachActionStandardFlatObjectMetadata,
   outreachSequence: buildMyahOutreachSequenceStandardFlatObjectMetadata,
   outreachStep: buildMyahOutreachStepStandardFlatObjectMetadata,
   promotedAsset: buildMyahPromotedAssetStandardFlatObjectMetadata,
   campaignAccount: buildMyahCampaignAccountStandardFlatObjectMetadata,
+  campaignEmailConversationBinding:
+    buildMyahCampaignEmailConversationBindingStandardFlatObjectMetadata,
   campaignCreator: buildMyahCampaignCreatorStandardFlatObjectMetadata,
   campaignCreatorList: buildMyahCampaignCreatorListStandardFlatObjectMetadata,
   campaignCreatorListSource:
@@ -893,6 +906,11 @@ export const STANDARD_FLAT_OBJECT_METADATA_BUILDERS_BY_OBJECT_NAME = {
   creatorListMember: buildMyahCreatorListMemberStandardFlatObjectMetadata,
   creatorList: buildMyahCreatorListStandardFlatObjectMetadata,
   creator: buildMyahCreatorStandardFlatObjectMetadata,
+  myahInstagramAccount: buildMyahInstagramAccountStandardFlatObjectMetadata,
+  myahSocialConversation: buildMyahSocialConversationStandardFlatObjectMetadata,
+  myahSocialMessage: buildMyahSocialMessageStandardFlatObjectMetadata,
+  myahInstagramReplyDraft:
+    buildMyahInstagramReplyDraftStandardFlatObjectMetadata,
 } satisfies {
   [P in AllStandardObjectName]: (
     args: Omit<CreateStandardObjectArgs<P>, 'context' | 'objectName'>,

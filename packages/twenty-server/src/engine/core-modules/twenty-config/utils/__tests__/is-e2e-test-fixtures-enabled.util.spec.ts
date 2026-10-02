@@ -14,9 +14,6 @@ describe('isE2eTestFixturesEnabled', () => {
     ['development', 'false', false],
     ['development', 'true', true],
     ['test', 'true', true],
-    [undefined, 'true', false],
-    ['staging', 'true', false],
-    ['production', 'true', false],
   ])('is %s with E2E_TEST_FIXTURES=%s -> %s', (nodeEnv, flag, expected) => {
     process.env.NODE_ENV = nodeEnv;
     if (flag === undefined) {
@@ -27,4 +24,15 @@ describe('isE2eTestFixturesEnabled', () => {
 
     expect(isE2eTestFixturesEnabled()).toBe(expected);
   });
+
+  it.each([undefined, 'staging', 'production'])(
+    'throws before activation when NODE_ENV=%s and fixtures requested',
+    (environment) => {
+      process.env.NODE_ENV = environment;
+      process.env.E2E_TEST_FIXTURES = 'true';
+      expect(isE2eTestFixturesEnabled).toThrow(
+        'E2E_TEST_FIXTURES cannot be enabled',
+      );
+    },
+  );
 });

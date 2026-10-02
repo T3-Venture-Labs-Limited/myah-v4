@@ -12,17 +12,24 @@ import {
 export type BuildStandardFlatPageLayoutTabMetadataMapsArgs = Omit<
   CreateStandardPageLayoutTabArgs,
   'context'
->;
+> & {
+  omitDashboardComposition?: boolean;
+};
 
 export const buildStandardFlatPageLayoutTabMetadataMaps = ({
   now,
   workspaceId,
   twentyStandardApplicationId,
   standardPageLayoutMetadataRelatedEntityIds,
+  omitDashboardComposition = false,
 }: BuildStandardFlatPageLayoutTabMetadataMapsArgs): FlatEntityMaps<FlatPageLayoutTab> => {
   const allPageLayoutTabMetadatas: FlatPageLayoutTab[] = [];
 
   for (const layoutName of Object.keys(ALL_STANDARD_PAGE_LAYOUTS)) {
+    if (omitDashboardComposition && layoutName === 'myFirstDashboard') {
+      continue;
+    }
+
     const layout = ALL_STANDARD_PAGE_LAYOUTS[
       layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS
     ] as { tabs: Record<string, StandardPageLayoutTabConfig> };

@@ -25,14 +25,20 @@ import { lazyWithPreload } from '~/utils/lazyWithPreload';
 import { sentryCreateBrowserRouter } from '~/instrument';
 
 const RecordIndexPage = lazy(() =>
-  import('~/pages/object-record/RecordIndexPage').then((module) => ({
-    default: module.RecordIndexPage,
+  import('~/pages/object-record/RecordIndexPageRoute').then((module) => ({
+    default: module.RecordIndexPageRoute,
   })),
 );
 
 const RecordShowPage = lazy(() =>
-  import('~/pages/object-record/RecordShowPage').then((module) => ({
-    default: module.RecordShowPage,
+  import('~/pages/object-record/RecordShowPageRoute').then((module) => ({
+    default: module.RecordShowPageRoute,
+  })),
+);
+
+const MyahCampaignPage = lazy(() =>
+  import('@/myah/campaign/components/MyahCampaignPage').then((module) => ({
+    default: module.MyahCampaignPage,
   })),
 );
 
@@ -172,6 +178,14 @@ const createWorkspaceAppRouter = (
                     to={getSettingsPath(SettingsPath.General)}
                     replace
                   />
+                }
+              />
+              <Route
+                path="/myah/campaigns/:campaignId"
+                element={
+                  <LazyRoute>
+                    <MyahCampaignPage />
+                  </LazyRoute>
                 }
               />
               <Route

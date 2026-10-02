@@ -17,7 +17,11 @@ type ObjectNavigationCommand = FlatCommandMenuItem & {
 };
 
 export type OrphanedObjectNavigationCommandRepairPlan = {
-  operations: FlatEntityToCreateDeleteUpdate<'commandMenuItem'>;
+  operations: {
+    flatEntityToCreate: FlatEntityToCreateDeleteUpdate<'commandMenuItem'>['flatEntityToCreate'];
+    flatEntityToUpdate: FlatCommandMenuItem[];
+    flatEntityToDelete: FlatCommandMenuItem[];
+  };
   unclassifiedOrphanCommandUniversalIdentifiers: string[];
 };
 
@@ -44,7 +48,7 @@ export const buildOrphanedObjectNavigationCommandRepairPlan = ({
     flatObjectMetadataMaps.byUniversalIdentifier,
   ).filter(isDefined);
   const currentObjectIds = new Set(objects.map(({ id }) => id));
-  const operations: FlatEntityToCreateDeleteUpdate<'commandMenuItem'> = {
+  const operations: OrphanedObjectNavigationCommandRepairPlan['operations'] = {
     flatEntityToCreate: [],
     flatEntityToUpdate: [],
     flatEntityToDelete: [],

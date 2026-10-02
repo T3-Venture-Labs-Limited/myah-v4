@@ -6,6 +6,7 @@ import {
   MYAH_INBOX_REPLY_SEND_STATUS_TOOL_NAMES,
   REGISTERED_ACTION_TOOL_NAMES,
 } from 'src/engine/core-modules/tool-provider/constants/myah-assistant-tool-names.constant';
+import { type ReviewedGenericAction } from 'twenty-shared/ai';
 import { isValidUuid } from 'twenty-shared/utils';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 
@@ -69,12 +70,14 @@ export const getGenericApprovedResumeActiveToolNames = (toolNames: string[]) =>
 
 type MessagePartLike = {
   type?: string;
+  toolCallId?: string;
   input?: unknown;
   output?: unknown;
   toolOutput?: unknown;
 };
 
 type MessageLike = {
+  id?: string;
   role?: string;
   parts?: MessagePartLike[];
 };
@@ -83,18 +86,49 @@ type ApprovalToolResult = {
   status?: string;
   decision?: string;
   actionApprovalBindingId?: string;
+  reviewedAction?: unknown;
 };
 
 type ApprovalToolOutput = {
   result: ApprovalToolResult;
 };
 
-export const getLatestApprovedGenericToolName = (
+export type LatestApprovedGenericAction = {
+  messageId: string;
+  toolCallId: string;
+  reviewedAction: ReviewedGenericAction;
+};
+
+const isReviewedGenericAction = (
+  value: unknown,
+): value is ReviewedGenericAction => {
+  if (!value || typeof value !== 'object') return false;
+
+  const candidate = value as Partial<ReviewedGenericAction>;
+
+  return (
+    candidate.version === 1 &&
+    typeof candidate.toolName === 'string' &&
+    candidate.toolName.length > 0 &&
+    typeof candidate.argumentsDigest === 'string' &&
+    /^[0-9a-f]{64}$/.test(candidate.argumentsDigest) &&
+    !!candidate.arguments &&
+    typeof candidate.arguments === 'object' &&
+    !Array.isArray(candidate.arguments) &&
+    !!candidate.target &&
+    typeof candidate.target === 'object'
+  );
+};
+
+// Only a resolved, approved generic approval that carries its server-derived
+// reviewed action can unlock a write. Consumed, invalidated, rejected,
+// legacy (tool-name-only), and registered approvals unlock nothing here.
+export const getLatestApprovedGenericAction = (
   messages: MessageLike[],
-): string | null => {
+): LatestApprovedGenericAction | null => {
   const latestMessage = messages[messages.length - 1];
 
-  if (latestMessage?.role !== 'assistant') {
+  if (latestMessage?.role !== 'assistant' || !latestMessage.id) {
     return null;
   }
 
@@ -103,10 +137,12 @@ export const getLatestApprovedGenericToolName = (
 
     if (
       part.type !== `tool-${REQUEST_APPROVAL_TOOL_NAME}` ||
+      !part.toolCallId ||
       !isApprovalToolOutput(output) ||
       output.result.status !== 'resolved' ||
       output.result.decision !== 'approved' ||
       isRegisteredActionApprovalOutput(output) ||
+      !isReviewedGenericAction(output.result.reviewedAction) ||
       !part.input ||
       typeof part.input !== 'object' ||
       !('toolName' in part.input)
@@ -114,14 +150,17 @@ export const getLatestApprovedGenericToolName = (
       continue;
     }
 
-    const toolName = part.input.toolName;
+    const { reviewedAction } = output.result;
 
     if (
-      typeof toolName === 'string' &&
-      toolName.length > 0 &&
-      REGISTERED_ACTION_TOOL_NAMES_BY_NAME[toolName] !== true
+      part.input.toolName === reviewedAction.toolName &&
+      REGISTERED_ACTION_TOOL_NAMES_BY_NAME[reviewedAction.toolName] !== true
     ) {
-      return toolName;
+      return {
+        messageId: latestMessage.id,
+        toolCallId: part.toolCallId,
+        reviewedAction,
+      };
     }
   }
 

@@ -1,4 +1,3 @@
-import { TextArea } from '@/ui/input/components/TextArea';
 import { styled } from '@linaria/react';
 import { useId } from 'react';
 import { Button } from 'twenty-ui/input';
@@ -6,41 +5,21 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { INSTAGRAM_MESSAGE_MAX_BODY_BYTES } from 'twenty-shared/constants';
 import { getUtf8ByteLength } from 'twenty-shared/utils';
 
+import { MyahInboxReplyAiActions } from '@/myah/inbox/components/MyahInboxReplyAiActions';
+import { MyahInboxReplyBox } from '@/myah/inbox/components/MyahInboxReplyBox';
+import { StyledMyahInboxReplyCenterContext } from '@/myah/inbox/components/MyahInboxReplyCenterContext';
+import { Select } from '@/ui/input/components/Select';
+import { type MyahInboxInstagramCampaignOption } from '@/myah/inbox/hooks/useMyahInboxInstagramCampaignOptions';
 import { type MyahInboxInstagramChannelState } from '@/myah/inbox/types/MyahInboxContact';
 
-const StyledComposer = styled.section`
-  background: ${themeCssVariables.background.transparent.lighter};
-  border: 1px solid ${themeCssVariables.border.color.light};
-  border-radius: ${themeCssVariables.border.radius.md};
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
-  padding: ${themeCssVariables.spacing[3]};
-`;
-
-const StyledActions = styled.div`
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${themeCssVariables.spacing[2]};
-  justify-content: flex-end;
-`;
-
-const StyledError = styled.div`
-  color: ${themeCssVariables.font.color.danger};
-  font-size: ${themeCssVariables.font.size.xs};
-`;
-
-const StyledByteCount = styled.div<{ $overLimit: boolean }>`
-  align-self: flex-end;
+const StyledByteCount = styled.span<{ $overLimit: boolean }>`
   color: ${({ $overLimit }) =>
     $overLimit
       ? themeCssVariables.font.color.danger
       : themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.xs};
 `;
 
-type MyahInboxInstagramComposerProps = {
+export type MyahInboxInstagramComposerProps = {
   username: string;
   body: string;
   channelState: MyahInboxInstagramChannelState;
@@ -48,8 +27,21 @@ type MyahInboxInstagramComposerProps = {
   error?: string | null;
   disabled?: boolean;
   sending?: boolean;
+  editorVersion?: number;
+  previewScope?: string;
+  conflict?: { revision: number; body: string } | null;
   onBodyChange: (body: string) => void;
   onReviewAndSend: () => void;
+  onReloadConflict?: () => void;
+  // Membership-scoped Campaign guidance selection (MYAH-413 owns evidence-
+  // backed context/draft/send authority). Selecting a Campaign here only
+  // changes the Open AI guidance destination.
+  campaignOptions?: MyahInboxInstagramCampaignOption[];
+  selectedCampaignId?: string | null;
+  onSelectCampaign?: (campaignId: string) => void;
+  campaignUnavailableReason?: string | null;
+  onOpenAiGuidance?: () => void | Promise<void>;
+  guidanceUnavailableReason?: string;
 };
 
 export const MyahInboxInstagramComposer = ({
@@ -60,10 +52,20 @@ export const MyahInboxInstagramComposer = ({
   error = null,
   disabled = false,
   sending = false,
+  editorVersion = 0,
+  previewScope = '',
+  conflict = null,
   onBodyChange,
   onReviewAndSend,
+  onReloadConflict,
+  campaignOptions = [],
+  selectedCampaignId = null,
+  onSelectCampaign,
+  campaignUnavailableReason = null,
+  onOpenAiGuidance,
+  guidanceUnavailableReason,
 }: MyahInboxInstagramComposerProps) => {
-  const textAreaId = useId();
+  const composerId = useId();
   const isReadOnly =
     disabled || channelState !== 'READY' || provider === 'COMPOSIO_HISTORY';
   const trimmedByteLength = getUtf8ByteLength(body.trim());
@@ -72,34 +74,81 @@ export const MyahInboxInstagramComposer = ({
   const displayedError = isOverLimit
     ? `Message is too long (${trimmedByteLength} bytes). Shorten it to ${INSTAGRAM_MESSAGE_MAX_BODY_BYTES} bytes or fewer to send.`
     : error;
-  const label = `Message @${username} via Instagram`;
+  const recipient = `@${username}`;
+  const effectiveCampaignUnavailableReason =
+    campaignUnavailableReason ??
+    (campaignOptions.length === 0 ? 'No associated Campaigns yet.' : null);
 
   return (
-    <StyledComposer aria-label="Instagram composer">
-      <TextArea
-        ariaLabel={label}
-        disabled={isReadOnly}
-        minRows={6}
-        maxRows={6}
-        onChange={onBodyChange}
-        textAreaId={textAreaId}
-        value={body}
-      />
-      <StyledByteCount $overLimit={isOverLimit}>
-        {trimmedByteLength} / {INSTAGRAM_MESSAGE_MAX_BODY_BYTES}
-      </StyledByteCount>
-      {displayedError && (
-        <StyledError role="alert">{displayedError}</StyledError>
-      )}
-      <StyledActions aria-label="Instagram draft actions">
+    <MyahInboxReplyBox
+      body={{ markdown: body, blocknote: null }}
+      bodyAriaLabel={`Message ${recipient} via Instagram`}
+      conflict={
+        conflict
+          ? {
+              revision: conflict.revision,
+              body: { markdown: conflict.body, blocknote: null },
+            }
+          : null
+      }
+      disabled={isReadOnly}
+      editorMode="plain-text"
+      editorVersion={editorVersion}
+      error={conflict ? null : displayedError}
+      previewScope={previewScope}
+      onBodyChange={(nextBody) => onBodyChange(nextBody.markdown)}
+      onReloadConflict={onReloadConflict}
+      primaryActions={
         <Button
           disabled={cannotSend}
           onClick={onReviewAndSend}
           size="small"
-          title="Review and send"
+          title="Review"
+          ariaLabel="Review and send"
           variant="primary"
         />
-      </StyledActions>
-    </StyledComposer>
+      }
+      centerContext={
+        <StyledMyahInboxReplyCenterContext
+          data-campaign-context
+          role="group"
+          aria-label="Campaign context"
+        >
+          <Select
+            ariaLabel="Campaign context"
+            dropdownId={`${composerId}-campaign-context-select`}
+            value={selectedCampaignId ?? ''}
+            onChange={(value) => onSelectCampaign?.(value)}
+            options={effectiveCampaignUnavailableReason ? [] : campaignOptions}
+            emptyOption={{
+              value: '',
+              label: effectiveCampaignUnavailableReason ?? 'Choose a Campaign',
+            }}
+            disabled={Boolean(effectiveCampaignUnavailableReason)}
+            selectSizeVariant="small"
+            showContextualTextInControl={false}
+            withSearchInput={!effectiveCampaignUnavailableReason}
+            dropdownWidth={340}
+            dropdownOffset={{ x: 0, y: 8 }}
+          />
+        </StyledMyahInboxReplyCenterContext>
+      }
+      reloadConflictLabel="Reload saved Instagram draft"
+      trailingActions={
+        <>
+          <MyahInboxReplyAiActions
+            disabled={isReadOnly}
+            onOpenAiGuidance={onOpenAiGuidance}
+            guidanceUnavailableReason={guidanceUnavailableReason}
+            feedbackResetKey={`${editorVersion}:${body}`}
+            status={
+              <StyledByteCount $overLimit={isOverLimit}>
+                {trimmedByteLength} / {INSTAGRAM_MESSAGE_MAX_BODY_BYTES}
+              </StyledByteCount>
+            }
+          />
+        </>
+      }
+    />
   );
 };

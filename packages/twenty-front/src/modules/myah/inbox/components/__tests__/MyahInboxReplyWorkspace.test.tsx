@@ -9,7 +9,13 @@ import {
   InMemoryCache,
   Observable,
 } from '@apollo/client';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -70,6 +76,7 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     subjectOptions,
     subjectValue,
     onSubjectChange,
+    bodyAriaLabel,
     campaignOptions,
     campaignValue,
     onCampaignChange,
@@ -87,6 +94,7 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     }>;
     subjectValue?: string;
     onSubjectChange?: (value: string) => void;
+    bodyAriaLabel?: string;
     campaignOptions?: Array<{ label: string; value: string }>;
     campaignValue?: string;
     onCampaignChange?: (value: string) => void;
@@ -101,6 +109,9 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
         }
       />
       {subject && <output data-testid="draft-subject">{subject}</output>}
+      {bodyAriaLabel && (
+        <output data-testid="draft-body-label">{bodyAriaLabel}</output>
+      )}
       {subjectOptions && subjectValue && onSubjectChange ? (
         <select
           aria-label="Reply subject"
@@ -317,32 +328,31 @@ const setup = (
 };
 
 describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
-  it('preserves the floating main card with its animated border and reduced-motion fallback', () => {
-    const source = readFileSync(
+  it('moves the finalized animated frame into the shared reply box without nesting a copied Email frame', () => {
+    const workspaceSource = readFileSync(
       resolve(
         process.cwd(),
         'packages/twenty-front/src/modules/myah/inbox/components/MyahInboxReplyWorkspace.tsx',
       ),
       'utf8',
     );
+    const replyBoxSource = readFileSync(
+      resolve(
+        process.cwd(),
+        'packages/twenty-front/src/modules/myah/inbox/components/MyahInboxReplyBox.tsx',
+      ),
+      'utf8',
+    );
 
-    const mainStyles = source.match(
-      /const StyledMainReplyWorkspace = styled\(StyledReplyWorkspace\)`([\s\S]*?)`;/,
-    )?.[1];
-    expect(mainStyles).toBeDefined();
-    expect(mainStyles).toContain(
+    expect(replyBoxSource).toContain(
       'animation: myahReplyCardBorder 12s ease-in-out infinite alternate;',
     );
-    expect(mainStyles).toContain('linear-gradient(');
-    expect(mainStyles).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(mainStyles).not.toContain('border: 0');
-    expect(source).toContain(
-      'const MYAH_REPLY_CARD_SURFACE = themeCssVariables.background.primary;',
-    );
-    expect(source).toContain(
-      'border: 1px solid ${themeCssVariables.border.color.light}',
-    );
-    expect(source).toContain("{presentation !== 'main' && (");
+    expect(replyBoxSource).toContain('${themeCssVariables.color.pink}');
+    expect(replyBoxSource).toContain('${themeCssVariables.color.sky}');
+    expect(replyBoxSource).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(workspaceSource).not.toContain('@keyframes myahReplyCardBorder');
+    expect(workspaceSource).not.toContain('linear-gradient(');
+    expect(workspaceSource).toContain("{presentation !== 'main' && (");
   });
 
   it('removes the main-only composer heading while preserving the default heading', async () => {
@@ -374,6 +384,14 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
       );
     },
   );
+
+  it('passes the recipient-independent Email body label through the reply-box adapter', async () => {
+    setup(false, 'main');
+    await completeRead();
+    expect(screen.getByTestId('draft-body-label')).toHaveTextContent(
+      'Shared reply draft',
+    );
+  });
 
   it('maps readable Campaign cards to the main subject selector', async () => {
     const onReplyTargetChange = jest.fn();
@@ -656,6 +674,130 @@ describe('MyahInboxReplyWorkspace exact-key authority integration', () => {
       status: 'saved',
       localBody: { markdown: 'generated' },
     });
+  });
+
+  it('updates an edited incoming-stale draft only explicitly, through CAS, leaving review required', async () => {
+    const view = setup();
+    await completeRead({
+      executionState: 'NEEDS_REVIEW',
+      incomingState: 'STALE',
+      bodyEdited: true,
+      body: { markdown: 'my edited reply', blocknote: null },
+    });
+    expect(takeIfPending('GenerateMyahInboxReplyProposal')).toBeNull();
+    expect(
+      screen.getByText('New creator message since this draft was written.'),
+    ).toBeInTheDocument();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Update draft' })),
+    );
+    const generation = take('GenerateMyahInboxReplyProposal');
+    expect(generation.variables).toMatchObject({
+      input: {
+        ...contextInput,
+        expectedContextFingerprint: contextFingerprint,
+      },
+    });
+    await act(async () =>
+      generation.resolve({
+        generateMyahInboxReplyProposal: {
+          body: { markdown: 'updated', blocknote: null },
+          contextFingerprint,
+        },
+      }),
+    );
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables).toMatchObject({
+      input: {
+        expectedRevision: 2,
+        proposalContextFingerprint: contextFingerprint,
+        requireReview: true,
+        body: { markdown: 'updated' },
+      },
+    });
+    await act(async () =>
+      save.resolve({
+        saveMyahInboxDraft: {
+          status: 'SAVED',
+          revision: 3,
+          body: { markdown: 'updated', blocknote: null },
+        },
+      }),
+    );
+    await completeRead({
+      revision: 3,
+      executionState: 'NEEDS_REVIEW',
+      incomingState: 'CURRENT',
+      bodyEdited: false,
+      body: { markdown: 'updated', blocknote: null },
+    });
+    expect(view.entry()).toMatchObject({
+      executionState: 'NEEDS_REVIEW',
+      incomingState: 'CURRENT',
+      localBody: { markdown: 'updated' },
+      operation: null,
+    });
+    expect(takeIfPending('GenerateMyahInboxReplyProposal')).toBeNull();
+    // Explicit review is the only path from the updated proposal to send.
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Review draft' })),
+    );
+    const review = take('ReviewMyahInboxReplyContext');
+    expect(review.variables).toMatchObject({
+      input: {
+        ...contextInput,
+        expectedDraftRevision: 3,
+        expectedContextFingerprint: contextFingerprint,
+      },
+    });
+    await act(async () =>
+      review.resolve({
+        reviewMyahInboxReplyContext: draftPayload({
+          revision: 3,
+          body: { markdown: 'updated', blocknote: null },
+        }).myahInboxReplyDraft,
+      }),
+    );
+    await completeRead({
+      revision: 3,
+      executionState: 'READY',
+      incomingState: 'CURRENT',
+      bodyEdited: false,
+      body: { markdown: 'updated', blocknote: null },
+    });
+    expect(view.entry()).toMatchObject({ executionState: 'READY' });
+    expect(
+      screen.queryByRole('button', { name: 'Review draft' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('refreshes an untouched incoming-stale proposal automatically as an acknowledged proposal', async () => {
+    setup();
+    await completeRead({
+      executionState: 'NEEDS_REVIEW',
+      incomingState: 'STALE',
+      bodyEdited: false,
+      body: { markdown: 'older proposal', blocknote: null },
+    });
+    await waitFor(() =>
+      expect(
+        requests.some(({ name }) => name === 'GenerateMyahInboxReplyProposal'),
+      ).toBe(true),
+    );
+    const generation = take('GenerateMyahInboxReplyProposal');
+    await act(async () =>
+      generation.resolve({
+        generateMyahInboxReplyProposal: {
+          body: { markdown: 'refreshed', blocknote: null },
+          contextFingerprint,
+        },
+      }),
+    );
+    const save = take('SaveMyahInboxDraft');
+    expect(save.variables.input).toMatchObject({
+      proposalContextFingerprint: contextFingerprint,
+    });
+    expect(save.variables.input).not.toHaveProperty('requireReview');
   });
 
   it('never applies a delayed generation after forced target loss', async () => {

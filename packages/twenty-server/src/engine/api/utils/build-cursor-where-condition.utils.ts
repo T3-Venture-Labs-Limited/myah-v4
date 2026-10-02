@@ -1,4 +1,4 @@
-import { type ObjectRecord } from 'twenty-shared/types';
+import { FieldMetadataType, type ObjectRecord } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import {
@@ -30,6 +30,7 @@ type BuildCursorWhereConditionParams = {
     | ObjectRecordCursorLeafCompositeValue;
   flatObjectMetadata: FlatObjectMetadata;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  flatObjectMetadataMaps?: FlatEntityMaps<FlatObjectMetadata>;
   orderBy: ObjectRecordOrderBy;
   isForwardPagination: boolean;
   isEqualityCondition?: boolean;
@@ -40,6 +41,7 @@ export const buildCursorWhereCondition = ({
   cursorValue,
   flatObjectMetadata,
   flatFieldMetadataMaps,
+  flatObjectMetadataMaps,
   orderBy,
   isForwardPagination,
   isEqualityCondition = false,
@@ -65,6 +67,57 @@ export const buildCursorWhereCondition = ({
       GraphqlQueryRunnerExceptionCode.INVALID_CURSOR,
       { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
     );
+  }
+
+  if (fieldMetadata.type === FieldMetadataType.RELATION) {
+    const relationOrderBy = orderBy
+      .map((orderByItem) => orderByItem[fieldMetadataKey])
+      .find(isDefined);
+
+    if (
+      !isDefined(flatObjectMetadataMaps) ||
+      !isDefined(fieldMetadata.relationTargetObjectMetadataId) ||
+      typeof cursorValue !== 'object' ||
+      cursorValue === null ||
+      typeof relationOrderBy !== 'object' ||
+      relationOrderBy === null
+    ) {
+      throw new GraphqlQueryRunnerException(
+        'Invalid relation cursor',
+        GraphqlQueryRunnerExceptionCode.INVALID_CURSOR,
+        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+      );
+    }
+
+    const [nestedCursorKey, nestedOrderBy] = Object.entries(relationOrderBy)[0];
+    const nestedCursorEntry = Object.entries(cursorValue).find(
+      ([key]) => key === nestedCursorKey,
+    );
+    const relationTargetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityMaps: flatObjectMetadataMaps,
+      flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
+    });
+
+    if (!isDefined(nestedCursorEntry) || !relationTargetObjectMetadata) {
+      throw new GraphqlQueryRunnerException(
+        'Invalid relation cursor',
+        GraphqlQueryRunnerExceptionCode.INVALID_CURSOR,
+        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+      );
+    }
+
+    return {
+      [fieldMetadataKey]: buildCursorWhereCondition({
+        cursorKey: nestedCursorKey,
+        cursorValue: nestedCursorEntry[1],
+        flatObjectMetadata: relationTargetObjectMetadata,
+        flatFieldMetadataMaps,
+        flatObjectMetadataMaps,
+        orderBy: [{ [nestedCursorKey]: nestedOrderBy }],
+        isForwardPagination,
+        isEqualityCondition,
+      }),
+    };
   }
 
   if (isCompositeFieldMetadataType(fieldMetadata.type)) {

@@ -363,6 +363,18 @@ const createService = (
     isManagedModel: jest.fn().mockReturnValue(false),
     wrapModel: jest.fn(({ model }: { model: LanguageModel }) => model),
   };
+  const replyContexts = {
+    resolveForAction: jest.fn(async () => ({
+      state: 'READY',
+      contextFingerprint: 'a'.repeat(64),
+      selected: { kind: ReplyContextKind.GENERAL },
+      target: { deliveryTargetId: threadId },
+    })),
+  };
+  const approvals = {
+    executeInboxReplyTargetLocked: jest.fn(async (_input, run) => run()),
+    getInboxReplyTargetExecutionState: jest.fn(async () => null),
+  };
   const service = new MyahInboxReplyProposalService(
     replyBriefingService,
     actorContextService as never,
@@ -370,23 +382,15 @@ const createService = (
     billingUsageService as never,
     aiBillingService as never,
     managedOpenRouterModelService as never,
-    {
-      resolveForAction: jest.fn(async () => ({
-        state: 'READY',
-        contextFingerprint: 'a'.repeat(64),
-        selected: { kind: ReplyContextKind.GENERAL },
-        target: { deliveryTargetId: threadId },
-      })),
-    } as never,
-    {
-      executeInboxReplyTargetLocked: jest.fn(async (_input, run) => run()),
-      getInboxReplyTargetExecutionState: jest.fn(async () => null),
-    } as never,
+    replyContexts as never,
+    approvals as never,
   );
 
   return {
     service,
     fakeModel,
+    replyContexts,
+    approvals,
     replyBriefingService,
     loadReplyBriefing,
     actorContextService,
@@ -425,6 +429,9 @@ describe('MyahInboxReplyProposalService', () => {
     const sidebarTools = new MyahInboxToolWorkspaceService(
       {} as never,
       setup.service,
+      {} as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
     ).generateMyahInboxTools({
@@ -783,6 +790,46 @@ describe('MyahInboxReplyProposalService', () => {
     );
   });
 
+  it('rejects an Email proposal if a readable inbound changes authority during generation', async () => {
+    const setup = createService({
+      body: { markdown: 'A draft', blocknote: null },
+    });
+    setup.replyContexts.resolveForAction
+      .mockResolvedValueOnce({
+        state: 'READY',
+        contextFingerprint: 'a'.repeat(64),
+        selected: { kind: ReplyContextKind.GENERAL },
+        target: { deliveryTargetId: threadId },
+      })
+      .mockResolvedValueOnce({
+        state: 'READY',
+        contextFingerprint: 'b'.repeat(64),
+        selected: { kind: ReplyContextKind.GENERAL },
+        target: { deliveryTargetId: threadId },
+      });
+
+    await expect(
+      setup.service.generateContextReplyProposal({
+        authContext: userAuthContext,
+        expectedWorkspaceId: workspaceId,
+        target: {
+          channel: ReplyChannel.EMAIL,
+          threadId,
+          contactId: encodeMyahInboxContactId({
+            workspaceId,
+            identity: { kind: 'email-thread', recordId: threadId },
+          }),
+        },
+        replyContext: { kind: ReplyContextKind.GENERAL },
+        expectedContextFingerprint: 'a'.repeat(64),
+        operatorInstructions: request.operatorInstructions,
+      }),
+    ).rejects.toThrow('Reply context changed during generation');
+    expect(setup.fakeModel.doGenerate).toHaveBeenCalledTimes(1);
+    expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
+    expect(setup.messageRepositoryInsert).not.toHaveBeenCalled();
+  });
+
   it('passes the same multi-message history and no masked summary content through GraphQL and sidebar tool prompts', async () => {
     const proposal = {
       body: {
@@ -835,6 +882,9 @@ describe('MyahInboxReplyProposalService', () => {
     const toolSet = new MyahInboxToolWorkspaceService(
       {} as never,
       setup.service,
+      {} as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
     ).generateMyahInboxTools({

@@ -1,3 +1,6 @@
+import { MyahInboxReplyAiActions } from '@/myah/inbox/components/MyahInboxReplyAiActions';
+import { MyahInboxReplyBox } from '@/myah/inbox/components/MyahInboxReplyBox';
+import { StyledMyahInboxReplyCenterContext } from '@/myah/inbox/components/MyahInboxReplyCenterContext';
 import { MyahInboxRichDraftEditor } from '@/myah/inbox/components/MyahInboxRichDraftEditor';
 import { Select } from '@/ui/input/components/Select';
 import { TextArea } from '@/ui/input/components/TextArea';
@@ -10,9 +13,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useIcons } from 'twenty-ui/icon';
 import { Button, type SelectOption } from 'twenty-ui/input';
-import { AppTooltip, TooltipDelay, TooltipPosition } from 'twenty-ui/surfaces';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { parseMyahReplyRichText } from 'twenty-shared/utils';
 
@@ -26,121 +27,22 @@ const StyledDraftEditor = styled.section`
   flex-direction: column;
   gap: ${themeCssVariables.spacing[2]};
 
-  &[data-main-reply-card] {
-    container-type: inline-size;
-  }
-
   button[aria-disabled='true'] {
     color: ${themeCssVariables.font.color.light};
     cursor: not-allowed;
   }
 `;
 
-const StyledActions = styled.div<{ $mainCard?: boolean }>`
-  align-items: center;
-  display: ${({ $mainCard }) => ($mainCard ? 'grid' : 'flex')};
-  flex-wrap: wrap;
-  gap: ${themeCssVariables.spacing[2]};
-  grid-template-columns: ${({ $mainCard }) =>
-    $mainCard ? 'repeat(3, minmax(0, 1fr))' : 'none'};
-  justify-content: ${({ $mainCard }) => ($mainCard ? 'normal' : 'flex-end')};
-  max-width: 100%;
-
-  &[data-main-reply-actions] {
-    > [aria-label='AI actions'] {
-      grid-column: 3;
-      grid-row: 1;
-    }
-
-    > [aria-label='Reply actions'] {
-      grid-column: 1;
-      grid-row: 1;
-    }
-
-    > [data-reply-subject] {
-      grid-column: 2;
-      grid-row: 1;
-    }
-
-    @container (max-width: 480px) {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-
-      > [aria-label='AI actions'] {
-        grid-column: 2;
-        grid-row: 2;
-      }
-
-      > [aria-label='Reply actions'] {
-        grid-column: 1;
-        grid-row: 2;
-      }
-
-      > [data-reply-subject] {
-        grid-column: 1 / -1;
-        grid-row: 1;
-      }
-    }
-  }
-`;
-
-const StyledActionGroup = styled.div<{ $alignEnd?: boolean }>`
+const StyledActions = styled.div`
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[2]};
-  margin-left: ${({ $alignEnd }) => ($alignEnd ? 'auto' : '0')};
+  justify-content: flex-end;
   max-width: 100%;
-  min-width: 0;
-  overflow-wrap: anywhere;
-`;
-
-const MAIN_REPLY_SCROLL_STYLES = `
-  max-height: min(240px, 40vh);
-  overflow-y: auto;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
 `;
 
 const StyledEditorContainer = styled.div``;
-
-const StyledDraftPreview = styled.div`
-  ${MAIN_REPLY_SCROLL_STYLES}
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.md};
-  line-height: inherit;
-  min-height: ${themeCssVariables.spacing[6]};
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-`;
-
-const StyledReplySubject = styled.div`
-  justify-self: center;
-  max-width: 100%;
-  min-width: 0;
-
-  > span {
-    color: ${themeCssVariables.font.color.secondary};
-    display: block;
-    font-size: ${themeCssVariables.font.size.sm};
-    overflow: hidden;
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-`;
-
-const StyledAccessibleDescription = styled.span`
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-`;
 
 const StyledError = styled.div`
   color: ${themeCssVariables.font.color.danger};
@@ -169,6 +71,7 @@ type MyahInboxDraftEditorProps = {
   disabled?: boolean;
   presentation?: 'default' | 'main';
   previewScope?: string;
+  bodyAriaLabel?: string;
   subject?: string;
   onOpenAiGuidance?: () => void | Promise<void>;
   guidanceUnavailableReason?: string;
@@ -188,6 +91,7 @@ export const MyahInboxDraftEditor = ({
   disabled = false,
   presentation = 'default',
   previewScope = '',
+  bodyAriaLabel = 'Shared reply draft',
   subject,
   onOpenAiGuidance,
   guidanceUnavailableReason,
@@ -200,13 +104,8 @@ export const MyahInboxDraftEditor = ({
   const conflictPanelRef = useRef<HTMLDivElement>(null);
   const editorId = useId();
   const [isEditing, setIsEditing] = useState(initialIsEditing);
-  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const isMainCard = presentation === 'main';
-  const { getIcon } = useIcons();
-  const thumbsUpIcon = getIcon('IconThumbUp');
-  const thumbsDownIcon = getIcon('IconThumbDown');
-  const guidanceDescriptionId = `${editorId}-guidance-description`;
-  const feedbackDescriptionId = `${editorId}-feedback-description`;
+  const feedbackResetKey = `${previewScope}:${entry.localBody.markdown}`;
 
   useEffect(() => {
     if (entry.status === 'conflict') {
@@ -214,11 +113,6 @@ export const MyahInboxDraftEditor = ({
     }
   }, [entry.status]);
 
-  useEffect(() => {
-    setFeedback(null);
-  }, [entry.localBody.markdown, previewScope]);
-
-  const hasDraftContent = entry.localBody.markdown.trim().length > 0;
   const hasStructuredBody = entry.localBody.blocknote !== null;
   const hasUnsupportedStructuredBody = useMemo(() => {
     if (!hasStructuredBody) return false;
@@ -229,8 +123,7 @@ export const MyahInboxDraftEditor = ({
       return true;
     }
   }, [entry.localBody, hasStructuredBody]);
-  const useRichEditor =
-    (isMainCard || hasStructuredBody) && !hasUnsupportedStructuredBody;
+  const useRichEditor = hasStructuredBody && !hasUnsupportedStructuredBody;
   const editor = hasUnsupportedStructuredBody ? (
     <StyledConflict role="alert">
       <span>This formatted draft cannot be edited safely.</span>
@@ -253,8 +146,6 @@ export const MyahInboxDraftEditor = ({
         disabled={disabled}
         editorVersion={entry.editorVersion}
         focusId={`${previewScope}:${entry.editorVersion}`}
-        autoFocus={isMainCard && isEditing}
-        presentation={presentation}
         onDraftChange={onDraftChange}
       />
     </StyledEditorContainer>
@@ -275,170 +166,79 @@ export const MyahInboxDraftEditor = ({
     </StyledEditorContainer>
   );
 
-  return (
-    <StyledDraftEditor
-      aria-label="Shared reply draft editor"
-      data-main-reply-card={isMainCard || undefined}
-    >
-      {isMainCard && !isEditing ? (
-        hasDraftContent ? (
-          <StyledDraftPreview
-            role="region"
-            aria-label="Reply draft preview"
-            tabIndex={0}
-          >
-            {entry.localBody.markdown}
-          </StyledDraftPreview>
-        ) : null
-      ) : (
-        editor
-      )}
-      <StyledActions
-        $mainCard={isMainCard}
-        data-main-reply-actions={isMainCard || undefined}
-        aria-label="Draft actions"
-      >
-        {!isMainCard && actions}
-        {isMainCard && (
-          <>
-            <StyledActionGroup role="group" aria-label="Reply actions">
-              {actions}
-              <Button
-                title={isEditing ? 'Done editing' : 'Edit reply'}
-                variant="tertiary"
-                size="small"
-                disabled={disabled}
-                onClick={() =>
-                  setIsEditing((editing) => {
-                    const nextIsEditing = !editing;
-                    onEditingChange?.(nextIsEditing);
-                    return nextIsEditing;
-                  })
-                }
-              />
-            </StyledActionGroup>
-            {subject && (
-              <StyledReplySubject data-reply-subject>
-                {subjectOptions?.length && subjectValue && onSubjectChange ? (
-                  <Select
-                    ariaLabel="Reply subject"
-                    dropdownId={`${editorId}-reply-subject-select`}
-                    value={subjectValue}
-                    onChange={onSubjectChange}
-                    options={subjectOptions}
-                    selectSizeVariant="small"
-                    showContextualTextInControl={false}
-                    withSearchInput
-                    dropdownWidth={340}
-                    dropdownOffset={{ x: 0, y: 8 }}
-                  />
-                ) : (
-                  <span aria-label="Reply subject" title={subject}>
-                    {subject}
-                  </span>
-                )}
-              </StyledReplySubject>
-            )}
-            <StyledActionGroup $alignEnd role="group" aria-label="AI actions">
-              <div data-testid="myah-inbox-guidance-tooltip-anchor">
-                <Button
-                  title="Open AI guidance"
-                  variant="tertiary"
-                  size="small"
-                  disabled={disabled}
-                  aria-disabled={
-                    Boolean(guidanceUnavailableReason || !onOpenAiGuidance) ||
-                    undefined
-                  }
-                  aria-describedby={
-                    guidanceUnavailableReason
-                      ? guidanceDescriptionId
-                      : undefined
-                  }
-                  onClick={
-                    guidanceUnavailableReason ? undefined : onOpenAiGuidance
-                  }
-                />
-              </div>
-              <Button
-                Icon={thumbsUpIcon}
-                ariaLabel="Thumbs up"
-                aria-pressed={feedback === 'up'}
-                aria-describedby={feedbackDescriptionId}
-                data-selected={feedback === 'up' || undefined}
-                dataTestId="myah-inbox-feedback-tooltip-up"
-                variant={feedback === 'up' ? 'secondary' : 'tertiary'}
-                accent={feedback === 'up' ? 'brand' : 'default'}
-                size="small"
-                disabled={disabled}
-                onClick={() =>
-                  setFeedback((selection) => (selection === 'up' ? null : 'up'))
-                }
-              />
-              <Button
-                Icon={thumbsDownIcon}
-                ariaLabel="Thumbs down"
-                aria-pressed={feedback === 'down'}
-                aria-describedby={feedbackDescriptionId}
-                data-selected={feedback === 'down' || undefined}
-                dataTestId="myah-inbox-feedback-tooltip-down"
-                variant={feedback === 'down' ? 'secondary' : 'tertiary'}
-                accent={feedback === 'down' ? 'brand' : 'default'}
-                size="small"
-                disabled={disabled}
-                onClick={() =>
-                  setFeedback((selection) =>
-                    selection === 'down' ? null : 'down',
-                  )
-                }
-              />
-            </StyledActionGroup>
-          </>
+  if (isMainCard) {
+    const centerContext = subject ? (
+      <StyledMyahInboxReplyCenterContext data-reply-subject>
+        {subjectOptions?.length && subjectValue && onSubjectChange ? (
+          <Select
+            ariaLabel="Reply subject"
+            dropdownId={`${editorId}-reply-subject-select`}
+            value={subjectValue}
+            onChange={onSubjectChange}
+            options={subjectOptions}
+            selectSizeVariant="small"
+            showContextualTextInControl={false}
+            withSearchInput
+            dropdownWidth={340}
+            dropdownOffset={{ x: 0, y: 8 }}
+          />
+        ) : (
+          <span aria-label="Reply subject" title={subject}>
+            {subject}
+          </span>
         )}
-      </StyledActions>
-      {hasUnsupportedStructuredBody && isMainCard && !isEditing && (
-        <StyledConflict role="alert">
-          <span>This formatted draft cannot be edited safely.</span>
-          <Button
-            title="Use plain text"
-            variant="secondary"
-            size="small"
-            disabled={disabled}
-            onClick={() =>
-              onDraftChange({
-                markdown: entry.localBody.markdown,
-                blocknote: null,
-              })
-            }
-          />
-        </StyledConflict>
-      )}
-      {isMainCard && (
-        <>
-          {guidanceUnavailableReason && (
-            <>
-              <StyledAccessibleDescription id={guidanceDescriptionId}>
-                {guidanceUnavailableReason}
-              </StyledAccessibleDescription>
-              <AppTooltip
-                anchorSelect="[data-testid='myah-inbox-guidance-tooltip-anchor']"
-                content={guidanceUnavailableReason}
-                delay={TooltipDelay.shortDelay}
-                place={TooltipPosition.Top}
-              />
-            </>
-          )}
-          <StyledAccessibleDescription id={feedbackDescriptionId}>
-            Feedback is a local preview and is not saved.
-          </StyledAccessibleDescription>
-          <AppTooltip
-            anchorSelect="[data-testid^='myah-inbox-feedback-tooltip-']"
-            content="Feedback is a local preview and is not saved."
-            delay={TooltipDelay.shortDelay}
-            place={TooltipPosition.Top}
-          />
-        </>
-      )}
+      </StyledMyahInboxReplyCenterContext>
+    ) : null;
+    const trailingActions = (
+      <MyahInboxReplyAiActions
+        disabled={disabled}
+        onOpenAiGuidance={onOpenAiGuidance}
+        guidanceUnavailableReason={guidanceUnavailableReason}
+        feedbackResetKey={feedbackResetKey}
+      />
+    );
+    return (
+      <MyahInboxReplyBox
+        body={entry.localBody}
+        bodyAriaLabel={bodyAriaLabel}
+        centerContext={centerContext}
+        bodyRecovery={
+          hasUnsupportedStructuredBody
+            ? {
+                message: 'This formatted draft cannot be edited safely.',
+                actionLabel: 'Use plain text',
+                onRecover: () =>
+                  onDraftChange({
+                    markdown: entry.localBody.markdown,
+                    blocknote: null,
+                  }),
+              }
+            : undefined
+        }
+        conflict={entry.status === 'conflict' ? entry.conflict : null}
+        disabled={disabled}
+        editorMode="rich"
+        editorVersion={entry.editorVersion}
+        error={entry.status === 'error' ? entry.error : null}
+        isEditing={isEditing}
+        onBodyChange={onDraftChange}
+        onEditingChange={(nextIsEditing) => {
+          setIsEditing(nextIsEditing);
+          onEditingChange?.(nextIsEditing);
+        }}
+        onReloadConflict={onReloadConflict}
+        onRetry={onRetry}
+        previewScope={previewScope}
+        primaryActions={actions}
+        trailingActions={trailingActions}
+      />
+    );
+  }
+
+  return (
+    <StyledDraftEditor aria-label="Shared reply draft editor">
+      {editor}
+      <StyledActions aria-label="Draft actions">{actions}</StyledActions>
       {entry.status === 'error' && (
         <StyledError role="alert">
           {entry.error}

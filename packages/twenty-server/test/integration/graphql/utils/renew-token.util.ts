@@ -19,6 +19,6 @@ export const renewToken = async (appToken: string) => {
 
   return await makeMetadataAPIRequest(
     { query: mutation, variables: { appToken } },
-    undefined,
+    null,
   );
 };

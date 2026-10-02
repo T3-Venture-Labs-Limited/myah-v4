@@ -7,11 +7,19 @@ describe('useCreateWorkspaceAppRouter', () => {
       resolve(__dirname, '../useCreateWorkspaceAppRouter.tsx'),
       'utf8',
     );
+    const campaignRouteIndex = source.indexOf(
+      'path="/myah/campaigns/:campaignId"',
+    );
     const myahRouteIndex = source.indexOf('path="/myah/:pageId"');
     const wildcardRouteIndex = source.indexOf(
       'path={AppPath.NotFoundWildcard}',
     );
 
+    expect(campaignRouteIndex).toBeGreaterThan(
+      source.indexOf('<MainAppLayoutWithSidePanel />'),
+    );
+    expect(campaignRouteIndex).toBeLessThan(myahRouteIndex);
+    expect(source).toContain('<MyahCampaignPage />');
     expect(myahRouteIndex).toBeGreaterThan(source.indexOf('<DefaultLayout />'));
     expect(myahRouteIndex).toBeGreaterThan(
       source.indexOf('<MainAppLayoutWithSidePanel />'),

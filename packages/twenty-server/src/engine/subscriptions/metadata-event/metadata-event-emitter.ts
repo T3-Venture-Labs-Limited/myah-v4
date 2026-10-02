@@ -24,18 +24,29 @@ type EmitMetadataEventsArgs = {
 export class MetadataEventEmitter {
   constructor(private readonly eventEmitter: EventEmitter2) {}
 
-  public emitMetadataEvents({
+  public emitMetadataEvents(args: EmitMetadataEventsArgs): void {
+    for (const batch of this.createBatches(args))
+      this.eventEmitter.emit(batch.name, batch);
+  }
+
+  // Pinned upgrades must wait for durable webhook jobs and subscriber delivery
+  // before their command process closes; the ordinary live path is unchanged.
+  public async emitMetadataEventsAsync(
+    args: EmitMetadataEventsArgs,
+  ): Promise<void> {
+    for (const batch of this.createBatches(args))
+      await this.eventEmitter.emitAsync(batch.name, batch);
+  }
+
+  private createBatches({
     metadataEvents,
     workspaceId,
     initiatorContext,
-  }: EmitMetadataEventsArgs): void {
-    if (metadataEvents.length === 0) {
-      return;
-    }
+  }: EmitMetadataEventsArgs): MetadataEventBatch[] {
+    if (metadataEvents.length === 0) return [];
 
     const resolvedInitiatorContext =
       this.resolveInitiatorContext(initiatorContext);
-
     const userId =
       resolvedInitiatorContext?.type === 'user' ||
       resolvedInitiatorContext?.type === 'pendingActivationUser'
@@ -46,14 +57,8 @@ export class MetadataEventEmitter {
         ? resolvedInitiatorContext.apiKey.id
         : undefined;
 
-    const grouped = this.groupByMetadataNameAndAction(metadataEvents);
-
-    for (const { eventName, events, metadataName, type } of grouped.values()) {
-      if (metadataEvents.length === 0) {
-        continue;
-      }
-
-      const metadataEventBatch: MetadataEventBatch = {
+    return [...this.groupByMetadataNameAndAction(metadataEvents).values()].map(
+      ({ eventName, events, metadataName, type }): MetadataEventBatch => ({
         name: eventName,
         workspaceId,
         metadataName,
@@ -61,10 +66,8 @@ export class MetadataEventEmitter {
         events,
         userId,
         apiKeyId,
-      };
-
-      this.eventEmitter.emit(eventName, metadataEventBatch);
-    }
+      }),
+    );
   }
 
   private resolveInitiatorContext(

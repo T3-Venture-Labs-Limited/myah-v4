@@ -68,7 +68,7 @@ export const signUpInWorkspaceAndGetAccessToken = async (
         workspaceId: SEED_APPLE_WORKSPACE_ID,
       },
     },
-    undefined,
+    null,
   );
 
   expect(signUpResponse.status).toBe(200);

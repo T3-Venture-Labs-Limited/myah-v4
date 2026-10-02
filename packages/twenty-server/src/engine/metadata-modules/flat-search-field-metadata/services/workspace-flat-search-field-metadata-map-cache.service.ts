@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -40,24 +40,34 @@ export class WorkspaceFlatSearchFieldMetadataMapCacheService extends WorkspaceCa
   async computeForCache(
     workspaceId: string,
   ): Promise<FlatSearchFieldMetadataMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatSearchFieldMetadataMaps> {
     const [
       existingSearchFieldMetadatas,
       applications,
       objectMetadatas,
       fieldMetadatas,
     ] = await Promise.all([
-      this.searchFieldMetadataRepository.find(workspaceId),
-      this.applicationRepository.find({
+      this.searchFieldMetadataRepository.withManager(manager).find(workspaceId),
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.objectMetadataRepository.find({
+      manager.getRepository(ObjectMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.fieldMetadataRepository.find({
+      manager.getRepository(FieldMetadataEntity).find({
         where: { workspaceId },
         select: [
           'id',

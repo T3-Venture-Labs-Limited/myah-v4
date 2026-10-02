@@ -84,6 +84,16 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
       objectMetadataUniversalIdentifier,
     }),
   ),
+  ...[
+    MYAH_STANDARD_OBJECTS.partnershipOfferVersion.universalIdentifier,
+    MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier,
+  ].map((objectMetadataUniversalIdentifier) =>
+    buildReadOnlyObjectPermissionDefinition({
+      roleUniversalIdentifier:
+        MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+      objectMetadataUniversalIdentifier,
+    }),
+  ),
   buildObjectPermissionDefinition({
     roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
     objectMetadataUniversalIdentifier:

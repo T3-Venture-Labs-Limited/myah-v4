@@ -39,6 +39,25 @@ describe('isMyahNavigationRouteActive', () => {
     ).toBe(true);
   });
 
+  it('matches a dedicated nested Campaign pathname without selecting its index siblings', () => {
+    expect(
+      isMyahNavigationRouteActive({
+        route: resolvedCampaignRoute,
+        pathname: '/myah/campaigns/campaign-id',
+        search: '?section=outreach',
+        hash: '',
+      }),
+    ).toBe(true);
+    expect(
+      isMyahNavigationRouteActive({
+        route: resolvedCampaignRoute,
+        pathname: '/myah/campaigns-extra/campaign-id',
+        search: '',
+        hash: '',
+      }),
+    ).toBe(false);
+  });
+
   it('matches an object record-show pathname', () => {
     expect(
       isMyahNavigationRouteActive({

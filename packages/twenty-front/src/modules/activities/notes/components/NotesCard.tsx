@@ -29,8 +29,14 @@ const StyledNotesContainer = styled.div`
 
 export const NotesCard = () => {
   const targetRecord = useTargetRecord();
-  const { notes, loading, totalCountNotes, fetchMoreNotes, hasNextPage } =
-    useNotes(targetRecord);
+  const {
+    notes,
+    loading,
+    totalCountNotes,
+    fetchMoreNotes,
+    hasNextPage,
+    error,
+  } = useNotes(targetRecord);
 
   const handleLastRowVisible = async () => {
     if (hasNextPage) {
@@ -56,6 +62,22 @@ export const NotesCard = () => {
 
   if (loading && isNotesEmpty) {
     return <SkeletonLoader />;
+  }
+
+  if (error && isNotesEmpty) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            {t`Notes couldn't be loaded`}
+          </AnimatedPlaceholderEmptyTitle>
+          <AnimatedPlaceholderEmptySubTitle>
+            {t`Please refresh the page.`}
+          </AnimatedPlaceholderEmptySubTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
   }
 
   if (isNotesEmpty) {

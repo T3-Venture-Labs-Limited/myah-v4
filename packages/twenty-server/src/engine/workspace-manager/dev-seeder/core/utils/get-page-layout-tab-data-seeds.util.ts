@@ -44,42 +44,6 @@ export const getPageLayoutTabFlatEntitySeeds = ({
 
   return [
     buildTab(
-      PAGE_LAYOUT_TAB_SEEDS.SALES_OVERVIEW,
-      'Overview',
-      0,
-      PAGE_LAYOUT_SEEDS.SALES_DASHBOARD,
-    ),
-    buildTab(
-      PAGE_LAYOUT_TAB_SEEDS.SALES_DETAILS,
-      'Details',
-      1,
-      PAGE_LAYOUT_SEEDS.SALES_DASHBOARD,
-    ),
-    buildTab(
-      PAGE_LAYOUT_TAB_SEEDS.CUSTOMER_OVERVIEW,
-      'Overview',
-      0,
-      PAGE_LAYOUT_SEEDS.CUSTOMER_DASHBOARD,
-    ),
-    buildTab(
-      PAGE_LAYOUT_TAB_SEEDS.CUSTOMER_ANALYTICS,
-      'Analytics',
-      1,
-      PAGE_LAYOUT_SEEDS.CUSTOMER_DASHBOARD,
-    ),
-    buildTab(
-      PAGE_LAYOUT_TAB_SEEDS.TEAM_OVERVIEW,
-      'Team & People',
-      0,
-      PAGE_LAYOUT_SEEDS.TEAM_DASHBOARD,
-    ),
-    buildTab(
-      PAGE_LAYOUT_TAB_SEEDS.TEAM_METRICS,
-      'Tasks & Activity',
-      1,
-      PAGE_LAYOUT_SEEDS.TEAM_DASHBOARD,
-    ),
-    buildTab(
       PAGE_LAYOUT_TAB_SEEDS.DOCUMENTATION,
       'Documentation',
       0,

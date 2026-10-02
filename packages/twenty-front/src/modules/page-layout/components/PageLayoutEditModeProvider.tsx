@@ -1,4 +1,3 @@
-import { DashboardPageLayoutEditModeProvider } from '@/page-layout/components/DashboardPageLayoutEditModeProvider';
 import { RecordPageLayoutEditModeProvider } from '@/page-layout/components/RecordPageLayoutEditModeProvider';
 import { PageLayoutEditModeProviderContext } from '@/page-layout/contexts/PageLayoutEditModeContext';
 import { type ReactNode } from 'react';
@@ -32,8 +31,8 @@ export const PageLayoutEditModeProvider = ({
   }
 
   return (
-    <DashboardPageLayoutEditModeProvider pageLayoutId={pageLayoutId}>
+    <PageLayoutEditModeProviderContext value={{ isInEditMode: false }}>
       {children}
-    </DashboardPageLayoutEditModeProvider>
+    </PageLayoutEditModeProviderContext>
   );
 };

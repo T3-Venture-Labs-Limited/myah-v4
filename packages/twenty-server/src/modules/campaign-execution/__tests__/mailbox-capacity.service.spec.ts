@@ -1019,7 +1019,7 @@ describe('campaign capacity entity and module metadata', () => {
         OutboundEmailAttemptEntity,
       ]),
     );
-    expect(typeOrmImport.providers).toHaveLength(8);
+    expect(typeOrmImport.providers).toHaveLength(11);
   });
 });
 
@@ -1227,6 +1227,7 @@ describe('MailboxCapacityService mutation revalidation and CAS', () => {
             ],
           };
         }
+        if (sql.includes('campaignForecastHead')) return [];
         if (sql.includes('UPDATE "core"."mailboxDispatchClock"')) {
           return {
             affected: 1,
@@ -1259,8 +1260,11 @@ describe('MailboxCapacityService mutation revalidation and CAS', () => {
       } as unknown as EntityManager,
     );
 
-    expect(calls).toHaveLength(2);
-    expect(calls.every(({ structured }) => structured === true)).toBe(true);
+    expect(calls).toHaveLength(3);
+    expect(
+      calls.slice(0, 2).every(({ structured }) => structured === true),
+    ).toBe(true);
+    expect(calls[2].sql).toContain('campaignForecastHead');
     expect(calls[0].sql).toContain('"reservedCount" + 1');
     expect(calls[0].sql).toContain('"localDate"::text AS "localDate"');
     expect(calls[1].sql).toContain('GREATEST');
@@ -1301,10 +1305,11 @@ describe('MailboxCapacityService mutation revalidation and CAS', () => {
         await service.consumeReserved(lockedDay, manager);
       }
 
-      expect(query).toHaveBeenCalledTimes(1);
+      expect(query).toHaveBeenCalledTimes(2);
       expect(query.mock.calls[0][0]).toContain(
         '"localDate"::text AS "localDate"',
       );
+      expect(query.mock.calls[1][0]).toContain('campaignForecastHead');
     },
   );
 });

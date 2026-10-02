@@ -1,4 +1,4 @@
-import { type Repository } from 'typeorm';
+import { type QueryRunner, type Repository } from 'typeorm';
 
 import { type WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { BackfillWorkspaceCustomApplicationRegistrationCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1782853718000-backfill-workspace-custom-application-registration.command';
@@ -74,6 +74,18 @@ describe('BackfillWorkspaceCustomApplicationRegistrationCommand', () => {
       applicationRegistrationId: 'registration-1',
       workspaceId: WORKSPACE_ID,
     });
+  });
+
+  it('uses only the pinned runner for registration admission and both writes', async () => {
+    const pinnedWorkspaceFind = jest.fn().mockResolvedValue({id:WORKSPACE_ID,workspaceCustomApplicationId:CUSTOM_APPLICATION_ID});
+    const pinnedApplicationFind = jest.fn().mockResolvedValue({id:CUSTOM_APPLICATION_ID,universalIdentifier:CUSTOM_APPLICATION_ID,applicationRegistrationId:null});
+    const runner = {manager:{getRepository: jest.fn((entity) => entity.name === 'WorkspaceEntity' ? {findOne:pinnedWorkspaceFind} : {findOne:pinnedApplicationFind})}} as unknown as QueryRunner;
+    const afterCommit = jest.fn();
+    await command.runOnWorkspaceInUpgradeTransaction({workspaceId:WORKSPACE_ID,options:{},index:0,total:1},runner,afterCommit);
+    expect(workspaceFindOne).not.toHaveBeenCalled();
+    expect(applicationFindOne).not.toHaveBeenCalled();
+    expect(createRegistration).toHaveBeenCalledWith({workspaceId:WORKSPACE_ID,universalIdentifier:CUSTOM_APPLICATION_ID},runner);
+    expect(updateApplication).toHaveBeenCalledWith(CUSTOM_APPLICATION_ID,{applicationRegistrationId:'registration-1',workspaceId:WORKSPACE_ID},{queryRunner:runner,afterCommit});
   });
 
   it('is idempotent: skips when the custom application already has a registration', async () => {

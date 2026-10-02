@@ -12,7 +12,7 @@ export class RebrandEmailSenderToMyahSlowInstanceCommand
 {
   public readonly runDataMigrationWithoutWorkspaces = true;
 
-  public async runDataMigration(dataSource: DataSource): Promise<void> {
+  public async runDataMigration(dataSource: DataSource, queryRunner?: QueryRunner): Promise<void> {
     await dataSource.query(
       `UPDATE "core"."keyValuePair"
       SET value = to_jsonb($1::text)
@@ -22,6 +22,7 @@ export class RebrandEmailSenderToMyahSlowInstanceCommand
       AND "workspaceId" IS NULL
       AND value = to_jsonb($2::text)`,
       [MYAH_SENDER_NAME, LEGACY_SENDER_NAME],
+      queryRunner,
     );
   }
 

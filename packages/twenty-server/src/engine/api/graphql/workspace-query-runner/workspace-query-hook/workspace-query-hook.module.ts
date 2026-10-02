@@ -6,7 +6,6 @@ import { WorkspaceQueryHookMetadataAccessor } from 'src/engine/api/graphql/works
 import { WorkspaceQueryHookExplorer } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/workspace-query-hook.explorer';
 import { WorkspaceQueryHookService } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/workspace-query-hook.service';
 import { BlocklistQueryHookModule } from 'src/modules/blocklist/query-hooks/blocklist-query-hook.module';
-import { DashboardQueryHookModule } from 'src/modules/dashboard/query-hooks/dashboard-query-hook.module';
 import { MessagingQueryHookModule } from 'src/modules/messaging/common/query-hooks/messaging-query-hook.module';
 import { MyahCampaignQueryHookModule } from 'src/modules/myah-campaign/query-hooks/myah-campaign-query-hook.module';
 import { NoteQueryHookModule } from 'src/modules/note/query-hooks/note-query-hook.module';
@@ -16,7 +15,6 @@ import { WorkspaceMemberQueryHookModule } from 'src/modules/workspace-member/que
 @Module({
   imports: [
     MessagingQueryHookModule,
-    DashboardQueryHookModule,
     BlocklistQueryHookModule,
     WorkspaceMemberQueryHookModule,
     NoteQueryHookModule,

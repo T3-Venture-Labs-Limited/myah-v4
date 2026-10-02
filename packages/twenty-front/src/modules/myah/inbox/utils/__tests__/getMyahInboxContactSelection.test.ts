@@ -13,6 +13,11 @@ const contact: MyahInboxContact = {
   creator: { id: 'creator-1', name: 'Creator One' },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
+  initialSelection: {
+    channel: 'EMAIL',
+    emailThreadId: 'thread-1',
+    instagramConversationId: null,
+  },
   preview: 'Latest',
   sender: '@creator',
   needsAttention: true,
@@ -61,7 +66,7 @@ describe('getMyahInboxContactSelection', () => {
       }).emailThreadId,
     ).toBeNull();
   });
-  it('defaults a new Contact to its latest available channel and exact target', () => {
+  it('defaults a new Contact to its projected inbound channel and exact target', () => {
     expect(
       getMyahInboxContactSelection({
         workspaceId: 'workspace-1',
@@ -71,10 +76,98 @@ describe('getMyahInboxContactSelection', () => {
     ).toEqual({
       workspaceId: 'workspace-1',
       contactId: 'contact-1',
+      channel: 'EMAIL',
+      emailThreadId: 'thread-1',
+      instagramConversationId: null,
+    });
+  });
+
+  it('rejects a projected Email target outside readable contact membership', () => {
+    expect(
+      getMyahInboxContactSelection({
+        workspaceId: 'workspace-1',
+        contact: {
+          ...contact,
+          initialSelection: {
+            channel: 'EMAIL',
+            emailThreadId: 'stale-thread',
+            instagramConversationId: null,
+          },
+        },
+        previousSelection: null,
+      }),
+    ).toMatchObject({ channel: 'EMAIL', emailThreadId: null });
+  });
+
+  it('accepts only the projected sole readable Instagram conversation', () => {
+    expect(
+      getMyahInboxContactSelection({
+        workspaceId: 'workspace-1',
+        contact: {
+          ...contact,
+          initialSelection: {
+            channel: 'INSTAGRAM',
+            emailThreadId: null,
+            instagramConversationId: 'conversation-1',
+          },
+        },
+        previousSelection: null,
+      }),
+    ).toMatchObject({
       channel: 'INSTAGRAM',
-      emailThreadId: null,
       instagramConversationId: 'conversation-1',
     });
+
+    expect(
+      getMyahInboxContactSelection({
+        workspaceId: 'workspace-1',
+        contact: {
+          ...contact,
+          initialSelection: {
+            channel: 'INSTAGRAM',
+            emailThreadId: null,
+            instagramConversationId: 'conversation-1',
+          },
+          instagram: {
+            ...contact.instagram,
+            state: 'AMBIGUOUS',
+            conversations: [
+              ...contact.instagram.conversations,
+              { ...contact.instagram.conversations[0], id: 'conversation-2' },
+            ],
+          },
+        },
+        previousSelection: null,
+      }),
+    ).toMatchObject({
+      channel: 'INSTAGRAM',
+      instagramConversationId: null,
+    });
+  });
+
+  it('keeps the existing exact-target fallback when the recommended channel is unavailable', () => {
+    expect(
+      getMyahInboxContactSelection({
+        workspaceId: 'workspace-1',
+        contact: {
+          ...contact,
+          instagramUsername: null,
+          initialSelection: {
+            channel: 'INSTAGRAM',
+            emailThreadId: null,
+            instagramConversationId: null,
+          },
+          instagram: {
+            isAvailable: false,
+            state: 'UNAVAILABLE',
+            needsAttention: false,
+            conversations: [],
+          },
+        },
+        previousSelection: null,
+        latestOutreachThreadId: 'thread-2',
+      }),
+    ).toMatchObject({ channel: 'EMAIL', emailThreadId: 'thread-2' });
   });
 
   it('preserves a pinned exact Email target despite partial contact membership', () => {

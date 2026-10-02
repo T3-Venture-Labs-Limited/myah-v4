@@ -43,6 +43,11 @@ export type MyahInboxContact = {
   creator: { id: string; name: string | null } | null;
   lastActivityAt: string;
   latestChannel: MyahInboxChannel;
+  initialSelection: {
+    channel: MyahInboxChannel;
+    emailThreadId: string | null;
+    instagramConversationId: string | null;
+  };
   preview: string | null;
   sender: string | null;
   needsAttention: boolean;

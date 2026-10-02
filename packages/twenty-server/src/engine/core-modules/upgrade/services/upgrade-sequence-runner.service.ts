@@ -1,10 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  MYAH_STANDARD_OBJECTS,
+  STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
+import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
 import {
   type WorkspaceIteratorReport,
   WorkspaceIteratorService,
 } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type ParsedUpgradeCommandOptions } from 'src/database/commands/upgrade-version-command/upgrade.command';
+import {
+  BackfillSystemUniqueIndexUniversalIdentifierCommand,
+  SYSTEM_UNIQUE_INDEX_BACKFILL_UPGRADE_NAME,
+} from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1783093620000-backfill-system-unique-index-universal-identifier.command';
+import { CreateCampaignPartnershipWorkItemFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790000000001-create-campaign-partnership-work-item';
+import { CreateCampaignEmailWorkCollisionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790000000007-create-campaign-email-work-collision';
+import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
+import { RetireBrandBrainMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790000000410-retire-brand-brain-metadata.command';
+import { SynchronizeInstagramSourceControlledMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790491923604-synchronize-instagram-source-controlled-metadata.command';
+import { LEGACY_2_19_PREREQUISITE_COMMAND_NAMES } from 'src/engine/core-modules/upgrade/constants/legacy-2-19-prerequisite-command-names.constant';
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import {
   UpgradeMigrationService,
@@ -17,10 +32,45 @@ import {
   UpgradeSequenceReaderService,
 } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import { WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
+import { UpgradeWriteLockService } from 'src/engine/core-modules/upgrade/services/upgrade-write-lock.service';
 import { formatUpgradeLog } from 'src/engine/core-modules/upgrade/utils/format-upgrade-log.util';
 import { UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade-aware/upgrade-aware-entity-metadata.adapter';
 import { WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
+
+const ASSEMBLED_INSTANCES = [
+  '2.20.0_CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand_1789645911003',
+  '2.20.0_CreateCampaignForecastProjectionFastInstanceCommand_1789992172618',
+  '2.20.0_AddConnectedAccountSendingPolicyRevisionFastInstanceCommand_1789992172619',
+  '2.20.0_CreateCampaignPartnershipWorkItemFastInstanceCommand_1790000000001',
+  '2.20.0_AddCampaignReplyAmbiguitySnapshotFastInstanceCommand_1790000000002',
+  '2.20.0_CreateCampaignEmailBaselineFastInstanceCommand_1790000000004',
+  '2.20.0_AddCampaignEmailAccountIncarnationFastInstanceCommand_1790000000005',
+  '2.20.0_AddCampaignEmailWorkIdentityFastInstanceCommand_1790000000006',
+  '2.20.0_CreateCampaignEmailWorkCollisionFastInstanceCommand_1790000000007',
+  '2.20.0_CreateMyahCampaignReplyEvidenceFastInstanceCommand_1790141137300',
+  '2.20.0_AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand_1790141137400',
+  '2.20.0_MigrateManagedEmailPaymentReceiptsSlowInstanceCommand_1786000004001',
+  // The registry retains the original Instagram receipt identity.
+  '2.20.0_InvalidateComposioInstagramAuthoritiesSlowInstanceCommand_1799201004000',
+] as const;
+const ASSEMBLED_WORKSPACE_TAIL = [
+  '2.20.0_SynchronizeMyahPartnershipFactsCommand_1789730000001',
+  '2.20.0_SynchronizeCampaignReplyAuthorityCommand_1790000000003',
+  '2.20.0_RetireBrandBrainMetadataCommand_1790000000410',
+  '2.20.0_RetireShopifyConnectionsCommand_1790000000411',
+  '2.20.0_RetireCalendarSyncCommand_1790000000412',
+  '2.20.0_RetireDashboardCommand_1790000000413',
+  '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
+  '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
+] as const;
+
+const LEGACY_REBRAND_COMMAND_NAME =
+  '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206';
+const LEGACY_PROVIDER_BINDING_COMMAND_NAME =
+  '2.19.0_AddInstagramReplyApprovalProviderBindingSlowInstanceCommand_1784106536001';
+const LEGACY_FINALIZE_COMMAND_NAME =
+  '2.19.0_FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand_1784112963059';
 
 export type UpgradeSequenceRunnerReport = {
   totalSuccesses: number;
@@ -39,6 +89,7 @@ export class UpgradeSequenceRunnerService {
     private readonly upgradeAwareEntityMetadataAdapter: UpgradeAwareEntityMetadataAdapter,
     private readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly workspaceVersionService: WorkspaceVersionService,
+    private readonly upgradeWriteLockService: UpgradeWriteLockService,
   ) {}
 
   async run({
@@ -48,23 +99,213 @@ export class UpgradeSequenceRunnerService {
     sequence: UpgradeStep[];
     options: ParsedUpgradeCommandOptions;
   }): Promise<UpgradeSequenceRunnerReport> {
-    if (sequence.length === 0) {
-      return { totalSuccesses: 0, totalFailures: 0 };
+    // The first authoritative cursor and workspace reads occur inside the lock.
+    return this.upgradeWriteLockService.withLock(
+      async () => {
+        if (sequence.length === 0) {
+          return { totalSuccesses: 0, totalFailures: 0 };
+        }
+
+        // The admission uses only the lock's raw reads: metadata-adapter
+        // refresh reads a cursor and mutates TypeORM's in-memory shape.
+        await this.assertAssembledUpgradeAdmission(sequence);
+        await this.upgradeAwareEntityMetadataAdapter.refresh();
+
+        try {
+          return await this.runInner({ sequence, options });
+        } finally {
+          try {
+            await this.upgradeAwareEntityMetadataAdapter.refresh();
+          } catch (refreshError) {
+            this.logger.error(
+              'Failed to refresh upgrade-aware entity metadata after run',
+              refreshError instanceof Error
+                ? refreshError.stack
+                : String(refreshError),
+            );
+          }
+        }
+      },
+      { requireNoOngoingActivation: true },
+    );
+  }
+
+  private async assertAssembledUpgradeAdmission(
+    sequence: UpgradeStep[],
+  ): Promise<void> {
+    const names = sequence.map((step) => step.name);
+
+    // Native Twenty-only unit/upgrade sequences have no 334 commands.
+    if (!ASSEMBLED_INSTANCES.slice(3, 9).some((name) => names.includes(name))) {
+      return;
     }
 
-    await this.upgradeAwareEntityMetadataAdapter.refresh();
+    const start = names.indexOf(ASSEMBLED_INSTANCES[0]);
+    const tailStart = names.length - ASSEMBLED_WORKSPACE_TAIL.length;
+    if (
+      start < 0 ||
+      ASSEMBLED_INSTANCES.some(
+        (name, offset) =>
+          names[start + offset] !== name ||
+          names.filter((registered) => registered === name).length !== 1 ||
+          sequence[start + offset]?.kind !==
+            (offset < ASSEMBLED_INSTANCES.length - 2
+              ? 'fast-instance'
+              : 'slow-instance'),
+      ) ||
+      tailStart < start + ASSEMBLED_INSTANCES.length ||
+      sequence
+        .slice(start + ASSEMBLED_INSTANCES.length)
+        .some((step) => step.kind !== 'workspace') ||
+      ASSEMBLED_WORKSPACE_TAIL.some(
+        (name, offset) =>
+          names[tailStart + offset] !== name ||
+          sequence[tailStart + offset]?.kind !== 'workspace' ||
+          names.filter((registered) => registered === name).length !== 1,
+      )
+    ) {
+      throw new Error('Unsupported MYAH-334 assembled upgrade sequence');
+    }
 
-    try {
-      return await this.runInner({ sequence, options });
-    } finally {
-      try {
-        await this.upgradeAwareEntityMetadataAdapter.refresh();
-      } catch (refreshError) {
-        this.logger.error(
-          `Failed to refresh upgrade-aware entity metadata after run`,
-          refreshError instanceof Error
-            ? refreshError.stack
-            : String(refreshError),
+    const queryRunner = this.upgradeWriteLockService.currentRunner();
+    const workspaces: Array<{ id: string }> = await queryRunner.query(
+      `SELECT id FROM core.workspace WHERE "activationStatus"::text = ANY($1::text[]) ORDER BY id`,
+      [[WorkspaceActivationStatus.ACTIVE, WorkspaceActivationStatus.SUSPENDED]],
+    );
+    const workspaceIds = workspaces.map(({ id }) => id);
+    const histories =
+      await this.upgradeMigrationService.getScopedUpgradeReceiptHistories({
+        workspaceIds,
+        queryRunner,
+      });
+    const globalHistory = histories.get(null);
+    const instanceSteps = sequence
+      .slice(0, tailStart)
+      .filter((step) => step.kind !== 'workspace');
+
+    if (
+      globalHistory?.length !== instanceSteps.length ||
+      globalHistory.some(
+        (row, index) =>
+          row.name !== instanceSteps[index].name ||
+          row.status !== 'completed' ||
+          row.isInitial ||
+          row.attempt !== 1,
+      )
+    ) {
+      throw new Error(
+        'Unsupported MYAH-334 upgrade history: instance receipts require completed assembled prerequisites',
+      );
+    }
+
+    for (const workspaceId of workspaceIds) {
+      const history = histories.get(workspaceId.toLowerCase());
+      const initial = history?.[0];
+      const executed = history?.slice(1) ?? [];
+
+      if (
+        !initial ||
+        initial.name !==
+          ASSEMBLED_WORKSPACE_TAIL[ASSEMBLED_WORKSPACE_TAIL.length - 1] ||
+        initial.status !== 'completed' ||
+        !initial.isInitial ||
+        executed.length > ASSEMBLED_WORKSPACE_TAIL.length ||
+        executed.some(
+          (row, index) =>
+            row.name !== ASSEMBLED_WORKSPACE_TAIL[index] ||
+            row.status !== 'completed' ||
+            row.isInitial,
+        )
+      ) {
+        throw new Error(
+          `Unsupported MYAH-334 upgrade history: workspace ${workspaceId} has an unexplained, failed or out-of-order receipt`,
+        );
+      }
+    }
+
+    // Receipt completion is insufficient on its own: these are read-only
+    // checks of the installed immutable core shape, including 0007's trigger.
+    await new CreateCampaignPartnershipWorkItemFastInstanceCommand().assertPhysicalContract(
+      queryRunner,
+    );
+    await new CreateCampaignEmailWorkCollisionFastInstanceCommand().assertPhysicalContract(
+      queryRunner,
+    );
+    const [coreShape]: Array<{ ready: boolean }> = await queryRunner.query(
+      `SELECT to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL
+        AND to_regclass('core."myahCampaignReplyPending"') IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('core."myahInboxReplyContextDraft"')
+            AND attname = 'authoredIncomingBaseline' AND NOT attisdropped
+        ) AS ready`,
+    );
+    if (coreShape?.ready !== true) {
+      throw new Error(
+        'Unsupported MYAH-334 upgrade history: assembled reply core schema is absent',
+      );
+    }
+
+    const requiredObjects = [
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.campaignEmailConversationBinding
+        .universalIdentifier,
+    ];
+    const partnershipObjects = [
+      MYAH_STANDARD_OBJECTS.partnershipOfferVersion.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier,
+    ];
+    const replyFields = [
+      MYAH_STANDARD_OBJECTS.campaign.fields.replyAgentEnabled
+        .universalIdentifier,
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.replyAgentPaused
+        .universalIdentifier,
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.emailConversationBindings
+        .universalIdentifier,
+      MYAH_STANDARD_OBJECTS.campaignEmailConversationBinding.fields
+        .campaignCreator.universalIdentifier,
+    ];
+    const partnershipFields = [
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.offerVersions
+        .universalIdentifier,
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.partnershipObligations
+        .universalIdentifier,
+      STANDARD_OBJECTS.task.fields.partnershipObligations.universalIdentifier,
+    ];
+    for (const workspaceId of workspaceIds) {
+      const rows: Array<{ universalIdentifier: string }> =
+        await queryRunner.query(
+          `SELECT "universalIdentifier" FROM core."objectMetadata"
+          WHERE "workspaceId" = $1::uuid AND "universalIdentifier" = ANY($2::uuid[])`,
+          [workspaceId, [...requiredObjects, ...partnershipObjects]],
+        );
+      const present = new Set(rows.map((row) => row.universalIdentifier));
+      const hasBReceipt =
+        (histories.get(workspaceId.toLowerCase())?.length ?? 0) > 1;
+
+      if (
+        requiredObjects.some((id) => !present.has(id)) ||
+        partnershipObjects.some((id) => present.has(id) !== hasBReceipt)
+      ) {
+        throw new Error(
+          `Unsupported MYAH-334 upgrade history: workspace ${workspaceId} metadata does not match assembled B/reply baseline`,
+        );
+      }
+      const fields: Array<{ universalIdentifier: string }> =
+        await queryRunner.query(
+          `SELECT "universalIdentifier" FROM core."fieldMetadata"
+          WHERE "workspaceId" = $1::uuid AND "universalIdentifier" = ANY($2::uuid[])`,
+          [workspaceId, [...replyFields, ...partnershipFields]],
+        );
+      const presentFields = new Set(
+        fields.map((field) => field.universalIdentifier),
+      );
+      if (
+        replyFields.some((id) => !presentFields.has(id)) ||
+        partnershipFields.some((id) => presentFields.has(id) !== hasBReceipt)
+      ) {
+        throw new Error(
+          `Unsupported MYAH-334 upgrade history: workspace ${workspaceId} has missing reply or partial partnership fields`,
         );
       }
     }
@@ -79,6 +320,13 @@ export class UpgradeSequenceRunnerService {
   }): Promise<UpgradeSequenceRunnerReport> {
     const allActiveOrSuspendedWorkspaceIds =
       await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds();
+
+    if (!options.dryRun) {
+      await this.reconcileCommittedWorkspaceSteps({
+        sequence,
+        workspaceIds: allActiveOrSuspendedWorkspaceIds,
+      });
+    }
 
     const startCursor = await this.resolveStartCursor({
       sequence,
@@ -213,6 +461,31 @@ export class UpgradeSequenceRunnerService {
         allActiveOrSuspendedWorkspaceIds,
       );
 
+    // The old native Rebrand cursor predates these fast prerequisites. Block
+    // incomplete receipts even on a failed Rebrand retry; a completed receipt
+    // set is not a physical-schema postcondition for an inconsistent database.
+    if (
+      [
+        LEGACY_REBRAND_COMMAND_NAME,
+        LEGACY_PROVIDER_BINDING_COMMAND_NAME,
+        LEGACY_FINALIZE_COMMAND_NAME,
+      ].includes(lastAttempted.name)
+    ) {
+      for (const name of LEGACY_2_19_PREREQUISITE_COMMAND_NAMES) {
+        if (
+          !(await this.upgradeMigrationService.isLastAttemptCompleted({
+            name,
+            workspaceId: null,
+          }))
+        ) {
+          throw new Error(
+            `Historical 2.19 prerequisite receipt ${name} is missing before ${lastAttempted.name}; ` +
+              '2.19 prerequisite reconciliation is not available. Refusing ordered upgrade before approval consumers.',
+          );
+        }
+      }
+    }
+
     const lastAttemptedCursor =
       this.upgradeSequenceReaderService.locateStepInSequenceOrThrow({
         sequence,
@@ -245,6 +518,60 @@ export class UpgradeSequenceRunnerService {
       }
       default:
         assertUnreachable(lastAttemptedStep);
+    }
+  }
+
+  private async reconcileCommittedWorkspaceSteps({
+    sequence,
+    workspaceIds,
+  }: {
+    sequence: UpgradeStep[];
+    workspaceIds: string[];
+  }): Promise<void> {
+    const recoverable = [
+      {
+        name: SYSTEM_UNIQUE_INDEX_BACKFILL_UPGRADE_NAME,
+        command: BackfillSystemUniqueIndexUniversalIdentifierCommand,
+      },
+      {
+        name: '2.20.0_SynchronizeMyahStandardMetadataCommand_1784266302001',
+        command: SynchronizeMyahStandardMetadataCommand,
+      },
+      {
+        name: '2.20.0_RetireBrandBrainMetadataCommand_1790000000410',
+        command: RetireBrandBrainMetadataCommand,
+      },
+      {
+        name: '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
+        command: SynchronizeInstagramSourceControlledMetadataCommand,
+      },
+    ] as const;
+    for (const recovery of recoverable) {
+      const step = sequence.find((item) => item.name === recovery.name);
+      if (!step) continue;
+      if (
+        step.kind !== 'workspace' ||
+        !(step.command instanceof recovery.command)
+      )
+        throw new Error(`Recovery command not registered: ${recovery.name}`);
+      const queryRunner = this.upgradeWriteLockService.currentRunner();
+      for (const workspaceId of workspaceIds) {
+        if (
+          await this.upgradeMigrationService.isLastAttemptCompleted({
+            name: recovery.name,
+            workspaceId,
+            queryRunner,
+            ...(recovery.name ===
+            '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604'
+              ? { requireNonInitial: true }
+              : {}),
+          })
+        ) {
+          // COMMIT and receipt are durable even if Redis callbacks failed.
+          // Heal before reading any cursor or running another step.
+          await step.command.reconcileCommittedUpgrade(workspaceId);
+        }
+      }
     }
   }
 

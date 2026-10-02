@@ -1,6 +1,6 @@
 import { styled } from '@linaria/react';
 import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledActionBar = styled.div`
   align-items: center;
@@ -8,6 +8,22 @@ const StyledActionBar = styled.div`
   flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[1]};
   justify-content: flex-end;
+  min-width: 0;
+
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+
+    > * {
+      min-width: 0;
+      width: 100%;
+    }
+
+    > :last-child {
+      grid-column: 1 / -1;
+    }
+  }
 `;
 
 type CampaignOutreachWorkflowActionBarProps = {

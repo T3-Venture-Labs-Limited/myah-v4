@@ -64,12 +64,13 @@ export class UnipileInstagramAccountProjectionService {
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(input.workspace.id);
+        // pi-lens-ignore: sql-injection -- workspace schema comes from the trusted workspace identifier.
         const records = await dataSource.query<
           InstagramAccountIdentityRecord[]
         >(
           `
             SELECT "id", "deletedAt"
-            FROM "${schemaName}"."_myahInstagramAccount"
+            FROM "${schemaName}"."myahInstagramAccount"
             WHERE "igUserId" = $1
             LIMIT 2
           `,
@@ -90,7 +91,7 @@ export class UnipileInstagramAccountProjectionService {
         >(
           `
             SELECT "id"
-            FROM "${schemaName}"."_myahInstagramAccount"
+            FROM "${schemaName}"."myahInstagramAccount"
             WHERE "unipileAccountId" = $1
             LIMIT 2
           `,
@@ -122,7 +123,7 @@ export class UnipileInstagramAccountProjectionService {
             [InstagramAccountRecord[], number]
           >(
             `
-              UPDATE "${schemaName}"."_myahInstagramAccount"
+              UPDATE "${schemaName}"."myahInstagramAccount"
               SET
                 "name" = $1,
                 "label" = $2,
@@ -175,7 +176,7 @@ export class UnipileInstagramAccountProjectionService {
 
         await dataSource.query(
           `
-            INSERT INTO "${schemaName}"."_myahInstagramAccount" (
+            INSERT INTO "${schemaName}"."myahInstagramAccount" (
               "id",
               "name",
               "label",
@@ -241,7 +242,7 @@ export class UnipileInstagramAccountProjectionService {
           `
             SELECT
               "id", "username", "status", "lastCheckedAt", "lastError"
-            FROM "${schemaName}"."_myahInstagramAccount"
+            FROM "${schemaName}"."myahInstagramAccount"
             WHERE "id" = $1
               AND "deletedAt" IS NULL
           `,
@@ -268,7 +269,7 @@ export class UnipileInstagramAccountProjectionService {
         const schemaName = getWorkspaceSchemaName(input.workspace.id);
         const records = await dataSource.query<InstagramAccountRecord[]>(
           `
-            UPDATE "${schemaName}"."_myahInstagramAccount"
+            UPDATE "${schemaName}"."myahInstagramAccount"
             SET
               "status" = $1,
               "lastCheckedAt" = $2,

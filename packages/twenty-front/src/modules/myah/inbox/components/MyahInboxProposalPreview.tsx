@@ -35,6 +35,11 @@ const StyledError = styled.div`
   font-size: ${themeCssVariables.font.size.xs};
 `;
 
+const StyledNotice = styled.div`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.xs};
+`;
+
 const StyledAccessibleDescription = styled.span`
   clip: rect(0 0 0 0);
   clip-path: inset(50%);
@@ -70,6 +75,11 @@ export type MyahInboxProposalPreviewProps = {
   editorOwner?: symbol;
   disabled: boolean;
   generateUnavailableReason?: string;
+  // auto: untouched incoming-stale proposal refreshes itself; explicit: an
+  // edited/chat/legacy body offers Update draft and still requires review.
+  incomingUpdate?: 'auto' | 'explicit';
+  // UNKNOWN: a legacy draft whose authored baseline was never recorded.
+  incomingState?: 'STALE' | 'UNKNOWN' | null;
   renderGenerateAction?: (
     generateAction: ReactNode,
     isGenerating: boolean,
@@ -81,6 +91,8 @@ export const MyahInboxProposalPreview = ({
   editorOwner,
   disabled,
   generateUnavailableReason,
+  incomingUpdate,
+  incomingState,
   renderGenerateAction,
 }: MyahInboxProposalPreviewProps) => {
   const identity = myahInboxDraftKeyId(draftKey);
@@ -145,10 +157,15 @@ export const MyahInboxProposalPreview = ({
         generatedProposal.contextFingerprint !== capture.contextFingerprint
       )
         return;
-      const applied = await controller.applyProposalIfCurrent(capture, {
+      const body = {
         markdown: generatedProposal.body.markdown,
         blocknote: generatedProposal.body.blocknote ?? null,
-      });
+      };
+      const applied = await (incomingUpdate === 'explicit'
+        ? controller.applyProposalIfCurrent(capture, body, {
+            requireReview: true,
+          })
+        : controller.applyProposalIfCurrent(capture, body));
       if (!applied && isCurrent()) setError('Draft changed; generate again.');
     } catch {
       if (isCurrent()) setError('Could not generate a reply. Try again.');
@@ -162,10 +179,24 @@ export const MyahInboxProposalPreview = ({
     }
   };
 
+  // One automatic refresh per confirmed revision; failures wait for the user.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const autoAttemptRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (incomingUpdate !== 'auto' || disabled || generateUnavailableReason)
+      return;
+    const attempt = `${identity}:${controller.getEntry(draftKey)?.confirmedRevision}`;
+    if (autoAttemptRef.current === attempt) return;
+    autoAttemptRef.current = attempt;
+    void handleGenerate();
+  });
+
+  const actionLabel =
+    incomingUpdate === 'explicit' ? 'Update draft' : 'Generate reply';
   const generateAction = (
     <Button
-      title="Generate reply"
-      ariaLabel={isGenerating ? 'Generating reply' : 'Generate reply'}
+      title={actionLabel}
+      ariaLabel={isGenerating ? 'Generating reply' : actionLabel}
       variant="secondary"
       size="small"
       Icon={isGenerating ? GenerateReplyLoadingIcon : undefined}
@@ -184,6 +215,13 @@ export const MyahInboxProposalPreview = ({
         renderGenerateAction(generateAction, isGenerating)
       ) : (
         <StyledActions>{generateAction}</StyledActions>
+      )}
+      {incomingUpdate === 'explicit' && (
+        <StyledNotice>
+          {incomingState === 'UNKNOWN'
+            ? 'This draft may not reflect the latest messages.'
+            : 'New creator message since this draft was written.'}
+        </StyledNotice>
       )}
       {generateUnavailableReason && (
         <StyledAccessibleDescription id={unavailableDescriptionId}>

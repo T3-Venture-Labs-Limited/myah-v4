@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useActivities } from '@/activities/hooks/useActivities';
 import { type Task } from '@/activities/types/Task';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
@@ -40,6 +40,37 @@ const mockActivity = {
 describe('useActivities', () => {
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('distinguishes a failed next-page read from a successful empty page', async () => {
+    const { useActivityTargetsForTargetableObjects: mockUseTargets } =
+      jest.requireMock(
+        '@/activities/hooks/useActivityTargetsForTargetableObjects',
+      );
+    const fetchMoreActivityTargets = jest
+      .fn()
+      .mockResolvedValueOnce({ error: new Error('page failed') })
+      .mockResolvedValueOnce({ data: { edges: [] } });
+    mockUseTargets.mockReturnValue({
+      activityTargets: [],
+      loadingActivityTargets: false,
+      fetchMoreActivityTargets,
+    });
+
+    const { result } = renderHook(() =>
+      useActivities({
+        objectNameSingular: CoreObjectNameSingular.Task,
+        targetableObjects: [{ targetObjectNameSingular: 'company', id: '123' }],
+        limit: 10,
+        activityTargetsOrderByVariables: [{}],
+      }),
+    );
+
+    await act(async () => {
+      expect(await result.current.fetchMoreActivities()).toBeUndefined();
+      expect(await result.current.fetchMoreActivities()).toEqual([]);
+    });
+    expect(fetchMoreActivityTargets).toHaveBeenCalledTimes(2);
   });
 
   it('fetches activities', async () => {

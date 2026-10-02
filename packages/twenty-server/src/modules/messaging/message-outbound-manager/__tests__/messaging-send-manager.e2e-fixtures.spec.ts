@@ -52,9 +52,9 @@ describe('MessagingSendManagerModule E2E fixture provider', () => {
   });
 
   it('replaces Gmail only for the isolated E2E fixture process', () => {
-    expect(
-      loadGmailProvider('production', 'true').gmailProvider,
-    ).toBeUndefined();
+    expect(() => loadGmailProvider('production', 'true')).toThrow(
+      'E2E_TEST_FIXTURES cannot be enabled',
+    );
     expect(
       loadGmailProvider('development', undefined).gmailProvider,
     ).toBeUndefined();

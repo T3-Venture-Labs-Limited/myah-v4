@@ -19,6 +19,7 @@ import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
+import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
 import { WorkspaceSharedConnectedAccountConflictError } from 'src/modules/connected-account/exceptions/workspace-shared-connected-account-conflict.error';
 import { WorkspaceSharedConnectedAccountNotFoundError } from 'src/modules/connected-account/exceptions/workspace-shared-connected-account-not-found.error';
 import { AccountsToReconnectService } from 'src/modules/connected-account/services/accounts-to-reconnect.service';
@@ -48,6 +49,8 @@ export type UpsertConnectedAccountResult = {
 
 @Injectable()
 export class ImapSmtpCalDavAPIService {
+  private readonly forecastInvalidation =
+    new CampaignForecastInputInvalidationService();
   private readonly logger = new Logger(ImapSmtpCalDavAPIService.name);
 
   constructor(
@@ -177,6 +180,11 @@ export class ImapSmtpCalDavAPIService {
             visibility,
             authFailedAt: null,
           });
+
+          await this.forecastInvalidation.invalidateInTransaction(
+            { workspaceId },
+            transactionManager,
+          );
 
           const messageChannelId =
             existingMessageChannel?.id ??

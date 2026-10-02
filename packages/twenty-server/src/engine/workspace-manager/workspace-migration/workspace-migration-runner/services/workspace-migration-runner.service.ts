@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 
 import { type AllMetadataName } from 'twenty-shared/metadata';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, isValidUuid } from 'twenty-shared/utils';
 import { DataSource } from 'typeorm';
 
 import { LoggerService } from 'src/engine/core-modules/logger/logger.service';
@@ -28,6 +28,8 @@ import { WorkspaceMigrationRunnerActionHandlerRegistryService } from 'src/engine
 import { buildPreallocatedIdByUniversalIdentifierFromActions } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/utils/build-preallocated-id-by-universal-identifier-from-actions.util';
 import { type AfterCommitSideEffect } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/after-commit-side-effect.type';
 import { type MetadataEvent } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event';
+import type { UpgradeWorkspaceTransaction } from 'src/engine/workspace-manager/workspace-migration/types/upgrade-workspace-transaction.type';
+import type { PinnedWorkspaceMetadataSnapshot } from 'src/engine/workspace-manager/workspace-migration/types/pinned-workspace-metadata-snapshot.type';
 
 @Injectable()
 export class WorkspaceMigrationRunnerService {
@@ -46,9 +48,11 @@ export class WorkspaceMigrationRunnerService {
   private getLegacyCacheInvalidationPromises({
     allFlatEntityMapsKeys,
     workspaceId,
+    incrementVersion = true,
   }: {
     allFlatEntityMapsKeys: (keyof AllFlatEntityMaps)[];
     workspaceId: string;
+    incrementVersion?: boolean;
   }): Promise<void>[] {
     const asyncOperations: Promise<void>[] = [];
     const flatMapsKeysSet = new Set(allFlatEntityMapsKeys);
@@ -57,7 +61,7 @@ export class WorkspaceMigrationRunnerService {
       flatMapsKeysSet.has('flatObjectMetadataMaps') ||
       flatMapsKeysSet.has('flatFieldMetadataMaps');
 
-    if (shouldIncrementMetadataGraphqlSchemaVersion) {
+    if (shouldIncrementMetadataGraphqlSchemaVersion && incrementVersion) {
       asyncOperations.push(
         this.workspaceMetadataVersionService.incrementMetadataVersion(
           workspaceId,
@@ -131,9 +135,11 @@ export class WorkspaceMigrationRunnerService {
   async invalidateCache({
     allFlatEntityMapsKeys,
     workspaceId,
+    incrementVersion = true,
   }: {
     allFlatEntityMapsKeys: (keyof AllFlatEntityMaps)[];
     workspaceId: string;
+    incrementVersion?: boolean;
   }): Promise<void> {
     this.logger.perfTime(
       'Runner',
@@ -149,6 +155,7 @@ export class WorkspaceMigrationRunnerService {
       this.getLegacyCacheInvalidationPromises({
         allFlatEntityMapsKeys,
         workspaceId,
+        incrementVersion,
       }),
     );
 
@@ -206,14 +213,35 @@ export class WorkspaceMigrationRunnerService {
   run = async ({
     workspaceMigration: { actions, applicationUniversalIdentifier },
     workspaceId,
+    upgradeTransaction,
+    pinnedSnapshot,
   }: {
     workspaceMigration: WorkspaceMigration;
     workspaceId: string;
+    upgradeTransaction?: UpgradeWorkspaceTransaction;
+    pinnedSnapshot?: PinnedWorkspaceMetadataSnapshot;
   }): Promise<{
     allFlatEntityMaps: AllFlatEntityMaps;
     metadataEvents: MetadataEvent[];
     hasSchemaMetadataChanged: boolean;
   }> => {
+    if (pinnedSnapshot) {
+      const runner = upgradeTransaction?.queryRunner;
+      if (
+        !isValidUuid(workspaceId) ||
+        pinnedSnapshot.workspaceId !== workspaceId ||
+        pinnedSnapshot.workspace.id !== workspaceId ||
+        !runner ||
+        pinnedSnapshot.queryRunner !== runner ||
+        runner.isReleased ||
+        !runner.isTransactionActive ||
+        runner.manager?.queryRunner !== runner ||
+        typeof upgradeTransaction?.afterCommit !== 'function'
+      )
+        throw new Error(
+          'Pinned runner snapshot requires a matching active upgrade transaction',
+        );
+    }
     if (this.twentyConfigService.get('WORKSPACE_SCHEMA_DDL_LOCKED')) {
       throw new WorkspaceMigrationRunnerException({
         message:
@@ -222,12 +250,29 @@ export class WorkspaceMigrationRunnerService {
       });
     }
 
+    // These handlers install/delete files or runtime resources before the SQL
+    // commit. A lost pinned backend could leave such external effects behind.
+    if (
+      upgradeTransaction &&
+      actions.some(
+        (action) =>
+          action.metadataName === 'logicFunction' &&
+          (action.type === 'create' || action.type === 'update'),
+      )
+    ) {
+      throw new Error(
+        'Pinned upgrade cannot run logic-function install/update before commit',
+      );
+    }
+
     this.logger.perfTime('Runner', 'Total execution');
     this.logger.perfTime('Runner', 'Initial cache retrieval');
 
     const initialCacheRetrievalStart = performance.now();
 
-    const queryRunner = this.coreDataSource.createQueryRunner();
+    const queryRunner =
+      upgradeTransaction?.queryRunner ??
+      this.coreDataSource.createQueryRunner();
 
     const actionMetadataNames = [
       ...new Set(actions.flatMap((action) => action.metadataName)),
@@ -241,7 +286,7 @@ export class WorkspaceMigrationRunnerService {
     );
 
     const searchVectorRebuildMetadataNames: AllMetadataName[] =
-      hasSearchVectorRebuildAction ? ['index'] : [];
+      hasSearchVectorRebuildAction ? ['index', 'searchFieldMetadata'] : [];
 
     const actionsMetadataAndRelatedMetadataNames: AllMetadataName[] = [
       ...new Set([
@@ -258,13 +303,48 @@ export class WorkspaceMigrationRunnerService {
       getMetadataFlatEntityMapsKey,
     );
 
-    let allFlatEntityMaps =
-      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps<
+    // A pinned invocation must not read pooled metadata or overlay stale optimistic maps.
+    const snapshotMaps = pinnedSnapshot?.allFlatEntityMaps as
+      | Record<string, unknown>
+      | undefined;
+    const selectedSnapshotMaps =
+      snapshotMaps &&
+      Object.fromEntries(
+        allFlatEntityMapsKeys.map((key) => {
+          const value = snapshotMaps[key];
+          if (value === undefined)
+            throw new Error(`Pinned metadata snapshot missing ${key}`);
+          return [key, structuredClone(value)];
+        }),
+      );
+    const readSharedMaps = () =>
+      this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps<
         typeof allFlatEntityMapsKeys
-      >({
-        workspaceId,
-        flatMapsKeys: allFlatEntityMapsKeys,
-      });
+      >({ workspaceId, flatMapsKeys: allFlatEntityMapsKeys });
+    let allFlatEntityMaps = selectedSnapshotMaps
+      ? (selectedSnapshotMaps as Awaited<ReturnType<typeof readSharedMaps>>)
+      : await readSharedMaps();
+
+    if (!pinnedSnapshot && upgradeTransaction?.optimisticFlatEntityMaps) {
+      // Pooled cache recomputation cannot see another step's uncommitted SQL.
+      // Overlay only the keys requested by this step, from this command's
+      // pinned transaction, before any handler derives workspace DDL.
+      allFlatEntityMaps = {
+        ...allFlatEntityMaps,
+        ...Object.fromEntries(
+          allFlatEntityMapsKeys
+            .filter(
+              (key) =>
+                upgradeTransaction.optimisticFlatEntityMaps?.[key] !==
+                undefined,
+            )
+            .map((key) => [
+              key,
+              upgradeTransaction.optimisticFlatEntityMaps?.[key],
+            ]),
+        ),
+      } as typeof allFlatEntityMaps;
+    }
 
     this.logger.perfTimeEnd('Runner', 'Initial cache retrieval');
 
@@ -276,10 +356,16 @@ export class WorkspaceMigrationRunnerService {
       'Runner',
     );
 
-    const { flatApplicationMaps } =
-      await this.workspaceCacheService.getOrRecompute(workspaceId, [
-        'flatApplicationMaps',
-      ]);
+    if (pinnedSnapshot && !pinnedSnapshot.flatApplicationMaps) {
+      throw new Error('Pinned metadata snapshot missing flatApplicationMaps');
+    }
+    const flatApplicationMaps = pinnedSnapshot
+      ? structuredClone(pinnedSnapshot.flatApplicationMaps)
+      : (
+          await this.workspaceCacheService.getOrRecompute(workspaceId, [
+            'flatApplicationMaps',
+          ])
+        ).flatApplicationMaps;
 
     const applicationId =
       flatApplicationMaps.idByUniversalIdentifier[
@@ -301,8 +387,16 @@ export class WorkspaceMigrationRunnerService {
 
     this.logger.perfTime('Runner', 'Transaction execution');
 
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    if (upgradeTransaction) {
+      if (!queryRunner.isTransactionActive || queryRunner.isReleased) {
+        throw new Error(
+          'Pinned upgrade metadata runner requires an active transaction',
+        );
+      }
+    } else {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     const allMetadataEvents: MetadataEvent[] = [];
     const allAfterCommitSideEffects: AfterCommitSideEffect[] = [];
@@ -372,9 +466,22 @@ export class WorkspaceMigrationRunnerService {
         allAfterCommitSideEffects.push(...afterCommitSideEffects);
       }
 
+      // The outer upgrade receipt and metadata version must commit together.
+      // The version service registers only cache publication for after COMMIT.
+      if (
+        upgradeTransaction &&
+        (allFlatEntityMapsKeys.includes('flatObjectMetadataMaps') ||
+          allFlatEntityMapsKeys.includes('flatFieldMetadataMaps'))
+      ) {
+        await this.workspaceMetadataVersionService.incrementMetadataVersion(
+          workspaceId,
+          upgradeTransaction,
+        );
+      }
+
       const commitStart = performance.now();
 
-      await queryRunner.commitTransaction();
+      if (!upgradeTransaction) await queryRunner.commitTransaction();
 
       const commitMs = performance.now() - commitStart;
       const transactionMs = performance.now() - transactionStart;
@@ -385,6 +492,16 @@ export class WorkspaceMigrationRunnerService {
       );
 
       this.logger.perfTimeEnd('Runner', 'Transaction execution');
+      if (upgradeTransaction) {
+        upgradeTransaction.optimisticFlatEntityMaps = {
+          ...(pinnedSnapshot
+            ? pinnedSnapshot.allFlatEntityMaps
+            : upgradeTransaction.optimisticFlatEntityMaps),
+          ...Object.fromEntries(
+            allFlatEntityMapsKeys.map((key) => [key, allFlatEntityMaps[key]]),
+          ),
+        };
+      }
     } catch (error) {
       this.logger.error(
         `[install-perf] migration failed after ${actionCount} action(s): ${
@@ -392,9 +509,13 @@ export class WorkspaceMigrationRunnerService {
         }`,
         'Runner',
       );
-      await this.logBlockingDbActivity();
+      if (!pinnedSnapshot) await this.logBlockingDbActivity();
 
-      if (queryRunner.isTransactionActive && !queryRunner.isReleased) {
+      if (
+        !upgradeTransaction &&
+        queryRunner.isTransactionActive &&
+        !queryRunner.isReleased
+      ) {
         await queryRunner
           .rollbackTransaction()
           .catch((rollbackError) =>
@@ -410,32 +531,38 @@ export class WorkspaceMigrationRunnerService {
         );
       }
 
-      const invertedActions = [...actions].reverse();
+      // An upgrade owns the SQL transaction: its caller rolls it back. Neither
+      // rollback handlers nor shared cache recomputation may observe/publish
+      // partial metadata before that rollback. Ordinary migrations retain their
+      // existing cleanup semantics.
+      if (!upgradeTransaction) {
+        const invertedActions = [...actions].reverse();
 
-      for (const invertedAction of invertedActions) {
-        await this.workspaceMigrationRunnerActionHandlerRegistry.executeActionRollbackHandler(
-          {
-            action: invertedAction,
-            context: {
-              flatApplication,
+        for (const invertedAction of invertedActions) {
+          await this.workspaceMigrationRunnerActionHandlerRegistry.executeActionRollbackHandler(
+            {
               action: invertedAction,
-              allFlatEntityMaps,
-              workspaceId,
+              context: {
+                flatApplication,
+                action: invertedAction,
+                allFlatEntityMaps,
+                workspaceId,
+              },
             },
-          },
-        );
-      }
+          );
+        }
 
-      try {
-        await this.invalidateCache({
-          allFlatEntityMapsKeys,
-          workspaceId,
-        });
-      } catch (cacheError) {
-        this.logger.error(
-          `Cache invalidation failed after rollback: ${cacheError}`,
-          'Runner',
-        );
+        try {
+          await this.invalidateCache({
+            allFlatEntityMapsKeys,
+            workspaceId,
+          });
+        } catch (cacheError) {
+          this.logger.error(
+            `Cache invalidation failed after rollback: ${cacheError}`,
+            'Runner',
+          );
+        }
       }
 
       if (error instanceof WorkspaceMigrationRunnerException) {
@@ -448,49 +575,63 @@ export class WorkspaceMigrationRunnerService {
         context: getFlatEntityMapsExceptionContext(error),
       });
     } finally {
-      await queryRunner.release();
+      if (!upgradeTransaction) await queryRunner.release();
     }
 
-    const postCommitInvalidateStart = performance.now();
+    const runAfterCommit = async () => {
+      const postCommitInvalidateStart = performance.now();
 
-    try {
-      await this.invalidateCache({
-        allFlatEntityMapsKeys,
-        workspaceId,
-      });
-    } catch (cacheError) {
-      this.logger.error(
-        `Cache invalidation failed after committed transaction: ${cacheError}`,
+      if (upgradeTransaction) {
+        // Version SQL was pinned before the receipt; this is cache-only and
+        // must reject so a committed-but-unreconciled upgrade cannot continue.
+        await this.invalidateCache({
+          allFlatEntityMapsKeys,
+          workspaceId,
+          incrementVersion: false,
+        });
+      } else {
+        try {
+          await this.invalidateCache({
+            allFlatEntityMapsKeys,
+            workspaceId,
+          });
+        } catch (cacheError) {
+          this.logger.error(
+            `Cache invalidation failed after committed transaction: ${cacheError}`,
+            'Runner',
+          );
+        }
+      }
+
+      const postCommitInvalidateMs =
+        performance.now() - postCommitInvalidateStart;
+
+      this.logger.perf(
+        `[install-perf] Runner post-commit invalidateCache took ${postCommitInvalidateMs.toFixed(1)}ms for ${allFlatEntityMapsKeys.length} flat-maps keys`,
         'Runner',
       );
-    }
 
-    const postCommitInvalidateMs =
-      performance.now() - postCommitInvalidateStart;
+      const sideEffectResults = await Promise.allSettled(
+        allAfterCommitSideEffects.map((sideEffect) =>
+          Promise.resolve().then(() => sideEffect.run()),
+        ),
+      );
 
-    this.logger.perf(
-      `[install-perf] Runner post-commit invalidateCache took ${postCommitInvalidateMs.toFixed(1)}ms for ${allFlatEntityMapsKeys.length} flat-maps keys`,
-      'Runner',
-    );
-
-    const sideEffectResults = await Promise.allSettled(
-      allAfterCommitSideEffects.map((sideEffect) =>
-        Promise.resolve().then(() => sideEffect.run()),
-      ),
-    );
-
-    sideEffectResults.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        this.logger.warn(
-          `After-commit side effect failed (${allAfterCommitSideEffects[index].description}): ${
-            result.reason instanceof Error
-              ? result.reason.message
-              : String(result.reason)
-          }`,
-          'Runner',
-        );
-      }
-    });
+      sideEffectResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          this.logger.warn(
+            `After-commit side effect failed (${allAfterCommitSideEffects[index].description}): ${
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+            }`,
+            'Runner',
+          );
+        }
+      });
+    };
+    if (upgradeTransaction) upgradeTransaction.afterCommit(runAfterCommit);
+    else await runAfterCommit();
 
     const hasSchemaMetadataChanged =
       allFlatEntityMapsKeys.includes('flatObjectMetadataMaps') ||

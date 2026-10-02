@@ -1,3 +1,4 @@
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import type { DataSource } from 'typeorm';
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -17,6 +18,14 @@ const args = {
   total: 1,
 } as RunOnWorkspaceArgs;
 
+const expectedCreatorImportSyncOptions = {
+  targetObjectUniversalIdentifiers: new Set([
+    MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+  ]),
+  migrateLegacyMyahApplication: false,
+  preserveCreatorImportPermissions: true,
+};
+
 describe('MigrateMyahCreatorImportMetadataCommand', () => {
   it('creates, migrates, verifies, preserves legacy fields, and removes obsolete view fields', async () => {
     const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
@@ -35,7 +44,10 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     await command.runOnWorkspace(args);
 
     expect(synchronizeWorkspace).toHaveBeenCalledTimes(2);
-    expect(synchronizeWorkspace.mock.calls[0]).toEqual([args]);
+    expect(synchronizeWorkspace.mock.calls[0]).toEqual([
+      args,
+      expectedCreatorImportSyncOptions,
+    ]);
     expect(migrate).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,
       workspaceDataSource,
@@ -44,6 +56,7 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     expect(synchronizeWorkspace.mock.calls[1]).toEqual([
       args,
       {
+        ...expectedCreatorImportSyncOptions,
         explicitObsoleteUniversalIdentifiersByMetadataName: {
           viewField: expect.any(Set),
         },
@@ -55,6 +68,62 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     expect(migrate.mock.invocationCallOrder[0]).toBeLessThan(
       synchronizeWorkspace.mock.invocationCallOrder[1],
     );
+  });
+
+  it('refuses the first sync before social copy or a second sync', async () => {
+    const refusal = new Error(
+      'Unsafe Creator import: object permission would drift',
+    );
+    const synchronizeWorkspace = jest.fn().mockRejectedValue(refusal);
+    const migrate = jest.fn();
+    const command = new MigrateMyahCreatorImportMetadataCommand(
+      {} as WorkspaceIteratorService,
+      {
+        workspaceSchemaExists: jest.fn().mockResolvedValue(true),
+        synchronizeWorkspace,
+      } as unknown as SynchronizeMyahStandardMetadataCommand,
+      { migrate } as unknown as MigrateMyahCreatorSocialLinksService,
+    );
+
+    await expect(command.runOnWorkspace(args)).rejects.toBe(refusal);
+    expect(synchronizeWorkspace).toHaveBeenCalledTimes(1);
+    expect(synchronizeWorkspace).toHaveBeenCalledWith(
+      args,
+      expectedCreatorImportSyncOptions,
+    );
+    expect(migrate).not.toHaveBeenCalled();
+  });
+
+  it('propagates a second sync refusal instead of reporting success', async () => {
+    const refusal = new Error(
+      'Unsafe Creator import: object permission would drift',
+    );
+    const synchronizeWorkspace = jest
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(refusal);
+    const migrate = jest.fn().mockResolvedValue({ canDeleteOldFields: true });
+    const command = new MigrateMyahCreatorImportMetadataCommand(
+      {} as WorkspaceIteratorService,
+      {
+        workspaceSchemaExists: jest.fn().mockResolvedValue(true),
+        synchronizeWorkspace,
+      } as unknown as SynchronizeMyahStandardMetadataCommand,
+      { migrate } as unknown as MigrateMyahCreatorSocialLinksService,
+    );
+
+    await expect(command.runOnWorkspace(args)).rejects.toBe(refusal);
+    expect(synchronizeWorkspace).toHaveBeenCalledTimes(2);
+    expect(synchronizeWorkspace.mock.calls[1]).toEqual([
+      args,
+      {
+        ...expectedCreatorImportSyncOptions,
+        explicitObsoleteUniversalIdentifiersByMetadataName: {
+          viewField: expect.any(Set),
+        },
+      },
+    ]);
+    expect(migrate).toHaveBeenCalledTimes(1);
   });
 
   it('does not remove old metadata during dry-run', async () => {
@@ -78,6 +147,10 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     await command.runOnWorkspace(dryRunArgs);
 
     expect(synchronizeWorkspace).toHaveBeenCalledTimes(1);
+    expect(synchronizeWorkspace.mock.calls[0]).toEqual([
+      dryRunArgs,
+      expectedCreatorImportSyncOptions,
+    ]);
     expect(migrate).toHaveBeenCalledWith(
       expect.objectContaining({ dryRun: true }),
     );
@@ -105,20 +178,22 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
   });
 
   it('requires the workspace data source supplied by the command runner', async () => {
+    const synchronizeWorkspace = jest.fn();
+    const migrate = jest.fn();
     const command = new MigrateMyahCreatorImportMetadataCommand(
       {} as WorkspaceIteratorService,
       {
         workspaceSchemaExists: jest.fn().mockResolvedValue(true),
-        synchronizeWorkspace: jest.fn(),
+        synchronizeWorkspace,
       } as unknown as SynchronizeMyahStandardMetadataCommand,
-      {
-        migrate: jest.fn(),
-      } as unknown as MigrateMyahCreatorSocialLinksService,
+      { migrate } as unknown as MigrateMyahCreatorSocialLinksService,
     );
 
     await expect(
       command.runOnWorkspace({ ...args, dataSource: undefined }),
     ).rejects.toThrow('Workspace data source is required');
+    expect(synchronizeWorkspace).not.toHaveBeenCalled();
+    expect(migrate).not.toHaveBeenCalled();
   });
 
   it('skips workspaces without a physical database schema', async () => {

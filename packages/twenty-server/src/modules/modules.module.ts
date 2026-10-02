@@ -3,7 +3,6 @@ import { Module } from '@nestjs/common';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
 import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
-import { MyahStandardAppsModule } from 'src/modules/myah-standard-apps/myah-standard-apps.module';
 import { MyahUnipileModule } from 'src/modules/myah-unipile/myah-unipile.module';
 import { WorkflowModule } from 'src/modules/workflow/workflow.module';
 import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-member.module';
@@ -13,7 +12,6 @@ import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-me
     MessagingModule,
     CampaignExecutionOrchestrationModule,
     ConnectedAccountModule,
-    MyahStandardAppsModule,
     MyahUnipileModule,
     WorkflowModule,
     WorkspaceMemberModule,

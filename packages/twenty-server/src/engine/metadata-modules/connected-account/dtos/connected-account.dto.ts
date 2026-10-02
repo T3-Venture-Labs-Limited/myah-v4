@@ -112,6 +112,11 @@ export class ConnectedAccountDTO {
   @Field(() => Int)
   minimumSendIntervalMs: number;
 
+  @IsInt()
+  @Min(1)
+  @Field(() => Int)
+  sendingPolicyRevision: number;
+
   @HideField()
   workspaceId: string;
 

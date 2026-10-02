@@ -2,6 +2,7 @@ import { Command } from 'nest-commander';
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
+import type { QueryRunner } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -14,6 +15,7 @@ import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspa
 import { WorkspaceMigrationRunnerService } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/services/workspace-migration-runner.service';
 import { WORKSPACE_MIGRATION_ACTION_TYPE } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/constants/workspace-migration-action-type.constant';
 import type { UniversalUpdateFieldAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/field/types/workspace-migration-field-action';
+import type { UpgradeWorkspaceTransaction } from 'src/engine/workspace-manager/workspace-migration/types/upgrade-workspace-transaction.type';
 
 const CREATOR_CRM_SEARCH_SOURCE_FIELD_UNIVERSAL_IDENTIFIER_BY_OBJECT_UNIVERSAL_IDENTIFIER: Record<string, string> = {
   [MYAH_STANDARD_OBJECTS.creator.universalIdentifier]:
@@ -41,10 +43,22 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
     super(workspaceIteratorService);
   }
 
-  override async runOnWorkspace({
-    workspaceId,
-    options,
-  }: RunOnWorkspaceArgs): Promise<void> {
+  override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    await this.synchronize(args);
+  }
+
+  override async runOnWorkspaceInUpgradeTransaction(
+    args: RunOnWorkspaceArgs,
+    queryRunner: QueryRunner,
+    afterCommit: UpgradeWorkspaceTransaction['afterCommit'],
+  ): Promise<void> {
+    await this.synchronize(args, { queryRunner, afterCommit });
+  }
+
+  private async synchronize(
+    { workspaceId, options }: RunOnWorkspaceArgs,
+    upgradeTransaction?: UpgradeWorkspaceTransaction,
+  ): Promise<void> {
     if (options.dryRun) {
       return;
     }
@@ -116,6 +130,7 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
           applicationUniversalIdentifier:
             twentyStandardFlatApplication.universalIdentifier,
           isSystemBuild: true,
+          upgradeTransaction,
           allFlatEntityOperationByMetadataName: {
             searchFieldMetadata: {
               flatEntityToCreate: missingSearchFieldMetadatas,
@@ -163,8 +178,16 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
         ),
       },
       workspaceId,
+      upgradeTransaction,
     });
 
+    if (upgradeTransaction) {
+      upgradeTransaction.afterCommit(() => this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+        'flatFieldMetadataMaps',
+        'flatSearchFieldMetadataMaps',
+      ]));
+      return;
+    }
     await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
       'flatFieldMetadataMaps',
       'flatSearchFieldMetadataMaps',

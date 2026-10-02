@@ -1,6 +1,7 @@
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
+import type { QueryRunner } from 'typeorm';
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
@@ -10,6 +11,7 @@ import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/wo
 
 type SynchronizeMyahCreatorCrmSearchMetadataCommand = {
   runOnWorkspace: (args: RunOnWorkspaceArgs) => Promise<void>;
+  runOnWorkspaceInUpgradeTransaction: (args: RunOnWorkspaceArgs, runner: QueryRunner, afterCommit: (effect: () => Promise<void> | void) => void) => Promise<void>;
 };
 
 type SynchronizeMyahCreatorCrmSearchMetadataCommandConstructor = new (
@@ -140,6 +142,20 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
       ),
     };
   };
+
+  it('threads pinned runner through both metadata actions and defers final cache refresh', async () => {
+    const {command, validateBuildAndRunWorkspaceMigration, workspaceCacheService, workspaceMigrationRunnerService} =
+      createCommand(createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps);
+    const queryRunner = {isTransactionActive:true} as QueryRunner;
+    const effects: Array<() => Promise<void> | void> = [];
+    await command.runOnWorkspaceInUpgradeTransaction(args, queryRunner, (effect) => effects.push(effect));
+    expect(validateBuildAndRunWorkspaceMigration.mock.calls[0][0].upgradeTransaction).toEqual({queryRunner,afterCommit:expect.any(Function)});
+    expect(workspaceMigrationRunnerService.run.mock.calls[0][0].upgradeTransaction).toEqual({queryRunner,afterCommit:expect.any(Function)});
+    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledTimes(1);
+    expect(effects).toHaveLength(1);
+    await effects[0]();
+    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledTimes(2);
+  });
 
   it('refreshes search metadata before and after persisting missing Creator CRM rows', async () => {
     const {

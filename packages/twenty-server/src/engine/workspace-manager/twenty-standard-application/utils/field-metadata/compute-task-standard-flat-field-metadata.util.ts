@@ -286,6 +286,26 @@ export const buildTaskStandardFlatFieldMetadatas = ({
   }),
 
   // Relation fields
+  partnershipObligations: createStandardRelationFieldFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      type: FieldMetadataType.RELATION,
+      fieldName: 'partnershipObligations',
+      label: 'Partnership obligations',
+      description: 'Obligations explicitly linked to this task',
+      icon: 'IconLink',
+      isUIEditable: false,
+      targetObjectName: 'partnershipObligation',
+      targetFieldName: 'task',
+      morphId: null,
+      settings: { relationType: RelationType.ONE_TO_MANY },
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
   taskTargets: createStandardRelationFieldFlatMetadata({
     objectName,
     workspaceId,

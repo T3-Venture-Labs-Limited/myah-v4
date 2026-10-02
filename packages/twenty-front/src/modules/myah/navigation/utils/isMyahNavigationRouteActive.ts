@@ -17,7 +17,11 @@ export const isMyahNavigationRouteActive = ({
     return false;
   }
 
-  if (pathname === route.route.entryPath) {
+  if (
+    pathname === route.route.entryPath ||
+    (route.route.id === 'campaigns' &&
+      matchPath('/myah/campaigns/:campaignId', pathname) !== null)
+  ) {
     return true;
   }
 

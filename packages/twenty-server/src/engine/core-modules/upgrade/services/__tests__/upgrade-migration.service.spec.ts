@@ -1,4 +1,10 @@
-import { IsNull, type Repository, type DataSource } from 'typeorm';
+import {
+  IsNull,
+  type Repository,
+  type DataSource,
+  type QueryRunner,
+} from 'typeorm';
+import { LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME } from 'src/engine/core-modules/upgrade/constants/legacy-2-19-prerequisite-reconciliation-name.constant';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { type UpgradeMigrationEntity } from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
@@ -44,6 +50,150 @@ const buildInstagramSequenceReader = () => {
   return reader;
 };
 
+describe('UpgradeMigrationService pinned complete history (mock QueryRunner, not PostgreSQL)', () => {
+  const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const date = new Date('2026-09-25T01:02:03.000Z');
+  const row = (id: string, workspaceId: string | null, overrides = {}) => ({
+    id,
+    workspaceId,
+    name: 'unknown-old-command',
+    attempt: 1,
+    status: 'failed',
+    isInitial: false,
+    createdAt: date,
+    ...overrides,
+  });
+  const repository = {
+    manager: { query: jest.fn() },
+    find: jest.fn(),
+    createQueryBuilder: jest.fn(),
+  };
+  const service = new UpgradeMigrationService(
+    repository as unknown as Repository<UpgradeMigrationEntity>,
+  );
+  const runner = (rows: unknown[]) => ({
+    databaseConnection: {},
+    isReleased: false,
+    query: jest.fn().mockResolvedValue(rows),
+    manager: { query: jest.fn(), getRepository: jest.fn() },
+  });
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('reads every attempt and initial/unknown/failed receipt, partitions null and requested empty scopes without pooled reads', async () => {
+    const rows = [
+      row('null-1', null),
+      row('a-1', a, { name: 'old-command', status: 'completed' }),
+      row('a-2', a, { attempt: 2 }),
+      row('b-initial', b, {
+        name: 'selected-command',
+        isInitial: true,
+        status: 'completed',
+      }),
+    ];
+    const pinned = runner(rows);
+    const result = await service.getScopedUpgradeReceiptHistories({
+      workspaceIds: [
+        a,
+        b,
+        a.toUpperCase(),
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      ],
+      queryRunner: pinned as unknown as QueryRunner,
+    });
+    expect([...result.keys()]).toEqual([
+      null,
+      a,
+      b,
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    ]);
+    expect(result.get(null)).toEqual([rows[0]]);
+    expect(result.get(a)).toEqual([rows[1], rows[2]]);
+    expect(result.get(b)).toEqual([rows[3]]);
+    expect(result.get('cccccccc-cccc-4ccc-8ccc-cccccccccccc')).toEqual([]);
+    expect(result.get(a)?.[0].id).toBe('a-1');
+    expect(result.get(a)?.[0].createdAt).toBe(date);
+    expect(pinned.query).toHaveBeenCalledTimes(1);
+    expect(pinned.query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /SELECT id, name, attempt, status, "workspaceId", "isInitial", "createdAt"\s+FROM core\."upgradeMigration"\s+WHERE "workspaceId" IS NULL OR "workspaceId" = ANY\(\$1::uuid\[\]\)\s+ORDER BY "workspaceId" NULLS FIRST, "createdAt", id/,
+      ),
+      [[a, b, 'cccccccc-cccc-4ccc-8ccc-cccccccccccc']],
+    );
+    expect(repository.manager.query).not.toHaveBeenCalled();
+    expect(repository.find).not.toHaveBeenCalled();
+    expect(repository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(pinned.manager.query).not.toHaveBeenCalled();
+  });
+
+  it('queries only null scope for explicitly empty workspace IDs', async () => {
+    const pinned = runner([row('null-1', null)]);
+    const result = await service.getScopedUpgradeReceiptHistories({
+      workspaceIds: [],
+      queryRunner: pinned as unknown as QueryRunner,
+    });
+    expect([...result.entries()]).toEqual([[null, [row('null-1', null)]]]);
+    expect(pinned.query).toHaveBeenCalledWith(
+      expect.stringContaining('ANY($1::uuid[])'),
+      [[]],
+    );
+  });
+
+  it.each([undefined, null, 'bad', [a, 'bad'], [a, null]])(
+    'rejects invalid or absent workspace scope %p before querying',
+    async (workspaceIds) => {
+      const pinned = runner([]);
+      await expect(
+        service.getScopedUpgradeReceiptHistories({
+          workspaceIds,
+          queryRunner: pinned as unknown as QueryRunner,
+        } as Parameters<typeof service.getScopedUpgradeReceiptHistories>[0]),
+      ).rejects.toThrow();
+      expect(pinned.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    null,
+    { isReleased: true, databaseConnection: {} },
+    { isReleased: false },
+  ])(
+    'rejects absent, released or disconnected runner %p',
+    async (queryRunner) => {
+      await expect(
+        service.getScopedUpgradeReceiptHistories({
+          workspaceIds: [],
+          queryRunner: queryRunner as QueryRunner,
+        }),
+      ).rejects.toThrow();
+    },
+  );
+
+  it('fails closed if a pinned result unexpectedly includes another workspace', async () => {
+    const pinned = runner([row('out-of-scope', b)]);
+    await expect(
+      service.getScopedUpgradeReceiptHistories({
+        workspaceIds: [a],
+        queryRunner: pinned as unknown as QueryRunner,
+      }),
+    ).rejects.toThrow('outside requested workspace scope');
+  });
+
+  it('propagates pinned query errors rather than substituting pooled history', async () => {
+    const pinned = runner([]);
+    const failure = new Error('query failed');
+    pinned.query.mockRejectedValue(failure);
+    await expect(
+      service.getScopedUpgradeReceiptHistories({
+        workspaceIds: [a],
+        queryRunner: pinned as unknown as QueryRunner,
+      }),
+    ).rejects.toBe(failure);
+    expect(repository.manager.query).not.toHaveBeenCalled();
+  });
+});
+
 describe('UpgradeMigrationService durable Instagram history contracts (mock repository, not PostgreSQL)', () => {
   const workspaceId = 'saved-workspace';
   const executedByVersion = '2.20.0';
@@ -74,6 +224,7 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
     };
     const repository = {
       findOne: jest.fn(),
+      exists: jest.fn().mockResolvedValue(true),
       count: jest.fn().mockResolvedValue(1),
       save: jest.fn(),
       update: jest.fn(),
@@ -87,6 +238,41 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
     );
     return { service, repository, queryBuilder };
   };
+
+  it.each(['failed', 'completed'] as const)(
+    'reads the latest global R %s attempt by exact identity and attempt order after reconstruction',
+    async (status) => {
+      const { repository } = setup();
+      const receipt = {
+        ...historical,
+        name: LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME,
+        workspaceId: null,
+        attempt: 2,
+        status,
+        errorMessage: status === 'failed' ? 'stored failure' : null,
+        createdAt: new Date('2026-09-13T00:00:00Z'),
+      };
+      repository.findOne.mockResolvedValue(receipt);
+      const reconstructed = new UpgradeMigrationService(
+        repository as unknown as Repository<UpgradeMigrationEntity>,
+      );
+
+      expect(
+        await reconstructed.getLatestPrerequisiteReconciliationAttempt(),
+      ).toEqual(receipt);
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: {
+          name: LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME,
+          workspaceId: IsNull(),
+        },
+        order: { attempt: 'DESC' },
+      });
+      repository.findOne.mockResolvedValue(null);
+      expect(
+        await reconstructed.getLatestPrerequisiteReconciliationAttempt(),
+      ).toBeNull();
+    },
+  );
 
   it.each([null, workspaceId])(
     'uses exact D and existing scope %s for completion lookup',
@@ -259,7 +445,7 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
       expect(result.get(workspaceId)).toEqual(cursor);
       expect(repository.manager.query).toHaveBeenCalledWith(
         expect.stringContaining('ORDER BY "workspaceId", name, attempt DESC'),
-        [[workspaceId]],
+        [[workspaceId], LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME],
       );
       const sql = repository.manager.query.mock.calls[0][0] as string;
       expect(sql).not.toContain('"isInitial" = false');
@@ -268,6 +454,98 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
       expect(repository.delete).not.toHaveBeenCalled();
       expect(repository.remove).not.toHaveBeenCalled();
       expect(row).toEqual({ ...original, isInitial });
+    },
+  );
+
+  it.each([
+    ['completed', false],
+    ['failed', false],
+    ['completed', true],
+    ['failed', true],
+  ] as const)(
+    'excludes only non-progress R from all three cursors after %s, timestamp tie=%s',
+    async (status, timestampTie) => {
+      const { repository, queryBuilder } = setup();
+      const r = LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME;
+      const originalCursor = { name: INSTAGRAM_SLOW_D, status: 'completed' };
+      const originalWorkspace = { ...historical };
+      const originalInstance = {
+        ...historical,
+        ...originalCursor,
+        workspaceId: null,
+        isInitial: false,
+      };
+      const receipt = {
+        ...originalInstance,
+        name: r,
+        status,
+        createdAt: timestampTie
+          ? originalInstance.createdAt
+          : new Date('2026-09-13T00:00:00Z'),
+      };
+      // Emulate the query's exclusion while keeping the persisted rows untouched.
+      const records = [
+        originalInstance,
+        originalWorkspace,
+        receipt,
+        { ...receipt, workspaceId },
+      ];
+      queryBuilder.getOne.mockImplementation(async () => {
+        const predicates = queryBuilder.andWhere.mock.calls.map(([sql]) => sql);
+        return predicates.some(
+          (sql) => sql === 'migration.name != :nonProgressName',
+        )
+          ? originalInstance
+          : receipt;
+      });
+      repository.manager.query.mockImplementation(
+        async (sql: string, params: unknown[]) =>
+          sql.includes('name != $2') && params[1] === r
+            ? [originalWorkspace]
+            : [{ ...receipt, workspaceId }],
+      );
+      repository.findOne.mockResolvedValue(receipt);
+      const reconstructed = new UpgradeMigrationService(
+        repository as unknown as Repository<UpgradeMigrationEntity>,
+      );
+      expect(
+        await reconstructed.getLastAttemptedCommandNameOrThrow([workspaceId]),
+      ).toEqual(originalCursor);
+      expect(
+        (
+          await reconstructed.getWorkspaceLastAttemptedCommandName([
+            workspaceId,
+          ])
+        ).get(workspaceId)?.name,
+      ).toBe(INSTAGRAM_WORKSPACE_D);
+      expect(
+        (await reconstructed.getLastAttemptedInstanceCommand())?.name,
+      ).toBe(INSTAGRAM_SLOW_D);
+      expect(
+        await reconstructed.isLastAttemptCompleted({
+          name: r,
+          workspaceId: null,
+        }),
+      ).toBe(status === 'completed');
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { name: r, workspaceId: IsNull() },
+        order: { attempt: 'DESC' },
+      });
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+        'migration.name != :nonProgressName',
+        { nonProgressName: r },
+      );
+      expect(repository.manager.query).toHaveBeenCalledWith(
+        expect.stringContaining('name != $2'),
+        [[workspaceId], r],
+      );
+      expect(records[0]).toEqual(originalInstance);
+      expect(records[1]).toEqual(originalWorkspace);
+      expect(records[2]).toEqual(receipt);
+      expect(await reconstructed.hasInstanceAttempt(r)).toBe(true);
+      expect(repository.exists).toHaveBeenCalledWith({
+        where: { name: r, workspaceId: IsNull() },
+      });
     },
   );
 
@@ -304,6 +582,10 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
               .mockResolvedValue([workspaceId]),
           } as unknown as WorkspaceVersionService,
           status,
+          {
+            withLock: async (operation: () => Promise<unknown>) => operation(),
+            currentRunner: () => queryRunner,
+          } as never,
         );
         const command = { up: jest.fn(), down: jest.fn() };
         await expect(
@@ -311,20 +593,36 @@ describe('UpgradeMigrationService durable Instagram history contracts (mock repo
         ).resolves.toEqual({ status: 'success' });
         expect(command.up).toHaveBeenCalledWith(queryRunner);
       } else {
+        const queryRunner = {
+          isReleased: false,
+          isTransactionActive: false,
+          startTransaction: jest.fn(),
+          commitTransaction: jest.fn(),
+          manager: { getRepository: jest.fn().mockReturnValue(repository) },
+        };
         const runner = new WorkspaceCommandRunnerService(
           config,
           service,
           status,
+          { currentRunner: () => queryRunner } as never,
         );
         const command = {
           runOnWorkspace: jest.fn(),
+          runOnWorkspaceInUpgradeTransaction: jest.fn(),
         } as unknown as RegisteredWorkspaceCommand['command'];
         await runner.runWorkspaceCommands({
           iteratorContext: { workspaceId, index: 0, total: 1 },
           options: {},
           workspaceCommands: [{ name: sequence[2].name, command }],
         });
-        expect(command.runOnWorkspace).toHaveBeenCalledTimes(1);
+        expect(command.runOnWorkspaceInUpgradeTransaction).toHaveBeenCalledWith(
+          expect.objectContaining({ workspaceId }),
+          queryRunner,
+          expect.any(Function),
+        );
+        expect(queryRunner.startTransaction).toHaveBeenCalledTimes(1);
+        expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
+        expect(command.runOnWorkspace).not.toHaveBeenCalled();
       }
       expect(repository.save).toHaveBeenCalledWith(
         (isInstance ? [null, workspaceId] : [workspaceId]).map((scope) => ({

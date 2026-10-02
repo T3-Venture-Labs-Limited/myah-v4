@@ -66,6 +66,9 @@ const EXTERNAL_WRITE_POLICIES: Readonly<Record<string, ExternalWritePolicy>> =
     search_output: { kind: 'read' },
   });
 
+// Read-only access for AI chat generic-approval classification (MYAH-315).
+export { EXTERNAL_WRITE_POLICIES };
+
 @Injectable()
 export class ExternalWritePolicyService {
   constructor(private readonly permissionsService: PermissionsService) {}

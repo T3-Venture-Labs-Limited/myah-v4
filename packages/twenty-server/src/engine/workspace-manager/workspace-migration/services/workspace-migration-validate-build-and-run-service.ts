@@ -4,6 +4,7 @@ import {
   AllMetadataName,
   WorkspaceMigrationV2ExceptionCode,
 } from 'twenty-shared/metadata';
+import { isValidUuid } from 'twenty-shared/utils';
 
 import { LoggerService } from 'src/engine/core-modules/logger/logger.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -26,6 +27,9 @@ import {
   WorkspaceMigrationOrchestratorSuccessfulResult,
 } from 'src/engine/workspace-manager/workspace-migration/types/workspace-migration-orchestrator.type';
 import { WorkspaceMigrationRunnerService } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/services/workspace-migration-runner.service';
+import type { UpgradeWorkspaceTransaction } from 'src/engine/workspace-manager/workspace-migration/types/upgrade-workspace-transaction.type';
+import type { PinnedWorkspaceMetadataSnapshot } from 'src/engine/workspace-manager/workspace-migration/types/pinned-workspace-metadata-snapshot.type';
+import type { WorkspaceMigration } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration.type';
 
 type ValidateBuildAndRunWorkspaceMigrationFromMatriceArgs = {
   workspaceId: string;
@@ -33,6 +37,7 @@ type ValidateBuildAndRunWorkspaceMigrationFromMatriceArgs = {
   isSystemBuild?: boolean;
   applicationUniversalIdentifier: string;
   dryRun?: boolean;
+  upgradeTransaction?: UpgradeWorkspaceTransaction;
 };
 
 type ValidateBuildAndRunWorkspaceMigrationFromRecordArgs = {
@@ -41,6 +46,7 @@ type ValidateBuildAndRunWorkspaceMigrationFromRecordArgs = {
   isSystemBuild?: boolean;
   applicationUniversalIdentifier: string;
   dryRun?: boolean;
+  upgradeTransaction?: UpgradeWorkspaceTransaction;
 };
 
 @Injectable()
@@ -65,6 +71,9 @@ export class WorkspaceMigrationValidateBuildAndRunService {
     args: WorkspaceMigrationOrchestratorBuildArgs & {
       idByUniversalIdentifierByMetadataName?: IdByUniversalIdentifierByMetadataName;
       dryRun?: boolean;
+      upgradeTransaction?: UpgradeWorkspaceTransaction;
+      pinnedSnapshot?: PinnedWorkspaceMetadataSnapshot;
+      assertBeforeRun?: (migration: WorkspaceMigration) => void;
     },
   ): Promise<
     | WorkspaceMigrationOrchestratorFailedResult
@@ -72,13 +81,50 @@ export class WorkspaceMigrationValidateBuildAndRunService {
         hasSchemaMetadataChanged: boolean;
       })
   > {
-    const { idByUniversalIdentifierByMetadataName, dryRun, ...buildArgs } =
-      args;
+    const {
+      idByUniversalIdentifierByMetadataName,
+      dryRun,
+      upgradeTransaction,
+      pinnedSnapshot,
+      assertBeforeRun,
+      ...buildArgs
+    } = args;
+
+    if (pinnedSnapshot) {
+      const runner = upgradeTransaction?.queryRunner;
+      if (
+        !isValidUuid(args.workspaceId) ||
+        pinnedSnapshot.workspaceId !== args.workspaceId ||
+        pinnedSnapshot.workspace.id !== args.workspaceId ||
+        !runner ||
+        pinnedSnapshot.queryRunner !== runner ||
+        runner.isReleased ||
+        !runner.isTransactionActive ||
+        runner.manager?.queryRunner !== runner ||
+        typeof upgradeTransaction?.afterCommit !== 'function'
+      ) {
+        throw new Error(
+          'Pinned migration snapshot requires a matching active upgrade transaction',
+        );
+      }
+    }
 
     const buildStart = performance.now();
     const validateAndBuildResult =
       await this.workspaceMigrationBuildOrchestratorService
-        .buildWorkspaceMigration(buildArgs)
+        .buildWorkspaceMigration(
+          pinnedSnapshot
+            ? {
+                ...buildArgs,
+                additionalCacheDataMaps: {
+                  ...buildArgs.additionalCacheDataMaps,
+                  featureFlagsMap: structuredClone(
+                    pinnedSnapshot.featureFlagsMap,
+                  ),
+                },
+              }
+            : buildArgs,
+        )
         .catch((error) => {
           this.logger.error(
             error,
@@ -114,6 +160,10 @@ export class WorkspaceMigrationValidateBuildAndRunService {
       workspaceMigration: validateAndBuildResult.workspaceMigration,
     });
 
+    // A pinned command can reject the *enriched* native plan before a single
+    // runner write, without rebuilding a possibly different second plan.
+    assertBeforeRun?.(workspaceMigration);
+
     if (dryRun === true || workspaceMigration.actions.length === 0) {
       return {
         status: 'success',
@@ -141,6 +191,8 @@ export class WorkspaceMigrationValidateBuildAndRunService {
       await this.workspaceMigrationRunnerService.run({
         workspaceId: args.workspaceId,
         workspaceMigration,
+        upgradeTransaction,
+        pinnedSnapshot,
       });
     const runMs = performance.now() - runStart;
 
@@ -149,10 +201,15 @@ export class WorkspaceMigrationValidateBuildAndRunService {
       WorkspaceMigrationValidateBuildAndRunService.name,
     );
 
-    this.metadataEventEmitter.emitMetadataEvents({
-      metadataEvents: metadataEvents,
+    const eventBatch = {
+      metadataEvents,
       workspaceId: args.workspaceId,
-    });
+    };
+    if (upgradeTransaction)
+      upgradeTransaction.afterCommit(() =>
+        this.metadataEventEmitter.emitMetadataEventsAsync(eventBatch),
+      );
+    else this.metadataEventEmitter.emitMetadataEvents(eventBatch);
 
     return {
       status: 'success',
@@ -167,6 +224,7 @@ export class WorkspaceMigrationValidateBuildAndRunService {
     isSystemBuild = false,
     applicationUniversalIdentifier,
     dryRun,
+    upgradeTransaction,
   }: ValidateBuildAndRunWorkspaceMigrationFromMatriceArgs): Promise<
     | WorkspaceMigrationOrchestratorFailedResult
     | (WorkspaceMigrationOrchestratorSuccessfulResult & {
@@ -182,6 +240,7 @@ export class WorkspaceMigrationValidateBuildAndRunService {
       isSystemBuild,
       applicationUniversalIdentifier,
       dryRun,
+      upgradeTransaction,
     });
   }
 
@@ -191,6 +250,7 @@ export class WorkspaceMigrationValidateBuildAndRunService {
     isSystemBuild = false,
     applicationUniversalIdentifier,
     dryRun,
+    upgradeTransaction,
   }: ValidateBuildAndRunWorkspaceMigrationFromRecordArgs): Promise<
     | WorkspaceMigrationOrchestratorFailedResult
     | (WorkspaceMigrationOrchestratorSuccessfulResult & {
@@ -256,6 +316,7 @@ export class WorkspaceMigrationValidateBuildAndRunService {
       additionalCacheDataMaps,
       idByUniversalIdentifierByMetadataName,
       dryRun,
+      upgradeTransaction,
     });
   }
 }

@@ -14,6 +14,7 @@ import {
   DataSource,
   type EntitySubscriberInterface,
   getMetadataArgsStorage,
+  TableCheck,
 } from 'typeorm';
 
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
@@ -194,6 +195,22 @@ const observedCatalogs = {
   ],
 };
 
+// The entity's CHECK constraint text has evolved beyond the historical
+// repair-utility snapshot above (later, unrelated PR added the
+// myahReplyContextSnapshot email-reply-context branches). This is the exact
+// current definition/expression, used only to prove the entity decorator's
+// live SQL still installs and matches PostgreSQL's canonical rendering.
+const entityActionApprovalBindingInteractionContextCatalog = {
+  table_name: 'actionApprovalBinding',
+  conname: bindingName,
+  contype: 'c',
+  convalidated: true,
+  definition:
+    'CHECK (((((("actionName")::text = \'send_instagram_message\'::text) AND (("actionKind")::text = ANY ((ARRAY[\'START_CHAT\'::character varying, \'REPLY\'::character varying])::text[])) AND ("myahReplyContextSnapshot" IS NULL) AND ((("actionVersion" = 2) AND ((("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL)) OR (("threadId" IS NULL) AND (("interactionContextType")::text = \'MYAH_INBOX_INSTAGRAM_DRAFT\'::text) AND ("interactionContextId" = "draftId")))) OR (("actionVersion" = 3) AND ((("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL)) OR (("threadId" IS NULL) AND (("interactionContextType")::text = \'MYAH_INSTAGRAM_MESSAGE_DRAFT\'::text) AND ("interactionContextId" = "draftId")))))) OR ((("actionName")::text = \'send_inbox_reply\'::text) AND ("actionVersion" = 1) AND ("actionKind" IS NULL) AND ("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL) AND ("myahReplyContextSnapshot" IS NULL)) OR ((("actionName")::text = \'send_inbox_reply\'::text) AND ("actionVersion" = 2) AND ("actionKind" IS NULL) AND ("myahReplyContextSnapshot" IS NOT NULL) AND (jsonb_typeof("myahReplyContextSnapshot") = \'object\'::text) AND (("myahReplyContextSnapshot" ->> \'schemaVersion\'::text) = \'1\'::text) AND (("myahReplyContextSnapshot" ->> \'channel\'::text) = \'EMAIL\'::text) AND (("myahReplyContextSnapshot" ->> \'draftId\'::text) = ("draftId")::text) AND (("myahReplyContextSnapshot" ->> \'deliveryTargetId\'::text) ~ \'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\'::text) AND (("myahReplyContextSnapshot" ->> \'contextFingerprint\'::text) ~ \'^[0-9a-f]{64}$\'::text) AND (("myahReplyContextSnapshot" ->> \'eligibilityEvidenceDigest\'::text) ~ \'^[0-9a-f]{64}$\'::text) AND (("myahReplyContextSnapshot" #>> \'{contactAnchor,kind}\'::text[]) = ANY (ARRAY[\'CREATOR\'::text, \'EMAIL_THREAD\'::text])) AND (("myahReplyContextSnapshot" #>> \'{contactAnchor,id}\'::text[]) ~ \'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\'::text) AND (((("myahReplyContextSnapshot" #>> \'{replyContext,kind}\'::text[]) = \'GENERAL\'::text) AND (("myahReplyContextSnapshot" #>> \'{replyContext,campaignId}\'::text[]) IS NULL)) OR ((("myahReplyContextSnapshot" #>> \'{replyContext,kind}\'::text[]) = \'CAMPAIGN\'::text) AND (("myahReplyContextSnapshot" #>> \'{replyContext,campaignId}\'::text[]) ~ \'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\'::text))) AND ((("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL)) OR (("threadId" IS NULL) AND (("interactionContextType")::text = \'MYAH_INBOX_EMAIL_CONTEXT_DRAFT\'::text) AND ("interactionContextId" = "draftId")))) OR ((("actionName")::text <> ALL ((ARRAY[\'send_instagram_message\'::character varying, \'send_inbox_reply\'::character varying])::text[])) AND ("actionKind" IS NULL) AND ("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL) AND ("myahReplyContextSnapshot" IS NULL))) IS TRUE))',
+  expression:
+    '((((("actionName")::text = \'send_instagram_message\'::text) AND (("actionKind")::text = ANY ((ARRAY[\'START_CHAT\'::character varying, \'REPLY\'::character varying])::text[])) AND ("myahReplyContextSnapshot" IS NULL) AND ((("actionVersion" = 2) AND ((("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL)) OR (("threadId" IS NULL) AND (("interactionContextType")::text = \'MYAH_INBOX_INSTAGRAM_DRAFT\'::text) AND ("interactionContextId" = "draftId")))) OR (("actionVersion" = 3) AND ((("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL)) OR (("threadId" IS NULL) AND (("interactionContextType")::text = \'MYAH_INSTAGRAM_MESSAGE_DRAFT\'::text) AND ("interactionContextId" = "draftId")))))) OR ((("actionName")::text = \'send_inbox_reply\'::text) AND ("actionVersion" = 1) AND ("actionKind" IS NULL) AND ("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL) AND ("myahReplyContextSnapshot" IS NULL)) OR ((("actionName")::text = \'send_inbox_reply\'::text) AND ("actionVersion" = 2) AND ("actionKind" IS NULL) AND ("myahReplyContextSnapshot" IS NOT NULL) AND (jsonb_typeof("myahReplyContextSnapshot") = \'object\'::text) AND (("myahReplyContextSnapshot" ->> \'schemaVersion\'::text) = \'1\'::text) AND (("myahReplyContextSnapshot" ->> \'channel\'::text) = \'EMAIL\'::text) AND (("myahReplyContextSnapshot" ->> \'draftId\'::text) = ("draftId")::text) AND (("myahReplyContextSnapshot" ->> \'deliveryTargetId\'::text) ~ \'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\'::text) AND (("myahReplyContextSnapshot" ->> \'contextFingerprint\'::text) ~ \'^[0-9a-f]{64}$\'::text) AND (("myahReplyContextSnapshot" ->> \'eligibilityEvidenceDigest\'::text) ~ \'^[0-9a-f]{64}$\'::text) AND (("myahReplyContextSnapshot" #>> \'{contactAnchor,kind}\'::text[]) = ANY (ARRAY[\'CREATOR\'::text, \'EMAIL_THREAD\'::text])) AND (("myahReplyContextSnapshot" #>> \'{contactAnchor,id}\'::text[]) ~ \'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\'::text) AND (((("myahReplyContextSnapshot" #>> \'{replyContext,kind}\'::text[]) = \'GENERAL\'::text) AND (("myahReplyContextSnapshot" #>> \'{replyContext,campaignId}\'::text[]) IS NULL)) OR ((("myahReplyContextSnapshot" #>> \'{replyContext,kind}\'::text[]) = \'CAMPAIGN\'::text) AND (("myahReplyContextSnapshot" #>> \'{replyContext,campaignId}\'::text[]) ~ \'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\'::text))) AND ((("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL)) OR (("threadId" IS NULL) AND (("interactionContextType")::text = \'MYAH_INBOX_EMAIL_CONTEXT_DRAFT\'::text) AND ("interactionContextId" = "draftId")))) OR ((("actionName")::text <> ALL ((ARRAY[\'send_instagram_message\'::character varying, \'send_inbox_reply\'::character varying])::text[])) AND ("actionKind" IS NULL) AND ("threadId" IS NOT NULL) AND ("interactionContextType" IS NULL) AND ("interactionContextId" IS NULL) AND ("myahReplyContextSnapshot" IS NULL))) IS TRUE)',
+};
+
 const loadForwardDependencies = async () => ({
   ...(await import('typeorm')),
   ...(await import('@nestjs/common/constants')),
@@ -213,6 +230,7 @@ const loadForwardDependencies = async () => ({
   ...(await import('src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service')),
   ...(await import('src/engine/core-modules/upgrade/services/upgrade-sequence-runner.service')),
   ...(await import('src/engine/core-modules/upgrade/services/instance-command-runner.service')),
+  ...(await import('src/engine/core-modules/upgrade/services/upgrade-write-lock.service')),
   ...(await import('src/engine/core-modules/upgrade/services/workspace-command-runner.service')),
   ...(await import('src/engine/core-modules/upgrade/upgrade-migration.entity')),
   ...(await import('src/engine/core-modules/workspace/workspace.entity')),
@@ -258,7 +276,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
   const createTables = async () => {
     requireSchemaOwnership();
     await dataSource.query(
-      'CREATE TABLE core."actionApprovalBinding" ("actionName" varchar NOT NULL, "actionVersion" integer NOT NULL, "draftId" uuid NOT NULL, "actionKind" varchar, "threadId" uuid, "interactionContextType" varchar, "interactionContextId" uuid)',
+      'CREATE TABLE core."actionApprovalBinding" ("actionName" varchar NOT NULL, "actionVersion" integer NOT NULL, "draftId" uuid NOT NULL, "actionKind" varchar, "threadId" uuid, "interactionContextType" varchar, "interactionContextId" uuid, "myahReplyContextSnapshot" jsonb)',
     );
     await dataSource.query(
       'CREATE TABLE core."unipileInstagramSyncRun" ("currentChatId" text, "currentChatAttendeeId" text)',
@@ -277,9 +295,23 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
   const insertBinding = (values: Record<string, string | number | null>) => {
     const entries = Object.entries(values);
 
+    if (
+      entries.some(
+        ([key]) => !Object.prototype.hasOwnProperty.call(thread, key),
+      )
+    )
+      throw new Error('Unexpected fixture column');
     return dataSource.query(
-      `INSERT INTO core."actionApprovalBinding" (${entries.map(([key]) => `"${key}"`).join(',')}) VALUES (${entries.map((_, index) => `$${index + 1}`).join(',')})`,
-      entries.map(([, value]) => value),
+      'INSERT INTO core."actionApprovalBinding" ("actionName", "actionVersion", "draftId", "actionKind", "threadId", "interactionContextType", "interactionContextId") VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [
+        values.actionName,
+        values.actionVersion,
+        values.draftId,
+        values.actionKind,
+        values.threadId,
+        values.interactionContextType,
+        values.interactionContextId,
+      ],
     );
   };
 
@@ -297,9 +329,16 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         // An absent entity CHECK deliberately leaves the table unconstrained;
         // behavioral assertions below then fail on admitted invalid rows.
         if (check) {
-          await dataSource.query(
-            `ALTER TABLE core."${table}" ADD CONSTRAINT "${name}" CHECK (${check.expression})`,
-          );
+          const runner = dataSource.createQueryRunner();
+
+          try {
+            await runner.createCheckConstraint(
+              `core.${table}`,
+              new TableCheck({ name, expression: check.expression }),
+            );
+          } finally {
+            await runner.release();
+          }
         }
       }
     });
@@ -308,10 +347,13 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
 
     it('matches the exact observed strict entity catalog definitions', async () => {
       const rows = await dataSource.query(
-        `SELECT c.relname AS table_name, k.conname, k.contype, k.convalidated, pg_get_constraintdef(k.oid) AS definition, pg_get_expr(k.conbin,k.conrelid) AS expression FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='core' ORDER BY c.relname,k.conname`,
+        `SELECT c.relname AS table_name, k.conname, k.contype, k.convalidated, pg_get_constraintdef(k.oid) AS definition, pg_get_expr(k.conbin,k.conrelid) AS expression FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='core' AND k.contype='c' ORDER BY c.relname,k.conname`,
       );
 
-      expect(rows).toEqual(observedCatalogs.strict);
+      expect(rows).toEqual([
+        entityActionApprovalBindingInteractionContextCatalog,
+        observedCatalogs.strict[1],
+      ]);
     });
 
     it.each(bindingCases)('binding $name', async ({ values, valid }) => {
@@ -359,16 +401,57 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
       validated = true,
     ) => {
       requireSchemaOwnership();
-      await dataSource.query(
-        `ALTER TABLE core."${table}" DROP CONSTRAINT IF EXISTS "${name}"`,
-      );
-      await dataSource.query(
-        `ALTER TABLE core."${table}" ADD CONSTRAINT "${name}" CHECK (${strict ? `(${predicate}) IS TRUE` : predicate}) ${validated ? '' : 'NOT VALID'}`,
-      );
+      if (
+        !(
+          (table === 'actionApprovalBinding' &&
+            name === bindingName &&
+            (predicate === oldPredicates.binding || predicate === 'true')) ||
+          (table === 'unipileInstagramSyncRun' &&
+            name === syncName &&
+            (predicate === oldPredicates.sync || predicate === 'true'))
+        )
+      )
+        throw new Error('Unexpected fixture CHECK');
+      const runner = dataSource.createQueryRunner();
+
+      try {
+        if (table === 'actionApprovalBinding') {
+          await runner.query(
+            'ALTER TABLE core."actionApprovalBinding" DROP CONSTRAINT IF EXISTS "CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT"',
+          );
+        } else {
+          await runner.query(
+            'ALTER TABLE core."unipileInstagramSyncRun" DROP CONSTRAINT IF EXISTS "CHK_UNIPILE_IG_SYNC_RUN_CHAT_IDENTITY"',
+          );
+        }
+        if (!validated) {
+          // Only validity is under test: use a literal known expression and
+          // keep NOT VALID as a literal PostgreSQL operation.
+          if (table === 'actionApprovalBinding') {
+            await runner.query(
+              'ALTER TABLE core."actionApprovalBinding" ADD CONSTRAINT "CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT" CHECK (true) NOT VALID',
+            );
+          } else {
+            await runner.query(
+              'ALTER TABLE core."unipileInstagramSyncRun" ADD CONSTRAINT "CHK_UNIPILE_IG_SYNC_RUN_CHAT_IDENTITY" CHECK (true) NOT VALID',
+            );
+          }
+        } else {
+          await runner.createCheckConstraint(
+            `core.${table}`,
+            new TableCheck({
+              name,
+              expression: strict ? `(${predicate}) IS TRUE` : predicate,
+            }),
+          );
+        }
+      } finally {
+        await runner.release();
+      }
     };
     const catalog = () =>
       dataSource.query(
-        `SELECT c.relname AS table_name, k.conname, k.contype, k.convalidated, pg_get_constraintdef(k.oid) AS definition, pg_get_expr(k.conbin,k.conrelid) AS expression FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='core' AND k.conname IN ('${bindingName}', '${syncName}') ORDER BY c.relname,k.conname`,
+        `SELECT c.relname AS table_name, k.conname, k.contype, k.convalidated, pg_get_constraintdef(k.oid) AS definition, pg_get_expr(k.conbin,k.conrelid) AS expression FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='core' AND k.conname IN ('CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT', 'CHK_UNIPILE_IG_SYNC_RUN_CHAT_IDENTITY') ORDER BY c.relname,k.conname`,
       );
 
     beforeEach(async () => {
@@ -463,9 +546,15 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
     it.each(['binding', 'sync'] as const)(
       'fails closed for missing %s CHECK',
       async (target) => {
-        await dataSource.query(
-          `ALTER TABLE core."${target === 'binding' ? 'actionApprovalBinding' : 'unipileInstagramSyncRun'}" DROP CONSTRAINT "${target === 'binding' ? bindingName : syncName}"`,
-        );
+        if (target === 'binding') {
+          await dataSource.query(
+            'ALTER TABLE core."actionApprovalBinding" DROP CONSTRAINT "CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT"',
+          );
+        } else {
+          await dataSource.query(
+            'ALTER TABLE core."unipileInstagramSyncRun" DROP CONSTRAINT "CHK_UNIPILE_IG_SYNC_RUN_CHAT_IDENTITY"',
+          );
+        }
         const before = await catalog();
 
         await expect(repair(dataSource)).rejects.toThrow(
@@ -689,7 +778,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
           ) {
             // Force PG (not a mock rejection) to fail the second replacement.
             return query(
-              `ALTER TABLE core."unipileInstagramSyncRun" ADD CONSTRAINT "${syncName}" CHECK (false)`,
+              'ALTER TABLE core."unipileInstagramSyncRun" ADD CONSTRAINT "CHK_UNIPILE_IG_SYNC_RUN_CHAT_IDENTITY" CHECK (false)',
             );
           }
 
@@ -907,6 +996,22 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534';
     const contextD =
       '2.20.0_AddInstagramDirectActionContextFastInstanceCommand_1799201003000';
+    // Every registered 2.20.0 workspace command after the verifier in real
+    // timestamp order. The actual sequence runner does not stop at the
+    // verifier; these genuinely execute (as safe no-ops for the unrelated
+    // ones) and must be recorded as real completed attempts.
+    const registeredTailAfterVerifier = [
+      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
+      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
+      '2.20.0_RefreshMyahAssistantSkillsWorkspaceCommand_1789645911006',
+      '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
+      '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
+    ];
     const permissionDefinitions = [
       ['SEND_INSTAGRAM_REPLY_TOOL', 'b955e9a9-2d3e-4001-a43d-cf6a9608c122'],
       [
@@ -933,7 +1038,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
       dataSource.query('SELECT * FROM core."upgradeMigration" ORDER BY id');
     const catalog = () =>
       dataSource.query(
-        `SELECT c.relname, k.conname, pg_get_expr(k.conbin,k.conrelid) AS expression FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='core' AND k.conname IN ('${bindingName}', '${syncName}') ORDER BY c.relname`,
+        `SELECT c.relname, k.conname, pg_get_expr(k.conbin,k.conrelid) AS expression FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='core' AND k.conname IN ('CHK_ACTION_APPROVAL_BINDING_INTERACTION_CONTEXT', 'CHK_UNIPILE_IG_SYNC_RUN_CHAT_IDENTITY') ORDER BY c.relname`,
       );
     const seedHistory = async (
       name: string,
@@ -972,6 +1077,8 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
       workspaces: await Promise.all(
         ids.map(async (workspaceId) => {
           const schema = dependencies.getWorkspaceSchemaName(workspaceId);
+          if (!/^workspace_[a-z0-9]+$/.test(schema))
+            throw new Error('Unexpected fixture workspace schema name');
           return {
             conversations: await dataSource.query(
               `SELECT * FROM "${schema}"."_myahSocialConversation" ORDER BY id`,
@@ -1125,6 +1232,23 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
           dependencies.V2_20_UpgradeVersionCommandModule,
         ),
       ] as Function[];
+      // Only the two commands under direct test are real. Every other
+      // registered command keeps its real class identity (constructor.name
+      // and decorator metadata drive sequence naming/ordering), but its
+      // uninitialized DI-backed methods are replaced with safe no-ops so an
+      // actual full-sequence walk can pass through them without invoking
+      // broken dependency-injected behavior. workspace/fast/slow are the
+      // only shapes the runner invokes (runOnWorkspace / up / runDataMigration).
+      const buildFaithfulNoOpCommandInstance = (metatype: Function) => {
+        const instance = Object.create(metatype.prototype);
+
+        instance.runOnWorkspace = async () => {};
+        instance.up = async () => {};
+        instance.down = async () => {};
+        instance.runDataMigration = async () => {};
+
+        return instance;
+      };
       const registry = new dependencies.UpgradeCommandRegistryService({
         getProviders: () =>
           providers.map((metatype) => ({
@@ -1136,7 +1260,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
                 : metatype ===
                     dependencies.BackfillComposioInstagramHistoryWorkspaceCommand
                   ? backfill
-                  : Object.create(metatype.prototype),
+                  : buildFaithfulNoOpCommandInstance(metatype),
           })),
       } as unknown as DiscoveryService);
       registry.onModuleInit();
@@ -1163,6 +1287,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         migration,
         { getActiveOrSuspendedWorkspaceIds: async () => ids } as never,
         status,
+        new dependencies.UpgradeWriteLockService(dataSource),
       );
     });
 
@@ -1508,7 +1633,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         workspace: backfillD,
         status: 'completed',
         initial: true,
-        expected: [verifierE9],
+        expected: [verifierE9, ...registeredTailAfterVerifier],
       },
       {
         label: 'completed noninitial old tail',
@@ -1516,7 +1641,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         workspace: backfillD,
         status: 'completed',
         initial: false,
-        expected: [verifierE9],
+        expected: [verifierE9, ...registeredTailAfterVerifier],
       },
       {
         label: 'failed old workspace',
@@ -1524,7 +1649,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         workspace: backfillD,
         status: 'failed',
         initial: false,
-        expected: [backfillD, verifierE9],
+        expected: [backfillD, verifierE9, ...registeredTailAfterVerifier],
       },
       {
         label: 'failed new verifier',
@@ -1532,7 +1657,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         workspace: verifierE9,
         status: 'failed',
         initial: false,
-        expected: [verifierE9],
+        expected: [verifierE9, ...registeredTailAfterVerifier],
       },
       {
         label: 'initial already at new tail',
@@ -1540,7 +1665,7 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
         workspace: verifierE9,
         status: 'completed',
         initial: true,
-        expected: [],
+        expected: [...registeredTailAfterVerifier],
       },
     ])(
       'actual normal runner $label appends only real attempts; operational sweep changes none',
@@ -1571,6 +1696,9 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
           { refresh: async () => {} } as never,
           iterator,
           { getActiveOrSuspendedWorkspaceIds: async () => ids } as never,
+          {
+            withLock: async (operation: () => Promise<unknown>) => operation(),
+          } as never,
         );
         await expect(
           runner.run({ sequence: reader.getUpgradeSequence(), options: {} }),
@@ -1674,10 +1802,13 @@ describePostgres('Instagram security cutover isolated PostgreSQL', () => {
 
     it('interruption after invalidation remains retryable without duplicate evidence or history writes', async () => {
       const before = await history();
-      const query = workspaceDataSource.query.bind(workspaceDataSource);
+      // The backfill step queries through its own injected core DataSource
+      // (not the workspace-scoped args.dataSource adapter), so the
+      // interruption must be injected on that same real DataSource instance.
+      const query = dataSource.query.bind(dataSource);
       let interrupted = false;
       jest
-        .spyOn(workspaceDataSource, 'query')
+        .spyOn(dataSource, 'query')
         .mockImplementation(async (sql, parameters) => {
           if (sql.includes('WITH "legacyMessages"') && !interrupted) {
             interrupted = true;

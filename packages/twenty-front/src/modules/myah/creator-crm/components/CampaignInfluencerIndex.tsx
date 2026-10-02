@@ -222,10 +222,18 @@ export const CampaignInfluencerIndex = ({
   const [selectedCampaignView, setSelectedCampaignView] = useState<
     { campaignId: string; viewId: string } | undefined
   >();
+  const fallbackCampaignView = views.find(
+    (view) =>
+      view.objectMetadataId === campaignCreatorObjectMetadataItem?.id &&
+      view.isActive &&
+      (view.type === ViewType.TABLE_WIDGET || view.type === ViewType.TABLE),
+  );
   const selectedCampaignViewId =
     selectedCampaignView?.campaignId === campaignId
       ? selectedCampaignView.viewId
-      : (campaignInfluencersViewId ?? campaignInfluencersRuntimeView?.id);
+      : (campaignInfluencersViewId ??
+        campaignInfluencersRuntimeView?.id ??
+        fallbackCampaignView?.id);
   const campaignFilter = useMemo<RecordFilter | undefined>(() => {
     if (!campaignFieldMetadataItem || !campaignIdFieldMetadataItem) {
       return undefined;

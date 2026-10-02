@@ -14,6 +14,7 @@ import { RecordTitleCellContainerType } from '@/object-record/record-title-cell/
 import { styled } from '@linaria/react';
 import { useState } from 'react';
 import { FieldMetadataType } from 'twenty-shared/types';
+import { IconChevronLeft } from 'twenty-ui/icon';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledEditableTitleContainer = styled.div`
@@ -39,8 +40,25 @@ const StyledBreadcrumbPrefixObjectIcon = styled.div`
   opacity: 0.64;
 `;
 
-const StyledTitle = styled.div`
+const StyledCompactBackButton = styled.button`
+  align-items: center;
+  background: none;
+  border: 0;
+  color: ${themeCssVariables.font.color.tertiary};
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  padding: ${themeCssVariables.spacing[1]};
+
+  &:focus-visible {
+    outline: 2px solid ${themeCssVariables.brand.focusRing};
+  }
+`;
+
+const StyledTitle = styled.div<{ compactOnMobile: boolean }>`
+  flex: ${({ compactOnMobile }) => (compactOnMobile ? '1 1 0' : 'initial')};
   max-width: 100%;
+  min-width: ${({ compactOnMobile }) => (compactOnMobile ? '0' : 'auto')};
   overflow: hidden;
   width: fit-content;
 `;
@@ -54,11 +72,13 @@ export const ObjectRecordShowPageBreadcrumb = ({
   objectRecordId,
   objectLabel,
   labelIdentifierFieldMetadataItem,
+  compactOnMobile = false,
 }: {
   objectNameSingular: string;
   objectRecordId: string;
   objectLabel: string;
   labelIdentifierFieldMetadataItem?: FieldMetadataItem;
+  compactOnMobile?: boolean;
 }) => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
@@ -114,18 +134,24 @@ export const ObjectRecordShowPageBreadcrumb = ({
 
   return (
     <StyledEditableTitleContainer data-testid="top-bar-title">
-      <StyledEditableTitlePrefix
-        onClick={() => {
-          navigateToIndexView();
-        }}
-      >
-        <StyledBreadcrumbPrefixObjectIcon>
-          <ObjectMetadataIcon objectMetadataItem={objectMetadataItem} />
-        </StyledBreadcrumbPrefixObjectIcon>
-        {objectLabel}
-        <span>{' / '}</span>
-      </StyledEditableTitlePrefix>
-      <StyledTitle>
+      {compactOnMobile ? (
+        <StyledCompactBackButton
+          type="button"
+          aria-label={`Back to ${objectLabel}`}
+          onClick={navigateToIndexView}
+        >
+          <IconChevronLeft size={themeCssVariables.icon.size.md} />
+        </StyledCompactBackButton>
+      ) : (
+        <StyledEditableTitlePrefix onClick={navigateToIndexView}>
+          <StyledBreadcrumbPrefixObjectIcon>
+            <ObjectMetadataIcon objectMetadataItem={objectMetadataItem} />
+          </StyledBreadcrumbPrefixObjectIcon>
+          {objectLabel}
+          <span>{' / '}</span>
+        </StyledEditableTitlePrefix>
+      )}
+      <StyledTitle compactOnMobile={compactOnMobile}>
         <FieldContext.Provider
           value={{
             recordId: objectRecordId,
@@ -155,9 +181,11 @@ export const ObjectRecordShowPageBreadcrumb = ({
           />
         </FieldContext.Provider>
       </StyledTitle>
-      <StyledPaginationInformation>
-        {paginationInformation}
-      </StyledPaginationInformation>
+      {!compactOnMobile && (
+        <StyledPaginationInformation>
+          {paginationInformation}
+        </StyledPaginationInformation>
+      )}
     </StyledEditableTitleContainer>
   );
 };

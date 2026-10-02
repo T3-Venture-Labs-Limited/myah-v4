@@ -28,10 +28,10 @@ import {
 } from 'src/engine/metadata-modules/page-layout-widget/exceptions/page-layout-widget.exception';
 import { type AllPageLayoutWidgetConfiguration } from 'src/engine/metadata-modules/page-layout-widget/types/all-page-layout-widget-configuration.type';
 import { fromFlatPageLayoutWidgetToPageLayoutWidgetDto } from 'src/engine/metadata-modules/page-layout-widget/utils/from-flat-page-layout-widget-to-page-layout-widget-dto.util';
+import { assertPageLayoutMutationIsAllowed } from 'src/engine/metadata-modules/page-layout/utils/assert-page-layout-mutation-is-allowed.util';
 import { validateChartConfigurationFieldReferencesOrThrow } from 'src/engine/metadata-modules/page-layout-widget/utils/validate-chart-configuration-field-references.util';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
-import { DashboardSyncService } from 'src/modules/dashboard-sync/services/dashboard-sync.service';
 
 type WidgetMigrationOperations = {
   flatEntityToCreate: FlatPageLayoutWidget[];
@@ -45,7 +45,6 @@ export class PageLayoutWidgetService {
     private readonly workspaceMigrationValidateBuildAndRunService: WorkspaceMigrationValidateBuildAndRunService,
     private readonly workspaceManyOrAllFlatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly applicationService: ApplicationService,
-    private readonly dashboardSyncService: DashboardSyncService,
   ) {}
 
   private async getFlatPageLayoutWidgetMaps(
@@ -225,6 +224,7 @@ export class PageLayoutWidgetService {
 
     const {
       flatPageLayoutTabMaps,
+      flatPageLayoutMaps,
       flatObjectMetadataMaps,
       flatFieldMetadataMaps,
       flatFrontComponentMaps,
@@ -236,6 +236,7 @@ export class PageLayoutWidgetService {
           workspaceId,
           flatMapsKeys: [
             'flatPageLayoutTabMaps',
+            'flatPageLayoutMaps',
             'flatObjectMetadataMaps',
             'flatFieldMetadataMaps',
             'flatFrontComponentMaps',
@@ -244,6 +245,16 @@ export class PageLayoutWidgetService {
           ],
         },
       );
+
+    assertPageLayoutMutationIsAllowed({
+      flatObjectMetadataMaps,
+      pageLayoutTabId: createInput.pageLayoutTabId,
+      objectMetadataId: createInput.objectMetadataId,
+      configuration: createInput.configuration,
+      flatViewMaps,
+      flatPageLayoutMaps,
+      flatPageLayoutTabMaps,
+    });
 
     const flatPageLayoutWidgetToCreate =
       fromCreatePageLayoutWidgetInputToFlatPageLayoutWidgetToCreate({
@@ -285,12 +296,6 @@ export class PageLayoutWidgetService {
       flatEntityMaps: recomputedMaps,
     });
 
-    await this.dashboardSyncService.updateLinkedDashboardsUpdatedAtByWidgetId({
-      widgetId: flatPageLayoutWidgetToCreate.id,
-      workspaceId,
-      updatedAt: new Date(createdWidget.updatedAt),
-    });
-
     return fromFlatPageLayoutWidgetToPageLayoutWidgetDto(createdWidget);
   }
 
@@ -319,6 +324,7 @@ export class PageLayoutWidgetService {
         flatViewFieldGroupMaps: existingFlatViewFieldGroupMaps,
         flatViewMaps: existingFlatViewMaps,
         flatPageLayoutTabMaps: existingFlatPageLayoutTabMaps,
+        flatPageLayoutMaps: existingFlatPageLayoutMaps,
       },
       { workspaceCustomFlatApplication },
     ] = await Promise.all([
@@ -332,6 +338,7 @@ export class PageLayoutWidgetService {
             'flatViewFieldGroupMaps',
             'flatViewMaps',
             'flatPageLayoutTabMaps',
+            'flatPageLayoutMaps',
           ],
         },
       ),
@@ -339,6 +346,23 @@ export class PageLayoutWidgetService {
         { workspaceId },
       ),
     ]);
+
+    assertPageLayoutMutationIsAllowed({
+      flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
+      pageLayoutWidgetId: id,
+      flatPageLayoutMaps: existingFlatPageLayoutMaps,
+      flatPageLayoutTabMaps: existingFlatPageLayoutTabMaps,
+      flatPageLayoutWidgetMaps: existingFlatPageLayoutWidgetMaps,
+    });
+    assertPageLayoutMutationIsAllowed({
+      flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
+      pageLayoutTabId: updateData.pageLayoutTabId,
+      objectMetadataId: updateData.objectMetadataId,
+      configuration: updateData.configuration,
+      flatViewMaps: existingFlatViewMaps,
+      flatPageLayoutMaps: existingFlatPageLayoutMaps,
+      flatPageLayoutTabMaps: existingFlatPageLayoutTabMaps,
+    });
 
     const isConfigurationBeingUpdated = Object.prototype.hasOwnProperty.call(
       updateData,
@@ -423,12 +447,6 @@ export class PageLayoutWidgetService {
       flatEntityMaps: recomputedMaps,
     });
 
-    await this.dashboardSyncService.updateLinkedDashboardsUpdatedAtByWidgetId({
-      widgetId: id,
-      workspaceId,
-      updatedAt: new Date(updatedWidget.updatedAt),
-    });
-
     return fromFlatPageLayoutWidgetToPageLayoutWidgetDto(updatedWidget);
   }
 
@@ -461,8 +479,30 @@ export class PageLayoutWidgetService {
     id: string;
     workspaceId: string;
   }): Promise<boolean> {
-    const existingFlatPageLayoutWidgetMaps =
-      await this.getFlatPageLayoutWidgetMaps(workspaceId);
+    const {
+      flatPageLayoutWidgetMaps: existingFlatPageLayoutWidgetMaps,
+      flatPageLayoutTabMaps: existingFlatPageLayoutTabMaps,
+      flatPageLayoutMaps: existingFlatPageLayoutMaps,
+      flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
+    } = await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+      {
+        workspaceId,
+        flatMapsKeys: [
+          'flatPageLayoutWidgetMaps',
+          'flatPageLayoutTabMaps',
+          'flatPageLayoutMaps',
+          'flatObjectMetadataMaps',
+        ],
+      },
+    );
+
+    assertPageLayoutMutationIsAllowed({
+      flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
+      pageLayoutWidgetId: id,
+      flatPageLayoutMaps: existingFlatPageLayoutMaps,
+      flatPageLayoutTabMaps: existingFlatPageLayoutTabMaps,
+      flatPageLayoutWidgetMaps: existingFlatPageLayoutWidgetMaps,
+    });
 
     const flatPageLayoutWidgetToDestroy =
       fromDestroyPageLayoutWidgetInputToFlatPageLayoutWidgetOrThrow({
@@ -479,12 +519,6 @@ export class PageLayoutWidgetService {
       },
       errorMessage:
         'Multiple validation errors occurred while destroying page layout widget',
-    });
-
-    await this.dashboardSyncService.updateLinkedDashboardsUpdatedAtByWidgetId({
-      widgetId: id,
-      workspaceId,
-      updatedAt: new Date(),
     });
 
     return true;

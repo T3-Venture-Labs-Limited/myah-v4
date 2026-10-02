@@ -95,6 +95,11 @@ const dualContact: MyahInboxContact = {
   creator: { id: 'creator-ada', name: 'Ada Okafor' },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
+  initialSelection: {
+    channel: 'INSTAGRAM',
+    emailThreadId: null,
+    instagramConversationId: 'instagram-ada',
+  },
   preview: 'The revised rate works for me.',
   sender: '@ada.creates',
   needsAttention: true,
@@ -256,6 +261,12 @@ const MyahInboxStorySurface = ({
   const [instagramBody, setInstagramBody] = useState(
     'Thanks — I will update the campaign.',
   );
+  // Membership-scoped Campaign guidance fixture. MYAH-413 owns evidence-
+  // backed context/draft/send authority; this only demonstrates the shared
+  // Campaign context selector and Open AI guidance/thumbs controls.
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
+    'campaign-spring',
+  );
   const selectedContact =
     contacts.find(({ id }) => id === storyContactId) ?? null;
 
@@ -294,6 +305,7 @@ const MyahInboxStorySurface = ({
     )!;
     return {
       threadId,
+      anchorKey: `legacy:${threadId}`,
       rootMessageId: root.id,
       startTimestamp: root.receivedAt,
       subject: root.subject,
@@ -331,6 +343,7 @@ const MyahInboxStorySurface = ({
       pages: [
         {
           threadId: card.threadId,
+          anchorKey: card.anchorKey,
           root: emailMessages.find(
             (message) => message.id === card.rootMessageId,
           )!,
@@ -360,6 +373,7 @@ const MyahInboxStorySurface = ({
     retryIncremental: async () => undefined,
     locateMessage: async () => undefined,
     refresh: async () => undefined,
+    ambientRefresh: async () => true,
     rebase: async () => undefined,
     setReadingAnchor: () => undefined,
     purge: () => undefined,
@@ -496,8 +510,34 @@ const MyahInboxStorySurface = ({
                       : 'Link this Instagram conversation to a Creator before replying.')
                   }
                   disabled={instagramComposerDisabled}
+                  editorVersion={0}
                   onBodyChange={setInstagramBody}
                   onReviewAndSend={fn()}
+                  campaignOptions={
+                    selectedContact.creator
+                      ? [
+                          {
+                            value: 'campaign-spring',
+                            label: 'Spring Campaign',
+                          },
+                          { value: 'campaign-fall', label: 'Fall Campaign' },
+                        ]
+                      : []
+                  }
+                  selectedCampaignId={
+                    selectedContact.creator ? selectedCampaignId : null
+                  }
+                  onSelectCampaign={setSelectedCampaignId}
+                  onOpenAiGuidance={
+                    selectedContact.creator && selectedCampaignId
+                      ? fn()
+                      : undefined
+                  }
+                  guidanceUnavailableReason={
+                    selectedContact.creator && selectedCampaignId
+                      ? undefined
+                      : 'Select a Campaign to open AI guidance.'
+                  }
                 />
               )}
             </StyledInstagramFixture>

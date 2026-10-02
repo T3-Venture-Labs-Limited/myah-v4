@@ -5,6 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { constants as osConstants, tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 
+import { config as loadEnv } from 'dotenv';
+
 import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';
 
 const SELECTOR = 'TWENTY_SERVER_INTEGRATION_ENV_FILE';
@@ -18,6 +20,7 @@ const ENV_KEYS = [
   SELECTOR,
   'IS_BILLING_ENABLED',
   'PG_DATABASE_URL',
+  'REDIS_URL',
   'METER_DRIVER',
   'EXCEPTION_HANDLER_DRIVER',
 ] as const;
@@ -97,6 +100,33 @@ describe('getServerEnvFilePath', () => {
     expect(getServerEnvFilePath()).toBe(selector);
   });
 
+  it('keeps selected PG and Redis values after an overriding dotenv load', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'selected-server-env-'));
+    const selectedFile = join(directory, 'integration.env');
+
+    try {
+      await writeFile(
+        selectedFile,
+        'PG_DATABASE_URL=postgresql://selected.invalid:15471/task\nREDIS_URL=redis://selected.invalid:16371/0\n',
+      );
+      process.env.NODE_ENV = 'test';
+      process.env[SELECTOR] = selectedFile;
+      process.env.PG_DATABASE_URL = 'postgresql://fallback.invalid:5432/test';
+      process.env.REDIS_URL = 'redis://fallback.invalid:6379/0';
+
+      loadEnv({ path: getServerEnvFilePath(), override: true });
+
+      expect(new URL(process.env.PG_DATABASE_URL!).host).toBe(
+        'selected.invalid:15471',
+      );
+      expect(new URL(process.env.REDIS_URL!).host).toBe(
+        'selected.invalid:16371',
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it.each(['', ' ', '\t', '\n', ' \t\n '])(
     'throws the fixed redacted error for a blank test selection',
     (selector) => {
@@ -111,6 +141,23 @@ describe('getServerEnvFilePath', () => {
 });
 
 describe('reachable env-loader use sites', () => {
+  it('sequence-runner env loader uses the selected file and preserves override', async () => {
+    const source = await readFile(
+      join(
+        SERVER_ROOT,
+        'test/integration/upgrade/utils/upgrade-sequence-runner-integration-test.util.ts',
+      ),
+      'utf8',
+    );
+
+    expect(source).toContain(
+      "import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';",
+    );
+    expect(source).toMatch(
+      /config\(\{\s*path: getServerEnvFilePath\(\),\s*override: true,\s*\}\);/,
+    );
+  });
+
   let envSnapshot: EnvSnapshot;
 
   beforeEach(() => {
@@ -838,6 +885,24 @@ describePosix('fresh child-process reachable import orders', () => {
     );
     expect(integrationConfig.indexOf('dotenv.config')).toBeLessThan(
       integrationConfig.indexOf('const isBillingEnabled'),
+    );
+  });
+
+  it('keeps the upgrade fixture on the selected env file with override enabled', async () => {
+    // Importing this fixture would initialize its integration dependencies; inspect its loader instead.
+    const fixture = await readFile(
+      join(
+        SERVER_ROOT,
+        'test/integration/upgrade/utils/upgrade-sequence-runner-integration-test.util.ts',
+      ),
+      'utf8',
+    );
+
+    expect(fixture).toMatch(
+      /config\(\{\s*path: getServerEnvFilePath\(\),\s*override: true,\s*\}\)/,
+    );
+    expect(fixture).toContain(
+      "import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';",
     );
   });
 

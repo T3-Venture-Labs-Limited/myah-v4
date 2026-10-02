@@ -4,7 +4,8 @@ import { TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER } from 'twenty-shared/
 import { type WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { CommandLogger } from 'src/database/commands/logger';
 import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
-import { RepairOrphanedObjectNavigationCommandsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788766265947-repair-orphaned-object-navigation-commands.command';
+import { RepairOrphanedObjectNavigationCommandsCommand, assertPinnedOrphanNavigationActions } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788766265947-repair-orphaned-object-navigation-commands.command';
+import { buildOrphanedObjectNavigationCommandRepairPlan } from 'src/database/commands/upgrade-version-command/2-20/utils/build-orphaned-object-navigation-command-repair-plan.util';
 import { type ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { buildNavigationFlatCommandMenuItem } from 'src/engine/metadata-modules/flat-command-menu-item/utils/build-navigation-flat-command-menu-item.util';
@@ -55,6 +56,22 @@ const createCommand = (commands = [navigation]) => {
       },
     });
   const getOrRecompute = jest.fn().mockResolvedValue(maps);
+  const flush = jest.fn();
+  const load = jest.fn().mockResolvedValue({
+    workspaceId: WORKSPACE_ID,
+    allFlatEntityMaps: maps,
+    flatApplicationMaps: {
+      byId: { [APPLICATION_ID]: {
+        id: APPLICATION_ID,
+        universalIdentifier: TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
+      } },
+      idByUniversalIdentifier: {
+        [TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER]: APPLICATION_ID,
+      },
+    },
+    featureFlagsMap: {},
+  });
+  const validateBuildAndRunWorkspaceMigrationFromTo = jest.fn();
   const validateBuildAndRunWorkspaceMigration = jest.fn().mockResolvedValue({
     status: 'success',
     workspaceMigration: { actions: [] },
@@ -64,16 +81,21 @@ const createCommand = (commands = [navigation]) => {
     {
       findWorkspaceTwentyStandardAndCustomApplicationOrThrow,
     } as unknown as ApplicationService,
-    { getOrRecompute } as unknown as WorkspaceCacheService,
+    { getOrRecompute, flush } as unknown as WorkspaceCacheService,
     {
       validateBuildAndRunWorkspaceMigration,
+      validateBuildAndRunWorkspaceMigrationFromTo,
     } as unknown as WorkspaceMigrationValidateBuildAndRunService,
+    { load } as never,
+    { publishCommittedMetadataVersion: jest.fn() } as never,
   );
   return {
     command,
     maps,
     findWorkspaceTwentyStandardAndCustomApplicationOrThrow,
     getOrRecompute,
+    load,
+    validateBuildAndRunWorkspaceMigrationFromTo,
     validateBuildAndRunWorkspaceMigration,
   };
 };
@@ -96,12 +118,67 @@ describe('RepairOrphanedObjectNavigationCommandsCommand', () => {
     ).toContain(RepairOrphanedObjectNavigationCommandsCommand);
   });
 
+  it('requires a pinned transaction for a mutating repair', async () => {
+    const { command, validateBuildAndRunWorkspaceMigration } = createCommand();
+    await expect(command.runOnWorkspace(args)).rejects.toThrow('pinned upgrade transaction');
+    expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
+    expect(command.runOnWorkspaceInUpgradeTransaction).toBeDefined();
+  });
+
+  it('allows only the exact planned native navigation payload update', () => {
+    const { maps } = createCommand();
+    const plan = buildOrphanedObjectNavigationCommandRepairPlan({
+      ...maps,
+      twentyStandardApplicationId: APPLICATION_ID,
+    });
+    const after = plan.operations.flatEntityToUpdate[0];
+    const action = {
+      type: 'update', metadataName: 'commandMenuItem',
+      universalIdentifier: navigation.universalIdentifier,
+      update: { payload: after.payload },
+      diff: { payload: { before: navigation.payload, after: after.payload } },
+      flatEntity: after,
+    };
+    const migration = {
+      applicationUniversalIdentifier: TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
+      actions: [action],
+    };
+    const input = {
+      migration: migration as never,
+      plan,
+      current: maps.flatCommandMenuItemMaps,
+      standardApplicationId: APPLICATION_ID,
+    };
+    expect(() => assertPinnedOrphanNavigationActions(input)).not.toThrow();
+    expect(() => assertPinnedOrphanNavigationActions({
+      ...input, migration: { ...migration, actions: [
+        { ...action, update: { payload: after.payload, label: 'unrelated' } },
+      ] } as never,
+    })).toThrow('Unsafe pinned navigation repair');
+    expect(() => assertPinnedOrphanNavigationActions({
+      ...input, migration: { ...migration, actions: [
+        { ...action, type: 'delete' },
+      ] } as never,
+    })).toThrow('Unsafe pinned navigation repair');
+  });
+
+  it('uses a transaction-bound snapshot and no pooled cache for a pinned no-op', async () => {
+    const { command, load, getOrRecompute, validateBuildAndRunWorkspaceMigrationFromTo } = createCommand([]);
+    const manager = { queryRunner: null as unknown };
+    const runner = { isTransactionActive: true, isReleased: false, manager };
+    manager.queryRunner = runner;
+    await command.runOnWorkspaceInUpgradeTransaction(args, runner as never, jest.fn());
+    expect(load).toHaveBeenCalledWith(WORKSPACE_ID, runner);
+    expect(getOrRecompute).not.toHaveBeenCalled();
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
+  });
+
   it('logs a no-op without invoking migration', async () => {
     const { command, validateBuildAndRunWorkspaceMigration } = createCommand(
       [],
     );
     const log = jest.spyOn(CommandLogger.prototype, 'log').mockImplementation();
-    await command.runOnWorkspace(args);
+    await command.runOnWorkspace({ ...args, options: { dryRun: true } });
     expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining('No orphaned object-navigation commands'),
@@ -120,7 +197,7 @@ describe('RepairOrphanedObjectNavigationCommandsCommand', () => {
     const error = jest
       .spyOn(CommandLogger.prototype, 'error')
       .mockImplementation();
-    await expect(command.runOnWorkspace(args)).rejects.toThrow(
+    await expect(command.runOnWorkspace({ ...args, options: { dryRun: true } })).rejects.toThrow(
       'Unclassified orphaned object-navigation commands',
     );
     expect(error).toHaveBeenCalledWith(
@@ -135,9 +212,10 @@ describe('RepairOrphanedObjectNavigationCommandsCommand', () => {
     expect(maps).toEqual(before);
   });
 
-  it.each([undefined, false, true])(
-    'passes only command-menu operations to system migration with dryRun=%s',
-    async (dryRun) => {
+  it(
+    'passes only command-menu operations to a read-only system migration',
+    async () => {
+      const dryRun = true;
       const {
         command,
         findWorkspaceTwentyStandardAndCustomApplicationOrThrow,
@@ -229,7 +307,7 @@ describe('RepairOrphanedObjectNavigationCommandsCommand', () => {
     };
     validateBuildAndRunWorkspaceMigration.mockResolvedValue(failure);
     const error: unknown = await command
-      .runOnWorkspace(args)
+      .runOnWorkspace({ ...args, options: { dryRun: true } })
       .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(WorkspaceMigrationBuilderException);
     expect(

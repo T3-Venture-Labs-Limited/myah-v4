@@ -310,6 +310,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
               async () => false,
             ),
           } as never,
+          {} as never,
         ),
       );
       const persistSentMessage = jest.spyOn(persistence, 'persistSentMessage');

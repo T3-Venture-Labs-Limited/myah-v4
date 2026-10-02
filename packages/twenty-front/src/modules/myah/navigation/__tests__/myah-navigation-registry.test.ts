@@ -7,6 +7,7 @@ import {
   IconBox,
   IconChartBar,
   IconFileText,
+  IconInbox,
   IconSearch,
   IconVideo,
 } from 'twenty-ui/icon';
@@ -36,6 +37,11 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
       },
       {
         id: 'campaigns',
+        group: 'campaign-operations',
+        availability: 'available',
+      },
+      {
+        id: 'messages',
         group: 'campaign-operations',
         availability: 'available',
       },
@@ -193,6 +199,13 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
     expect(MYAH_NAVIGATION_ROUTES.map(({ id }) => id)).not.toContain(
       'brand-brain',
     );
+  });
+
+  it('matches the approved Campaign messages navigation', () => {
+    expect(getMyahNavigationRoute('messages')).toMatchObject({
+      label: 'Campaign messages',
+      Icon: IconInbox,
+    });
   });
 
   it('uses semantic icons for visible Soon entries', () => {

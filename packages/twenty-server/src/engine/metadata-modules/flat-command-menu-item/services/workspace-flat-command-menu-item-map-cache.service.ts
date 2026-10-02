@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -38,6 +38,20 @@ export class WorkspaceFlatCommandMenuItemMapCacheService extends WorkspaceCacheP
   }
 
   async computeForCache(workspaceId: string): Promise<FlatCommandMenuItemMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatCommandMenuItemMaps> {
+    if (!workspaceId) {
+      throw new Error('Workspace id is required');
+    }
+
     const [
       commandMenuItems,
       applications,
@@ -45,25 +59,25 @@ export class WorkspaceFlatCommandMenuItemMapCacheService extends WorkspaceCacheP
       frontComponents,
       pageLayouts,
     ] = await Promise.all([
-      this.commandMenuItemRepository.find(workspaceId, {
+      this.commandMenuItemRepository.withManager(manager).find(workspaceId, {
         withDeleted: true,
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.objectMetadataRepository.find({
+      manager.getRepository(ObjectMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.frontComponentRepository.find({
+      manager.getRepository(FrontComponentEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.pageLayoutRepository.find(workspaceId, {
+      this.pageLayoutRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),

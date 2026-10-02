@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { isE2eTestFixturesEnabled } from 'src/engine/core-modules/twenty-config/utils/is-e2e-test-fixtures-enabled.util';
 import { AuthModule } from 'src/engine/core-modules/auth/auth.module';
 import { MessageQueueModule } from 'src/engine/core-modules/message-queue/message-queue.module';
 import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
@@ -37,6 +38,7 @@ import { UnipileInstagramSyncService } from 'src/modules/myah-unipile/services/u
 import { UnipileInstagramSyncQueue } from 'src/modules/myah-unipile/services/unipile-instagram-sync.queue';
 import { UnipileInstagramWebhookIntakeService } from 'src/modules/myah-unipile/services/unipile-instagram-webhook-intake.service';
 import { UnipileInstagramWebhookQueue } from 'src/modules/myah-unipile/services/unipile-instagram-webhook.queue';
+import { e2eFixtureRejectingUnipileFetch } from 'src/modules/myah-unipile/services/e2e-fixture-rejecting-unipile-fetch';
 import {
   UNIPILE_FETCH,
   UnipileV1ClientService,
@@ -82,7 +84,12 @@ import {
     UnipileInstagramWebhookQueue,
     UnipileInstagramWebhookJob,
     UnipileInstagramWebhookReconciliationJob,
-    { provide: UNIPILE_FETCH, useValue: globalThis.fetch },
+    {
+      provide: UNIPILE_FETCH,
+      useValue: isE2eTestFixturesEnabled()
+        ? e2eFixtureRejectingUnipileFetch
+        : globalThis.fetch,
+    },
     {
       provide: UNIPILE_HOSTED_AUTH_ACCOUNT_FINALIZER,
       useExisting: UnipileInstagramAccountService,

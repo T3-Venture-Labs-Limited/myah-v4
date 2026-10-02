@@ -1,18 +1,23 @@
 import { randomUUID } from 'crypto';
 
 import { activateWorkspace } from 'test/integration/graphql/utils/activate-workspace.util';
+import { createOneOperationFactory } from 'test/integration/graphql/utils/create-one-operation-factory.util';
 import { deleteUser } from 'test/integration/graphql/utils/delete-user.util';
-import { findManyApplications } from 'test/integration/graphql/utils/find-many-applications.util';
+import { destroyOneOperationFactory } from 'test/integration/graphql/utils/destroy-one-operation-factory.util';
 import { getAuthTokensFromLoginToken } from 'test/integration/graphql/utils/get-auth-tokens-from-login-token.util';
 import { getCurrentUser } from 'test/integration/graphql/utils/get-current-user.util';
+import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import { signUpInNewWorkspace } from 'test/integration/graphql/utils/sign-up-in-new-workspace.util';
 import { signUp } from 'test/integration/graphql/utils/sign-up.util';
+import { updateOneOperationFactory } from 'test/integration/graphql/utils/update-one-operation-factory.util';
 import { createOneLogicFunction } from 'test/integration/metadata/suites/logic-function/utils/create-logic-function.util';
 import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
 import { jestExpectToBeDefined } from 'test/utils/jest-expect-to-be-defined.util.test';
 import { isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
+import { PageLayoutType } from 'src/engine/metadata-modules/page-layout/enums/page-layout-type.enum';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 
 describe('Successful user and workspace creation', () => {
@@ -95,39 +100,128 @@ describe('Successful user and workspace creation', () => {
       expectedCurrentWorkspace,
     );
 
-    const {
-      data: { findManyApplications: findManyApplicationsData },
-    } = await findManyApplications({
-      accessToken: newWorkspaceAccessToken,
-      expectToFail: false,
-    });
+    const workspaceId = currentUser.currentWorkspace.id;
+    const workspaceCustomApplicationId =
+      currentUser.currentWorkspace.workspaceCustomApplicationId;
+    const applications: Array<{
+      id: string;
+      workspaceId: string;
+      universalIdentifier: string;
+      name: string;
+      description: string | null;
+      version: string | null;
+      sourcePath: string;
+      sourceType: string;
+    }> = await testDataSource.query(
+      `SELECT id, "workspaceId", "universalIdentifier", name, description,
+              version, "sourcePath", "sourceType"
+       FROM core."application"
+       WHERE "workspaceId" = $1 AND "deletedAt" IS NULL`,
+      [workspaceId],
+    );
 
-    expect(findManyApplicationsData.length).toBe(2);
-    const twentyStandardApp = findManyApplicationsData.find(
+    expect(applications).toHaveLength(2);
+    const twentyStandardApp = applications.find(
       (application) =>
         application.universalIdentifier ===
         TWENTY_STANDARD_APPLICATION.universalIdentifier,
     );
 
     jestExpectToBeDefined(twentyStandardApp);
-    const {
-      sourcePath: _sourcePath,
-      sourceType: _sourceType,
-      ...expectedStandardTwentyApplication
-    } = TWENTY_STANDARD_APPLICATION;
+    expect(twentyStandardApp).toMatchObject({
+      ...TWENTY_STANDARD_APPLICATION,
+      workspaceId,
+    });
 
-    expect(twentyStandardApp).toMatchObject(expectedStandardTwentyApplication);
-
-    const workpsaceCustomApplication = findManyApplicationsData.find(
-      (application) =>
-        application.id ===
-        currentUser.currentWorkspace?.workspaceCustomApplicationId,
+    const workspaceCustomApplication = applications.find(
+      (application) => application.id === workspaceCustomApplicationId,
     );
 
-    jestExpectToBeDefined(workpsaceCustomApplication);
-    expect(workpsaceCustomApplication.universalIdentifier).toEqual(
-      workpsaceCustomApplication.id,
+    jestExpectToBeDefined(workspaceCustomApplication);
+    expect(workspaceCustomApplication.id).not.toBe(twentyStandardApp.id);
+    expect(workspaceCustomApplication.workspaceId).toBe(workspaceId);
+    expect(workspaceCustomApplication.universalIdentifier).toBe(
+      workspaceCustomApplication.id,
     );
+
+    const [layoutCounts] = await testDataSource.query(
+      `SELECT
+        count(*) FILTER (WHERE type = $2) AS "recordPages",
+        count(*) FILTER (WHERE type = $3) AS "dashboards"
+       FROM core."pageLayout"
+       WHERE "workspaceId" = $1`,
+      [workspaceId, PageLayoutType.RECORD_PAGE, PageLayoutType.DASHBOARD],
+    );
+
+    expect(Number(layoutCounts.recordPages)).toBeGreaterThan(0);
+    expect(Number(layoutCounts.dashboards)).toBe(0);
+
+    const [dashboardComposition] = await testDataSource.query(
+      `SELECT
+        (SELECT count(*) FROM core."pageLayoutTab" tab
+         JOIN core."pageLayout" layout ON layout.id = tab."pageLayoutId"
+         WHERE tab."workspaceId" = $1 AND layout."workspaceId" = $1
+           AND layout.type = $2) AS "tabs",
+        (SELECT count(*) FROM core."pageLayoutWidget" widget
+         JOIN core."pageLayoutTab" tab ON tab.id = widget."pageLayoutTabId"
+         JOIN core."pageLayout" layout ON layout.id = tab."pageLayoutId"
+         WHERE widget."workspaceId" = $1 AND tab."workspaceId" = $1
+           AND layout."workspaceId" = $1 AND layout.type = $2) AS "widgets"`,
+      [workspaceId, PageLayoutType.DASHBOARD],
+    );
+
+    expect(Number(dashboardComposition.tabs)).toBe(0);
+    expect(Number(dashboardComposition.widgets)).toBe(0);
+
+    // The historical dashboard table remains for compatibility, but new
+    // workspaces must not receive dashboard records.
+    const workspaceSchemaName = getWorkspaceSchemaName(workspaceId);
+
+    expect(workspaceSchemaName).toMatch(/^workspace_[a-z0-9]+$/);
+    const dashboardCountQuery = `SELECT count(*) AS count FROM "${workspaceSchemaName}"."dashboard"`;
+    const [dashboardRows] = await testDataSource.query(dashboardCountQuery);
+
+    expect(Number(dashboardRows.count)).toBe(0);
+
+    // The workspace GraphQL API names this mutation createDashboard (the
+    // create-one operation), not createOneDashboard. Use a valid former input
+    // so a schema/argument error cannot masquerade as the retirement guard.
+    const dashboardId = randomUUID();
+    const dashboardMutations = [
+      createOneOperationFactory({
+        objectMetadataSingularName: 'dashboard',
+        gqlFields: 'id',
+        data: { id: dashboardId, title: 'Retired dashboard', position: 0 },
+      }),
+      updateOneOperationFactory({
+        objectMetadataSingularName: 'dashboard',
+        gqlFields: 'id',
+        recordId: dashboardId,
+        data: { title: 'Edited retired dashboard' },
+      }),
+      destroyOneOperationFactory({
+        objectMetadataSingularName: 'dashboard',
+        gqlFields: 'id',
+        recordId: dashboardId,
+      }),
+    ];
+
+    for (const operation of dashboardMutations) {
+      const response = await makeGraphqlAPIRequest(
+        operation,
+        newWorkspaceAccessToken,
+      );
+
+      expect(response.body.errors).toHaveLength(1);
+      expect(response.body.errors?.[0].message).toBe(
+        'Dashboard records are read-only after feature retirement',
+      );
+    }
+
+    const [dashboardRowsAfterMutations] =
+      await testDataSource.query(dashboardCountQuery);
+
+    expect(Number(dashboardRowsAfterMutations.count)).toBe(0);
   });
 
   it('should reclaim a stale ONGOING_CREATION workspace and activate it', async () => {

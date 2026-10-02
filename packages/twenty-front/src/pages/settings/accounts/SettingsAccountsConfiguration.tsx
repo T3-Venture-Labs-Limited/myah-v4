@@ -54,22 +54,18 @@ export const SettingsAccountsConfiguration = () => {
     });
   };
 
-  if (isDefined(messageChannel)) {
-    return (
-      <>
-        <SettingsAccountsConfigurationSelectedMessageChannelEffect
-          messageChannel={messageChannel}
-        />
-        <SettingsAccountsConfigurationStepEmail
-          messageChannel={messageChannel}
-          hasNextStep={false}
-          isSubmitting={isSubmitting}
-          onNext={handleAddAccount}
-          onAddAccount={handleAddAccount}
-        />
-      </>
-    );
-  }
-
-  return null;
+  return isDefined(messageChannel) ? (
+    <>
+      <SettingsAccountsConfigurationSelectedMessageChannelEffect
+        messageChannel={messageChannel}
+      />
+      <SettingsAccountsConfigurationStepEmail
+        messageChannel={messageChannel}
+        hasNextStep={false}
+        isSubmitting={isSubmitting}
+        onNext={handleAddAccount}
+        onAddAccount={handleAddAccount}
+      />
+    </>
+  ) : null;
 };

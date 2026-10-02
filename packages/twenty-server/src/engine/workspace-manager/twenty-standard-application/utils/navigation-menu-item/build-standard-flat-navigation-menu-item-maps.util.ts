@@ -34,6 +34,7 @@ export const buildStandardFlatNavigationMenuItemMaps = ({
   workspaceId,
   twentyStandardApplicationId,
   dependencyFlatEntityMaps: { flatObjectMetadataMaps, flatViewMaps },
+  omitDashboardComposition = false,
 }: {
   now: string;
   workspaceId: string;
@@ -42,6 +43,7 @@ export const buildStandardFlatNavigationMenuItemMaps = ({
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
     flatViewMaps: FlatEntityMaps<FlatView>;
   };
+  omitDashboardComposition?: boolean;
 }): FlatNavigationMenuItemMaps => {
   const flatNavigationMenuItemMaps: FlatNavigationMenuItemMaps = {
     ...createEmptyFlatEntityMaps(),
@@ -49,6 +51,13 @@ export const buildStandardFlatNavigationMenuItemMaps = ({
   };
 
   for (const navigationMenuItemName of FLAT_NAVIGATION_MENU_ITEM_NAMES) {
+    if (
+      omitDashboardComposition &&
+      navigationMenuItemName === 'allDashboards'
+    ) {
+      continue;
+    }
+
     const navigationMenuItemDefinition =
       STANDARD_NAVIGATION_MENU_ITEMS[navigationMenuItemName];
 

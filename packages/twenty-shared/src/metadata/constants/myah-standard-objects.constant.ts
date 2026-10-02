@@ -240,6 +240,145 @@ export const MYAH_STANDARD_OBJECTS = {
       },
     },
   },
+  partnershipOfferVersion: {
+    universalIdentifier: '8264f0ef-0ba8-561f-a8d9-d00b1a96b1d9',
+    fields: {
+      id: { universalIdentifier: 'a4cbbfe5-d344-5e99-a563-e756f0aaf60c' },
+      createdAt: {
+        universalIdentifier: '3e17cbca-baab-57fb-9c52-c8c5a1825fc3',
+      },
+      updatedAt: {
+        universalIdentifier: '101c5439-9de8-5af1-8348-1d7ccf1aef1b',
+      },
+      deletedAt: {
+        universalIdentifier: 'a1762515-d73f-5ef3-b759-3972756bcb5d',
+      },
+      position: { universalIdentifier: '6166b50e-6ed7-5ba7-a33e-f67cca118649' },
+      createdBy: {
+        universalIdentifier: '3118a325-ed88-504f-a0b2-089161f05dfa',
+      },
+      updatedBy: {
+        universalIdentifier: '332386bf-6fdd-5f01-9260-16ffcd1d28fb',
+      },
+      searchVector: {
+        universalIdentifier: 'ed1e2f5b-5107-5b65-bf35-f50e305c9cd8',
+      },
+      name: { universalIdentifier: '5358eaee-acbf-58b3-bb87-713ba965f980' },
+      version: { universalIdentifier: 'acd2c4df-a7ba-5ef5-9d27-2d3dc0c726e7' },
+      terms: { universalIdentifier: 'f0edb7cf-e92f-5714-ad52-738ddb8f496e' },
+      fixedAmount: {
+        universalIdentifier: 'dad4bcbe-a956-507e-8b51-be4c99d2827e',
+      },
+      currency: { universalIdentifier: '22eba63a-eebd-5bfe-9f7d-3db1f9d6d982' },
+      sourceReference: {
+        universalIdentifier: '7ab4d07e-bb45-5b41-9a02-faf708dfc7fc',
+      },
+      authorizedById: {
+        universalIdentifier: '7129bcb4-ebbf-592c-8e17-4f4be554d92e',
+      },
+      authorizedAt: {
+        universalIdentifier: 'e323fd69-416f-5459-a2fc-54762385ed52',
+      },
+      acceptanceReference: {
+        universalIdentifier: '0db3ed43-94be-5031-9d07-4ea5271c6f16',
+      },
+      confirmedById: {
+        universalIdentifier: '59b0fdb7-8f96-56fd-9249-90a3dd4afe92',
+      },
+      confirmedAt: {
+        universalIdentifier: 'd027f9a3-d032-5021-b6a1-724e3f0eb7c1',
+      },
+      campaignCreator: {
+        universalIdentifier: '0386efcf-9554-5399-b94f-4b78965b2f14',
+      },
+      previousVersion: {
+        universalIdentifier: '5b37b253-cb6d-5e35-b20b-0f3e69e38ea5',
+      },
+      amendments: {
+        universalIdentifier: '11fe107a-9f2c-531f-8ad8-62950710bc6e',
+      },
+      obligations: {
+        universalIdentifier: 'f173dc43-1948-5822-b278-0b6a6a7258e5',
+      },
+    },
+    indexes: {
+      campaignCreatorVersionUniqueIndex: {
+        universalIdentifier: 'c4400294-3677-4039-9770-c81b10644d5c',
+      },
+    },
+    views: {},
+  },
+  partnershipObligation: {
+    universalIdentifier: '361b076f-367c-503d-bf4b-b0d3a27be630',
+    fields: {
+      id: { universalIdentifier: '6aa25f0d-431c-5f34-84a5-1ac392f0b7ca' },
+      createdAt: {
+        universalIdentifier: '89e4bb0a-fa3c-5210-9b67-9aa61e3cfe03',
+      },
+      updatedAt: {
+        universalIdentifier: '56bae00c-fefd-5dee-8e21-5cfd23a046fe',
+      },
+      deletedAt: {
+        universalIdentifier: '0f6cef58-585c-5912-a353-99b445d3ec62',
+      },
+      position: { universalIdentifier: '9ff95709-c029-518a-8897-48d6b6704cd7' },
+      createdBy: {
+        universalIdentifier: '1a6667df-f87b-54de-89b4-f36b6176df6b',
+      },
+      updatedBy: {
+        universalIdentifier: '52249a6f-ba56-5849-b24e-6f3f6e7846b6',
+      },
+      searchVector: {
+        universalIdentifier: 'bb9d1b2b-a073-5ac8-ba31-3182e60205a0',
+      },
+      name: { universalIdentifier: 'e48173ca-0445-5d42-9e42-af144945d2bb' },
+      purpose: { universalIdentifier: 'edde976d-77e1-50fe-b5a1-9b1e91d661e6' },
+      obligationType: {
+        universalIdentifier: 'fcc43ea2-bbde-53e0-8564-f9808b5a248e',
+      },
+      responsibleParty: {
+        universalIdentifier: '253ef70b-2c9d-518f-a8ac-d76ab29b044e',
+      },
+      amount: { universalIdentifier: 'c86eadf8-3895-50b8-8bbd-633638ee70d7' },
+      currency: { universalIdentifier: '3dec8a90-6f49-598d-860e-b207103b94cc' },
+      terms: { universalIdentifier: 'e853abce-2bab-53e0-beee-360a982044ef' },
+      prerequisites: {
+        universalIdentifier: '3b2427ae-9d5a-563c-9c55-d2161a4bb822',
+      },
+      dueCondition: {
+        universalIdentifier: 'ba853630-d2ed-521e-b63d-79e48477f225',
+      },
+      dueAt: { universalIdentifier: 'd0c693e5-fe3d-5a37-820d-8c0d4e5d42e2' },
+      dueTimezone: {
+        universalIdentifier: '812c967f-3132-5d4c-8900-82cf4bfaa628',
+      },
+      evidenceReference: {
+        universalIdentifier: '48d559e4-ed60-5fa6-8131-108db2a42215',
+      },
+      evidenceActorId: {
+        universalIdentifier: '0cf94be8-5694-583b-bfdc-5923a97ff2df',
+      },
+      evidenceAt: {
+        universalIdentifier: '75299efd-ce12-57a2-942f-e085b41278c4',
+      },
+      confirmationState: {
+        universalIdentifier: '5b9a2c13-1420-571a-8506-c5b0244af513',
+      },
+      campaignCreator: {
+        universalIdentifier: '3002605b-a289-561f-9785-7f289e65d461',
+      },
+      offerVersion: {
+        universalIdentifier: 'd6eed50a-3ee4-5631-a90c-b7e4533e099f',
+      },
+      task: { universalIdentifier: '8c4f424f-f330-5846-924f-6c3f9c5c47c6' },
+    },
+    indexes: {
+      offerVersionPurposeUniqueIndex: {
+        universalIdentifier: '6fe28316-670c-4609-b3d2-b3830a9d12df',
+      },
+    },
+    views: {},
+  },
   offer: {
     universalIdentifier: 'fd8a37b8-72db-5069-902a-a1763ddc63f7',
     fields: {
@@ -496,9 +635,112 @@ export const MYAH_STANDARD_OBJECTS = {
     indexes: {},
     views: {},
   },
+  campaignEmailConversationBinding: {
+    universalIdentifier: 'afef982b-e974-5679-81bc-d5415f3db518',
+    fields: {
+      id: { universalIdentifier: 'd5a2f383-4a30-5091-921b-881a0769cd10' },
+      createdAt: {
+        universalIdentifier: '2f6a567f-5247-5ac9-9a8a-bfc8fa03a4e7',
+      },
+      updatedAt: {
+        universalIdentifier: '415664ba-a8bf-528d-8fc2-4c6ae34af2e4',
+      },
+      deletedAt: {
+        universalIdentifier: '6e1b6c22-9ba5-5ef5-95f1-98e81accc80c',
+      },
+      position: { universalIdentifier: 'cc5981c6-52bd-5579-96c5-e9b307b0d4f4' },
+      createdBy: {
+        universalIdentifier: '3c5366e9-c64e-59bb-a81b-d28432ec18ff',
+      },
+      updatedBy: {
+        universalIdentifier: '2815bfd0-aadc-5a8c-83a1-2404added660',
+      },
+      searchVector: {
+        universalIdentifier: '058bc05d-2289-588a-a4ba-76f51f6fa19c',
+      },
+      campaignCreator: {
+        universalIdentifier: 'd48bba25-dc85-5ddd-986f-946c048ee343',
+      },
+      campaignId: {
+        universalIdentifier: '9a4e5dbd-1385-5739-a2bb-6951f37b8575',
+      },
+      participationId: {
+        universalIdentifier: '8e0e1668-e74b-5018-a7d7-89aedcb53a38',
+      },
+      creatorId: {
+        universalIdentifier: 'ba2d8a72-efaa-5833-a399-cc12fa7d52db',
+      },
+      messageThreadId: {
+        universalIdentifier: '4dffec20-8d76-59e3-be13-9bff8fb511cc',
+      },
+      messageChannelId: {
+        universalIdentifier: 'b144104f-edb3-5b2b-b7f4-c3d568106259',
+      },
+      connectedAccountId: {
+        universalIdentifier: 'b22da993-f3a2-5010-8ebc-46e23cc4f106',
+      },
+      providerThreadId: {
+        universalIdentifier: 'e9895f63-6724-55ca-ba4f-cd7f84aa9607',
+      },
+      creatorSender: {
+        universalIdentifier: '52971fc1-fdf4-540b-848a-1aeeb715f014',
+      },
+      accountRecipient: {
+        universalIdentifier: '978a5c3f-918e-5f30-a588-b1c93674576e',
+      },
+      evidenceKind: {
+        universalIdentifier: 'b28bdd75-2d03-57f8-a370-c10db96a7804',
+      },
+      evidenceReference: {
+        universalIdentifier: '4d3467b7-4334-5e25-924b-28e6378688a5',
+      },
+      establishedAt: {
+        universalIdentifier: 'f8f132a3-8150-5bdd-bf8b-f945d5a9270b',
+      },
+      establishedByWorkspaceMemberId: {
+        universalIdentifier: '46d87297-8be0-59c7-8955-e1ee96c766c7',
+      },
+      messageId: {
+        universalIdentifier: '88c0ab0b-10d2-5141-8d07-2306c9ac6677',
+      },
+      revokedAt: {
+        universalIdentifier: '115427b5-f2c0-5deb-8d77-dd8e138d6662',
+      },
+      revokedByWorkspaceMemberId: {
+        universalIdentifier: 'f3d404d6-3c93-5226-a77f-1cfd3e44b41c',
+      },
+      revocationReason: {
+        universalIdentifier: '0f1619bd-3180-5c91-b25f-250a6d5e168d',
+      },
+    },
+    indexes: {},
+    views: {},
+  },
   campaignCreator: {
     universalIdentifier: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
     fields: {
+      emailConversationBindings: {
+        universalIdentifier: 'a223d8cd-f3cb-5e21-9020-6ec7447105da',
+      },
+      replyAgentPaused: {
+        universalIdentifier: 'a2618722-5773-5691-acb1-a870523090b1',
+      },
+      replyAgentRevision: {
+        universalIdentifier: 'f3786457-fb7b-5a08-ab3b-a243126c8d26',
+      },
+      replyAgentPauseHistory: {
+        universalIdentifier: '90353895-cf46-5c88-8025-0ae1f4b71069',
+      },
+      replyAgentMaterialGeneration: {
+        universalIdentifier: 'cbd6eb70-8bc9-4ef4-9837-28412aac0124',
+      },
+      replyAgentChangedAt: {
+        universalIdentifier: 'cabf1ac9-bceb-50b6-b01a-977b5c5406e5',
+      },
+      replyAgentChangedByWorkspaceMemberId: {
+        universalIdentifier: 'b286b335-d25a-5a18-a8b6-2ff9198c77da',
+      },
+
       id: { universalIdentifier: '12a47afe-9cc2-4a05-8ff6-6a269e4367c2' },
       createdAt: {
         universalIdentifier: 'd1bd77e6-f7ff-4b5e-b5be-015d667a4de7',
@@ -552,6 +794,12 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       outcomeSummary: {
         universalIdentifier: '640d0d05-246d-5005-b592-a28889852fbd',
+      },
+      offerVersions: {
+        universalIdentifier: 'c6410d1a-a5d4-55cc-a07f-47fd4091e6fc',
+      },
+      partnershipObligations: {
+        universalIdentifier: '1b520f25-ce36-500a-bc20-00f6717a17e0',
       },
       outreachActions: {
         universalIdentifier: 'e9b9d246-f49e-5200-9819-0a4c9cd0d19a',
@@ -726,6 +974,25 @@ export const MYAH_STANDARD_OBJECTS = {
   campaign: {
     universalIdentifier: '9a09d54a-d464-5692-ac74-70527fb00ddd',
     fields: {
+      replyAgentEnabled: {
+        universalIdentifier: '42353e44-6611-53ba-a116-b8f31d3db4bb',
+      },
+      replyAgentMode: {
+        universalIdentifier: '1cdfe25b-19f4-561c-89b3-08253ef28ebb',
+      },
+      replyAgentRevision: {
+        universalIdentifier: 'f104c56b-ba08-57d4-86d6-66bc9cf2f3fe',
+      },
+      replyAgentEnabledAt: {
+        universalIdentifier: '3143709f-f3cd-5f63-b26f-f5e7726f38c8',
+      },
+      replyAgentChangedAt: {
+        universalIdentifier: 'f87d9d5d-8c0c-5769-b64f-3270d0f414df',
+      },
+      replyAgentChangedByWorkspaceMemberId: {
+        universalIdentifier: '9ad21b5d-1fc7-593a-a63b-91198eccd259',
+      },
+
       id: { universalIdentifier: 'eed0f58d-3a0f-4f29-8746-01507e6a0fe2' },
       createdAt: {
         universalIdentifier: '524dbf41-8e81-42bb-98d4-c10cc3f3e9b8',
@@ -1290,6 +1557,12 @@ export const MYAH_STANDARD_OBJECTS = {
       taskTargets: {
         universalIdentifier: '4dca8339-817b-4292-a55c-425d01c4ea35',
       },
+      instagramConversations: {
+        universalIdentifier: 'c46dbf9f-ceaf-4fb5-a7b9-8b05dd579935',
+      },
+      instagramMessageDrafts: {
+        universalIdentifier: 'f072449f-7fc3-4481-b9d3-b255add4a574',
+      },
     },
     indexes: {},
     views: {
@@ -1467,5 +1740,262 @@ export const MYAH_STANDARD_OBJECTS = {
         },
       },
     },
+  },
+  myahInstagramAccount: {
+    universalIdentifier: '2d357469-831a-4629-ad4b-47335900e883',
+    fields: {
+      id: { universalIdentifier: 'bb27bb78-d7bd-583c-83c9-d433160a2fb9' },
+      name: { universalIdentifier: 'a5d35d7c-fb9f-547c-9dad-d7c5a0f54040' },
+      createdAt: {
+        universalIdentifier: '2dcca88e-e874-5493-94e8-48f25d64b713',
+      },
+      updatedAt: {
+        universalIdentifier: '0f73ffc3-845f-548b-9475-ae6a46db6c61',
+      },
+      deletedAt: {
+        universalIdentifier: '9e2ecd94-7113-5dcf-8b6f-c91b6b925c3f',
+      },
+      createdBy: {
+        universalIdentifier: 'fa20b920-48b9-5d00-97a8-d3924e793641',
+      },
+      updatedBy: {
+        universalIdentifier: '96f00d91-884d-542c-bf7e-e0761c86f70e',
+      },
+      position: { universalIdentifier: '25025b4c-d718-58d4-96b8-de93eebc533f' },
+      searchVector: {
+        universalIdentifier: '6b868e7a-8cb3-5898-a735-46cdbaaa13a3',
+      },
+      label: { universalIdentifier: '74a2afe3-6c29-4d0a-a4a3-6597785221dc' },
+      connectedAccountId: {
+        universalIdentifier: '05136556-a14d-48f8-aa7d-a9ca1cf7b152',
+      },
+      composioUserId: {
+        universalIdentifier: 'b2df75c7-24ef-4728-8ea9-acbc9f3365bf',
+      },
+      authConfigId: {
+        universalIdentifier: 'beba840b-2f16-4634-b151-15e555e1cd68',
+      },
+      igUserId: { universalIdentifier: 'a1068123-eb00-45e7-aee3-71308dfc7fda' },
+      unipileAccountId: {
+        universalIdentifier: '0f0e5c9e-aec8-491a-9613-26405ed2ee11',
+      },
+      username: { universalIdentifier: '9a9de878-e28b-4a2e-9dab-3ca047ce251b' },
+      status: { universalIdentifier: '5c714c84-e66a-41d5-a5da-f4ffa51bb798' },
+      lastCheckedAt: {
+        universalIdentifier: '4355dfca-f0e6-4139-ae50-37c7f9eba94f',
+      },
+      lastConversationSyncAt: {
+        universalIdentifier: '8ab2d37c-a7bf-4681-a5c3-c54890632321',
+      },
+      completedChatSyncAt: {
+        universalIdentifier: '23224a02-a2f3-490f-81f4-84273cc113d1',
+      },
+      conversationAfterCursor: {
+        universalIdentifier: 'bbc45f65-2bba-4c0c-807f-12d46b215d39',
+      },
+      lastError: {
+        universalIdentifier: '6b4932fa-29ff-4509-9853-a11226abd07c',
+      },
+      conversations: {
+        universalIdentifier: '08930cbe-877b-484d-8570-4ad1b8f8f5c0',
+      },
+    },
+    indexes: {
+      connectedAccountIdUniqueIndex: {
+        universalIdentifier: 'c8d67e3d-9793-549f-8085-a68dd2a8f3cf',
+      },
+      igUserIdUniqueIndex: {
+        universalIdentifier: 'ae3b3c68-1695-55f2-b02d-1ae467314f67',
+      },
+      unipileAccountIdUniqueIndex: {
+        universalIdentifier: '836e94db-84c0-57dc-95d6-788f96c8ffb9',
+      },
+    },
+    views: {},
+  },
+  myahSocialConversation: {
+    universalIdentifier: '36817464-855f-42db-9fbb-f8853643f8d6',
+    fields: {
+      id: { universalIdentifier: 'f8f4f3b3-7f7b-5616-9662-5d41bac2ab8a' },
+      name: { universalIdentifier: '932e1249-86cb-5f21-b0a2-5d2b0b6b4865' },
+      createdAt: {
+        universalIdentifier: '733ebe52-3a06-5c51-a674-9f3bd5cfd5a8',
+      },
+      updatedAt: {
+        universalIdentifier: '68f7a12d-ac5b-5cb0-aeec-fb2415b2c4c5',
+      },
+      deletedAt: {
+        universalIdentifier: '5d878633-c6c8-5f35-a898-39ff9db4e8ca',
+      },
+      createdBy: {
+        universalIdentifier: '6e2aa543-aab4-59f6-b394-56e7301233d2',
+      },
+      updatedBy: {
+        universalIdentifier: '68c734ee-6fe1-5928-a618-d7f8ad1aa16f',
+      },
+      position: { universalIdentifier: '9d970358-c4eb-5865-8adf-57b2d39afd51' },
+      searchVector: {
+        universalIdentifier: '136c9e2b-8311-5a19-9675-a09e9d8122c9',
+      },
+      label: { universalIdentifier: 'ca2f533f-5805-4256-8e48-fbf622b5284c' },
+      provider: { universalIdentifier: '99cbc07b-138a-4d0a-b9f3-05d0be9e46b3' },
+      lifecycle: {
+        universalIdentifier: '74b47e38-60ec-4f11-8c23-4e622b7d3045',
+      },
+      providerConversationId: {
+        universalIdentifier: 'd3252d54-709f-4ae6-89bb-2ed4b21fa9a8',
+      },
+      recipientIgsid: {
+        universalIdentifier: 'feaaf284-4421-44df-84d5-70c31732bd1e',
+      },
+      recipientUsername: {
+        universalIdentifier: '39b1ef10-36da-452b-a246-0334eea7d78e',
+      },
+      recipientDisplayName: {
+        universalIdentifier: 'e1a10c6b-f59e-4597-8d7b-3003b97609fb',
+      },
+      instagramAccount: {
+        universalIdentifier: '64c89b5d-9b54-4fb0-804e-b0c3cd110711',
+      },
+      creator: { universalIdentifier: '6b26848c-ab3b-45dd-ad62-9d194512b116' },
+      completedMessageSyncAt: {
+        universalIdentifier: 'e824bee6-188d-445f-b3ac-dcf8f365161c',
+      },
+      messages: { universalIdentifier: '49f3eeac-b8a5-4362-827a-7dc597d2dcb4' },
+      replyDrafts: {
+        universalIdentifier: '006182fc-786f-4ea3-8168-6a5d440d76ac',
+      },
+    },
+    indexes: {
+      providerIdentityIndex: {
+        universalIdentifier: '574979a4-1216-43d1-b302-0c18240a0450',
+      },
+    },
+    views: {},
+  },
+  myahSocialMessage: {
+    universalIdentifier: '7241bd44-e474-4904-8636-339276b3feff',
+    fields: {
+      id: { universalIdentifier: '8b7e33e1-56ff-54e0-b603-7b4a7a4c5f6e' },
+      name: { universalIdentifier: 'ff1c6e48-3153-5d5d-8432-133b7e1a12d8' },
+      createdAt: {
+        universalIdentifier: '7bb8a6b0-9f2f-5353-873a-fe1d491532a2',
+      },
+      updatedAt: {
+        universalIdentifier: 'fa3b8985-1525-5a88-a6c1-c578994cf8b7',
+      },
+      deletedAt: {
+        universalIdentifier: '2a176d71-ac6a-57ee-98d3-d9a4747dd323',
+      },
+      createdBy: {
+        universalIdentifier: 'd2300e0b-b0dc-58c4-bd7d-12dcb2f1aac8',
+      },
+      updatedBy: {
+        universalIdentifier: 'e20488d5-4b8a-5ced-86f6-026ccf133d07',
+      },
+      position: { universalIdentifier: '174afd6a-23fb-56c9-b581-e75ed015abea' },
+      searchVector: {
+        universalIdentifier: '49addc6d-3e26-504f-8011-127ef2a9cb4a',
+      },
+      text: { universalIdentifier: 'ceb3642e-b4b4-44b7-8297-fa3ac944dc19' },
+      direction: {
+        universalIdentifier: '882c38ea-7464-4d2f-9dab-8468e14814ad',
+      },
+      sentVia: { universalIdentifier: 'eacf38d5-b3e9-4838-b115-d879df85fe72' },
+      provider: { universalIdentifier: 'b421f20f-363c-4ce5-af0a-b4dcede88e9f' },
+      hasAttachments: {
+        universalIdentifier: '2208e340-552f-430c-b1a1-b0bbc033e4eb',
+      },
+      attachmentCount: {
+        universalIdentifier: 'cd621cac-95e8-4894-ac9f-dac654612bd9',
+      },
+      deliveryState: {
+        universalIdentifier: '27ab20f0-3339-4c10-b9d3-76b774b40ca5',
+      },
+      deliveryStateUpdatedAt: {
+        universalIdentifier: '0d8bafac-00b0-45ed-860c-3bf1f0711fd2',
+      },
+      providerMessageId: {
+        universalIdentifier: '9132e7f5-8607-4d36-95b2-1dd557ef35e8',
+      },
+      providerCreatedAt: {
+        universalIdentifier: 'f2355fd3-4198-4122-ae4a-ea96318bcd97',
+      },
+      conversation: {
+        universalIdentifier: '80670f08-59e0-4f45-9058-e7221d66b95f',
+      },
+    },
+    indexes: {
+      providerIdentityIndex: {
+        universalIdentifier: '1718368c-182b-4643-bb7a-5a5f2ab3e9b8',
+      },
+    },
+    views: {},
+  },
+  myahInstagramReplyDraft: {
+    universalIdentifier: '85762d24-541b-407f-9d6a-cdf89552c665',
+    fields: {
+      id: { universalIdentifier: 'd796dd99-096e-55a3-8b63-61adbcbe6e13' },
+      name: { universalIdentifier: 'f83e81b7-a226-56f0-8140-60ced015e4ee' },
+      createdAt: {
+        universalIdentifier: '9a35410f-a6b2-5692-8835-36912f1cd0fe',
+      },
+      updatedAt: {
+        universalIdentifier: 'c5256628-51bc-5c04-9e0a-b81ebfaac51a',
+      },
+      deletedAt: {
+        universalIdentifier: '35ee9f9d-c1e6-518a-8977-787d59845081',
+      },
+      createdBy: {
+        universalIdentifier: 'cd265551-8855-5cda-8665-13193a15b783',
+      },
+      updatedBy: {
+        universalIdentifier: '1b9fae60-be51-51e3-81d5-0495e0a55d83',
+      },
+      position: { universalIdentifier: 'fb442825-f513-5613-9226-c4c71d181151' },
+      searchVector: {
+        universalIdentifier: '30e526c6-e389-5e0c-a231-c02efe5c67ea',
+      },
+      title: { universalIdentifier: 'c12d1c07-166e-437b-9035-ac8b368d539d' },
+      body: { universalIdentifier: '485477d0-2f79-467e-abb0-55fbeb442b81' },
+      kind: { universalIdentifier: '51f98b6b-dbb8-49c9-9c16-30695b301f77' },
+      status: { universalIdentifier: 'aa6d4155-e790-4d4c-8283-c0cc4db1e77b' },
+      source: { universalIdentifier: 'e134a261-2e5a-4b7b-a91f-68e6417eb93d' },
+      inboundMessageRecordId: {
+        universalIdentifier: 'f9b6ca96-28e8-4a0e-8d7c-cfa7453f5bf2',
+      },
+      inboundProviderMessageId: {
+        universalIdentifier: '3a00ed07-2bc9-4cc8-99f8-0577f4908605',
+      },
+      generatedAt: {
+        universalIdentifier: '321e8137-71a4-4154-ad86-6498efce9d5a',
+      },
+      approvedAt: {
+        universalIdentifier: 'a18bc63b-2757-4c48-8c43-07777fcae7b5',
+      },
+      sentAt: { universalIdentifier: '588de979-935e-4cd9-828f-ba498ea9e0e0' },
+      sendBlockedReason: {
+        universalIdentifier: 'fb1b3368-6230-4107-ae68-484bb7eef41c',
+      },
+      creator: { universalIdentifier: '2cc8ea09-7c86-41bd-80ea-efcc5edc81e5' },
+      recipientUsername: {
+        universalIdentifier: 'a46d5603-cff8-46de-8907-292ef82b4e25',
+      },
+      recipientProviderId: {
+        universalIdentifier: '4a79a104-ac37-4920-9ef7-181e52756574',
+      },
+      revision: { universalIdentifier: '0d53dfe9-0252-45c4-a3aa-78d640798d38' },
+      composerInputDigest: {
+        universalIdentifier: '5d78a1f7-79ea-4b67-9a8d-3b0a6109a5d4',
+      },
+      instagramMessageSnapshot: {
+        universalIdentifier: '3a80e3bb-cc44-4c97-9e89-a849776a9580',
+      },
+      conversation: {
+        universalIdentifier: 'cbf131df-81b8-4ff5-aadf-42f6ae55d6c8',
+      },
+    },
+    indexes: {},
+    views: {},
   },
 } as const satisfies Record<string, StandardObjectDefinition>;

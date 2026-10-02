@@ -3,3 +3,6 @@
 **/node_modules
 .nx/cache
 packages/twenty-server/.env
+# Product image stages consume the checked-in DocumentationPaths.ts artifact,
+# not the docs site source. Generate it with yarn docs:generate-paths before building.
+packages/twenty-docs/

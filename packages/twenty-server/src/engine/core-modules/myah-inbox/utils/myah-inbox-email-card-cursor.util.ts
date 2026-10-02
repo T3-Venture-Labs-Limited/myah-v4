@@ -15,6 +15,17 @@ export type MyahInboxEmailCardCursor = MyahInboxEmailCursorScope & {
   timestamp?: string;
   id?: string;
   threadId?: string;
+  anchorKey?: string;
+};
+
+export const isMyahInboxEmailAnchorKey = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  const [prefix, id, extra] = value.split(':');
+  return (
+    !extra &&
+    ['attempt', 'thread', 'legacy'].includes(prefix) &&
+    isValidUuid(id)
+  );
 };
 
 export const isMyahInboxEmailTimestamp = (value: unknown): value is string =>
@@ -47,7 +58,11 @@ export const decodeMyahInboxEmailCardCursor = (
     'fingerprint',
   ];
   if (row.kind !== 'snapshot') keys.push('timestamp', 'id');
-  if (row.kind === 'older' || row.kind === 'newer') keys.push('threadId');
+  if (row.kind === 'cards' && row.threadId !== undefined) keys.push('threadId');
+  if (row.kind === 'older' || row.kind === 'newer') {
+    keys.push('threadId');
+    if (row.anchorKey !== undefined) keys.push('anchorKey');
+  }
   if (
     Object.keys(row).length !== keys.length ||
     Object.keys(row).some((key) => !keys.includes(key)) ||
@@ -65,9 +80,18 @@ export const decodeMyahInboxEmailCardCursor = (
     (row.kind !== 'snapshot' &&
       (!isMyahInboxEmailTimestamp(row.timestamp) ||
         typeof row.id !== 'string' ||
-        !isValidUuid(row.id))) ||
+        (row.kind === 'cards'
+          ? !isMyahInboxEmailAnchorKey(row.id) && !isValidUuid(row.id)
+          : !isValidUuid(row.id)))) ||
+    (row.kind === 'cards' &&
+      (isMyahInboxEmailAnchorKey(row.id)
+        ? typeof row.threadId !== 'string' || !isValidUuid(row.threadId)
+        : row.threadId !== undefined)) ||
     (['older', 'newer'].includes(row.kind) &&
-      (typeof row.threadId !== 'string' || !isValidUuid(row.threadId))) ||
+      (typeof row.threadId !== 'string' ||
+        !isValidUuid(row.threadId) ||
+        (row.anchorKey !== undefined &&
+          !isMyahInboxEmailAnchorKey(row.anchorKey)))) ||
     Buffer.from(JSON.stringify(row)).toString('base64url') !== token
   )
     throw invalid();

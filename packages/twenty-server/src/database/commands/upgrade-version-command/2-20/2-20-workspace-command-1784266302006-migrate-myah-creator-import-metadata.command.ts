@@ -1,4 +1,5 @@
 import { Command } from 'nest-commander';
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
@@ -10,6 +11,14 @@ import {
   OBSOLETE_SOURCE_CONTROLLED_CREATOR_VIEW_FIELD_UNIVERSAL_IDENTIFIERS,
 } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
+
+const CREATOR_IMPORT_SYNC_OPTIONS = {
+  targetObjectUniversalIdentifiers: new Set([
+    MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+  ]),
+  migrateLegacyMyahApplication: false,
+  preserveCreatorImportPermissions: true as const,
+};
 
 @RegisteredWorkspaceCommand('2.20.0', 1784266302006)
 @Command({
@@ -41,6 +50,7 @@ export class MigrateMyahCreatorImportMetadataCommand extends ActiveOrSuspendedWo
 
     await this.synchronizeMyahStandardMetadataCommand.synchronizeWorkspace(
       args,
+      CREATOR_IMPORT_SYNC_OPTIONS,
     );
 
     const { canDeleteOldFields } =
@@ -63,6 +73,7 @@ export class MigrateMyahCreatorImportMetadataCommand extends ActiveOrSuspendedWo
     await this.synchronizeMyahStandardMetadataCommand.synchronizeWorkspace(
       args,
       {
+        ...CREATOR_IMPORT_SYNC_OPTIONS,
         explicitObsoleteUniversalIdentifiersByMetadataName: {
           viewField:
             OBSOLETE_SOURCE_CONTROLLED_CREATOR_VIEW_FIELD_UNIVERSAL_IDENTIFIERS,

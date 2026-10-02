@@ -1,8 +1,7 @@
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { Button } from 'twenty-ui/input';
-import { AppPath } from 'twenty-shared/types';
-import { getAppPath, isDefined } from 'twenty-shared/utils';
+import { getMyahCampaignPath } from '@/myah/navigation/myah-navigation-registry';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
 import { getMyahInboxSafeEmailSubject } from '@/myah/inbox/components/MyahInboxEmailSubjectSeparator';
@@ -19,10 +18,8 @@ import {
 } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { useMyahInboxReplyDraft } from '@/myah/inbox/hooks/useMyahInboxReplyDraft';
 import { useMyahInboxReplyContextOptions } from '@/myah/inbox/hooks/useMyahInboxReplyContextOptions';
-import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignAgentTabUniversalIdentifier';
-import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
+import { getMyahInboxActiveCampaignAgentTabId } from '@/myah/inbox/utils/getMyahInboxActiveCampaignAgentTabId';
 import { pageLayoutsWithRelationsSelector } from '@/page-layout/states/pageLayoutsWithRelationsSelector';
-import { type PageLayout } from '@/page-layout/types/PageLayout';
 import { ReplyChannel, type ReplyContextInput } from '~/generated/graphql';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
@@ -43,8 +40,6 @@ const StyledReplyWorkspace = styled.section`
   padding: ${themeCssVariables.spacing[3]};
 `;
 
-const MYAH_REPLY_CARD_SURFACE = themeCssVariables.background.primary;
-
 // Rendered only when no shared draft can be loaded: the composer keeps its
 // normal surface and controls instead of printing status copy.
 const UNAVAILABLE_DRAFT_ENTRY: MyahInboxDraftAutosaveEntry = {
@@ -63,39 +58,10 @@ const UNAVAILABLE_DRAFT_ENTRY: MyahInboxDraftAutosaveEntry = {
   editorVersion: 0,
 };
 
-const StyledMainReplyWorkspace = styled(StyledReplyWorkspace)`
-  animation: myahReplyCardBorder 12s ease-in-out infinite alternate;
-  background:
-    linear-gradient(${MYAH_REPLY_CARD_SURFACE}, ${MYAH_REPLY_CARD_SURFACE})
-      padding-box,
-    linear-gradient(
-        120deg,
-        ${themeCssVariables.color.pink},
-        ${themeCssVariables.color.sky},
-        ${themeCssVariables.color.pink}
-      )
-      border-box;
-  background-size:
-    100% 100%,
-    200% 200%;
-  border-color: transparent;
-
-  @keyframes myahReplyCardBorder {
-    from {
-      background-position:
-        0 0,
-        0% 50%;
-    }
-    to {
-      background-position:
-        0 0,
-        100% 50%;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-  }
+const StyledMainReplyWorkspace = styled.section`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 `;
 
 const StyledComposerHeader = styled.div`
@@ -124,20 +90,7 @@ const getMainReplyDisplaySubject = (subject: string | null) => {
   return subjectWithoutReplyPrefixes || 'No subject';
 };
 
-const getActiveCampaignAgentTabId = (pageLayouts: PageLayout[]) => {
-  const campaignLayout = pageLayouts.find(
-    ({ deletedAt, universalIdentifier }) =>
-      !isDefined(deletedAt) &&
-      universalIdentifier ===
-        MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
-  );
-
-  return campaignLayout?.tabs.find(
-    ({ isActive, universalIdentifier }) =>
-      isActive &&
-      universalIdentifier === MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER,
-  )?.id;
-};
+const getActiveCampaignAgentTabId = getMyahInboxActiveCampaignAgentTabId;
 
 export type MyahInboxReplyWorkspaceProps = {
   thread: MyahInboxThread;
@@ -145,6 +98,7 @@ export type MyahInboxReplyWorkspaceProps = {
   replyContext?: ReplyContextInput | null;
   targetAvailable?: boolean;
   scopeGeneration?: string;
+  arrivalEpoch?: number;
   presentation?: 'default' | 'main';
   replyTargets?: Array<{
     threadId: string;
@@ -167,6 +121,7 @@ const MyahInboxReplyWorkspaceContent = ({
   workspaceId,
   targetAvailable = true,
   scopeGeneration = '',
+  arrivalEpoch = 0,
   presentation = 'default',
   replyTargets = [],
   onReplyTargetChange,
@@ -222,10 +177,12 @@ const MyahInboxReplyWorkspaceContent = ({
     entry: draftEntry,
     editorOwner,
     status,
+    review,
   } = useMyahInboxReplyDraft(
     input,
     draftAutosaveController,
     JSON.stringify([scopeGeneration, authorizationKey]),
+    arrivalEpoch,
   );
 
   // Edit mode is owned outside the editor so it survives the guidance round trip.
@@ -308,15 +265,9 @@ const MyahInboxReplyWorkspaceContent = ({
 
       store.set(myahInboxPreserveSelectionOnUnmountState.atom, true);
       markedForPreservation = true;
-      navigate(
-        `${getAppPath(AppPath.RecordShowPage, {
-          objectNameSingular: 'campaign',
-          objectRecordId: campaignId,
-        })}#${runtimeAgentTabId}`,
-        {
-          state: { myahCampaignAgentGuidanceFocusCampaignId: campaignId },
-        },
-      );
+      navigate(`${getMyahCampaignPath(campaignId)}?section=agent`, {
+        state: { myahCampaignAgentGuidanceFocusCampaignId: campaignId },
+      });
     } catch {
       if (markedForPreservation)
         store.set(myahInboxPreserveSelectionOnUnmountState.atom, false);
@@ -355,6 +306,7 @@ const MyahInboxReplyWorkspaceContent = ({
         entry={UNAVAILABLE_DRAFT_ENTRY}
         presentation={presentation}
         previewScope={`unavailable:${thread.id}`}
+        bodyAriaLabel="Shared reply draft"
         // The thread selector and its options stay withheld until a draft is
         // authorized; the container and its controls still render.
         onDraftChange={() => undefined}
@@ -375,6 +327,33 @@ const MyahInboxReplyWorkspaceContent = ({
   }
 
   const hasDraftContent = draftEntry.localBody.markdown.trim().length > 0;
+  // New readable creator mail since the body was authored: an untouched
+  // proposal refreshes itself; any other body waits for an explicit update.
+  const incomingUpdate =
+    hasDraftContent &&
+    !draftEntry.dirty &&
+    (draftEntry.executionState === 'READY' ||
+      draftEntry.executionState === 'NEEDS_REVIEW') &&
+    (draftEntry.incomingState === 'STALE' ||
+      draftEntry.incomingState === 'UNKNOWN')
+      ? draftEntry.incomingState === 'STALE' && draftEntry.bodyEdited === false
+        ? ('auto' as const)
+        : ('explicit' as const)
+      : undefined;
+  // A clean body whose context changed (new mail, guidance, or after Update
+  // draft) needs explicit review before send; Update draft stays optional.
+  const reviewAction =
+    hasDraftContent &&
+    !draftEntry.dirty &&
+    !draftEntry.operation &&
+    draftEntry.executionState === 'NEEDS_REVIEW' ? (
+      <Button
+        title="Review draft"
+        variant="secondary"
+        size="small"
+        onClick={() => void review()}
+      />
+    ) : null;
   const campaignRequiredReason = campaignId
     ? undefined
     : 'Link an exact readable Campaign to generate a reply or open AI guidance.';
@@ -389,8 +368,12 @@ const MyahInboxReplyWorkspaceContent = ({
       key={myahInboxDraftKeyId(draftKey)}
       draftKey={draftKey}
       editorOwner={editorOwner}
+      incomingUpdate={incomingUpdate}
+      incomingState={
+        draftEntry.incomingState === 'UNKNOWN' ? 'UNKNOWN' : 'STALE'
+      }
       disabled={
-        draftEntry.executionState !== 'READY' ||
+        (draftEntry.executionState !== 'READY' && !incomingUpdate) ||
         Boolean(draftEntry.operation) ||
         draftEntry.status === 'saving' ||
         draftEntry.status === 'error' ||
@@ -415,6 +398,7 @@ const MyahInboxReplyWorkspaceContent = ({
             entry={draftEntry}
             presentation={presentation}
             previewScope={myahInboxDraftKeyId(draftKey)}
+            bodyAriaLabel="Shared reply draft"
             subject={subject}
             subjectOptions={
               presentation === 'main' ? subjectOptions : undefined
@@ -453,13 +437,18 @@ const MyahInboxReplyWorkspaceContent = ({
             actions={
               presentation === 'main' ? (
                 hasDraftContent ? (
-                  sendAction
+                  <>
+                    {incomingUpdate === 'explicit' && generateAction}
+                    {reviewAction}
+                    {sendAction}
+                  </>
                 ) : (
                   generateAction
                 )
               ) : (
                 <>
                   {generateAction}
+                  {reviewAction}
                   {sendAction}
                 </>
               )
@@ -478,6 +467,7 @@ export const MyahInboxReplyWorkspace = ({
   onSent,
   targetAvailable,
   scopeGeneration,
+  arrivalEpoch,
   presentation = 'default',
   replyTargets,
   onReplyTargetChange,
@@ -509,6 +499,7 @@ export const MyahInboxReplyWorkspace = ({
           onSent={onSent}
           targetAvailable={targetAvailable}
           scopeGeneration={scopeGeneration}
+          arrivalEpoch={arrivalEpoch}
           presentation={presentation}
           replyTargets={replyTargets}
           onReplyTargetChange={onReplyTargetChange}

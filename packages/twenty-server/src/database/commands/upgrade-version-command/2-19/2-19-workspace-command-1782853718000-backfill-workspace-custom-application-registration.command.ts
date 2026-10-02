@@ -2,7 +2,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { Command } from 'nest-commander';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
+import { type QueryRunner, Repository } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -10,6 +10,7 @@ import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import type { UpgradeWorkspaceTransaction } from 'src/engine/workspace-manager/workspace-migration/types/upgrade-workspace-transaction.type';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 
 @RegisteredWorkspaceCommand('2.19.0', 1782853718000)
@@ -30,12 +31,30 @@ export class BackfillWorkspaceCustomApplicationRegistrationCommand extends Activ
     super(workspaceIteratorService);
   }
 
-  override async runOnWorkspace({
-    workspaceId,
-    options,
-  }: RunOnWorkspaceArgs): Promise<void> {
+  override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    await this.backfill(args);
+  }
+
+  override async runOnWorkspaceInUpgradeTransaction(
+    args: RunOnWorkspaceArgs,
+    queryRunner: QueryRunner,
+    afterCommit: UpgradeWorkspaceTransaction['afterCommit'],
+  ): Promise<void> {
+    await this.backfill(args, { queryRunner, afterCommit });
+  }
+
+  private async backfill(
+    { workspaceId, options }: RunOnWorkspaceArgs,
+    upgradeTransaction?: UpgradeWorkspaceTransaction,
+  ): Promise<void> {
+    const workspaceRepository = upgradeTransaction
+      ? upgradeTransaction.queryRunner.manager.getRepository(WorkspaceEntity)
+      : this.workspaceRepository;
+    const applicationRepository = upgradeTransaction
+      ? upgradeTransaction.queryRunner.manager.getRepository(ApplicationEntity)
+      : this.applicationRepository;
     // Suspended workspaces are soft-deleted, so the row needs withDeleted.
-    const workspace = await this.workspaceRepository.findOne({
+    const workspace = await workspaceRepository.findOne({
       select: ['id', 'workspaceCustomApplicationId'],
       where: { id: workspaceId },
       withDeleted: true,
@@ -47,7 +66,7 @@ export class BackfillWorkspaceCustomApplicationRegistrationCommand extends Activ
       return;
     }
 
-    const customApplication = await this.applicationRepository.findOne({
+    const customApplication = await applicationRepository.findOne({
       select: ['id', 'universalIdentifier', 'applicationRegistrationId'],
       where: {
         id: workspace.workspaceCustomApplicationId,
@@ -85,12 +104,13 @@ export class BackfillWorkspaceCustomApplicationRegistrationCommand extends Activ
           workspaceId,
           universalIdentifier: customApplication.universalIdentifier,
         },
+        ...(upgradeTransaction ? [upgradeTransaction.queryRunner] : []),
       );
 
     await this.applicationService.update(customApplication.id, {
       applicationRegistrationId: registration.id,
       workspaceId,
-    });
+    }, ...(upgradeTransaction ? [upgradeTransaction] : []));
 
     this.logger.log(
       `Created application registration ${registration.id} for workspace ${workspaceId} custom application`,

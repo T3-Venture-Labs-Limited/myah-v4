@@ -6,6 +6,7 @@ import { DataSource, type QueryRunner } from 'typeorm';
 import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794327-create-campaign-execution-authority-foundation';
 import { AddCampaignDispatchEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789066100000-add-campaign-dispatch-evidence';
 import { AddCampaignOperatorExclusionReasonFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971536-add-campaign-operator-exclusion-reason';
+import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
 import { setPgDateTypeParser } from 'src/database/pg/set-pg-date-type-parser';
 import { CampaignTestPreparationProofService } from 'src/engine/core-modules/campaign-test-authority/services/campaign-test-preparation-proof.service';
 import { WorkspaceCampaignCapacityTimeZoneService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone.service';
@@ -159,7 +160,11 @@ const readNormalizedCampaignCatalog = async (
       FROM pg_constraint con WHERE con.conrelid IN (SELECT oid FROM relations)),
     'indexes', (SELECT jsonb_agg(jsonb_build_array(i.indexrelid::regclass::text,
       pg_get_indexdef(i.indexrelid), i.indisvalid, i.indisready) ORDER BY i.indexrelid::regclass::text)
-      FROM pg_index i WHERE i.indrelid IN (SELECT oid FROM relations)),
+      FROM pg_index i WHERE i.indrelid IN (SELECT oid FROM relations)
+        -- These later MYAH-402 projection indexes are not owned by the
+        -- historical authority command under this down/up comparison.
+        AND i.indexrelid::regclass::text NOT IN
+          ('core."IDX_CO_FORECAST_PENDING"','core."IDX_CO_OVERVIEW"')),
     'triggers', (SELECT jsonb_agg(jsonb_build_array(t.tgname, pg_get_triggerdef(t.oid, true)) ORDER BY t.tgname)
       FROM pg_trigger t WHERE t.tgrelid IN (SELECT oid FROM relations) AND NOT t.tgisinternal),
     'functions', (SELECT jsonb_agg(pg_get_functiondef(p.oid) ORDER BY p.proname)
@@ -2375,6 +2380,10 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
         new AddCampaignDispatchEvidenceFastInstanceCommand();
       const operatorExclusionCommand =
         new AddCampaignOperatorExclusionReasonFastInstanceCommand();
+      // Later dependent: reply evidence references outboundEmailAttempt.
+      const replyEvidenceCommand =
+        new CreateMyahCampaignReplyEvidenceFastInstanceCommand();
+      await replyEvidenceCommand.down(runner);
       await operatorExclusionCommand.down(runner);
       await dispatchEvidenceCommand.down(runner);
       await command.down(runner);
@@ -2407,6 +2416,7 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
       await command.up(runner);
       await dispatchEvidenceCommand.up(runner);
       await operatorExclusionCommand.up(runner);
+      await replyEvidenceCommand.up(runner);
       expect(
         await runner.query(
           `SELECT jsonb_agg(jsonb_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull)

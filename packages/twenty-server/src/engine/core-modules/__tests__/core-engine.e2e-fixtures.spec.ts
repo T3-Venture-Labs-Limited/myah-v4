@@ -56,7 +56,6 @@ describe('CoreEngineModule E2E fixture registration', () => {
     ['development', 'false', false],
     ['development', 'true', true],
     ['test', 'true', true],
-    ['production', 'true', false],
   ])(
     'registers fixture providers only for %s with E2E_TEST_FIXTURES=%s',
     (environment, flag, expected) => {
@@ -66,8 +65,14 @@ describe('CoreEngineModule E2E fixture registration', () => {
     },
   );
 
+  it('rejects fixture activation in production before assembling the graph', () => {
+    expect(() => loadImports('production', 'true')).toThrow(
+      'E2E_TEST_FIXTURES cannot be enabled',
+    );
+  });
+
   it('omits fixture mutations from the generated production schema', async () => {
-    const { imports, fixtureModule } = loadImports('production', 'true');
+    const { imports, fixtureModule } = loadImports('production', undefined);
     const moduleRef = await Test.createTestingModule({
       imports: [GraphQLSchemaBuilderModule],
       providers: [

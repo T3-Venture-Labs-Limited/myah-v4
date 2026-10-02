@@ -1,15 +1,14 @@
 import { Command } from 'nest-commander';
 
-import {
-  MYAH_STANDARD_OBJECTS,
-  STANDARD_OBJECTS,
-} from 'twenty-shared/metadata';
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import type { QueryRunner } from 'typeorm';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { TwentyStandardApplicationService } from 'src/engine/workspace-manager/twenty-standard-application/services/twenty-standard-application.service';
+import type { UpgradeWorkspaceTransaction } from 'src/engine/workspace-manager/workspace-migration/types/upgrade-workspace-transaction.type';
 
 @RegisteredWorkspaceCommand('2.19.0', 1785453080000)
 @Command({
@@ -26,10 +25,22 @@ export class ResynchronizeMyahStandardApplicationCommand extends ActiveOrSuspend
     super(workspaceIteratorService);
   }
 
-  override async runOnWorkspace({
-    workspaceId,
-    options,
-  }: RunOnWorkspaceArgs): Promise<void> {
+  override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    await this.synchronize(args);
+  }
+
+  override async runOnWorkspaceInUpgradeTransaction(
+    args: RunOnWorkspaceArgs,
+    queryRunner: QueryRunner,
+    afterCommit: UpgradeWorkspaceTransaction['afterCommit'],
+  ): Promise<void> {
+    await this.synchronize(args, { queryRunner, afterCommit });
+  }
+
+  private async synchronize(
+    { workspaceId, options }: RunOnWorkspaceArgs,
+    upgradeTransaction?: UpgradeWorkspaceTransaction,
+  ): Promise<void> {
     const { flatObjectMetadataMaps } =
       await this.workspaceCacheService.getOrRecompute(workspaceId, [
         'flatObjectMetadataMaps',
@@ -50,15 +61,8 @@ export class ResynchronizeMyahStandardApplicationCommand extends ActiveOrSuspend
 
       return;
     }
-    const profile =
-      flatObjectMetadataMaps.byUniversalIdentifier[
-        STANDARD_OBJECTS.company.universalIdentifier
-      ] === undefined
-        ? 'myah'
-        : 'full';
-
     await this.twentyStandardApplicationService.synchronizeTwentyStandardApplicationOrThrow(
-      { workspaceId, profile },
+      { workspaceId, profile: 'myah', ...(upgradeTransaction ? { upgradeTransaction } : {}) },
     );
   }
 }

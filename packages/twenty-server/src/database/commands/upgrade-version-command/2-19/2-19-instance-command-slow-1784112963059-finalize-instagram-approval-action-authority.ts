@@ -7,14 +7,14 @@ const BINDING = 'core."actionApprovalBinding"';
 const EVIDENCE_LINK = 'core."actionApprovalBindingEvidenceLink"';
 const RECEIPT = 'core."actionExecutionReceipt"';
 
-const hasLegacyBindingColumns = async (dataSource: DataSource) => {
+const hasLegacyBindingColumns = async (dataSource: DataSource, queryRunner?: QueryRunner) => {
   const rows: unknown = await dataSource.query(`SELECT EXISTS (
     SELECT 1
     FROM information_schema.columns
     WHERE table_schema = 'core'
       AND table_name = 'actionApprovalBinding'
       AND column_name = 'approvalId'
-  ) AS "exists"`);
+  ) AS "exists"`, [], queryRunner);
 
   if (
     !Array.isArray(rows) ||
@@ -73,8 +73,8 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
 {
   public readonly runDataMigrationWithoutWorkspaces = true;
 
-  public async runDataMigration(dataSource: DataSource): Promise<void> {
-    if (!(await hasLegacyBindingColumns(dataSource))) {
+  public async runDataMigration(dataSource: DataSource, queryRunner?: QueryRunner): Promise<void> {
+    if (!(await hasLegacyBindingColumns(dataSource, queryRunner))) {
       return;
     }
 
@@ -92,7 +92,7 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
         OR "inboundMessageId" IS NULL
         OR "inboundSenderIgsid" IS NULL
         OR "inboundDirection" IS NULL
-        OR "inboundReceivedAt" IS NULL`);
+        OR "inboundReceivedAt" IS NULL`, [], queryRunner);
     await dataSource.query(`UPDATE ${RECEIPT} AS receipt
       SET "workspaceId" = COALESCE(receipt."workspaceId", binding."workspaceId"),
           "idempotencyKey" = COALESCE(
@@ -109,7 +109,7 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
           receipt."workspaceId" IS NULL
           OR receipt."idempotencyKey" IS NULL
           OR receipt."redactedOutcome" IS NULL
-        )`);
+        )`, [], queryRunner);
     await dataSource.query(`DO $$ BEGIN
       IF to_regclass('core."agentMessagePart"') IS NOT NULL
         AND EXISTS (
@@ -138,7 +138,7 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
         WHERE part."toolName" = 'request_instagram_reply_approval'
           AND part."toolOutput" #>> '{result,status}' IS DISTINCT FROM 'expired';
       END IF;
-    END $$`);
+    END $$`, [], queryRunner);
     await dataSource.query(`DO $$ BEGIN
       IF to_regclass('core."agentChatThread"') IS NOT NULL
         AND to_regclass('core."agentMessage"') IS NOT NULL
@@ -177,7 +177,7 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
               AND part."toolOutput" #>> '{result,status}' = 'pending'
           );
       END IF;
-    END $$`);
+    END $$`, [], queryRunner);
   }
 
 

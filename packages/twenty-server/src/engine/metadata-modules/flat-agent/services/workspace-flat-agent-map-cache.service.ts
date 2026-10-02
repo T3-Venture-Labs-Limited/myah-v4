@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -29,11 +29,31 @@ export class WorkspaceFlatAgentMapCacheService extends WorkspaceCacheProvider<Fl
   }
 
   async computeForCache(workspaceId: string): Promise<FlatAgentMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatAgentMaps> {
+    if (
+      workspaceId === undefined ||
+      workspaceId === null ||
+      workspaceId === ''
+    ) {
+      throw new Error(
+        'WorkspaceScopedRepository: workspaceId must be a non-empty string.',
+      );
+    }
+
     const [agents, applications] = await Promise.all([
-      this.agentRepository.find(workspaceId, {
+      this.agentRepository.withManager(manager).find(workspaceId, {
         withDeleted: true,
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,

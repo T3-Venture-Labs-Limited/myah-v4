@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { CommandRunner, Option } from 'nest-commander';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
+import type { QueryRunner } from 'typeorm';
 
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { CommandLogger } from 'src/database/commands/logger';
@@ -135,6 +136,14 @@ export abstract class WorkspaceCommandRunner<
       throw error;
     }
   }
+
+  // Ordered upgrade only: commands without an explicitly fenced implementation
+  // must fail before running on an independent pooled connection.
+  public runOnWorkspaceInUpgradeTransaction?(
+    args: RunOnWorkspaceArgs,
+    queryRunner: QueryRunner,
+    afterCommit: (effect: () => Promise<void> | void) => void,
+  ): Promise<void>;
 
   public abstract runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void>;
 }

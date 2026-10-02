@@ -12,10 +12,11 @@ describe('MigrateOpenRouterModelIdentitiesCommand', () => {
 
   beforeEach(() => {
     query = jest.fn();
-    transaction = jest.fn(async (callback: (manager: EntityManager) => unknown) =>
-      callback({
-        getRepository: () => ({ query }),
-      } as unknown as EntityManager),
+    transaction = jest.fn(
+      async (callback: (manager: EntityManager) => unknown) =>
+        callback({
+          getRepository: () => ({ query }),
+        } as unknown as EntityManager),
     );
 
     const workspaceRepository = {
@@ -50,13 +51,38 @@ describe('MigrateOpenRouterModelIdentitiesCommand', () => {
       workspaceId,
     ]);
     expect(query.mock.calls[0][0]).toContain('substring("fastModel"');
-    expect(query.mock.calls[0][0]).toContain('smartModel" LIKE $2 || \'%\'');
-    expect(query.mock.calls[0][0]).toContain('routerModel" LIKE $2 || \'%\'');
-    expect(query.mock.calls[0][0]).toContain('model_id LIKE $2 || \'%\'');
+    expect(query.mock.calls[0][0]).toContain("smartModel\" LIKE $2 || '%'");
+    expect(query.mock.calls[0][0]).toContain("routerModel\" LIKE $2 || '%'");
+    expect(query.mock.calls[0][0]).toContain("model_id LIKE $2 || '%'");
     expect(query.mock.calls[1][0]).toContain('"modelId" LIKE $2 || \'%\'');
     expect(query.mock.calls[1][0]).toContain('substring("modelId"');
     expect(query.mock.calls[0][0]).not.toContain('ALL(');
     expect(query.mock.calls[1][0]).not.toContain('ALL(');
+  });
+
+  it('uses only the pinned runner when invoked by ordered upgrade', async () => {
+    const pinnedQuery = jest.fn(
+      async (_sql: string, _parameters: unknown[]) => undefined,
+    );
+    const runner = {
+      manager: { getRepository: () => ({ query: pinnedQuery }) },
+    } as never;
+    await command.runOnWorkspaceInUpgradeTransaction(
+      { workspaceId, options: { dryRun: false }, index: 0, total: 1 },
+      runner,
+    );
+    expect(transaction).not.toHaveBeenCalled();
+    expect(pinnedQuery).toHaveBeenCalledTimes(2);
+    expect(pinnedQuery.mock.calls[0][1]).toEqual([
+      'openrouter-custom/',
+      'openrouter/',
+      workspaceId,
+    ]);
+    expect(pinnedQuery.mock.calls[1][1]).toEqual([
+      'openrouter-custom/',
+      'openrouter/',
+      workspaceId,
+    ]);
   });
 
   it('does not write in dry-run mode', async () => {
