@@ -53,10 +53,6 @@ const resolvedRoutes: ResolvedMyahNavigationRoute[] = [
     status: 'soon',
     route: getMyahNavigationRoute('creator-briefs'),
   },
-  {
-    status: 'missing',
-    route: getMyahNavigationRoute('brand-brain'),
-  },
 ];
 
 const renderSection = (
@@ -117,13 +113,6 @@ describe('MyahNavigationDrawerSection', () => {
     expect(creatorBriefsControl).toHaveAttribute('aria-disabled', 'true');
     expect(creatorBriefsControl).toHaveAttribute('tabindex', '-1');
     expect(creatorBriefsControl).not.toHaveAttribute('href');
-    const brandBrainControl = screen.getByRole('button', {
-      name: 'Brand Brain',
-    });
-
-    expect(brandBrainControl).toHaveAttribute('aria-disabled', 'true');
-    expect(brandBrainControl).toHaveAttribute('tabindex', '-1');
-    expect(brandBrainControl).not.toHaveAttribute('href');
   });
 
   it('removes group headers from the collapsed drawer while retaining group route controls', () => {

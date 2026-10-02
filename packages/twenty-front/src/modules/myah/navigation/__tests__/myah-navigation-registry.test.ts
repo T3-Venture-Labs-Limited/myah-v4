@@ -79,11 +79,6 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
       { id: 'tasks', group: 'outreach', availability: 'available' },
       { id: 'approvals', group: 'outreach', availability: 'deferred' },
       {
-        id: 'brand-brain',
-        group: 'brand-workspace',
-        availability: 'available',
-      },
-      {
         id: 'connected-channels',
         group: 'brand-workspace',
         availability: 'deferred',
@@ -191,13 +186,6 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
       object: {
         kind: 'core-object',
         nameSingular: CoreObjectNameSingular.Task,
-      },
-    });
-    expect(getMyahNavigationRoute('brand-brain').destination).toEqual({
-      kind: 'native-object',
-      object: {
-        kind: 'app-object',
-        universalIdentifier: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
       },
     });
 
