@@ -167,6 +167,61 @@ const runTableHook = (
 };
 
 describe('buildCreatorSpreadsheetImportSession', () => {
+  it('preserves an explicitly mapped note on the clean schema without adding a Creator field', async () => {
+    const session = buildCreatorSpreadsheetImportSession({
+      availableFieldMetadataItems: [{ id: 'name-id', name: 'name' }],
+      spreadsheetImportFields: [field('name', 'name-id')],
+      queryExistingCreators: jest.fn().mockResolvedValue([]),
+    });
+    expect(session.spreadsheetImportFields).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'notes' })]),
+    );
+    const rows = await session.matchColumnsStepHook(
+      [{ name: 'Ada', notes: 'Prefers email' }],
+      [['Ada', 'Prefers email']],
+      columnsFor(['first_name', 'notes']),
+      undefined,
+    );
+    const plan = session.buildRowCommitPlan(rows[0]);
+    expect(plan.creator).toEqual({ name: 'Ada' });
+    expect(plan.note?.markdown).toContain('Prefers email');
+    expect(session.getRowPreview(rows[0]).supplementaryNoteFields).toHaveLength(
+      1,
+    );
+    expect(session.getRowPreview(rows[0]).excludedFields).toEqual([]);
+
+    const [remappedRow] = await session.matchColumnsStepHook(
+      [{ name: 'Ada', notes: 'No exclusivity' }],
+      [['Ada', 'Prefers email', 'No exclusivity']],
+      [
+        {
+          index: 0,
+          header: 'Name',
+          type: SpreadsheetColumnType.matched,
+          value: 'name',
+        },
+        {
+          index: 1,
+          header: 'Original notes',
+          type: SpreadsheetColumnType.ignored,
+        },
+        {
+          index: 2,
+          header: 'Brand preference',
+          type: SpreadsheetColumnType.matched,
+          value: 'notes',
+        },
+      ],
+      undefined,
+    );
+    expect(session.getRowPreview(remappedRow).excludedFields).toEqual([
+      'Original notes',
+    ]);
+    expect(session.buildRowCommitPlan(remappedRow).note?.markdown).toContain(
+      'No exclusivity',
+    );
+  });
+
   it('maps clean Creator metadata social URLs to UI-only fields and canonical profiles', async () => {
     const session = buildCreatorSpreadsheetImportSession({
       availableFieldMetadataItems: metadataItems.filter(

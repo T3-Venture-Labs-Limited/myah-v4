@@ -219,12 +219,27 @@ export const buildCreatorSpreadsheetImportSession = ({
       isNestedField: false,
     }),
   );
+  const noteImportFields: SpreadsheetImportField[] =
+    spreadsheetImportFields.some(({ key }) => key === 'notes')
+      ? []
+      : [
+          {
+            key: 'notes',
+            label: 'Supplementary note',
+            Icon: undefined,
+            fieldMetadataItemId: 'virtual:creator-note',
+            fieldMetadataType: FieldMetadataType.TEXT,
+            fieldType: { type: 'input' },
+            isNestedField: false,
+          },
+        ];
   const importFields = [
     ...spreadsheetImportFields.filter(
       (field) =>
         !SOCIAL_DESTINATIONS.some(({ fieldKey }) => field.key === fieldKey),
     ),
     ...socialImportFields,
+    ...noteImportFields,
   ];
   const fieldByDestinationKey = new Map<
     HeaderDestinationKey,
@@ -264,7 +279,9 @@ export const buildCreatorSpreadsheetImportSession = ({
       fieldByDestinationKey.set(socialDestination.destinationKey, field);
   }
 
-  const headerAliases: Record<string, SpreadsheetImportHeaderAlias> = {};
+  const headerAliases: Record<string, SpreadsheetImportHeaderAlias> = {
+    notes: { fieldKey: 'notes' },
+  };
 
   for (const [sourceHeader, destinationKey] of Object.entries(
     SOURCE_HEADER_DESTINATION_KEYS,
@@ -340,7 +357,8 @@ export const buildCreatorSpreadsheetImportSession = ({
     importFields.flatMap((field) => {
       const metadata =
         fieldMetadataById.get(field.fieldMetadataItemId) ??
-        (SOCIAL_DESTINATIONS.some(({ fieldKey }) => field.key === fieldKey)
+        (field.key === 'notes' ||
+        SOCIAL_DESTINATIONS.some(({ fieldKey }) => field.key === fieldKey)
           ? { name: field.key, label: field.label }
           : undefined);
 
