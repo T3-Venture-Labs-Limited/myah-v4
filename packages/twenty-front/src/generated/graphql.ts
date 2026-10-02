@@ -741,10 +741,10 @@ export type MyahInboxInstagramMessage = {
   provider: Scalars['String']['output'];
   providerCreatedAt?: Maybe<Scalars['String']['output']>;
   providerMessageId?: Maybe<Scalars['String']['output']>;
-  replyReceiptId?: Maybe<Scalars['String']['output']>;
   reactionActorLabel?: Maybe<Scalars['String']['output']>;
   reactionEmoji?: Maybe<Scalars['String']['output']>;
   reactionVersion?: Maybe<Scalars['String']['output']>;
+  replyReceiptId?: Maybe<Scalars['String']['output']>;
   sentVia: Scalars['String']['output'];
   text?: Maybe<Scalars['String']['output']>;
 };
