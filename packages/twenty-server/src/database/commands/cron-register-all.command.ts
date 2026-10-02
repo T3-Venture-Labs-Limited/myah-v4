@@ -28,6 +28,7 @@ import { CalendarOngoingStaleCronCommand } from 'src/modules/calendar/calendar-e
 import { CalendarRelaunchFailedCalendarChannelsCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-relaunch-failed-calendar-channels.cron.command';
 import { MessagingMessageListFetchCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-message-list-fetch.cron.command';
 import { MessagingMessagesImportCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-messages-import.cron.command';
+import { CampaignEmailReplyRecoveryCronCommand } from 'src/modules/campaign-partnership/commands/campaign-email-reply-recovery.cron.command';
 import { MessagingOngoingStaleCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-ongoing-stale.cron.command';
 import { MessagingRelaunchFailedMessageChannelsCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-relaunch-failed-message-channels.cron.command';
 import { UnipileInstagramAccountRecoveryCronCommand } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.cron-command';
@@ -46,6 +47,7 @@ export class CronRegisterAllCommand extends CommandRunner {
   constructor(
     private readonly campaignEmailRuntimeCronCommand: CampaignEmailRuntimeCronCommand,
     private readonly messagingMessagesImportCronCommand: MessagingMessagesImportCronCommand,
+    private readonly campaignEmailReplyRecoveryCronCommand: CampaignEmailReplyRecoveryCronCommand,
     private readonly messagingMessageListFetchCronCommand: MessagingMessageListFetchCronCommand,
     private readonly messagingOngoingStaleCronCommand: MessagingOngoingStaleCronCommand,
     private readonly messagingRelaunchFailedMessageChannelsCronCommand: MessagingRelaunchFailedMessageChannelsCronCommand,
@@ -107,6 +109,10 @@ export class CronRegisterAllCommand extends CommandRunner {
       {
         name: 'CampaignEmailRuntime',
         command: this.campaignEmailRuntimeCronCommand,
+      },
+      {
+        name: 'CampaignEmailReplyRecovery',
+        command: this.campaignEmailReplyRecoveryCronCommand,
       },
       {
         name: 'MessagingMessagesImport',

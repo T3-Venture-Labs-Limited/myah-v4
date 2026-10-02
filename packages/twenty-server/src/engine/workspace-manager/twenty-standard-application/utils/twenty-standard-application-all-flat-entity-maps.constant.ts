@@ -1,4 +1,8 @@
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
+
+import { ALL_MANY_TO_ONE_METADATA_RELATIONS } from 'src/engine/metadata-modules/flat-entity/constant/all-many-to-one-metadata-relations.constant';
+import { pruneDanglingForeignKeyAggregatorsInAllFlatEntityMapsThroughMutation } from 'src/engine/metadata-modules/flat-entity/utils/prune-dangling-foreign-key-aggregators-in-all-flat-entity-maps-through-mutation.util';
 
 import { createEmptyFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-flat-entity-maps.constant';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
@@ -35,6 +39,7 @@ export type ComputeTwentyStandardApplicationAllFlatEntityMapsArgs = {
   workspaceId: string;
   twentyStandardApplicationId: string;
   removeReplacedTwentyCrmMetadata?: boolean;
+  omitPartnershipFacts?: boolean;
 };
 
 export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
@@ -42,6 +47,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
   workspaceId,
   twentyStandardApplicationId,
   removeReplacedTwentyCrmMetadata = false,
+  omitPartnershipFacts = false,
 }: ComputeTwentyStandardApplicationAllFlatEntityMapsArgs): {
   allFlatEntityMaps: TwentyStandardAllFlatEntityMaps;
   // TODO remove once all metadatas has fully been universal migrated
@@ -286,6 +292,103 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
 
   if (removeReplacedTwentyCrmMetadata) {
     removeReplacedTwentyCrmMetadataFromMaps(allFlatEntityMaps);
+  }
+
+  if (omitPartnershipFacts) {
+    // Remove the two later objects and the entire dependent metadata graph,
+    // including inverse relations on CampaignCreator/Task and role permissions.
+    const omitted = new Set<string>([
+      MYAH_STANDARD_OBJECTS.partnershipOfferVersion.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier,
+    ]);
+    const removedByName: Record<string, Set<string>> = {
+      objectMetadata: omitted,
+    };
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+      for (const name of TWENTY_STANDARD_ALL_METADATA_NAME) {
+        const maps = allFlatEntityMaps[getMetadataFlatEntityMapsKey(name)] as {
+          byUniversalIdentifier: Record<
+            string,
+            Record<string, unknown> | undefined
+          >;
+        };
+        const removed = (removedByName[name] ??= new Set());
+        const relations = Object.values(
+          ALL_MANY_TO_ONE_METADATA_RELATIONS[name],
+        ) as ({ metadataName: string; universalForeignKey: string } | null)[];
+        for (const entity of Object.values(maps.byUniversalIdentifier).filter(
+          isDefined,
+        )) {
+          const id = entity.universalIdentifier as string;
+          if (removed.has(id)) continue;
+          const referencesRemoved = relations.some(
+            (relation) =>
+              relation !== null &&
+              removedByName[relation.metadataName]?.has(
+                entity[relation.universalForeignKey] as string,
+              ),
+          );
+          const targetsRemovedField =
+            name === 'fieldMetadata' &&
+            (removedByName.fieldMetadata?.has(
+              entity.relationTargetFieldMetadataUniversalIdentifier as string,
+            ) ||
+              (entity.universalSettings &&
+                typeof entity.universalSettings === 'object' &&
+                removedByName.fieldMetadata?.has(
+                  (entity.universalSettings as Record<string, string>)
+                    .junctionTargetFieldUniversalIdentifier,
+                )));
+          const indexesRemovedField =
+            name === 'index' &&
+            Array.isArray(entity.universalFlatIndexFieldMetadatas) &&
+            entity.universalFlatIndexFieldMetadatas.some(
+              (field: { fieldMetadataUniversalIdentifier: string }) =>
+                removedByName.fieldMetadata?.has(
+                  field.fieldMetadataUniversalIdentifier,
+                ),
+            );
+          if (referencesRemoved || targetsRemovedField || indexesRemovedField) {
+            removed.add(id);
+            changed = true;
+          }
+        }
+      }
+    }
+
+    for (const name of TWENTY_STANDARD_ALL_METADATA_NAME) {
+      const maps = allFlatEntityMaps[getMetadataFlatEntityMapsKey(name)] as {
+        byUniversalIdentifier: Record<string, { id: string } | undefined>;
+        universalIdentifierById: Record<string, string | undefined>;
+        universalIdentifiersByApplicationId: Record<
+          string,
+          string[] | undefined
+        >;
+      };
+      const removed = removedByName[name];
+      if (!removed) continue;
+      for (const id of removed) {
+        const entity = maps.byUniversalIdentifier[id];
+        if (entity) {
+          delete maps.universalIdentifierById[entity.id];
+          delete maps.byUniversalIdentifier[id];
+        }
+      }
+      for (const [applicationId, ids] of Object.entries(
+        maps.universalIdentifiersByApplicationId,
+      )) {
+        if (ids)
+          maps.universalIdentifiersByApplicationId[applicationId] = ids.filter(
+            (id) => !removed.has(id),
+          );
+      }
+    }
+    pruneDanglingForeignKeyAggregatorsInAllFlatEntityMapsThroughMutation({
+      allFlatEntityMapsToMutate: allFlatEntityMaps,
+    });
   }
 
   const idByUniversalIdentifierByMetadataName: IdByUniversalIdentifierByMetadataName =

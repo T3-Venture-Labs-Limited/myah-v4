@@ -20,7 +20,6 @@ import { MessagingCommonModule } from 'src/modules/messaging/common/messaging-co
 import { MessageParticipantMatchParticipantJob } from 'src/modules/messaging/message-participant-manager/jobs/message-participant-match-participant.job';
 import { MessageParticipantPersonListener } from 'src/modules/messaging/message-participant-manager/listeners/message-participant-person.listener';
 import { MessageParticipantWorkspaceMemberListener } from 'src/modules/messaging/message-participant-manager/listeners/message-participant-workspace-member.listener';
-import { MessageParticipantListener } from 'src/modules/messaging/message-participant-manager/listeners/message-participant.listener';
 import { MessagingMessageParticipantService } from 'src/modules/messaging/message-participant-manager/services/messaging-message-participant.service';
 import { TimelineActivityWorkspaceEntity } from 'src/modules/timeline/standard-objects/timeline-activity.workspace-entity';
 
@@ -45,7 +44,6 @@ import { TimelineActivityWorkspaceEntity } from 'src/modules/timeline/standard-o
   providers: [
     MessagingMessageParticipantService,
     MessageParticipantMatchParticipantJob,
-    MessageParticipantListener,
     MessageParticipantPersonListener,
     MessageParticipantWorkspaceMemberListener,
     FeatureFlagService,

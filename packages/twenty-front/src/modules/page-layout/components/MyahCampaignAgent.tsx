@@ -3,6 +3,7 @@ import { styled } from '@linaria/react';
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { MyahCampaignReplyStatus } from '@/page-layout/components/MyahCampaignReplyStatus';
 import { MyahCampaignRichTextSettings } from '@/page-layout/components/MyahCampaignRichTextSettings';
 
 type MyahCampaignAgentProps = {
@@ -71,6 +72,7 @@ export const MyahCampaignAgent = ({
       ref={guidanceRegionRef}
       tabIndex={-1}
     >
+      <MyahCampaignReplyStatus campaignId={campaignId} />
       <MyahCampaignRichTextSettings
         campaignId={campaignId}
         copy={{

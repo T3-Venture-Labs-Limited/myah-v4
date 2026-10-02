@@ -23,6 +23,7 @@ const SYSTEM_PERMISSIONS = { shouldBypassPermissionChecks: true } as const;
 const REASON_ORDER: readonly CampaignOutreachAudienceExclusionReason[] = [
   'INVALID_MEMBERSHIP',
   'OPERATOR_EXCLUDED',
+  'REPLY_RECEIVED',
   'MISSING_CREATOR',
   'INVALID_STAGE',
   'NON_EMAIL_CONTACT_METHOD',
@@ -54,6 +55,7 @@ type AudienceRows = Readonly<{
   memberships: readonly Membership[];
   audienceCreators: readonly Creator[];
   allWorkspaceCreators: readonly Creator[];
+  repliedMembershipIds: ReadonlySet<string>;
 }>;
 
 @Injectable()
@@ -147,6 +149,12 @@ export class CampaignOutreachAudienceReviewService {
         buildSystemAuthContext(workspaceId),
       );
 
+      const repliedMembershipIds = await this.repliedMembershipIds(
+        workspaceId,
+        campaignId,
+        activeMemberships,
+        audienceCreators,
+      );
       const candidateEmails = this.candidateEmails(audienceCreators);
       const suppressedEmails = await this.suppression.getSuppressedAddresses(
         workspaceId,
@@ -159,6 +167,7 @@ export class CampaignOutreachAudienceReviewService {
           memberships: activeMemberships,
           audienceCreators,
           allWorkspaceCreators,
+          repliedMembershipIds,
         },
         suppressedEmails,
       );
@@ -244,6 +253,13 @@ export class CampaignOutreachAudienceReviewService {
     if (!Array.isArray(allWorkspaceCreators))
       throw new Error('Campaign audience duplicate census was incomplete');
 
+    const repliedMembershipIds = await this.repliedMembershipIds(
+      workspaceId,
+      campaignId,
+      activeMemberships,
+      audienceCreators,
+      runner,
+    );
     const candidateEmails = this.candidateEmails(audienceCreators);
     const suppressionRows = await runner.query(
       `SELECT "emailAddress"
@@ -267,6 +283,7 @@ export class CampaignOutreachAudienceReviewService {
         memberships: activeMemberships,
         audienceCreators,
         allWorkspaceCreators,
+        repliedMembershipIds,
       },
       suppressedEmails,
     );
@@ -324,6 +341,11 @@ export class CampaignOutreachAudienceReviewService {
       )
         reasons.push('INVALID_MEMBERSHIP');
       if (membership.excludedAt != null) reasons.push('OPERATOR_EXCLUDED');
+      if (
+        campaignCreatorId !== null &&
+        rows.repliedMembershipIds.has(campaignCreatorId)
+      )
+        reasons.push('REPLY_RECEIVED');
       if (!creator) reasons.push('MISSING_CREATOR');
       if (
         !MYAH_CAMPAIGN_CREATOR_OUTREACH_ELIGIBLE_STAGES.has(
@@ -385,6 +407,48 @@ export class CampaignOutreachAudienceReviewService {
       eligible: Object.freeze(eligible.sort(compare)),
       excluded: Object.freeze(excluded.sort(compare)),
     });
+  }
+
+  private async repliedMembershipIds(
+    workspaceId: string,
+    campaignId: string,
+    memberships: readonly Membership[],
+    audienceCreators: readonly Creator[],
+    runner?: NonNullable<WorkspaceEntityManager['queryRunner']>,
+  ): Promise<ReadonlySet<string>> {
+    const visibleCreatorIds = new Set(
+      audienceCreators
+        .filter(
+          ({ id, deletedAt }) =>
+            deletedAt == null && typeof id === 'string' && isUuid(id),
+        )
+        .map(({ id }) => id),
+    );
+    const ids = memberships
+      .filter(({ creatorId }) => visibleCreatorIds.has(creatorId))
+      .map(({ id }) => id)
+      .filter((id): id is string => typeof id === 'string' && isUuid(id));
+    if (ids.length === 0) return new Set();
+    const query = `SELECT DISTINCT "campaignCreatorId" FROM core."campaignEnrollment"
+      WHERE "workspaceId"=$1 AND "campaignId"=$2
+        AND "campaignCreatorId"=ANY($3::uuid[]) AND state='REPLIED'`;
+    const result = runner
+      ? await runner.query(query, [workspaceId, campaignId, ids])
+      : await this.orm.getGlobalWorkspaceDataSource().then((source) =>
+          // Both role-scoped repositories supplied these membership and Creator IDs;
+          // bypass only for this workspace/Campaign/ID-bounded core history read.
+          source.query(query, [workspaceId, campaignId, ids], undefined, {
+            shouldBypassPermissionChecks: true,
+          }),
+        );
+    if (!Array.isArray(result))
+      throw new Error('Campaign audience reply history was incomplete');
+    const queriedIds = new Set(ids);
+    return new Set(
+      result
+        .map(({ campaignCreatorId }) => campaignCreatorId)
+        .filter((id) => queriedIds.has(id)),
+    );
   }
 
   private candidateEmails(creators: readonly Creator[]): string[] {

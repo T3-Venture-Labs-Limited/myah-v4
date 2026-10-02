@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+  MYAH_STANDARD_OBJECTS,
+  STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { MetadataFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/metadata-flat-entity.type';
@@ -43,6 +47,70 @@ export class TwentyStandardApplicationService {
         'featureFlagsMap',
       ]);
 
+    const objectMaps = getSubFlatEntityMapsByApplicationIdsOrThrow({
+      applicationIds: [twentyStandardFlatApplication.id],
+      flatEntityMaps:
+        fromTwentyStandardAllFlatEntityMaps.flatObjectMetadataMaps,
+    });
+    const installedPartnershipObjects = [
+      MYAH_STANDARD_OBJECTS.partnershipOfferVersion.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier,
+    ].filter((id) => objectMaps.byUniversalIdentifier[id] !== undefined);
+
+    const laterObjects = [
+      MYAH_STANDARD_OBJECTS.partnershipOfferVersion,
+      MYAH_STANDARD_OBJECTS.partnershipObligation,
+    ];
+    const laterFields = [
+      ...laterObjects.flatMap((object) =>
+        Object.values(object.fields).map((field) => field.universalIdentifier),
+      ),
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.offerVersions
+        .universalIdentifier,
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.partnershipObligations
+        .universalIdentifier,
+      STANDARD_OBJECTS.task.fields.partnershipObligations.universalIdentifier,
+    ];
+    const laterIndexes = laterObjects.flatMap((object) =>
+      Object.values(object.indexes).map((index) => index.universalIdentifier),
+    );
+    const fieldMaps = getSubFlatEntityMapsByApplicationIdsOrThrow({
+      applicationIds: [twentyStandardFlatApplication.id],
+      flatEntityMaps: fromTwentyStandardAllFlatEntityMaps.flatFieldMetadataMaps,
+    });
+    const indexMaps = getSubFlatEntityMapsByApplicationIdsOrThrow({
+      applicationIds: [twentyStandardFlatApplication.id],
+      flatEntityMaps: fromTwentyStandardAllFlatEntityMaps.flatIndexMaps,
+    });
+    const permissionMaps = getSubFlatEntityMapsByApplicationIdsOrThrow({
+      applicationIds: [twentyStandardFlatApplication.id],
+      flatEntityMaps:
+        fromTwentyStandardAllFlatEntityMaps.flatObjectPermissionMaps,
+    });
+    if (
+      installedPartnershipObjects.length === 1 ||
+      (installedPartnershipObjects.length === 0 &&
+        (laterFields.some(
+          (id) => fieldMaps.byUniversalIdentifier[id] !== undefined,
+        ) ||
+          laterIndexes.some(
+            (id) => indexMaps.byUniversalIdentifier[id] !== undefined,
+          ) ||
+          Object.values(permissionMaps.byUniversalIdentifier).some(
+            (permission) =>
+              permission !== undefined &&
+              laterObjects.some(
+                (object) =>
+                  permission.objectMetadataUniversalIdentifier ===
+                  object.universalIdentifier,
+              ),
+          )))
+    ) {
+      throw new Error(
+        'Unsupported partial partnership metadata: inspect applied B before standard application synchronization',
+      );
+    }
+
     const {
       allFlatEntityMaps: toTwentyStandardAllFlatEntityMaps,
       idByUniversalIdentifierByMetadataName,
@@ -51,6 +119,7 @@ export class TwentyStandardApplicationService {
       workspaceId,
       twentyStandardApplicationId: twentyStandardFlatApplication.id,
       removeReplacedTwentyCrmMetadata: profile === 'myah',
+      omitPartnershipFacts: installedPartnershipObjects.length === 0,
     });
 
     const fromToAllFlatEntityMaps: FromToAllUniversalFlatEntityMaps = {};

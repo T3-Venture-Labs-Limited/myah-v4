@@ -485,6 +485,7 @@ describe('CampaignFinalSubmissionAuthorityAdapter', () => {
     [{ pool: { senderPoolFingerprint: 'changed' } }, 'SENDER_NOT_READY'],
     [{ pool: { serializationRevision: 'changed' } }, 'SENDER_NOT_READY'],
     [{ pool: { rotationPolicyId: 'changed' } }, 'SENDER_NOT_READY'],
+    [{ excludedReasons: ['REPLY_RECEIVED'] }, 'ENROLLMENT_REPLIED'],
     [{ excludedReasons: ['SUPPRESSED_EMAIL'] }, 'RECIPIENT_SUPPRESSED'],
     [{ excludedReasons: ['DUPLICATE_CREATOR_EMAIL'] }, 'AUDIENCE_DUPLICATE'],
     [{ excludedReasons: ['INVALID_STAGE'] }, 'AUDIENCE_STAGE_INVALID'],

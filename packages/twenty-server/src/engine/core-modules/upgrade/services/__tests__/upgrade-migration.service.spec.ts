@@ -1,4 +1,9 @@
-import { IsNull, type Repository, type DataSource } from 'typeorm';
+import {
+  IsNull,
+  type Repository,
+  type DataSource,
+  type QueryRunner,
+} from 'typeorm';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { type UpgradeMigrationEntity } from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
@@ -43,6 +48,150 @@ const buildInstagramSequenceReader = () => {
   );
   return reader;
 };
+
+describe('UpgradeMigrationService pinned complete history (mock QueryRunner, not PostgreSQL)', () => {
+  const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const date = new Date('2026-09-25T01:02:03.000Z');
+  const row = (id: string, workspaceId: string | null, overrides = {}) => ({
+    id,
+    workspaceId,
+    name: 'unknown-old-command',
+    attempt: 1,
+    status: 'failed',
+    isInitial: false,
+    createdAt: date,
+    ...overrides,
+  });
+  const repository = {
+    manager: { query: jest.fn() },
+    find: jest.fn(),
+    createQueryBuilder: jest.fn(),
+  };
+  const service = new UpgradeMigrationService(
+    repository as unknown as Repository<UpgradeMigrationEntity>,
+  );
+  const runner = (rows: unknown[]) => ({
+    databaseConnection: {},
+    isReleased: false,
+    query: jest.fn().mockResolvedValue(rows),
+    manager: { query: jest.fn(), getRepository: jest.fn() },
+  });
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('reads every attempt and initial/unknown/failed receipt, partitions null and requested empty scopes without pooled reads', async () => {
+    const rows = [
+      row('null-1', null),
+      row('a-1', a, { name: 'old-command', status: 'completed' }),
+      row('a-2', a, { attempt: 2 }),
+      row('b-initial', b, {
+        name: 'selected-command',
+        isInitial: true,
+        status: 'completed',
+      }),
+    ];
+    const pinned = runner(rows);
+    const result = await service.getScopedUpgradeReceiptHistories({
+      workspaceIds: [
+        a,
+        b,
+        a.toUpperCase(),
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      ],
+      queryRunner: pinned as unknown as QueryRunner,
+    });
+    expect([...result.keys()]).toEqual([
+      null,
+      a,
+      b,
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    ]);
+    expect(result.get(null)).toEqual([rows[0]]);
+    expect(result.get(a)).toEqual([rows[1], rows[2]]);
+    expect(result.get(b)).toEqual([rows[3]]);
+    expect(result.get('cccccccc-cccc-4ccc-8ccc-cccccccccccc')).toEqual([]);
+    expect(result.get(a)?.[0].id).toBe('a-1');
+    expect(result.get(a)?.[0].createdAt).toBe(date);
+    expect(pinned.query).toHaveBeenCalledTimes(1);
+    expect(pinned.query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /SELECT id, name, attempt, status, "workspaceId", "isInitial", "createdAt"\s+FROM core\."upgradeMigration"\s+WHERE "workspaceId" IS NULL OR "workspaceId" = ANY\(\$1::uuid\[\]\)\s+ORDER BY "workspaceId" NULLS FIRST, "createdAt", id/,
+      ),
+      [[a, b, 'cccccccc-cccc-4ccc-8ccc-cccccccccccc']],
+    );
+    expect(repository.manager.query).not.toHaveBeenCalled();
+    expect(repository.find).not.toHaveBeenCalled();
+    expect(repository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(pinned.manager.query).not.toHaveBeenCalled();
+  });
+
+  it('queries only null scope for explicitly empty workspace IDs', async () => {
+    const pinned = runner([row('null-1', null)]);
+    const result = await service.getScopedUpgradeReceiptHistories({
+      workspaceIds: [],
+      queryRunner: pinned as unknown as QueryRunner,
+    });
+    expect([...result.entries()]).toEqual([[null, [row('null-1', null)]]]);
+    expect(pinned.query).toHaveBeenCalledWith(
+      expect.stringContaining('ANY($1::uuid[])'),
+      [[]],
+    );
+  });
+
+  it.each([undefined, null, 'bad', [a, 'bad'], [a, null]])(
+    'rejects invalid or absent workspace scope %p before querying',
+    async (workspaceIds) => {
+      const pinned = runner([]);
+      await expect(
+        service.getScopedUpgradeReceiptHistories({
+          workspaceIds,
+          queryRunner: pinned as unknown as QueryRunner,
+        } as Parameters<typeof service.getScopedUpgradeReceiptHistories>[0]),
+      ).rejects.toThrow();
+      expect(pinned.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    null,
+    { isReleased: true, databaseConnection: {} },
+    { isReleased: false },
+  ])(
+    'rejects absent, released or disconnected runner %p',
+    async (queryRunner) => {
+      await expect(
+        service.getScopedUpgradeReceiptHistories({
+          workspaceIds: [],
+          queryRunner: queryRunner as QueryRunner,
+        }),
+      ).rejects.toThrow();
+    },
+  );
+
+  it('fails closed if a pinned result unexpectedly includes another workspace', async () => {
+    const pinned = runner([row('out-of-scope', b)]);
+    await expect(
+      service.getScopedUpgradeReceiptHistories({
+        workspaceIds: [a],
+        queryRunner: pinned as unknown as QueryRunner,
+      }),
+    ).rejects.toThrow('outside requested workspace scope');
+  });
+
+  it('propagates pinned query errors rather than substituting pooled history', async () => {
+    const pinned = runner([]);
+    const failure = new Error('query failed');
+    pinned.query.mockRejectedValue(failure);
+    await expect(
+      service.getScopedUpgradeReceiptHistories({
+        workspaceIds: [a],
+        queryRunner: pinned as unknown as QueryRunner,
+      }),
+    ).rejects.toBe(failure);
+    expect(repository.manager.query).not.toHaveBeenCalled();
+  });
+});
 
 describe('UpgradeMigrationService durable Instagram history contracts (mock repository, not PostgreSQL)', () => {
   const workspaceId = 'saved-workspace';

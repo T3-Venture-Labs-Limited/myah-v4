@@ -1,5 +1,13 @@
 import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
+import { CreateCampaignPartnershipWorkItemFastInstanceCommand } from './2-20-instance-command-fast-1790000000001-create-campaign-partnership-work-item';
+import { AddCampaignReplyAmbiguitySnapshotFastInstanceCommand } from './2-20-instance-command-fast-1790000000002-add-campaign-reply-ambiguity-snapshot';
+import { CreateCampaignEmailBaselineFastInstanceCommand } from './2-20-instance-command-fast-1790000000004-create-campaign-email-baseline';
+import { AddCampaignEmailAccountIncarnationFastInstanceCommand } from './2-20-instance-command-fast-1790000000005-add-campaign-email-account-incarnation';
+import { AddCampaignEmailWorkIdentityFastInstanceCommand } from './2-20-instance-command-fast-1790000000006-add-campaign-email-work-identity';
+import { CreateCampaignEmailWorkCollisionFastInstanceCommand } from './2-20-instance-command-fast-1790000000007-create-campaign-email-work-collision';
 import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
+import { SynchronizeMyahPartnershipFactsCommand } from './2-20-workspace-command-1789730000001-synchronize-myah-partnership-facts.command';
+import { SynchronizeCampaignReplyAuthorityCommand } from './2-20-workspace-command-1790000000003-synchronize-campaign-reply-authority.command';
 import { Module } from '@nestjs/common';
 import { SynchronizeInstagramComposerMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748005-synchronize-instagram-composer-metadata.command';
 import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971534-verify-instagram-security-cutover.command';
@@ -56,6 +64,8 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
   providers: [
     SynchronizeInstagramComposerMetadataCommand,
     SynchronizeMyahStandardMetadataCommand,
+    SynchronizeMyahPartnershipFactsCommand,
+    SynchronizeCampaignReplyAuthorityCommand,
     SynchronizeManagedEmailCampaignAssignmentMetadataCommand,
     SynchronizeSourceControlledMyahMetadataService,
     SynchronizeMyahCreatorCrmMetadataCommand,
@@ -83,6 +93,12 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     CatchUpCampaignActivityControlMetadataWorkspaceCommand,
     CreateMyahInboxReplyContextDraftsFastInstanceCommand,
     CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
+    CreateCampaignPartnershipWorkItemFastInstanceCommand,
+    AddCampaignReplyAmbiguitySnapshotFastInstanceCommand,
+    CreateCampaignEmailBaselineFastInstanceCommand,
+    AddCampaignEmailAccountIncarnationFastInstanceCommand,
+    AddCampaignEmailWorkIdentityFastInstanceCommand,
+    CreateCampaignEmailWorkCollisionFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
     RefreshMyahAssistantSkillsWorkspaceCommand,
   ],

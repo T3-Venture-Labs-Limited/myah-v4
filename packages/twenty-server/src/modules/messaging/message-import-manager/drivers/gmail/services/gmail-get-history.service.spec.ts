@@ -72,6 +72,28 @@ describe('GmailGetHistoryService', () => {
       expect(mockClient.users.history.list).toHaveBeenCalledTimes(2);
     });
 
+    it('rejects a repeated history page token instead of hanging an initial frontier walk', async () => {
+      const mockClient = {
+        users: {
+          history: {
+            list: jest
+              .fn()
+              .mockResolvedValueOnce({
+                data: { history: [], nextPageToken: 'stuck', historyId: '200' },
+              })
+              .mockResolvedValueOnce({
+                data: { history: [], nextPageToken: 'stuck', historyId: '200' },
+              })
+              .mockRejectedValue(new Error('unexpected third page')),
+          },
+        },
+      } as unknown as gmail_v1.Gmail;
+      await expect(service.getHistory(mockClient, '100')).rejects.toThrow(
+        'Repeated Gmail history page token',
+      );
+      expect(mockClient.users.history.list).toHaveBeenCalledTimes(2);
+    });
+
     it('should throw SYNC_CURSOR_ERROR when historyId is expired', async () => {
       const error = { code: 404, message: 'Not found' };
       const mockClient = {

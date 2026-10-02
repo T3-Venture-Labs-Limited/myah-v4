@@ -8,6 +8,7 @@ import { ManagedEmailModule } from 'src/engine/core-modules/managed-email/manage
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
 import { CampaignEmailRuntimeCronCommand } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.command';
+import { CampaignEmailReplyRecoveryCronCommand } from 'src/modules/campaign-partnership/commands/campaign-email-reply-recovery.cron.command';
 import { MyahUnipileModule } from 'src/modules/myah-unipile/myah-unipile.module';
 import { UnipileInstagramAccountRecoveryCronCommand } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.cron-command';
 
@@ -29,6 +30,9 @@ const runAggregate = async (
 ) => {
   const otherCronCommand = { run: jest.fn().mockResolvedValue(undefined) };
   const campaignEmailRuntimeCronCommand = {
+    run: jest.fn().mockResolvedValue(undefined),
+  };
+  const campaignEmailReplyRecoveryCronCommand = {
     run: jest.fn().mockResolvedValue(undefined),
   };
   const managedProviderBillingRecoveryCronCommand = {
@@ -60,15 +64,17 @@ const runAggregate = async (
         useValue:
           provide === CampaignEmailRuntimeCronCommand
             ? campaignEmailRuntimeCronCommand
-            : provide === ManagedProviderBillingRecoveryCronCommand
-              ? managedProviderBillingRecoveryCronCommand
-              : provide === ManagedEmailReconciliationCronCommand
-                ? managedEmailReconciliationCronCommand
-                : provide === UnipileInstagramAccountRecoveryCronCommand
-                  ? unipileInstagramAccountRecoveryCronCommand
-                  : provide === TwentyConfigService
-                    ? twentyConfigService
-                    : otherCronCommand,
+            : provide === CampaignEmailReplyRecoveryCronCommand
+              ? campaignEmailReplyRecoveryCronCommand
+              : provide === ManagedProviderBillingRecoveryCronCommand
+                ? managedProviderBillingRecoveryCronCommand
+                : provide === ManagedEmailReconciliationCronCommand
+                  ? managedEmailReconciliationCronCommand
+                  : provide === UnipileInstagramAccountRecoveryCronCommand
+                    ? unipileInstagramAccountRecoveryCronCommand
+                    : provide === TwentyConfigService
+                      ? twentyConfigService
+                      : otherCronCommand,
       })),
     ],
   }).compile();
@@ -80,6 +86,7 @@ const runAggregate = async (
 
   return {
     campaignEmailRuntimeCronCommand,
+    campaignEmailReplyRecoveryCronCommand,
     managedEmailReconciliationCronCommand,
     managedProviderBillingRecoveryCronCommand,
     unipileInstagramAccountRecoveryCronCommand,
@@ -87,9 +94,13 @@ const runAggregate = async (
 };
 
 describe('CronRegisterAllCommand', () => {
-  it('registers Campaign email runtime', async () => {
-    const { campaignEmailRuntimeCronCommand } = await runAggregate(false);
+  it('registers Campaign email runtime and pending reply recovery', async () => {
+    const {
+      campaignEmailRuntimeCronCommand,
+      campaignEmailReplyRecoveryCronCommand,
+    } = await runAggregate(false);
     expect(campaignEmailRuntimeCronCommand.run).toHaveBeenCalledTimes(1);
+    expect(campaignEmailReplyRecoveryCronCommand.run).toHaveBeenCalledTimes(1);
   });
 
   it('registers managed-provider billing recovery when Metronome is enabled', async () => {

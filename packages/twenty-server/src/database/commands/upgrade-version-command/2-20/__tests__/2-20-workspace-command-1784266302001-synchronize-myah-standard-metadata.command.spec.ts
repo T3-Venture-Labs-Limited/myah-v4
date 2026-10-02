@@ -201,6 +201,77 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     );
   });
 
+  it('projects reply-only metadata from a clean workspace without installing later partnership facts', async () => {
+    await runOnWorkspace();
+
+    const maps =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+        .fromToAllFlatEntityMaps;
+    const laterIds = [
+      MYAH_STANDARD_OBJECTS.partnershipOfferVersion.universalIdentifier,
+      MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier,
+    ];
+
+    for (const id of laterIds) {
+      expect(maps.flatObjectMetadataMaps.to.byUniversalIdentifier[id]).toBeUndefined();
+    }
+    expect(
+      Object.values(maps.flatFieldMetadataMaps.to.byUniversalIdentifier).some(
+        (field: any) =>
+          laterIds.includes(field.objectMetadataUniversalIdentifier) ||
+          laterIds.includes(field.relationTargetObjectMetadataUniversalIdentifier),
+      ),
+    ).toBe(false);
+    expect(
+      Object.values(maps.flatObjectPermissionMaps.to.byUniversalIdentifier).some(
+        (permission: any) =>
+          laterIds.includes(permission.objectMetadataUniversalIdentifier),
+      ),
+    ).toBe(false);
+  });
+
+  it('leaves already-installed partnership objects outside the broad sync slice', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-09-27T00:00:00.000Z',
+      });
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
+    getOrRecompute.mockResolvedValue({ ...allFlatEntityMaps, featureFlagsMap: {} });
+
+    await runOnWorkspace();
+
+    const maps =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+        .fromToAllFlatEntityMaps.flatObjectMetadataMaps;
+    for (const object of [
+      MYAH_STANDARD_OBJECTS.partnershipOfferVersion,
+      MYAH_STANDARD_OBJECTS.partnershipObligation,
+    ]) {
+      expect(maps.from.byUniversalIdentifier[object.universalIdentifier]).toBeUndefined();
+      expect(maps.to.byUniversalIdentifier[object.universalIdentifier]).toBeUndefined();
+    }
+  });
+
+  it('rejects partial partnership metadata before building a broad migration', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-09-27T00:00:00.000Z',
+      });
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier
+    ];
+    getOrRecompute.mockResolvedValue({ ...allFlatEntityMaps, featureFlagsMap: {} });
+
+    await expect(runOnWorkspace()).rejects.toThrow('Unsupported partial partnership metadata');
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
+  });
+
   it('omits cache-derived field uniqueness from the metadata migration', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({

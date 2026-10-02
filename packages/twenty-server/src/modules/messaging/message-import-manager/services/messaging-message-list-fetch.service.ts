@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { isNonEmptyString } from '@sniptt/guards';
@@ -26,6 +26,7 @@ import {
   MessageImportSyncStep,
 } from 'src/modules/messaging/message-import-manager/services/messaging-import-exception-handler.service';
 import { MessagingMessagesImportService } from 'src/modules/messaging/message-import-manager/services/messaging-messages-import.service';
+import { MessagingEmailBaselineService } from 'src/modules/messaging/message-import-manager/services/messaging-email-baseline.service';
 import { MessagingPendingSyncCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-pending-sync-cursor.service';
 import {
   MessagingProcessFolderActionsService,
@@ -55,6 +56,8 @@ export class MessagingMessageListFetchService {
     private readonly syncMessageFoldersService: SyncMessageFoldersService,
     private readonly messagingProcessGroupEmailActionsService: MessagingProcessGroupEmailActionsService,
     private readonly messagingProcessFolderActionsService: MessagingProcessFolderActionsService,
+    @Optional()
+    private readonly emailBaselineService?: MessagingEmailBaselineService,
   ) {}
 
   public async processMessageListFetch(
@@ -120,11 +123,33 @@ export class MessagingMessageListFetchService {
             workspaceId,
           });
 
+          const needsInitialScan =
+            (await this.emailBaselineService?.needsInitialScan(
+              freshMessageChannel,
+              messageFoldersToSync,
+              workspaceId,
+            )) ?? false;
+          const scannedIncarnationId = needsInitialScan
+            ? await this.emailBaselineService?.snapshotIncarnation(
+                freshMessageChannel,
+                workspaceId,
+              )
+            : null;
           const messageLists =
             await this.messagingGetMessageListService.getMessageLists(
               freshMessageChannel,
               messageFoldersToSync,
+              ...(needsInitialScan ? [true] : []),
             );
+          const baselineGenerationId = needsInitialScan
+            ? await this.emailBaselineService?.recordEnumeration(
+                freshMessageChannel,
+                messageFoldersToSync,
+                workspaceId,
+                messageLists,
+                scannedIncarnationId,
+              )
+            : null;
 
           const messageExternalIds = [
             ...messageLists.flatMap(
@@ -145,6 +170,7 @@ export class MessagingMessageListFetchService {
 
           let totalMessagesToImportCount = 0;
           const messageExternalIdsToImportForSync: string[] = [];
+          const alreadyImportedIds: string[] = [];
 
           this.logger.log(
             `WorkspaceId: ${workspaceId}, MessageChannelId: ${freshMessageChannel.id} - Is full sync: ${isFullSync}, toImportCount: ${messageExternalIds.length}, toDeleteCount: ${messageExternalIdsToDelete.length}`,
@@ -176,6 +202,11 @@ export class MessagingMessageListFetchService {
                   messageChannelMessageAssociation.messageExternalId,
               );
 
+            alreadyImportedIds.push(
+              ...existingMessageChannelMessageAssociationsExternalIds.filter(
+                isNonEmptyString,
+              ),
+            );
             const messageExternalIdsToImport = messageExternalIdsChunk.filter(
               (messageExternalId) =>
                 !existingMessageChannelMessageAssociationsExternalIds.includes(
@@ -204,11 +235,18 @@ export class MessagingMessageListFetchService {
             }
           }
 
+          await this.emailBaselineService?.recordAlreadyImported(
+            workspaceId,
+            freshMessageChannel,
+            baselineGenerationId ?? null,
+            alreadyImportedIds,
+          );
           await this.messagingPendingSyncCursorService.stage({
             messageChannelId: freshMessageChannel.id,
             messageExternalIds: messageExternalIdsToImportForSync,
             messageLists,
             workspaceId,
+            ...(baselineGenerationId ? { baselineGenerationId } : {}),
           });
 
           const fullSyncMessageChannelMessageAssociationsToDelete = isFullSync
@@ -260,6 +298,11 @@ export class MessagingMessageListFetchService {
               messageChannel: freshMessageChannel,
               workspaceId,
             });
+            await this.emailBaselineService?.finalize(
+              workspaceId,
+              freshMessageChannel,
+              baselineGenerationId ?? null,
+            );
 
             await this.messageChannelSyncStatusService.markAsMessageSyncCompleted(
               [freshMessageChannel.id],

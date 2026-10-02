@@ -122,12 +122,14 @@ type CampaignSequenceReadinessData = {
 
 type CampaignOutreachAudienceReason =
   | 'INVALID_MEMBERSHIP'
+  | 'OPERATOR_EXCLUDED'
   | 'MISSING_CREATOR'
   | 'INVALID_STAGE'
   | 'NON_EMAIL_CONTACT_METHOD'
   | 'INVALID_EMAIL'
   | 'SUPPRESSED_EMAIL'
-  | 'DUPLICATE_CREATOR_EMAIL';
+  | 'DUPLICATE_CREATOR_EMAIL'
+  | 'REPLY_RECEIVED';
 
 type CampaignOutreachAudienceReviewData = {
   campaignOutreachAudienceReview: {
@@ -152,12 +154,14 @@ type CampaignOutreachAudienceReviewData = {
 
 const audienceReasonLabels: Record<CampaignOutreachAudienceReason, string> = {
   INVALID_MEMBERSHIP: 'Campaign membership is invalid',
+  OPERATOR_EXCLUDED: 'Excluded by operator',
   MISSING_CREATOR: 'Creator is missing or deleted',
   INVALID_STAGE: 'Stage must be Not contacted or Contacted',
   NON_EMAIL_CONTACT_METHOD: 'Contact method must be Email',
   INVALID_EMAIL: 'Creator needs a valid email address',
   SUPPRESSED_EMAIL: 'Email address is suppressed',
   DUPLICATE_CREATOR_EMAIL: 'Email conflicts with another Creator',
+  REPLY_RECEIVED: 'Reply received',
 };
 
 type CampaignEmailSenderPoolReadinessData = {

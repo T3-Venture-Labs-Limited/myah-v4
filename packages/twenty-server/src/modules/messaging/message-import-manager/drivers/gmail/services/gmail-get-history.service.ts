@@ -5,6 +5,10 @@ import { type gmail_v1 } from 'googleapis';
 
 import { MESSAGING_GMAIL_USERS_HISTORY_MAX_RESULT } from 'src/modules/messaging/message-import-manager/drivers/gmail/constants/messaging-gmail-users-history-max-result.constant';
 import { GmailMessageListFetchErrorHandler } from 'src/modules/messaging/message-import-manager/drivers/gmail/services/gmail-message-list-fetch-error-handler.service';
+import {
+  MessageImportDriverException,
+  MessageImportDriverExceptionCode,
+} from 'src/modules/messaging/message-import-manager/drivers/exceptions/message-import-driver.exception';
 
 @Injectable()
 export class GmailGetHistoryService {
@@ -23,6 +27,7 @@ export class GmailGetHistoryService {
     let pageToken: string | undefined;
     let hasMoreMessages = true;
     let nextHistoryId: string | undefined;
+    const seenPageTokens = new Set<string>();
 
     while (hasMoreMessages) {
       const response = await gmailClient.users.history
@@ -57,6 +62,13 @@ export class GmailGetHistoryService {
       }
 
       pageToken = response?.data?.nextPageToken ?? undefined;
+      if (pageToken && seenPageTokens.has(pageToken)) {
+        throw new MessageImportDriverException(
+          'Repeated Gmail history page token',
+          MessageImportDriverExceptionCode.UNKNOWN,
+        );
+      }
+      if (pageToken) seenPageTokens.add(pageToken);
       hasMoreMessages = !!pageToken;
     }
 

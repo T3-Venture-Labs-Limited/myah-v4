@@ -25,6 +25,7 @@ import { AccountsToReconnectService } from 'src/modules/connected-account/servic
 import { AccountsToReconnectKeys } from 'src/modules/connected-account/types/accounts-to-reconnect-key-value.type';
 import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 import { MessageChannelSyncLockService } from 'src/modules/messaging/common/services/message-channel-sync-lock.service';
+import { invalidateCampaignEmailBaselineInTransaction } from 'src/modules/messaging/message-import-manager/utils/invalidate-campaign-email-baseline.util';
 import {
   getAcknowledgedMessageSyncIdsCacheKey,
   getMessagesToImportCacheKey,
@@ -184,6 +185,34 @@ export class MessageChannelSyncStatusService {
     messageChannelId: string,
     workspaceId: string,
   ): Promise<void> {
+    const authContext = buildSystemAuthContext(workspaceId);
+    // Invalidate *before* the cache/cursor reset. An in-flight remote scan
+    // carries the old incarnation and cannot re-establish READY afterward.
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        if (!dataSource) throw new Error('Workspace data source unavailable');
+        await dataSource.transaction(async (tx) => {
+          const accounts: Array<{ connectedAccountId: string }> =
+            await tx.query(
+              `SELECT c."connectedAccountId" FROM core."messageChannel" c
+           JOIN core."connectedAccount" a ON a."id" = c."connectedAccountId"
+           WHERE c."id" = $1 AND c."workspaceId" = $2 AND a."provider" = 'google'`,
+              [messageChannelId, workspaceId],
+            );
+          if (accounts[0])
+            await invalidateCampaignEmailBaselineInTransaction(
+              tx,
+              workspaceId,
+              accounts[0].connectedAccountId,
+            );
+        });
+      },
+      authContext,
+      { lite: true },
+    );
+
     const generationKey = getPendingMessageSyncGenerationCacheKey({
       messageChannelId,
       workspaceId,
@@ -208,8 +237,6 @@ export class MessageChannelSyncStatusService {
           ]
         : []),
     ]);
-
-    const authContext = buildSystemAuthContext(workspaceId);
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {

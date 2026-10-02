@@ -90,6 +90,66 @@ describe('MicrosoftGetMessageListService', () => {
     jest.clearAllMocks();
   });
 
+  it('rejects a batch that omits a requested folder', async () => {
+    const client = createMockMicrosoftClient();
+    client.post.mockResolvedValue({ responses: [] });
+    (microsoftOAuth2ClientProvider.getClient as jest.Mock).mockResolvedValue(
+      client,
+    );
+
+    await expect(
+      service.getMessageLists({
+        connectedAccount: mockConnectedAccount,
+        messageChannel: {
+          syncCursor: '',
+          id: 'channel-1',
+          messageFolderImportPolicy: MessageFolderImportPolicy.ALL_FOLDERS,
+        },
+        messageFolders: [
+          createMockFolder({
+            name: 'Inbox',
+            externalId: 'inbox-id',
+            isSynced: true,
+          }),
+        ],
+      }),
+    ).rejects.toThrow('Missing Microsoft message-list batch response');
+  });
+
+  it('rejects a completed folder scan without a delta cursor', async () => {
+    const client = createMockMicrosoftClient();
+    client.post.mockResolvedValue({
+      responses: [
+        {
+          id: '1',
+          status: 200,
+          body: { value: [{ id: 'msg-1' }] },
+        },
+      ],
+    });
+    (microsoftOAuth2ClientProvider.getClient as jest.Mock).mockResolvedValue(
+      client,
+    );
+
+    await expect(
+      service.getMessageLists({
+        connectedAccount: mockConnectedAccount,
+        messageChannel: {
+          syncCursor: '',
+          id: 'channel-1',
+          messageFolderImportPolicy: MessageFolderImportPolicy.ALL_FOLDERS,
+        },
+        messageFolders: [
+          createMockFolder({
+            name: 'Inbox',
+            externalId: 'inbox-id',
+            isSynced: true,
+          }),
+        ],
+      }),
+    ).rejects.toThrow('Missing Microsoft message-list delta cursor');
+  });
+
   describe('folder filtering based on import policy', () => {
     it('should only process synced folders when SELECTED_FOLDERS policy is set', async () => {
       const mockClient = createMockMicrosoftClient();

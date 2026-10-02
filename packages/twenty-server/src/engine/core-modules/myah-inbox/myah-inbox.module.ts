@@ -10,6 +10,9 @@ import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox
 import { MyahInboxTriageCapabilityService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
 import { MyahInboxReplyContextModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-reply-context.module';
 import { MyahInboxContactResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-contact.resolver';
+import { MyahInboxCampaignReplyWorkResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-campaign-reply-work.resolver';
+import { CampaignEmailReplyWorkBoundaryService } from 'src/modules/campaign-partnership/services/campaign-email-reply-work-boundary.service';
+import { CampaignEmailReplyWorkReviewService } from 'src/modules/campaign-partnership/services/campaign-email-reply-work-review.service';
 import { MyahInboxInstagramMessageResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-instagram-message.resolver';
 import { MyahInboxResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox.resolver';
 import { MyahInboxReplySendResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-reply-send.resolver';
@@ -30,7 +33,6 @@ import { MyahInboxReplyApprovedExecutionService } from 'src/engine/core-modules/
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
 import { AiAgentExecutionModule } from 'src/engine/metadata-modules/ai/ai-agent-execution/ai-agent-execution.module';
 import { AiBillingModule } from 'src/engine/metadata-modules/ai/ai-billing/ai-billing.module';
-import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { AiModelsModule } from 'src/engine/metadata-modules/ai/ai-models/ai-models.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
@@ -54,6 +56,8 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
   ],
   providers: [
     MyahInboxContactEmailQueryService,
+    CampaignEmailReplyWorkBoundaryService,
+    CampaignEmailReplyWorkReviewService,
     MyahInboxContactLinkService,
     MyahInboxContactQueryService,
     MyahInboxTriageCapabilityService,
@@ -105,12 +109,12 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
       inject: [MyahInboxReplyContextDraftService, ActionApprovalService],
     },
     MyahInboxToolWorkspaceService,
-    BrandBrainPreflightService,
     {
       provide: MYAH_INBOX_TOOL_SERVICE_TOKEN,
       useExisting: MyahInboxToolWorkspaceService,
     },
     MyahInboxContactResolver,
+    MyahInboxCampaignReplyWorkResolver,
     MyahInboxInstagramMessageResolver,
     {
       provide: MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN,

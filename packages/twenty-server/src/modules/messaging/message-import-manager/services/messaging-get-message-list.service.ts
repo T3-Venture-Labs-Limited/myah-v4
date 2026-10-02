@@ -25,13 +25,17 @@ export class MessagingGetMessageListService {
   public async getMessageLists(
     messageChannel: MessageChannelEntity,
     messageFolders: MessageFolder[],
+    forceGmailInitialScan = false,
   ): Promise<GetMessageListsResponse> {
     switch (messageChannel.connectedAccount.provider) {
       case ConnectedAccountProvider.GOOGLE:
         return await this.gmailGetMessageListService.getMessageLists({
-          messageChannel,
+          messageChannel: forceGmailInitialScan
+            ? { ...messageChannel, syncCursor: '' }
+            : messageChannel,
           connectedAccount: messageChannel.connectedAccount,
           messageFolders,
+          forceInitialFrontier: forceGmailInitialScan,
         });
       case ConnectedAccountProvider.MICROSOFT:
         return this.microsoftGetMessageListService.getMessageLists({

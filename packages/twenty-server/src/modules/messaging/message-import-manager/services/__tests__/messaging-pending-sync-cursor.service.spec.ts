@@ -111,6 +111,45 @@ describe('MessagingPendingSyncCursorService', () => {
     );
   });
 
+  it('binds baseline and Gmail creation candidates to the pending cursor generation, not an expired pointer', async () => {
+    await service.stage({
+      messageChannelId,
+      workspaceId,
+      messageExternalIds: ['old', 'new'],
+      baselineGenerationId: 'baseline-1',
+      messageLists: [
+        {
+          folderId: undefined,
+          messageExternalIds: ['old', 'new'],
+          newMessageExternalIds: ['new'],
+          messageExternalIdsToDelete: [],
+          nextSyncCursor: 'history-2',
+          previousSyncCursor: 'history-1',
+        },
+      ],
+    });
+    const state = cache.set.mock.calls[0][1];
+    cache.get.mockImplementation(async (key: string) =>
+      key === generationKey
+        ? state.generationId
+        : key === pendingKey(state.generationId)
+          ? state
+          : null,
+    );
+    await expect(
+      service.getFrontierState({ messageChannelId, workspaceId }),
+    ).resolves.toEqual({
+      baselineGenerationId: 'baseline-1',
+      newMessageExternalIds: ['new'],
+    });
+    cache.get.mockImplementation(async (key: string) =>
+      key === generationKey ? state.generationId : null,
+    );
+    await expect(
+      service.getFrontierState({ messageChannelId, workspaceId }),
+    ).resolves.toBeNull();
+  });
+
   it('acknowledges only IDs expected by the published generation', async () => {
     cache.get.mockImplementation(async (key: string) => {
       if (key === generationKey) return 'generation-1';

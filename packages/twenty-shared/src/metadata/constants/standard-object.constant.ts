@@ -2151,6 +2151,9 @@ export const STANDARD_OBJECTS = {
       updatedBy: {
         universalIdentifier: '9e8bf518-f4ab-433e-9674-efb75fba2802',
       },
+      partnershipObligations: {
+        universalIdentifier: 'd40a94a2-ccf9-55e8-956c-0eb3d6602d1d',
+      },
       taskTargets: {
         universalIdentifier: '20202020-de9c-4d0e-a452-713d4a3e5fc7',
       },

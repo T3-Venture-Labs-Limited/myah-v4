@@ -102,9 +102,17 @@ const buildHarness = (
   validationErrors?: Partial<Record<(typeof sources)[number][0], Error>>,
   duplicateDeletedAtPredicate = false,
   hasHiddenParticipatingEmail = false,
+  physicalSocialTables = [true, true],
 ) => {
   const getRepository = jest.fn(
     async (_workspaceId: string, object: string) => {
+      const metadataError =
+        validationErrors?.[object as (typeof sources)[number][0]];
+
+      if (metadataError instanceof EntityMetadataNotFoundError) {
+        throw metadataError;
+      }
+
       const repository = dataSource.getRepository(object);
 
       return {
@@ -140,7 +148,16 @@ const buildHarness = (
 
   expect(Service).toBeDefined();
 
-  const query = jest.fn().mockResolvedValue([{ hasHiddenParticipatingEmail }]);
+  const query = jest.fn(async (sql: string) =>
+    sql.includes('to_regclass')
+      ? [
+          {
+            conversationExists: physicalSocialTables[0],
+            messageExists: physicalSocialTables[1],
+          },
+        ]
+      : [{ hasHiddenParticipatingEmail }],
+  );
   const getGlobalWorkspaceDataSource = jest.fn().mockResolvedValue({ query });
 
   return {
@@ -254,11 +271,11 @@ describe('MyahInboxTriageCapabilityService', () => {
     ).resolves.toBeUndefined();
 
     expect(harness.getGlobalWorkspaceDataSource).toHaveBeenCalledTimes(1);
-    expect(harness.query.mock.calls[0][0]).toContain(
+    expect(harness.query.mock.calls[1][0]).toContain(
       'GROUP BY association."messageId"',
     );
-    expect(harness.query.mock.calls[0][0]).toContain('HAVING NOT BOOL_OR(');
-    expect(harness.query.mock.calls[0][0]).toContain(
+    expect(harness.query.mock.calls[1][0]).toContain('HAVING NOT BOOL_OR(');
+    expect(harness.query.mock.calls[1][0]).toContain(
       '"myahInboxTriageEmailChannelProvenance"',
     );
   });
@@ -292,6 +309,94 @@ describe('MyahInboxTriageCapabilityService', () => {
       message: 'Triage is unavailable with your current Inbox access',
       status: 403,
     });
+  });
+
+  const missingSocialMetadata = {
+    myahSocialConversation: new EntityMetadataNotFoundError(
+      'myahSocialConversation',
+    ),
+    myahSocialMessage: new EntityMetadataNotFoundError('myahSocialMessage'),
+  };
+
+  it('allows Email-only triage when both social metadata and tables are absent', async () => {
+    const harness = buildHarness(
+      undefined,
+      missingSocialMetadata,
+      false,
+      false,
+      [false, false],
+    );
+
+    await expect(
+      harness.service.assertRead({ authContext }),
+    ).resolves.toBeUndefined();
+    await expect(
+      harness.service.assertWrite({ authContext }),
+    ).resolves.toBeUndefined();
+    expect(harness.getRepository).toHaveBeenCalledWith(
+      workspace.id,
+      'messageThread',
+      rolePermissionConfig,
+    );
+  });
+
+  it.each([
+    ['only conversation table remains', [true, false], missingSocialMetadata],
+    ['only message table remains', [false, true], missingSocialMetadata],
+    [
+      'one social metadata remains',
+      [false, false],
+      { myahSocialMessage: missingSocialMetadata.myahSocialMessage },
+    ],
+    ['metadata remains without tables', [false, false], undefined],
+    [
+      'tables absent but metadata partially missing',
+      [false, false],
+      { myahSocialConversation: missingSocialMetadata.myahSocialConversation },
+    ],
+  ])(
+    'fails closed on inconsistent social capability: %s',
+    async (_name, tables, errors) => {
+      const harness = buildHarness(
+        undefined,
+        errors,
+        false,
+        false,
+        tables as boolean[],
+      );
+
+      await expect(harness.service.assertRead({ authContext })).rejects.toEqual(
+        expect.any(ForbiddenException),
+      );
+    },
+  );
+
+  it('rejects restricted Email thread reads even when social capability is absent', async () => {
+    const harness = buildHarness(
+      'messageThread',
+      missingSocialMetadata,
+      false,
+      false,
+      [false, false],
+    );
+
+    await expect(harness.service.assertRead({ authContext })).rejects.toEqual(
+      expect.any(ForbiddenException),
+    );
+  });
+
+  it('rejects hidden participating Email when social capability is absent', async () => {
+    const harness = buildHarness(
+      undefined,
+      missingSocialMetadata,
+      false,
+      true,
+      [false, false],
+    );
+
+    await expect(harness.service.assertRead({ authContext })).rejects.toEqual(
+      expect.any(ForbiddenException),
+    );
   });
 
   it('rethrows unexpected serialization failures', async () => {

@@ -41,6 +41,12 @@ import { MessagingMessagesImportJob } from 'src/modules/messaging/message-import
 import { MessagingOngoingStaleJob } from 'src/modules/messaging/message-import-manager/jobs/messaging-ongoing-stale.job';
 import { MessagingRelaunchFailedMessageChannelJob } from 'src/modules/messaging/message-import-manager/jobs/messaging-relaunch-failed-message-channel.job';
 import { MessagingCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-cursor.service';
+import { MessagingEmailBaselineService } from 'src/modules/messaging/message-import-manager/services/messaging-email-baseline.service';
+import { CampaignEmailInboundHeldWorkService } from 'src/modules/campaign-partnership/services/campaign-email-inbound-held-work.service';
+import { CampaignEmailReplyPendingRecoveryService } from 'src/modules/campaign-partnership/services/campaign-email-reply-pending-recovery.service';
+import { CampaignEmailReplyPendingJob } from 'src/modules/campaign-partnership/jobs/campaign-email-reply-pending.job';
+import { CampaignEmailReplyRecoveryCronJob } from 'src/modules/campaign-partnership/jobs/campaign-email-reply-recovery.cron.job';
+import { CampaignEmailReplyRecoveryCronCommand } from 'src/modules/campaign-partnership/commands/campaign-email-reply-recovery.cron.command';
 import { MessagingDeleteFolderMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-delete-folder-messages.service';
 import { MessagingDeleteGroupEmailMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-delete-group-email-messages.service';
 import { MessagingImportFolderMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-import-folder-messages.service';
@@ -115,6 +121,12 @@ import { MessagingMonitoringModule } from 'src/modules/messaging/monitoring/mess
     MessagingGetMessagesService,
     MessageImportExceptionHandlerService,
     MessagingCursorService,
+    MessagingEmailBaselineService,
+    CampaignEmailInboundHeldWorkService,
+    CampaignEmailReplyPendingRecoveryService,
+    CampaignEmailReplyPendingJob,
+    CampaignEmailReplyRecoveryCronJob,
+    CampaignEmailReplyRecoveryCronCommand,
     MessagingProcessFolderActionsService,
     MessagingProcessGroupEmailActionsService,
     MessagingDeleteFolderMessagesService,
@@ -131,6 +143,7 @@ import { MessagingMonitoringModule } from 'src/modules/messaging/monitoring/mess
     InboundEmailImportService,
     MessagingSaveMessagesAndEnqueueContactCreationService,
     MessagingMessageService,
+    CampaignEmailReplyRecoveryCronCommand,
   ],
 })
 export class MessagingImportManagerModule {}

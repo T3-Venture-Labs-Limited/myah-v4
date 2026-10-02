@@ -64,7 +64,13 @@ describe('ImapSmtpCalDavAPIService', () => {
   const mockTransactionConnectedAccountFindOne = jest.fn();
   const mockTransactionMessageChannelFindOne = jest.fn();
   const mockTransactionCalendarChannelFindOne = jest.fn();
-  const mockTransactionManagerQuery = jest.fn();
+  const mockTransactionManagerQuery = jest.fn(async (sql: string) => {
+    if (sql.includes('FOR UPDATE')) return [{ id: 'existing-account-id' }];
+    if (sql.includes('pg_attribute')) return [{ hasIncarnation: true }];
+    if (sql.includes('to_regclass'))
+      return [{ tableName: 'campaignEmailBaselineGeneration' }];
+    return [];
+  });
   const mockTransactionManager = {
     query: mockTransactionManagerQuery,
     queryRunner: {
@@ -582,10 +588,18 @@ describe('ImapSmtpCalDavAPIService', () => {
         authFailedAt: null,
       });
 
-      const invalidationCall = mockTransactionManagerQuery.mock.calls.find(
-        ([sql]) => String(sql).includes('campaignForecastHead'),
+      expect(mockTransactionManagerQuery).toHaveBeenCalledWith(
+        expect.stringContaining('"status" = \'INVALID\''),
+        ['workspace-id', 'existing-account-id'],
       );
-      expect(invalidationCall).toEqual([
+      const invalidationCallIndex =
+        mockTransactionManagerQuery.mock.calls.findIndex(([sql]) =>
+          String(sql).includes('campaignForecastHead'),
+        );
+      expect(invalidationCallIndex).toBeGreaterThanOrEqual(0);
+      expect(
+        mockTransactionManagerQuery.mock.calls[invalidationCallIndex],
+      ).toEqual([
         expect.stringContaining('campaignForecastHead'),
         ['workspace-id', 'workspace:workspace-id'],
       ]);
@@ -593,7 +607,7 @@ describe('ImapSmtpCalDavAPIService', () => {
         mockTransactionManagerSave.mock.invocationCallOrder[0],
       ).toBeLessThan(
         mockTransactionManagerQuery.mock.invocationCallOrder[
-          mockTransactionManagerQuery.mock.calls.indexOf(invalidationCall)
+          invalidationCallIndex
         ],
       );
 

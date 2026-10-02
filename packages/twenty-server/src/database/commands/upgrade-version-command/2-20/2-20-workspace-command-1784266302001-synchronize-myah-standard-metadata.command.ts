@@ -3,7 +3,7 @@ import { Command } from 'nest-commander';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { In, type DataSource } from 'typeorm';
 
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { MYAH_STANDARD_OBJECTS, STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 
@@ -215,19 +215,85 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       );
     const featureFlagsMap =
       cachedMetadata.featureFlagsMap as AdditionalCacheDataMaps['featureFlagsMap'];
+    // SAFETY: the requested cache keys are the standard flat entity maps plus feature flags.
     const fromAllFlatEntityMaps =
       cachedMetadata as unknown as TwentyStandardAllFlatEntityMaps;
-    const { allFlatEntityMaps: standardAllFlatEntityMaps,
-    idByUniversalIdentifierByMetadataName, } = computeTwentyStandardApplicationAllFlatEntityMaps({ now: new Date().toISOString(),
-    workspaceId,
-    twentyStandardApplicationId: twentyStandardFlatApplication.id, removeReplacedTwentyCrmMetadata: shouldMigrateLegacyMyahApplication,  });
+    const laterObjects = [
+      MYAH_STANDARD_OBJECTS.partnershipOfferVersion,
+      MYAH_STANDARD_OBJECTS.partnershipObligation,
+    ];
+    const laterObjectIds = new Set<string>(
+      laterObjects.map(({ universalIdentifier }) => universalIdentifier),
+    );
+    const installedLaterObjects = laterObjects.filter(
+      ({ universalIdentifier }) =>
+        fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+          universalIdentifier
+        ] !== undefined,
+    );
+    const laterFields = [
+      ...laterObjects.flatMap((object) =>
+        Object.values(object.fields).map((field) => field.universalIdentifier),
+      ),
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.offerVersions
+        .universalIdentifier,
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.partnershipObligations
+        .universalIdentifier,
+      STANDARD_OBJECTS.task.fields.partnershipObligations.universalIdentifier,
+    ];
+    if (
+      syncOptions.targetObjectUniversalIdentifiers === undefined &&
+      (installedLaterObjects.length === 1 ||
+        (installedLaterObjects.length === 0 &&
+          (laterFields.some(
+            (id) =>
+              fromAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+                id
+              ] !== undefined,
+          ) ||
+            laterObjects.some((object) =>
+              Object.values(object.indexes).some(
+                (index) =>
+                  fromAllFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[
+                    index.universalIdentifier
+                  ] !== undefined,
+              ),
+            ) ||
+            Object.values(
+              fromAllFlatEntityMaps.flatObjectPermissionMaps
+                .byUniversalIdentifier,
+            ).some(
+              (permission) =>
+                permission !== undefined &&
+                laterObjects.some(
+                  (object) =>
+                    permission.objectMetadataUniversalIdentifier ===
+                    object.universalIdentifier,
+                ),
+            ))))
+    ) {
+      throw new Error(
+        'Unsupported partial partnership metadata: inspect applied B before Myah standard metadata synchronization',
+      );
+    }
+    const {
+      allFlatEntityMaps: standardAllFlatEntityMaps,
+      idByUniversalIdentifierByMetadataName,
+    } = computeTwentyStandardApplicationAllFlatEntityMaps({
+      now: new Date().toISOString(),
+      workspaceId,
+      twentyStandardApplicationId: twentyStandardFlatApplication.id,
+      removeReplacedTwentyCrmMetadata: shouldMigrateLegacyMyahApplication,
+      omitPartnershipFacts:
+        syncOptions.targetObjectUniversalIdentifiers === undefined,
+    });
 
     const objectUniversalIdentifiers =
       syncOptions.targetObjectUniversalIdentifiers ??
       new Set<string>(
-        Object.values(MYAH_STANDARD_OBJECTS).map(
-          ({ universalIdentifier }) => universalIdentifier,
-        ),
+        Object.values(MYAH_STANDARD_OBJECTS)
+          .map(({ universalIdentifier }) => universalIdentifier)
+          .filter((id) => !laterObjectIds.has(id)),
       );
     const currentObjectUniversalIdentifiers = new Set(
       Object.keys(
@@ -491,11 +557,13 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     );
 
     const toAllFlatEntityMaps = createEmptyAllFlatEntityMaps();
+    // SAFETY: each metadata name below resolves to a flat-map key in both standard map sets.
     const standardFlatEntityMapsByKey =
       standardAllFlatEntityMaps as unknown as Record<
         string,
         SyncableFlatEntityMaps
       >;
+    // SAFETY: createEmptyAllFlatEntityMaps initializes the same flat-map keys.
     const toFlatEntityMapsByKey = toAllFlatEntityMaps as unknown as Record<
       string,
       SyncableFlatEntityMaps
@@ -632,6 +700,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     const hasCompleteNativeMyahGraph =
       TWENTY_STANDARD_ALL_METADATA_NAME.every((metadataName) => {
         const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
+        // SAFETY: metadataName comes from the standard metadata-name list used to build these maps.
         const desiredUniversalIdentifiers = Object.keys(
           (
             toAllFlatEntityMaps as unknown as Record<
@@ -640,6 +709,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
             >
           )[flatEntityMapsKey].byUniversalIdentifier,
         );
+        // SAFETY: the cache was requested for every standard metadata-name flat-map key.
         const currentFlatEntityMaps = (
           fromAllFlatEntityMaps as unknown as Record<
             string,
@@ -676,12 +746,15 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     const dependencyAllFlatEntityMaps = createEmptyAllFlatEntityMaps();
     for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
       const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
+      // SAFETY: the computed standard map contains each key from TWENTY_STANDARD_ALL_METADATA_NAME.
       const toFlatEntityMaps = toAllFlatEntityMaps[
         flatEntityMapsKey
       ] as unknown as SyncableFlatEntityMaps;
+      // SAFETY: the cache requested the corresponding flat map for every metadata name.
       const fromFlatEntityMaps = fromAllFlatEntityMaps[
         flatEntityMapsKey
       ] as unknown as SyncableFlatEntityMaps;
+      // SAFETY: createEmptyAllFlatEntityMaps initializes the corresponding dependency key.
       (
         dependencyAllFlatEntityMaps as unknown as Record<
           string,
@@ -703,6 +776,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
           universalIdentifiers,
         });
 
+      // SAFETY: createEmptyAllFlatEntityMaps initializes the corresponding selected-map key.
       (
         fromMyahFlatEntityMaps as unknown as Record<
           string,
@@ -763,6 +837,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
 
       for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
         const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
+        // SAFETY: the metadata-name list supplies keys initialized in toAllFlatEntityMaps.
         const targetUniversalIdentifiers = Object.keys(
           (
             toAllFlatEntityMaps as unknown as Record<

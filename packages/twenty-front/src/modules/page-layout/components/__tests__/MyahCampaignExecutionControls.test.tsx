@@ -485,6 +485,58 @@ it('shows eligible and excluded Creator names with actionable reasons', () => {
   ).toBeVisible();
 });
 
+it('labels a reply-stop exclusion without treating it as eligibility', () => {
+  audienceData = {
+    campaignOutreachAudienceReview: {
+      state: 'LOADED',
+      campaignId: 'campaign',
+      eligibleCount: 0,
+      eligibleCreators: [],
+      excludedCount: 1,
+      excludedCreators: [
+        {
+          campaignCreatorId: 'membership-replied',
+          creatorId: 'creator-replied',
+          creatorName: 'Grace Replied',
+          reasons: ['REPLY_RECEIVED'],
+        },
+      ],
+    },
+  };
+
+  render(<MyahCampaignExecutionControls campaignId="campaign" />);
+
+  expect(screen.getByText('0 eligible · 1 excluded')).toBeVisible();
+  expect(screen.getByText('Grace Replied — Reply received')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
+});
+
+it('explains an operator-excluded Creator without changing eligibility counts', () => {
+  audienceData = {
+    campaignOutreachAudienceReview: {
+      state: 'LOADED',
+      campaignId: 'campaign',
+      eligibleCount: 0,
+      eligibleCreators: [],
+      excludedCount: 1,
+      excludedCreators: [
+        {
+          campaignCreatorId: 'membership-excluded',
+          creatorId: 'creator-excluded',
+          creatorName: 'Ada Excluded',
+          reasons: ['OPERATOR_EXCLUDED'],
+        },
+      ],
+    },
+  };
+
+  render(<MyahCampaignExecutionControls campaignId="campaign" />);
+
+  expect(screen.getByText('0 eligible · 1 excluded')).toBeVisible();
+  expect(screen.getByText('Ada Excluded — Excluded by operator')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
+});
+
 it('shows audience load failure as an error and disables Start', () => {
   audienceError = new Error('audience unavailable');
 

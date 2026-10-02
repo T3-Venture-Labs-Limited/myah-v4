@@ -408,12 +408,14 @@ export class CampaignProgressionService implements CampaignProgressionPort {
           candidate.campaignCreatorId === enrollment[0].campaignCreatorId,
       );
       const reason = this.enrollmentExclusionReason(excluded?.reasons ?? []);
+      const occurrenceReason =
+        reason === 'REPLY_RECEIVED' ? 'ENROLLMENT_REPLIED' : reason;
       const skipped = rows(
         await runner.query(
           `UPDATE core."campaignOccurrence" SET state='SKIPPED',"holdReason"=NULL,"terminalReason"=$2,
             "terminalAt"=$3,"updatedAt"=clock_timestamp() WHERE id=$1 AND state IN ('PENDING','HELD')
             RETURNING "terminalAt"`,
-          [input.occurrenceId, reason, observedAt],
+          [input.occurrenceId, occurrenceReason, observedAt],
         ),
       );
       if (skipped.length !== 1)
@@ -425,7 +427,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         sourceId: input.occurrenceId,
         sourceType: 'OCCURRENCE',
         terminalAt: skipped[0].terminalAt,
-        reason,
+        reason: occurrenceReason,
       });
       const excludedEnrollment = await this.excludeEnrollmentInTransaction(
         String(enrollment[0].id),
@@ -987,7 +989,9 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     | 'DUPLICATE_CREATOR_EMAIL'
     | 'SUPPRESSED_EMAIL'
     | 'OPERATOR_EXCLUDED'
+    | 'REPLY_RECEIVED'
   > {
+    if (reasons.includes('REPLY_RECEIVED')) return 'REPLY_RECEIVED';
     if (reasons.includes('OPERATOR_EXCLUDED')) return 'OPERATOR_EXCLUDED';
     if (reasons.includes('SUPPRESSED_EMAIL')) return 'SUPPRESSED_EMAIL';
     if (reasons.includes('DUPLICATE_CREATOR_EMAIL'))
@@ -1439,47 +1443,73 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     if (campaign.length !== 1) return { status: 'EXACT_REPLAY' };
     const enrollment = rows(
       await runner.query(
-        `SELECT * FROM core."campaignEnrollment" WHERE "workspaceId"=$1 AND "campaignId"=$2 AND id=$3 FOR UPDATE`,
+        `SELECT * FROM core."campaignEnrollment" WHERE "workspaceId"=$1 AND "campaignId"=$2 AND id=$3`,
         [input.workspaceId, input.campaignId, input.enrollmentId],
       ),
     );
-    if (enrollment.length !== 1) return { status: 'EXACT_REPLAY' };
-    if (enrollment[0].state === 'REPLIED') return { status: 'EXACT_REPLAY' };
-    await runner.query(
-      `SELECT id FROM core."campaignOccurrence" WHERE "workspaceId"=$1 AND "campaignId"=$2
-        AND "enrollmentId"=$3 ORDER BY "authoredMessageIndex",id FOR UPDATE`,
-      [input.workspaceId, input.campaignId, input.enrollmentId],
-    );
-    const attempts = rows(
+    if (enrollment.length !== 1 || enrollment[0].state === 'REPLIED')
+      return { status: 'EXACT_REPLAY' };
+    // The accepted attempt identifies the participation, not just its old
+    // enrollment. Lock every active generation in stable order after Campaign.
+    const active = rows(
       await runner.query(
-        `SELECT a.* FROM core."outboundEmailAttempt" a JOIN core."campaignOccurrence" o ON o.id=a."occurrenceId"
-          WHERE o."workspaceId"=$1 AND o."campaignId"=$2 AND o."enrollmentId"=$3
-          ORDER BY o."authoredMessageIndex",a."attemptNumber",a."attemptId" FOR UPDATE OF a`,
-        [input.workspaceId, input.campaignId, input.enrollmentId],
+        `SELECT * FROM core."campaignEnrollment" WHERE "workspaceId"=$1 AND "campaignId"=$2
+          AND "campaignCreatorId"=$3 AND "creatorId"=$4 AND state='ACTIVE' ORDER BY id FOR UPDATE`,
+        [
+          input.workspaceId,
+          input.campaignId,
+          enrollment[0].campaignCreatorId,
+          enrollment[0].creatorId,
+        ],
       ),
     );
-    const processing = attempts.some((attempt) =>
-      ['PROCESSING', 'UNKNOWN', 'ACCEPTED'].includes(
-        String(attempt.attemptState),
-      ),
-    );
-    const replied = rows(
+    if (
+      !active.some((row) => row.id === input.enrollmentId) ||
+      active.some((row) => row.creatorId !== enrollment[0].creatorId)
+    )
+      throw new Error(
+        'Campaign reply enrollment identity changed under Campaign lock',
+      );
+    let processing = false;
+    let terminalAt: unknown;
+    for (const current of active) {
       await runner.query(
-        `UPDATE core."campaignEnrollment" SET state='REPLIED', "holdReason"=NULL,
-          "terminalReason"='REPLY_RECEIVED', "terminalAt"=clock_timestamp(), "updatedAt"=clock_timestamp()
-          WHERE id=$1 AND state='ACTIVE' RETURNING "terminalAt"`,
-        [input.enrollmentId],
-      ),
-    );
-    if (replied.length !== 1)
-      throw new Error('Campaign reply terminalization CAS failed');
-    await runner.query(
-      `UPDATE core."campaignOccurrence" SET state='CANCELLED', "holdReason"=NULL,
-        "terminalReason"='ENROLLMENT_REPLIED', "terminalAt"=$2, "updatedAt"=clock_timestamp()
-        WHERE "enrollmentId"=$1 AND state IN ('PENDING','HELD')`,
-      [input.enrollmentId, replied[0].terminalAt],
-    );
-    const happenedAt = new Date(String(replied[0].terminalAt)).toISOString();
+        `SELECT id FROM core."campaignOccurrence" WHERE "workspaceId"=$1 AND "campaignId"=$2
+          AND "enrollmentId"=$3 ORDER BY "authoredMessageIndex",id FOR UPDATE`,
+        [input.workspaceId, input.campaignId, current.id],
+      );
+      const attempts = rows(
+        await runner.query(
+          `SELECT a.* FROM core."outboundEmailAttempt" a JOIN core."campaignOccurrence" o ON o.id=a."occurrenceId"
+            WHERE o."workspaceId"=$1 AND o."campaignId"=$2 AND o."enrollmentId"=$3
+            ORDER BY o."authoredMessageIndex",a."attemptNumber",a."attemptId" FOR UPDATE OF a`,
+          [input.workspaceId, input.campaignId, current.id],
+        ),
+      );
+      processing ||= attempts.some((attempt) =>
+        ['PROCESSING', 'UNKNOWN', 'ACCEPTED'].includes(
+          String(attempt.attemptState),
+        ),
+      );
+      const replied = rows(
+        await runner.query(
+          `UPDATE core."campaignEnrollment" SET state='REPLIED', "holdReason"=NULL,
+            "terminalReason"='REPLY_RECEIVED', "terminalAt"=clock_timestamp(), "updatedAt"=clock_timestamp()
+            WHERE id=$1 AND state='ACTIVE' RETURNING "terminalAt"`,
+          [current.id],
+        ),
+      );
+      if (replied.length !== 1)
+        throw new Error('Campaign reply terminalization CAS failed');
+      if (current.id === input.enrollmentId) terminalAt = replied[0].terminalAt;
+      await runner.query(
+        `UPDATE core."campaignOccurrence" SET state='CANCELLED', "holdReason"=NULL,
+          "terminalReason"='ENROLLMENT_REPLIED', "terminalAt"=$2, "updatedAt"=clock_timestamp()
+          WHERE "enrollmentId"=$1 AND state IN ('PENDING','HELD')`,
+        [current.id, replied[0].terminalAt],
+      );
+    }
+    const happenedAt = new Date(String(terminalAt)).toISOString();
     await this.timelineEventWriter?.writeInTransaction(
       { manager, workspaceId: input.workspaceId, campaignId: input.campaignId },
       {

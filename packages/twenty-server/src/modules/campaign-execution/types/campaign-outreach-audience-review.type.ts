@@ -1,6 +1,7 @@
 export type CampaignOutreachAudienceExclusionReason =
   | 'INVALID_MEMBERSHIP'
   | 'OPERATOR_EXCLUDED'
+  | 'REPLY_RECEIVED'
   | 'MISSING_CREATOR'
   | 'INVALID_STAGE'
   | 'NON_EMAIL_CONTACT_METHOD'

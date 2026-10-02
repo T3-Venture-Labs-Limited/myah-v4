@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { type PermissionFlagType } from 'twenty-shared/constants';
+import { FieldMetadataType } from 'twenty-shared/types';
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import { QueryResultFieldValue } from 'src/engine/api/graphql/workspace-query-runner/factories/query-result-getters/interfaces/query-result-field-value';
 
@@ -60,6 +62,134 @@ import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { runWithWorkspaceDatabaseEventBuffer } from 'src/engine/workspace-event-emitter/utils/workspace-database-event-buffer';
 
+// Until source-version and human-authority domain actions exist, the native
+// generic CRUD surface must not write either authoritative partnership fact.
+const PROTECTED_PARTNERSHIP_FACT_OBJECT_IDENTIFIERS = new Set<string>([
+  MYAH_STANDARD_OBJECTS.partnershipOfferVersion.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier,
+]);
+
+// The schema is dormant: only a future validated domain transaction may establish
+// or revoke an exact route or change either control. Generic CRUD is not that writer.
+const PROTECTED_REPLY_CONTROL_FIELDS = new Set([
+  'replyAgentEnabled',
+  'replyAgentMode',
+  'replyAgentRevision',
+  'replyAgentEnabledAt',
+  'replyAgentEnabledByUserWorkspaceId',
+  'replyAgentChangedAt',
+  'replyAgentChangedByWorkspaceMemberId',
+  'replyAgentPaused',
+  'replyAgentMaterialGeneration',
+  'replyAgentPauseHistory',
+  'emailConversationBindings',
+  'campaignEmailConversationBindings',
+]);
+type ReplyGuardMetadata = Pick<
+  CommonBaseQueryRunnerContext,
+  'flatObjectMetadata' | 'flatObjectMetadataMaps' | 'flatFieldMetadataMaps'
+>;
+
+// Only follow actual metadata relations. RAW_JSON and other scalar field values
+// are opaque, even if their arbitrary contents quote a protected field name.
+const containsProtectedReplyAuthority = (
+  value: unknown,
+  objectUniversalIdentifier: string,
+  metadata?: ReplyGuardMetadata,
+): boolean => {
+  if (Array.isArray(value))
+    return value.some((entry) =>
+      containsProtectedReplyAuthority(
+        entry,
+        objectUniversalIdentifier,
+        metadata,
+      ),
+    );
+  if (value === null || typeof value !== 'object') return false;
+
+  const object =
+    metadata?.flatObjectMetadata.universalIdentifier ===
+    objectUniversalIdentifier
+      ? metadata.flatObjectMetadata
+      : metadata?.flatObjectMetadataMaps.byUniversalIdentifier[
+          objectUniversalIdentifier
+        ];
+  const isCampaign =
+    objectUniversalIdentifier ===
+    MYAH_STANDARD_OBJECTS.campaign.universalIdentifier;
+  const isParticipation =
+    objectUniversalIdentifier ===
+    MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier;
+
+  return Object.entries(value).some(([key, nested]) => {
+    if (
+      (isCampaign || isParticipation) &&
+      PROTECTED_REPLY_CONTROL_FIELDS.has(key)
+    )
+      return true;
+    const field = object?.fieldIds
+      .map((id) => {
+        const uid = metadata?.flatFieldMetadataMaps.universalIdentifierById[id];
+        return uid
+          ? metadata?.flatFieldMetadataMaps.byUniversalIdentifier[uid]
+          : undefined;
+      })
+      .find((item) => item?.name === key);
+    // At a relation boundary, these wrappers describe the target record.
+    // A real scalar field with the same name still remains an opaque leaf.
+    if (
+      !field &&
+      ['create', 'connect', 'update', 'where', 'data'].includes(key)
+    )
+      return containsProtectedReplyAuthority(
+        nested,
+        objectUniversalIdentifier,
+        metadata,
+      );
+    if (
+      field?.type !== FieldMetadataType.RELATION &&
+      field?.type !== FieldMetadataType.MORPH_RELATION
+    )
+      return false;
+    const targetId = field.relationTargetObjectMetadataId;
+    const targetUid =
+      targetId &&
+      metadata?.flatObjectMetadataMaps.universalIdentifierById[targetId];
+    // A broken relation map cannot justify treating a nested write as safe.
+    if (!targetUid) return true;
+    if (
+      targetUid ===
+      MYAH_STANDARD_OBJECTS.campaignEmailConversationBinding.universalIdentifier
+    )
+      return true;
+    return containsProtectedReplyAuthority(nested, targetUid, metadata);
+  });
+};
+
+export const isProtectedCampaignReplyAuthorityMutation = (
+  operationName: CommonQueryNames,
+  objectUniversalIdentifier: string,
+  args: unknown,
+  metadata?: ReplyGuardMetadata,
+): boolean =>
+  PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
+  (objectUniversalIdentifier ===
+    MYAH_STANDARD_OBJECTS.campaignEmailConversationBinding
+      .universalIdentifier ||
+    (operationName === CommonQueryNames.MERGE_MANY &&
+      (objectUniversalIdentifier ===
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier ||
+        objectUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier)) ||
+    (typeof args === 'object' &&
+      args !== null &&
+      'data' in args &&
+      containsProtectedReplyAuthority(
+        (args as { data: unknown }).data,
+        objectUniversalIdentifier,
+        metadata,
+      )));
+
 const INSTAGRAM_MESSAGE_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER =
   '85762d24-541b-407f-9d6a-cdf89552c665';
 const MESSAGE_THREAD_OBJECT_UNIVERSAL_IDENTIFIER =
@@ -84,6 +214,13 @@ const PROTECTED_DRAFT_MUTATION_NAMES: Partial<Record<CommonQueryNames, true>> =
     [CommonQueryNames.RESTORE_MANY]: true,
     [CommonQueryNames.MERGE_MANY]: true,
   };
+
+export const isProtectedPartnershipFactMutation = (
+  operationName: CommonQueryNames,
+  objectUniversalIdentifier: string,
+) =>
+  PROTECTED_DRAFT_MUTATION_NAMES[operationName] === true &&
+  PROTECTED_PARTNERSHIP_FACT_OBJECT_IDENTIFIERS.has(objectUniversalIdentifier);
 
 export const isProtectedInstagramDraftMutation = (
   operationName: CommonQueryNames,
@@ -178,6 +315,7 @@ export abstract class CommonBaseQueryRunnerService<
     this.throwIfProtectedMyahInboxDraftMutation(
       args,
       flatObjectMetadata.universalIdentifier,
+      queryRunnerContext,
     );
 
     if (
@@ -221,6 +359,7 @@ export abstract class CommonBaseQueryRunnerService<
     this.throwIfProtectedMyahInboxDraftMutation(
       processedArgs,
       flatObjectMetadata.universalIdentifier,
+      queryRunnerContext,
     );
 
     const results =
@@ -295,6 +434,7 @@ export abstract class CommonBaseQueryRunnerService<
                 this.throwIfProtectedMyahInboxDraftMutation(
                   processedArgs,
                   flatObjectMetadata.universalIdentifier,
+                  queryRunnerContext,
                 );
 
                 const extendedQueryRunnerContext =
@@ -344,7 +484,32 @@ export abstract class CommonBaseQueryRunnerService<
   private throwIfProtectedMyahInboxDraftMutation(
     args: unknown,
     objectUniversalIdentifier: string,
+    metadata: ReplyGuardMetadata,
   ): void {
+    if (
+      isProtectedCampaignReplyAuthorityMutation(
+        this.operationName,
+        objectUniversalIdentifier,
+        args,
+        metadata,
+      )
+    ) {
+      throw new PermissionsException(
+        'Campaign reply authority is writable only through authorized domain services',
+        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
+      );
+    }
+    if (
+      isProtectedPartnershipFactMutation(
+        this.operationName,
+        objectUniversalIdentifier,
+      )
+    ) {
+      throw new PermissionsException(
+        'Partnership facts are writable only through authorized domain services',
+        PermissionsExceptionCode.METHOD_NOT_ALLOWED,
+      );
+    }
     if (
       isProtectedInstagramDraftMutation(
         this.operationName,

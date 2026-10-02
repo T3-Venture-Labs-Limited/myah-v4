@@ -24,6 +24,8 @@ export type PendingMessageSyncCursorState = {
   }>;
   expectedMessageExternalIds: string[];
   generationId: string;
+  baselineGenerationId?: string;
+  newMessageExternalIds?: string[];
 };
 
 const isPendingMessageSyncCursorState = (
@@ -35,6 +37,11 @@ const isPendingMessageSyncCursorState = (
 
   return (
     typeof state.generationId === 'string' &&
+    (state.baselineGenerationId === undefined ||
+      typeof state.baselineGenerationId === 'string') &&
+    (state.newMessageExternalIds === undefined ||
+      (Array.isArray(state.newMessageExternalIds) &&
+        state.newMessageExternalIds.every((id) => typeof id === 'string'))) &&
     Array.isArray(state.expectedMessageExternalIds) &&
     state.expectedMessageExternalIds.every(
       (messageExternalId) => typeof messageExternalId === 'string',
@@ -69,9 +76,11 @@ export class MessagingPendingSyncCursorService {
     messageExternalIds,
     messageLists,
     workspaceId,
+    baselineGenerationId,
   }: MessageChannelScope & {
     messageExternalIds: string[];
     messageLists: GetMessageListsResponse;
+    baselineGenerationId?: string | null;
   }): Promise<void> {
     const generationId = v4();
 
@@ -88,6 +97,16 @@ export class MessagingPendingSyncCursorService {
         })),
         expectedMessageExternalIds: [...new Set(messageExternalIds)],
         generationId,
+        ...(baselineGenerationId ? { baselineGenerationId } : {}),
+        ...(messageLists.some(
+          (list) => list.newMessageExternalIds !== undefined,
+        )
+          ? {
+              newMessageExternalIds: messageLists.flatMap(
+                (list) => list.newMessageExternalIds ?? [],
+              ),
+            }
+          : {}),
       },
       PENDING_SYNC_CURSOR_TTL_MS,
     );
@@ -118,6 +137,38 @@ export class MessagingPendingSyncCursorService {
         }),
       )) ?? null
     );
+  }
+
+  async getFrontierState({
+    messageChannelId,
+    workspaceId,
+  }: MessageChannelScope): Promise<Pick<
+    PendingMessageSyncCursorState,
+    'baselineGenerationId' | 'newMessageExternalIds'
+  > | null> {
+    const generationId = await this.cacheStorage.get<string>(
+      getPendingMessageSyncGenerationCacheKey({
+        messageChannelId,
+        workspaceId,
+      }),
+    );
+    if (!generationId) return null;
+    const state = await this.cacheStorage.get<unknown>(
+      getPendingMessageSyncCursorsCacheKey({
+        generationId,
+        messageChannelId,
+        workspaceId,
+      }),
+    );
+    if (
+      !isPendingMessageSyncCursorState(state) ||
+      state.generationId !== generationId
+    )
+      return null;
+    return {
+      baselineGenerationId: state.baselineGenerationId,
+      newMessageExternalIds: state.newMessageExternalIds,
+    };
   }
 
   async restorePendingMessageExternalIds({

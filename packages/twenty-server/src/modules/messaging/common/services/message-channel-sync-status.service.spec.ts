@@ -22,6 +22,81 @@ const workspaceId = 'workspace-id';
 const messageChannelId = 'message-channel-id';
 
 describe('MessageChannelSyncStatusService', () => {
+  it('invalidates Gmail READY and rotates incarnation before clearing a 404 cursor', async () => {
+    const calls: string[] = [];
+    const tx = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM core."messageChannel"')) {
+          calls.push('channel');
+          return [{ connectedAccountId: 'account-id' }];
+        }
+        if (sql.includes('FOR UPDATE')) {
+          calls.push('account-lock');
+          return [{ id: 'account-id' }];
+        }
+        if (sql.includes('pg_attribute')) return [{ hasIncarnation: true }];
+        if (sql.includes('uuid_generate_v4()')) {
+          calls.push('rotate');
+          return [];
+        }
+        if (sql.includes('to_regclass'))
+          return [{ tableName: 'campaignEmailBaselineGeneration' }];
+        if (sql.includes('campaignEmailBaselineGeneration')) {
+          calls.push('invalidate');
+          return [];
+        }
+        throw new Error(`Unexpected SQL: ${sql}`);
+      }),
+    };
+    const cache = {
+      get: jest.fn().mockResolvedValue(null),
+      mdel: jest.fn(async () => {
+        calls.push('cache-reset');
+      }),
+    };
+    const globalManager = {
+      executeInWorkspaceContext: jest.fn((fn) => fn()),
+      getGlobalWorkspaceDataSource: jest.fn(async () => ({
+        transaction: (fn: (manager: typeof tx) => Promise<unknown>) => fn(tx),
+      })),
+    };
+    const module = await Test.createTestingModule({
+      providers: [
+        MessageChannelSyncStatusService,
+        { provide: CacheStorageNamespace.ModuleMessaging, useValue: cache },
+        { provide: GlobalWorkspaceOrmManager, useValue: globalManager },
+        {
+          provide: getRepositoryToken(MessageChannelEntity),
+          useValue: { update: jest.fn() },
+        },
+        {
+          provide: getRepositoryToken(MessageFolderEntity),
+          useValue: { update: jest.fn() },
+        },
+        { provide: getRepositoryToken(ConnectedAccountEntity), useValue: {} },
+        { provide: getRepositoryToken(UserWorkspaceEntity), useValue: {} },
+        { provide: AccountsToReconnectService, useValue: {} },
+        { provide: MetricsService, useValue: {} },
+        {
+          provide: MessageChannelSyncLockService,
+          useValue: {
+            withLock: (_scope: unknown, fn: () => Promise<unknown>) => fn(),
+          },
+        },
+      ],
+    }).compile();
+    await module
+      .get(MessageChannelSyncStatusService)
+      .resetAndMarkAsMessagesListFetchPending([messageChannelId], workspaceId);
+    expect(calls).toEqual([
+      'channel',
+      'account-lock',
+      'rotate',
+      'invalidate',
+      'cache-reset',
+    ]);
+  });
+
   it('clears work and current-generation cursor state during a full reset', async () => {
     const cache = {
       get: jest.fn().mockResolvedValue('generation-1'),
@@ -52,6 +127,11 @@ describe('MessageChannelSyncStatusService', () => {
             executeInWorkspaceContext: jest
               .fn()
               .mockImplementation((callback: () => unknown) => callback()),
+            getGlobalWorkspaceDataSource: jest.fn(async () => ({
+              transaction: (
+                operation: (manager: unknown) => Promise<unknown>,
+              ) => operation({ query: jest.fn().mockResolvedValue([]) }),
+            })),
           },
         },
         {

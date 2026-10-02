@@ -24,12 +24,94 @@ export type WorkspaceLastAttemptedCommand = {
 
 const UPGRADE_MIGRATION_SAVE_BATCH_SIZE = 1000;
 
+export type UpgradeReceiptHistoryRow = Pick<
+  UpgradeMigrationEntity,
+  | 'id'
+  | 'name'
+  | 'attempt'
+  | 'status'
+  | 'workspaceId'
+  | 'isInitial'
+  | 'createdAt'
+>;
+
+// PostgreSQL UUIDs are case-insensitive; normalize scope keys before deduplication.
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class UpgradeMigrationService {
   constructor(
     @InjectRepository(UpgradeMigrationEntity)
     private readonly upgradeMigrationRepository: Repository<UpgradeMigrationEntity>,
   ) {}
+
+  /** Complete, scoped ledger read on a caller-owned, already connected runner.
+   * This does not acquire a lock or establish an initialized baseline.
+   */
+  async getScopedUpgradeReceiptHistories({
+    workspaceIds,
+    queryRunner,
+  }: {
+    workspaceIds: string[];
+    queryRunner: QueryRunner;
+  }): Promise<Map<string | null, UpgradeReceiptHistoryRow[]>> {
+    if (!Array.isArray(workspaceIds)) {
+      throw new Error('Explicit workspace ID scope is required');
+    }
+
+    const ids: string[] = [];
+    const seen = new Set<string>();
+
+    for (const id of workspaceIds) {
+      if (typeof id !== 'string' || !UUID_PATTERN.test(id)) {
+        throw new Error('Invalid upgrade workspace ID scope');
+      }
+      const normalized = id.toLowerCase();
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        ids.push(normalized);
+      }
+    }
+
+    // QueryRunner has no public isConnected flag. PostgreSQL's runner holds
+    // databaseConnection only after connect(); never connect or release it here.
+    if (
+      !queryRunner ||
+      queryRunner.isReleased !== false ||
+      !(queryRunner as QueryRunner & { databaseConnection?: unknown })
+        .databaseConnection ||
+      typeof queryRunner.query !== 'function'
+    ) {
+      throw new Error(
+        'A connected, unreleased upgrade QueryRunner is required',
+      );
+    }
+
+    const histories = new Map<string | null, UpgradeReceiptHistoryRow[]>([
+      [null, []],
+      ...ids.map((id): [string, UpgradeReceiptHistoryRow[]] => [id, []]),
+    ]);
+    const rows = (await queryRunner.query(
+      `SELECT id, name, attempt, status, "workspaceId", "isInitial", "createdAt"
+       FROM core."upgradeMigration"
+       WHERE "workspaceId" IS NULL OR "workspaceId" = ANY($1::uuid[])
+       ORDER BY "workspaceId" NULLS FIRST, "createdAt", id`,
+      [ids],
+    )) as UpgradeReceiptHistoryRow[];
+
+    for (const row of rows) {
+      const key = row.workspaceId?.toLowerCase() ?? null;
+      const scope = histories.get(key);
+
+      if (!scope) {
+        throw new Error('Upgrade receipt outside requested workspace scope');
+      }
+      scope.push(row);
+    }
+
+    return histories;
+  }
 
   async getInferredVersion(commandName?: string): Promise<string | null> {
     if (isDefined(commandName)) {

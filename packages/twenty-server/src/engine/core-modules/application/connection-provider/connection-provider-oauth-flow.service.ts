@@ -27,6 +27,7 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
+import { invalidateCampaignEmailBaselineInTransaction } from 'src/modules/messaging/message-import-manager/utils/invalidate-campaign-email-baseline.util';
 
 const STATE_JWT_EXPIRES_IN = '10m';
 
@@ -277,6 +278,11 @@ export class ConnectionProviderOAuthFlowService {
           await this.forecastInvalidation.invalidateInTransaction(
             { workspaceId },
             manager,
+          );
+          await invalidateCampaignEmailBaselineInTransaction(
+            manager,
+            workspaceId,
+            reconnectingConnectedAccountId,
           );
           return manager.getRepository(ConnectedAccountEntity).findOneByOrFail({
             id: reconnectingConnectedAccountId,

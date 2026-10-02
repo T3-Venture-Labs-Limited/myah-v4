@@ -116,8 +116,15 @@ export class MicrosoftGetMessageListService {
         );
 
     const results: GetOneMessageListResponse[] = [];
+    const seenResponseIds = new Set<string>();
 
     for (const response of batchResponse.responses) {
+      if (seenResponseIds.has(response.id)) {
+        throw new Error(
+          `Duplicate Microsoft message-list batch response ${response.id}`,
+        );
+      }
+      seenResponseIds.add(response.id);
       const folder = folderByRequestId.get(response.id);
 
       if (!isDefined(folder)) {
@@ -137,6 +144,10 @@ export class MicrosoftGetMessageListService {
       results.push(
         await this.iterateFolderPages(microsoftClient, folder, response.body),
       );
+    }
+
+    if (results.length !== foldersBatch.length) {
+      throw new Error('Missing Microsoft message-list batch response');
     }
 
     return results;
@@ -187,11 +198,18 @@ export class MicrosoftGetMessageListService {
       this.microsoftMessageListFetchErrorHandler.handleError(error);
     });
 
+    const nextSyncCursor = pageIterator.getDeltaLink();
+    if (!isNonEmptyString(nextSyncCursor)) {
+      throw new Error(
+        `Missing Microsoft message-list delta cursor for folder ${folder.id}`,
+      );
+    }
+
     return {
       messageExternalIds,
       messageExternalIdsToDelete,
       previousSyncCursor: folder.syncCursor,
-      nextSyncCursor: pageIterator.getDeltaLink() || '',
+      nextSyncCursor,
       folderId: folder.id,
     };
   }

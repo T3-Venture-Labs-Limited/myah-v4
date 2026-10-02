@@ -3,7 +3,9 @@ import { InjectDataSource } from '@nestjs/typeorm';
 
 import { type AllMetadataName } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
-import { DataSource } from 'typeorm';
+import { DataSource, type QueryRunner } from 'typeorm';
+
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 
 import { LoggerService } from 'src/engine/core-modules/logger/logger.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -203,6 +205,160 @@ export class WorkspaceMigrationRunnerService {
     }
   }
 
+  /** Executes only native actions on the caller-owned active transaction. The caller owns commit, receipts and publication. */
+  async executeActionsInTransaction({
+    queryRunner,
+    workspaceId,
+    workspaceMigration,
+    allFlatEntityMaps,
+    flatApplication,
+  }: {
+    queryRunner: QueryRunner;
+    workspaceId: string;
+    workspaceMigration: WorkspaceMigration;
+    allFlatEntityMaps: AllFlatEntityMaps;
+    flatApplication: FlatApplication;
+  }): Promise<{
+    allFlatEntityMaps: AllFlatEntityMaps;
+    metadataEvents: MetadataEvent[];
+    afterCommitSideEffects: AfterCommitSideEffect[];
+  }> {
+    const state = {
+      allFlatEntityMaps,
+      actionCount: 0,
+      slowestActionMs: 0,
+      slowestActionLabel: 'n/a',
+    };
+
+    return this.executeActionLoop({
+      queryRunner,
+      workspaceId,
+      workspaceMigration,
+      state,
+      flatApplication,
+      transactionSafeCreateActionsOnly: true,
+    });
+  }
+
+  private async executeActionLoop({
+    queryRunner,
+    workspaceId,
+    workspaceMigration: { actions },
+    state,
+    flatApplication,
+    transactionSafeCreateActionsOnly,
+  }: {
+    queryRunner: QueryRunner;
+    workspaceId: string;
+    workspaceMigration: WorkspaceMigration;
+    state: {
+      allFlatEntityMaps: AllFlatEntityMaps;
+      actionCount: number;
+      slowestActionMs: number;
+      slowestActionLabel: string;
+    };
+    flatApplication: FlatApplication;
+    transactionSafeCreateActionsOnly: boolean;
+  }): Promise<{
+    allFlatEntityMaps: AllFlatEntityMaps;
+    metadataEvents: MetadataEvent[];
+    afterCommitSideEffects: AfterCommitSideEffect[];
+  }> {
+    if (this.twentyConfigService.get('WORKSPACE_SCHEMA_DDL_LOCKED')) {
+      throw new WorkspaceMigrationRunnerException({
+        message:
+          'Workspace schema DDL changes are locked. This is typically set during hot upgrades.',
+        code: WorkspaceMigrationRunnerExceptionCode.DDL_LOCKED,
+      });
+    }
+    if (
+      !queryRunner ||
+      queryRunner.isReleased ||
+      !queryRunner.isTransactionActive
+    ) {
+      throw new Error(
+        'Workspace migration actions require an active, connected caller-owned QueryRunner transaction',
+      );
+    }
+
+    // The new caller-owned transaction API cannot execute handlers with external effects.
+    // Check the whole plan before the first action so an unsafe tail cannot follow writes.
+    if (
+      transactionSafeCreateActionsOnly &&
+      actions.some(
+        (action) =>
+          action.type !== 'create' ||
+          !(
+            action.metadataName === 'objectMetadata' ||
+            action.metadataName === 'fieldMetadata' ||
+            action.metadataName === 'index' ||
+            action.metadataName === 'objectPermission'
+          ),
+      )
+    ) {
+      throw new Error(
+        'Caller-owned workspace migration requires transaction-safe create actions only: objectMetadata, fieldMetadata, index, objectPermission',
+      );
+    }
+
+    const preallocatedIdByUniversalIdentifierByMetadataName =
+      buildPreallocatedIdByUniversalIdentifierFromActions(actions);
+    const metadataEvents: MetadataEvent[] = [];
+    const afterCommitSideEffects: AfterCommitSideEffect[] = [];
+    const searchFieldMetadatasByTsVectorFieldIdAccessor =
+      createSearchFieldMetadatasByTsVectorFieldIdAccessor(
+        () => state.allFlatEntityMaps.flatSearchFieldMetadataMaps,
+      );
+
+    for (const action of actions) {
+      const actionStart = performance.now();
+      const result =
+        await this.workspaceMigrationRunnerActionHandlerRegistry.executeActionHandler(
+          {
+            action,
+            context: {
+              flatApplication,
+              action,
+              allFlatEntityMaps: state.allFlatEntityMaps,
+              queryRunner,
+              workspaceId,
+              preallocatedIdByUniversalIdentifierByMetadataName,
+              getSearchFieldMetadatasByTsVectorFieldId:
+                searchFieldMetadatasByTsVectorFieldIdAccessor.get,
+            },
+          },
+        );
+
+      const actionMs = performance.now() - actionStart;
+      state.actionCount += 1;
+      if (actionMs > state.slowestActionMs) {
+        state.slowestActionMs = actionMs;
+        state.slowestActionLabel = `${action.type}:${action.metadataName}`;
+      }
+      if (actionMs > 50) {
+        this.logger.perf(
+          `[install-perf] slow action ${action.type}:${action.metadataName} took ${actionMs.toFixed(1)}ms`,
+          'Runner',
+        );
+      }
+      state.allFlatEntityMaps = {
+        ...state.allFlatEntityMaps,
+        ...result.partialOptimisticCache,
+      } as typeof state.allFlatEntityMaps;
+      if (action.metadataName === 'searchFieldMetadata') {
+        searchFieldMetadatasByTsVectorFieldIdAccessor.invalidate();
+      }
+      metadataEvents.push(...result.metadataEvents);
+      afterCommitSideEffects.push(...result.afterCommitSideEffects);
+    }
+
+    return {
+      allFlatEntityMaps: state.allFlatEntityMaps,
+      metadataEvents,
+      afterCommitSideEffects,
+    };
+  }
+
   run = async ({
     workspaceMigration: { actions, applicationUniversalIdentifier },
     workspaceId,
@@ -258,7 +414,7 @@ export class WorkspaceMigrationRunnerService {
       getMetadataFlatEntityMapsKey,
     );
 
-    let allFlatEntityMaps =
+    let allFlatEntityMaps: AllFlatEntityMaps =
       await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps<
         typeof allFlatEntityMapsKeys
       >({
@@ -296,81 +452,35 @@ export class WorkspaceMigrationRunnerService {
       });
     }
 
-    const preallocatedIdByUniversalIdentifierByMetadataName =
-      buildPreallocatedIdByUniversalIdentifierFromActions(actions);
-
     this.logger.perfTime('Runner', 'Transaction execution');
 
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    const allMetadataEvents: MetadataEvent[] = [];
-    const allAfterCommitSideEffects: AfterCommitSideEffect[] = [];
-
+    const state = {
+      allFlatEntityMaps,
+      actionCount: 0,
+      slowestActionMs: 0,
+      slowestActionLabel: 'n/a',
+    };
+    let allMetadataEvents: MetadataEvent[] = [];
+    let allAfterCommitSideEffects: AfterCommitSideEffect[] = [];
     const transactionStart = performance.now();
-    let slowestActionMs = 0;
-    let slowestActionLabel = 'n/a';
-    let actionCount = 0;
-
-    const searchFieldMetadatasByTsVectorFieldIdAccessor =
-      createSearchFieldMetadatasByTsVectorFieldIdAccessor(
-        () => allFlatEntityMaps.flatSearchFieldMetadataMaps,
-      );
 
     try {
       await queryRunner.query(`SET LOCAL lock_timeout = '8s'`);
 
-      for (const action of actions) {
-        const actionStart = performance.now();
-        const {
-          partialOptimisticCache,
-          metadataEvents,
-          afterCommitSideEffects,
-        } =
-          await this.workspaceMigrationRunnerActionHandlerRegistry.executeActionHandler(
-            {
-              action,
-              context: {
-                flatApplication,
-                action,
-                allFlatEntityMaps,
-                queryRunner,
-                workspaceId,
-                preallocatedIdByUniversalIdentifierByMetadataName,
-                getSearchFieldMetadatasByTsVectorFieldId:
-                  searchFieldMetadatasByTsVectorFieldIdAccessor.get,
-              },
-            },
-          );
-
-        const actionMs = performance.now() - actionStart;
-
-        actionCount += 1;
-
-        if (actionMs > slowestActionMs) {
-          slowestActionMs = actionMs;
-          slowestActionLabel = `${action.type}:${action.metadataName}`;
-        }
-
-        if (actionMs > 50) {
-          this.logger.perf(
-            `[install-perf] slow action ${action.type}:${action.metadataName} took ${actionMs.toFixed(1)}ms`,
-            'Runner',
-          );
-        }
-
-        allFlatEntityMaps = {
-          ...allFlatEntityMaps,
-          ...partialOptimisticCache,
-        } as typeof allFlatEntityMaps;
-
-        if (action.metadataName === 'searchFieldMetadata') {
-          searchFieldMetadatasByTsVectorFieldIdAccessor.invalidate();
-        }
-
-        allMetadataEvents.push(...metadataEvents);
-        allAfterCommitSideEffects.push(...afterCommitSideEffects);
-      }
+      const result = await this.executeActionLoop({
+        queryRunner,
+        workspaceId,
+        workspaceMigration: { actions, applicationUniversalIdentifier },
+        state,
+        flatApplication,
+        transactionSafeCreateActionsOnly: false,
+      });
+      allFlatEntityMaps = result.allFlatEntityMaps;
+      allMetadataEvents = result.metadataEvents;
+      allAfterCommitSideEffects = result.afterCommitSideEffects;
 
       const commitStart = performance.now();
 
@@ -380,14 +490,14 @@ export class WorkspaceMigrationRunnerService {
       const transactionMs = performance.now() - transactionStart;
 
       this.logger.perf(
-        `[install-perf] Runner transaction summary: ${actionCount} actions, total transaction ${transactionMs.toFixed(1)}ms (commit ${commitMs.toFixed(1)}ms), slowest action ${slowestActionLabel} ${slowestActionMs.toFixed(1)}ms`,
+        `[install-perf] Runner transaction summary: ${state.actionCount} actions, total transaction ${transactionMs.toFixed(1)}ms (commit ${commitMs.toFixed(1)}ms), slowest action ${state.slowestActionLabel} ${state.slowestActionMs.toFixed(1)}ms`,
         'Runner',
       );
 
       this.logger.perfTimeEnd('Runner', 'Transaction execution');
     } catch (error) {
       this.logger.error(
-        `[install-perf] migration failed after ${actionCount} action(s): ${
+        `[install-perf] migration failed after ${state.actionCount} action(s): ${
           error instanceof Error ? error.message : String(error)
         }`,
         'Runner',
@@ -410,6 +520,7 @@ export class WorkspaceMigrationRunnerService {
         );
       }
 
+      allFlatEntityMaps = state.allFlatEntityMaps;
       const invertedActions = [...actions].reverse();
 
       for (const invertedAction of invertedActions) {

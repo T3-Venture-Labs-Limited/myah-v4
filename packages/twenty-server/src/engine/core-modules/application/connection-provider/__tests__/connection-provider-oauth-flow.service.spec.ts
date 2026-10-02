@@ -40,6 +40,7 @@ describe('ConnectionProviderOAuthFlowService', () => {
   };
   let secureHttpClientService: { createSsrfSafeFetch: jest.Mock };
   let reconnectManager: {
+    query: jest.Mock;
     getRepository: jest.Mock;
     queryRunner: {
       isReleased: boolean;
@@ -106,6 +107,13 @@ describe('ConnectionProviderOAuthFlowService', () => {
       manager: { transaction: jest.fn() },
     };
     reconnectManager = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FOR UPDATE')) return [{ id: 'existing-account-id' }];
+        if (sql.includes('pg_attribute')) return [{ hasIncarnation: true }];
+        if (sql.includes('to_regclass'))
+          return [{ tableName: 'campaignEmailBaselineGeneration' }];
+        return [];
+      }),
       getRepository: jest.fn(() => connectedAccountRepository),
       queryRunner: {
         isReleased: false,
@@ -413,6 +421,10 @@ describe('ConnectionProviderOAuthFlowService', () => {
       expect(reconnectManager.queryRunner.query).toHaveBeenCalledWith(
         expect.stringContaining('campaignForecastHead'),
         ['workspace-1', 'workspace:workspace-1'],
+      );
+      expect(reconnectManager.query).toHaveBeenCalledWith(
+        expect.stringContaining('"status" = \'INVALID\''),
+        ['workspace-1', 'existing-account-id'],
       );
       expect(
         connectedAccountRepository.update.mock.invocationCallOrder[0],

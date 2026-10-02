@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
 import {
   type WorkspaceIteratorReport,
@@ -22,6 +24,34 @@ import { UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade
 import { WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 
+const PARTNERSHIP_FACTS_B =
+  '2.20.0_SynchronizeMyahPartnershipFactsCommand_1789730000001';
+const REPLY_TAIL =
+  '2.20.0_SynchronizeCampaignReplyAuthorityCommand_1790000000003';
+const BEFORE_F =
+  '2.20.0_CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand_1789645911003';
+const FORECAST =
+  '2.20.0_CreateCampaignForecastProjectionFastInstanceCommand_1789992172618';
+const POLICY =
+  '2.20.0_AddConnectedAccountSendingPolicyRevisionFastInstanceCommand_1789992172619';
+const F =
+  '2.20.0_CreateCampaignPartnershipWorkItemFastInstanceCommand_1790000000001';
+const G =
+  '2.20.0_AddCampaignReplyAmbiguitySnapshotFastInstanceCommand_1790000000002';
+const EMAIL_BASELINE =
+  '2.20.0_CreateCampaignEmailBaselineFastInstanceCommand_1790000000004';
+const EMAIL_ACCOUNT_INCARNATION =
+  '2.20.0_AddCampaignEmailAccountIncarnationFastInstanceCommand_1790000000005';
+const EMAIL_WORK_IDENTITY =
+  '2.20.0_AddCampaignEmailWorkIdentityFastInstanceCommand_1790000000006';
+const EMAIL_WORK_COLLISION =
+  '2.20.0_CreateCampaignEmailWorkCollisionFastInstanceCommand_1790000000007';
+const PAYMENT_SLOW =
+  '2.20.0_MigrateManagedEmailPaymentReceiptsSlowInstanceCommand_1786000004001';
+// Registry compatibility retains the original Instagram receipt identity.
+const INSTAGRAM_SLOW =
+  '2.20.0_InvalidateComposioInstagramAuthoritiesSlowInstanceCommand_1799201004000';
+
 export type UpgradeSequenceRunnerReport = {
   totalSuccesses: number;
   totalFailures: number;
@@ -39,6 +69,7 @@ export class UpgradeSequenceRunnerService {
     private readonly upgradeAwareEntityMetadataAdapter: UpgradeAwareEntityMetadataAdapter,
     private readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly workspaceVersionService: WorkspaceVersionService,
+    @InjectDataSource() private readonly dataSource?: DataSource,
   ) {}
 
   async run({
@@ -80,6 +111,15 @@ export class UpgradeSequenceRunnerService {
     const allActiveOrSuspendedWorkspaceIds =
       await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds();
 
+    let workspaceCursors = await this.fetchWorkspaceCursors(
+      allActiveOrSuspendedWorkspaceIds,
+    );
+    await this.assertReplyOnlyUpgradeAdmission({
+      sequence,
+      workspaceIds: allActiveOrSuspendedWorkspaceIds,
+      workspaceCursors,
+    });
+
     const startCursor = await this.resolveStartCursor({
       sequence,
       allActiveOrSuspendedWorkspaceIds,
@@ -88,9 +128,6 @@ export class UpgradeSequenceRunnerService {
     let totalSuccesses = 0;
     let totalFailures = 0;
     let cursor = startCursor;
-    let workspaceCursors = await this.fetchWorkspaceCursors(
-      allActiveOrSuspendedWorkspaceIds,
-    );
 
     while (cursor < sequence.length) {
       const step = sequence[cursor];
@@ -310,6 +347,166 @@ export class UpgradeSequenceRunnerService {
     }
   }
 
+  private async assertReplyOnlyUpgradeAdmission({
+    sequence,
+    workspaceIds,
+    workspaceCursors,
+  }: {
+    sequence: UpgradeStep[];
+    workspaceIds: string[];
+    workspaceCursors: Map<string, WorkspaceLastAttemptedCommand>;
+  }): Promise<void> {
+    const names = sequence.map((step) => step.name);
+    const hasReplyCommands = [
+      F,
+      G,
+      EMAIL_BASELINE,
+      EMAIL_ACCOUNT_INCARNATION,
+      EMAIL_WORK_IDENTITY,
+      EMAIL_WORK_COLLISION,
+      PARTNERSHIP_FACTS_B,
+      REPLY_TAIL,
+    ].some((name) => names.includes(name));
+    if (!hasReplyCommands) return; // Unrelated native Twenty sequences remain unaffected.
+
+    const expectedInstances = [
+      BEFORE_F,
+      FORECAST,
+      POLICY,
+      F,
+      G,
+      EMAIL_BASELINE,
+      EMAIL_ACCOUNT_INCARNATION,
+      EMAIL_WORK_IDENTITY,
+      EMAIL_WORK_COLLISION,
+      PAYMENT_SLOW,
+      INSTAGRAM_SLOW,
+    ];
+    const beforeFPosition = names.indexOf(BEFORE_F);
+    const lastInstancePosition = names.indexOf(INSTAGRAM_SLOW);
+    const workspaceStart = beforeFPosition + expectedInstances.length;
+    if (
+      beforeFPosition < 0 ||
+      expectedInstances.some(
+        (name, offset) =>
+          names[beforeFPosition + offset] !== name ||
+          names.filter((registeredName) => registeredName === name).length !==
+            1 ||
+          sequence[beforeFPosition + offset]?.kind !==
+            (offset < 9 ? 'fast-instance' : 'slow-instance'),
+      ) ||
+      sequence
+        .slice(workspaceStart)
+        .some((step) => step.kind !== 'workspace') ||
+      names[sequence.length - 2] !== PARTNERSHIP_FACTS_B ||
+      names[sequence.length - 1] !== REPLY_TAIL ||
+      [PARTNERSHIP_FACTS_B, REPLY_TAIL].some(
+        (name) =>
+          names.filter((registeredName) => registeredName === name).length !==
+          1,
+      )
+    ) {
+      throw new Error(
+        'Unsupported MYAH-334 upgrade sequence: expected exact provenance/forecast/policy/F/G/Email baseline/account incarnation/work identity/collision, payment/Instagram slow, then B/reply-only workspace tail; verify registered commands before upgrade',
+      );
+    }
+    if (!this.dataSource) {
+      throw new Error(
+        'Unsupported MYAH-334 upgrade history: ledger data source unavailable',
+      );
+    }
+    const queryRunner = this.dataSource.createQueryRunner();
+    try {
+      await queryRunner.connect();
+      const histories =
+        await this.upgradeMigrationService.getScopedUpgradeReceiptHistories({
+          workspaceIds,
+          queryRunner,
+        });
+      const globalHistory = histories.get(null);
+      const globalCursor =
+        await this.upgradeMigrationService.getLastAttemptedCommandNameOrThrow(
+          workspaceIds,
+        );
+      const globalPosition = names.indexOf(globalCursor.name);
+      for (const workspaceId of workspaceIds) {
+        const history = histories.get(workspaceId.toLowerCase());
+        const cursor = workspaceCursors.get(workspaceId);
+        if (
+          globalPosition !== lastInstancePosition ||
+          !history ||
+          history.length !== 1 ||
+          history[0].name !== REPLY_TAIL ||
+          history[0].status !== 'completed' ||
+          !history[0].isInitial ||
+          cursor?.name !== REPLY_TAIL ||
+          cursor.status !== 'completed' ||
+          !cursor.isInitial
+        ) {
+          const reason =
+            history?.find(
+              (row) =>
+                row.name !== REPLY_TAIL ||
+                row.status !== 'completed' ||
+                !row.isInitial,
+            ) ?? history?.[0];
+          throw new Error(
+            `Unsupported MYAH-334 upgrade history: workspace ${workspaceId} at ${reason?.name ?? cursor?.name ?? 'missing receipt'} (${reason?.status ?? cursor?.status ?? 'missing'}); only a candidate-created reply-tail initial checkpoint without conflicting receipts is admitted. Preserve applied B; reconcile older history separately`,
+          );
+        }
+      }
+      if (
+        !globalHistory?.length ||
+        globalPosition < beforeFPosition ||
+        globalPosition > lastInstancePosition ||
+        globalCursor.status !== 'completed' ||
+        !globalHistory.some(
+          (row) =>
+            row.name === globalCursor.name &&
+            row.status === 'completed' &&
+            !row.isInitial,
+        )
+      ) {
+        throw new Error(
+          `Unsupported MYAH-334 upgrade history: instance cursor ${globalCursor.name} (${globalCursor.status}); initialize this candidate through ${BEFORE_F} before F/G`,
+        );
+      }
+      for (const prerequisite of expectedInstances.slice(
+        0,
+        globalPosition - beforeFPosition + 1,
+      )) {
+        if (
+          !globalHistory.some(
+            (row) =>
+              row.name === prerequisite &&
+              row.status === 'completed' &&
+              !row.isInitial,
+          )
+        ) {
+          throw new Error(
+            `Unsupported MYAH-334 upgrade history: instance command ${prerequisite} has no completed receipt before ${globalCursor.name}; reconcile before reply-only upgrade`,
+          );
+        }
+      }
+      for (const row of globalHistory) {
+        const position = names.indexOf(row.name);
+        if (
+          row.status !== 'completed' ||
+          row.isInitial ||
+          position < 0 ||
+          position > lastInstancePosition ||
+          sequence[position].kind === 'workspace'
+        ) {
+          throw new Error(
+            `Unsupported MYAH-334 upgrade history: instance command ${row.name} (${row.status}); reconcile outside reply-only upgrade`,
+          );
+        }
+      }
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   private async fetchWorkspaceCursors(
     allActiveOrSuspendedWorkspaceIds: string[],
   ): Promise<Map<string, WorkspaceLastAttemptedCommand>> {
@@ -386,11 +583,12 @@ export class UpgradeSequenceRunnerService {
           );
         }
 
-        const pendingCommands =
-          this.upgradeSequenceReaderService.getPendingWorkspaceCommands({
+        const pendingCommands = this.upgradeSequenceReaderService
+          .getPendingWorkspaceCommands({
             workspaceCommands: workspaceCommandsSegment,
             workspaceCursor,
-          });
+          })
+          .filter((command) => command.name !== PARTNERSHIP_FACTS_B);
 
         await this.workspaceCommandRunnerService.runWorkspaceCommands({
           iteratorContext: context,

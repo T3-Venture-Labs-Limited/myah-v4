@@ -142,6 +142,30 @@ export class MyahInboxTriageCapabilityService {
 
     if (!rolePermissionConfig) unavailable();
     const resolvedRolePermissionConfig = rolePermissionConfig;
+    const dataSource =
+      await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+    const schemaName = getWorkspaceSchemaName(authContext.workspace.id);
+    const [socialTables] = await dataSource.query<
+      Array<{ conversationExists: boolean; messageExists: boolean }>
+    >(
+      `SELECT to_regclass($1) IS NOT NULL AS "conversationExists",
+              to_regclass($2) IS NOT NULL AS "messageExists"`,
+      [
+        `${schemaName}."_myahSocialConversation"`,
+        `${schemaName}."_myahSocialMessage"`,
+      ],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
+    const socialTablesPresent =
+      socialTables?.conversationExists === true &&
+      socialTables?.messageExists === true;
+    const socialTablesAbsent =
+      socialTables?.conversationExists === false &&
+      socialTables?.messageExists === false;
+
+    if (!socialTablesPresent && !socialTablesAbsent) unavailable();
+    let absentSocialMetadataCount = 0;
 
     for (const [objectName, alias, tableName] of readCapabilitySources) {
       let serialized: SerializedReadCapabilityQuery;
@@ -157,12 +181,19 @@ export class MyahInboxTriageCapabilityService {
         )) as unknown as PermissionAwareRepository;
         serialized = serializeReadCapabilityQuery(repository, alias);
       } catch (error) {
-        if (isExpectedCapabilityDenial(error)) {
-          unavailable();
+        if (
+          socialTablesAbsent &&
+          objectName !== 'messageThread' &&
+          error instanceof EntityMetadataNotFoundError
+        ) {
+          absentSocialMetadataCount++;
+          continue;
         }
+        if (isExpectedCapabilityDenial(error)) unavailable();
 
         throw error;
       }
+      if (socialTablesAbsent && objectName !== 'messageThread') unavailable();
       const canonicalSql = normalizeReadCapabilitySql(serialized.sql, alias);
       const expectedSql = normalizeSerializedSql(
         canonicalUnrestrictedReadSql({
@@ -177,12 +208,12 @@ export class MyahInboxTriageCapabilityService {
       }
     }
 
+    if (socialTablesAbsent && absentSocialMetadataCount !== 2) unavailable();
+
     // Object READ permission does not override Email channel privacy. A single
     // hidden participating Email could otherwise change a shared contact tuple
     // without being visible to this user, so the coarse capability must reject
     // it before any tuple is exposed or mutated.
-    const dataSource =
-      await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
     const [visibility] = await dataSource.query<
       Array<{ hasHiddenParticipatingEmail: boolean }>
     >(

@@ -8,6 +8,7 @@ import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modu
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
+import { invalidateCampaignEmailBaselineInTransaction } from 'src/modules/messaging/message-import-manager/utils/invalidate-campaign-email-baseline.util';
 
 export type UpdateConnectedAccountOnReconnectInput = {
   workspaceId: string;
@@ -68,6 +69,11 @@ export class UpdateConnectedAccountOnReconnectService {
       await this.forecastInvalidation.invalidateInTransaction(
         { workspaceId },
         input.transactionManager,
+      );
+      await invalidateCampaignEmailBaselineInTransaction(
+        input.transactionManager,
+        workspaceId,
+        connectedAccountId,
       );
     }, authContext);
   }

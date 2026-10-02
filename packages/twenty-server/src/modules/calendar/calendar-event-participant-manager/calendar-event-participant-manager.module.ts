@@ -18,7 +18,6 @@ import { WorkspaceDataSourceModule } from 'src/engine/workspace-datasource/works
 import { CalendarEventParticipantMatchParticipantJob } from 'src/modules/calendar/calendar-event-participant-manager/jobs/calendar-event-participant-match-participant.job';
 import { CalendarEventParticipantPersonListener } from 'src/modules/calendar/calendar-event-participant-manager/listeners/calendar-event-participant-person.listener';
 import { CalendarEventParticipantWorkspaceMemberListener } from 'src/modules/calendar/calendar-event-participant-manager/listeners/calendar-event-participant-workspace-member.listener';
-import { CalendarEventParticipantListener } from 'src/modules/calendar/calendar-event-participant-manager/listeners/calendar-event-participant.listener';
 import { CalendarEventParticipantService } from 'src/modules/calendar/calendar-event-participant-manager/services/calendar-event-participant.service';
 import { ContactCreationManagerModule } from 'src/modules/contact-creation-manager/contact-creation-manager.module';
 import { MatchParticipantModule } from 'src/modules/match-participant/match-participant.module';
@@ -40,7 +39,6 @@ import { MatchParticipantModule } from 'src/modules/match-participant/match-part
   providers: [
     CalendarEventParticipantService,
     CalendarEventParticipantMatchParticipantJob,
-    CalendarEventParticipantListener,
     CalendarEventParticipantPersonListener,
     CalendarEventParticipantWorkspaceMemberListener,
     FeatureFlagService,

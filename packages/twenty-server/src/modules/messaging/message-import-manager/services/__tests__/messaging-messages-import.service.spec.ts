@@ -16,6 +16,7 @@ import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connect
 import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/services/message-channel-sync-status.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { MessagingGetMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-get-messages.service';
+import { MessagingEmailBaselineService } from 'src/modules/messaging/message-import-manager/services/messaging-email-baseline.service';
 import { MessageImportExceptionHandlerService } from 'src/modules/messaging/message-import-manager/services/messaging-import-exception-handler.service';
 import { MessagingMessagesImportService } from 'src/modules/messaging/message-import-manager/services/messaging-messages-import.service';
 import { MessagingPendingSyncCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-pending-sync-cursor.service';
@@ -72,6 +73,13 @@ describe('MessagingMessagesImportService', () => {
 
     providersBase = [
       MessagingMessagesImportService,
+      {
+        provide: MessagingEmailBaselineService,
+        useValue: {
+          classifyNewIds: jest.fn().mockResolvedValue(null),
+          finalize: jest.fn(),
+        },
+      },
       {
         provide: CacheStorageService,
         useValue: {
@@ -172,6 +180,7 @@ describe('MessagingMessagesImportService', () => {
           getPendingGenerationId: jest
             .fn()
             .mockResolvedValue('pending-generation-1'),
+          getFrontierState: jest.fn().mockResolvedValue(null),
         },
       },
       {
@@ -308,6 +317,68 @@ describe('MessagingMessagesImportService', () => {
     );
   });
 
+  it('keeps a listed missing provider item FAILED while classifying only a new Gmail creation after READY as LIVE', async () => {
+    const frontier = {
+      newMessageExternalIds: ['new', 'old'],
+      baselineGenerationId: 'baseline-generation',
+    };
+    jest
+      .spyOn(pendingSyncCursorService, 'getFrontierState')
+      .mockResolvedValue(frontier);
+    const baseline = (
+      service as unknown as {
+        emailBaselineService: MessagingEmailBaselineService;
+      }
+    ).emailBaselineService;
+    jest.spyOn(baseline, 'classifyNewIds').mockResolvedValue({
+      generationId: 'ready-generation',
+      completedAt: new Date('2026-09-27T12:00:00Z'),
+      ids: new Set(['new', 'old']),
+    });
+    jest.spyOn(messagingGetMessagesService, 'getMessages').mockResolvedValue([
+      {
+        externalId: 'new',
+        providerOccurredAt: '2026-09-27T12:01:00Z',
+        participants: [],
+      },
+      {
+        externalId: 'old',
+        providerOccurredAt: '2026-09-27T11:00:00Z',
+        participants: [],
+      },
+    ] as never);
+    const cache = (
+      service as unknown as { cacheStorage: { setPop: jest.Mock } }
+    ).cacheStorage;
+    cache.setPop.mockResolvedValue(['new', 'old', 'missing']);
+
+    await service.processMessageBatchImport(
+      mockMessageChannel as MessageChannelEntity,
+      mockConnectedAccount,
+      workspaceId,
+    );
+
+    expect(
+      saveMessagesService.saveMessagesAndEnqueueContactCreation,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      expect.objectContaining({
+        mode: 'BACKFILL',
+        baselineGenerationId: 'baseline-generation',
+        listedIds: ['new', 'old', 'missing'],
+        liveMessageExternalIds: ['new'],
+      }),
+    );
+    expect(baseline.finalize).toHaveBeenCalledWith(
+      workspaceId,
+      mockMessageChannel,
+      'baseline-generation',
+    );
+  });
+
   it('classifies a first polling import as BACKFILL and forwards the pending generation', async () => {
     await service.processMessageBatchImport(
       mockMessageChannel as MessageChannelEntity,
@@ -322,29 +393,46 @@ describe('MessagingMessagesImportService', () => {
       mockMessageChannel,
       mockConnectedAccount,
       workspaceId,
-      { mode: 'BACKFILL', generationId: 'pending-generation-1' },
+      expect.objectContaining({
+        mode: 'BACKFILL',
+        generationId: 'pending-generation-1',
+        liveMessageExternalIds: [],
+      }),
     );
   });
 
-  it('classifies a polling import after a completed sync as LIVE', async () => {
-    mockMessageChannel.syncedAt = new Date('2026-09-01T00:00:00.000Z');
+  it.each([
+    ConnectedAccountProvider.GOOGLE,
+    ConnectedAccountProvider.MICROSOFT,
+    ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+  ])(
+    'preserves post-sync Inbox triage for %s without Campaign frontier proof',
+    async (provider) => {
+      mockConnectedAccount.provider = provider;
+      mockMessageChannel.syncedAt = new Date('2026-09-01T00:00:00.000Z');
 
-    await service.processMessageBatchImport(
-      mockMessageChannel as MessageChannelEntity,
-      mockConnectedAccount,
-      workspaceId,
-    );
+      await service.processMessageBatchImport(
+        mockMessageChannel as MessageChannelEntity,
+        mockConnectedAccount,
+        workspaceId,
+      );
 
-    expect(
-      saveMessagesService.saveMessagesAndEnqueueContactCreation,
-    ).toHaveBeenCalledWith(
-      expect.anything(),
-      mockMessageChannel,
-      mockConnectedAccount,
-      workspaceId,
-      { mode: 'LIVE', generationId: 'pending-generation-1' },
-    );
-  });
+      expect(
+        saveMessagesService.saveMessagesAndEnqueueContactCreation,
+      ).toHaveBeenCalledWith(
+        expect.anything(),
+        mockMessageChannel,
+        mockConnectedAccount,
+        workspaceId,
+        expect.objectContaining({
+          mode: 'LIVE',
+          generationId: 'pending-generation-1',
+          liveMessageExternalIds: [],
+          liveBaselineGenerationId: undefined,
+        }),
+      );
+    },
+  );
 
   it('should process message batch import of more than MESSAGING_GMAIL_USERS_MESSAGES_GET_BATCH_SIZE successfully', async () => {
     const arrayMessagesBig = Array.from(

@@ -239,27 +239,25 @@ describe('GmailGetMessageListService', () => {
       expect(result[0].messageExternalIds).toHaveLength(3);
       expect(mockGmailClient.users.messages.list).toHaveBeenCalledTimes(2);
     });
-    it('should go through while loop once when gmail provides a nextpagetoken but 0 messages - should never happen IRL', async () => {
+    it('continues an empty page when Gmail provides a nextPageToken', async () => {
       const mockGmailClient = {
         users: {
           messages: {
-            list: jest.fn().mockResolvedValue({
-              data: {
-                messages: [],
-                nextPageToken: 'next-page-token',
-              },
+            list: jest
+              .fn()
+              .mockResolvedValueOnce({
+                data: { messages: [], nextPageToken: 'next-page-token' },
+              })
+              .mockResolvedValueOnce({
+                data: { messages: [{ id: 'message-after-empty-page' }] },
+              }),
+            get: jest.fn().mockResolvedValue({
+              data: { historyId: 'history-id-123' },
             }),
           },
-          get: jest.fn().mockResolvedValue({
-            data: {
-              historyId: 'history-id-123',
-            },
-          }),
         },
       };
-
       jest.spyOn(google, 'gmail').mockReturnValue(mockGmailClient as never);
-
       (googleOAuth2ClientProvider.getClient as jest.Mock).mockResolvedValue({});
 
       const result = await service.getMessageLists({
@@ -278,8 +276,199 @@ describe('GmailGetMessageListService', () => {
         ],
       });
 
-      expect(result[0].messageExternalIds).toHaveLength(0);
-      expect(mockGmailClient.users.messages.list).toHaveBeenCalledTimes(1);
+      expect(result[0].messageExternalIds).toEqual([
+        'message-after-empty-page',
+      ]);
+      expect(mockGmailClient.users.messages.list).toHaveBeenCalledTimes(2);
+    });
+
+    it('uses a mailbox cursor before pagination so modification of A after new B cannot hide B', async () => {
+      const order: string[] = [];
+      const client = {
+        users: {
+          getProfile: jest.fn(async () => {
+            order.push('profile');
+            return { data: { historyId: 'before-B' } };
+          }),
+          messages: {
+            list: jest.fn(async () => {
+              order.push('list-A');
+              return { data: { messages: [{ id: 'A' }] } };
+            }),
+            get: jest.fn(async () => {
+              order.push('get-A-after-B');
+              return { data: { historyId: 'after-B' } };
+            }),
+          },
+        },
+      };
+      jest.spyOn(google, 'gmail').mockReturnValue(client as never);
+      (googleOAuth2ClientProvider.getClient as jest.Mock).mockResolvedValue({});
+      const historyService = (
+        service as unknown as { gmailGetHistoryService: GmailGetHistoryService }
+      ).gmailGetHistoryService;
+      jest
+        .spyOn(historyService, 'getHistory')
+        .mockImplementation(async (_client, start) => {
+          order.push(`history:${start}`);
+          return {
+            history:
+              start === 'before-B'
+                ? [{ messagesAdded: [{ message: { id: 'B' } }] }]
+                : [],
+            historyId: 'final',
+          };
+        });
+      jest
+        .spyOn(historyService, 'getMessageIdsFromHistory')
+        .mockResolvedValue({ messagesAdded: ['B'], messagesDeleted: [] });
+      const [result] = await service.getMessageLists({
+        messageChannel: {
+          syncCursor: 'old-cursor',
+          id: 'channel-1',
+          messageFolderImportPolicy: MessageFolderImportPolicy.ALL_FOLDERS,
+        },
+        connectedAccount: mockConnectedAccount,
+        messageFolders: [],
+        forceInitialFrontier: true,
+      });
+      expect(order[0]).toBe('profile');
+      expect(order.indexOf('profile')).toBeLessThan(order.indexOf('list-A'));
+      expect(order).toContain('history:before-B');
+      expect(result).toMatchObject({
+        messageExternalIds: ['A', 'B'],
+        initialFrontierVerified: true,
+        nextSyncCursor: 'final',
+      });
+    });
+
+    it('qualifies nonempty enumeration only after validating the message-derived history cursor and including additions during scan', async () => {
+      const client = {
+        users: {
+          getProfile: jest
+            .fn()
+            .mockResolvedValue({ data: { historyId: 'history-start' } }),
+          messages: {
+            list: jest
+              .fn()
+              .mockResolvedValue({ data: { messages: [{ id: 'initial' }] } }),
+            get: jest
+              .fn()
+              .mockResolvedValue({ data: { historyId: 'history-start' } }),
+          },
+        },
+      };
+      jest.spyOn(google, 'gmail').mockReturnValue(client as never);
+      (googleOAuth2ClientProvider.getClient as jest.Mock).mockResolvedValue({});
+      const historyService = (
+        service as unknown as { gmailGetHistoryService: GmailGetHistoryService }
+      ).gmailGetHistoryService;
+      jest.spyOn(historyService, 'getHistory').mockResolvedValue({
+        history: [{ messagesAdded: [{ message: { id: 'during-scan' } }] }],
+        historyId: 'history-final',
+      });
+      jest.spyOn(historyService, 'getMessageIdsFromHistory').mockResolvedValue({
+        messagesAdded: ['during-scan'],
+        messagesDeleted: [],
+      });
+      const args = {
+        messageChannel: {
+          syncCursor: '',
+          id: 'channel-1',
+          messageFolderImportPolicy: MessageFolderImportPolicy.ALL_FOLDERS,
+        },
+        connectedAccount: mockConnectedAccount,
+        messageFolders: [],
+        forceInitialFrontier: true,
+      };
+      const [list] = await service.getMessageLists(args);
+      expect(historyService.getHistory).toHaveBeenCalledWith(
+        client,
+        'history-start',
+      );
+      expect(list).toMatchObject({
+        messageExternalIds: ['initial', 'during-scan'],
+        nextSyncCursor: 'history-final',
+        initialFrontierVerified: true,
+      });
+      jest
+        .spyOn(historyService, 'getHistory')
+        .mockRejectedValue(new Error('expired history'));
+      const [unverified] = await service.getMessageLists(args);
+      expect(unverified.messageExternalIds).toEqual(['initial']);
+      expect(unverified.initialFrontierVerified).toBeUndefined();
+    });
+
+    it('rejects an identity-less listed item instead of certifying a partial baseline', async () => {
+      jest.spyOn(google, 'gmail').mockReturnValue({
+        users: {
+          messages: {
+            list: jest
+              .fn()
+              .mockResolvedValue({ data: { messages: [{ id: null }] } }),
+          },
+        },
+      } as never);
+      (googleOAuth2ClientProvider.getClient as jest.Mock).mockResolvedValue({});
+      await expect(
+        service.getMessageLists({
+          messageChannel: {
+            syncCursor: '',
+            id: 'channel-1',
+            messageFolderImportPolicy: MessageFolderImportPolicy.ALL_FOLDERS,
+          },
+          connectedAccount: mockConnectedAccount,
+          messageFolders: [],
+        }),
+      ).rejects.toThrow('has no provider ID');
+    });
+
+    it('rejects a repeated nextPageToken rather than certifying a truncated scan', async () => {
+      const mockGmailClient = {
+        users: {
+          messages: {
+            list: jest
+              .fn()
+              .mockResolvedValueOnce({
+                data: {
+                  messages: [{ id: 'message-1' }],
+                  nextPageToken: 'stuck',
+                },
+              })
+              .mockResolvedValueOnce({
+                data: {
+                  messages: [{ id: 'message-2' }],
+                  nextPageToken: 'stuck',
+                },
+              })
+              .mockRejectedValue(
+                new Error('bounded test: unexpected third page'),
+              ),
+          },
+        },
+      };
+      jest.spyOn(google, 'gmail').mockReturnValue(mockGmailClient as never);
+      (googleOAuth2ClientProvider.getClient as jest.Mock).mockResolvedValue({});
+
+      await expect(
+        service.getMessageLists({
+          messageChannel: {
+            syncCursor: '',
+            id: 'my-id',
+            messageFolderImportPolicy:
+              MessageFolderImportPolicy.SELECTED_FOLDERS,
+          },
+          connectedAccount: mockConnectedAccount,
+          messageFolders: [
+            createMockFolder({
+              name: 'INBOX',
+              externalId: 'INBOX',
+              isSynced: true,
+            }),
+          ],
+        }),
+      ).rejects.toThrow('Repeated Gmail message-list page token');
+      expect(mockGmailClient.users.messages.list).toHaveBeenCalledTimes(2);
     });
 
     it('should return empty array when no folders have isSynced=true with SELECTED_FOLDERS policy', async () => {
@@ -319,6 +508,37 @@ describe('GmailGetMessageListService', () => {
       expect(result).toEqual([]);
       expect(mockGmailClient.users.messages.list).not.toHaveBeenCalled();
     });
+  });
+
+  it('distinguishes Gmail messageAdded from old message labelAdded on an incremental cursor', async () => {
+    const history = [
+      { messagesAdded: [{ message: { id: 'new-id' } }] },
+      { labelsAdded: [{ message: { id: 'old-id' } }] },
+    ];
+    const historyService = (
+      service as unknown as { gmailGetHistoryService: GmailGetHistoryService }
+    ).gmailGetHistoryService;
+    jest
+      .spyOn(historyService, 'getHistory')
+      .mockResolvedValue({ history, historyId: 'history-final' });
+    jest.spyOn(historyService, 'getMessageIdsFromHistory').mockResolvedValue({
+      messagesAdded: ['new-id', 'old-id'],
+      messagesDeleted: [],
+    });
+    jest.spyOn(google, 'gmail').mockReturnValue({} as never);
+    (googleOAuth2ClientProvider.getClient as jest.Mock).mockResolvedValue({});
+
+    const result = await service.getMessageLists({
+      messageChannel: {
+        id: 'channel-1',
+        syncCursor: 'history-start',
+        messageFolderImportPolicy: MessageFolderImportPolicy.ALL_FOLDERS,
+      },
+      connectedAccount: mockConnectedAccount,
+      messageFolders: [],
+    });
+    expect(result[0].messageExternalIds).toEqual(['new-id', 'old-id']);
+    expect(result[0].newMessageExternalIds).toEqual(['new-id']);
   });
 
   describe('initial sync folder filtering', () => {

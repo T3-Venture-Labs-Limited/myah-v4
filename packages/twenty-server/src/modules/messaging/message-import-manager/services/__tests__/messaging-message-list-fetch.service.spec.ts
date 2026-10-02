@@ -13,6 +13,7 @@ import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/se
 import { MessagingMessageCleanerService } from 'src/modules/messaging/message-cleaner/services/messaging-message-cleaner.service';
 import { SyncMessageFoldersService } from 'src/modules/messaging/message-folder-manager/services/sync-message-folders.service';
 import { MessagingCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-cursor.service';
+import { MessagingEmailBaselineService } from 'src/modules/messaging/message-import-manager/services/messaging-email-baseline.service';
 import { MessagingGetMessageListService } from 'src/modules/messaging/message-import-manager/services/messaging-get-message-list.service';
 import { MessageImportExceptionHandlerService } from 'src/modules/messaging/message-import-manager/services/messaging-import-exception-handler.service';
 import { MessagingMessageListFetchService } from 'src/modules/messaging/message-import-manager/services/messaging-message-list-fetch.service';
@@ -30,6 +31,7 @@ describe('MessagingMessageListFetchService', () => {
   let globalWorkspaceOrmManager: GlobalWorkspaceOrmManager;
   let messagingCursorService: MessagingCursorService;
   let pendingSyncCursorService: MessagingPendingSyncCursorService;
+  let baselineService: MessagingEmailBaselineService;
 
   let mockMicrosoftMessageChannel: MessageChannelEntity;
   let mockGoogleMessageChannel: MessageChannelEntity;
@@ -106,6 +108,18 @@ describe('MessagingMessageListFetchService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagingMessageListFetchService,
+        {
+          provide: MessagingEmailBaselineService,
+          useValue: {
+            needsInitialScan: jest.fn().mockResolvedValue(false),
+            snapshotIncarnation: jest.fn().mockResolvedValue('incarnation-1'),
+            recordEnumeration: jest
+              .fn()
+              .mockResolvedValue('baseline-generation-id'),
+            recordAlreadyImported: jest.fn(),
+            finalize: jest.fn().mockResolvedValue(true),
+          },
+        },
         {
           provide: CacheStorageNamespace.ModuleMessaging,
           useValue: {
@@ -283,6 +297,65 @@ describe('MessagingMessageListFetchService', () => {
       MessagingCursorService,
     );
     pendingSyncCursorService = module.get(MessagingPendingSyncCursorService);
+    baselineService = module.get(MessagingEmailBaselineService);
+  });
+
+  it('forces a complete Gmail enumeration before staging a new baseline and finalizes only after cursor commit', async () => {
+    jest.spyOn(baselineService, 'needsInitialScan').mockResolvedValue(true);
+    jest
+      .spyOn(messagingGetMessageListService, 'getMessageLists')
+      .mockResolvedValue([
+        {
+          messageExternalIds: ['old'],
+          messageExternalIdsToDelete: [],
+          nextSyncCursor: 'history-1',
+          initialFrontierVerified: true,
+          previousSyncCursor: '',
+          folderId: undefined,
+        },
+      ]);
+    const repository = await globalWorkspaceOrmManager.getRepository(
+      workspaceId,
+      'messageChannelMessageAssociation',
+    );
+    jest
+      .spyOn(repository, 'find')
+      .mockResolvedValue([{ messageExternalId: 'old' }] as never);
+
+    await messagingMessageListFetchService.processMessageListFetch(
+      mockGoogleMessageChannel,
+      workspaceId,
+    );
+
+    expect(messagingGetMessageListService.getMessageLists).toHaveBeenCalledWith(
+      mockGoogleMessageChannel,
+      expect.any(Array),
+      true,
+    );
+    expect(baselineService.recordEnumeration).toHaveBeenCalledWith(
+      mockGoogleMessageChannel,
+      expect.any(Array),
+      workspaceId,
+      expect.any(Array),
+      'incarnation-1',
+    );
+    expect(baselineService.recordAlreadyImported).toHaveBeenCalledWith(
+      workspaceId,
+      mockGoogleMessageChannel,
+      'baseline-generation-id',
+      ['old'],
+    );
+    expect(pendingSyncCursorService.stage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baselineGenerationId: 'baseline-generation-id',
+      }),
+    );
+    expect(
+      (pendingSyncCursorService.commit as jest.Mock).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      (baselineService.finalize as jest.Mock).mock.invocationCallOrder[0],
+    );
   });
 
   it('should process Microsoft message list fetch correctly', async () => {

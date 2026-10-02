@@ -10,4 +10,5 @@ export type GetMessageListsArgs = {
   >;
   connectedAccount: Pick<ConnectedAccountEntity, 'id' | 'provider' | 'handle'>;
   messageFolders: MessageFolder[];
+  forceInitialFrontier?: boolean;
 };

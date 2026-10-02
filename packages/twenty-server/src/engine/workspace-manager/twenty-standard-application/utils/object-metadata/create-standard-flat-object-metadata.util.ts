@@ -8,11 +8,14 @@ import {
   buildMyahCampaignCreatorListStandardFlatObjectMetadata,
   buildMyahCampaignCreatorListSourceStandardFlatObjectMetadata,
   buildMyahCreatorListStandardFlatObjectMetadata,
+  buildMyahCampaignEmailConversationBindingStandardFlatObjectMetadata,
   buildMyahCampaignCreatorStandardFlatObjectMetadata,
   buildMyahCampaignStandardFlatObjectMetadata,
   buildMyahCreatorListMemberStandardFlatObjectMetadata,
   buildMyahCreatorStandardFlatObjectMetadata,
   buildMyahOfferStandardFlatObjectMetadata,
+  buildMyahPartnershipOfferVersionStandardFlatObjectMetadata,
+  buildMyahPartnershipObligationStandardFlatObjectMetadata,
   buildMyahOutreachActionStandardFlatObjectMetadata,
   buildMyahOutreachSequenceStandardFlatObjectMetadata,
   buildMyahOutreachStepStandardFlatObjectMetadata,
@@ -872,11 +875,17 @@ export const STANDARD_FLAT_OBJECT_METADATA_BUILDERS_BY_OBJECT_NAME = {
   brandBrainUpdateProposal:
     buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata,
   offer: buildMyahOfferStandardFlatObjectMetadata,
+  partnershipOfferVersion:
+    buildMyahPartnershipOfferVersionStandardFlatObjectMetadata,
+  partnershipObligation:
+    buildMyahPartnershipObligationStandardFlatObjectMetadata,
   outreachAction: buildMyahOutreachActionStandardFlatObjectMetadata,
   outreachSequence: buildMyahOutreachSequenceStandardFlatObjectMetadata,
   outreachStep: buildMyahOutreachStepStandardFlatObjectMetadata,
   promotedAsset: buildMyahPromotedAssetStandardFlatObjectMetadata,
   campaignAccount: buildMyahCampaignAccountStandardFlatObjectMetadata,
+  campaignEmailConversationBinding:
+    buildMyahCampaignEmailConversationBindingStandardFlatObjectMetadata,
   campaignCreator: buildMyahCampaignCreatorStandardFlatObjectMetadata,
   campaignCreatorList: buildMyahCampaignCreatorListStandardFlatObjectMetadata,
   campaignCreatorListSource:

@@ -7,6 +7,23 @@ it('updates recovery state and invalidates with the supplied transaction manager
     update: jest.fn(async () => calls.push('update')),
   };
   const transactionManager = {
+    query: jest.fn(async (sql: string) => {
+      if (sql.includes('FOR UPDATE')) {
+        calls.push('account-lock');
+        return [{ id: 'account-id' }];
+      }
+      if (sql.includes('pg_attribute')) return [{ hasIncarnation: true }];
+      if (sql.includes('uuid_generate_v4()')) {
+        calls.push('rotate');
+        return [];
+      }
+      if (sql.includes('to_regclass')) {
+        calls.push('baseline-schema');
+        return [{ tableName: 'campaignEmailBaselineGeneration' }];
+      }
+      calls.push('baseline-invalidated');
+      return [];
+    }),
     getRepository: jest.fn((entity) => {
       expect(entity).toBe(ConnectedAccountEntity);
       return repository;
@@ -14,11 +31,10 @@ it('updates recovery state and invalidates with the supplied transaction manager
     queryRunner: {
       isReleased: false,
       isTransactionActive: true,
-      query: jest.fn(async (sql: string) =>
-        calls.push(
-          sql.includes('campaignForecastHead') ? 'invalidate' : 'other',
-        ),
-      ),
+      query: jest.fn(async () => {
+        calls.push('invalidate');
+        return [];
+      }),
     },
   };
   const service = new UpdateConnectedAccountOnReconnectService(
@@ -46,5 +62,12 @@ it('updates recovery state and invalidates with the supplied transaction manager
     }),
     expect.objectContaining({ authFailedAt: null }),
   );
-  expect(calls).toEqual(['update', 'invalidate']);
+  expect(calls).toEqual([
+    'update',
+    'invalidate',
+    'account-lock',
+    'rotate',
+    'baseline-schema',
+    'baseline-invalidated',
+  ]);
 });

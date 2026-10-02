@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { isDefined } from 'twenty-shared/utils';
@@ -24,6 +24,7 @@ import {
   MessageImportDriverExceptionCode,
 } from 'src/modules/messaging/message-import-manager/drivers/exceptions/message-import-driver.exception';
 import { MessagingGetMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-get-messages.service';
+import { MessagingEmailBaselineService } from 'src/modules/messaging/message-import-manager/services/messaging-email-baseline.service';
 import {
   MessageImportExceptionHandlerService,
   MessageImportSyncStep,
@@ -60,6 +61,8 @@ export class MessagingMessagesImportService {
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
     private readonly twentyConfigService: TwentyConfigService,
+    @Optional()
+    private readonly emailBaselineService?: MessagingEmailBaselineService,
   ) {}
 
   async processMessageBatchImport(
@@ -116,10 +119,20 @@ export class MessagingMessagesImportService {
           );
 
           if (!messageIdsToFetch?.length) {
+            const frontier =
+              await this.messagingPendingSyncCursorService.getFrontierState?.({
+                messageChannelId: messageChannel.id,
+                workspaceId,
+              });
             await this.messagingPendingSyncCursorService.commit({
               messageChannel,
               workspaceId,
             });
+            await this.emailBaselineService?.finalize(
+              workspaceId,
+              messageChannel,
+              frontier?.baselineGenerationId ?? null,
+            );
 
             await this.messageChannelSyncStatusService.markAsMessageSyncCompleted(
               [messageChannel.id],
@@ -217,25 +230,55 @@ export class MessagingMessagesImportService {
             workspace?.isInternalMessagesImportEnabled ?? false,
           );
 
-          if (messagesToSave.length > 0) {
-            // Contact triage needs the source boundary: the first import of a
-            // channel is BACKFILL (history must not reopen contacts) and every
-            // import after a completed sync is LIVE. The in-flight generation is
-            // owned by the pending-cursor cache and used here as provenance only.
+          const frontier =
+            await this.messagingPendingSyncCursorService.getFrontierState?.({
+              messageChannelId: messageChannel.id,
+              workspaceId,
+            });
+          const classified = await this.emailBaselineService?.classifyNewIds(
+            workspaceId,
+            messageChannel,
+            frontier?.newMessageExternalIds ?? [],
+          );
+          const liveIds = messagesToSave
+            .filter(
+              (message) =>
+                classified?.ids.has(message.externalId) &&
+                !!message.providerOccurredAt &&
+                new Date(message.providerOccurredAt).getTime() >
+                  new Date(classified.completedAt).getTime(),
+            )
+            .map((message) => message.externalId);
+          if (messagesToSave.length > 0 || frontier?.baselineGenerationId) {
             const pendingGenerationId =
               await this.messagingPendingSyncCursorService.getPendingGenerationId(
                 { messageChannelId: messageChannel.id, workspaceId },
               );
-
+            const savedIds = new Set(
+              messagesToSave.map((message) => message.externalId),
+            );
+            const fetchedIds = new Set(
+              allMessages.map((message) => message.externalId),
+            );
             await this.saveMessagesAndEnqueueContactCreationService.saveMessagesAndEnqueueContactCreation(
               messagesToSave,
               messageChannel,
               connectedAccount,
               workspaceId,
               {
+                // Preserve existing Inbox triage independently of Campaign
+                // eligibility. Only the separately verified baseline receipt
+                // may authorize Campaign work; this legacy mode cannot.
                 mode: messageChannel.syncedAt ? 'LIVE' : 'BACKFILL',
                 generationId:
                   pendingGenerationId ?? `polling:${messageChannel.id}`,
+                baselineGenerationId: frontier?.baselineGenerationId,
+                listedIds: messageIdsToFetch,
+                excludedIds: messageIdsToFetch.filter(
+                  (id) => fetchedIds.has(id) && !savedIds.has(id),
+                ),
+                liveMessageExternalIds: liveIds,
+                liveBaselineGenerationId: classified?.generationId,
               },
             );
           }
@@ -250,6 +293,11 @@ export class MessagingMessagesImportService {
               messageChannel,
               workspaceId,
             });
+            await this.emailBaselineService?.finalize(
+              workspaceId,
+              messageChannel,
+              frontier?.baselineGenerationId ?? null,
+            );
 
             await this.messageChannelSyncStatusService.markAsMessageSyncCompleted(
               [messageChannel.id],

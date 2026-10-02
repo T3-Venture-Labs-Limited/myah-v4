@@ -1350,6 +1350,8 @@ describe('Myah standard metadata contract', () => {
         canSoftDeleteObjectRecords: false,
       },
       ...[
+        MYAH_STANDARD_OBJECTS.partnershipOfferVersion.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier,
         MYAH_STANDARD_OBJECTS.campaignAccount.universalIdentifier,
         MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
         MYAH_STANDARD_OBJECTS.campaignCreatorListSource.universalIdentifier,

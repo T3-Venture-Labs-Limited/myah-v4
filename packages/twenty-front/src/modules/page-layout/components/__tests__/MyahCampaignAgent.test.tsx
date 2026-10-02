@@ -111,6 +111,10 @@ const persistedCampaign = {
   replyRules: { blocknote: persistedBodies.replyRules, markdown: null },
 };
 
+jest.mock('@/page-layout/components/MyahCampaignReplyStatus', () => ({
+  MyahCampaignReplyStatus: () => <div>Campaign reply status</div>,
+}));
+
 jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: () => ({
     objectMetadataItems: mockObjectMetadataItems,

@@ -2,6 +2,8 @@ import { Injectable, Optional } from '@nestjs/common';
 
 import { type MyahInboxTriageMode } from 'src/engine/core-modules/myah-inbox/types/myah-inbox-contact-triage.types';
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
+import { MessagingEmailBaselineService } from 'src/modules/messaging/message-import-manager/services/messaging-email-baseline.service';
+import { CampaignEmailInboundHeldWorkService } from 'src/modules/campaign-partnership/services/campaign-email-inbound-held-work.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
 import { ModuleRef } from '@nestjs/core';
 
@@ -51,6 +53,10 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     private readonly myahInboxContactTriageService: MyahInboxContactTriageService,
     private readonly myahInboxContactTriageReceiptService: MyahInboxContactTriageReceiptService,
     @Optional() private readonly moduleRef?: ModuleRef,
+    @Optional()
+    private readonly emailBaselineService?: MessagingEmailBaselineService,
+    @Optional()
+    private readonly campaignEmailInboundHeldWorkService?: CampaignEmailInboundHeldWorkService,
   ) {}
 
   async saveMessagesAndEnqueueContactCreation(
@@ -58,7 +64,15 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     messageChannel: MessageChannelEntity,
     connectedAccount: ConnectedAccountEntity,
     workspaceId: string,
-    source?: { mode: MyahInboxTriageMode; generationId: string },
+    source?: {
+      mode: MyahInboxTriageMode;
+      generationId: string;
+      baselineGenerationId?: string;
+      listedIds?: string[];
+      excludedIds?: string[];
+      liveMessageExternalIds?: string[];
+      liveBaselineGenerationId?: string;
+    },
     suppliedTransactionManager?: WorkspaceEntityManager,
   ): Promise<
     | {
@@ -225,6 +239,81 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         transactionManager,
       );
 
+      // Recheck the READY incarnation while holding its row lock in the same
+      // transaction as canonical associations and the durable triage receipt.
+      // A reconnect racing after the list read must not grant LIVE authority.
+      const verifiedLiveIds =
+        source?.liveBaselineGenerationId && this.emailBaselineService
+          ? await this.emailBaselineService.verifyLiveInTransaction(
+              transactionManager,
+              workspaceId,
+              messageChannel,
+              source.liveBaselineGenerationId,
+              source.liveMessageExternalIds ?? [],
+            )
+          : new Set<string>();
+
+      // Never use Inbox's source.mode or mutable channel syncedAt as Campaign
+      // authority. The per-provider-ID READY generation was rechecked above in
+      // this same canonical import transaction. No user or send authority exists
+      // here: the new receipt stays HELD until an authenticated reassessment.
+      if (
+        this.campaignEmailInboundHeldWorkService &&
+        source?.liveBaselineGenerationId
+      ) {
+        for (const message of messagesToSave) {
+          if (
+            !verifiedLiveIds.has(message.externalId) ||
+            message.direction !== MessageDirection.INCOMING ||
+            message.isDraft
+          )
+            continue;
+          const from = message.participants.find(
+            (p) => p.role === MessageParticipantRole.FROM,
+          )?.handle;
+          const to = message.participants.find(
+            (p) => p.role === MessageParticipantRole.TO,
+          )?.handle;
+          if (
+            !from ||
+            !to ||
+            (to !== connectedAccount.handle &&
+              !(connectedAccount.handleAliases ?? []).includes(to))
+          )
+            continue;
+          const messageId = messageExternalIdsAndIdsMap.get(message.externalId);
+          const threadId = messageExternalIdToMessageThreadIdMap.get(
+            message.externalId,
+          );
+          const providerOccurredAt = message.providerOccurredAt
+            ? new Date(message.providerOccurredAt)
+            : null;
+          if (
+            !messageId ||
+            !threadId ||
+            !providerOccurredAt ||
+            !Number.isFinite(providerOccurredAt.getTime())
+          )
+            continue;
+          await this.campaignEmailInboundHeldWorkService.recordInTransaction(
+            {
+              workspaceId,
+              messageId,
+              threadId,
+              channelId: messageChannel.id,
+              connectedAccountId: connectedAccount.id,
+              generationId: source.liveBaselineGenerationId,
+              providerMessageId: message.externalId,
+              providerThreadId: message.messageThreadExternalId,
+              from,
+              to,
+              providerOccurredAt,
+            },
+            transactionManager,
+          );
+        }
+      }
+
       if (recordTriageSource && source) {
         const persistedSourceMessages = messagesToSave.flatMap((message) => {
           const messageId = messageExternalIdsAndIdsMap.get(message.externalId);
@@ -259,7 +348,9 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
               persistedMessageId: sourceMessage.messageId,
               sourceRecordId: sourceMessage.threadId,
               sourceGenerationId: source.generationId,
-              mode: source.mode,
+              mode: verifiedLiveIds.has(sourceMessage.message.externalId)
+                ? 'LIVE'
+                : source.mode,
               direction: sourceMessage.direction,
               providerOccurredAt:
                 sourceMessage.message.providerOccurredAt ?? null,
@@ -315,6 +406,21 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
             },
           );
         }
+      }
+
+      if (source?.baselineGenerationId && source.listedIds?.length) {
+        await this.emailBaselineService?.recordDispositionsInTransaction(
+          transactionManager,
+          {
+            generationId: source.baselineGenerationId,
+            workspaceId,
+            messageChannelId: messageChannel.id,
+            connectedAccountId: connectedAccount.id,
+            listedIds: source.listedIds,
+            importedIds: [...messageExternalIdsAndIdsMap.keys()],
+            excludedIds: source.excludedIds ?? [],
+          },
+        );
       }
 
       return {

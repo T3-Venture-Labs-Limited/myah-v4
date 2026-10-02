@@ -23,6 +23,7 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { CampaignForecastInputInvalidationService } from 'src/modules/campaign-execution/services/campaign-forecast-input-invalidation.service';
+import { invalidateCampaignEmailBaselineInTransaction } from 'src/modules/messaging/message-import-manager/utils/invalidate-campaign-email-baseline.util';
 import {
   CalendarEventListFetchJob,
   type CalendarEventListFetchJobData,
@@ -220,6 +221,13 @@ export class ImapSmtpCalDavAPIService {
             { workspaceId },
             transactionManager,
           );
+          if (isDefined(existingAccount)) {
+            await invalidateCampaignEmailBaselineInTransaction(
+              transactionManager,
+              workspaceId,
+              connectedAccountId,
+            );
+          }
 
           const messageChannelId =
             existingMessageChannel?.id ??

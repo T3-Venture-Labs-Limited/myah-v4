@@ -21,6 +21,8 @@ import { CAMPAIGN_REPLY_EVIDENCE_PORT } from 'src/modules/campaign-execution/con
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 import { MessagingMessageFolderAssociationService } from 'src/modules/messaging/message-import-manager/services/messaging-message-folder-association.service';
 import { MessagingMessageService } from 'src/modules/messaging/message-import-manager/services/messaging-message.service';
+import { MessagingEmailBaselineService } from 'src/modules/messaging/message-import-manager/services/messaging-email-baseline.service';
+import { CampaignEmailInboundHeldWorkService } from 'src/modules/campaign-partnership/services/campaign-email-inbound-held-work.service';
 import { MessagingSaveMessagesAndEnqueueContactCreationService } from 'src/modules/messaging/message-import-manager/services/messaging-save-messages-and-enqueue-contact-creation.service';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
 import { MessagingMessageParticipantService } from 'src/modules/messaging/message-participant-manager/services/messaging-message-participant.service';
@@ -40,6 +42,9 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
   let transactionManager: Record<string, never>;
   let commitTransaction: jest.Mock;
   let rollbackTransaction: jest.Mock;
+  let baselineReceipt: jest.Mock;
+  let verifyLiveReceipt: jest.Mock;
+  let heldWork: jest.Mock;
 
   const workspaceId = '00000000-0000-4000-8000-000000000001';
 
@@ -121,6 +126,9 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     transactionManager = {};
     commitTransaction = jest.fn();
     rollbackTransaction = jest.fn();
+    baselineReceipt = jest.fn();
+    verifyLiveReceipt = jest.fn().mockResolvedValue(new Set());
+    heldWork = jest.fn().mockResolvedValue('HELD');
     campaignReplyEvidencePort = {
       reconcileInboundMessageInTransaction: jest.fn(),
     };
@@ -141,6 +149,21 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagingSaveMessagesAndEnqueueContactCreationService,
+        {
+          provide: MessagingEmailBaselineService,
+          useValue: {
+            recordDispositionsInTransaction: (...args: unknown[]) =>
+              baselineReceipt(...args),
+            verifyLiveInTransaction: (...args: unknown[]) =>
+              verifyLiveReceipt(...args),
+          },
+        },
+        {
+          provide: CampaignEmailInboundHeldWorkService,
+          useValue: {
+            recordInTransaction: (...args: unknown[]) => heldWork(...args),
+          },
+        },
         {
           provide: MessageQueueService,
           useValue: {
@@ -265,6 +288,168 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     );
     triageService = module.get(MyahInboxContactTriageService);
     receiptService = module.get(MyahInboxContactTriageReceiptService);
+  });
+
+  it('records only a verified per-ID inbound in the canonical transaction, not Inbox LIVE mode', async () => {
+    Object.assign(transactionManager, {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    });
+    verifyLiveReceipt.mockResolvedValueOnce(new Set(['message-2']));
+    const incoming = {
+      ...mockMessages[1],
+      providerOccurredAt: '2026-09-28T12:00:00Z',
+    };
+    await service.saveMessagesAndEnqueueContactCreation(
+      [incoming],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      {
+        mode: 'BACKFILL',
+        generationId: 'inbox-only',
+        liveBaselineGenerationId: 'ready-id',
+        liveMessageExternalIds: ['message-2'],
+      },
+    );
+    expect(heldWork).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationId: 'ready-id',
+        providerMessageId: 'message-2',
+        from: 'contact@company.com',
+        to: 'test@example.com',
+        messageId: 'db-message-id-2',
+      }),
+      transactionManager,
+    );
+    expect(commitTransaction).toHaveBeenCalledTimes(1);
+    expect(messageQueueService.add).not.toHaveBeenCalledWith(
+      'CampaignReplyJob',
+      expect.anything(),
+    );
+    heldWork.mockClear();
+    await service.saveMessagesAndEnqueueContactCreation(
+      [incoming],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'inbox-only' },
+    );
+    expect(heldWork).not.toHaveBeenCalled();
+  });
+
+  it('rolls back canonical import if verified HELD persistence fails', async () => {
+    Object.assign(transactionManager, {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    });
+    verifyLiveReceipt.mockResolvedValueOnce(new Set(['message-2']));
+    heldWork.mockRejectedValueOnce(new Error('held receipt unavailable'));
+    await expect(
+      service.saveMessagesAndEnqueueContactCreation(
+        [{ ...mockMessages[1], providerOccurredAt: '2026-09-28T12:00:00Z' }],
+        mockMessageChannel,
+        mockConnectedAccount,
+        workspaceId,
+        {
+          mode: 'LIVE',
+          generationId: 'inbox-only',
+          liveBaselineGenerationId: 'ready-id',
+          liveMessageExternalIds: ['message-2'],
+        },
+      ),
+    ).rejects.toThrow('held receipt unavailable');
+    expect(rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('records listed imported, filtered and missing IDs with canonical participants before commit; receipt failure rolls back', async () => {
+    Object.assign(transactionManager, {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    });
+    const source = {
+      mode: 'BACKFILL' as const,
+      generationId: 'polling',
+      baselineGenerationId: 'baseline',
+      listedIds: ['message-1', 'message-2', 'filtered', 'missing'],
+      excludedIds: ['filtered'],
+    };
+    await service.saveMessagesAndEnqueueContactCreation(
+      mockMessages,
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      source,
+    );
+    expect(baselineReceipt).toHaveBeenCalledWith(transactionManager, {
+      generationId: 'baseline',
+      workspaceId,
+      messageChannelId: mockMessageChannel.id,
+      connectedAccountId: mockConnectedAccount.id,
+      listedIds: source.listedIds,
+      importedIds: ['message-1', 'message-2'],
+      excludedIds: ['filtered'],
+    });
+    expect(
+      (messageParticipantService.saveMessageParticipants as jest.Mock).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(baselineReceipt.mock.invocationCallOrder[0]);
+    expect(baselineReceipt.mock.invocationCallOrder[0]).toBeLessThan(
+      commitTransaction.mock.invocationCallOrder[0],
+    );
+    baselineReceipt.mockRejectedValueOnce(new Error('disposition failed'));
+    await expect(
+      service.saveMessagesAndEnqueueContactCreation(
+        mockMessages,
+        mockMessageChannel,
+        mockConnectedAccount,
+        workspaceId,
+        source,
+      ),
+    ).rejects.toThrow('disposition failed');
+    expect(rollbackTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('rechecks READY under the canonical transaction lock before marking an inbound receipt LIVE', async () => {
+    Object.assign(transactionManager, {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    });
+    const source = {
+      mode: 'BACKFILL' as const,
+      generationId: 'polling',
+      liveBaselineGenerationId: 'ready-generation',
+      liveMessageExternalIds: ['message-2'],
+    };
+    await service.saveMessagesAndEnqueueContactCreation(
+      mockMessages,
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      source,
+    );
+    expect(verifyLiveReceipt).toHaveBeenCalledWith(
+      transactionManager,
+      workspaceId,
+      mockMessageChannel,
+      'ready-generation',
+      ['message-2'],
+    );
+    expect(
+      (receiptService.recordInTransaction as jest.Mock).mock.calls.find(
+        ([input]) => input.direction === 'INBOUND',
+      )?.[0].mode,
+    ).toBe('BACKFILL');
+    verifyLiveReceipt.mockResolvedValue(new Set(['message-2']));
+    await service.saveMessagesAndEnqueueContactCreation(
+      mockMessages,
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      source,
+    );
+    expect(
+      (receiptService.recordInTransaction as jest.Mock).mock.calls
+        .filter(([input]) => input.direction === 'INBOUND')
+        .slice(-1)[0]?.[0].mode,
+    ).toBe('LIVE');
   });
 
   it('should save messages and enqueue contact creation', async () => {

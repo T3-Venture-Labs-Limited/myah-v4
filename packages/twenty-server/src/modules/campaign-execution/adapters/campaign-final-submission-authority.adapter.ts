@@ -357,6 +357,8 @@ export class CampaignFinalSubmissionAuthorityAdapter implements FinalSubmissionA
         (candidate) =>
           candidate.campaignCreatorId === enrollment[0].campaignCreatorId,
       );
+      if (excluded?.reasons.includes('REPLY_RECEIVED'))
+        return reject('ENROLLMENT_REPLIED');
       if (excluded?.reasons.includes('SUPPRESSED_EMAIL'))
         return reject('RECIPIENT_SUPPRESSED');
       if (excluded?.reasons.includes('DUPLICATE_CREATOR_EMAIL'))

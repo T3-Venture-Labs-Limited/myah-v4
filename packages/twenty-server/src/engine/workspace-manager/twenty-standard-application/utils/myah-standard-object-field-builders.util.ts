@@ -53,6 +53,62 @@ const createMyahStandardFieldFlatMetadata = <
   });
 };
 
+const buildReplyAuthorityField = (
+  objectName: MyahStandardObjectName,
+  fieldName: string,
+  type: FieldMetadataType,
+  args: Omit<Args, 'objectName'>,
+  defaultValue?: string | number | boolean | object,
+): FlatFieldMetadata =>
+  createMyahStandardFieldFlatMetadata({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: fieldName as never,
+      type,
+      label: fieldName,
+      description: `Server-managed reply authority: ${fieldName}`,
+      icon: 'IconLock',
+      isNullable:
+        objectName === 'campaignEmailConversationBinding'
+          ? new Set([
+              'establishedByWorkspaceMemberId',
+              'messageId',
+              'revokedAt',
+              'revokedByWorkspaceMemberId',
+              'revocationReason',
+            ]).has(fieldName)
+          : defaultValue === undefined,
+      isUIEditable: false,
+      ...(defaultValue === undefined ? {} : { defaultValue }),
+      ...(fieldName === 'replyAgentMode'
+        ? {
+            options: [
+              {
+                id: 'aead2d74-2b22-5208-a15e-5cd4b635fd60',
+                value: 'REVIEW',
+                label: 'Review',
+                color: 'blue',
+                position: 0,
+              },
+              {
+                id: '8df86429-f369-5bd9-8e3d-a0201a8176ef',
+                value: 'AUTONOMOUS',
+                label: 'Autonomous',
+                color: 'orange',
+                position: 1,
+              },
+            ],
+          }
+        : {}),
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  });
+
 const buildMyahBaseSystemFields = ({
   objectName,
   ...args
@@ -293,6 +349,52 @@ export const buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata = (
     },
   });
 
+export const buildMyahPartnershipOfferVersionStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'partnershipOfferVersion',
+    context: {
+      universalIdentifier:
+        MYAH_STANDARD_OBJECTS.partnershipOfferVersion.universalIdentifier,
+      nameSingular: 'partnershipOfferVersion',
+      namePlural: 'partnershipOfferVersions',
+      labelSingular: 'Partnership Offer Version',
+      labelPlural: 'Partnership Offer Versions',
+      description:
+        'Participation-scoped partnership fact; domain services own writes',
+      icon: 'IconFileText',
+      isSearchable: false,
+      isUICreatable: false,
+      isUIEditable: false,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahPartnershipObligationStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'partnershipObligation',
+    context: {
+      universalIdentifier:
+        MYAH_STANDARD_OBJECTS.partnershipObligation.universalIdentifier,
+      nameSingular: 'partnershipObligation',
+      namePlural: 'partnershipObligations',
+      labelSingular: 'Partnership Obligation',
+      labelPlural: 'Partnership Obligations',
+      description:
+        'Participation-scoped partnership fact; domain services own writes',
+      icon: 'IconFileText',
+      isSearchable: false,
+      isUICreatable: false,
+      isUIEditable: false,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
 export const buildMyahOfferStandardFlatObjectMetadata = (
   args: ObjectArgs,
 ): FlatObjectMetadata =>
@@ -388,6 +490,28 @@ export const buildMyahPromotedAssetStandardFlatObjectMetadata = (
       labelIdentifierFieldMetadataName: 'name',
     },
   });
+
+export const buildMyahCampaignEmailConversationBindingStandardFlatObjectMetadata =
+  (args: ObjectArgs): FlatObjectMetadata =>
+    createStandardObjectFlatMetadata({
+      ...args,
+      objectName: 'campaignEmailConversationBinding',
+      context: {
+        universalIdentifier:
+          MYAH_STANDARD_OBJECTS.campaignEmailConversationBinding
+            .universalIdentifier,
+        nameSingular: 'campaignEmailConversationBinding',
+        namePlural: 'campaignEmailConversationBindings',
+        labelSingular: 'Campaign Email Conversation Binding',
+        labelPlural: 'Campaign Email Conversation Bindings',
+        description: 'Server-established exact Email participation attribution',
+        icon: 'IconMail',
+        isSearchable: false,
+        isUICreatable: false,
+        isUIEditable: false,
+        labelIdentifierFieldMetadataName: 'id',
+      },
+    });
 
 export const buildMyahCampaignCreatorStandardFlatObjectMetadata = (
   args: ObjectArgs,
@@ -1331,6 +1455,688 @@ export const buildMyahStandardFlatFieldMetadatas = ({
               relationType: RelationType.MANY_TO_ONE,
               onDelete: RelationOnDeleteAction.SET_NULL,
               joinColumnName: 'targetPageId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'partnershipOfferVersion':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'name',
+            description: 'name',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        version: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'version',
+            type: FieldMetadataType.NUMBER,
+            label: 'version',
+            description: 'version',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        terms: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'terms',
+            type: FieldMetadataType.RAW_JSON,
+            label: 'terms',
+            description: 'terms',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        fixedAmount: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'fixedAmount',
+            type: FieldMetadataType.TEXT,
+            label: 'fixedAmount',
+            description: 'fixedAmount',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        currency: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'currency',
+            type: FieldMetadataType.TEXT,
+            label: 'currency',
+            description: 'currency',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        sourceReference: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'sourceReference',
+            type: FieldMetadataType.TEXT,
+            label: 'sourceReference',
+            description: 'sourceReference',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        authorizedById: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'authorizedById',
+            type: FieldMetadataType.UUID,
+            label: 'authorizedById',
+            description: 'authorizedById',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        authorizedAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'authorizedAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'authorizedAt',
+            description: 'authorizedAt',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        acceptanceReference: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'acceptanceReference',
+            type: FieldMetadataType.TEXT,
+            label: 'acceptanceReference',
+            description: 'acceptanceReference',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        confirmedById: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'confirmedById',
+            type: FieldMetadataType.UUID,
+            label: 'confirmedById',
+            description: 'confirmedById',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        confirmedAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'confirmedAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'confirmedAt',
+            description: 'confirmedAt',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreator: createStandardRelationFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreator',
+            label: 'campaignCreator',
+            description: 'campaignCreator',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'campaignCreator',
+            targetFieldName: 'offerVersions',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.RESTRICT,
+              joinColumnName: 'campaignCreatorId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        previousVersion: createStandardRelationFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'previousVersion',
+            label: 'previousVersion',
+            description: 'previousVersion',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'partnershipOfferVersion',
+            targetFieldName: 'amendments',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'previousVersionId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        amendments: createStandardRelationFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'amendments',
+            label: 'amendments',
+            description: 'amendments',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'partnershipOfferVersion',
+            targetFieldName: 'previousVersion',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        obligations: createStandardRelationFieldFlatMetadata({
+          objectName: 'partnershipOfferVersion',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'obligations',
+            label: 'obligations',
+            description: 'obligations',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'partnershipObligation',
+            targetFieldName: 'offerVersion',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'partnershipObligation':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'name',
+            description: 'name',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        purpose: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'purpose',
+            type: FieldMetadataType.TEXT,
+            label: 'purpose',
+            description: 'purpose',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        obligationType: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'obligationType',
+            type: FieldMetadataType.SELECT,
+            label: 'Obligation type',
+            description: 'Supported human and content milestones',
+            icon: 'IconListCheck',
+            isNullable: true,
+            isUIEditable: false,
+            options: [
+              {
+                id: '000afdd2-af31-573f-9dd9-34bab6dcb1ab',
+                value: 'SIGNING',
+                label: 'Signing',
+                color: 'blue',
+                position: 0,
+              },
+              {
+                id: 'aca80bde-3953-5c15-aad9-190a35984290',
+                value: 'PAYMENT',
+                label: 'Payment',
+                color: 'green',
+                position: 1,
+              },
+              {
+                id: 'cfc09aa8-f5a9-501d-a704-e30aaee1e80a',
+                value: 'SHIPMENT',
+                label: 'Shipment',
+                color: 'orange',
+                position: 2,
+              },
+              {
+                id: '9d6c5abf-e5a2-53ec-a1c8-76eaa35a2216',
+                value: 'RECEIPT',
+                label: 'Receipt',
+                color: 'sky',
+                position: 3,
+              },
+              {
+                id: '61b4b1cc-0d05-5bdc-9e0c-3be3828a810a',
+                value: 'CONTENT',
+                label: 'Content',
+                color: 'purple',
+                position: 4,
+              },
+            ],
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        responsibleParty: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'responsibleParty',
+            type: FieldMetadataType.TEXT,
+            label: 'responsibleParty',
+            description: 'responsibleParty',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        amount: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'amount',
+            type: FieldMetadataType.TEXT,
+            label: 'amount',
+            description: 'amount',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        currency: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'currency',
+            type: FieldMetadataType.TEXT,
+            label: 'currency',
+            description: 'currency',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        terms: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'terms',
+            type: FieldMetadataType.RAW_JSON,
+            label: 'terms',
+            description: 'terms',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        prerequisites: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'prerequisites',
+            type: FieldMetadataType.RAW_JSON,
+            label: 'prerequisites',
+            description: 'prerequisites',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        dueCondition: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'dueCondition',
+            type: FieldMetadataType.RAW_JSON,
+            label: 'dueCondition',
+            description: 'dueCondition',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        dueAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'dueAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'dueAt',
+            description: 'dueAt',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        dueTimezone: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'dueTimezone',
+            type: FieldMetadataType.TEXT,
+            label: 'dueTimezone',
+            description: 'dueTimezone',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        evidenceReference: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'evidenceReference',
+            type: FieldMetadataType.TEXT,
+            label: 'evidenceReference',
+            description: 'evidenceReference',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        evidenceActorId: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'evidenceActorId',
+            type: FieldMetadataType.UUID,
+            label: 'evidenceActorId',
+            description: 'evidenceActorId',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        evidenceAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'evidenceAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'evidenceAt',
+            description: 'evidenceAt',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        confirmationState: createMyahStandardFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'confirmationState',
+            type: FieldMetadataType.TEXT,
+            label: 'confirmationState',
+            description: 'confirmationState',
+            icon: 'IconFileText',
+            isNullable: true,
+            isUIEditable: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreator: createStandardRelationFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreator',
+            label: 'campaignCreator',
+            description: 'campaignCreator',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'campaignCreator',
+            targetFieldName: 'partnershipObligations',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.RESTRICT,
+              joinColumnName: 'campaignCreatorId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        offerVersion: createStandardRelationFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'offerVersion',
+            label: 'offerVersion',
+            description: 'offerVersion',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'partnershipOfferVersion',
+            targetFieldName: 'obligations',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.RESTRICT,
+              joinColumnName: 'offerVersionId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        task: createStandardRelationFieldFlatMetadata({
+          objectName: 'partnershipObligation',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'task',
+            label: 'task',
+            description: 'task',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'task',
+            targetFieldName: 'partnershipObligations',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'taskId',
             },
           },
           standardObjectMetadataRelatedEntityIds:
@@ -2598,9 +3404,202 @@ export const buildMyahStandardFlatFieldMetadatas = ({
         }),
       };
 
+    case 'campaignEmailConversationBinding':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        campaignId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'campaignId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        participationId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'participationId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        creatorId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'creatorId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        messageThreadId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'messageThreadId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        messageChannelId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'messageChannelId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        connectedAccountId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'connectedAccountId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        providerThreadId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'providerThreadId',
+          FieldMetadataType.TEXT,
+          args,
+        ),
+        creatorSender: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'creatorSender',
+          FieldMetadataType.TEXT,
+          args,
+        ),
+        accountRecipient: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'accountRecipient',
+          FieldMetadataType.TEXT,
+          args,
+        ),
+        evidenceKind: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'evidenceKind',
+          FieldMetadataType.TEXT,
+          args,
+        ),
+        evidenceReference: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'evidenceReference',
+          FieldMetadataType.TEXT,
+          args,
+        ),
+        establishedAt: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'establishedAt',
+          FieldMetadataType.DATE_TIME,
+          args,
+        ),
+        establishedByWorkspaceMemberId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'establishedByWorkspaceMemberId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        messageId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'messageId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        revokedAt: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'revokedAt',
+          FieldMetadataType.DATE_TIME,
+          args,
+        ),
+        revokedByWorkspaceMemberId: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'revokedByWorkspaceMemberId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        revocationReason: buildReplyAuthorityField(
+          'campaignEmailConversationBinding',
+          'revocationReason',
+          FieldMetadataType.TEXT,
+          args,
+        ),
+        campaignCreator: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignEmailConversationBinding',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreator',
+            label: 'Campaign creator',
+            description:
+              'Participation navigation (snapshots remain authoritative)',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'campaignCreator',
+            targetFieldName: 'emailConversationBindings',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.RESTRICT,
+              joinColumnName: 'campaignCreatorId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
     case 'campaignCreator':
       return {
         ...buildMyahBaseSystemFields({ objectName, ...args }),
+        replyAgentPaused: buildReplyAuthorityField(
+          'campaignCreator',
+          'replyAgentPaused',
+          FieldMetadataType.BOOLEAN,
+          args,
+          false,
+        ),
+        replyAgentRevision: buildReplyAuthorityField(
+          'campaignCreator',
+          'replyAgentRevision',
+          FieldMetadataType.NUMBER,
+          args,
+          0,
+        ),
+        replyAgentMaterialGeneration: buildReplyAuthorityField(
+          'campaignCreator',
+          'replyAgentMaterialGeneration',
+          FieldMetadataType.NUMBER,
+          args,
+          0,
+        ),
+        replyAgentPauseHistory: buildReplyAuthorityField(
+          'campaignCreator',
+          'replyAgentPauseHistory',
+          FieldMetadataType.RAW_JSON,
+          args,
+        ),
+        replyAgentChangedAt: buildReplyAuthorityField(
+          'campaignCreator',
+          'replyAgentChangedAt',
+          FieldMetadataType.DATE_TIME,
+          args,
+        ),
+        replyAgentChangedByWorkspaceMemberId: buildReplyAuthorityField(
+          'campaignCreator',
+          'replyAgentChangedByWorkspaceMemberId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        emailConversationBindings: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'emailConversationBindings',
+            label: 'Email conversation bindings',
+            description: 'Exact Email attribution history',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'campaignEmailConversationBinding',
+            targetFieldName: 'campaignCreator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         name: createMyahStandardFieldFlatMetadata({
           objectName: 'campaignCreator',
           workspaceId: args.workspaceId,
@@ -2908,11 +3907,98 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        offerVersions: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'offerVersions',
+            label: 'offerVersions',
+            description: 'offerVersions',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'partnershipOfferVersion',
+            targetFieldName: 'campaignCreator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        partnershipObligations: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'partnershipObligations',
+            label: 'partnershipObligations',
+            description: 'partnershipObligations',
+            icon: 'IconLink',
+            isUIEditable: false,
+            targetObjectName: 'partnershipObligation',
+            targetFieldName: 'campaignCreator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
       };
 
     case 'campaign':
       return {
         ...buildMyahBaseSystemFields({ objectName, ...args }),
+        replyAgentEnabled: buildReplyAuthorityField(
+          'campaign',
+          'replyAgentEnabled',
+          FieldMetadataType.BOOLEAN,
+          args,
+          false,
+        ),
+        replyAgentMode: buildReplyAuthorityField(
+          'campaign',
+          'replyAgentMode',
+          FieldMetadataType.SELECT,
+          args,
+          "'REVIEW'",
+        ),
+        replyAgentRevision: buildReplyAuthorityField(
+          'campaign',
+          'replyAgentRevision',
+          FieldMetadataType.NUMBER,
+          args,
+          0,
+        ),
+        replyAgentEnabledAt: buildReplyAuthorityField(
+          'campaign',
+          'replyAgentEnabledAt',
+          FieldMetadataType.DATE_TIME,
+          args,
+        ),
+        replyAgentEnabledByUserWorkspaceId: buildReplyAuthorityField(
+          'campaign',
+          'replyAgentEnabledByUserWorkspaceId',
+          FieldMetadataType.UUID,
+          args,
+        ),
+        replyAgentChangedAt: buildReplyAuthorityField(
+          'campaign',
+          'replyAgentChangedAt',
+          FieldMetadataType.DATE_TIME,
+          args,
+        ),
+        replyAgentChangedByWorkspaceMemberId: buildReplyAuthorityField(
+          'campaign',
+          'replyAgentChangedByWorkspaceMemberId',
+          FieldMetadataType.UUID,
+          args,
+        ),
         name: createMyahStandardFieldFlatMetadata({
           objectName: 'campaign',
           workspaceId: args.workspaceId,

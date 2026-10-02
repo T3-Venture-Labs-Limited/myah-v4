@@ -191,7 +191,9 @@ const buildHarness = (
   const preflightQuery = jest.fn().mockResolvedValue([{ exists: true }]);
   const dataSourceQuery = jest.fn(async (sql: string, ...rest: unknown[]) =>
     sql.startsWith('SELECT to_regclass')
-      ? preflightQuery(sql, ...rest)
+      ? sql.includes('"conversationExists"')
+        ? [{ conversationExists: true, messageExists: true }]
+        : preflightQuery(sql, ...rest)
       : query(sql, ...rest),
   );
   let productionPermissionDenialPending = useProductionPermissionDenial;

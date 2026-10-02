@@ -13,6 +13,7 @@ import { addPersonEmailFiltersToQueryBuilder } from 'src/modules/match-participa
 import { findPersonByPrimaryOrAdditionalEmail } from 'src/modules/match-participant/utils/find-person-by-primary-or-additional-email';
 import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
 import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
+import { projectParticipantLinkedTimelineActivities } from 'src/modules/timeline/repositories/timeline-activity.repository';
 import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
 type ObjectMetadataName = 'messageParticipant' | 'calendarEventParticipant';
@@ -59,7 +60,7 @@ export class MatchParticipantService<
     | MessageParticipantWorkspaceEntity,
 > {
   constructor(
-    private readonly workspaceEventEmitter: WorkspaceEventEmitter,
+    _workspaceEventEmitter: WorkspaceEventEmitter,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
@@ -94,6 +95,28 @@ export class MatchParticipantService<
     const globalWorkspaceDataSource =
       await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
 
+    if (!transactionManager) {
+      await globalWorkspaceDataSource.transaction(async (manager) => {
+        await this.matchParticipants({
+          participants,
+          objectMetadataName,
+          transactionManager: manager as WorkspaceEntityManager,
+          matchWith,
+          workspaceId,
+        });
+      });
+      return;
+    }
+
+    if (
+      !transactionManager.queryRunner?.isTransactionActive ||
+      transactionManager.internalContext.workspaceId !== workspaceId
+    ) {
+      throw new Error(
+        'Participant matching requires an active workspace transaction',
+      );
+    }
+
     const shouldMatchWithWorkspaceMember =
       matchWith === 'workspaceMemberAndPerson' ||
       matchWith === 'workspaceMemberOnly';
@@ -124,7 +147,18 @@ export class MatchParticipantService<
       : undefined;
 
     const chunkSize = 200;
-    const chunkedParticipants = chunk(participants, chunkSize);
+    const sourceId = (participant: ParticipantWorkspaceEntity) =>
+      objectMetadataName === 'messageParticipant'
+        ? (participant as MessageParticipantWorkspaceEntity).messageId
+        : (participant as CalendarEventParticipantWorkspaceEntity)
+            .calendarEventId;
+    // Keep the parent-row lock order stable even when links span chunks.
+    const chunkedParticipants = chunk(
+      [...participants].sort((left, right) =>
+        sourceId(left).localeCompare(sourceId(right)),
+      ),
+      chunkSize,
+    );
 
     for (const participants of chunkedParticipants) {
       const uniqueParticipantsHandles = [
@@ -133,7 +167,10 @@ export class MatchParticipantService<
 
       const people = isDefined(personRepository)
         ? await addPersonEmailFiltersToQueryBuilder({
-            queryBuilder: personRepository.createQueryBuilder('person'),
+            queryBuilder: personRepository.createQueryBuilder(
+              'person',
+              transactionManager.queryRunner,
+            ),
             emails: uniqueParticipantsHandles,
           })
             .orderBy('person.createdAt', 'ASC')
@@ -192,6 +229,37 @@ export class MatchParticipantService<
         })
         .filter(isDefined);
 
+      const objectName =
+        objectMetadataName === 'messageParticipant'
+          ? 'message'
+          : 'calendarEvent';
+      const links = partipantsToBeUpdated.flatMap((participant) => {
+        if (!shouldMatchWithPerson || !participant.personId) {
+          return [];
+        }
+
+        return [
+          {
+            personId: participant.personId,
+            recordId:
+              objectName === 'message'
+                ? (participant as MessageParticipantWorkspaceEntity).messageId
+                : (participant as CalendarEventParticipantWorkspaceEntity)
+                    .calendarEventId,
+          },
+        ];
+      });
+
+      if (links.length > 0) {
+        await projectParticipantLinkedTimelineActivities({
+          globalWorkspaceOrmManager: this.globalWorkspaceOrmManager,
+          transactionManager,
+          workspaceId,
+          objectName,
+          links,
+        });
+      }
+
       await participantRepository.updateMany(
         partipantsToBeUpdated.map((participant) => ({
           criteria: participant.id,
@@ -204,17 +272,7 @@ export class MatchParticipantService<
             }),
           },
         })),
-      );
-
-      this.workspaceEventEmitter.emitCustomBatchEvent(
-        `${objectMetadataName}_matched`,
-        [
-          {
-            workspaceMemberId: null,
-            participants: partipantsToBeUpdated,
-          },
-        ],
-        workspaceId,
+        transactionManager,
       );
     }
   }

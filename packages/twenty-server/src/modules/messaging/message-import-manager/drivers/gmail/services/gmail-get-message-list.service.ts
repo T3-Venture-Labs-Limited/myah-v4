@@ -38,6 +38,7 @@ export class GmailGetMessageListService {
       'name' | 'externalId' | 'isSynced' | 'parentFolderId'
     >[],
     messageChannel: Pick<MessageChannelEntity, 'messageFolderImportPolicy'>,
+    forceInitialFrontier = false,
   ): Promise<GetMessageListsResponse> {
     const oAuth2Client = await this.googleOAuth2ClientProvider.getClient(
       connectedAccount.id,
@@ -47,8 +48,26 @@ export class GmailGetMessageListService {
       auth: oAuth2Client,
     });
 
+    // The start must predate page one. A listed message's historyId is its
+    // most recent modification and can advance past an unlisted arrival.
+    // Gmail documents getProfile as the current mailbox history record; only
+    // a successful history.list walk can validate its use as a cursor here.
+    let preScanHistoryId: string | null = null;
+    if (forceInitialFrontier) {
+      try {
+        preScanHistoryId =
+          (await gmailClient.users.getProfile({ userId: 'me' })).data
+            .historyId ?? null;
+      } catch {
+        this.logger.warn(
+          `Gmail mailbox pre-scan cursor unavailable for connected account ${connectedAccount.id}; ordinary import remains enabled`,
+        );
+      }
+    }
+
     let pageToken: string | undefined;
     let hasMoreMessages = true;
+    const seenPageTokens = new Set<string>();
 
     const messageExternalIds: string[] = [];
 
@@ -83,18 +102,26 @@ export class GmailGetMessageListService {
           };
         });
 
-      const { messages } = messageList.data;
-      const hasMessages = messages && messages.length > 0;
-
-      if (!hasMessages) {
-        break;
+      const messages = messageList.data.messages ?? [];
+      for (const message of messages) {
+        if (!isNonEmptyString(message.id)) {
+          throw new MessageImportDriverException(
+            `Gmail message-list item has no provider ID for connected account ${connectedAccount.id}`,
+            MessageImportDriverExceptionCode.UNKNOWN,
+          );
+        }
+        messageExternalIds.push(message.id);
       }
 
       pageToken = messageList.data.nextPageToken ?? undefined;
+      if (pageToken && seenPageTokens.has(pageToken)) {
+        throw new MessageImportDriverException(
+          `Repeated Gmail message-list page token for connected account ${connectedAccount.id}`,
+          MessageImportDriverExceptionCode.UNKNOWN,
+        );
+      }
+      if (pageToken) seenPageTokens.add(pageToken);
       hasMoreMessages = !!pageToken;
-
-      // @ts-expect-error legacy noImplicitAny
-      messageExternalIds.push(...messages.map((message) => message.id));
     }
 
     if (messageExternalIds.length === 0) {
@@ -128,10 +155,37 @@ export class GmailGetMessageListService {
       );
     }
 
+    let verifiedIds = messageExternalIds;
+    let verifiedCursor = nextSyncCursor;
+    let initialFrontierVerified = false;
+    if (forceInitialFrontier && isNonEmptyString(preScanHistoryId)) {
+      // A pre-list profile cursor is accepted only if history.list succeeds
+      // through a final cursor. Any rejection leaves the scan unqualified.
+      try {
+        const { history, historyId } =
+          await this.gmailGetHistoryService.getHistory(
+            gmailClient,
+            preScanHistoryId,
+          );
+        if (isNonEmptyString(historyId)) {
+          const { messagesAdded } =
+            await this.gmailGetHistoryService.getMessageIdsFromHistory(history);
+          verifiedIds = [...new Set([...messageExternalIds, ...messagesAdded])];
+          verifiedCursor = historyId;
+          initialFrontierVerified = true;
+        }
+      } catch {
+        this.logger.warn(
+          `Gmail initial history proof unavailable for connected account ${connectedAccount.id}; importing without baseline eligibility`,
+        );
+      }
+    }
+
     return [
       {
-        messageExternalIds,
-        nextSyncCursor,
+        messageExternalIds: verifiedIds,
+        nextSyncCursor: verifiedCursor,
+        ...(initialFrontierVerified ? { initialFrontierVerified } : {}),
         previousSyncCursor: '',
         messageExternalIdsToDelete: [],
         folderId: undefined,
@@ -143,6 +197,7 @@ export class GmailGetMessageListService {
     messageChannel,
     connectedAccount,
     messageFolders,
+    forceInitialFrontier,
   }: GetMessageListsArgs): Promise<GetMessageListsResponse> {
     if (
       messageChannel.messageFolderImportPolicy ===
@@ -167,11 +222,12 @@ export class GmailGetMessageListService {
       auth: oAuth2Client,
     });
 
-    if (!isNonEmptyString(messageChannel.syncCursor)) {
+    if (forceInitialFrontier || !isNonEmptyString(messageChannel.syncCursor)) {
       return this.getMessageListWithoutCursor(
         connectedAccount,
         messageFolders,
         messageChannel,
+        forceInitialFrontier,
       );
     }
 
@@ -183,6 +239,18 @@ export class GmailGetMessageListService {
 
     const { messagesAdded, messagesDeleted } =
       await this.gmailGetHistoryService.getMessageIdsFromHistory(history);
+    // A labelAdded replay is not a new provider message, even when this is
+    // the first time the importer sees its ID.
+    const newMessageExternalIds = [
+      ...new Set(
+        history.flatMap(
+          (entry) =>
+            entry.messagesAdded
+              ?.map((addition) => addition.message?.id)
+              .filter(isNonEmptyString) ?? [],
+        ),
+      ),
+    ];
 
     if (!nextSyncCursor) {
       throw new MessageImportDriverException(
@@ -194,6 +262,7 @@ export class GmailGetMessageListService {
     return [
       {
         messageExternalIds: messagesAdded,
+        newMessageExternalIds,
         messageExternalIdsToDelete: messagesDeleted,
         previousSyncCursor: messageChannel.syncCursor,
         nextSyncCursor,
