@@ -45,6 +45,8 @@ type WorkspaceAccountStatus = {
     | 'INACTIVE';
   lastCheckedAt: string | null;
   lastError: string | null;
+  lastSyncedAt: string | null;
+  lastMessageReceivedAt: string | null;
 };
 
 type UnipileInstagramAccountService = {
@@ -99,6 +101,7 @@ type UnipileInstagramAccountServiceModule = {
     accountClient: AccountClient,
     finalizationLockService: FinalizationLockService,
     availabilityService: AvailabilityService,
+    syncRunRepository: { findOne: jest.Mock },
   ) => UnipileInstagramAccountService;
 };
 
@@ -180,6 +183,7 @@ const createAccountService = (input: {
   accountClient?: AccountClient;
   finalizationLockService?: FinalizationLockService;
   availabilityService?: AvailabilityService;
+  syncRunRepository?: { findOne: jest.Mock };
 }) => {
   const accountServiceModule = loadAccountServiceModule();
 
@@ -239,6 +243,7 @@ const createAccountService = (input: {
     input.availabilityService ?? {
       assertEnabled: jest.fn(),
     },
+    input.syncRunRepository ?? { findOne: jest.fn().mockResolvedValue(null) },
   );
 };
 
@@ -611,6 +616,7 @@ describe('UnipileInstagramAccountService', () => {
       { deleteAccount: jest.fn(), getAccount: jest.fn() },
       finalizationLockService,
       { assertEnabled: jest.fn() },
+      { findOne: jest.fn() },
     );
 
     await expect(
@@ -3094,6 +3100,8 @@ describe('UnipileInstagramAccountService', () => {
       status: 'DELETE_UNKNOWN',
       lastCheckedAt: '2026-09-04T12:34:56.000Z',
       lastError: null,
+      lastSyncedAt: null,
+      lastMessageReceivedAt: null,
     });
     expect(bindingRepository.findOne).toHaveBeenCalledWith({
       where: { workspaceId, deactivatedAt: IsNull() },
@@ -3101,6 +3109,57 @@ describe('UnipileInstagramAccountService', () => {
     expect(projectionService.getAccountStatus).toHaveBeenCalledWith({
       workspace,
       workspaceInstagramAccountRecordId,
+    });
+  });
+
+  it('returns the latest completed sync and inbound message for the current binding', async () => {
+    const binding = {
+      id: reconnectBindingId,
+      workspaceId,
+      workspaceInstagramAccountRecordId,
+      status: 'ACTIVE',
+      deactivatedAt: null,
+    };
+    const syncRunRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        completedAt: new Date('2026-09-29T04:00:46.000Z'),
+      }),
+    };
+    const service = createAccountService({
+      workspaceRepository: { findOne: jest.fn().mockResolvedValue(workspace) },
+      bindingRepository: {
+        findOne: jest.fn().mockResolvedValue(binding),
+        create: jest.fn(),
+        save: jest.fn(),
+      },
+      projectionService: {
+        upsertVerifiedAccount: jest.fn(),
+        getAccountStatus: jest.fn().mockResolvedValue({
+          id: workspaceInstagramAccountRecordId,
+          username: account.username,
+          status: 'ACTIVE',
+          lastCheckedAt: null,
+          lastError: null,
+          lastMessageReceivedAt: '2026-09-29T04:09:27.000Z',
+        }),
+      },
+      syncRunRepository,
+    });
+
+    await expect(
+      service?.getWorkspaceAccountStatus(workspaceId),
+    ).resolves.toEqual({
+      id: workspaceInstagramAccountRecordId,
+      username: account.username,
+      status: 'ACTIVE',
+      lastCheckedAt: null,
+      lastError: null,
+      lastSyncedAt: '2026-09-29T04:00:46.000Z',
+      lastMessageReceivedAt: '2026-09-29T04:09:27.000Z',
+    });
+    expect(syncRunRepository.findOne).toHaveBeenCalledWith({
+      where: { bindingId: reconnectBindingId, status: 'COMPLETED' },
+      order: { completedAt: 'DESC' },
     });
   });
 
@@ -3151,6 +3210,8 @@ describe('UnipileInstagramAccountService', () => {
       status: 'INACTIVE',
       lastCheckedAt: null,
       lastError: null,
+      lastSyncedAt: null,
+      lastMessageReceivedAt: null,
     });
     expect(bindingRepository.findOne).toHaveBeenNthCalledWith(1, {
       where: { workspaceId, deactivatedAt: IsNull() },
@@ -3206,6 +3267,8 @@ describe('UnipileInstagramAccountService', () => {
       status: 'NEEDS_RECONNECT',
       lastCheckedAt: null,
       lastError: 'stale projection status',
+      lastSyncedAt: null,
+      lastMessageReceivedAt: null,
     });
     expect(bindingRepository.findOne).toHaveBeenCalledTimes(1);
     expect(bindingRepository.findOne).toHaveBeenCalledWith({

@@ -63,6 +63,7 @@ export type MyahInboxContact = {
     isAvailable: boolean;
     state: MyahInboxInstagramChannelState;
     needsAttention: boolean;
+    reactionNeedsAttention?: boolean;
     conversations: MyahInboxContactInstagramConversation[];
   };
 };
@@ -92,8 +93,13 @@ export type MyahInstagramConversationMessage = {
   sentVia: 'MANUAL' | 'COMPOSIO' | 'UNIPILE' | 'UNKNOWN';
   provider: 'COMPOSIO_HISTORY' | 'UNIPILE';
   deliveryState: 'UNKNOWN' | 'RECEIVED' | 'SENT' | 'DELIVERED' | 'READ';
+  providerMessageId: string | null;
+  replyReceiptId?: string | null;
   providerCreatedAt: string | null;
   createdAt: string;
   hasAttachments: boolean;
   attachmentCount: number;
+  reactionEmoji?: string | null;
+  reactionActorLabel?: string | null;
+  reactionVersion?: string | null;
 };

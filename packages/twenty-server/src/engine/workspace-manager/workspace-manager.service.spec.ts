@@ -266,7 +266,15 @@ describe('WorkspaceManagerService', () => {
       expect(statements).not.toContainEqual(
         expect.stringContaining("VALUES (true, 'MIGRATING'"),
       );
-      expect(fixture.rawQueryRunner.query).toHaveBeenCalledTimes(8);
+      expect(fixture.rawQueryRunner.query).toHaveBeenCalledTimes(9);
+      expect(statements).toContainEqual(
+        expect.stringContaining('to_regclass($2)'),
+      );
+      expect(statements).not.toContainEqual(
+        expect.stringContaining(
+          'CREATE TABLE IF NOT EXISTS "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInboxInstagramReaction"',
+        ),
+      );
       expect(
         fixture.rawQueryRunner.query.mock.invocationCallOrder[0],
       ).toBeGreaterThan(

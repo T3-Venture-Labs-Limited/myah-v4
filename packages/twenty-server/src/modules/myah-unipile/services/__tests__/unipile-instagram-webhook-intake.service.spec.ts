@@ -1,4 +1,8 @@
-import { Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 
 type WebhookEvent = {
   id: string;
@@ -540,6 +544,100 @@ describe('UnipileInstagramWebhookIntakeService', () => {
     );
   });
 
+  it('accepts a mapped v1 creator reaction with only bounded actor/value/timestamp stored', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+    const reaction = {
+      ...messageReceivedBody,
+      event: 'message_reaction',
+      reaction: '👍',
+      reaction_sender: {
+        attendee_provider_id: instagramRemoteId,
+        attendee_name: 'Private name',
+      },
+    };
+
+    await expect(
+      service.intake({ body: reaction, secret: 'shared-webhook-secret' }),
+    ).resolves.toEqual({ ok: true, duplicate: false });
+    const stored = harness.eventRepository.create.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+
+    expect(stored).toMatchObject({
+      eventType: 'MESSAGE_REACTION',
+      reactionValue: '👍',
+      reactionActorProviderId: instagramRemoteId,
+      reactionOccurredAt: new Date(messageReceivedBody.timestamp),
+      attendeeProviderId: instagramRemoteId,
+      unipileMessageId: messageReceivedBody.message_id,
+    });
+    expect(JSON.stringify(stored)).not.toContain('Private name');
+    expect(JSON.stringify(stored)).not.toContain(messageReceivedBody.message);
+    expect(JSON.stringify(stored)).not.toContain('reaction_sender');
+  });
+
+  it('deduplicates a replayed reaction but fingerprints an emoji change independently', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+    const body = {
+      ...messageReceivedBody,
+      event: 'message_reaction',
+      reaction: '👍',
+      reaction_sender: { attendee_provider_id: instagramRemoteId },
+    };
+
+    await service.intake({ body, secret: 'shared-webhook-secret' });
+    const first = harness.eventRepository.create.mock
+      .calls[0][0] as WebhookEvent;
+    harness.eventRepository.findOne.mockResolvedValueOnce({
+      ...first,
+      id: 'event-id',
+      status: 'COMPLETED',
+    });
+    await expect(
+      service.intake({ body, secret: 'shared-webhook-secret' }),
+    ).resolves.toEqual({ ok: true, duplicate: true });
+    await service.intake({
+      body: { ...body, reaction: '❤️' },
+      secret: 'shared-webhook-secret',
+    });
+
+    expect(harness.eventRepository.create).toHaveBeenCalledTimes(2);
+    expect(
+      harness.eventRepository.create.mock.calls[1][0].eventFingerprint,
+    ).not.toBe(first.eventFingerprint);
+    expect(harness.webhookQueue.enqueue).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['missing reaction', { reaction: undefined }],
+    ['oversized reaction', { reaction: 'a'.repeat(65) }],
+    ['missing actor', { reaction_sender: undefined }],
+    ['malformed actor', { reaction_sender: { attendee_provider_id: 1 } }],
+  ])(
+    'rejects a reaction with %s before persistence',
+    async (_name, override) => {
+      const harness = createHarness();
+      const service = createService(harness);
+
+      await expect(
+        service.intake({
+          body: {
+            ...messageReceivedBody,
+            event: 'message_reaction',
+            reaction: '👍',
+            reaction_sender: { attendee_provider_id: instagramRemoteId },
+            ...override,
+          },
+          secret: 'shared-webhook-secret',
+        }),
+      ).rejects.toThrow();
+      expect(harness.dataSource.transaction).not.toHaveBeenCalled();
+    },
+  );
+
   it('persists a bounded AccountStatus envelope without message-event fields', async () => {
     const harness = createHarness();
     const service = createService(harness);
@@ -566,6 +664,55 @@ describe('UnipileInstagramWebhookIntakeService', () => {
         unipileMessageId: null,
       }),
     );
+  });
+
+  it('asks Unipile to retry an account status until its binding is linked', async () => {
+    const harness = createHarness();
+    harness.bindingRepository.findOne.mockResolvedValue(null);
+    const service = createService(harness);
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const body = {
+      AccountStatus: {
+        account_id: activeBinding.unipileAccountId,
+        account_type: 'INSTAGRAM',
+        message: 'CREDENTIALS',
+      },
+    };
+
+    try {
+      await expect(
+        service.intake({ body, secret: 'invalid-secret' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(
+        service.intake({
+          body: { AccountStatus: {} },
+          secret: 'shared-webhook-secret',
+        }),
+      ).rejects.toHaveProperty('status', 400);
+      expect(harness.bindingRepository.findOne).not.toHaveBeenCalled();
+
+      await expect(
+        service.intake({ body, secret: 'shared-webhook-secret' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(harness.eventRepository.save).not.toHaveBeenCalled();
+      expect(harness.webhookQueue.enqueue).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        'UNIPILE_INSTAGRAM_WEBHOOK_ACCOUNT_NOT_LINKED',
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(
+        activeBinding.unipileAccountId,
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('CREDENTIALS');
+
+      harness.bindingRepository.findOne.mockResolvedValue(activeBinding);
+      await expect(
+        service.intake({ body, secret: 'shared-webhook-secret' }),
+      ).resolves.toEqual({ ok: true, duplicate: false });
+      expect(harness.eventRepository.save).toHaveBeenCalledTimes(1);
+      expect(harness.webhookQueue.enqueue).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('leaves a newly committed event enqueued when queueing fails', async () => {

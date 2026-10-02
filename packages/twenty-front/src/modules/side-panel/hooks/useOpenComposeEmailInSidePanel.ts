@@ -7,6 +7,7 @@ import { v4 } from 'uuid';
 
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { composeEmailConnectedAccountIdComponentState } from '@/side-panel/pages/compose-email/states/composeEmailConnectedAccountIdComponentState';
+import { composeEmailCreatorIdComponentState } from '@/side-panel/pages/compose-email/states/composeEmailCreatorIdComponentState';
 import { composeEmailDefaultInReplyToComponentState } from '@/side-panel/pages/compose-email/states/composeEmailDefaultInReplyToComponentState';
 import { composeEmailDefaultSubjectComponentState } from '@/side-panel/pages/compose-email/states/composeEmailDefaultSubjectComponentState';
 import { composeEmailDefaultToComponentState } from '@/side-panel/pages/compose-email/states/composeEmailDefaultToComponentState';
@@ -15,6 +16,7 @@ import { t } from '@lingui/core/macro';
 type OpenComposeEmailParams = {
   threadId?: string;
   connectedAccountId: string;
+  creatorId?: string;
   defaultTo?: string;
   defaultSubject?: string;
   defaultInReplyTo?: string;
@@ -37,6 +39,11 @@ export const useOpenComposeEmailInSidePanel = () => {
           instanceId: pageId,
         }),
         params.connectedAccountId,
+      );
+
+      store.set(
+        composeEmailCreatorIdComponentState.atomFamily({ instanceId: pageId }),
+        isReply ? null : (params.creatorId ?? null),
       );
 
       store.set(

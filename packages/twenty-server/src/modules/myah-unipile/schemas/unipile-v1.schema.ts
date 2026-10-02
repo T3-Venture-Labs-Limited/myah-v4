@@ -150,6 +150,18 @@ export const unipileInstagramMessageSchema = z.object({
   is_sender: z.union([z.literal(0), z.literal(1)]).optional(),
   text: z.string().nullable(),
   attachments: z.array(z.unknown()),
+  reactions: z
+    .array(
+      z.object({
+        value: z.string().trim().min(1).max(64),
+        sender_id: z.string().trim().min(1).max(256),
+        is_sender: z.boolean(),
+      }),
+    )
+    .max(50)
+    .optional()
+    // Invalid optional evidence is not an authoritative empty snapshot.
+    .catch(undefined),
   timestamp: unipileTimestampSchema,
   seen: unipileBinaryBooleanSchema,
   delivered: unipileBinaryBooleanSchema,

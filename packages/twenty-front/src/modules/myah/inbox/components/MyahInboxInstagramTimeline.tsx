@@ -38,6 +38,7 @@ type MyahInboxInstagramTimelineProps = {
   lifecycle?: 'ACTIVE' | 'HISTORICAL';
   hasNextPage?: boolean;
   loadingMore?: boolean;
+  refreshing?: boolean;
   onLoadMore?: () => void;
 };
 
@@ -81,6 +82,7 @@ export const MyahInboxInstagramTimeline = ({
   lifecycle,
   hasNextPage = false,
   loadingMore = false,
+  refreshing = false,
   onLoadMore,
 }: MyahInboxInstagramTimelineProps) => {
   if (channelState === 'UNAVAILABLE') {
@@ -113,7 +115,8 @@ export const MyahInboxInstagramTimeline = ({
           variant="secondary"
           size="small"
           disabled={loadingMore}
-          onClick={onLoadMore}
+          aria-disabled={refreshing || undefined}
+          onClick={refreshing ? undefined : onLoadMore}
         />
       ) : null}
       {messages.map((message, index) => {

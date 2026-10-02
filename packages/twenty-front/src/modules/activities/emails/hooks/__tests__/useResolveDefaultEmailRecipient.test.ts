@@ -105,6 +105,26 @@ const emailNode = (email: string) => ({
   id: email,
   emails: { primaryEmail: email },
 });
+const creatorItem = (() => {
+  const person = item('person');
+  const email = person.fields.find(
+    ({ name, type }) => name === 'jobTitle' && type === 'TEXT',
+  );
+  if (!email) throw new Error('Missing TEXT fixture field');
+  return {
+    ...person,
+    id: '00000000-0000-4000-8000-000000000425',
+    nameSingular: 'creator',
+    namePlural: 'creators',
+    fields: person.fields
+      .filter(({ name }) => name === 'id')
+      .concat({
+        ...email,
+        id: '00000000-0000-4000-8000-000000000426',
+        name: 'email',
+      }),
+  } as EnrichedObjectMetadataItem;
+})();
 const withoutField = (objectName: string, fieldName: string) =>
   nativeItems.map((metadata) =>
     metadata.nameSingular === objectName
@@ -158,6 +178,77 @@ it.each([
     expect(mockQuery).not.toHaveBeenCalled();
   },
 );
+
+it('pre-fills a readable Creator TEXT email and refuses unreadable or blank values', async () => {
+  const items = [...nativeItems, creatorItem];
+  const render = (
+    overrides: Partial<ObjectPermissions> = {},
+    metadata = items,
+  ) =>
+    renderHook(
+      () =>
+        useResolveDefaultEmailRecipient({
+          objectNameSingular: 'creator',
+          recordId: 'creator-id',
+        }),
+      {
+        wrapper: wrapper(metadata, [
+          {
+            ...permission('person', overrides),
+            objectMetadataId: creatorItem.id,
+          },
+        ]),
+      },
+    );
+  mockQuery.mockResolvedValue(
+    connection('creators', [
+      { id: 'creator-id', email: 'creator@example.com' },
+    ]),
+  );
+  const readable = render();
+  await waitFor(() =>
+    expect(readable.result.current.defaultTo).toBe('creator@example.com'),
+  );
+  expect(mockQuery.mock.calls[0][0].variables).toEqual({
+    filterCreator: { id: { eq: 'creator-id' } },
+    firstCreator: 1,
+  });
+  expect(print(mockQuery.mock.calls[0][0].query)).toContain('email');
+  readable.unmount();
+
+  mockQuery.mockClear();
+  const denied = render({ canReadObjectRecords: false });
+  expect(denied.result.current.defaultTo).toBe('');
+  expect(mockQuery).not.toHaveBeenCalled();
+  denied.unmount();
+
+  const hidden = render({}, [
+    ...nativeItems,
+    {
+      ...creatorItem,
+      fields: creatorItem.fields.filter(({ name }) => name !== 'email'),
+    },
+  ]);
+  expect(hidden.result.current.defaultTo).toBe('');
+  expect(mockQuery).not.toHaveBeenCalled();
+  hidden.unmount();
+
+  const emailField = creatorItem.fields.find(({ name }) => name === 'email')!;
+  const restricted = render({
+    restrictedFields: { [emailField.id]: { canRead: false, canUpdate: false } },
+  });
+  expect(restricted.result.current.defaultTo).toBe('');
+  expect(mockQuery).not.toHaveBeenCalled();
+  restricted.unmount();
+
+  mockQuery.mockResolvedValue(
+    connection('creators', [{ id: 'creator-id', email: '  ' }]),
+  );
+  const blank = render();
+  await waitFor(() => expect(blank.result.current.loading).toBe(false));
+  expect(blank.result.current.defaultTo).toBe('');
+  blank.unmount();
+});
 
 it.each([
   ['person', 'people', emailNode('person@example.com'), 'person@example.com'],

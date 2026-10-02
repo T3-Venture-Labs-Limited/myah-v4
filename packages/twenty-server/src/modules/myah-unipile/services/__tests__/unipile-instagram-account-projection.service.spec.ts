@@ -26,6 +26,7 @@ type UnipileInstagramAccountStatus = {
   status: 'ACTIVE' | 'NEEDS_RECONNECT';
   lastCheckedAt: string | null;
   lastError: string | null;
+  lastMessageReceivedAt: string | null;
 };
 
 type UnipileInstagramAccountProjectionService = {
@@ -643,6 +644,7 @@ describe('UnipileInstagramAccountProjectionService', () => {
       status: 'ACTIVE' as const,
       lastCheckedAt,
       lastError: null,
+      lastMessageReceivedAt: new Date('2026-09-04T12:12:00.000Z'),
     };
     const query = jest.fn().mockResolvedValueOnce([accountStatus]);
     const subject = createProjectionService(query);
@@ -656,7 +658,10 @@ describe('UnipileInstagramAccountProjectionService', () => {
         workspace,
         workspaceInstagramAccountRecordId,
       }),
-    ).resolves.toEqual(accountStatus);
+    ).resolves.toEqual({
+      ...accountStatus,
+      lastMessageReceivedAt: '2026-09-04T12:12:00.000Z',
+    });
 
     const schemaName = getWorkspaceSchemaName(workspace.id);
     const [selectSql, selectValues] = query.mock.calls[0];
@@ -676,9 +681,19 @@ describe('UnipileInstagramAccountProjectionService', () => {
       undefined,
       queryOptions,
     );
-    expect(selectedColumns).toBe(
-      '"id", "username", "status", "lastCheckedAt", "lastError"',
+    expect(selectedColumns).toContain('a."id"');
+    expect(selectSql).toContain('AS "lastMessageReceivedAt"');
+    expect(selectSql).toContain(
+      'MAX(COALESCE(m."providerCreatedAt", m."createdAt"))',
     );
+    expect(selectSql).toContain(`"${schemaName}"."myahSocialMessage" m`);
+    expect(selectSql).toContain(`"${schemaName}"."myahSocialConversation" c`);
+    expect(selectSql).toContain('c."instagramAccountId" = $1');
+    expect(selectSql).toContain('c."provider" = \'UNIPILE\'');
+    expect(selectSql).toContain('m."provider" = \'UNIPILE\'');
+    expect(selectSql).toContain('m."direction" = \'INBOUND\'');
+    expect(selectSql).toContain('c."deletedAt" IS NULL');
+    expect(selectSql).toContain('m."deletedAt" IS NULL');
     expect(selectSql).toContain('"id" = $1');
     expect(selectSql).toContain('"deletedAt" IS NULL');
     expect(selectSql).not.toContain(workspace.id);
@@ -694,6 +709,29 @@ describe('UnipileInstagramAccountProjectionService', () => {
     }
     expect(providerFetch).not.toHaveBeenCalled();
     expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a null last message time when no inbound message exists', async () => {
+    const query = jest.fn().mockResolvedValueOnce([
+      {
+        id: originalRecord.id,
+        username: account.username,
+        status: 'ACTIVE',
+        lastCheckedAt,
+        lastError: null,
+        lastMessageReceivedAt: null,
+      },
+    ]);
+    const subject = createProjectionService(query);
+
+    await expect(
+      subject?.service.getAccountStatus({
+        workspace,
+        workspaceInstagramAccountRecordId: originalRecord.id,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ lastMessageReceivedAt: null }),
+    );
   });
 
   it('returns null when the exact nondeleted workspace Instagram account is absent', async () => {
@@ -731,9 +769,8 @@ describe('UnipileInstagramAccountProjectionService', () => {
       undefined,
       queryOptions,
     );
-    expect(selectedColumns).toBe(
-      '"id", "username", "status", "lastCheckedAt", "lastError"',
-    );
+    expect(selectedColumns).toContain('a."id"');
+    expect(selectSql).toContain('AS "lastMessageReceivedAt"');
     expect(selectSql).toContain('"id" = $1');
     expect(selectSql).toContain('"deletedAt" IS NULL');
     expect(selectSql).not.toContain(workspace.id);

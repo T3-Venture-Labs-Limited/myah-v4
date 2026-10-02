@@ -18,7 +18,15 @@ import {
 type WebhookEvent = {
   id: string;
   bindingId: string;
-  eventType: 'MESSAGE_RECEIVED' | 'MESSAGE_READ' | 'ACCOUNT_STATUS';
+  eventType:
+    | 'MESSAGE_RECEIVED'
+    | 'MESSAGE_READ'
+    | 'MESSAGE_REACTION'
+    | 'ACCOUNT_STATUS';
+  eventFingerprint?: string;
+  reactionValue?: string | null;
+  reactionActorProviderId?: string | null;
+  reactionOccurredAt?: Date | null;
   unipileChatId: string | null;
   attemptCount: number;
   unipileMessageId: string | null;
@@ -46,6 +54,7 @@ type WebhookJobHarness = {
   projectionService: {
     upsertVerifiedChat: jest.Mock;
     upsertVerifiedMessage: jest.Mock;
+    applyVerifiedReaction: jest.Mock;
   };
   syncQueue: { enqueue: jest.Mock };
 };
@@ -64,6 +73,7 @@ type WebhookJobModule = {
     projectionService: {
       upsertVerifiedChat: jest.Mock;
       upsertVerifiedMessage: jest.Mock;
+      applyVerifiedReaction: jest.Mock;
     },
     accountService: {
       reconcileWebhookAccountStatus: jest.Mock;
@@ -174,6 +184,7 @@ const createHarness = (
     upsertVerifiedMessage: jest.fn().mockResolvedValue({
       messageRecordId: 'message-record-id',
     }),
+    applyVerifiedReaction: jest.fn().mockResolvedValue(true),
   };
   const accountService = {
     reconcileWebhookAccountStatus: jest.fn().mockResolvedValue('ACTIVE'),
@@ -216,6 +227,86 @@ describe('UnipileInstagramWebhookJob', () => {
       harness.availabilityService,
     );
   };
+
+  it('applies a verified reaction without projecting a conversation, message, or triage', async () => {
+    const event: WebhookEvent = {
+      ...messageEvent,
+      eventType: 'MESSAGE_REACTION',
+      eventFingerprint: 'a'.repeat(64),
+      reactionValue: '👍',
+      reactionActorProviderId: messageEvent.attendeeProviderId,
+      reactionOccurredAt: new Date('2026-09-04T12:01:00.000Z'),
+    };
+    const harness = createHarness(event);
+
+    await createJob(harness).handle({ eventId: event.id });
+
+    expect(
+      harness.projectionService.applyVerifiedReaction,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorProviderId: event.reactionActorProviderId,
+        emoji: '👍',
+        version: event.eventFingerprint,
+      }),
+    );
+    expect(harness.projectionService.upsertVerifiedChat).not.toHaveBeenCalled();
+    expect(
+      harness.projectionService.upsertVerifiedMessage,
+    ).not.toHaveBeenCalled();
+    expect(harness.eventRepository.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'COMPLETED' }),
+    );
+  });
+
+  it.each([binding.instagramUserId, 'unknown-ig'])(
+    'rejects an unverified reaction actor %s before projection',
+    async (actorProviderId) => {
+      const event: WebhookEvent = {
+        ...messageEvent,
+        eventType: 'MESSAGE_REACTION',
+        eventFingerprint: 'a'.repeat(64),
+        reactionValue: '👍',
+        reactionActorProviderId: actorProviderId,
+        reactionOccurredAt: new Date('2026-09-04T12:01:00.000Z'),
+      };
+      const harness = createHarness(event);
+
+      await expect(
+        createJob(harness).handle({ eventId: event.id }),
+      ).rejects.toThrow();
+      expect(
+        harness.projectionService.applyVerifiedReaction,
+      ).not.toHaveBeenCalled();
+      expect(
+        harness.projectionService.upsertVerifiedMessage,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a hidden reaction parent without creating attention', async () => {
+    const event: WebhookEvent = {
+      ...messageEvent,
+      eventType: 'MESSAGE_REACTION',
+      eventFingerprint: 'a'.repeat(64),
+      reactionValue: '👍',
+      reactionActorProviderId: messageEvent.attendeeProviderId,
+      reactionOccurredAt: new Date('2026-09-04T12:01:00.000Z'),
+    };
+    const harness = createHarness(event);
+    harness.client.getMessage.mockResolvedValue({
+      ...(await harness.client.getMessage()),
+      hidden: true,
+    });
+
+    await expect(
+      createJob(harness).handle({ eventId: event.id }),
+    ).rejects.toThrow();
+    expect(
+      harness.projectionService.applyVerifiedReaction,
+    ).not.toHaveBeenCalled();
+    expect(harness.projectionService.upsertVerifiedChat).not.toHaveBeenCalled();
+  });
 
   describe('connected timestamp ingestion', () => {
     const cases = [

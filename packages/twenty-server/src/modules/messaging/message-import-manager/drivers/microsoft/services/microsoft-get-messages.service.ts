@@ -11,6 +11,7 @@ import { MicrosoftImportDriverException } from 'src/modules/messaging/message-im
 import { type MicrosoftGraphBatchResponse } from 'src/modules/messaging/message-import-manager/drivers/microsoft/services/microsoft-get-messages.interface';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
 import { buildReplyToParticipants } from 'src/modules/messaging/message-import-manager/utils/build-reply-to-participants.util';
+import { extractInReplyToTokens } from 'src/modules/messaging/message-import-manager/utils/extract-in-reply-to-tokens.util';
 import { extractMessageBodyText } from 'src/modules/messaging/message-import-manager/utils/extract-message-body-text.util';
 import { formatAddressObjectAsParticipants } from 'src/modules/messaging/message-import-manager/utils/format-address-object-as-participants.util';
 import { safeParseEmailAddress } from 'src/modules/messaging/message-import-manager/utils/safe-parse-email-address.util';
@@ -152,6 +153,16 @@ export class MicrosoftGetMessagesService {
         providerOccurredAt: response.receivedDateTime ?? null,
         text,
         headerMessageId: response.internetMessageId,
+        ...(response.internetMessageHeaders
+          ? {
+              inReplyToTokens: extractInReplyToTokens(
+                response.internetMessageHeaders.find(
+                  ({ name }: { name: string }) =>
+                    name.toLowerCase() === 'in-reply-to',
+                )?.value,
+              ),
+            }
+          : {}),
         messageThreadExternalId: response.conversationId,
         direction: response.from
           ? computeMessageDirection(

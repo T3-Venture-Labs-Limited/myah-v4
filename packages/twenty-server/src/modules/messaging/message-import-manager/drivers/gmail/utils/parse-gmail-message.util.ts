@@ -17,6 +17,7 @@ export const parseGmailMessage = (message: gmail_v1.Schema$Message) => {
   const rawCc = getPropertyFromHeaders(message, 'Cc');
   const rawBcc = getPropertyFromHeaders(message, 'Bcc');
   const messageId = getPropertyFromHeaders(message, 'Message-ID');
+  const inReplyTo = getPropertyFromHeaders(message, 'In-Reply-To');
   const id = message.id;
   const threadId = message.threadId;
   const historyId = message.historyId;
@@ -38,6 +39,7 @@ export const parseGmailMessage = (message: gmail_v1.Schema$Message) => {
   return {
     id,
     headerMessageId: messageId,
+    inReplyTo,
     threadId,
     historyId,
     internalDate,

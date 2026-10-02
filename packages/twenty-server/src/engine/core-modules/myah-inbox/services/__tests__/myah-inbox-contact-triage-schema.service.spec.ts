@@ -7,10 +7,11 @@ const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 describe('MyahInboxContactTriageSchemaService', () => {
   it('creates the private triage relations, durable Email provenance, required indexes, and millisecond timestamp precision', async () => {
     const queryRunner = {
-      query: jest
-        .fn()
-        .mockResolvedValueOnce([{ exists: false }])
-        .mockResolvedValue([]),
+      query: jest.fn(async (sql: string) =>
+        sql.startsWith('SELECT to_regclass')
+          ? [{ exists: sql.includes('to_regclass($2)') }]
+          : [],
+      ),
     } as unknown as jest.Mocked<Pick<QueryRunner, 'query'>>;
     const service = new MyahInboxContactTriageSchemaService();
 
@@ -23,7 +24,7 @@ describe('MyahInboxContactTriageSchemaService', () => {
       String(statement),
     );
 
-    expect(statements).toHaveLength(7);
+    expect(statements).toHaveLength(9);
     expect(statements).toEqual(
       expect.arrayContaining([
         expect.stringContaining('"myahInboxContactIdentity"'),
@@ -31,13 +32,48 @@ describe('MyahInboxContactTriageSchemaService', () => {
         expect.stringContaining('"myahInboxTriageTransitionReceipt"'),
         expect.stringContaining('"myahInboxTriageEmailChannelProvenance"'),
         expect.stringContaining('"myahInboxTriageMigration"'),
+        expect.stringContaining('"myahInboxInstagramReaction"'),
       ]),
     );
     const ddl = statements.join('\n');
 
     expect(ddl).toContain('timestamptz(3)');
+    expect(ddl).toContain('UNIQUE ("messageRecordId", "actorProviderId")');
+    expect(ddl).toContain('"myahSocialMessage"("id")');
     expect(ddl).toContain("\"status\" IN ('MIGRATING','READY')");
     expect(ddl).not.toContain("'CATCH_UP'");
+  });
+
+  it('provisions Email-only Inbox tables without requiring optional Instagram parent relations', async () => {
+    const queryRunner = {
+      query: jest.fn(async (sql: string) =>
+        sql.startsWith('SELECT to_regclass') ? [{ exists: false }] : [],
+      ),
+    } as unknown as jest.Mocked<Pick<QueryRunner, 'query'>>;
+    const service = new MyahInboxContactTriageSchemaService();
+
+    await service.ensureWorkspaceTables(
+      queryRunner as unknown as QueryRunner,
+      workspaceId,
+    );
+
+    const statements = queryRunner.query.mock.calls.map(([sql]) => String(sql));
+
+    expect(statements).toContainEqual(
+      expect.stringContaining('"myahInboxTriageMigration"'),
+    );
+    expect(statements).not.toContainEqual(
+      expect.stringContaining(
+        'CREATE TABLE IF NOT EXISTS "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInboxInstagramReaction"',
+      ),
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('to_regclass($2)'),
+      [
+        '"workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialMessage"',
+        '"workspace_1wgvd1injqtife6y4rvfbu3h5"."myahSocialConversation"',
+      ],
+    );
   });
 
   it('skips relation DDL when the transactionally last marker already exists', async () => {

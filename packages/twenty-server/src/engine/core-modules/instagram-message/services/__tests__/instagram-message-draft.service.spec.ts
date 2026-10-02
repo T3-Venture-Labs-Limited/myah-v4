@@ -59,6 +59,7 @@ const buildHarness = (
   };
   const actionApprovalService = {
     isDraftExecutionLocked: jest.fn().mockResolvedValue(false),
+    isDraftProviderAccepted: jest.fn().mockResolvedValue(false),
   };
   const draftLockService = {
     withLock: jest.fn(async (_input, operation) => operation()),
@@ -608,6 +609,44 @@ describe('InstagramMessageDraftService', () => {
       ).rejects.toThrow();
     },
   );
+  it('does not reopen an accepted draft or an older draft on revisit', async () => {
+    const harness = buildHarness((sql) =>
+      sql.includes('"myahInstagramReplyDraft"')
+        ? [{ id: draftId, revision: 3, body: 'Already sent' }]
+        : [],
+    );
+    harness.actionApprovalService.isDraftProviderAccepted.mockResolvedValue(
+      true,
+    );
+    harness.actionApprovalService.isDraftExecutionLocked.mockResolvedValue(
+      true,
+    );
+
+    await expect(
+      harness.service.getDraftForTarget({
+        workspaceId,
+        kind: 'REPLY',
+        creatorRecordId: null,
+        conversationRecordId: conversationId,
+      }),
+    ).resolves.toBeNull();
+    expect(
+      harness.actionApprovalService.isDraftProviderAccepted,
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      actionName: 'send_instagram_message',
+      draftId,
+    });
+    await expect(
+      harness.service.saveDraft({
+        ...firstMessageInput,
+        kind: 'REPLY',
+        conversationRecordId: conversationId,
+        expectedRevision: 3,
+      }),
+    ).rejects.toThrow('Instagram message draft is locked for execution');
+  });
+
   it('loads the latest unsent server draft for the exact target after reload', async () => {
     const harness = buildHarness((sql) =>
       sql.includes('"myahInstagramReplyDraft"')

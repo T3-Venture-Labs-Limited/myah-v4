@@ -5497,6 +5497,7 @@ input SendEmailInput {
   body: String!
   inReplyTo: String
   draftMessageId: String
+  creatorId: String
   files: [SendEmailAttachmentInput!]
 }
 

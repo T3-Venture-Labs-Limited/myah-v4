@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 import { createV3RecoveryFixture } from './instagram-message-v3-recovery.fixture';
 import { InstagramMessageSendService } from '../instagram-message-send.service';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
@@ -533,6 +535,43 @@ describe('InstagramMessageSendService', () => {
       harness.messageProjectionWriter,
     );
   });
+
+  it.each(['inline-send', 'finish-existing'] as const)(
+    'logs %s projection failure without changing accepted status or exposing the draft',
+    async (stage) => {
+      const harness = buildHarness();
+      const warning = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      harness.projector.projectReceiptWithWriter.mockRejectedValue(
+        new Error('message read unavailable'),
+      );
+      if (stage === 'finish-existing') {
+        harness.actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue(
+          {
+            id: receiptId,
+            state: 'PROVIDER_ACCEPTED',
+          },
+        );
+      }
+      try {
+        await expect(
+          harness.service.executeApproved(executeInput),
+        ).resolves.toEqual({
+          status: 'PROVIDER_ACCEPTED',
+          receiptId,
+        });
+        expect(warning).toHaveBeenCalledWith(
+          expect.stringContaining(
+            `${receiptId} ${stage} Error: message read unavailable`,
+          ),
+        );
+        expect(JSON.stringify(warning.mock.calls)).not.toContain(
+          'Hello creator',
+        );
+      } finally {
+        warning.mockRestore();
+      }
+    },
+  );
 
   it('fails before any provider call when the draft body exceeds 1000 UTF-8 bytes', async () => {
     const harness = buildHarness();

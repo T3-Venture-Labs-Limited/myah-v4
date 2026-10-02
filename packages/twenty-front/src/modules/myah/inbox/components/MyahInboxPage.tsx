@@ -875,6 +875,10 @@ const MyahInboxPageContent = ({
         return;
       }
       if (result.selectedContact) setRetainedContact(result.selectedContact);
+      // The selected Instagram page may have a reaction on an old parent,
+      // even when contact preview/activity/revision are unchanged.
+      if (selection.channel === 'INSTAGRAM')
+        setDraftArrivalEpoch((epoch) => epoch + 1);
       // A newly opened contact was just loaded authoritatively.
       const now = Date.now();
       if (fullReauthorizationRef.current.contactId !== selection.contactId)
@@ -903,7 +907,8 @@ const MyahInboxPageContent = ({
         contactId: selection.contactId,
         at: now,
       };
-      setDraftArrivalEpoch((epoch) => epoch + 1);
+      if (selection.channel === 'EMAIL')
+        setDraftArrivalEpoch((epoch) => epoch + 1);
     } finally {
       ambientArrivalInFlightRef.current = false;
     }
@@ -944,6 +949,11 @@ const MyahInboxPageContent = ({
       email.refresh(),
       handleRefresh(),
     ]);
+  };
+
+  const handleReactionViewed = async () => {
+    if (callbackScopeRef.current !== callbackScope) return;
+    await handleRefresh(currentSelection.contactId, { preserveTarget: true });
   };
 
   const publishStatus = (message: string) => {
@@ -1024,6 +1034,7 @@ const MyahInboxPageContent = ({
           });
         }}
         onActivity={handleActivity}
+        onReactionViewed={handleReactionViewed}
         onThreadUpdated={handleThreadUpdated}
         onUpdateFailed={publishStatus}
       />

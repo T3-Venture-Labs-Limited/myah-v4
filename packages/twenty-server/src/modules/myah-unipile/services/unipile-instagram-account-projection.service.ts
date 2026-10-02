@@ -33,6 +33,7 @@ export type UnipileInstagramAccountStatus = {
   status: UnipileInstagramAccountBindingStatus;
   lastCheckedAt: string | null;
   lastError: string | null;
+  lastMessageReceivedAt: string | null;
 };
 
 type UnipileInstagramAccountStatusReadInput = {
@@ -238,20 +239,45 @@ export class UnipileInstagramAccountProjectionService {
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(input.workspace.id);
-        const records = await dataSource.query<UnipileInstagramAccountStatus[]>(
+        // pi-lens-ignore: no-sql-in-code -- trusted workspace schema; account ID is bound.
+        const records = await dataSource.query<
+          (Omit<UnipileInstagramAccountStatus, 'lastMessageReceivedAt'> & {
+            lastMessageReceivedAt: Date | string | null;
+          })[]
+        >(
           `
             SELECT
-              "id", "username", "status", "lastCheckedAt", "lastError"
-            FROM "${schemaName}"."myahInstagramAccount"
-            WHERE "id" = $1
-              AND "deletedAt" IS NULL
+              a."id", a."username", a."status", a."lastCheckedAt", a."lastError",
+              (
+                SELECT MAX(COALESCE(m."providerCreatedAt", m."createdAt"))
+                FROM "${schemaName}"."myahSocialMessage" m
+                JOIN "${schemaName}"."myahSocialConversation" c
+                  ON c."id" = m."conversationId"
+                WHERE c."instagramAccountId" = $1
+                  AND c."provider" = 'UNIPILE'
+                  AND m."provider" = 'UNIPILE'
+                  AND m."direction" = 'INBOUND'
+                  AND c."deletedAt" IS NULL
+                  AND m."deletedAt" IS NULL
+              ) AS "lastMessageReceivedAt"
+            FROM "${schemaName}"."myahInstagramAccount" a
+            WHERE a."id" = $1
+              AND a."deletedAt" IS NULL
           `,
           [input.workspaceInstagramAccountRecordId],
           undefined,
           queryOptions,
         );
 
-        return records[0] ?? null;
+        if (!records[0]) return null;
+
+        // ponytail: aggregate scans account messages; add a covering index if accounts grow large.
+        return {
+          ...records[0],
+          lastMessageReceivedAt: records[0].lastMessageReceivedAt
+            ? new Date(records[0].lastMessageReceivedAt).toISOString()
+            : null,
+        };
       },
       buildSystemAuthContext({
         workspace: input.workspace as NonNullable<RawAuthContext['workspace']>,

@@ -7,11 +7,11 @@ import { type MyahInstagramConversationMessage } from '@/myah/inbox/types/MyahIn
 
 jest.mock('twenty-ui/theme-constants', () => ({
   themeCssVariables: {
-    background: { transparent: { lighter: 'transparent' } },
+    background: { quaternary: 'gray', transparent: { lighter: 'transparent' } },
     border: { color: { medium: 'gray' }, radius: { sm: '2px', lg: '12px' } },
     font: {
       color: { primary: 'black', secondary: 'gray' },
-      size: { xs: '12px' },
+      size: { xs: '12px', md: '16px' },
       weight: { semiBold: 600 },
     },
     tag: { background: { violet: 'lavender' }, text: { violet: 'indigo' } },
@@ -28,6 +28,7 @@ const message = (
   sentVia: 'UNIPILE',
   provider: 'UNIPILE',
   deliveryState: 'RECEIVED',
+  providerMessageId: null,
   providerCreatedAt: '2026-09-05T12:00:00.000Z',
   createdAt: '2026-09-05T12:00:01.000Z',
   hasAttachments: false,
@@ -116,6 +117,90 @@ describe('MyahInboxInstagramTimeline', () => {
     fireEvent.click(loading);
     expect(onLoadMore).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('Inbound Instagram message')).toBeVisible();
+  });
+
+  it('shows an emoji-only accessible reaction on only its persisted parent, including outbound messages', () => {
+    render(
+      <MyahInboxInstagramTimeline
+        channelState="READY"
+        messages={[
+          message({ id: 'plain' }),
+          message({
+            id: 'sent-parent',
+            direction: 'OUTBOUND',
+            reactionEmoji: '👍',
+            reactionActorLabel: 'Instagram participant',
+            reactionVersion: 'a'.repeat(64),
+          }),
+          message({ id: 'legacy', provider: 'COMPOSIO_HISTORY' }),
+        ]}
+      />,
+    );
+    const reaction = screen.getByRole('img', {
+      name: 'Instagram participant reacted 👍',
+    });
+    expect(reaction).toBeVisible();
+    expect(reaction).toHaveTextContent(/^👍$/);
+    expect(reaction).toHaveAttribute('data-reaction-version', 'a'.repeat(64));
+    expect(
+      screen.getByLabelText('Outbound Instagram message'),
+    ).toContainElement(reaction);
+    for (const inbound of screen.getAllByLabelText(
+      'Inbound Instagram message',
+    )) {
+      expect(inbound).not.toContainElement(reaction);
+    }
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+  });
+
+  it('renders a long inbound reaction only after its parent is paged in, not on legacy or optimistic rows', () => {
+    const emoji = '🔥'.repeat(24);
+    const history = message({
+      id: 'history-parent',
+      text: 'Historical inbound parent',
+      reactionEmoji: emoji,
+      reactionActorLabel: 'Instagram participant',
+      reactionVersion: 'b'.repeat(64),
+    });
+    const current = [
+      message({
+        id: 'legacy',
+        provider: 'COMPOSIO_HISTORY',
+        reactionEmoji: emoji,
+        reactionVersion: 'a'.repeat(64),
+      }),
+      message({
+        id: 'pending-optimistic',
+        direction: 'OUTBOUND',
+        deliveryState: 'SENT',
+      }),
+    ];
+    const { rerender } = render(
+      <MyahInboxInstagramTimeline
+        channelState="READY"
+        messages={current}
+        hasNextPage
+        onLoadMore={jest.fn()}
+      />,
+    );
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Load more Instagram messages' }),
+    ).toBeEnabled();
+    rerender(
+      <MyahInboxInstagramTimeline
+        channelState="READY"
+        messages={[history, ...current]}
+      />,
+    );
+    const reaction = screen.getByRole('img', {
+      name: `Instagram participant reacted ${emoji}`,
+    });
+    expect(
+      screen.getByText('Historical inbound parent').closest('article'),
+    ).toContainElement(reaction);
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(reaction).toHaveAttribute('data-reaction-version', 'b'.repeat(64));
   });
 
   it('renders familiar grouped bubbles with exact timestamps and no delivery labels', () => {

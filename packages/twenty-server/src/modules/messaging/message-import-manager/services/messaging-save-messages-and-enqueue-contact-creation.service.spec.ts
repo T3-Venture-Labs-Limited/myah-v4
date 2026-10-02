@@ -17,6 +17,7 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
 import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-lifecycle.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
+import { MYAH_COMPOSE_REPLY_EVIDENCE_PORT } from 'src/engine/core-modules/myah-inbox/myah-compose-email.module';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { CreateCompanyAndContactJob } from 'src/modules/contact-creation-manager/jobs/create-company-and-contact.job';
@@ -34,6 +35,10 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
   let messageService: MessagingMessageService;
   let messageParticipantService: MessagingMessageParticipantService;
   let campaignReplyEvidencePort: {
+    reconcileInboundMessageInTransaction: jest.Mock;
+    prepareInboundCandidateCreatorsInTransaction: jest.Mock;
+  };
+  let composeReplyEvidencePort: {
     reconcileInboundMessageInTransaction: jest.Mock;
     prepareInboundCandidateCreatorsInTransaction: jest.Mock;
   };
@@ -135,6 +140,12 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
         .fn()
         .mockResolvedValue([]),
     };
+    composeReplyEvidencePort = {
+      reconcileInboundMessageInTransaction: jest.fn(),
+      prepareInboundCandidateCreatorsInTransaction: jest
+        .fn()
+        .mockResolvedValue([]),
+    };
     datasourceInstance = {
       transaction: jest.fn().mockImplementation(async (callback) => {
         try {
@@ -212,6 +223,10 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
         {
           provide: CAMPAIGN_REPLY_EVIDENCE_PORT,
           useValue: campaignReplyEvidencePort,
+        },
+        {
+          provide: MYAH_COMPOSE_REPLY_EVIDENCE_PORT,
+          useValue: composeReplyEvidencePort,
         },
         {
           provide: MessagingMessageParticipantService,
@@ -417,6 +432,84 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     );
   });
 
+  it('covers Compose candidates and reconciles after Campaign in the same inbound import', async () => {
+    const creatorA = '00000000-0000-4000-8000-000000000101';
+    const creatorC = '00000000-0000-4000-8000-000000000103';
+    campaignReplyEvidencePort.prepareInboundCandidateCreatorsInTransaction.mockResolvedValue(
+      [creatorA],
+    );
+    composeReplyEvidencePort.prepareInboundCandidateCreatorsInTransaction.mockResolvedValue(
+      [creatorC],
+    );
+    transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+    const order: string[] = [];
+    campaignReplyEvidencePort.reconcileInboundMessageInTransaction.mockImplementation(
+      async () => {
+        order.push('campaign');
+      },
+    );
+    composeReplyEvidencePort.reconcileInboundMessageInTransaction.mockImplementation(
+      async () => {
+        order.push('compose');
+      },
+    );
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[1]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'compose-preflight' },
+    );
+
+    expect(
+      lifecycleService.withCreatorMutationLocksInTransaction,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ creatorIds: [creatorA, creatorC] }),
+    );
+    expect(order).toEqual(['campaign', 'compose']);
+    expect(
+      composeReplyEvidencePort.reconcileInboundMessageInTransaction,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ coveredCreatorIds: [creatorA, creatorC] }),
+      transactionManager,
+    );
+  });
+
+  it('continues Campaign reconciliation if the optional Compose port is unavailable', async () => {
+    const ref = (
+      service as unknown as {
+        moduleRef: {
+          get: (token: symbol, options?: { strict: boolean }) => unknown;
+        };
+      }
+    ).moduleRef;
+    const originalGet = ref.get.bind(ref);
+    jest
+      .spyOn(ref, 'get')
+      .mockImplementation((token, options) =>
+        token === MYAH_COMPOSE_REPLY_EVIDENCE_PORT
+          ? undefined
+          : originalGet(token, options),
+      );
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      [mockMessages[1]],
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+    );
+
+    expect(
+      campaignReplyEvidencePort.reconcileInboundMessageInTransaction,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      composeReplyEvidencePort.reconcileInboundMessageInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
   it('rolls back rather than acquiring an unanticipated Creator C after source locking', async () => {
     const creatorA = '00000000-0000-4000-8000-000000000101';
     const creatorB = '00000000-0000-4000-8000-000000000102';
@@ -589,6 +682,37 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
       ),
     ).toBe(false);
   });
+
+  it.each([
+    ConnectedAccountProvider.GOOGLE,
+    ConnectedAccountProvider.MICROSOFT,
+  ])(
+    'gives %s reply-parent tokens to Compose but keeps Campaign matching unchanged',
+    async (provider) => {
+      const incoming: MessageWithParticipants = {
+        ...mockMessages[1],
+        inReplyToTokens: ['<sent@example.com>'],
+      };
+
+      await service.saveMessagesAndEnqueueContactCreation(
+        [incoming],
+        mockMessageChannel,
+        { ...mockConnectedAccount, provider },
+        workspaceId,
+      );
+
+      const campaignInput =
+        campaignReplyEvidencePort.reconcileInboundMessageInTransaction.mock
+          .calls[0][0];
+      expect(
+        Object.prototype.hasOwnProperty.call(campaignInput, 'inReplyToTokens'),
+      ).toBe(false);
+      expect(
+        composeReplyEvidencePort.reconcileInboundMessageInTransaction.mock
+          .calls[0][0].inReplyToTokens,
+      ).toEqual(['<sent@example.com>']);
+    },
+  );
 
   it('rolls back the import when Campaign reconciliation rejects', async () => {
     const reconciliationError = new Error('reconciliation failed');

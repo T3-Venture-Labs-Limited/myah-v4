@@ -448,6 +448,7 @@ export class UnipileInstagramSyncService {
           input.chat,
           listedMessage.messageId,
         );
+        const snapshotStartedAt = new Date();
         const message = await this.client.getMessage({
           accountId: input.binding.unipileAccountId,
           chatId: input.chat.chatId,
@@ -481,6 +482,15 @@ export class UnipileInstagramSyncService {
           triageMode: input.run.triageMode,
           sourceGenerationId: input.run.id,
         });
+        if (message.reactions !== undefined) {
+          await this.projectionService.reconcileVerifiedReactionSnapshot({
+            workspace: input.workspace,
+            binding: input.binding,
+            chat: input.chat,
+            message,
+            observedAt: snapshotStartedAt,
+          });
+        }
         highWaterAt = this.latestDate(
           highWaterAt,
           this.asDate(message.timestamp),

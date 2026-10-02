@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 
 import { DataSource } from 'typeorm';
@@ -21,6 +21,8 @@ const LOCK_KEY = 'instagram-message-reconciliation';
 @Injectable()
 @Processor(MessageQueue.cronQueue)
 export class InstagramMessageReconciliationJob {
+  private readonly logger = new Logger(InstagramMessageReconciliationJob.name);
+
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly reconciliationService: InstagramMessageReconciliationService,
@@ -117,7 +119,10 @@ export class InstagramMessageReconciliationJob {
               await this.deferReceipt(receipt);
             }
           }
-        } catch {
+        } catch (error) {
+          this.logger.warn(
+            `Instagram receipt ${receipt.id} ${receipt.state} ${error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error'}`,
+          );
           await this.deferReceipt(receipt);
         }
       }

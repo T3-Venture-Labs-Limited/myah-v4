@@ -234,6 +234,22 @@ export const useMyahInboxInstagramDraft = ({
             setBodyState(serverDraft.body);
             setEditorVersion((version) => version + 1);
           }
+        } else if (
+          !serverDraft &&
+          currentSnapshot &&
+          !hasLocalEdits &&
+          (currentSnapshot.body || currentSnapshot.revision)
+        ) {
+          // The saved draft disappeared (for example, after provider acceptance).
+          // Keep unsaved local edits, but never revive a consumed draft on revisit.
+          draftIdsByScope.delete(scope);
+          draftSnapshotsByScope.delete(scope);
+          setDraftId(getDraftId(scope));
+          bodyRef.current = '';
+          revisionRef.current = 0;
+          setBodyState('');
+          setEditorVersion((version) => version + 1);
+          setRevision(0);
         }
         lifetime.hydrated = true;
         lifetime.baselineKnown = true;

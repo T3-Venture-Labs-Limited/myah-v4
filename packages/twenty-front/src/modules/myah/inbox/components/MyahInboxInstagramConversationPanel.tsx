@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   MyahInboxInstagramComposer,
@@ -12,11 +12,17 @@ import {
   useMyahInboxInstagramDraft,
   type MyahInboxInstagramDraftFlushResult,
 } from '@/myah/inbox/hooks/useMyahInboxInstagramDraft';
-import { useMyahInboxInstagramSend } from '@/myah/inbox/hooks/useMyahInboxInstagramSend';
+import {
+  useMyahInboxInstagramSend,
+  type PendingInstagramMessage,
+} from '@/myah/inbox/hooks/useMyahInboxInstagramSend';
 import { useMyahInstagramConversation } from '@/myah/inbox/hooks/useMyahInstagramConversation';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+import { AcknowledgeMyahInboxInstagramReactionDocument } from '~/generated/graphql';
 import {
   type MyahInboxContact,
   type MyahInboxContactInstagramConversation,
+  type MyahInstagramConversationMessage,
 } from '@/myah/inbox/types/MyahInboxContact';
 import { styled } from '@linaria/react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -93,6 +99,16 @@ const REQUIRED_CAMPAIGN_METADATA_NAMES = [
   'campaignCreator',
   'campaign',
 ] as const;
+
+const matchesPendingReply = (
+  pending: PendingInstagramMessage,
+  message: MyahInstagramConversationMessage,
+) =>
+  (Boolean(pending.providerMessageId) &&
+    message.providerMessageId === pending.providerMessageId) ||
+  (!pending.providerMessageId &&
+    Boolean(pending.receiptId) &&
+    message.replyReceiptId === pending.receiptId);
 
 type MyahInboxInstagramComposerBaseProps = Omit<
   MyahInboxInstagramComposerProps,
@@ -320,12 +336,16 @@ export type MyahInboxInstagramConversationPanelProps = {
   workspaceId: string;
   contact: MyahInboxContact;
   onActivity: () => void | Promise<void>;
+  onReactionViewed?: () => void | Promise<void>;
+  arrivalEpoch?: number;
 };
 
 export const MyahInboxInstagramConversationPanel = ({
   workspaceId,
   contact,
   onActivity,
+  onReactionViewed,
+  arrivalEpoch,
 }: MyahInboxInstagramConversationPanelProps) => {
   if (contact.instagram.state === 'AMBIGUOUS') {
     return (
@@ -364,6 +384,8 @@ export const MyahInboxInstagramConversationPanel = ({
       workspaceId={workspaceId}
       contact={contact}
       onActivity={onActivity}
+      onReactionViewed={onReactionViewed}
+      arrivalEpoch={arrivalEpoch}
       activeConversation={activeConversation}
     />
   );
@@ -373,6 +395,8 @@ const MyahInboxInstagramReplyPanel = ({
   workspaceId,
   contact,
   onActivity,
+  onReactionViewed,
+  arrivalEpoch,
   activeConversation,
 }: MyahInboxInstagramConversationPanelProps & {
   activeConversation: MyahInboxContactInstagramConversation;
@@ -380,6 +404,7 @@ const MyahInboxInstagramReplyPanel = ({
   const instagram = useMyahInstagramConversation(
     activeConversation?.id ?? null,
   );
+  const apolloCoreClient = useApolloCoreClient();
   const draft = useMyahInboxInstagramDraft({
     workspaceId,
     contactId: contact.id,
@@ -387,8 +412,63 @@ const MyahInboxInstagramReplyPanel = ({
     creatorRecordId: null,
     conversationRecordId: activeConversation?.id ?? null,
   });
-  const send = useMyahInboxInstagramSend({ draft });
+  const send = useMyahInboxInstagramSend({
+    draft,
+    conversationId: activeConversation.id,
+  });
   const [sendFeedback, setSendFeedback] = useState<string | null>(null);
+  const [bodyHidden, setBodyHidden] = useState(false);
+  const [editorVersionOffset, setEditorVersionOffset] = useState(0);
+  const pendingMessages = send.pendingMessages;
+  const inFlightReply = pendingMessages.some((pending) => !pending.accepted);
+  const dismissPending = send.dismissPending;
+  const refreshPendingProviderIds = send.refreshPendingProviderIds;
+  const messages = instagram.messages;
+  const refetchMessages = instagram.refetch;
+  const unmatchedPending = useMemo(
+    () =>
+      pendingMessages.filter(
+        (pending) =>
+          !messages.some((message) => matchesPendingReply(pending, message)),
+      ),
+    [messages, pendingMessages],
+  );
+  const timelineMessages: MyahInstagramConversationMessage[] = useMemo(
+    () =>
+      unmatchedPending.length
+        ? [
+            ...messages,
+            ...unmatchedPending.map((pending) => ({
+              id: `pending:${pending.localId}`,
+              text: pending.text,
+              direction: 'OUTBOUND' as const,
+              sentVia: 'MANUAL' as const,
+              provider: 'UNIPILE' as const,
+              deliveryState: 'SENT' as const,
+              providerMessageId: pending.providerMessageId,
+              providerCreatedAt: null,
+              createdAt: pending.createdAt,
+              hasAttachments: false,
+              attachmentCount: 0,
+            })),
+          ]
+        : messages,
+    [messages, unmatchedPending],
+  );
+  const acceptedPending = unmatchedPending.filter(
+    (pending) => pending.accepted,
+  );
+  const acceptedPendingIds = acceptedPending
+    .map((pending) => pending.localId)
+    .join('|');
+  const missingProviderId = acceptedPending.some(
+    (pending) => !pending.providerMessageId,
+  );
+  const pendingExpiresAt = acceptedPending.length
+    ? Math.max(
+        ...acceptedPending.map((pending) => Date.parse(pending.createdAt)),
+      ) + 600_000
+    : 0;
   // Flushes the exact Instagram draft before the selected target unmounts.
   // oxlint-disable-next-line twenty/no-state-useref
   const flushRef = useRef(draft.flush);
@@ -409,12 +489,205 @@ const MyahInboxInstagramReplyPanel = ({
   // oxlint-disable-next-line twenty/no-state-useref
   const previousLoadingMoreRef = useRef(false);
   // oxlint-disable-next-line twenty/no-state-useref
-  const previousLastMessageIdRef = useRef<string | null>(null);
+  const previousLastMessageRef = useRef<MyahInstagramConversationMessage>(null);
   // oxlint-disable-next-line twenty/no-state-useref
   const wasAtBottomRef = useRef(true);
   const [hasNewerMessages, setHasNewerMessages] = useState(false);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const lastArrivalEpochRef = useRef(arrivalEpoch);
+  const refetch = instagram.refetch;
+  const reactionScope = `${workspaceId}:${contact.id}:${activeConversation.id}`;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const reactionScopeRef = useRef<string | null>(reactionScope);
+  reactionScopeRef.current = reactionScope;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const readableReactionRef = useRef(false);
+  readableReactionRef.current = !instagram.loading && !instagram.error;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const onReactionViewedRef = useRef(onReactionViewed);
+  onReactionViewedRef.current = onReactionViewed;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const attemptedReactionsRef = useRef(new Set<string>());
+  // oxlint-disable-next-line twenty/no-state-useref
+  const pendingReactionsRef = useRef(new Set<string>());
+  useEffect(
+    () => () => {
+      reactionScopeRef.current = null;
+    },
+    [],
+  );
+  useEffect(() => {
+    const messages = messagesRef.current;
+    if (
+      !messages ||
+      instagram.loading ||
+      instagram.error ||
+      contact.instagram.reactionNeedsAttention === false ||
+      typeof IntersectionObserver === 'undefined'
+    )
+      return;
+    const reactionElements = Array.from(
+      messages.querySelectorAll<HTMLElement>('[data-reaction-version]'),
+    );
+    let active = true;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          !active ||
+          document.visibilityState !== 'visible' ||
+          !readableReactionRef.current ||
+          reactionScopeRef.current !== reactionScope
+        )
+          return;
+        for (const entry of entries) {
+          if (
+            !entry.isIntersecting ||
+            entry.intersectionRatio < 1 ||
+            !(entry.target instanceof HTMLElement)
+          )
+            continue;
+          const element = entry.target;
+          const version = element.dataset.reactionVersion;
+          const messageId = element.closest<HTMLElement>(
+            '[data-instagram-message-id]',
+          )?.dataset.instagramMessageId;
+          if (
+            !messageId ||
+            !version ||
+            !instagram.messages.some(
+              (message) =>
+                message.id === messageId &&
+                message.reactionVersion === version &&
+                message.provider === 'UNIPILE',
+            )
+          )
+            continue;
+          const key = `${messageId}:${version}`;
+          if (
+            attemptedReactionsRef.current.has(key) ||
+            pendingReactionsRef.current.has(key)
+          )
+            continue;
+          pendingReactionsRef.current.add(key);
+          void apolloCoreClient
+            .mutate({
+              mutation: AcknowledgeMyahInboxInstagramReactionDocument,
+              variables: {
+                input: {
+                  expectedWorkspaceId: workspaceId,
+                  conversationId: activeConversation.id,
+                  messageId,
+                  version,
+                },
+              },
+            })
+            .then(({ data }) => {
+              attemptedReactionsRef.current.add(key);
+              if (
+                data?.acknowledgeMyahInboxInstagramReaction &&
+                reactionScopeRef.current === reactionScope
+              ) {
+                void Promise.resolve(onReactionViewedRef.current?.()).catch(
+                  () => undefined,
+                );
+              }
+            })
+            .catch(() => undefined)
+            .finally(() => {
+              pendingReactionsRef.current.delete(key);
+            });
+        }
+      },
+      { root: messages, threshold: 1 },
+    );
+    reactionElements.forEach((element) => observer.observe(element));
+    const retryVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      reactionElements.forEach((element) => {
+        observer.unobserve(element);
+        observer.observe(element);
+      });
+    };
+    document.addEventListener('visibilitychange', retryVisible);
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', retryVisible);
+      observer.disconnect();
+    };
+  }, [
+    activeConversation.id,
+    apolloCoreClient,
+    contact.id,
+    contact.instagram.reactionNeedsAttention,
+    instagram.error,
+    instagram.loading,
+    instagram.messages,
+    reactionScope,
+    workspaceId,
+  ]);
+  useEffect(() => {
+    if (
+      arrivalEpoch === undefined ||
+      arrivalEpoch === lastArrivalEpochRef.current
+    )
+      return;
+    lastArrivalEpochRef.current = arrivalEpoch;
+    if (document.visibilityState === 'visible') void refetch(true);
+  }, [arrivalEpoch, refetch]);
 
   flushRef.current = draft.flush;
+
+  useEffect(() => {
+    for (const pending of pendingMessages) {
+      if (messages.some((message) => matchesPendingReply(pending, message))) {
+        dismissPending(pending.localId);
+      }
+    }
+  }, [messages, dismissPending, pendingMessages]);
+
+  useEffect(() => {
+    if (!acceptedPendingIds) return;
+    let active = true;
+    const refresh = () => {
+      if (missingProviderId) {
+        void refreshPendingProviderIds().then(() => {
+          // The authorized timeline can also match by receipt when status stays unavailable.
+          if (active) void refetchMessages(true);
+        });
+      } else {
+        void refetchMessages(true);
+      }
+    };
+    refresh();
+    if (Date.now() >= pendingExpiresAt)
+      return () => {
+        active = false;
+      };
+    // ponytail: fixed 5s polling for at most 10m; use push updates only if this becomes costly.
+    const timer = setInterval(() => {
+      if (Date.now() >= pendingExpiresAt) {
+        clearInterval(timer);
+        return;
+      }
+      refresh();
+    }, 5_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [
+    acceptedPendingIds,
+    missingProviderId,
+    pendingExpiresAt,
+    activeConversation.id,
+    refetchMessages,
+    refreshPendingProviderIds,
+  ]);
+
+  useEffect(() => {
+    setBodyHidden(false);
+    setEditorVersionOffset(0);
+  }, [activeConversation.id]);
 
   useEffect(() => {
     const flushDraft = () => {
@@ -493,32 +766,42 @@ const MyahInboxInstagramReplyPanel = ({
     if (settledOlderPage) {
       restoreMessageAnchor(pendingPageAnchorRef.current);
       pendingPageAnchorRef.current = null;
+    } else if (!instagram.loadingMore && !wasAtBottomRef.current) {
+      restoreMessageAnchor(readingAnchorRef.current);
     }
 
-    const lastMessageId = instagram.messages.at(-1)?.id ?? null;
-    const previousLastMessageId = previousLastMessageIdRef.current;
+    const lastMessage = timelineMessages.at(-1) ?? null;
+    const previousLastMessage = previousLastMessageRef.current;
+    const lastTimestamp = lastMessage
+      ? Date.parse(lastMessage.providerCreatedAt ?? lastMessage.createdAt)
+      : 0;
+    const previousTimestamp = previousLastMessage
+      ? Date.parse(
+          previousLastMessage.providerCreatedAt ??
+            previousLastMessage.createdAt,
+        )
+      : 0;
     const didReceiveNewerMessage =
-      previousLastMessageId !== null &&
-      lastMessageId !== null &&
-      lastMessageId !== previousLastMessageId &&
-      instagram.messages.some(
-        (message) => message.id === previousLastMessageId,
-      );
+      previousLastMessage !== null &&
+      lastMessage !== null &&
+      (lastTimestamp > previousTimestamp ||
+        (lastTimestamp === previousTimestamp &&
+          lastMessage.id.localeCompare(previousLastMessage.id) > 0));
 
-    if (previousLastMessageId === null || wasAtBottomRef.current) {
+    if (previousLastMessage === null || wasAtBottomRef.current) {
       messages.scrollTop = messages.scrollHeight;
       setHasNewerMessages(false);
     } else if (didReceiveNewerMessage) {
       setHasNewerMessages(true);
     }
-    previousLastMessageIdRef.current = lastMessageId;
+    previousLastMessageRef.current = lastMessage;
     previousLoadingMoreRef.current = instagram.loadingMore;
     captureVisibleMessageAnchor();
   }, [
     activeConversation?.id,
     instagram.loading,
     instagram.loadingMore,
-    instagram.messages,
+    timelineMessages,
   ]);
 
   useEffect(() => {
@@ -575,7 +858,7 @@ const MyahInboxInstagramReplyPanel = ({
       : draft.error;
   const composerError =
     sendFeedback ??
-    (send.lockedUnknown
+    (send.lockedUnknown && !inFlightReply
       ? 'Delivery is unconfirmed. Do not resend. Check the conversation in Instagram, then reload the Inbox page to show the current server status.'
       : null) ??
     draftError ??
@@ -584,9 +867,23 @@ const MyahInboxInstagramReplyPanel = ({
       : null);
 
   const handleSend = async () => {
+    handleShowLatestMessages();
     setSendFeedback(null);
-    const result = await send.send();
+    setBodyHidden(true);
+    setEditorVersionOffset((version) => version + 1);
+    const result = await send.send(draft.body);
+    if (activeConversationIdRef.current !== activeConversation.id) return;
 
+    if (result.status === 'SENT' || result.status === 'PROVIDER_ACCEPTED') {
+      draft.resetAfterSend();
+      setBodyHidden(false);
+      void onActivity();
+      setSendFeedback(null);
+      return;
+    }
+
+    setBodyHidden(false);
+    setEditorVersionOffset((version) => version + 1);
     if (result.status === 'BLOCKED') {
       return;
     }
@@ -600,13 +897,6 @@ const MyahInboxInstagramReplyPanel = ({
 
     if (result.error) {
       setSendFeedback(result.error);
-      return;
-    }
-
-    if (result.status === 'SENT') {
-      draft.resetAfterSend();
-      await Promise.allSettled([onActivity(), instagram.refetch()]);
-      setSendFeedback(null);
       return;
     }
 
@@ -625,14 +915,14 @@ const MyahInboxInstagramReplyPanel = ({
           <StyledConversationLabel>
             {username ? `@${username}` : 'Instagram conversation'}
           </StyledConversationLabel>
-          {instagram.loading ? (
+          {instagram.loading && timelineMessages.length === 0 ? (
             <StyledStatus role="status">
               Loading Instagram messages
             </StyledStatus>
           ) : (
             <MyahInboxInstagramTimeline
               channelState="READY"
-              messages={instagram.messages}
+              messages={timelineMessages}
               inboundSenderName={
                 activeConversation.recipientDisplayName ?? contact.displayName
               }
@@ -641,6 +931,7 @@ const MyahInboxInstagramReplyPanel = ({
               lifecycle={activeConversation.lifecycle}
               hasNextPage={instagram.hasNextPage}
               loadingMore={instagram.loadingMore}
+              refreshing={instagram.refreshing}
               onLoadMore={handleLoadMore}
             />
           )}
@@ -674,15 +965,17 @@ const MyahInboxInstagramReplyPanel = ({
             }
             composerProps={{
               username: username ?? contact.displayName,
-              body: draft.body,
+              body: bodyHidden || inFlightReply ? '' : draft.body,
               channelState: 'READY',
               provider,
-              editorVersion: draft.editorVersion,
+              editorVersion: draft.editorVersion + editorVersionOffset,
               previewScope: activeConversation.id,
               error: composerError,
               conflict: draft.conflict,
               onReloadConflict: draft.reloadConflict,
               disabled:
+                bodyHidden ||
+                inFlightReply ||
                 isUnlinkedReply ||
                 send.isBlocked ||
                 send.lockedUnknown ||
