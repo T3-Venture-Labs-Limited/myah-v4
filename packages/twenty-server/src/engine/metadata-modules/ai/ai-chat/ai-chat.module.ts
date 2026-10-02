@@ -26,7 +26,6 @@ import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
 import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
-import { MyahBrandBrainModule } from 'src/modules/myah-brand-brain/myah-brand-brain.module';
 import { CampaignOutreachToolsModule } from 'src/modules/myah-outreach/campaign-outreach-tools.module';
 import { WorkflowToolsModule } from 'src/modules/workflow/workflow-tools/workflow-tools.module';
 
@@ -69,7 +68,6 @@ import { SystemPromptBuilderService } from './services/system-prompt-builder.ser
     AiBillingModule,
     MetricsModule,
     ToolProviderModule,
-    MyahBrandBrainModule,
     WorkflowToolsModule,
     CampaignOutreachToolsModule,
   ],

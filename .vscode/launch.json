@@ -44,17 +44,6 @@
       "cwd": "${workspaceFolder}/packages/twenty-server/"
     },
     {
-      "name": "Playwright Test current file",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["nx", "test", "twenty-e2e-testing", "${file}"],
-      "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}",
-      "internalConsoleOptions": "neverOpen",
-      "envFile": "${workspaceFolder}/packages/twenty-e2e-testing/.env"
-    },
-    {
       "type": "node",
       "request": "launch",
       "name": "twenty-server - debug integration test file (to launch with test file open)",

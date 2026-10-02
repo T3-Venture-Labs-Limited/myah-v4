@@ -393,8 +393,6 @@ ${tools
         return 'Navigation Menu Item Tools (sidebar entries, folders, and user favorites)';
       case ToolCategory.WEBHOOK:
         return 'Webhook Tools (outgoing webhooks)';
-      case ToolCategory.BRAND_BRAIN:
-        return 'Brand Brain Tools (manage brand knowledge and campaign context)';
       case ToolCategory.MYAH_INBOX:
         return 'Myah Inbox Tools (read context and generate reply proposals)';
       case ToolCategory.MYAH_CREATOR_OPS:
