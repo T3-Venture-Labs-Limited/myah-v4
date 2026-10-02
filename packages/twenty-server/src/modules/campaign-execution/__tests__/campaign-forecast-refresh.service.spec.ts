@@ -31,6 +31,7 @@ const buildHarness = (input?: {
   monotonicNow?: () => number;
   pools?: Record<string, string[]>;
   selectedHeads?: boolean;
+  extraHeadWorkspaceIds?: string[];
   sequencePlans?: Array<unknown>;
 }) => {
   const runner = {
@@ -41,13 +42,13 @@ const buildHarness = (input?: {
       if (sql.startsWith('INSERT INTO core."campaignForecastHead"')) return [];
       if (sql.includes('campaignForecastHead')) {
         if (input?.selectedHeads === false) return [];
-        return [
-          {
+        return [workspaceId, ...(input?.extraHeadWorkspaceIds ?? [])].map(
+          (id) => ({
             inputRevision: '7',
-            scopeKey: `workspace:${workspaceId}`,
-            workspaceId,
-          },
-        ];
+            scopeKey: `workspace:${id}`,
+            workspaceId: id,
+          }),
+        );
       }
       if (sql.includes('mailboxCapacityDay')) {
         return [
@@ -87,6 +88,9 @@ const buildHarness = (input?: {
   });
   runner.release.mockImplementation(() => {
     runner.isReleased = true;
+  });
+  runner.connect.mockImplementation(() => {
+    runner.isReleased = false;
   });
   const manager = {
     queryRunner: runner,
@@ -253,6 +257,25 @@ describe('CampaignForecastRefreshService', () => {
     expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
     expect(runner.release).toHaveBeenCalledTimes(1);
     expect(projection.publish).not.toHaveBeenCalled();
+  });
+
+  it('still refreshes other workspaces when one workspace fails', async () => {
+    const otherWorkspaceId = '11111111-1111-4111-8111-222222222222';
+    const { candidates, projection, runner, service } = buildHarness({
+      extraHeadWorkspaceIds: [otherWorkspaceId],
+    });
+    candidates.readPage.mockRejectedValueOnce(new Error('planning failed'));
+
+    await expect(service.refreshStaleForecasts()).rejects.toThrow(
+      'planning failed',
+    );
+    expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(runner.release).toHaveBeenCalledTimes(2);
+    expect(projection.publish).toHaveBeenCalledTimes(1);
+    expect(projection.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: otherWorkspaceId }),
+      expect.anything(),
+    );
   });
 
   it('publishes incomplete when a threaded follow-up has no accepted sender binding', async () => {
