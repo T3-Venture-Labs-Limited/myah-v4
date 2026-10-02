@@ -3732,8 +3732,6 @@ type Query {
   findOneAgent(input: AgentIdInput!): Agent!
   getRoles: [Role!]!
   getSSOIdentityProviders: [FindAvailableSSOIDP!]!
-  getPageLayoutWidgets(pageLayoutTabId: String!): [PageLayoutWidget!]!
-  getPageLayoutWidget(id: String!): PageLayoutWidget!
   getToolIndex: [ToolIndexEntry!]!
   getToolInputSchema(toolName: String!): JSON
   webhooks: [Webhook!]!
@@ -3756,6 +3754,8 @@ type Query {
   pieChartData(input: PieChartDataInput!): PieChartData!
   lineChartData(input: LineChartDataInput!): LineChartData!
   barChartData(input: BarChartDataInput!): BarChartData!
+  getPageLayoutWidgets(pageLayoutTabId: String!): [PageLayoutWidget!]!
+  getPageLayoutWidget(id: String!): PageLayoutWidget!
   campaignActivity(input: CampaignActivityInput!): CampaignActivityConnectionDTO!
   campaignMessageOverview(input: CampaignMessageOverviewInput!): CampaignMessageOverviewConnectionDTO!
   campaignMessageOverviewDetail(input: CampaignMessageOverviewDetailInput!): CampaignMessageOverviewRowDTO
@@ -4155,9 +4155,6 @@ type Mutation {
   createSAMLIdentityProvider(input: SetupSAMLSsoInput!): SetupSso!
   deleteSSOIdentityProvider(input: DeleteSsoInput!): DeleteSso!
   editSSOIdentityProvider(input: EditSsoInput!): EditSso!
-  createPageLayoutWidget(input: CreatePageLayoutWidgetInput!): PageLayoutWidget!
-  updatePageLayoutWidget(id: String!, input: UpdatePageLayoutWidgetInput!): PageLayoutWidget!
-  destroyPageLayoutWidget(id: String!): Boolean!
   createWebhook(input: CreateWebhookInput!): Webhook!
   updateWebhook(input: UpdateWebhookInput!): Webhook!
   deleteWebhook(id: UUID!): Webhook!
@@ -4186,6 +4183,9 @@ type Mutation {
   createObjectEvent(event: String!, recordId: UUID!, objectMetadataId: UUID!, properties: JSON): Analytics!
   trackAnalytics(type: AnalyticsType!, name: String, event: String, properties: JSON): Analytics!
   duplicateDashboard(id: UUID!): DuplicatedDashboard!
+  createPageLayoutWidget(input: CreatePageLayoutWidgetInput!): PageLayoutWidget!
+  updatePageLayoutWidget(id: String!, input: UpdatePageLayoutWidgetInput!): PageLayoutWidget!
+  destroyPageLayoutWidget(id: String!): Boolean!
   impersonate(userId: UUID!, workspaceId: UUID!): Impersonate!
   excludeCampaignCreator(input: ExcludeCampaignCreatorInput!): ExcludeCampaignCreatorResultDTO!
   startCampaignExecution(input: StartCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
@@ -5329,28 +5329,6 @@ input EditSsoInput {
   status: SSOIdentityProviderStatus!
 }
 
-input CreatePageLayoutWidgetInput {
-  pageLayoutTabId: UUID!
-  title: String!
-  type: WidgetType!
-  objectMetadataId: UUID
-  gridPosition: GridPositionInput!
-  position: JSON
-  configuration: JSON!
-}
-
-input UpdatePageLayoutWidgetInput {
-  pageLayoutTabId: UUID
-  title: String
-  type: WidgetType
-  objectMetadataId: UUID
-  gridPosition: GridPositionInput
-  position: JSON
-  configuration: JSON
-  conditionalDisplay: JSON
-  conditionalAvailabilityExpression: String
-}
-
 input CreateWebhookInput {
   id: UUID
   targetUrl: String!
@@ -5444,6 +5422,28 @@ input UpdateSkillInput {
 enum AnalyticsType {
   PAGEVIEW
   TRACK
+}
+
+input CreatePageLayoutWidgetInput {
+  pageLayoutTabId: UUID!
+  title: String!
+  type: WidgetType!
+  objectMetadataId: UUID
+  gridPosition: GridPositionInput!
+  position: JSON
+  configuration: JSON!
+}
+
+input UpdatePageLayoutWidgetInput {
+  pageLayoutTabId: UUID
+  title: String
+  type: WidgetType
+  objectMetadataId: UUID
+  gridPosition: GridPositionInput
+  position: JSON
+  configuration: JSON
+  conditionalDisplay: JSON
+  conditionalAvailabilityExpression: String
 }
 
 input ExcludeCampaignCreatorInput {
