@@ -19,8 +19,7 @@ type InstagramConversationOperation = {
   scopeKey: string;
   abortController: AbortController;
   // Intent belongs to this operation, so cancellation discards it too.
-  refreshRequested?: boolean;
-  preserveLoadedPages?: boolean;
+  refreshRequested?: 'foreground' | 'background';
 };
 
 const effectiveTimestamp = (message: {
@@ -44,7 +43,18 @@ const toInstagramConversationMessage = (
   createdAt: message.createdAt,
   hasAttachments: message.hasAttachments,
   attachmentCount: message.attachmentCount,
+  reactionEmoji: message.reactionEmoji ?? null,
+  reactionActorLabel: message.reactionActorLabel ?? null,
+  reactionVersion: message.reactionVersion ?? null,
 });
+
+const compareEdges = (
+  left: MyahInstagramMessageEdge,
+  right: MyahInstagramMessageEdge,
+) =>
+  Date.parse(effectiveTimestamp(left.node)) -
+    Date.parse(effectiveTimestamp(right.node)) ||
+  left.node.id.localeCompare(right.node.id);
 
 const mergeChronologically = (
   currentEdges: MyahInstagramMessageEdge[],
@@ -53,17 +63,10 @@ const mergeChronologically = (
   const edgesById = new Map<string, MyahInstagramMessageEdge>();
 
   for (const edge of [...currentEdges, ...nextEdges]) {
-    if (!edgesById.has(edge.node.id)) {
-      edgesById.set(edge.node.id, edge);
-    }
+    edgesById.set(edge.node.id, edge);
   }
 
-  return [...edgesById.values()].sort(
-    (left, right) =>
-      Date.parse(effectiveTimestamp(left.node)) -
-        Date.parse(effectiveTimestamp(right.node)) ||
-      left.node.id.localeCompare(right.node.id),
-  );
+  return [...edgesById.values()].sort(compareEdges);
 };
 
 export const useMyahInstagramConversation = (conversationId: string | null) => {
@@ -78,8 +81,6 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
   // Keeps pagination based on the latest accepted native page connection.
   // oxlint-disable-next-line twenty/no-state-useref
   const connectionRef = useRef<MyahInstagramMessageConnection | null>(null);
-  // oxlint-disable-next-line twenty/no-state-useref
-  const loadedOlderPagesRef = useRef(false);
   // Avoids turning an Apollo client identity change into a stale request.
   // oxlint-disable-next-line twenty/no-state-useref
   const apolloCoreClientRef = useRef(apolloCoreClient);
@@ -87,6 +88,7 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
     useState<MyahInstagramMessageConnection | null>(null);
   const [loading, setLoading] = useState(Boolean(conversationId));
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   scopeKeyRef.current = scopeKey;
@@ -131,14 +133,17 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
   );
 
   const startInitialRead = useCallback(
-    async function readInitialPage(preserveLoadedPages = false) {
+    async function readInitialPage(preserveHistory = false) {
       const requestedConversationId = scopeKeyRef.current;
 
       if (!requestedConversationId) return;
       if (operationRef.current) {
         if (operationRef.current.scopeKey === requestedConversationId) {
-          operationRef.current.refreshRequested = true;
-          operationRef.current.preserveLoadedPages ||= preserveLoadedPages;
+          operationRef.current.refreshRequested =
+            !preserveHistory ||
+            operationRef.current.refreshRequested === 'foreground'
+              ? 'foreground'
+              : 'background';
         }
         // Preserve the existing immediate settlement for busy refetch callers.
         return;
@@ -149,7 +154,9 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
         abortController: new AbortController(),
       };
       operationRef.current = operation;
-      setLoading(true);
+      const existingConnection = preserveHistory ? connectionRef.current : null;
+      if (existingConnection) setRefreshing(true);
+      else setLoading(true);
       setError(null);
 
       try {
@@ -163,24 +170,42 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
         ) {
           return;
         }
-        if (
-          preserveLoadedPages &&
-          loadedOlderPagesRef.current &&
-          connectionRef.current
-        ) {
-          const loadedConnection = connectionRef.current;
-          publishConnection({
-            ...nextConnection,
-            edges: mergeChronologically(
-              nextConnection.edges,
-              loadedConnection.edges,
-            ),
-            pageInfo: loadedConnection.pageInfo,
-          });
-        } else {
-          loadedOlderPagesRef.current = false;
-          publishConnection(nextConnection);
-        }
+        const oldestNewEdge = mergeChronologically([], nextConnection.edges)[0];
+        const newestOldEdge = existingConnection?.edges.at(-1);
+        const freshIds = new Set(
+          nextConnection.edges.map((edge) => edge.node.id),
+        );
+        // Server cursors use microseconds, but returned node dates only have
+        // milliseconds. Rebase rather than misorder an unseen boundary row.
+        const ambiguousBoundary =
+          oldestNewEdge !== undefined &&
+          existingConnection?.edges.some(
+            (edge) =>
+              !freshIds.has(edge.node.id) &&
+              Date.parse(effectiveTimestamp(edge.node)) ===
+                Date.parse(effectiveTimestamp(oldestNewEdge.node)),
+          );
+        const safeOverlap =
+          oldestNewEdge !== undefined &&
+          newestOldEdge !== undefined &&
+          !ambiguousBoundary &&
+          compareEdges(oldestNewEdge, newestOldEdge) <= 0;
+        publishConnection(
+          existingConnection &&
+            nextConnection.pageInfo.hasNextPage &&
+            safeOverlap
+            ? {
+                ...nextConnection,
+                edges: mergeChronologically(
+                  existingConnection.edges.filter(
+                    (edge) => compareEdges(edge, oldestNewEdge) < 0,
+                  ),
+                  nextConnection.edges,
+                ),
+                pageInfo: existingConnection.pageInfo,
+              }
+            : nextConnection,
+        );
       } catch (reason: unknown) {
         if (
           operationRef.current !== operation ||
@@ -197,11 +222,12 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
         if (operationRef.current === operation) {
           operationRef.current = null;
           setLoading(false);
+          setRefreshing(false);
           if (
             operation.refreshRequested &&
             scopeKeyRef.current === operation.scopeKey
           ) {
-            void readInitialPage(operation.preserveLoadedPages);
+            void readInitialPage(operation.refreshRequested === 'background');
           }
         }
       }
@@ -213,10 +239,10 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
     operationRef.current?.abortController.abort();
     operationRef.current = null;
     connectionRef.current = null;
-    loadedOlderPagesRef.current = false;
     setConnection(null);
     setError(null);
     setLoadingMore(false);
+    setRefreshing(false);
 
     if (!conversationId) {
       setLoading(false);
@@ -271,7 +297,6 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
       ) {
         return;
       }
-      loadedOlderPagesRef.current = true;
       publishConnection({
         ...nextPage,
         edges: mergeChronologically(currentConnection.edges, nextPage.edges),
@@ -291,7 +316,7 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
           operation.refreshRequested &&
           scopeKeyRef.current === operation.scopeKey
         ) {
-          void startInitialRead();
+          void startInitialRead(operation.refreshRequested === 'background');
         }
       }
     }
@@ -312,6 +337,7 @@ export const useMyahInstagramConversation = (conversationId: string | null) => {
     refetch: startInitialRead,
     hasNextPage: connection?.pageInfo.hasNextPage ?? false,
     loadingMore,
+    refreshing,
     loadMore,
   };
 };

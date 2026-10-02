@@ -1,11 +1,11 @@
-import {
-  type ViewFieldTestSetup,
-  cleanupViewFieldTest,
-  setupViewFieldTest,
-} from 'test/integration/graphql/suites/view/utils/setup-view-field-test.util';
+import { type ViewFieldTestSetup } from 'test/integration/graphql/suites/view/utils/setup-view-field-test.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
 import { createOneViewField } from 'test/integration/metadata/suites/view-field/utils/create-one-view-field.util';
 import { deleteOneViewField } from 'test/integration/metadata/suites/view-field/utils/delete-one-view-field.util';
 import { destroyOneViewField } from 'test/integration/metadata/suites/view-field/utils/destroy-one-view-field.util';
+import { createOneView } from 'test/integration/metadata/suites/view/utils/create-one-view.util';
+import { deleteOneView } from 'test/integration/metadata/suites/view/utils/delete-one-view.util';
+import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
 import { assertViewFieldStructure } from 'test/integration/utils/view-test.util';
 import {
   type EachTestingContext,
@@ -26,11 +26,36 @@ describe('View Field Resolver - Successful Create Operations', () => {
   let createdViewFieldId: string | undefined;
 
   beforeAll(async () => {
-    testSetup = await setupViewFieldTest();
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular fieldsList { id name }',
+      expectToFail: false,
+    });
+    const creator = objects.find((object) => object.nameSingular === 'creator');
+    const location = creator?.fieldsList?.find(
+      (field) => field.name === 'location',
+    );
+
+    expect(creator).toBeDefined();
+    expect(location).toBeDefined();
+    const { data } = await createOneView({
+      input: {
+        icon: 'icon123',
+        objectMetadataId: creator!.id,
+        name: 'TestViewForFields',
+      },
+      expectToFail: false,
+    });
+    testSetup = {
+      testViewId: data.createView.id,
+      testObjectMetadataId: creator!.id,
+      testFieldMetadataId: location!.id,
+    };
   });
 
   afterAll(async () => {
-    await cleanupViewFieldTest(testSetup.testObjectMetadataId);
+    await deleteOneView({ viewId: testSetup.testViewId, expectToFail: false });
+    await destroyOneView({ viewId: testSetup.testViewId, expectToFail: false });
   });
 
   afterEach(async () => {

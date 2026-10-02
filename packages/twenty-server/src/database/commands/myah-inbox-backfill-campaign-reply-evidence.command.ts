@@ -166,12 +166,15 @@ export class MyahInboxBackfillCampaignReplyEvidenceCommand extends CommandRunner
                 break;
               } catch (error) {
                 if (
-                  !(error instanceof ConflictException) ||
-                  error.message !==
-                    'Inbox Creator lock coverage changed before source mutation' ||
-                  attempt === 2
+                  error instanceof ConflictException &&
+                  error.message ===
+                    'Inbox Creator lock coverage changed before source mutation' &&
+                  attempt < 2
                 )
-                  throw error;
+                  continue;
+                throw new Error(
+                  `Backfill candidate ${candidate.messageId} failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+                );
               }
             }
           }

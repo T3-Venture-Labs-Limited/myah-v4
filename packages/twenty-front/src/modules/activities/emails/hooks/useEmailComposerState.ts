@@ -7,6 +7,7 @@ import { type EmailDraftPrefill } from '@/activities/emails/types/EmailDraftPref
 
 type UseEmailComposerStateArgs = {
   connectedAccountId: string;
+  creatorId?: string;
   draftPrefill?: EmailDraftPrefill | null;
   defaultTo?: string;
   defaultSubject?: string;
@@ -22,6 +23,7 @@ const countRecipients = (csv: string): number =>
 
 export const useEmailComposerState = ({
   connectedAccountId: initialConnectedAccountId,
+  creatorId,
   draftPrefill,
   defaultTo = '',
   defaultSubject = '',
@@ -73,6 +75,7 @@ export const useEmailComposerState = ({
 
     const { success, messageThreadId } = await sendEmail({
       connectedAccountId,
+      creatorId: defaultInReplyTo ? undefined : creatorId,
       to: trimmedTo,
       cc: trimmedCc || undefined,
       bcc: trimmedBcc || undefined,
@@ -88,6 +91,7 @@ export const useEmailComposerState = ({
     }
   }, [
     connectedAccountId,
+    creatorId,
     to,
     cc,
     bcc,

@@ -51,6 +51,8 @@ const webhookSchemaFieldNames = new Set([
   'mimetype',
   'name',
   'profile_url',
+  'reaction',
+  'reaction_sender',
   'sender',
   'size',
   'sticker',
@@ -133,6 +135,13 @@ const messageWebhookSchema = z
     webhook_name: z.string().trim().min(1).max(128),
   })
   .strict();
+const reactionWebhookSchema = messageWebhookSchema.extend({
+  event: z.literal('message_reaction'),
+  reaction: z.string().trim().min(1).max(64),
+  reaction_sender: attendeeSchema.extend({
+    attendee_provider_id: z.string().trim().min(1).max(256),
+  }),
+});
 const accountStatusWebhookSchema = z
   .object({
     AccountStatus: z
@@ -146,6 +155,7 @@ const accountStatusWebhookSchema = z
   .strict();
 const webhookPayloadSchema = z.union([
   messageWebhookSchema,
+  reactionWebhookSchema,
   accountStatusWebhookSchema,
 ]);
 
@@ -171,6 +181,9 @@ type NormalizedWebhookPayload = {
   deliveryStateUpdatedAt: Date | null;
   eventType: UnipileInstagramWebhookEventType;
   messageId: string | null;
+  reactionActorProviderId?: string;
+  reactionOccurredAt?: Date;
+  reactionValue?: string;
   timestamp: string | null;
 };
 type ClaimedEvent = {
@@ -339,6 +352,7 @@ export class UnipileInstagramWebhookIntakeService {
       message_read: UnipileInstagramWebhookEventType.MESSAGE_READ,
       message_delivered: UnipileInstagramWebhookEventType.MESSAGE_DELIVERED,
       message_edited: UnipileInstagramWebhookEventType.MESSAGE_EDITED,
+      message_reaction: UnipileInstagramWebhookEventType.MESSAGE_REACTION,
     }[payload.event];
     const deliveryState =
       payload.event === 'message_read'
@@ -359,6 +373,14 @@ export class UnipileInstagramWebhookIntakeService {
         : null,
       eventType,
       messageId: payload.message_id,
+      ...(payload.event === 'message_reaction'
+        ? {
+            reactionValue: payload.reaction,
+            reactionActorProviderId:
+              payload.reaction_sender.attendee_provider_id,
+            reactionOccurredAt: new Date(payload.timestamp),
+          }
+        : {}),
       timestamp: payload.timestamp,
     };
   }
@@ -430,6 +452,14 @@ export class UnipileInstagramWebhookIntakeService {
         unipileMessageId: payload.messageId,
         attendeeProviderId: payload.attendeeProviderId,
         accountStatus: payload.accountStatus,
+        ...(payload.eventType ===
+        UnipileInstagramWebhookEventType.MESSAGE_REACTION
+          ? {
+              reactionValue: payload.reactionValue,
+              reactionActorProviderId: payload.reactionActorProviderId,
+              reactionOccurredAt: payload.reactionOccurredAt,
+            }
+          : {}),
         deliveryState: payload.deliveryState,
         deliveryStateUpdatedAt: payload.deliveryStateUpdatedAt,
         status: UnipileInstagramWebhookEventStatus.ENQUEUED,

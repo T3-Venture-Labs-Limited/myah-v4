@@ -162,6 +162,8 @@ export type UnipileInstagramMessage = {
   isEvent: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
+  // Absent means Unipile did not provide an authoritative reaction snapshot.
+  reactions?: Array<{ value: string; senderId: string; isSender: boolean }>;
 };
 
 export const hasContradictoryUnipileInstagramSenderEvidence = (

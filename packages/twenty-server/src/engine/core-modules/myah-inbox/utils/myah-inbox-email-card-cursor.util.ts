@@ -23,7 +23,7 @@ export const isMyahInboxEmailAnchorKey = (value: unknown): value is string => {
   const [prefix, id, extra] = value.split(':');
   return (
     !extra &&
-    ['attempt', 'thread', 'legacy'].includes(prefix) &&
+    ['attempt', 'compose', 'thread', 'legacy'].includes(prefix) &&
     isValidUuid(id)
   );
 };

@@ -86,7 +86,7 @@ direct_groups AS (
   SELECT evidence."inboundMessageId" AS id, evidence."messageThreadId", evidence."messageChannelId",
     COALESCE(evidence."projectedMessageId", promoted_attempt."projectedMessageId") AS "projectedMessageId",
     CASE WHEN evidence.classification='EXACT' AND evidence."matchedAttemptId" IS NOT NULL
-      THEN 'attempt:' || evidence."matchedAttemptId"::text
+      THEN CASE WHEN evidence.source='COMPOSE' THEN 'compose:' ELSE 'attempt:' END || evidence."matchedAttemptId"::text
       WHEN promoted.id IS NOT NULL THEN 'attempt:' || promoted."attemptId"
       ELSE 'thread:' || evidence."messageThreadId"::text END AS "anchorKey"
   FROM reply_evidence evidence
@@ -160,7 +160,7 @@ message_groups AS (
           AND root."anchorKey" NOT LIKE 'legacy:%'
       ) THEN (SELECT root."anchorKey" FROM roots root
         WHERE root."messageThreadId"=message."messageThreadId"
-          AND root."anchorKey"='attempt:' || accepted."attemptId"::text LIMIT 1)
+          AND root."anchorKey"=accepted."anchorKey" LIMIT 1)
       ELSE COALESCE(
         (SELECT root."anchorKey" FROM roots root
           WHERE root."messageThreadId"=message."messageThreadId" AND root."receivedAt"<=message."receivedAt"
@@ -205,7 +205,7 @@ cards AS (
     'startTimestamp', ${timestamp('root."receivedAt"')},
     'subject', CASE WHEN message.visibility IN ('FULL','SUBJECT') AND subject.id IS NOT NULL THEN subject.subject ELSE ${restricted}::text END,
     'campaignLabel', campaign_name.name,
-    'historyBasis', CASE WHEN root."anchorKey" LIKE 'attempt:%' AND message.direction='INCOMING'
+    'historyBasis', CASE WHEN (root."anchorKey" LIKE 'attempt:%' OR root."anchorKey" LIKE 'compose:%') AND message.direction='INCOMING'
       THEN 'PENDING' ELSE 'EARLIEST_AUTHORIZED_RETAINED' END
   ) AS value
   FROM selected_roots root

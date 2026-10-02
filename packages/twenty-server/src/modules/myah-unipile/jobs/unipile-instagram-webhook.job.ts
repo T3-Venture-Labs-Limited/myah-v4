@@ -143,31 +143,63 @@ export class UnipileInstagramWebhookJob {
           chatId: unipileChatId,
           messageId: unipileMessageId,
         });
-        const { conversationRecordId } =
-          await this.projectionService.upsertVerifiedChat({
+        if (
+          claimed.event.eventType ===
+          UnipileInstagramWebhookEventType.MESSAGE_REACTION
+        ) {
+          if (message.deleted || message.hidden || message.isEvent) {
+            throw new UnipileInstagramWebhookFailure(
+              'UNIPILE_WEBHOOK_REACTION_PARENT_UNAVAILABLE',
+              'Instagram reaction parent is not available',
+            );
+          }
+          if (
+            claimed.event.reactionActorProviderId !== chat.attendeeProviderId ||
+            claimed.event.reactionActorProviderId ===
+              claimed.binding.instagramUserId
+          ) {
+            throw new UnipileInstagramWebhookFailure(
+              'UNIPILE_WEBHOOK_REACTION_ACTOR_MISMATCH',
+              'Unable to verify Instagram reaction actor',
+            );
+          }
+          await this.projectionService.applyVerifiedReaction({
             binding: claimed.binding,
             chat,
+            message,
             workspace: { id: claimed.binding.workspaceId },
+            actorProviderId: claimed.event.reactionActorProviderId,
+            emoji: claimed.event.reactionValue!,
+            occurredAt: claimed.event.reactionOccurredAt!,
+            version: claimed.event.eventFingerprint,
           });
+        } else {
+          const { conversationRecordId } =
+            await this.projectionService.upsertVerifiedChat({
+              binding: claimed.binding,
+              chat,
+              workspace: { id: claimed.binding.workspaceId },
+            });
 
-        await this.projectionService.upsertVerifiedMessage({
-          binding: claimed.binding,
-          chat,
-          conversationRecordId,
-          message,
-          workspace: { id: claimed.binding.workspaceId },
-          triageMode: 'LIVE',
-          sourceGenerationId: `webhook:${claimed.event.id}`,
-          ...(claimed.event.deliveryState
-            ? {
-                deliveryState: claimed.event.deliveryState as
-                  | 'DELIVERED'
-                  | 'READ',
-                deliveryStateUpdatedAt:
-                  claimed.event.deliveryStateUpdatedAt?.toISOString() ?? null,
-              }
-            : {}),
-        });
+          await this.projectionService.upsertVerifiedMessage({
+            binding: claimed.binding,
+            chat,
+            conversationRecordId,
+            message,
+            workspace: { id: claimed.binding.workspaceId },
+            triageMode: 'LIVE',
+            sourceGenerationId: `webhook:${claimed.event.id}`,
+            ...(claimed.event.deliveryState
+              ? {
+                  deliveryState: claimed.event.deliveryState as
+                    | 'DELIVERED'
+                    | 'READ',
+                  deliveryStateUpdatedAt:
+                    claimed.event.deliveryStateUpdatedAt?.toISOString() ?? null,
+                }
+              : {}),
+          });
+        }
       }
     } catch (error) {
       if (this.isTerminalFailure(error)) {
@@ -244,7 +276,8 @@ export class UnipileInstagramWebhookJob {
       event.eventType !== UnipileInstagramWebhookEventType.MESSAGE_RECEIVED &&
       event.eventType !== UnipileInstagramWebhookEventType.MESSAGE_READ &&
       event.eventType !== UnipileInstagramWebhookEventType.MESSAGE_DELIVERED &&
-      event.eventType !== UnipileInstagramWebhookEventType.MESSAGE_EDITED
+      event.eventType !== UnipileInstagramWebhookEventType.MESSAGE_EDITED &&
+      event.eventType !== UnipileInstagramWebhookEventType.MESSAGE_REACTION
     ) {
       return false;
     }
@@ -258,6 +291,19 @@ export class UnipileInstagramWebhookJob {
       return false;
     }
 
+    if (event.eventType === UnipileInstagramWebhookEventType.MESSAGE_REACTION) {
+      return (
+        !!event.reactionValue &&
+        event.reactionValue.length <= 64 &&
+        !!event.reactionActorProviderId &&
+        event.reactionActorProviderId.length <= 256 &&
+        event.reactionOccurredAt instanceof Date &&
+        Number.isFinite(event.reactionOccurredAt.getTime()) &&
+        /^[0-9a-f]{64}$/.test(event.eventFingerprint) &&
+        event.deliveryState === null &&
+        event.deliveryStateUpdatedAt === null
+      );
+    }
     if (event.eventType === UnipileInstagramWebhookEventType.MESSAGE_READ) {
       return (
         event.deliveryState === 'READ' &&

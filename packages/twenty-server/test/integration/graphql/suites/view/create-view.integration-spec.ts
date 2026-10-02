@@ -1,7 +1,6 @@
-import { createOneSelectFieldMetadataForIntegrationTests } from 'test/integration/metadata/suites/field-metadata/utils/create-one-select-field-metadata-for-integration-tests.util';
-import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
-import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
+import { deleteOneView } from 'test/integration/metadata/suites/view/utils/delete-one-view.util';
+import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
 import { createOneView } from 'test/integration/metadata/suites/view/utils/create-one-view.util';
 import { assertViewStructure } from 'test/integration/utils/view-test.util';
 import { ViewOpenRecordIn, ViewType } from 'twenty-shared/types';
@@ -9,49 +8,32 @@ import { ViewOpenRecordIn, ViewType } from 'twenty-shared/types';
 describe('Create core view', () => {
   let testObjectMetadataId: string;
   let testSelectFieldMetadataId: string;
+  const createdViewIds: string[] = [];
 
   beforeAll(async () => {
-    const {
-      data: {
-        createOneObject: { id: objectMetadataId },
-      },
-    } = await createOneObjectMetadata({
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular fieldsList { id name }',
       expectToFail: false,
-      input: {
-        nameSingular: 'myViewTestObject',
-        namePlural: 'myViewTestObjects',
-        labelSingular: 'My View Test Object',
-        labelPlural: 'My View Test Objects',
-        icon: 'Icon123',
-      },
     });
+    const socialProfile = objects.find(
+      (object) => object.nameSingular === 'socialProfile',
+    );
+    const platform = socialProfile?.fieldsList?.find(
+      (field) => field.name === 'platform',
+    );
 
-    testObjectMetadataId = objectMetadataId;
-
-    const { selectFieldMetadataId } =
-      await createOneSelectFieldMetadataForIntegrationTests({
-        input: {
-          objectMetadataId,
-        },
-      });
-
-    testSelectFieldMetadataId = selectFieldMetadataId;
+    expect(socialProfile).toBeDefined();
+    expect(platform).toBeDefined();
+    testObjectMetadataId = socialProfile!.id;
+    testSelectFieldMetadataId = platform!.id;
   });
 
   afterAll(async () => {
-    await updateOneObjectMetadata({
-      expectToFail: false,
-      input: {
-        idToUpdate: testObjectMetadataId,
-        updatePayload: {
-          isActive: false,
-        },
-      },
-    });
-    await deleteOneObjectMetadata({
-      expectToFail: false,
-      input: { idToDelete: testObjectMetadataId },
-    });
+    for (const viewId of createdViewIds) {
+      await deleteOneView({ viewId, expectToFail: false });
+      await destroyOneView({ viewId, expectToFail: false });
+    }
   });
 
   it('should create a new view with all properties', async () => {
@@ -70,6 +52,7 @@ describe('Create core view', () => {
     });
 
     expect(errors).toBeUndefined();
+    createdViewIds.push(data.createView.id);
     assertViewStructure(data.createView, {
       name: 'Kanban View',
       objectMetadataId: testObjectMetadataId,
@@ -96,6 +79,7 @@ describe('Create core view', () => {
     });
 
     expect(errors).toBeUndefined();
+    createdViewIds.push(data.createView.id);
     assertViewStructure(data.createView, {
       name: input.name,
       objectMetadataId: input.objectMetadataId,

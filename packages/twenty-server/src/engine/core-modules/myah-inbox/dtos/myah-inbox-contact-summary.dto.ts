@@ -87,6 +87,9 @@ export class MyahInboxContactInstagramChannelSummary {
   @Field(() => Boolean)
   needsAttention: boolean;
 
+  @Field(() => Boolean)
+  reactionNeedsAttention: boolean;
+
   @Field(() => [MyahInboxContactInstagramConversation])
   conversations: MyahInboxContactInstagramConversation[];
 }

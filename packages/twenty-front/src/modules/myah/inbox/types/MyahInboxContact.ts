@@ -63,6 +63,7 @@ export type MyahInboxContact = {
     isAvailable: boolean;
     state: MyahInboxInstagramChannelState;
     needsAttention: boolean;
+    reactionNeedsAttention?: boolean;
     conversations: MyahInboxContactInstagramConversation[];
   };
 };
@@ -98,4 +99,7 @@ export type MyahInstagramConversationMessage = {
   createdAt: string;
   hasAttachments: boolean;
   attachmentCount: number;
+  reactionEmoji?: string | null;
+  reactionActorLabel?: string | null;
+  reactionVersion?: string | null;
 };

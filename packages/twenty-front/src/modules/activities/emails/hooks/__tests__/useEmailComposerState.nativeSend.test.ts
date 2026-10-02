@@ -71,6 +71,7 @@ it('explicit Send retains native account, fields, attachments, mutation and succ
     variables: {
       input: {
         connectedAccountId: 'selected-account',
+        creatorId: undefined,
         to: 'to@example.com',
         cc: 'cc@example.com',
         bcc: 'bcc@example.com',
@@ -98,6 +99,29 @@ it('explicit Send retains native account, fields, attachments, mutation and succ
   expect(onSent).toHaveBeenCalledTimes(1);
   expect(onSent).toHaveBeenCalledWith('thread-id');
 });
+
+it.each([
+  [undefined, 'creator-id'],
+  ['<parent-message>', undefined],
+])(
+  'includes Creator origin only for new Compose, reply=%s',
+  async (defaultInReplyTo, expectedCreatorId) => {
+    const { result } = renderHook(() =>
+      useEmailComposerState({
+        connectedAccountId: 'account-id',
+        defaultTo: 'to@example.com',
+        creatorId: 'creator-id',
+        defaultInReplyTo,
+      }),
+    );
+    await act(async () => {
+      await result.current.handleSend();
+    });
+    expect(mockMutate.mock.calls[0][0].variables.input.creatorId).toBe(
+      expectedCreatorId,
+    );
+  },
+);
 
 it.each(['response-error', 'transport-error'])(
   'retains native %s behavior without closing',

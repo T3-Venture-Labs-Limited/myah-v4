@@ -629,24 +629,39 @@ export class MyahInboxContactEmailQueryService {
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const [replySchema] = await dataSource.query<
-          Array<{ exists: boolean }>
+          Array<{ exists: boolean; composeExists: boolean }>
         >(
-          `SELECT to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "exists"`,
+          `SELECT to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "exists",
+            to_regclass('core."myahComposeReplyEvidence"') IS NOT NULL
+              AND to_regclass('core."myahComposeEmailSend"') IS NOT NULL AS "composeExists"`,
           [],
           undefined,
           { shouldBypassPermissionChecks: true },
         );
         ctes.push(`accepted_outreach AS (
-SELECT "projectedMessageId", "attemptId", "campaignId", "enrollmentId", "messageChannelId", "providerAcceptedAt"
-          FROM core."outboundEmailAttempt"
-          WHERE "workspaceId"=${workspaceId}::uuid AND source='CAMPAIGN_SEQUENCE'
-            AND "attemptState"='ACCEPTED'
+SELECT "projectedMessageId", "attemptId", "campaignId", "enrollmentId", "messageChannelId", "providerAcceptedAt",
+  'attempt:' || "attemptId"::text AS "anchorKey"
+FROM core."outboundEmailAttempt"
+WHERE "workspaceId"=${workspaceId}::uuid AND source='CAMPAIGN_SEQUENCE' AND "attemptState"='ACCEPTED'
+${
+  replySchema?.composeExists
+    ? `UNION ALL
+(SELECT DISTINCT ON (receipt.id) sent.id, NULL::uuid, NULL::uuid, NULL::uuid, receipt."messageChannelId", receipt."acceptedAt",
+  'compose:' || receipt.id::text
+FROM authorized_email sent
+JOIN core."myahComposeEmailSend" receipt ON receipt."workspaceId"=${workspaceId}::uuid
+  AND receipt."messageChannelId"=sent."messageChannelId"
+  AND receipt."providerHeaderMessageId"=sent."headerMessageId"
+WHERE sent.direction='OUTGOING'
+ORDER BY receipt.id, sent.id)`
+    : ''
+}
         )`);
         ctes.push(
           replySchema?.exists
             ? `reply_evidence AS (
 SELECT ev."inboundMessageId", inbound."messageThreadId", ev.classification,
-                  ev."matchedAttemptId", ev."campaignId", ev."enrollmentId", ev."messageChannelId", attempt."projectedMessageId"
+                  ev."matchedAttemptId", ev."campaignId", ev."enrollmentId", ev."messageChannelId", attempt."projectedMessageId", 'CAMPAIGN' AS source
                 FROM core."myahCampaignReplyEvidence" ev
                 JOIN readable_campaign campaign ON campaign.id=ev."campaignId"
                 JOIN authorized_email inbound ON inbound.id=ev."inboundMessageId"
@@ -662,12 +677,32 @@ SELECT ev."inboundMessageId", inbound."messageThreadId", ev.classification,
                 LEFT JOIN core."outboundEmailAttempt" attempt ON attempt."attemptId"=ev."matchedAttemptId"
                   AND attempt."workspaceId"=ev."workspaceId" AND attempt."attemptState"='ACCEPTED'
                 WHERE ev."workspaceId"=${workspaceId}::uuid
+                ${
+                  replySchema?.composeExists
+                    ? `UNION ALL
+                SELECT ev."inboundMessageId", inbound."messageThreadId", ev.classification,
+                  ev."composeSendId", NULL::uuid, NULL::uuid, ev."messageChannelId", accepted."projectedMessageId", 'COMPOSE'
+                FROM core."myahComposeReplyEvidence" ev
+                JOIN authorized_email inbound ON inbound.id=ev."inboundMessageId"
+                  AND inbound."messageChannelId"=ev."messageChannelId" AND inbound.direction='INCOMING'
+                ${
+                  contact.kind === 'creator'
+                    ? `AND EXISTS (SELECT 1 FROM readable_threads linked
+                  WHERE linked.id=inbound."messageThreadId" AND linked."creatorId"=${recordId}::uuid)`
+                    : ''
+                }
+                LEFT JOIN accepted_outreach accepted ON accepted."anchorKey"='compose:' || ev."composeSendId"::text
+                WHERE ev."workspaceId"=${workspaceId}::uuid
+                  AND NOT EXISTS (SELECT 1 FROM core."myahCampaignReplyEvidence" campaign
+                    WHERE campaign."workspaceId"=ev."workspaceId" AND campaign."inboundMessageId"=ev."inboundMessageId")`
+                    : ''
+                }
               )`
             : `reply_evidence AS (
                 SELECT NULL::uuid AS "inboundMessageId", NULL::uuid AS "messageThreadId",
                   NULL::text AS classification, NULL::uuid AS "matchedAttemptId",
 NULL::uuid AS "campaignId", NULL::uuid AS "enrollmentId", NULL::uuid AS "messageChannelId",
-                  NULL::uuid AS "projectedMessageId" WHERE FALSE
+                  NULL::uuid AS "projectedMessageId", NULL::text AS source WHERE FALSE
               )`,
         );
         // Off until historical replies are backfilled: show one card per thread.

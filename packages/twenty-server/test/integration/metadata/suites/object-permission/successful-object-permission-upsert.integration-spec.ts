@@ -1,5 +1,4 @@
-import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
 import { upsertObjectPermissions } from 'test/integration/metadata/suites/object-permission/utils/upsert-object-permissions.util';
 import { createOneRole } from 'test/integration/metadata/suites/role/utils/create-one-role.util';
 import { deleteOneRole } from 'test/integration/metadata/suites/role/utils/delete-one-role.util';
@@ -32,20 +31,15 @@ describe('Object permission upsert should succeed', () => {
     createdRoleId = roleData?.createOneRole?.id;
     jestExpectToBeDefined(createdRoleId);
 
-    const {
-      data: { createOneObject },
-    } = await createOneObjectMetadata({
-      input: {
-        nameSingular: 'testObjectPermissionSuccess',
-        namePlural: 'testObjectPermissionSuccesses',
-        labelSingular: 'Test Object Permission Success',
-        labelPlural: 'Test Object Permission Successes',
-        icon: 'IconSettings',
-      },
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular',
+      expectToFail: false,
     });
+    const creator = objects.find((object) => object.nameSingular === 'creator');
 
-    customObjectMetadataId = createOneObject.id;
-    jestExpectToBeDefined(customObjectMetadataId);
+    jestExpectToBeDefined(creator);
+    customObjectMetadataId = creator.id;
   });
 
   afterAll(async () => {
@@ -53,12 +47,6 @@ describe('Object permission upsert should succeed', () => {
       await deleteOneRole({
         expectToFail: false,
         input: { idToDelete: createdRoleId },
-      });
-    }
-    if (isDefined(customObjectMetadataId)) {
-      await deleteOneObjectMetadata({
-        expectToFail: false,
-        input: { idToDelete: customObjectMetadataId },
       });
     }
   });

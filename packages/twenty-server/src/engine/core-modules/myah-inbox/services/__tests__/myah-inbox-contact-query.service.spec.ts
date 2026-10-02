@@ -1,4 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
+import { Client } from 'pg';
 
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import {
@@ -184,6 +185,7 @@ const buildHarness = (
   denySocialProfileRead = false,
   missingSocialProfileMetadata = false,
   responseFocusEnabled = true,
+  sqlFixture = false,
 ) => {
   rolePermissionConfig = hasRolePermissionConfig
     ? resolvedRolePermissionConfig
@@ -191,9 +193,14 @@ const buildHarness = (
   const query = jest.fn().mockResolvedValue(rows);
   // The service probes the private triage schema before its page query; routing
   // that probe to its own mock keeps main-query assertions about the page query.
-  const preflightQuery = jest
-    .fn()
-    .mockResolvedValue([{ exists: true, replyEvidenceReady: true }]);
+  const preflightQuery = jest.fn().mockResolvedValue([
+    {
+      exists: true,
+      reactionReady: true,
+      replyEvidenceReady: true,
+      composeEvidenceReady: true,
+    },
+  ]);
   const dataSourceQuery = jest.fn(async (sql: string, ...rest: unknown[]) =>
     sql.startsWith('SELECT to_regclass')
       ? preflightQuery(sql, ...rest)
@@ -227,9 +234,13 @@ const buildHarness = (
       getQueryAndParameters: jest
         .fn()
         .mockReturnValue([
-          objectName === 'message'
-            ? 'SELECT email_visibility(message.id) AS visibility FROM readable_message'
-            : `SELECT * FROM readable_${objectName}`,
+          sqlFixture
+            ? objectName === 'messageThread'
+              ? 'SELECT id, "creatorId", "myahCampaignId" AS "campaignId", "inboxOwnerId", "inboxState" AS state, "snoozedUntil" FROM pg_temp.readable_messageThread WHERE readable'
+              : `SELECT * FROM pg_temp.readable_${objectName} WHERE readable`
+            : objectName === 'message'
+              ? 'SELECT email_visibility(message.id) AS visibility FROM readable_message'
+              : `SELECT * FROM readable_${objectName}`,
           [],
         ]),
     };
@@ -269,7 +280,9 @@ const buildHarness = (
   };
   const visibilityPolicy = {
     buildSqlVisibilityProjection: jest.fn().mockReturnValue({
-      expression: 'email_visibility(message.id)',
+      expression: sqlFixture
+        ? 'message.visibility'
+        : 'email_visibility(message.id)',
       parameters: { visibilityWorkspaceId: workspaceId },
     }),
   };
@@ -323,6 +336,183 @@ const request = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('MyahInboxContactQueryService', () => {
+  it('exposes reaction attention separately without changing canonical New message state', async () => {
+    const harness = buildHarness([
+      {
+        ...rawRows[0],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+        triageIsAvailable: true,
+        triageInboxState: 'WAITING_ON_CREATOR',
+      },
+    ]);
+    const result = await harness.service.listContacts(request());
+
+    expect(result).toMatchObject({
+      edges: [
+        {
+          node: {
+            needsAttention: true,
+            triage: { inboxState: 'WAITING_ON_CREATOR' },
+            instagram: { needsAttention: false, reactionNeedsAttention: true },
+          },
+        },
+      ],
+    });
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'unseen_reactions_by_conversation AS',
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'FROM readable_social_messages message',
+    );
+    const sql = harness.query.mock.calls[0][0] as string;
+    expect(sql).toContain('"viewedVersion"');
+    expect(sql).toContain("message.provider = 'UNIPILE'");
+    expect(sql).toContain('reaction."conversationRecordId" = conversation.id');
+    expect(sql).toContain(
+      'reaction."actorProviderId" = source."recipientIgsid"',
+    );
+    expect(sql).toContain(
+      'INNER JOIN readable_social_conversations conversation',
+    );
+  });
+
+  it('omits physical Instagram reaction relations for Email-only workspaces', async () => {
+    for (const reactionReady of [false, true]) {
+      const harness = buildHarness([rawRows[1]]);
+
+      if (reactionReady) {
+        const getRepository = harness.globalWorkspaceOrmManager.getRepository;
+        const originalRepository = getRepository.getMockImplementation()!;
+
+        getRepository.mockImplementation(async (id, name) => {
+          if (
+            name === 'myahSocialConversation' ||
+            name === 'myahSocialMessage'
+          ) {
+            const error = new Error('Optional Instagram metadata is absent');
+
+            error.name = 'EntityMetadataNotFoundError';
+            throw error;
+          }
+
+          return originalRepository(id, name);
+        });
+      }
+      harness.preflightQuery.mockResolvedValueOnce([
+        {
+          exists: true,
+          replyEvidenceReady: true,
+          composeEvidenceReady: true,
+          reactionReady,
+        },
+      ]);
+
+      const page = await harness.service.listContacts(request());
+      const [sql] = harness.query.mock.calls[0];
+
+      expect(page).toMatchObject({
+        edges: [{ node: { identityKind: 'EMAIL_THREAD' } }],
+      });
+      expect(sql).toContain('unseen_reactions_by_conversation AS (');
+      expect(sql).not.toContain('"myahInboxInstagramReaction"');
+      expect(sql).not.toContain('"myahSocialConversation"');
+    }
+  });
+
+  it('keeps reaction-only attention on linked Creator groups and unlinked conversations without changing the message reason', async () => {
+    const linked = buildHarness([
+      {
+        ...rawRows[0],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+      },
+    ]);
+    const linkedPage = await linked.service.listContacts(request());
+    expect(linkedPage).toMatchObject({
+      edges: [
+        {
+          node: {
+            creator: { id: creatorId },
+            needsAttention: true,
+            instagram: {
+              needsAttention: false,
+              reactionNeedsAttention: true,
+              conversations: [{ id: instagramAId }, { id: instagramBId }],
+            },
+          },
+        },
+      ],
+    });
+    const unlinked = buildHarness([
+      {
+        ...rawRows[2],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+      },
+    ]);
+    const unlinkedPage = await unlinked.service.listContacts(request());
+    expect(unlinkedPage).toMatchObject({
+      edges: [
+        {
+          node: {
+            creator: null,
+            needsAttention: true,
+            instagram: { needsAttention: false, reactionNeedsAttention: true },
+          },
+        },
+      ],
+    });
+  });
+
+  it('clears only reaction attention while retaining independent New message or manual-triage attention', async () => {
+    for (const [row, needsAttention] of [
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: false,
+          triageIsAvailable: true,
+          triageInboxState: 'WAITING_ON_CREATOR',
+        },
+        false,
+      ],
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: false,
+          triageIsAvailable: true,
+          triageInboxState: 'NEEDS_REPLY',
+        },
+        true,
+      ],
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: true,
+          triageIsAvailable: false,
+        },
+        true,
+      ],
+    ] as const) {
+      const page = await buildHarness([row]).service.listContacts(request());
+      expect(
+        (
+          page.edges as Array<{
+            node: {
+              needsAttention: boolean;
+              instagram: { reactionNeedsAttention: boolean };
+            };
+          }>
+        )[0].node,
+      ).toMatchObject({
+        needsAttention,
+        instagram: { reactionNeedsAttention: false },
+      });
+    }
+  });
   it('emits exact SQL cursor text separately from the Date display timestamp', async () => {
     const exactTimestamp = '2026-09-05T12:30:00.000900Z';
     const harness = buildHarness([
@@ -888,7 +1078,9 @@ describe('MyahInboxContactQueryService', () => {
 
     const [sql] = harness.query.mock.calls[0];
     expect(sql).toContain('response_email_messages AS');
-    expect(sql).toMatch(/WHERE message.direction = 'INCOMING'\s+AND FALSE/);
+    expect(sql).toMatch(
+      /WHERE message.direction = 'INCOMING'\s+AND \(FALSE OR FALSE\)/,
+    );
     expect(sql).not.toContain('core."myahCampaignReplyEvidence"');
     expect(sql).toContain('instagram_source_rows AS');
   });
@@ -899,6 +1091,13 @@ describe('MyahInboxContactQueryService', () => {
     const [sql] = list.query.mock.calls[0];
     expect(sql).toContain('response_email_messages AS');
     expect(sql).toContain('core."myahCampaignReplyEvidence" evidence');
+    expect(sql).toContain('core."myahComposeReplyEvidence" evidence');
+    expect(sql).toContain(
+      'JOIN readable_creators evidence_creator ON evidence_creator.id=evidence_thread."creatorId"',
+    );
+    expect(sql).toContain("association.direction='INCOMING'");
+    expect(sql).toContain('evidence."inboundMessageId"=message.id');
+    expect(sql).toContain('core."myahCampaignReplyEvidence" campaign');
     expect(sql).toContain('evidence."inboundMessageId"=message.id');
     expect(sql).toContain('readable_campaigns AS');
     expect(sql).toContain(
@@ -1054,3 +1253,205 @@ describe('MyahInboxContactQueryService', () => {
     ).not.toHaveBeenCalled();
   });
 });
+
+// Execute the actual contact-list SQL, not a mocked row projection. The
+// connection is opt-in and restricted to the dedicated local fixture database.
+const contactPostgresUrl = process.env.MYAH_INBOX_TEST_POSTGRES_URL;
+const describeContactPostgres = contactPostgresUrl ? describe : describe.skip;
+
+describeContactPostgres(
+  'Compose contact listing (rolled-back PostgreSQL)',
+  () => {
+    let client: Client;
+    const uuid = (n: number) =>
+      `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+    beforeAll(async () => {
+      jest.useRealTimers();
+      const url = new URL(contactPostgresUrl!);
+      if (
+        url.hostname !== '127.0.0.1' ||
+        url.port !== '15432' ||
+        url.pathname !== '/default' ||
+        url.search ||
+        url.hash
+      ) {
+        throw new Error('Inbox test database endpoint is not allowlisted');
+      }
+      client = new Client({
+        connectionString: contactPostgresUrl,
+        connectionTimeoutMillis: 3000,
+        statement_timeout: 5000,
+      });
+      await client.connect();
+      await client.query('BEGIN');
+      await client.query(`
+      CREATE TEMP TABLE readable_message (id uuid, "messageThreadId" uuid, "receivedAt" timestamptz, subject text, text text, visibility text, direction text, "deletedAt" timestamptz, readable boolean) ON COMMIT DROP;
+      CREATE TEMP TABLE readable_messageThread (id uuid, "creatorId" uuid, "myahCampaignId" uuid, "inboxOwnerId" uuid, "inboxState" text, "snoozedUntil" timestamptz, "deletedAt" timestamptz, readable boolean) ON COMMIT DROP;
+      CREATE TEMP TABLE readable_creator (id uuid, name text, "instagramUsername" text, "deletedAt" timestamptz, readable boolean) ON COMMIT DROP;
+      CREATE TEMP TABLE readable_workspaceMember (id uuid, "deletedAt" timestamptz, readable boolean) ON COMMIT DROP;
+      CREATE TEMP TABLE readable_campaign (id uuid, "deletedAt" timestamptz, readable boolean) ON COMMIT DROP;
+      CREATE TEMP TABLE readable_messageParticipant (id uuid, "messageId" uuid, role text, handle text, "displayName" text, "deletedAt" timestamptz, readable boolean) ON COMMIT DROP;
+      CREATE TEMP TABLE readable_socialConversation (id uuid, "creatorId" uuid, "providerConversationId" text, provider text, lifecycle text, "recipientUsername" text, "recipientDisplayName" text, "createdAt" timestamptz, "updatedAt" timestamptz, "deletedAt" timestamptz, readable boolean) ON COMMIT DROP;
+      CREATE TEMP TABLE readable_socialMessage (id uuid, "conversationId" uuid, text text, direction text, "providerCreatedAt" timestamptz, "createdAt" timestamptz, "deletedAt" timestamptz, readable boolean) ON COMMIT DROP;
+      CREATE TEMP TABLE fixture_association (id uuid, "messageId" uuid, "messageChannelId" uuid, direction text, "deletedAt" timestamptz) ON COMMIT DROP;
+      CREATE TEMP TABLE fixture_channel (id uuid, "workspaceId" uuid, "connectedAccountId" uuid, type text, visibility text) ON COMMIT DROP;
+      CREATE TEMP TABLE fixture_account (id uuid, "workspaceId" uuid, "userWorkspaceId" uuid) ON COMMIT DROP;
+      CREATE TEMP TABLE fixture_compose_evidence ("workspaceId" uuid, "inboundMessageId" uuid, "messageChannelId" uuid) ON COMMIT DROP;
+      CREATE TEMP TABLE fixture_campaign_evidence ("workspaceId" uuid, "inboundMessageId" uuid, "messageChannelId" uuid, "campaignId" uuid, "creatorId" uuid) ON COMMIT DROP;
+      CREATE TEMP TABLE fixture_migration (id boolean, status text) ON COMMIT DROP;
+      CREATE TEMP TABLE fixture_provenance ("messageChannelIds" uuid[]) ON COMMIT DROP;
+      CREATE TEMP TABLE fixture_triage ("contactIdentityKey" text, "inboxOwnerId" uuid, "inboxState" text, "snoozedUntil" timestamptz, revision integer, "identityGeneration" text) ON COMMIT DROP;
+    `);
+      await client.query('INSERT INTO fixture_migration VALUES (TRUE, $1)', [
+        'READY',
+      ]);
+      await client.query(
+        'INSERT INTO readable_workspaceMember VALUES ($1, NULL, TRUE)',
+        [workspaceMemberId],
+      );
+      await client.query(
+        'INSERT INTO fixture_channel VALUES ($1, $2, NULL, $3, $4)',
+        [uuid(90), workspaceId, 'EMAIL', 'SHARE_EVERYTHING'],
+      );
+      for (let i = 100; i <= 104; i++) {
+        const linkedCreator = i === 101 ? null : uuid(i);
+        await client.query(
+          'INSERT INTO readable_creator VALUES ($1, $2, NULL, NULL, $3)',
+          [uuid(i), `Creator ${i}`, i !== 103],
+        );
+        await client.query(
+          'INSERT INTO readable_messageThread VALUES ($1, $2, NULL, NULL, NULL, NULL, NULL, TRUE)',
+          [uuid(i), linkedCreator],
+        );
+        await client.query(
+          'INSERT INTO readable_message VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8)',
+          [
+            uuid(i),
+            uuid(i),
+            `2026-09-05T12:0${i - 100}:00Z`,
+            'Reply',
+            'body',
+            'FULL',
+            'INCOMING',
+            i !== 102,
+          ],
+        );
+        await client.query(
+          'INSERT INTO fixture_association VALUES ($1, $1, $2, $3, NULL)',
+          [uuid(i), uuid(90), 'INCOMING'],
+        );
+        await client.query(
+          'INSERT INTO fixture_compose_evidence VALUES ($1, $2, $3)',
+          [workspaceId, uuid(i), uuid(90)],
+        );
+      }
+      await client.query(
+        'INSERT INTO readable_campaign VALUES ($1, NULL, TRUE)',
+        [uuid(200)],
+      );
+      await client.query(
+        'INSERT INTO fixture_campaign_evidence VALUES ($1, $2, $3, $4, $5)',
+        [workspaceId, uuid(104), uuid(90), uuid(200), uuid(104)],
+      );
+    }, 15000);
+
+    afterAll(async () => {
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } finally {
+          await client.end();
+        }
+      }
+    });
+
+    const list = async (focus = true) => {
+      const harness = buildHarness([], true, false, true, focus, true);
+
+      // The Email-only fixture has no physical Instagram reaction relation.
+      harness.preflightQuery.mockResolvedValueOnce([
+        {
+          exists: true,
+          reactionReady: false,
+          replyEvidenceReady: true,
+          composeEvidenceReady: true,
+        },
+      ]);
+      harness.query.mockImplementation(
+        async (sql: string, parameters: unknown[]) => {
+          const fixtureSql = sql
+            .replace(
+              /"workspace_[^"]+"\."messageChannelMessageAssociation"/g,
+              'pg_temp.fixture_association',
+            )
+            .replace(/"workspace_[^"]+"\.message/g, 'pg_temp.readable_message')
+            .replace(
+              /"workspace_[^"]+"\."myahInboxTriageMigration"/g,
+              'pg_temp.fixture_migration',
+            )
+            .replace(
+              /"workspace_[^"]+"\."myahInboxTriageEmailChannelProvenance"/g,
+              'pg_temp.fixture_provenance',
+            )
+            .replace(
+              /"workspace_[^"]+"\."myahInboxContactTriage"/g,
+              'pg_temp.fixture_triage',
+            )
+            .replace(
+              /pg_temp\.readable_myahSocialConversation/g,
+              'pg_temp.readable_socialConversation',
+            )
+            .replace(
+              /pg_temp\.readable_myahSocialMessage/g,
+              'pg_temp.readable_socialMessage',
+            )
+            .replace(/core\."messageChannel"/g, 'pg_temp.fixture_channel')
+            .replace(/core\."connectedAccount"/g, 'pg_temp.fixture_account')
+            .replace(
+              /core\."myahComposeReplyEvidence"/g,
+              'pg_temp.fixture_compose_evidence',
+            )
+            .replace(
+              /core\."myahCampaignReplyEvidence"/g,
+              'pg_temp.fixture_campaign_evidence',
+            );
+          return (await client.query(fixtureSql, parameters)).rows;
+        },
+      );
+      return harness.service.listContacts(request());
+    };
+
+    it('lists a linked readable Compose Creator, excludes unlinked and hidden rows, and preserves flag-off and Campaign-only behavior', async () => {
+      const focused = await list();
+      const ids = (
+        focused.edges as Array<{ node: { creator: { id: string } | null } }>
+      ).map(({ node }) => node.creator?.id);
+      expect(ids).toEqual([uuid(104), uuid(100)]);
+      expect(focused.totalCount).toBe(2);
+
+      // Without the focus gate, pre-existing visible-thread behavior is intact.
+      const flagOff = await list(false);
+      expect(flagOff.totalCount).toBe(4);
+      expect(
+        (flagOff.edges as Array<{ node: { creator: unknown } }>).some(
+          ({ node }) => node.creator === null,
+        ),
+      ).toBe(true);
+
+      await client.query('SAVEPOINT campaign_only');
+      try {
+        await client.query('DELETE FROM fixture_compose_evidence');
+        const campaignOnly = await list();
+        expect(campaignOnly.totalCount).toBe(1);
+        expect(
+          (
+            campaignOnly.edges as Array<{ node: { creator: { id: string } } }>
+          )[0].node.creator.id,
+        ).toBe(uuid(104));
+      } finally {
+        await client.query('ROLLBACK TO SAVEPOINT campaign_only');
+      }
+    });
+  },
+);

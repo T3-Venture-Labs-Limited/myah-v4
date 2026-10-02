@@ -142,6 +142,20 @@ describe('explicit Campaign reply evidence backfill', () => {
     expect(reply.reconcileInboundMessageInTransaction).toHaveBeenCalledTimes(2);
   });
 
+  it('names the failed candidate so partial per-message commits can be reconciled', async () => {
+    const { command, reply, transaction } = harness();
+    reply.reconcileInboundMessageInTransaction.mockRejectedValue(
+      new Error('evidence conflict'),
+    );
+
+    await expect(
+      command.run([], { workspaceId, apply: true, limit: 1 }),
+    ).rejects.toThrow(
+      `Backfill candidate ${messageId} failed: evidence conflict`,
+    );
+    expect(transaction).toHaveBeenCalledTimes(1);
+  });
+
   it('requires a real workspace and an explicit apply before mutating, then reuses the safe reconciler with no invented parent tokens', async () => {
     const { command, reply, transaction, query, rows } = harness();
 

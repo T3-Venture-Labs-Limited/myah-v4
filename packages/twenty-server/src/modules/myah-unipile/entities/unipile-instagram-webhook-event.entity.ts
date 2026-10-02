@@ -73,6 +73,15 @@ export class UnipileInstagramWebhookEventEntity {
   accountStatus: string | null;
 
   @Column({ type: 'text', nullable: true })
+  reactionValue: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  reactionActorProviderId: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  reactionOccurredAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
   deliveryState: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })

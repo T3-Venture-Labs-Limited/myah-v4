@@ -48,6 +48,7 @@ type Message = {
   isEvent: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
+  reactions?: Array<{ value: string; senderId: string; isSender: boolean }>;
 };
 
 type Run = {
@@ -333,6 +334,7 @@ const createHarness = (input: {
         conversationRecordId: `conversation-${request.chat.chatId}`,
       })),
     upsertVerifiedMessage: input.upsertMessage ?? jest.fn(async () => ({})),
+    reconcileVerifiedReactionSnapshot: jest.fn(async () => undefined),
     markCompletedMessageSync:
       input.markCompletedMessageSync ?? jest.fn(async () => undefined),
     markCompletedChatSync:
@@ -410,6 +412,38 @@ const createHarness = (input: {
 };
 
 describe('UnipileInstagramSyncService', () => {
+  it('reconciles only a validated explicit reaction snapshot on a verified parent', async () => {
+    const selectedChat = chat('chat-1');
+    const harness = createHarness({
+      listChats: jest
+        .fn()
+        .mockResolvedValue({ chats: [selectedChat], nextCursor: null }),
+      listMessages: jest.fn().mockResolvedValue({
+        messages: [message('message-1', selectedChat.chatId)],
+        nextCursor: null,
+      }),
+      getMessage: jest.fn().mockResolvedValue({
+        ...message('message-1', selectedChat.chatId),
+        reactions: [],
+      }),
+    });
+    const service = await harness.createService();
+
+    await service.synchronizeBinding(bindingId);
+
+    expect(
+      harness.projection.reconcileVerifiedReactionSnapshot,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          messageId: 'message-1',
+          reactions: [],
+        }),
+        observedAt: expect.any(Date),
+        chat: selectedChat,
+      }),
+    );
+  });
   it('synchronizes nested chat and message pages, then commits only completed high-water marks', async () => {
     const chatOne = chat('chat-1', '2026-09-04T12:00:00.000Z');
     const chatTwo = chat('chat-2', '2026-09-04T12:30:00.000Z');

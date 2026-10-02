@@ -1,14 +1,12 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Standard field metadata update should be ignored when trying to update isLabelSyncedWithName on standard field 1`] = `
 {
   "extensions": {
     "code": "FORBIDDEN",
-    "subCode": "FIELD_MUTATION_NOT_ALLOWED",
-    "userFriendlyMessage": "This field cannot be modified.",
+    "userFriendlyMessage": "An error occurred.",
   },
-  "message": "Cannot edit standard field metadata properties: isLabelSyncedWithName",
-  "name": "ForbiddenError",
+  "message": "Schema definitions are managed by the product and cannot be changed by customers",
 }
 `;
 
@@ -16,11 +14,9 @@ exports[`Standard field metadata update should be ignored when trying to update 
 {
   "extensions": {
     "code": "FORBIDDEN",
-    "subCode": "FIELD_MUTATION_NOT_ALLOWED",
-    "userFriendlyMessage": "This field cannot be modified.",
+    "userFriendlyMessage": "An error occurred.",
   },
-  "message": "Cannot edit standard field metadata properties: name",
-  "name": "ForbiddenError",
+  "message": "Schema definitions are managed by the product and cannot be changed by customers",
 }
 `;
 
@@ -28,11 +24,9 @@ exports[`Standard field metadata update should be ignored when trying to update 
 {
   "extensions": {
     "code": "FORBIDDEN",
-    "subCode": "FIELD_MUTATION_NOT_ALLOWED",
-    "userFriendlyMessage": "This field cannot be modified.",
+    "userFriendlyMessage": "An error occurred.",
   },
-  "message": "Cannot edit standard field metadata properties: isLabelSyncedWithName, name",
-  "name": "ForbiddenError",
+  "message": "Schema definitions are managed by the product and cannot be changed by customers",
 }
 `;
 

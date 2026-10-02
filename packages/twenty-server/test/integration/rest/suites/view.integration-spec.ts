@@ -1,7 +1,4 @@
-import { createOneSelectFieldMetadataForIntegrationTests } from 'test/integration/metadata/suites/field-metadata/utils/create-one-select-field-metadata-for-integration-tests.util';
-import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
-import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
 import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
 import { makeRestAPIRequest } from 'test/integration/rest/utils/make-rest-api-request.util';
 import {
@@ -11,9 +8,7 @@ import {
 import { createTestViewWithRestApi } from 'test/integration/rest/utils/view-rest-api.util';
 import { generateRecordName } from 'test/integration/utils/generate-record-name';
 import { assertViewStructure } from 'test/integration/utils/view-test.util';
-import { ViewOpenRecordIn, ViewType } from 'twenty-shared/types';
-
-import { ViewKey } from 'twenty-shared/types';
+import { ViewKey, ViewOpenRecordIn, ViewType } from 'twenty-shared/types';
 
 describe('View REST API', () => {
   let testObjectMetadataId: string;
@@ -21,45 +16,22 @@ describe('View REST API', () => {
   let testViewId: string | undefined;
 
   beforeAll(async () => {
-    const {
-      data: {
-        createOneObject: { id: objectMetadataId },
-      },
-    } = await createOneObjectMetadata({
-      input: {
-        nameSingular: 'testViewObject',
-        namePlural: 'testViewObjects',
-        labelSingular: 'Test View Object',
-        labelPlural: 'Test View Objects',
-        icon: 'IconView',
-      },
-    });
-
-    testObjectMetadataId = objectMetadataId;
-
-    const { selectFieldMetadataId } =
-      await createOneSelectFieldMetadataForIntegrationTests({
-        input: {
-          objectMetadataId,
-        },
-      });
-
-    testSelectFieldMetadataId = selectFieldMetadataId;
-  });
-
-  afterAll(async () => {
-    await updateOneObjectMetadata({
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular fieldsList { id name }',
       expectToFail: false,
-      input: {
-        idToUpdate: testObjectMetadataId,
-        updatePayload: {
-          isActive: false,
-        },
-      },
     });
-    await deleteOneObjectMetadata({
-      input: { idToDelete: testObjectMetadataId },
-    });
+    const socialProfile = objects.find(
+      (object) => object.nameSingular === 'socialProfile',
+    );
+    const platform = socialProfile?.fieldsList?.find(
+      (field) => field.name === 'platform',
+    );
+
+    expect(socialProfile).toBeDefined();
+    expect(platform).toBeDefined();
+    testObjectMetadataId = socialProfile!.id;
+    testSelectFieldMetadataId = platform!.id;
   });
 
   afterEach(async () => {

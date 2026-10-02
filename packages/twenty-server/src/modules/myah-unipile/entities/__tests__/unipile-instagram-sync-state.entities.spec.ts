@@ -312,6 +312,9 @@ describe('Unipile Instagram sync state entities', () => {
       'failureReason',
       'id',
       'nextAttemptAt',
+      'reactionActorProviderId',
+      'reactionOccurredAt',
+      'reactionValue',
       'status',
       'unipileChatId',
       'unipileMessageId',
@@ -334,6 +337,9 @@ describe('Unipile Instagram sync state entities', () => {
       'accountStatus',
       'deliveryState',
       'deliveryStateUpdatedAt',
+      'reactionActorProviderId',
+      'reactionOccurredAt',
+      'reactionValue',
       'failureCode',
       'failureReason',
       'nextAttemptAt',
@@ -356,6 +362,8 @@ describe('Unipile Instagram sync state entities', () => {
       'attendeeProviderId',
       'accountStatus',
       'deliveryState',
+      'reactionActorProviderId',
+      'reactionValue',
       'failureCode',
       'failureReason',
     ]) {
@@ -363,12 +371,14 @@ describe('Unipile Instagram sync state entities', () => {
         columnOptions(UnipileInstagramWebhookEventEntity, propertyName),
       ).toMatchObject({ type: 'text' });
     }
-    expect(
-      columnOptions(
-        UnipileInstagramWebhookEventEntity,
-        'deliveryStateUpdatedAt',
-      ),
-    ).toMatchObject({ type: 'timestamptz' });
+    for (const propertyName of [
+      'deliveryStateUpdatedAt',
+      'reactionOccurredAt',
+    ]) {
+      expect(
+        columnOptions(UnipileInstagramWebhookEventEntity, propertyName),
+      ).toMatchObject({ type: 'timestamptz' });
+    }
     expect(
       columnOptions(UnipileInstagramWebhookEventEntity, 'eventType'),
     ).toMatchObject({

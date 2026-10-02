@@ -91,6 +91,13 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
         "workspaceId" uuid, "inboundMessageId" uuid, "messageChannelId" uuid,
         classification text, "matchedAttemptId" uuid, "campaignId" uuid, "enrollmentId" uuid
       ) ON COMMIT DROP;
+      CREATE TEMP TABLE inbox_compose_send_fixture (
+        id uuid, "workspaceId" uuid, "messageChannelId" uuid, "providerHeaderMessageId" text, "acceptedAt" timestamptz
+      ) ON COMMIT DROP;
+      CREATE TEMP TABLE inbox_compose_evidence_fixture (
+        "workspaceId" uuid, "inboundMessageId" uuid, "messageChannelId" uuid,
+        classification text, "composeSendId" uuid
+      ) ON COMMIT DROP;
       CREATE TEMP TABLE inbox_attempt_fixture (
         "attemptId" uuid, "workspaceId" uuid, "messageChannelId" uuid,
         "projectedMessageId" uuid, "attemptState" text,
@@ -193,7 +200,9 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
         query: async (sql: string, parameters: unknown[]) => {
           statements++;
           if (sql.startsWith('SELECT to_regclass'))
-            return [{ exists: replyEvidenceReady }];
+            return [
+              { exists: replyEvidenceReady, composeExists: replyEvidenceReady },
+            ];
           const fixtureSql = sql
             .replace(
               /"workspace_[^"]+"\."messageChannelMessageAssociation"/g,
@@ -217,6 +226,14 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
             .replace(
               /ev\."creatorId"/g,
               "'00000000-0000-4000-8000-000000000050'::uuid",
+            )
+            .replace(
+              /core\."myahComposeEmailSend"/g,
+              'pg_temp.inbox_compose_send_fixture',
+            )
+            .replace(
+              /core\."myahComposeReplyEvidence"/g,
+              'pg_temp.inbox_compose_evidence_fixture',
             )
             .replace(
               /core\."outboundEmailAttempt"/g,
@@ -1133,6 +1150,141 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     ]);
   });
 
+  it('groups two Compose sends separately, recovers a missing sent root, and lets Campaign evidence win', async () => {
+    const fixture = serviceFixture(new Set(), true);
+    const workspaceId = fixture.request.workspace.id;
+    const threadId = '00000000-0000-4000-8000-000000000005';
+    const channelId = '00000000-0000-4000-8000-000000000052';
+    const sendIds = [901, 902].map(
+      (i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    );
+    const sentIds = [911, 912].map(
+      (i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    );
+    const replyIds = [101, 102].map(
+      (i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    );
+    for (const [index, sendId] of sendIds.entries()) {
+      await client.query(
+        `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction,"headerMessageId")
+        VALUES ($1,$2,$3,'2026-08-01','Compose','body','FULL','OUTGOING',$4)`,
+        [
+          sentIds[index],
+          threadId,
+          `2026-09-01T0${index + 1}:00:00Z`,
+          `<compose-${index}>`,
+        ],
+      );
+      await client.query(
+        `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction) VALUES ($1,$1,$2,'OUTGOING')`,
+        [sentIds[index], channelId],
+      );
+      await client.query(
+        `INSERT INTO inbox_compose_send_fixture VALUES ($1,$2,$3,$4,'2026-09-01')`,
+        [sendId, workspaceId, channelId, `<compose-${index}>`],
+      );
+      await client.query(
+        `INSERT INTO inbox_compose_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4)`,
+        [workspaceId, replyIds[index], channelId, sendId],
+      );
+    }
+    const first = await fixture.service.listCards(fixture.request as never);
+    expect(first.cards.filter((card) => card.threadId === threadId)).toEqual(
+      sendIds.map((sendId, i) =>
+        expect.objectContaining({
+          anchorKey: `compose:${sendId}`,
+          rootMessageId: sentIds[i],
+          historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+        }),
+      ),
+    );
+    await expect(
+      fixture.service.readCard({
+        ...fixture.request,
+        threadId,
+        anchorKey: `compose:${sendIds[0]}`,
+      } as never),
+    ).resolves.toMatchObject({ card: { rootMessageId: sentIds[0] } });
+    await expect(
+      fixture.service.readCard({
+        ...fixture.request,
+        threadId,
+        anchorKey: 'compose:00000000-0000-4000-8000-000000000999',
+      } as never),
+    ).rejects.toThrow('Inbox card is not readable');
+    await expect(
+      fixture.service.readCard({
+        ...fixture.request,
+        threadId: '00000000-0000-4000-8000-000000000004',
+        anchorKey: `compose:${sendIds[0]}`,
+      } as never),
+    ).rejects.toThrow('Inbox card is not readable');
+    const operatorReplyId = '00000000-0000-4000-8000-000000000913';
+    const unrelatedId = '00000000-0000-4000-8000-000000000914';
+    const bindingId = '00000000-0000-4000-8000-000000000915';
+    await client.query(
+      `INSERT INTO inbox_email_fixture (id,"messageThreadId","receivedAt","createdAt",subject,text,visibility,direction,"headerMessageId")
+      VALUES ($1,$3,'2026-09-03','2026-08-01','Inbox reply','body','FULL','OUTGOING','<operator>'),
+        ($2,$3,'2026-09-04','2026-08-01','Unrelated','body','FULL','OUTGOING','<unrelated>')`,
+      [operatorReplyId, unrelatedId, threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_association_fixture (id,"messageId","messageChannelId",direction)
+      VALUES ($1,$1,$3,'OUTGOING'),($2,$2,$3,'OUTGOING')`,
+      [operatorReplyId, unrelatedId, channelId],
+    );
+    await client.query(
+      `INSERT INTO inbox_binding_fixture VALUES ($1,$2,'send_inbox_reply')`,
+      [bindingId, workspaceId],
+    );
+    await client.query(
+      `INSERT INTO inbox_binding_link_fixture VALUES ($1,'thread_parent',$2),($1,'delivery_target',$3)`,
+      [bindingId, replyIds[0], threadId],
+    );
+    await client.query(
+      `INSERT INTO inbox_receipt_fixture VALUES ($1,$2,'SENT','<operator>',NULL)`,
+      [workspaceId, bindingId],
+    );
+    const grouped = await fixture.service.listCards(fixture.request as never);
+    const located = await fixture.service.locateMessage({
+      ...fixture.request,
+      snapshot: grouped.snapshot,
+      messageId: operatorReplyId,
+    } as never);
+    expect(located?.card.anchorKey).toBe(`compose:${sendIds[0]}`);
+    expect(
+      await fixture.service.locateMessage({
+        ...fixture.request,
+        snapshot: grouped.snapshot,
+        messageId: unrelatedId,
+      } as never),
+    ).toBeNull();
+    await client.query(
+      `UPDATE inbox_email_fixture SET readable=FALSE WHERE id=$1`,
+      [sentIds[1]],
+    );
+    const pending = await fixture.service.listCards(fixture.request as never);
+    expect(
+      pending.cards.find((card) => card.anchorKey === `compose:${sendIds[1]}`),
+    ).toMatchObject({ rootMessageId: replyIds[1], historyBasis: 'PENDING' });
+    await client.query(
+      `INSERT INTO inbox_reply_evidence_fixture VALUES ($1,$2,$3,'EXACT',$4,'00000000-0000-4000-8000-000000000056','00000000-0000-4000-8000-000000000057')`,
+      [
+        workspaceId,
+        replyIds[0],
+        channelId,
+        '00000000-0000-4000-8000-000000000401',
+      ],
+    );
+    const campaign = await fixture.service.listCards(fixture.request as never);
+    expect(campaign.cards.map((card) => card.anchorKey)).toContain(
+      'attempt:00000000-0000-4000-8000-000000000401',
+    );
+    expect(campaign.cards.map((card) => card.anchorKey)).not.toContain(
+      `compose:${sendIds[0]}`,
+    );
+  });
+
   it('keeps recorded replies inside one legacy thread card while response focus is disabled', async () => {
     const fixture = serviceFixture(new Set(), true, false);
     const threadId = '00000000-0000-4000-8000-000000000005';
@@ -1420,9 +1572,9 @@ describePostgres('myah-inbox-email-read-query (rolled-back PostgreSQL)', () => {
     const query = buildMyahInboxEmailReadQuery(
       {
         sql: `authorized_email AS (SELECT id, "messageThreadId", "receivedAt", "createdAt", visibility, direction, NULL::uuid AS "workspaceId", NULL::uuid AS "messageChannelId", "headerMessageId", NULL::text AS "messageExternalId" FROM inbox_email_fixture),
-        accepted_outreach AS (SELECT "projectedMessageId", "attemptId", "campaignId", "enrollmentId", "messageChannelId", "providerAcceptedAt" FROM inbox_attempt_fixture WHERE "attemptState"='ACCEPTED'),
+        accepted_outreach AS (SELECT "projectedMessageId", "attemptId", "campaignId", "enrollmentId", "messageChannelId", "providerAcceptedAt", 'attempt:' || "attemptId"::text AS "anchorKey" FROM inbox_attempt_fixture WHERE "attemptState"='ACCEPTED'),
         reply_evidence AS (SELECT evidence."inboundMessageId", inbound."messageThreadId", evidence.classification,
-          evidence."matchedAttemptId", evidence."campaignId", evidence."enrollmentId", evidence."messageChannelId", attempt."projectedMessageId"
+          evidence."matchedAttemptId", evidence."campaignId", evidence."enrollmentId", evidence."messageChannelId", attempt."projectedMessageId", 'CAMPAIGN' AS source
           FROM inbox_reply_evidence_fixture evidence
           JOIN authorized_email inbound ON inbound.id=evidence."inboundMessageId" AND inbound.direction='INCOMING'
           LEFT JOIN inbox_attempt_fixture attempt ON attempt."attemptId"=evidence."matchedAttemptId"),

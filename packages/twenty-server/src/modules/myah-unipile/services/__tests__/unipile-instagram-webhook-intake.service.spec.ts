@@ -544,6 +544,100 @@ describe('UnipileInstagramWebhookIntakeService', () => {
     );
   });
 
+  it('accepts a mapped v1 creator reaction with only bounded actor/value/timestamp stored', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+    const reaction = {
+      ...messageReceivedBody,
+      event: 'message_reaction',
+      reaction: '👍',
+      reaction_sender: {
+        attendee_provider_id: instagramRemoteId,
+        attendee_name: 'Private name',
+      },
+    };
+
+    await expect(
+      service.intake({ body: reaction, secret: 'shared-webhook-secret' }),
+    ).resolves.toEqual({ ok: true, duplicate: false });
+    const stored = harness.eventRepository.create.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+
+    expect(stored).toMatchObject({
+      eventType: 'MESSAGE_REACTION',
+      reactionValue: '👍',
+      reactionActorProviderId: instagramRemoteId,
+      reactionOccurredAt: new Date(messageReceivedBody.timestamp),
+      attendeeProviderId: instagramRemoteId,
+      unipileMessageId: messageReceivedBody.message_id,
+    });
+    expect(JSON.stringify(stored)).not.toContain('Private name');
+    expect(JSON.stringify(stored)).not.toContain(messageReceivedBody.message);
+    expect(JSON.stringify(stored)).not.toContain('reaction_sender');
+  });
+
+  it('deduplicates a replayed reaction but fingerprints an emoji change independently', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+    const body = {
+      ...messageReceivedBody,
+      event: 'message_reaction',
+      reaction: '👍',
+      reaction_sender: { attendee_provider_id: instagramRemoteId },
+    };
+
+    await service.intake({ body, secret: 'shared-webhook-secret' });
+    const first = harness.eventRepository.create.mock
+      .calls[0][0] as WebhookEvent;
+    harness.eventRepository.findOne.mockResolvedValueOnce({
+      ...first,
+      id: 'event-id',
+      status: 'COMPLETED',
+    });
+    await expect(
+      service.intake({ body, secret: 'shared-webhook-secret' }),
+    ).resolves.toEqual({ ok: true, duplicate: true });
+    await service.intake({
+      body: { ...body, reaction: '❤️' },
+      secret: 'shared-webhook-secret',
+    });
+
+    expect(harness.eventRepository.create).toHaveBeenCalledTimes(2);
+    expect(
+      harness.eventRepository.create.mock.calls[1][0].eventFingerprint,
+    ).not.toBe(first.eventFingerprint);
+    expect(harness.webhookQueue.enqueue).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['missing reaction', { reaction: undefined }],
+    ['oversized reaction', { reaction: 'a'.repeat(65) }],
+    ['missing actor', { reaction_sender: undefined }],
+    ['malformed actor', { reaction_sender: { attendee_provider_id: 1 } }],
+  ])(
+    'rejects a reaction with %s before persistence',
+    async (_name, override) => {
+      const harness = createHarness();
+      const service = createService(harness);
+
+      await expect(
+        service.intake({
+          body: {
+            ...messageReceivedBody,
+            event: 'message_reaction',
+            reaction: '👍',
+            reaction_sender: { attendee_provider_id: instagramRemoteId },
+            ...override,
+          },
+          secret: 'shared-webhook-secret',
+        }),
+      ).rejects.toThrow();
+      expect(harness.dataSource.transaction).not.toHaveBeenCalled();
+    },
+  );
+
   it('persists a bounded AccountStatus envelope without message-event fields', async () => {
     const harness = createHarness();
     const service = createService(harness);

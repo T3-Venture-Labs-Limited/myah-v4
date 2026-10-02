@@ -25,6 +25,25 @@ const buildMessage = (
 });
 
 describe('parseAndFormatGmailMessage', () => {
+  it('preserves every complete In-Reply-To message ID from Gmail headers', () => {
+    const result = parseAndFormatGmailMessage(
+      buildMessage([
+        { name: 'From', value: 'creator@example.com' },
+        { name: 'To', value: 'me@example.com' },
+        { name: 'Message-ID', value: '<reply@example.com>' },
+        {
+          name: 'in-reply-to',
+          value: '<first@example.com> <second@example.com> incomplete',
+        },
+      ]),
+      connectedAccount,
+    );
+
+    expect(result?.inReplyToTokens).toEqual([
+      '<first@example.com>',
+      '<second@example.com>',
+    ]);
+  });
   it('normalizes Gmail internalDate epoch evidence to strict UTC ISO text', () => {
     const result = parseAndFormatGmailMessage(
       buildMessage(

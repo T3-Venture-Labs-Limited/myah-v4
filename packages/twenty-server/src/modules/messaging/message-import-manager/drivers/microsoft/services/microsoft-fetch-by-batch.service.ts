@@ -4,6 +4,9 @@ import { MicrosoftOAuth2ClientProvider } from 'src/modules/connected-account/oau
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { type MicrosoftGraphBatchResponse } from 'src/modules/messaging/message-import-manager/drivers/microsoft/services/microsoft-get-messages.interface';
 
+const MESSAGE_FIELDS =
+  'id,subject,receivedDateTime,body,internetMessageId,conversationId,from,replyTo,toRecipients,ccRecipients,bccRecipients,parentFolderId,isDraft,internetMessageHeaders';
+
 @Injectable()
 export class MicrosoftFetchByBatchService {
   constructor(
@@ -33,7 +36,7 @@ export class MicrosoftFetchByBatchService {
       const batchRequests = batchMessageIds.map((messageId, index) => ({
         id: (index + 1).toString(),
         method: 'GET',
-        url: `/me/messages/${messageId}`,
+        url: `/me/messages/${messageId}?$select=${MESSAGE_FIELDS}`,
         headers: {
           'Content-Type': 'application/json',
           Prefer: 'outlook.body-content-type="text"',

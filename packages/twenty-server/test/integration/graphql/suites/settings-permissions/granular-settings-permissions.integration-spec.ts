@@ -2,8 +2,6 @@ import request from 'supertest';
 import { deleteOneRoleOperationFactory } from 'test/integration/graphql/utils/delete-one-role-operation-factory.util';
 import { destroyOneOperationFactory } from 'test/integration/graphql/utils/destroy-one-operation-factory.util';
 import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
-import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
 import { findOneRoleByLabel } from 'test/integration/metadata/suites/role/utils/find-one-role-by-label.util';
 import { findRoles } from 'test/integration/metadata/suites/role/utils/find-roles.util';
 import { updateWorkspaceMemberRole } from 'test/integration/metadata/suites/role/utils/update-workspace-member-role.util';
@@ -19,7 +17,6 @@ const client = request(`http://localhost:${APP_PORT}`);
 describe('Granular settings permissions', () => {
   let customRoleId: string;
   let originalMemberRoleId: string;
-  const createdObjectMetadataIds: string[] = [];
 
   beforeAll(async () => {
     // Get the original Member role ID for restoration later
@@ -104,50 +101,30 @@ describe('Granular settings permissions', () => {
       .post('/metadata')
       .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
       .send(deleteRoleQuery);
-
-    for (const objectMetadataId of createdObjectMetadataIds) {
-      await updateOneObjectMetadata({
-        expectToFail: false,
-        input: {
-          idToUpdate: objectMetadataId,
-          updatePayload: {
-            isActive: false,
-          },
-        },
-      });
-
-      await deleteOneObjectMetadata({
-        input: {
-          idToDelete: objectMetadataId,
-        },
-        expectToFail: false,
-      });
-    }
   });
 
   describe('Data Model Permissions', () => {
-    it('should allow access to data model operations when user has DATA_MODEL setting permission', async () => {
-      const { data, errors } = await createOneObjectMetadata({
+    it('denies customer schema creation even with DATA_MODEL setting permission', async () => {
+      const { errors } = await createOneObjectMetadata({
         input: {
           labelSingular: 'House',
           labelPlural: 'Houses',
-          nameSingular: 'house',
-          namePlural: 'houses',
+          nameSingular: 'housePolicyProbe',
+          namePlural: 'housePolicyProbes',
           description: 'a house',
           icon: 'IconHome',
         },
-        gqlFields: `
-          id
-          labelSingular
-          labelPlural
-        `,
-        expectToFail: false,
+        token: APPLE_JONY_MEMBER_ACCESS_TOKEN,
+        expectToFail: true,
       });
 
-      createdObjectMetadataIds.push(data.createOneObject.id);
-      expect(errors).toBeUndefined();
-      expect(data.createOneObject).toBeDefined();
-      expect(data.createOneObject.labelSingular).toBe('House');
+      expect(errors).toEqual([
+        expect.objectContaining({
+          message:
+            'Schema definitions are managed by the product and cannot be changed by customers',
+          extensions: expect.objectContaining({ code: 'FORBIDDEN' }),
+        }),
+      ]);
     });
   });
 
