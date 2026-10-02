@@ -43,7 +43,9 @@ const noProviderEvidence = (row: Record<string, unknown>): boolean =>
   row.providerAcceptedAt === null &&
   row.projectedMessageId === null;
 
-const validAttemptShape = (row: Record<string, unknown>): boolean => {
+export const isValidCampaignSequenceAttemptHistoryRow = (
+  row: Record<string, unknown>,
+): boolean => {
   if (
     row.source !== 'CAMPAIGN_SEQUENCE' ||
     !ATTEMPT_STATES.has(row.attemptState) ||
@@ -291,6 +293,25 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
     }
   }
 
+  async preflightSameWorkflowVersionHistoryInTransaction(
+    input: Parameters<
+      CampaignProgressionHistoryReaderPort['preflightSameWorkflowVersionHistoryInTransaction']
+    >[0],
+    manager: Parameters<
+      CampaignProgressionHistoryReaderPort['preflightSameWorkflowVersionHistoryInTransaction']
+    >[1],
+  ) {
+    const result = await this.readVersionHistoryInTransaction(
+      input,
+      manager,
+      null,
+    );
+
+    return result.status === 'BLOCKED'
+      ? result
+      : Object.freeze({ status: 'COMPLETE' as const });
+  }
+
   async readSameWorkflowVersionHistoryInTransaction(
     input: Parameters<
       CampaignProgressionHistoryReaderPort['readSameWorkflowVersionHistoryInTransaction']
@@ -298,6 +319,24 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
     manager: Parameters<
       CampaignProgressionHistoryReaderPort['readSameWorkflowVersionHistoryInTransaction']
     >[1],
+  ): Promise<CampaignProgressionHistoryResult> {
+    return this.readVersionHistoryInTransaction(
+      input,
+      manager,
+      input.creatorId,
+    );
+  }
+
+  private async readVersionHistoryInTransaction(
+    input: Readonly<{
+      workspaceId: string;
+      campaignId: string;
+      workflowVersionId: string;
+    }>,
+    manager: Parameters<
+      CampaignProgressionHistoryReaderPort['readSameWorkflowVersionHistoryInTransaction']
+    >[1],
+    creatorId: string | null,
   ): Promise<CampaignProgressionHistoryResult> {
     const runner = manager.queryRunner;
 
@@ -384,7 +423,7 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
 
     const groups = new Map<string, typeof rows>();
     const indexByMessage = new Map<string, number>();
-    const messageByIndex = new Map<number, string>();
+    const messageByIndex = new Map<string, string>();
     const blockerFlags = new Set<
       Extract<CampaignProgressionHistoryResult, { status: 'BLOCKED' }>['reason']
     >();
@@ -451,19 +490,22 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
               typeof row.terminalReason !== 'string' ||
               row.terminalReason.trim().length === 0 ||
               iso(row.terminalAt) === null) ||
-        (row.attemptId !== null && !validAttemptShape(row));
+        (row.attemptId !== null &&
+          !isValidCampaignSequenceAttemptHistoryRow(row));
 
       if (occurrenceMalformed) blockerFlags.add('MALFORMED_HISTORY');
       if (
         enrollmentMalformed ||
         occurrenceMalformed ||
-        row.creatorId !== input.creatorId
+        (creatorId !== null && row.creatorId !== creatorId)
       ) {
         continue;
       }
 
-      const priorIndex = indexByMessage.get(row.messageId);
-      const priorMessage = messageByIndex.get(row.authoredMessageIndex);
+      const messageKey = `${row.creatorId}:${row.messageId}`;
+      const indexKey = `${row.creatorId}:${row.authoredMessageIndex}`;
+      const priorIndex = indexByMessage.get(messageKey);
+      const priorMessage = messageByIndex.get(indexKey);
 
       if (
         (priorIndex !== undefined && priorIndex !== row.authoredMessageIndex) ||
@@ -471,9 +513,9 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
       ) {
         blockerFlags.add('AMBIGUOUS_HISTORY');
       }
-      indexByMessage.set(row.messageId, row.authoredMessageIndex);
-      messageByIndex.set(row.authoredMessageIndex, row.messageId);
-      const key = `${row.messageId}:${row.authoredMessageIndex}`;
+      indexByMessage.set(messageKey, row.authoredMessageIndex);
+      messageByIndex.set(indexKey, row.messageId);
+      const key = `${row.creatorId}:${row.messageId}:${row.authoredMessageIndex}`;
       const group = groups.get(key) ?? [];
       group.push(row);
       groups.set(key, group);
@@ -567,7 +609,7 @@ export class CampaignProgressionHistoryReaderAdapter implements CampaignProgress
           `${entry.workflowVersionId}:${entry.messageId}:${entry.authoredMessageIndex}`,
       ),
     );
-    if (unique.size !== entries.length) {
+    if (creatorId !== null && unique.size !== entries.length) {
       blockerFlags.add('AMBIGUOUS_HISTORY');
     }
     for (const reason of CAMPAIGN_PROGRESSION_HISTORY_BLOCKER_PRECEDENCE) {
