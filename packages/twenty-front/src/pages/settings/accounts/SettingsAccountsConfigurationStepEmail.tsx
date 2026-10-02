@@ -6,22 +6,18 @@ import { SettingsPageContainer } from '@/settings/components/SettingsPageContain
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { IconChevronRight, IconPlus } from 'twenty-ui/icon';
+import { IconPlus } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
 
 type SettingsAccountsConfigurationStepEmailProps = {
   messageChannel: MessageChannel;
-  hasNextStep: boolean;
   isSubmitting: boolean;
-  onNext: () => void;
   onAddAccount: () => void;
 };
 
 export const SettingsAccountsConfigurationStepEmail = ({
   messageChannel,
-  hasNextStep,
   isSubmitting,
-  onNext,
   onAddAccount,
 }: SettingsAccountsConfigurationStepEmailProps) => {
   const { t } = useLingui();
@@ -43,27 +39,15 @@ export const SettingsAccountsConfigurationStepEmail = ({
         },
       ]}
       actionButton={
-        hasNextStep ? (
-          <Button
-            Icon={IconChevronRight}
-            title={t`Next`}
-            accent="brand"
-            size="small"
-            variant="secondary"
-            onClick={onNext}
-            disabled={isSubmitting}
-          />
-        ) : (
-          <Button
-            Icon={IconPlus}
-            title={t`Add account`}
-            accent="brand"
-            size="small"
-            variant="primary"
-            onClick={onAddAccount}
-            disabled={isSubmitting}
-          />
-        )
+        <Button
+          Icon={IconPlus}
+          title={t`Add account`}
+          accent="brand"
+          size="small"
+          variant="primary"
+          onClick={onAddAccount}
+          disabled={isSubmitting}
+        />
       }
     >
       <SettingsPageContainer>

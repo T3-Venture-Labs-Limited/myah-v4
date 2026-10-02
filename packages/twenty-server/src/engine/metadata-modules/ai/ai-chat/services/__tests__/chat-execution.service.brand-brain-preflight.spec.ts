@@ -234,9 +234,6 @@ describe('ChatExecutionService without Brand Brain preflight', () => {
     expect(JSON.stringify(streamTextCall.messages)).not.toContain(
       '<brand_brain_preflight',
     );
-    expect(metricsService.recordHistogram).not.toHaveBeenCalledWith(
-      expect.objectContaining({ key: MetricsKeys.AiChatBrandBrainPreflightMs }),
-    );
   });
 
   it('binds only the selected current-workspace Inbox thread into read/propose dispatch', async () => {

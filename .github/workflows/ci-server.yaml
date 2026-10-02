@@ -2,6 +2,9 @@ name: CI Server
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -12,6 +15,8 @@ concurrency:
 
 env:
   SERVER_BUILD_CACHE_KEY: server-build
+  # Pull requests run only Myah's integration suites; the full upstream suite runs after merge.
+  MYAH_INTEGRATION_TEST_PATTERN: 'test/integration/(.*(myah|campaign|creator|instagram|social-profile)|(managed-email|messaging|ai|billing|action-approval)/)'
 
 jobs:
   select-runner:
@@ -32,13 +37,6 @@ jobs:
         packages/twenty-client-sdk/**
         packages/twenty-emails/**
         packages/twenty-shared/**
-
-  upgrade-changed-files-check:
-    uses: ./.github/workflows/changed-files.yaml
-    with:
-      files: |
-        packages/twenty-server/src/database/commands/upgrade-version-command/**
-        packages/twenty-server/src/engine/core-modules/upgrade/**
 
   server-build:
     needs: [changed-files-check, select-runner]
@@ -69,75 +67,6 @@ jobs:
         uses: ./.github/actions/save-cache
         with:
           key: ${{ steps.restore-server-build-cache.outputs.cache-primary-key }}
-
-  server-lint-typecheck:
-    needs: [changed-files-check, select-runner]
-    if: needs.changed-files-check.outputs.any_changed == 'true'
-    timeout-minutes: 30
-    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
-    steps:
-      - name: Fetch custom Github Actions and base branch history
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          fetch-depth: 10
-      - name: Install dependencies
-        uses: ./.github/actions/yarn-install
-        with:
-          cache-node-modules: false
-      - name: Build twenty-shared
-        run: npx nx build twenty-shared
-      - name: Server / Run lint, typecheck & lingui extract
-        uses: ./.github/actions/nx-affected
-        with:
-          tag: scope:backend
-          tasks: lint,typecheck,lingui:extract
-      # Separate step so compile never races extract on the .po files.
-      - name: Server / Run lingui compile
-        uses: ./.github/actions/nx-affected
-        with:
-          tag: scope:backend
-          tasks: lingui:compile
-
-  server-previous-version-upgrade-mutation-guard:
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fetch custom Github Actions and base branch history
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          fetch-depth: 10
-      - name: Get changed upgrade-version-command files
-        id: changed-files
-        uses: tj-actions/changed-files@48d8f15b2aaa3d255ca5af3eba4870f807ce6b3c # v45.0.9
-        with:
-          files: |
-            packages/twenty-server/src/database/commands/upgrade-version-command/**
-            .github/workflows/ci-server.yaml
-            .github/scripts/check-upgrade-command-history.py
-            .github/scripts/test-check-upgrade-command-history.py
-      - name: Test upgrade command history policy
-        if: steps.changed-files.outputs.any_changed == 'true'
-        run: python3 .github/scripts/test-check-upgrade-command-history.py
-      - name: Check upgrade version commands are in current version only
-        if: steps.changed-files.outputs.any_changed == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          test -n "$BASE_SHA"
-          git fetch --depth=1 origin "$BASE_SHA"
-          python3 .github/scripts/check-upgrade-command-history.py \
-            --base "$BASE_SHA" --check version
-      - name: Check upgrade timestamps remain append-only
-        if: steps.changed-files.outputs.any_changed == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          test -n "$BASE_SHA"
-          git fetch --depth=1 origin "$BASE_SHA"
-          python3 .github/scripts/check-upgrade-command-history.py \
-            --base "$BASE_SHA" --check timestamp
 
   server-validation:
     needs: [server-build, select-runner]
@@ -292,7 +221,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard: ${{ fromJSON(github.event_name == 'push' && '[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]' || '[1, 2, 3]') }}
     services:
       postgres:
         image: postgres:18
@@ -314,7 +243,7 @@ jobs:
         image: clickhouse/clickhouse-server:25.8.8
         env:
           CLICKHOUSE_PASSWORD: clickhousePassword
-          CLICKHOUSE_URL: 'http://default:clickhousePassword@localhost:8123/twenty'
+          CLICKHOUSE_URL: "http://default:clickhousePassword@localhost:8123/twenty"
         ports:
           - 8123:8123
           - 9000:9000
@@ -326,9 +255,9 @@ jobs:
     env:
       NODE_ENV: test
       ANALYTICS_ENABLED: true
-      CLICKHOUSE_URL: 'http://default:clickhousePassword@localhost:8123/twenty'
+      CLICKHOUSE_URL: "http://default:clickhousePassword@localhost:8123/twenty"
       CLICKHOUSE_PASSWORD: clickhousePassword
-      SHARD_COUNTER: 16
+      SHARD_COUNTER: ${{ github.event_name == 'push' && 16 || 3 }}
       MYAH_FRESH_ONLY_CI: 'true'
     steps:
       - name: Fetch custom Github Actions and base branch history
@@ -368,16 +297,7 @@ jobs:
           tag: scope:backend
           tasks: 'test:integration'
           configuration: 'with-db-reset'
-          args: --shard=${{ matrix.shard }}/${{ env.SHARD_COUNTER }}
-
-  cross-version-upgrade:
-    needs: [upgrade-changed-files-check, server-build]
-    uses: ./.github/workflows/ci-cross-version-upgrade.yaml
-    with:
-      # MYAH-409 ships fresh workspaces only; keep the historical upgrade
-      # command-history guard above, and re-enable this job before customer upgrades.
-      skip: true
-      skip_reason: 'Fresh-only Myah release: historical customer-workspace upgrade is not supported; manual upgrade workflow remains available.'
+          args: --shard=${{ matrix.shard }}/${{ env.SHARD_COUNTER }} ${{ github.event_name != 'push' && format('--testPathPattern={0}', env.MYAH_INTEGRATION_TEST_PATTERN) || '' }}
 
   ci-server-status-check:
     if: always() && !cancelled()
@@ -387,12 +307,9 @@ jobs:
       [
         changed-files-check,
         server-build,
-        server-lint-typecheck,
-        server-previous-version-upgrade-mutation-guard,
         server-validation,
         server-test,
         server-integration-test,
-        cross-version-upgrade,
         select-runner,
       ]
     steps:

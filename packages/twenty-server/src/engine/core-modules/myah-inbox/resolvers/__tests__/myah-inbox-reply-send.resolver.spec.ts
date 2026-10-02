@@ -89,10 +89,6 @@ jest.mock(
     MyahInboxToolWorkspaceService: class MyahInboxToolWorkspaceService {},
   }),
 );
-jest.mock(
-  'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service',
-  () => ({ BrandBrainPreflightService: class BrandBrainPreflightService {} }),
-);
 
 const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const userWorkspaceId = '20202020-1234-4678-9012-345678901234';

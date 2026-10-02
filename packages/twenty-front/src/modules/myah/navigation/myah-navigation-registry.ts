@@ -6,7 +6,6 @@ import {
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import {
   IconBox,
-  IconBrain,
   IconChartBar,
   IconCheckbox,
   IconCircle,
@@ -40,8 +39,6 @@ const CREATOR_LIST_OBJECT_UNIVERSAL_IDENTIFIER =
   'd51f2758-055b-5367-8250-859cb3f58631';
 const CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER =
   '9a09d54a-d464-5692-ac74-70527fb00ddd';
-const BRAND_BRAIN_PAGE_OBJECT_UNIVERSAL_IDENTIFIER =
-  '6a8289d7-8034-4f70-b3fa-47bc0e52828f';
 
 export const MYAH_NAVIGATION_ROUTES = [
   {
@@ -228,21 +225,6 @@ export const MYAH_NAVIGATION_ROUTES = [
     group: 'outreach',
     entryPath: '/myah/approvals',
     availability: 'deferred',
-  },
-  {
-    id: 'brand-brain',
-    label: 'Brand Brain',
-    Icon: IconBrain,
-    group: 'brand-workspace',
-    entryPath: '/myah/brand-brain',
-    availability: 'available',
-    destination: {
-      kind: 'native-object',
-      object: {
-        kind: 'app-object',
-        universalIdentifier: BRAND_BRAIN_PAGE_OBJECT_UNIVERSAL_IDENTIFIER,
-      },
-    },
   },
   {
     id: 'connected-channels',

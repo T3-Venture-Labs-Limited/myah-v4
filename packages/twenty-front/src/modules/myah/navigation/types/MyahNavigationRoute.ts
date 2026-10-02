@@ -19,7 +19,6 @@ export type MyahNavigationPageId =
   | 'automation-versions'
   | 'tasks'
   | 'approvals'
-  | 'brand-brain'
   | 'connected-channels';
 
 export type MyahNavigationAvailability = 'available' | 'deferred' | 'soon';
