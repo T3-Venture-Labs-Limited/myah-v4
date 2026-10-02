@@ -5,10 +5,12 @@ import re
 import sys
 from pathlib import Path
 
-# New PR base adds only unrelated Instagram DTO fields; the Creator metadata
-# builders are unchanged. Still reject any breaking removal outside the audited
-# Creator list; the exact new-base Inspector report remains a CI acceptance gate.
-REVIEWED_BASE = 'bd427cced1c7a98bff7d18a8d7598a608cc79a00'
+# Both reviewed PR bases remove the same exact 2,000 Creator API references.
+# Reject any other breaking removal or PR/base combination.
+REVIEWED_BASES = frozenset({
+    'bd427cced1c7a98bff7d18a8d7598a608cc79a00',
+    'f184fc6e83cff47d9a0b0f3d328326c33d5effd8',
+})
 RETIRED = {
     'categories', 'creatorStatus', 'externalUrls', 'gender', 'hasBrandDeals',
     'hasLinkInBio', 'hasMerch', 'hashtagsUsed', 'instagramAvgComments',
@@ -95,8 +97,8 @@ def permitted(message):
 
 
 def check(text, exit_code, allow_creator, base_sha):
-    if allow_creator and base_sha != REVIEWED_BASE:
-        raise ValueError('Creator retirement exception requires its reviewed PR base')
+    if allow_creator and base_sha not in REVIEWED_BASES:
+        raise ValueError('Creator retirement exception requires a reviewed PR base')
     if exit_code not in (0, 1):
         raise ValueError(f'GraphQL Inspector failed with exit {exit_code}')
     lines = [line.strip() for line in text.splitlines() if line.strip()]

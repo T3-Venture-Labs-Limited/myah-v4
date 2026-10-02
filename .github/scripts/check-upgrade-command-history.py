@@ -14,9 +14,12 @@ import sys
 import time
 
 ROOT = 'packages/twenty-server/src/database/commands/upgrade-version-command/'
-PRESERVED_BASE = 'bd427cced1c7a98bff7d18a8d7598a608cc79a00'
-# No upgrade paths changed between the previously audited and current PR bases;
-# the eight exact migration paths, statuses and content hashes remain required.
+PRESERVED_BASES = frozenset({
+    'bd427cced1c7a98bff7d18a8d7598a608cc79a00',
+    'f184fc6e83cff47d9a0b0f3d328326c33d5effd8',
+})
+# On both reviewed PR bases the eight preserved paths have identical diff
+# statuses and candidate bytes; every path and digest remains required.
 PRESERVED = {
     ROOT + '2-19/2-19-upgrade-version-command.module.ts': ('M', 'a19c0e592960854b58c4aa0021cf00e7023eec3b2c37d875efee5cd0b2789e00'),
     ROOT + '2-19/2-19-workspace-command-1786155607568-scope-myah-creator-social-profiles.command.ts': ('A', 'd234deaf6a53cfb86a692901f808bf969240116fde5aa703e4abc33693e16500'),
@@ -53,8 +56,8 @@ def check(base, statuses, read_file, current_dir, base_paths, now_ms, kind,
         raise GuardFailure('A registered upgrade command was deleted or renamed')
 
     if require_snapshot or PRESERVED.keys() & statuses.keys():
-        if base != PRESERVED_BASE:
-            raise GuardFailure('Preserved migration exception is bound to its reviewed PR base')
+        if base not in PRESERVED_BASES:
+            raise GuardFailure('Preserved migration exception is bound to a reviewed PR base')
         for path, (expected_status, expected_digest) in PRESERVED.items():
             if statuses.get(path) != expected_status:
                 raise GuardFailure(f'Missing or different preserved migration status: {path}')
@@ -158,7 +161,7 @@ def main():
         read_file = (lambda p: pathlib.Path(p).read_bytes()) if args.target == 'working' else (lambda p: git('show', f'HEAD:{p}'))
         check(args.base, statuses, read_file, '-'.join(match.groups()), base_paths,
               int(time.time() * 1000), args.check, renames,
-              require_snapshot=script_added and args.base == PRESERVED_BASE)
+              require_snapshot=script_added and args.base in PRESERVED_BASES)
         print(f'Upgrade {args.check} guard passed ({len(statuses)} changed paths)')
     except (GuardFailure, OSError, subprocess.CalledProcessError, UnicodeError, IndexError) as error:
         print(f'::error::Upgrade {args.check} guard failed: {error}', file=sys.stderr)

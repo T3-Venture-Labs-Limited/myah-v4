@@ -11,6 +11,7 @@ spec = importlib.util.spec_from_file_location('policy', Path(__file__).with_name
 policy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(policy)
 BASE = 'bd427cced1c7a98bff7d18a8d7598a608cc79a00'
+CURRENT_BASE = 'f184fc6e83cff47d9a0b0f3d328326c33d5effd8'
 
 
 def check(text, code, allow_creator, base=BASE, pr=193):
@@ -54,9 +55,11 @@ class PolicyTest(unittest.TestCase):
             ('✔', 'Type SocialProfile was added'),
             ('⚠', 'Enum value TWO was added to enum SocialProfilePlatformEnum'),
         ]
-        self.assertEqual(check(diff(*changes), 1, True), 5)
-        with self.assertRaises(ValueError):
-            check(diff(*changes), 1, False)
+        for base in (BASE, CURRENT_BASE):
+            with self.subTest(base=base):
+                self.assertEqual(check(diff(*changes), 1, True, base=base), 5)
+                with self.assertRaises(ValueError):
+                    check(diff(*changes), 1, False, base=base)
 
     def test_unaudited_raw_aggregate_input_removal_is_rejected(self):
         description = ('Input field categories was removed from input object type '
@@ -82,8 +85,9 @@ class PolicyTest(unittest.TestCase):
             'Type CreatorUnknownEnum was removed',
             'Field createSocialProfile was removed from object type Mutation',
         ):
-            with self.subTest(description=description), self.assertRaises(ValueError):
-                check(diff(('✖', description)), 1, True)
+            for base in (BASE, CURRENT_BASE):
+                with self.subTest(base=base, description=description), self.assertRaises(ValueError):
+                    check(diff(('✖', description)), 1, True, base=base)
 
     def test_invalid_or_failed_analysis_is_rejected(self):
         allowed = diff(('✖', 'Field instagramUsername was removed from object type Creator'))
@@ -102,7 +106,9 @@ class PolicyTest(unittest.TestCase):
         first = next(i for i, line in enumerate(report) if line.startswith('Detected the following changes'))
         end = next(i for i, line in enumerate(report[first:], first) if line.startswith('[error] Detected'))
         output = '\n'.join(report[first - 1:end + 1])
-        self.assertEqual(check(output, 1, True), 2000)
+        for base in (BASE, CURRENT_BASE):
+            with self.subTest(base=base):
+                self.assertEqual(check(output, 1, True, base=base), 2000)
         audited = {match.group(2) for line in output.splitlines()
                    if (match := policy.CHANGE.fullmatch(line.strip())) and match.group(1) == '✖'}
         candidates = {

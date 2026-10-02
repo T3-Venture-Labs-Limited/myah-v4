@@ -9,6 +9,7 @@ GUARD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(GUARD)
 PREFIX = 'packages/twenty-server/src/database/commands/upgrade-version-command/'
 BASE = 'bd427cced1c7a98bff7d18a8d7598a608cc79a00'
+CURRENT_BASE = 'f184fc6e83cff47d9a0b0f3d328326c33d5effd8'
 OLD = {
     PREFIX + '2-19/2-19-upgrade-version-command.module.ts': 'M',
     PREFIX + '2-19/2-19-workspace-command-1786155607568-scope-myah-creator-social-profiles.command.ts': 'A',
@@ -36,19 +37,22 @@ class GuardTest(unittest.TestCase):
                            '2-20', self.base_paths, self.now_ms, kind)
 
     def test_exact_eight_are_admitted_in_both_guards(self):
-        self.check()
-        self.check('timestamp')
+        for base in (BASE, CURRENT_BASE):
+            with self.subTest(base=base):
+                self.check(base=base)
+                self.check('timestamp', base=base)
 
     def test_one_byte_drift_is_denied_for_each_permitted_path(self):
-        for path in self.contents:
-            with self.subTest(path=path):
-                original = self.contents[path]
-                self.contents[path] = original + b'\n'
-                with self.assertRaises(GUARD.GuardFailure):
-                    self.check()
-                with self.assertRaises(GUARD.GuardFailure):
-                    self.check('timestamp')
-                self.contents[path] = original
+        for base in (BASE, CURRENT_BASE):
+            for path in self.contents:
+                with self.subTest(base=base, path=path):
+                    original = self.contents[path]
+                    self.contents[path] = original + b'\n'
+                    with self.assertRaises(GUARD.GuardFailure):
+                        self.check(base=base)
+                    with self.assertRaises(GUARD.GuardFailure):
+                        self.check('timestamp', base=base)
+                    self.contents[path] = original
 
     def test_all_required_paths_and_statuses_must_be_present(self):
         for path in list(self.statuses):
@@ -63,9 +67,10 @@ class GuardTest(unittest.TestCase):
 
     def test_new_guard_on_reviewed_base_requires_snapshot_even_if_all_files_omitted(self):
         self.statuses.clear()
-        with self.assertRaises(GUARD.GuardFailure):
-            GUARD.check(BASE, self.statuses, self.contents.__getitem__, '2-20',
-                        self.base_paths, self.now_ms, 'version', require_snapshot=True)
+        for base in (BASE, CURRENT_BASE):
+            with self.subTest(base=base), self.assertRaises(GUARD.GuardFailure):
+                GUARD.check(base, self.statuses, self.contents.__getitem__, '2-20',
+                            self.base_paths, self.now_ms, 'version', require_snapshot=True)
 
     def test_wrong_base_and_malformed_context_are_denied(self):
         for base in ('', 'not-a-sha', '0' * 40,

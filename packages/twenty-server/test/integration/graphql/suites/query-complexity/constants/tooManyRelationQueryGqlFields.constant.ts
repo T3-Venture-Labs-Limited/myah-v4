@@ -2,7 +2,6 @@ export const TOO_MANY_RELATION_QUERY_GQL_FIELDS = `
     id
     jobTitle
     avatarUrl
-    intro
     searchVector
     pointOfContactForOpportunities {
       edges {
@@ -78,7 +77,7 @@ export const TOO_MANY_RELATION_QUERY_GQL_FIELDS = `
       edges {
         node {
           id
-          person {
+          targetPerson {
             id
             company {
               id
