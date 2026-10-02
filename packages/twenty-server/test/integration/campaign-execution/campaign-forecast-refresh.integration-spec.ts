@@ -30,14 +30,20 @@ describe('Campaign forecast refresh with real PostgreSQL routing', () => {
   let ownsScope = false;
 
   beforeAll(async () => {
-    const [existing] = await global.testDataSource.query(
-      `SELECT 1 FROM core."campaignForecastHead" WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
+    // Other suites in the same shard may leave a forecast head for the shared
+    // seed workspace; start from an empty scope so this fixture is order-independent.
+    await global.testDataSource.query(
+      `UPDATE core."campaignForecastHead" SET "currentGenerationId"=NULL WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
       [workspaceId, scopeKey],
     );
-    if (existing)
-      throw new Error(
-        'First-generation fixture requires no existing forecast head',
-      );
+    await global.testDataSource.query(
+      `DELETE FROM core."campaignForecastGeneration" WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
+      [workspaceId, scopeKey],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM core."campaignForecastHead" WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
+      [workspaceId, scopeKey],
+    );
     ownsScope = true;
     const orm = getDomainService<GlobalWorkspaceOrmManager>(
       'GlobalWorkspaceOrmManager',
