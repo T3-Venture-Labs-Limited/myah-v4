@@ -3,7 +3,7 @@ import { type QueryRunner } from 'typeorm';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { type FastInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/fast-instance-command.interface';
 
-@RegisteredInstanceCommand('2.20.0', 1790742251000)
+@RegisteredInstanceCommand('2.20.0', 1790914739533)
 export class AddInstagramReactionEventFastInstanceCommand implements FastInstanceCommand {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`ALTER TABLE core."unipileInstagramWebhookEvent"

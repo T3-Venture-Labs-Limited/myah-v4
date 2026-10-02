@@ -10,7 +10,7 @@ import { MyahInboxContactTriageSchemaService } from 'src/engine/core-modules/mya
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
-@RegisteredWorkspaceCommand('2.20.0', 1790742251001)
+@RegisteredWorkspaceCommand('2.20.0', 1790914739534)
 @Command({
   name: 'upgrade:2-20:install-instagram-reaction',
   description: 'Install private Instagram reaction state in existing workspaces',

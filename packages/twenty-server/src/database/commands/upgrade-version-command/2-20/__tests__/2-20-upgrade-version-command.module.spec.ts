@@ -167,15 +167,15 @@ describe('V2_20_UpgradeVersionCommandModule', () => {
     expect(workspace).toBeDefined();
     expect(getRegisteredInstanceCommandMetadata(core!)).toMatchObject({
       version: '2.20.0',
-      timestamp: 1790742251000,
+      timestamp: 1790914739533,
       type: 'fast',
     });
     expect(getRegisteredWorkspaceCommandMetadata(workspace!)).toEqual({
       version: '2.20.0',
-      timestamp: 1790742251001,
+      timestamp: 1790914739534,
     });
-    expect(getRegisteredInstanceCommandMetadata(core!)!.timestamp).toBeGreaterThan(1790577600427);
-    expect(getRegisteredWorkspaceCommandMetadata(workspace!)!.timestamp).toBeGreaterThan(1790553600427);
+    expect(getRegisteredInstanceCommandMetadata(core!)!.timestamp).toBeGreaterThan(1790767948744);
+    expect(getRegisteredWorkspaceCommandMetadata(workspace!)!.timestamp).toBeGreaterThan(1790767948744);
   });
 
   it('preserves pre-existing v3 bindings when the original Inbox migration has not run yet', async () => {
@@ -535,7 +535,7 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
       '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',
       '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
-      '2.20.0_InstallInstagramReactionWorkspaceCommand_1790742251001',
+      '2.20.0_InstallInstagramReactionWorkspaceCommand_1790914739534',
     ];
     expect(
       sequence.slice(-expectedTail.length).map(({ name }) => name),
@@ -562,7 +562,7 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
       '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',
       '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
-      '2.20.0_InstallInstagramReactionWorkspaceCommand_1790742251001',
+      '2.20.0_InstallInstagramReactionWorkspaceCommand_1790914739534',
     ]);
     // An existing workspace already through Instagram adoption receives the
     // new layout command without moving the upgrade cursor backwards.
@@ -579,7 +579,7 @@ describe('Instagram production upgrade provider compatibility', () => {
     ).toEqual([
       '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',
       '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
-      '2.20.0_InstallInstagramReactionWorkspaceCommand_1790742251001',
+      '2.20.0_InstallInstagramReactionWorkspaceCommand_1790914739534',
     ]);
     expect(
       reader
@@ -593,7 +593,7 @@ describe('Instagram production upgrade provider compatibility', () => {
         .map(({ name }) => name),
     ).toEqual([
       '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
-      '2.20.0_InstallInstagramReactionWorkspaceCommand_1790742251001',
+      '2.20.0_InstallInstagramReactionWorkspaceCommand_1790914739534',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(

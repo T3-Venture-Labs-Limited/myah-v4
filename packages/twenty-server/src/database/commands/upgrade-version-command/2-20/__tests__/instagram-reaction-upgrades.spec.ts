@@ -1,8 +1,8 @@
 import { Client } from 'pg';
 import { type DataSource, type QueryRunner } from 'typeorm';
 
-import { AddInstagramReactionEventFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790742251000-add-instagram-reaction-event';
-import { InstallInstagramReactionWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790742251001-install-instagram-reaction.command';
+import { AddInstagramReactionEventFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790914739533-add-instagram-reaction-event';
+import { InstallInstagramReactionWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790914739534-install-instagram-reaction.command';
 import { MyahInboxContactTriageSchemaService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-schema.service';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
