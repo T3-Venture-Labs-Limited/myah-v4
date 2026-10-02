@@ -59,6 +59,8 @@ jest.mock(
 jest.mock('@/myah/inbox/components/MyahInboxInstagramComposer', () => ({
   MyahInboxInstagramComposer: ({
     username,
+    body,
+    editorVersion,
     disabled,
     error,
     conflict,
@@ -72,6 +74,8 @@ jest.mock('@/myah/inbox/components/MyahInboxInstagramComposer', () => ({
     guidanceUnavailableReason,
   }: {
     username: string;
+    body: string;
+    editorVersion: number;
     disabled: boolean;
     error: string | null;
     conflict?: { revision: number; body: string } | null;
@@ -86,6 +90,9 @@ jest.mock('@/myah/inbox/components/MyahInboxInstagramComposer', () => ({
   }) => (
     <div>
       Composer {username} {disabled ? 'disabled' : 'ready'}
+      <span data-testid="reply-editor" data-version={editorVersion}>
+        {body}
+      </span>
       <button onClick={onSend}>Send reply</button>
       {error ? <span>{error}</span> : null}
       {conflict ? (
@@ -240,10 +247,14 @@ describe('MyahInboxInstagramConversationPanel', () => {
       lockedUnknown: false,
       isBlocked: false,
       blockedUntil: null,
+      pendingMessages: [],
+      dismissPending: jest.fn(),
+      refreshPendingProviderIds: jest.fn().mockResolvedValue(true),
     });
     mockUseDraft.mockReturnValue({
       draftId: 'draft-1',
       body: '',
+      editorVersion: 0,
       revision: 0,
       status: 'saved',
       conflict: null,
@@ -490,7 +501,7 @@ describe('MyahInboxInstagramConversationPanel', () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
-  it('refetches the saved conversation page only after delayed confirmed projection', async () => {
+  it('shows an accepted reply immediately and clears the box without a delivery warning', async () => {
     let resolveSend:
       | ((value: { status: string; error: null }) => void)
       | undefined;
@@ -503,10 +514,20 @@ describe('MyahInboxInstagramConversationPanel', () => {
     const refetch = jest.fn();
     const onActivity = jest.fn();
     const resetAfterSend = jest.fn();
-    mockUseSend.mockReturnValue({
+    const pending = {
+      localId: 'one',
+      text: 'Saved draft',
+      createdAt: new Date().toISOString(),
+      receiptId: null,
+      providerMessageId: null,
+      accepted: false,
+    };
+    const sendState = {
       ...mockUseSend(),
       send,
-    });
+      pendingMessages: [] as (typeof pending)[],
+    };
+    mockUseSend.mockImplementation(() => sendState);
     mockUseConversation.mockReturnValue({
       ...mockUseConversation(),
       refetch,
@@ -515,6 +536,70 @@ describe('MyahInboxInstagramConversationPanel', () => {
       ...mockUseDraft(),
       body: 'Saved draft',
       resetAfterSend,
+    });
+
+    const panel = () => (
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={onActivity}
+      />
+    );
+    const view = render(panel());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    sendState.pendingMessages = [pending];
+    view.rerender(panel());
+    expect(screen.getByTestId('reply-editor')).toBeEmptyDOMElement();
+    expect(screen.getByText('Composer ada disabled')).toBeVisible();
+    expect(screen.getByTestId('reply-editor')).toHaveAttribute(
+      'data-version',
+      '1',
+    );
+    expect(screen.getByText('Saved draft')).toBeVisible();
+    expect(refetch).not.toHaveBeenCalled();
+    resolveSend?.({ status: 'PROVIDER_ACCEPTED', error: null });
+    sendState.pendingMessages = [{ ...pending, accepted: true }];
+    view.rerender(panel());
+
+    await waitFor(() => expect(resetAfterSend).toHaveBeenCalledTimes(1));
+    expect(onActivity).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByText(/Delivery is unconfirmed/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Instagram did not confirm a completed send.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the editor empty on a revisit while the same send is in flight', () => {
+    mockUseDraft.mockReturnValue({
+      ...mockUseDraft(),
+      body: 'Still sending',
+      executionLocked: true,
+    });
+    mockUseSend.mockReturnValue({
+      ...mockUseSend(),
+      sending: true,
+      lockedUnknown: true,
+      pendingMessages: [
+        {
+          localId: 'in-flight',
+          text: 'Still sending',
+          createdAt: new Date().toISOString(),
+          receiptId: null,
+          providerMessageId: null,
+          accepted: false,
+        },
+      ],
     });
 
     render(
@@ -528,20 +613,413 @@ describe('MyahInboxInstagramConversationPanel', () => {
             conversations: [conversation('conversation-1')],
           },
         })}
-        onActivity={onActivity}
+        onActivity={jest.fn()}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
-    expect(refetch).not.toHaveBeenCalled();
-    resolveSend?.({ status: 'SENT', error: null });
-
-    await waitFor(() => expect(resetAfterSend).toHaveBeenCalledTimes(1));
-    expect(onActivity).toHaveBeenCalledTimes(1);
-    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('reply-editor')).toBeEmptyDOMElement();
+    expect(screen.getByText('Composer ada disabled')).toBeVisible();
     expect(
-      screen.queryByText('Instagram did not confirm a completed send.'),
+      screen.queryByText(/Delivery is unconfirmed/),
     ).not.toBeInTheDocument();
+  });
+
+  it('restores the reply and removes its pending bubble when sending fails', async () => {
+    let resolveSend:
+      | ((result: { status: string; error: string }) => void)
+      | undefined;
+    const send = jest.fn(
+      () =>
+        new Promise<{ status: string; error: string }>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+    const pending = {
+      localId: 'failed',
+      text: 'Failed text',
+      createdAt: new Date().toISOString(),
+      receiptId: null,
+      providerMessageId: null,
+      accepted: false,
+    };
+    const sendState = {
+      ...mockUseSend(),
+      send,
+      pendingMessages: [] as (typeof pending)[],
+    };
+    mockUseSend.mockImplementation(() => sendState);
+    const resetAfterSend = jest.fn();
+    mockUseDraft.mockReturnValue({
+      ...mockUseDraft(),
+      body: 'Failed text',
+      resetAfterSend,
+    });
+    const panel = () => (
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />
+    );
+    const view = render(panel());
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    sendState.pendingMessages = [pending];
+    view.rerender(panel());
+    expect(screen.getByTestId('reply-editor')).toBeEmptyDOMElement();
+    expect(screen.getByText('Failed text')).toBeVisible();
+    resolveSend?.({ status: 'FAILED', error: 'Provider failed' });
+    sendState.pendingMessages = [];
+    view.rerender(panel());
+    await waitFor(() =>
+      expect(screen.getByTestId('reply-editor')).toHaveTextContent(
+        'Failed text',
+      ),
+    );
+    expect(
+      screen.queryByRole('region', { name: 'Outbound Instagram message' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Provider failed')).toBeVisible();
+    expect(resetAfterSend).not.toHaveBeenCalled();
+  });
+
+  it('scrolls to the latest message when sending from earlier history', () => {
+    mockUseDraft.mockReturnValue({ ...mockUseDraft(), body: 'New reply' });
+    mockUseSend.mockReturnValue({
+      ...mockUseSend(),
+      send: jest.fn(() => new Promise(() => undefined)),
+    });
+    mockUseConversation.mockReturnValue({
+      ...mockUseConversation(),
+      messages: [
+        {
+          id: 'earlier',
+          text: 'Earlier history',
+          direction: 'INBOUND',
+          provider: 'UNIPILE',
+          providerMessageId: 'earlier',
+          createdAt: new Date().toISOString(),
+          providerCreatedAt: null,
+          hasAttachments: false,
+          attachmentCount: 0,
+        },
+      ],
+    });
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+    const messages = screen.getByRole('region', { name: 'Instagram messages' });
+    Object.defineProperties(messages, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 600 },
+      scrollTop: { configurable: true, value: 40, writable: true },
+    });
+    fireEvent.scroll(messages);
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    expect(messages.scrollTop).toBe(600);
+  });
+
+  it('keeps the timeline and accepted bubble visible during a background refresh', () => {
+    mockUseConversation.mockReturnValue({
+      ...mockUseConversation(),
+      loading: true,
+      messages: [
+        {
+          id: 'inbound-1',
+          text: 'Earlier message',
+          direction: 'INBOUND',
+          provider: 'UNIPILE',
+          providerMessageId: 'inbound-1',
+          createdAt: new Date().toISOString(),
+          providerCreatedAt: null,
+          hasAttachments: false,
+          attachmentCount: 0,
+        },
+      ],
+    });
+    mockUseSend.mockReturnValue({
+      ...mockUseSend(),
+      pendingMessages: [
+        {
+          localId: 'pending-1',
+          text: 'Pending reply',
+          createdAt: new Date().toISOString(),
+          receiptId: 'receipt-1',
+          providerMessageId: 'provider-1',
+          accepted: true,
+        },
+      ],
+    });
+
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Earlier message')).toBeVisible();
+    expect(screen.getByText('Pending reply')).toBeVisible();
+    expect(
+      screen.queryByText('Loading Instagram messages'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps refetching an accepted row even when receipt status cannot reveal its provider ID', async () => {
+    jest.useFakeTimers();
+    try {
+      const refetch = jest.fn();
+      const refreshPendingProviderIds = jest
+        .fn()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
+      mockUseConversation.mockReturnValue({
+        ...mockUseConversation(),
+        refetch,
+      });
+      mockUseSend.mockReturnValue({
+        ...mockUseSend(),
+        refreshPendingProviderIds,
+        pendingMessages: [
+          {
+            localId: 'missing-id',
+            text: 'Accepted reply',
+            createdAt: new Date().toISOString(),
+            receiptId: 'receipt-1',
+            providerMessageId: null,
+            accepted: true,
+          },
+        ],
+      });
+      render(
+        <MyahInboxInstagramConversationPanel
+          workspaceId="workspace-1"
+          contact={contact({
+            instagram: {
+              isAvailable: true,
+              state: 'READY',
+              needsAttention: false,
+              conversations: [conversation('conversation-1')],
+            },
+          })}
+          onActivity={jest.fn()}
+        />,
+      );
+      await act(async () => Promise.resolve());
+      expect(refreshPendingProviderIds).toHaveBeenCalledTimes(1);
+      expect(refetch).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Accepted reply')).toBeVisible();
+      await act(async () => jest.advanceTimersByTimeAsync(5_000));
+      expect(refreshPendingProviderIds).toHaveBeenCalledTimes(2);
+      expect(refetch).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('deduplicates an accepted reply by receipt when status has no provider ID', () => {
+    const now = new Date().toISOString();
+    mockUseConversation.mockReturnValue({
+      ...mockUseConversation(),
+      messages: [
+        {
+          id: 'stored-1',
+          text: 'Accepted reply',
+          direction: 'OUTBOUND',
+          sentVia: 'MANUAL',
+          provider: 'UNIPILE',
+          deliveryState: 'SENT',
+          providerMessageId: 'provider-1',
+          replyReceiptId: 'receipt-1',
+          providerCreatedAt: now,
+          createdAt: now,
+          hasAttachments: false,
+          attachmentCount: 0,
+        },
+      ],
+    });
+    const dismissPending = jest.fn();
+    mockUseSend.mockReturnValue({
+      ...mockUseSend(),
+      dismissPending,
+      pendingMessages: [
+        {
+          localId: 'pending-1',
+          text: 'Accepted reply',
+          createdAt: now,
+          receiptId: 'receipt-1',
+          providerMessageId: null,
+          accepted: true,
+        },
+      ],
+    });
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+    expect(screen.getAllByText('Accepted reply')).toHaveLength(1);
+    expect(dismissPending).toHaveBeenCalledWith('pending-1');
+  });
+
+  it('does not use receipt fallback when the known provider IDs disagree', () => {
+    const now = new Date().toISOString();
+    mockUseConversation.mockReturnValue({
+      ...mockUseConversation(),
+      messages: [
+        {
+          id: 'stored-1',
+          text: 'Reply',
+          direction: 'OUTBOUND',
+          sentVia: 'MANUAL',
+          provider: 'UNIPILE',
+          deliveryState: 'SENT',
+          providerMessageId: 'different-provider',
+          replyReceiptId: 'receipt-1',
+          providerCreatedAt: now,
+          createdAt: now,
+          hasAttachments: false,
+          attachmentCount: 0,
+        },
+      ],
+    });
+    const dismissPending = jest.fn();
+    mockUseSend.mockReturnValue({
+      ...mockUseSend(),
+      dismissPending,
+      pendingMessages: [
+        {
+          localId: 'pending-1',
+          text: 'Reply',
+          createdAt: now,
+          receiptId: 'receipt-1',
+          providerMessageId: 'expected-provider',
+          accepted: true,
+        },
+      ],
+    });
+    render(
+      <MyahInboxInstagramConversationPanel
+        workspaceId="workspace-1"
+        contact={contact({
+          instagram: {
+            isAvailable: true,
+            state: 'READY',
+            needsAttention: false,
+            conversations: [conversation('conversation-1')],
+          },
+        })}
+        onActivity={jest.fn()}
+      />,
+    );
+    expect(screen.getAllByText('Reply')).toHaveLength(2);
+    expect(dismissPending).not.toHaveBeenCalled();
+  });
+
+  it('matches bubbles by provider ID, not text, and stops refetching after both match', async () => {
+    jest.useFakeTimers();
+    try {
+      const refetch = jest.fn();
+      const conversationState = {
+        ...mockUseConversation(),
+        refetch,
+        messages: [] as Array<Record<string, unknown>>,
+      };
+      mockUseConversation.mockImplementation(() => conversationState);
+      const createdAt = new Date().toISOString();
+      const pending = ['one', 'two'].map((localId) => ({
+        localId,
+        text: 'same text',
+        createdAt,
+        receiptId: localId,
+        providerMessageId: `provider-${localId}`,
+        accepted: true,
+      }));
+      const dismissPending = jest.fn();
+      mockUseSend.mockReturnValue({
+        ...mockUseSend(),
+        pendingMessages: pending,
+        dismissPending,
+      });
+      const panel = () => (
+        <MyahInboxInstagramConversationPanel
+          workspaceId="workspace-1"
+          contact={contact({
+            instagram: {
+              isAvailable: true,
+              state: 'READY',
+              needsAttention: false,
+              conversations: [conversation('conversation-1')],
+            },
+          })}
+          onActivity={jest.fn()}
+        />
+      );
+      const view = render(panel());
+      expect(screen.getAllByText('same text')).toHaveLength(2);
+      expect(refetch).toHaveBeenCalledTimes(1);
+      await act(async () => jest.advanceTimersByTimeAsync(5_000));
+      expect(refetch).toHaveBeenCalledTimes(2);
+      const row = (id: string) => ({
+        id,
+        text: 'same text',
+        direction: 'OUTBOUND',
+        sentVia: 'MANUAL',
+        provider: 'UNIPILE',
+        deliveryState: 'SENT',
+        providerMessageId: `provider-${id}`,
+        providerCreatedAt: createdAt,
+        createdAt,
+        hasAttachments: false,
+        attachmentCount: 0,
+      });
+      conversationState.messages = [row('one')];
+      view.rerender(panel());
+      expect(screen.getAllByText('same text')).toHaveLength(2);
+      expect(dismissPending).toHaveBeenCalledWith('one');
+      conversationState.messages = [row('one'), row('two')];
+      view.rerender(panel());
+      expect(screen.getAllByText('same text')).toHaveLength(2);
+      expect(dismissPending).toHaveBeenCalledWith('two');
+      const callsAfterMatch = refetch.mock.calls.length;
+      await act(async () => jest.advanceTimersByTimeAsync(10_000));
+      expect(refetch).toHaveBeenCalledTimes(callsAfterMatch);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('separates keyboard-scrollable messages from bounded composer and recovery controls', () => {
@@ -1566,6 +2044,8 @@ describe('MyahInboxInstagramConversationPanel', () => {
       lockedUnknown: true,
       isBlocked: false,
       blockedUntil: null,
+      pendingMessages: [],
+      dismissPending: jest.fn(),
     });
 
     render(

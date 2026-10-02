@@ -37,6 +37,8 @@ const toInstagramConversationMessage = (
   provider: message.provider as MyahInstagramConversationMessage['provider'],
   deliveryState:
     message.deliveryState as MyahInstagramConversationMessage['deliveryState'],
+  providerMessageId: message.providerMessageId ?? null,
+  replyReceiptId: message.replyReceiptId ?? null,
   providerCreatedAt: message.providerCreatedAt ?? null,
   createdAt: message.createdAt,
   hasAttachments: message.hasAttachments,

@@ -28,6 +28,7 @@ const message = (
   sentVia: 'UNIPILE',
   provider: 'UNIPILE',
   deliveryState: 'RECEIVED',
+  providerMessageId: null,
   providerCreatedAt: '2026-09-05T12:00:00.000Z',
   createdAt: '2026-09-05T12:00:01.000Z',
   hasAttachments: false,

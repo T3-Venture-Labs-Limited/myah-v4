@@ -28,6 +28,10 @@ export const useComposeEmailForTargetRecord = () => {
 
     openComposeEmailInSidePanel({
       connectedAccountId,
+      creatorId:
+        targetRecord.targetObjectNameSingular === 'creator'
+          ? (targetRecord.id ?? undefined)
+          : undefined,
       defaultTo,
     });
   };

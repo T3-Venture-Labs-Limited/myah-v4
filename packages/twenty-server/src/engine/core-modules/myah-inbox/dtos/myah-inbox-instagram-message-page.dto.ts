@@ -66,6 +66,12 @@ export class MyahInboxInstagramMessage {
   deliveryState: string;
 
   @Field(() => String, { nullable: true })
+  providerMessageId: string | null;
+
+  @Field(() => String, { nullable: true })
+  replyReceiptId: string | null;
+
+  @Field(() => String, { nullable: true })
   providerCreatedAt: string | null;
 
   @Field(() => String)

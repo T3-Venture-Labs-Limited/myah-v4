@@ -85,7 +85,13 @@ export class MyahInboxContactTriageSchemaService {
     for (const statement of statements.slice(0, -1)) {
       await queryRunner.query(statement);
     }
-    await this.ensureReactionTable(queryRunner, workspaceId);
+    const [socialParents] = (await queryRunner.query(
+      'SELECT to_regclass($1) IS NOT NULL AND to_regclass($2) IS NOT NULL AS "exists"',
+      [`${schema}."myahSocialMessage"`, `${schema}."myahSocialConversation"`],
+    )) as Array<{ exists: boolean }>;
+    // Email-only workspaces have no Instagram parents for the reaction FKs.
+    if (socialParents?.exists)
+      await this.ensureReactionTable(queryRunner, workspaceId);
     await queryRunner.query(statements[statements.length - 1]);
   }
 

@@ -35,6 +35,9 @@ export class SendEmailInput {
   @Field(() => String, { nullable: true })
   draftMessageId?: string;
 
+  @Field(() => String, { nullable: true })
+  creatorId?: string;
+
   @Field(() => [SendEmailAttachmentInput], { nullable: true })
   files?: SendEmailAttachmentInput[];
 }

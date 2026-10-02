@@ -534,17 +534,27 @@ export class MyahInboxContactQueryService {
         // They keep Instagram and exact Email lookups, never guessed responses.
         const [triageRelations] = (await dataSource.query(
           `SELECT to_regclass($1) IS NOT NULL AS "exists",
-            to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "replyEvidenceReady"`,
-          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
+            to_regclass($2) IS NOT NULL AS "reactionReady",
+            to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "replyEvidenceReady",
+            to_regclass('core."myahComposeReplyEvidence"') IS NOT NULL AS "composeEvidenceReady"`,
+          [
+            `${workspaceSchemaName}."myahInboxTriageMigration"`,
+            `${workspaceSchemaName}."myahInboxInstagramReaction"`,
+          ],
           undefined,
           { shouldBypassPermissionChecks: true },
-        )) as Array<{ exists: boolean; replyEvidenceReady: boolean }>;
+        )) as Array<{
+          exists: boolean;
+          reactionReady: boolean;
+          replyEvidenceReady: boolean;
+          composeEvidenceReady: boolean;
+        }>;
         if (!triageRelations?.exists) {
           throw new ForbiddenException(
             'Triage is unavailable with your current Inbox access',
           );
         }
-        const responseEvidencePredicate = triageRelations.replyEvidenceReady
+        const campaignEvidencePredicate = triageRelations.replyEvidenceReady
           ? `EXISTS (
       SELECT 1 FROM core."myahCampaignReplyEvidence" evidence
       JOIN readable_campaigns campaign ON campaign.id=evidence."campaignId"
@@ -558,12 +568,47 @@ export class MyahInboxContactQueryService {
       WHERE evidence."workspaceId"=$1 AND evidence."inboundMessageId"=message.id
     )`
           : 'FALSE';
+        const composeEvidencePredicate = triageRelations.composeEvidenceReady
+          ? `EXISTS (
+      SELECT 1 FROM core."myahComposeReplyEvidence" evidence
+      JOIN readable_threads evidence_thread ON evidence_thread.id=message."messageThreadId"
+      JOIN readable_creators evidence_creator ON evidence_creator.id=evidence_thread."creatorId"
+      JOIN "${workspaceSchemaName}"."messageChannelMessageAssociation" association
+        ON association."messageId"=message.id
+       AND association."messageChannelId"=evidence."messageChannelId"
+       AND association."deletedAt" IS NULL AND association.direction='INCOMING'
+      WHERE evidence."workspaceId"=$1 AND evidence."inboundMessageId"=message.id
+      ${
+        triageRelations.replyEvidenceReady
+          ? `AND NOT EXISTS (SELECT 1 FROM core."myahCampaignReplyEvidence" campaign
+        WHERE campaign."workspaceId"=evidence."workspaceId" AND campaign."inboundMessageId"=evidence."inboundMessageId")`
+          : ''
+      }
+    )`
+          : 'FALSE';
         // Off until historical replies are backfilled; otherwise old replies vanish.
         const emailSource =
           exactContact ||
           !this.twentyConfigService.get('MYAH_INBOX_RESPONSE_FOCUS_ENABLED')
             ? 'visible_email_messages'
             : 'response_email_messages';
+        const unseenReactionsSql =
+          triageRelations.reactionReady &&
+          socialConversationRepository &&
+          socialMessageRepository
+            ? `SELECT DISTINCT message."conversationId"
+  FROM readable_social_messages message
+  INNER JOIN readable_social_conversations conversation
+    ON conversation.id = message."conversationId" AND conversation.provider = 'UNIPILE'
+  INNER JOIN "${workspaceSchemaName}"."myahSocialConversation" source
+    ON source.id = conversation.id AND source."deletedAt" IS NULL
+  INNER JOIN "${workspaceSchemaName}"."myahInboxInstagramReaction" reaction
+    ON reaction."messageRecordId" = message.id
+   AND reaction."conversationRecordId" = conversation.id
+   AND reaction."actorProviderId" = source."recipientIgsid"
+  WHERE message.provider = 'UNIPILE'
+    AND reaction."viewedVersion" IS DISTINCT FROM reaction."version"`
+            : 'SELECT NULL::uuid AS "conversationId" WHERE FALSE';
         const sql = `WITH request_scope AS (
   SELECT $1::uuid AS "workspaceId", $2::uuid AS "userWorkspaceId"
 ),
@@ -613,7 +658,7 @@ response_email_messages AS (
   SELECT message.*
   FROM visible_email_messages message
   WHERE message.direction = 'INCOMING'
-    AND ${responseEvidencePredicate}
+    AND (${campaignEvidencePredicate} OR ${composeEvidencePredicate})
 ),
 latest_email_by_thread AS (
   SELECT DISTINCT ON (message."messageThreadId")
@@ -665,18 +710,7 @@ latest_inbound_instagram_by_conversation AS (
   ORDER BY message."conversationId", COALESCE(message."providerCreatedAt", message."createdAt") DESC, message.id DESC
 ),
 unseen_reactions_by_conversation AS (
-  SELECT DISTINCT message."conversationId"
-  FROM readable_social_messages message
-  INNER JOIN readable_social_conversations conversation
-    ON conversation.id = message."conversationId" AND conversation.provider = 'UNIPILE'
-  INNER JOIN "${workspaceSchemaName}"."myahSocialConversation" source
-    ON source.id = conversation.id AND source."deletedAt" IS NULL
-  INNER JOIN "${workspaceSchemaName}"."myahInboxInstagramReaction" reaction
-    ON reaction."messageRecordId" = message.id
-   AND reaction."conversationRecordId" = conversation.id
-   AND reaction."actorProviderId" = source."recipientIgsid"
-  WHERE message.provider = 'UNIPILE'
-    AND reaction."viewedVersion" IS DISTINCT FROM reaction."version"
+  ${unseenReactionsSql}
 ),
 email_source_rows AS (
   SELECT

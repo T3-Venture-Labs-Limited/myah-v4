@@ -331,6 +331,16 @@ describe('useMyahInboxInstagramDraft', () => {
     await act(async () => first.result.current.flush());
     const savedDraftId = first.result.current.draftId;
     first.unmount();
+    loadDraftQuery.mockResolvedValueOnce({
+      data: {
+        instagramMessageDraft: {
+          ...persistedDraft,
+          draftId: savedDraftId,
+          revision: 1,
+          body: 'Saved draft',
+        },
+      },
+    });
 
     const remounted = renderDraft('REPLY');
     await act(async () => Promise.resolve());
@@ -338,6 +348,29 @@ describe('useMyahInboxInstagramDraft', () => {
     expect(remounted.result.current.draftId).toBe(savedDraftId);
     expect(remounted.result.current.body).toBe('Saved draft');
     expect(remounted.result.current.revision).toBe(1);
+  });
+
+  it('clears a flushed local reply when the accepted draft is absent on revisit', async () => {
+    saveDraftMutation.mockResolvedValue({
+      data: {
+        saveInstagramMessageDraft: {
+          ...persistedDraft,
+          revision: 1,
+          body: 'Accepted reply',
+        },
+      },
+    });
+    const first = renderDraft('REPLY');
+    await act(async () => Promise.resolve());
+    act(() => first.result.current.setBody('Accepted reply'));
+    await act(async () => first.result.current.flush());
+    first.unmount();
+
+    const remounted = renderDraft('REPLY');
+    await act(async () => Promise.resolve());
+    expect(remounted.result.current.body).toBe('');
+    expect(remounted.result.current.revision).toBe(0);
+    expect(remounted.result.current.executionLocked).toBe(false);
   });
 
   it.each(['', '  \n  '])(

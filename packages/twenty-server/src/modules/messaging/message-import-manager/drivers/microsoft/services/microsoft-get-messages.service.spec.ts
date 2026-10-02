@@ -50,6 +50,37 @@ describe('Microsoft get messages service', () => {
     expect(service).toBeDefined();
   });
 
+  it('preserves the In-Reply-To headers for a Microsoft incoming message', () => {
+    const example = microsoftGraphBatchWithTwoMessagesResponse[0].responses[1];
+    const response = {
+      ...example,
+      body: {
+        ...example.body,
+        internetMessageHeaders: [
+          { name: 'Subject', value: 'Re: Test' },
+          {
+            name: 'IN-REPLY-TO',
+            value: '<first@example.com> <second@example.com>',
+          },
+        ],
+      },
+    };
+    const messages = service.formatBatchResponsesAsMessages(
+      [{ responses: [response] }],
+      {
+        id: 'account-id',
+        provider: ConnectedAccountProvider.MICROSOFT,
+        handle: 'me@example.com',
+        handleAliases: [],
+      },
+    );
+
+    expect(messages[0].inReplyToTokens).toEqual([
+      '<first@example.com>',
+      '<second@example.com>',
+    ]);
+  });
+
   it('Should format batch responses as messages', () => {
     const batchResponses: MicrosoftGraphBatchResponse[] =
       microsoftGraphBatchWithTwoMessagesResponse;

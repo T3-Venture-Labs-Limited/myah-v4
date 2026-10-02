@@ -4,6 +4,7 @@ import { RestoreInstagramV3ApprovalContextFastInstanceCommand } from './2-20-ins
 import { CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand } from './2-20-instance-command-fast-1789645911003-create-myah-inbox-email-general-provenance';
 import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from './2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
 import { AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand } from './2-20-instance-command-fast-1790141137400-add-myah-inbox-reply-draft-incoming-baseline';
+import { CreateMyahComposeEmailReplyEvidenceFastInstanceCommand } from './2-20-instance-command-fast-1790767948744-create-myah-compose-email-reply-evidence';
 import { InstallMyahInboxEmailGeneralProvenanceCommand } from './2-20-workspace-command-1789645911004-install-myah-inbox-email-general-provenance.command';
 import { SynchronizeInstagramSourceControlledMetadataCommand } from './2-20-workspace-command-1790491923604-synchronize-instagram-source-controlled-metadata.command';
 import { PrioritizeOutreachComposeWorkspaceCommand } from './2-20-workspace-command-1790553600427-prioritize-outreach-compose.command';
@@ -95,6 +96,7 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     CreateMyahInboxEmailGeneralProvenanceFastInstanceCommand,
     CreateMyahCampaignReplyEvidenceFastInstanceCommand,
     AddMyahInboxReplyDraftIncomingBaselineFastInstanceCommand,
+    CreateMyahComposeEmailReplyEvidenceFastInstanceCommand,
     InstallMyahInboxEmailGeneralProvenanceCommand,
     SynchronizeInstagramSourceControlledMetadataCommand,
     PrioritizeOutreachComposeWorkspaceCommand,

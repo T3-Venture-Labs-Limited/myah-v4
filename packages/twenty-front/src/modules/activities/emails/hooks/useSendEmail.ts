@@ -19,6 +19,7 @@ type SendEmailResult = {
 
 type SendEmailParams = {
   connectedAccountId: string;
+  creatorId?: string;
   to: string;
   cc?: string;
   bcc?: string;
@@ -42,21 +43,19 @@ export const useSendEmail = () => {
   const sendEmail = useCallback(
     async (params: SendEmailParams): Promise<SendEmailResult> => {
       try {
-        const result = await sendEmailMutation({
-          variables: {
-            input: {
-              connectedAccountId: params.connectedAccountId,
-              to: params.to,
-              cc: params.cc,
-              bcc: params.bcc,
-              subject: params.subject,
-              body: params.body,
-              inReplyTo: params.inReplyTo,
-              draftMessageId: params.draftMessageId,
-              files: params.files,
-            },
-          },
-        });
+        const input = {
+          connectedAccountId: params.connectedAccountId,
+          creatorId: params.creatorId,
+          to: params.to,
+          cc: params.cc,
+          bcc: params.bcc,
+          subject: params.subject,
+          body: params.body,
+          inReplyTo: params.inReplyTo,
+          draftMessageId: params.draftMessageId,
+          files: params.files,
+        };
+        const result = await sendEmailMutation({ variables: { input } });
 
         if (result.data?.sendEmail.success) {
           enqueueSuccessSnackBar({
