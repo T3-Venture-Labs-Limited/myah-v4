@@ -16517,6 +16517,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/lodash.kebabcase@npm:^4.1.9":
+  version: 4.1.9
+  resolution: "@types/lodash.kebabcase@npm:4.1.9"
+  dependencies:
+    "@types/lodash": "npm:*"
+  checksum: 10c0/f00fbfb891fd1883e3fab2286fa2b23a013550b3498013c8c8c5e3ed437f52543afe8e8dc899b4f3317bab8db403bb281de863274a6fa12f088667378fd7b475
+  languageName: node
+  linkType: hard
+
 "@types/lodash.merge@npm:^4.6.9":
   version: 4.6.9
   resolution: "@types/lodash.merge@npm:4.6.9"
@@ -39578,6 +39587,7 @@ __metadata:
     "@types/lodash.isempty": "npm:^4.4.7"
     "@types/lodash.isequal": "npm:^4.5.8"
     "@types/lodash.isobject": "npm:^3.0.7"
+    "@types/lodash.kebabcase": "npm:^4.1.9"
     "@types/lodash.merge": "npm:^4.6.9"
     "@types/lodash.omit": "npm:^4.5.9"
     "@types/lodash.snakecase": "npm:^4.1.7"
