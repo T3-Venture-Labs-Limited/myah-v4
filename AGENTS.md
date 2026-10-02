@@ -5,7 +5,7 @@ Myah is a creator/influencer outreach product built on TwentyCRM. Prefer existin
 ## Project sources of truth
 
 - **Linear:** problem, priority, user outcome, boundaries, acceptance and work relationships—not a premature technical plan. Use the project `myah-linear` skill for issue creation/refinement and parent/subissue decisions.
-- **Spec:** agreed behavior and design decisions. **Plan:** implementation order, real files/tests and evidence. Use `myah-development-docs` for canonical dated notes in the shared Obsidian vault's `llm-wiki/myahdev/Engineering/specs/` and `plans/`, each with `archive/`; do not write new canonical specs/plans into worktrees.
+- **Spec and plan:** maintained behavior, design and implementation tasks live in the private registered `myah-kb` OpenSpec store (`openspec/specs/` and `openspec/changes/`). Resolve logical paths with `openspec store list --json` and `openspec context --json`; do not create a parallel canonical spec/plan system in worktrees or the retired wiki.
 - **OpenSpec:** `openspec/config.yaml` points to the private registered `myah-kb` store. Keep private planning artifacts in that store; do not copy them into this public repository.
 - **Repository guidance:** this file and any package-level `AGENTS.md` files describe project facts and commands. Pi role configuration and project skills live under the gitignored `.pi/` directory; installed extension help is authoritative for runtime mechanics.
 
@@ -61,3 +61,7 @@ Inspect the affected package's `project.json`, Jest configuration, and CLI help 
 - Preserve upstream Twenty documentation inside packages. Internal project documents inside packages are still private unless explicitly approved.
 - Never put credentials, customer data, private URLs, or sensitive output in source, logs, Linear, or PRs. Git ignore rules do not prevent tools or telemetry from receiving content; evaluate telemetry separately.
 - Preserve provenance, licenses, private archive copies, and active handoffs. History remediation or deletion requires a separately approved plan.
+
+## Planning and implementation roots
+
+Resolve the registered private `myah-kb` planning store with `openspec store list --json` and `openspec context --json`. Private planning artifacts stay there; code edits target only the explicitly assigned, user-authorized Myah worktree. Resolve logical reference paths through the CLI rather than assuming a checkout location. OpenSpec status edit-root metadata is not rewritten by project guidance; report contradictory required instructions before code mutation.
