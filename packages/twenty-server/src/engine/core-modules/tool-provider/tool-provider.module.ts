@@ -6,7 +6,6 @@ import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-camp
 import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
 import { ActionToolProvider } from 'src/engine/core-modules/tool-provider/providers/action-tool.provider';
-import { BrandBrainToolProvider } from 'src/engine/core-modules/tool-provider/providers/brand-brain-tool.provider';
 import { DashboardToolProvider } from 'src/engine/core-modules/tool-provider/providers/dashboard-tool.provider';
 import { DatabaseToolProvider } from 'src/engine/core-modules/tool-provider/providers/database-tool.provider';
 import { LogicFunctionToolProvider } from 'src/engine/core-modules/tool-provider/providers/logic-function-tool.provider';
@@ -79,7 +78,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
     ToolExecutorService,
     ExternalWritePolicyService,
     ActionToolProvider,
-    BrandBrainToolProvider,
     DashboardToolProvider,
     DatabaseToolProvider,
     MetadataToolProvider,
@@ -99,7 +97,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
       provide: TOOL_PROVIDERS,
       useFactory: (
         actionProvider: ActionToolProvider,
-        brandBrainProvider: BrandBrainToolProvider,
         databaseProvider: DatabaseToolProvider,
         metadataProvider: MetadataToolProvider,
         logicFunctionProvider: LogicFunctionToolProvider,
@@ -113,7 +110,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
         myahCampaignOutreachProvider: MyahCampaignOutreachToolProvider,
       ) => [
         actionProvider,
-        brandBrainProvider,
         databaseProvider,
         metadataProvider,
         logicFunctionProvider,
@@ -128,7 +124,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
       ],
       inject: [
         ActionToolProvider,
-        BrandBrainToolProvider,
         DatabaseToolProvider,
         MetadataToolProvider,
         LogicFunctionToolProvider,
