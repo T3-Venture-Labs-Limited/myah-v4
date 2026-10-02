@@ -410,6 +410,39 @@ describe('JwtAuthStrategy', () => {
   });
 
   describe('APPLICATION_ACCESS token validation', () => {
+    it.each([
+      ['retired Shopify', 'a51fd2e5-b101-48f2-b1f8-cbc0a591e8ef', true],
+      ['retained Instagram', '4738ebcd-6662-4ecc-a190-374fa0525951', false],
+    ])(
+      'validates %s against the stored application identity',
+      async (_name, universalIdentifier, denied) => {
+        const workspace = new WorkspaceEntity();
+        workspace.id = 'workspace-id';
+        workspaceStore[workspace.id] = workspace;
+        applicationStore[workspace.id] = {
+          'application-id': { id: 'application-id', universalIdentifier },
+        };
+        strategy = createStrategy();
+        const validation = strategy.validate({
+          sub: 'application-id',
+          applicationId: 'application-id',
+          workspaceId: workspace.id,
+          type: JwtTokenTypeEnum.APPLICATION_ACCESS,
+        } as JwtPayload);
+        if (denied) {
+          await expect(validation).rejects.toMatchObject({
+            code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
+          });
+        } else {
+          await expect(validation).resolves.toMatchObject({
+            application: { id: 'application-id', universalIdentifier },
+            workspace,
+            tokenType: JwtTokenTypeEnum.APPLICATION_ACCESS,
+          });
+        }
+      },
+    );
+
     it('should throw AuthExceptionCode if type is APPLICATION_ACCESS, and application not found', async () => {
       const validApplicationId = randomUUID();
       const validWorkspaceId = randomUUID();

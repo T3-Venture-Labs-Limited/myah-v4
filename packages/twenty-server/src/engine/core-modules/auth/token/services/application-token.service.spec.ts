@@ -66,6 +66,96 @@ describe('ApplicationTokenService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('retired installed application', () => {
+    const workspaceId = 'workspace-id';
+    const applicationId = 'application-id';
+    const retiredId = 'a51fd2e5-b101-48f2-b1f8-cbc0a591e8ef';
+    const retainedId = '4738ebcd-6662-4ecc-a190-374fa0525951';
+
+    beforeEach(() => {
+      jest
+        .spyOn(workspaceRepository, 'findOne')
+        .mockResolvedValue({ id: workspaceId } as WorkspaceEntity);
+      jest
+        .spyOn(jwtWrapperService, 'signAsyncOrThrow')
+        .mockResolvedValue('fake-token');
+    });
+
+    it.each([
+      'generateApplicationAccessToken',
+      'generateApplicationTokenPair',
+      'renewApplicationTokens',
+    ] as const)(
+      '%s refuses Shopify based on the stored universal identifier',
+      async (method) => {
+        jest.spyOn(applicationRepository, 'findOne').mockResolvedValue({
+          id: applicationId,
+          workspaceId,
+          universalIdentifier: retiredId,
+        } as ApplicationEntity);
+        await expect(
+          service[method]({ applicationId, workspaceId }),
+        ).rejects.toMatchObject({
+          code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
+        });
+        expect(jwtWrapperService.signAsyncOrThrow).not.toHaveBeenCalled();
+      },
+    );
+
+    it('still issues and renews retained Instagram tokens', async () => {
+      jest.spyOn(applicationRepository, 'findOne').mockResolvedValue({
+        id: applicationId,
+        workspaceId,
+        universalIdentifier: retainedId,
+      } as ApplicationEntity);
+      await expect(
+        service.generateApplicationAccessToken({ applicationId, workspaceId }),
+      ).resolves.toMatchObject({ token: 'fake-token' });
+      await expect(
+        service.renewApplicationTokens({ applicationId, workspaceId }),
+      ).resolves.toMatchObject({
+        applicationRefreshToken: { token: 'fake-token' },
+      });
+    });
+
+    it.each([
+      'validateApplicationAccessToken',
+      'validateApplicationRefreshToken',
+    ] as const)(
+      '%s accepts retained Instagram and rejects an already minted Shopify token used for introspection',
+      async (method) => {
+        jest.spyOn(jwtWrapperService, 'decode').mockReturnValue({
+          sub: applicationId,
+          applicationId,
+          workspaceId,
+          type:
+            method === 'validateApplicationAccessToken'
+              ? JwtTokenTypeEnum.APPLICATION_ACCESS
+              : JwtTokenTypeEnum.APPLICATION_REFRESH,
+        });
+        const findApplication = jest
+          .spyOn(applicationRepository, 'findOne')
+          .mockResolvedValue({
+            id: applicationId,
+            workspaceId,
+            universalIdentifier: retainedId,
+          } as ApplicationEntity);
+        await expect(service[method]('fake-token')).resolves.toMatchObject({
+          applicationId,
+          workspaceId,
+        });
+        findApplication.mockResolvedValue({
+          id: applicationId,
+          workspaceId,
+          universalIdentifier: retiredId,
+        } as ApplicationEntity);
+        await expect(service[method]('fake-token')).rejects.toMatchObject({
+          code: AuthExceptionCode.FORBIDDEN_EXCEPTION,
+        });
+      },
+    );
+  });
+
   describe('generateApplicationAccessToken', () => {
     it('should generate an application access token successfully', async () => {
       const workspaceId = 'workspace-id';
@@ -188,6 +278,13 @@ describe('ApplicationTokenService', () => {
         .spyOn(jwtWrapperService, 'verifyJwtToken')
         .mockResolvedValue(undefined);
       jest.spyOn(jwtWrapperService, 'decode').mockReturnValue(mockPayload);
+      jest
+        .spyOn(workspaceRepository, 'findOne')
+        .mockResolvedValue({ id: mockPayload.workspaceId } as WorkspaceEntity);
+      jest.spyOn(applicationRepository, 'findOne').mockResolvedValue({
+        id: mockPayload.applicationId,
+        workspaceId: mockPayload.workspaceId,
+      } as ApplicationEntity);
 
       const result = await service.validateApplicationRefreshToken(mockToken);
 

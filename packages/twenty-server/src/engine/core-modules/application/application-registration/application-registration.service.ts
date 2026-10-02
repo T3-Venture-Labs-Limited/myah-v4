@@ -13,6 +13,7 @@ import { ALL_OAUTH_SCOPES } from 'src/engine/core-modules/application/applicatio
 import { shouldRefreshApplicationRegistrationOnInstall } from 'src/engine/core-modules/application/application-install/utils/should-refresh-application-registration-on-install.util';
 import { CacheLockService } from 'src/engine/core-modules/cache-lock/cache-lock.service';
 import { ApplicationRegistrationEntity } from 'src/engine/core-modules/application/application-registration/application-registration.entity';
+import { RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/core-modules/application/constants/retired-shopify-application.constant';
 import { TWENTY_CLI_APPLICATION_REGISTRATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-cli-application-registration.constant';
 import {
   ApplicationRegistrationException,
@@ -150,9 +151,14 @@ export class ApplicationRegistrationService {
   async findOneByClientId(
     clientId: string,
   ): Promise<ApplicationRegistrationEntity | null> {
-    return this.applicationRegistrationRepository.findOne({
+    const registration = await this.applicationRegistrationRepository.findOne({
       where: { oAuthClientId: clientId },
     });
+
+    return registration?.universalIdentifier ===
+      RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER
+      ? null
+      : registration;
   }
 
   // Global lookup — used by OAuth authorize page (no workspace scoping)
@@ -161,10 +167,21 @@ export class ApplicationRegistrationService {
   ): Promise<PublicApplicationRegistrationDTO | null> {
     const registration = await this.applicationRegistrationRepository.findOne({
       where: { oAuthClientId: clientId },
-      select: ['id', 'name', 'logo', 'websiteUrl', 'oAuthScopes'],
+      select: [
+        'id',
+        'universalIdentifier',
+        'name',
+        'logo',
+        'websiteUrl',
+        'oAuthScopes',
+      ],
     });
 
-    if (!registration) {
+    if (
+      !registration ||
+      registration.universalIdentifier ===
+        RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER
+    ) {
       return null;
     }
 

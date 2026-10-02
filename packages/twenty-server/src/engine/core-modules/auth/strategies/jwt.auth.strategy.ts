@@ -12,6 +12,7 @@ import {
 import { type AccessTokenJwtPayload } from 'src/engine/core-modules/auth/types/access-token-jwt-payload.type';
 import { type ApiKeyTokenJwtPayload } from 'src/engine/core-modules/auth/types/api-key-token-jwt-payload.type';
 import { ApplicationAccessTokenJwtPayload } from 'src/engine/core-modules/auth/types/application-access-token-jwt-payload.type';
+import { RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/core-modules/application/constants/retired-shopify-application.constant';
 import {
   type AuthContext,
   type AuthContextUser,
@@ -351,6 +352,16 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new AuthException(
         'Application not found',
         AuthExceptionCode.APPLICATION_NOT_FOUND,
+      );
+    }
+
+    if (
+      application.universalIdentifier ===
+      RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER
+    ) {
+      throw new AuthException(
+        'Application is no longer available',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
       );
     }
 

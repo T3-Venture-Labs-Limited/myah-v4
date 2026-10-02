@@ -20,6 +20,7 @@ import {
 import { buildApplicationLogEnvelopes } from 'src/engine/core-modules/event-logs/producers/application-log/build-application-log-envelopes';
 import { parseApplicationLogLines } from 'src/engine/core-modules/event-logs/producers/application-log/parse-application-log-lines';
 import { ApplicationRegistrationVariableEntity } from 'src/engine/core-modules/application/application-registration-variable/application-registration-variable.entity';
+import { RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/core-modules/application/constants/retired-shopify-application.constant';
 import type { FlatApplicationVariable } from 'src/engine/metadata-modules/flat-application-variable/types/flat-application-variable.type';
 import { FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { EventLogEmitterService } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.service';
@@ -105,13 +106,23 @@ export class LogicFunctionExecutorService {
     userWorkspaceId?: string;
     executionMode?: LogicFunctionExecutionMode;
   }): Promise<LogicFunctionExecuteResult> {
-    await this.throttleExecution(workspaceId);
-
     const { flatApplication, flatLogicFunction, flatApplicationVariables } =
       await this.getFlatEntitiesOrThrow({
         workspaceId,
         logicFunctionId,
       });
+
+    if (
+      flatApplication.universalIdentifier ===
+      RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER
+    ) {
+      throw new LogicFunctionExecutionException(
+        `Logic function with id ${logicFunctionId} not found`,
+        LogicFunctionExecutionExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
+      );
+    }
+
+    await this.throttleExecution(workspaceId);
 
     const envVariables = await this.getExecutionEnvVariables({
       workspaceId,

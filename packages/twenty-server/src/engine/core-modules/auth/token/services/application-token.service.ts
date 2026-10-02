@@ -14,6 +14,7 @@ import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-t
 import { type AuthToken } from 'src/engine/core-modules/auth/dto/auth-token.dto';
 import { WorkspaceNotFoundDefaultError } from 'src/engine/core-modules/workspace/workspace.exception';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
+import { RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/core-modules/application/constants/retired-shopify-application.constant';
 import {
   ApplicationException,
   ApplicationExceptionCode,
@@ -132,6 +133,11 @@ export class ApplicationTokenService {
         );
       }
 
+      await this.validateWorkspaceAndApplication(
+        payload.workspaceId,
+        payload.applicationId,
+      );
+
       return payload;
     } catch (error) {
       if (
@@ -166,6 +172,11 @@ export class ApplicationTokenService {
           AuthExceptionCode.INVALID_JWT_TOKEN_TYPE,
         );
       }
+
+      await this.validateWorkspaceAndApplication(
+        payload.workspaceId,
+        payload.applicationId,
+      );
 
       return payload;
     } catch (error) {
@@ -228,6 +239,16 @@ export class ApplicationTokenService {
         ApplicationExceptionCode.APPLICATION_NOT_FOUND,
       ),
     );
+
+    if (
+      application.universalIdentifier ===
+      RETIRED_SHOPIFY_APPLICATION_UNIVERSAL_IDENTIFIER
+    ) {
+      throw new AuthException(
+        'Application is no longer available',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      );
+    }
   }
 
   private async signApplicationToken({
