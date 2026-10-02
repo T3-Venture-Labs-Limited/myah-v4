@@ -52,10 +52,6 @@ const EXTERNAL_WRITE_POLICIES: Readonly<Record<string, ExternalWritePolicy>> =
       kind: 'external-write',
       actionName: 'send_myah_inbox_reply',
     },
-    create_calendar_event: {
-      permissionFlag: PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL,
-      kind: 'external-write',
-    },
     search_help_center: { kind: 'read' },
     code_interpreter: {
       permissionFlag: PermissionFlagType.CODE_INTERPRETER_TOOL,

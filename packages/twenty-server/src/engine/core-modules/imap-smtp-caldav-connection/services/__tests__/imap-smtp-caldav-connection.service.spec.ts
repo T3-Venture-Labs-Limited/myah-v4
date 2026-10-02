@@ -3,7 +3,6 @@ import { Test, type TestingModule } from '@nestjs/testing';
 
 import { ImapFlow } from 'imapflow';
 import { createTransport } from 'nodemailer';
-import { type DAVClient } from 'tsdav';
 
 import { EmailConnectionSecurity } from 'src/engine/core-modules/imap-smtp-caldav-connection/enums/email-connection-security.enum';
 import { ImapSmtpCaldavValidatorService } from 'src/engine/core-modules/imap-smtp-caldav-connection/services/imap-smtp-caldav-connection-validator.service';
@@ -15,8 +14,6 @@ import {
 import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
-import { CalDavClientService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-client.service';
-import { CalDavFetchEventsService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-fetch-events.service';
 
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn(),
@@ -29,8 +26,6 @@ jest.mock('imapflow', () => ({
 describe('ImapSmtpCaldavService', () => {
   let service: ImapSmtpCaldavService;
 
-  const mockClient = {} as DAVClient;
-
   const mockVerify = jest.fn().mockResolvedValue(true);
   const mockImapConnect = jest.fn().mockResolvedValue(undefined);
   const mockImapList = jest.fn().mockResolvedValue([{ path: 'INBOX' }]);
@@ -39,14 +34,6 @@ describe('ImapSmtpCaldavService', () => {
   const mockGetValidatedHost = jest
     .fn()
     .mockImplementation((host: string) => Promise.resolve(host));
-
-  const mockCalDavClientService = {
-    getClient: jest.fn(),
-  };
-
-  const mockCalDavFetchEventsService = {
-    listEventCalendars: jest.fn(),
-  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -61,10 +48,6 @@ describe('ImapSmtpCaldavService', () => {
     }));
     mockImapConnect.mockResolvedValue(undefined);
     mockImapList.mockResolvedValue([{ path: 'INBOX' }]);
-    mockCalDavClientService.getClient.mockResolvedValue(mockClient);
-    mockCalDavFetchEventsService.listEventCalendars.mockResolvedValue([
-      { url: 'https://caldav.example.com/calendars/user/default/' },
-    ]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -78,14 +61,6 @@ describe('ImapSmtpCaldavService', () => {
           provide: TwentyConfigService,
           useValue: { get: jest.fn().mockReturnValue(true) },
         },
-        {
-          provide: CalDavClientService,
-          useValue: mockCalDavClientService,
-        },
-        {
-          provide: CalDavFetchEventsService,
-          useValue: mockCalDavFetchEventsService,
-        },
       ],
     }).compile();
 
@@ -93,44 +68,10 @@ describe('ImapSmtpCaldavService', () => {
   });
 
   describe('testCaldavConnection', () => {
-    const params: ConnectionParameters = {
-      host: 'https://caldav.example.com',
-      port: 443,
-      username: 'user@example.com',
-      password: 'password123',
-      connectionSecurity: EmailConnectionSecurity.SSL_TLS,
-    };
-
-    it('builds a CalDAV client and lists its event calendars', async () => {
-      await service.testCaldavConnection('user@example.com', params);
-
-      expect(mockCalDavClientService.getClient).toHaveBeenCalledWith({
-        serverUrl: 'https://caldav.example.com',
-        username: 'user@example.com',
-        password: 'password123',
-      });
-      expect(
-        mockCalDavFetchEventsService.listEventCalendars,
-      ).toHaveBeenCalledWith(mockClient);
-    });
-
-    it('falls back to the handle when CALDAV.username is missing', async () => {
-      await service.testCaldavConnection('handle@example.com', {
-        ...params,
-        username: undefined,
-      });
-
-      expect(mockCalDavClientService.getClient).toHaveBeenCalledWith(
-        expect.objectContaining({ username: 'handle@example.com' }),
+    it('rejects CalDAV because calendar sync is not supported', async () => {
+      await expect(service.testCaldavConnection()).rejects.toThrow(
+        'CalDAV calendar sync is not supported',
       );
-    });
-
-    it('throws when no event calendars are found', async () => {
-      mockCalDavFetchEventsService.listEventCalendars.mockResolvedValue([]);
-
-      await expect(
-        service.testCaldavConnection('user@example.com', params),
-      ).rejects.toThrow('No calendar with event support found');
     });
   });
 

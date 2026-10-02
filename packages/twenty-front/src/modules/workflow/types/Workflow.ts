@@ -4,7 +4,6 @@ import {
   type SingleRecordAvailability,
   type workflowAiAgentActionSchema,
   type workflowCodeActionSchema,
-  type workflowCreateCalendarEventActionSchema,
   type workflowCreateRecordActionSchema,
   type workflowCronTriggerSchema,
   type workflowDatabaseEventTriggerSchema,
@@ -43,9 +42,6 @@ export type WorkflowSendEmailAction = z.infer<
 export type WorkflowDraftEmailAction = z.infer<
   typeof workflowDraftEmailActionSchema
 >;
-export type WorkflowCreateCalendarEventAction = z.infer<
-  typeof workflowCreateCalendarEventActionSchema
->;
 export type WorkflowCreateRecordAction = z.infer<
   typeof workflowCreateRecordActionSchema
 >;
@@ -82,7 +78,6 @@ export type WorkflowAction =
   | WorkflowLogicFunctionAction
   | WorkflowSendEmailAction
   | WorkflowDraftEmailAction
-  | WorkflowCreateCalendarEventAction
   | WorkflowCreateRecordAction
   | WorkflowUpdateRecordAction
   | WorkflowDeleteRecordAction

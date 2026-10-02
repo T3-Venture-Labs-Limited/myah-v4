@@ -22,8 +22,6 @@ import { WorkspaceMailboxConnectionException } from 'src/engine/core-modules/mya
 import { type WorkspaceMailboxConnectionErrorCode } from 'src/engine/core-modules/myah/types/workspace-mailbox-connection.type';
 import { getWorkspaceMailboxTlsServername } from 'src/engine/core-modules/myah/utils/get-workspace-mailbox-tls-servername.util';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
-import { CalDavClientService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-client.service';
-import { CalDavFetchEventsService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-fetch-events.service';
 
 @Injectable()
 export class ImapSmtpCaldavService {
@@ -32,8 +30,6 @@ export class ImapSmtpCaldavService {
   constructor(
     private readonly secureHttpClientService: SecureHttpClientService,
     private readonly twentyConfigService: TwentyConfigService,
-    private readonly caldavClientService: CalDavClientService,
-    private readonly caldavFetchEventsService: CalDavFetchEventsService,
     private readonly imapSmtpCaldavValidatorService: ImapSmtpCaldavValidatorService,
   ) {}
 
@@ -297,47 +293,10 @@ export class ImapSmtpCaldavService {
     return 'CONNECTION_UNAVAILABLE';
   }
 
-  async testCaldavConnection(
-    handle: string,
-    params: ConnectionParameters,
-  ): Promise<boolean> {
-    try {
-      const client = await this.caldavClientService.getClient({
-        serverUrl: params.host,
-        username: params.username ?? handle,
-        password: params.password,
-      });
-
-      const calendars =
-        await this.caldavFetchEventsService.listEventCalendars(client);
-
-      if (calendars.length === 0) {
-        throw new UserInputError('No calendar with event support found', {
-          userFriendlyMessage: msg`We couldn't find any calendars on your CalDAV server. Please make sure your account has at least one calendar.`,
-        });
-      }
-    } catch (error) {
-      if (error instanceof UserInputError) {
-        throw error;
-      }
-
-      this.logger.error(
-        `CALDAV connection failed: ${error.message}`,
-        error.stack,
-      );
-
-      if (error.code === 'FailedToOpenSocket') {
-        throw new UserInputError(`CALDAV connection failed: ${error.message}`, {
-          userFriendlyMessage: msg`We couldn't connect to your CalDAV server. Please check your server settings and try again.`,
-        });
-      }
-
-      throw new UserInputError(`CALDAV connection failed: ${error.message}`, {
-        userFriendlyMessage: msg`Invalid CALDAV credentials. Please check your username and password.`,
-      });
-    }
-
-    return true;
+  async testCaldavConnection(): Promise<boolean> {
+    throw new UserInputError('CalDAV calendar sync is not supported', {
+      userFriendlyMessage: msg`Calendar sync is not supported. Remove the CalDAV settings and try again.`,
+    });
   }
 
   async testImapSmtpCaldav({
@@ -363,7 +322,7 @@ export class ImapSmtpCaldavService {
       case 'SMTP':
         return this.testSmtpConnection(handle, params);
       case 'CALDAV':
-        return this.testCaldavConnection(handle, params);
+        return this.testCaldavConnection();
       default:
         assertUnreachable(accountType);
     }

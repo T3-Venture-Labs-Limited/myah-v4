@@ -13,7 +13,6 @@ import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channe
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
 import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/workspace-event-emitter.module';
-import { CalendarCommonModule } from 'src/modules/calendar/common/calendar-common.module';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
 import { ImapSmtpCalDavAPIService } from 'src/modules/connected-account/services/imap-smtp-caldav-apis.service';
 import { MessagingCommonModule } from 'src/modules/messaging/common/messaging-common.module';
@@ -34,7 +33,6 @@ import { MessagingFolderSyncManagerModule } from 'src/modules/messaging/message-
     TwentyORMModule,
     FeatureFlagModule,
     AuthModule,
-    CalendarCommonModule,
     ConnectedAccountModule,
     ConnectedAccountTokenEncryptionModule,
     MessagingCommonModule,

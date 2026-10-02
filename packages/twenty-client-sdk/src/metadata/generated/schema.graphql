@@ -3270,13 +3270,6 @@ type ChannelSyncSuccess {
   success: Boolean!
 }
 
-type CreateCalendarEventOutput {
-  success: Boolean!
-  iCalUid: String
-  conferenceLink: String
-  error: String
-}
-
 type BarChartSeries {
   key: String!
   label: String!
@@ -4191,7 +4184,6 @@ type Mutation {
   startCampaignExecution(input: StartCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
   updateCampaignSendingWindow(input: UpdateCampaignSendingWindowInput!): CampaignSendingWindowMutationResultDTO!
   stopCampaignExecution(input: StopCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
-  createCalendarEvent(input: CreateCalendarEventInput!): CreateCalendarEventOutput!
   sendEmail(input: SendEmailInput!): SendEmailOutput!
   startChannelSync(connectedAccountId: UUID!): ChannelSyncSuccess!
   updateLabPublicFeatureFlag(input: UpdateLabPublicFeatureFlagInput!): FeatureFlag!
@@ -5466,20 +5458,6 @@ input UpdateCampaignSendingWindowInput {
 
 input StopCampaignExecutionInput {
   campaignId: UUID!
-}
-
-input CreateCalendarEventInput {
-  connectedAccountId: String!
-  title: String!
-  description: String
-  location: String
-  startsAt: String!
-  endsAt: String!
-  isFullDay: Boolean
-  timeZone: String
-  attendees: String
-  sendInvitations: Boolean
-  addConferencing: Boolean
 }
 
 input SendEmailInput {
