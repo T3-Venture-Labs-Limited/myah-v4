@@ -1,12 +1,16 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { useAtom } from 'jotai';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 import { Button } from 'twenty-ui/input';
-import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import {
+  PAGE_LAYOUT_SIDE_PANEL_TAB_CHANGE_EVENT,
+  type PageLayoutSidePanelTabChangeDetail,
+} from '@/page-layout/constants/PageLayoutSidePanelTabChangeEvent';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { RichTextFieldEditor } from '@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
@@ -23,6 +27,7 @@ export type MyahCampaignRichTextSettingsField<FieldName extends string> = {
 
 export type MyahCampaignRichTextSettingsCopy = {
   keepEditing?: string;
+  saveLabel?: string;
   saveSuccess: string;
   saveError: string;
   unsavedChangesSubtitle: string;
@@ -31,10 +36,14 @@ export type MyahCampaignRichTextSettingsCopy = {
 export type MyahCampaignRichTextSettingsProps<FieldName extends string> = {
   campaignId: string;
   title: string;
+  description?: string;
   fields: readonly MyahCampaignRichTextSettingsField<FieldName>[];
   copy: MyahCampaignRichTextSettingsCopy;
   modalIdPrefix: string;
+  interceptSidePanelTabChange?: boolean;
   contentBeforeFields?: React.ReactNode;
+  contentAfterFields?: React.ReactNode;
+  sidebar?: React.ReactNode;
 };
 
 type CampaignRichTextValue = {
@@ -70,13 +79,14 @@ type ResolvedCampaignRichTextField<FieldName extends string> =
 const StyledSurface = styled.section`
   background: ${themeCssVariables.background.primary};
   box-sizing: border-box;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[5]};
   height: 100%;
   min-width: 0;
   overflow: hidden;
-  padding: ${themeCssVariables.spacing[4]};
+  padding: ${themeCssVariables.spacing[5]};
   width: 100%;
 `;
 
@@ -87,28 +97,54 @@ const StyledTitle = styled.h2`
   margin: 0;
 `;
 
-const StyledFields = styled.div`
-  display: flex;
+const StyledPageDescription = styled.p`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
+  margin: calc(-1 * ${themeCssVariables.spacing[3]}) 0 0;
+`;
+
+const StyledLayout = styled.div`
+  align-items: start;
+  display: grid;
   flex: 1;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[6]};
+  gap: ${themeCssVariables.spacing[7]};
+  grid-template-columns: minmax(0, 1fr) 280px;
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
   padding-bottom: ${themeCssVariables.spacing[4]};
+
+  &[data-has-sidebar='false'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @container (max-width: 850px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`;
+
+const StyledFields = styled.div`
+  border: 1px solid ${themeCssVariables.border.color.medium};
+  border-radius: ${themeCssVariables.border.radius.md};
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[6]};
+  min-width: 0;
+  padding: ${themeCssVariables.spacing[5]};
+`;
+
+const StyledSidebar = styled.aside`
+  border: 1px solid ${themeCssVariables.border.color.medium};
+  border-radius: ${themeCssVariables.border.radius.md};
+  min-width: 0;
+  padding: ${themeCssVariables.spacing[5]};
 `;
 
 const StyledFieldRow = styled.div`
-  align-items: start;
   display: grid;
-  gap: ${themeCssVariables.spacing[5]};
-  grid-template-columns: 220px minmax(0, 1fr);
+  gap: ${themeCssVariables.spacing[2]};
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
-
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
-    gap: ${themeCssVariables.spacing[2]};
-    grid-template-columns: minmax(0, 1fr);
-  }
 `;
 
 const StyledGuidance = styled.div`
@@ -134,7 +170,7 @@ const StyledDescription = styled.div`
 `;
 
 const StyledEditorCard = styled.div`
-  background: ${themeCssVariables.background.secondary};
+  background: ${themeCssVariables.background.primary};
   border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.md};
   box-sizing: border-box;
@@ -153,8 +189,8 @@ const StyledActions = styled.div`
   display: flex;
   flex-shrink: 0;
   justify-content: flex-end;
-  margin: 0 calc(-1 * ${themeCssVariables.spacing[4]})
-    calc(-1 * ${themeCssVariables.spacing[4]});
+  margin: 0 calc(-1 * ${themeCssVariables.spacing[5]})
+    calc(-1 * ${themeCssVariables.spacing[5]});
   padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
 `;
 
@@ -174,25 +210,38 @@ const StyledSkeletonEditor = styled(StyledSkeletonBlock)`
 
 type MyahCampaignRichTextSettingsSurfaceProps = {
   actions: React.ReactNode;
+  description?: string;
   contentBeforeFields?: React.ReactNode;
+  contentAfterFields?: React.ReactNode;
   fields: React.ReactNode;
   modal?: React.ReactNode;
+  sidebar?: React.ReactNode;
   title: string;
 };
 
 const MyahCampaignRichTextSettingsSurface = ({
   actions,
+  description,
   contentBeforeFields,
+  contentAfterFields,
   fields,
   modal,
+  sidebar,
   title,
 }: MyahCampaignRichTextSettingsSurfaceProps) => (
   <StyledSurface data-testid="campaign-rich-text-settings-surface">
     <StyledTitle>{title}</StyledTitle>
-    <StyledFields>
-      {contentBeforeFields}
-      {fields}
-    </StyledFields>
+    {description !== undefined && description.length > 0 && (
+      <StyledPageDescription>{description}</StyledPageDescription>
+    )}
+    <StyledLayout data-has-sidebar={sidebar != null ? 'true' : 'false'}>
+      <StyledFields>
+        {contentBeforeFields}
+        {fields}
+        {contentAfterFields}
+      </StyledFields>
+      {sidebar != null && <StyledSidebar>{sidebar}</StyledSidebar>}
+    </StyledLayout>
     <StyledActions>{actions}</StyledActions>
     {modal}
   </StyledSurface>
@@ -207,20 +256,28 @@ const createEditorVersions = <FieldName extends string>(
 
 type MyahCampaignRichTextSettingsEditorProps<FieldName extends string> = {
   campaignId: string;
+  description?: string;
   contentBeforeFields?: React.ReactNode;
+  contentAfterFields?: React.ReactNode;
+  sidebar?: React.ReactNode;
   copy: MyahCampaignRichTextSettingsCopy;
   fields: readonly ResolvedCampaignRichTextField<FieldName>[];
   modalIdPrefix: string;
+  interceptSidePanelTabChange?: boolean;
   persistedBodies: CampaignRichTextBodies<FieldName>;
   title: string;
 };
 
 const MyahCampaignRichTextSettingsEditor = <FieldName extends string>({
   campaignId,
+  description,
   contentBeforeFields,
+  contentAfterFields,
+  sidebar,
   copy,
   fields,
   modalIdPrefix,
+  interceptSidePanelTabChange,
   persistedBodies,
   title,
 }: MyahCampaignRichTextSettingsEditorProps<FieldName>) => {
@@ -238,6 +295,8 @@ const MyahCampaignRichTextSettingsEditor = <FieldName extends string>({
   const [pendingSavedBodies, setPendingSavedBodies] =
     useState<CampaignRichTextBodies<FieldName> | null>(null);
   const unsavedChangesModalId = `${modalIdPrefix}-${campaignId}`;
+  // oxlint-disable-next-line twenty/no-state-useref -- Retain the canceled tab's one-shot callback until Save or Discard.
+  const pendingSidePanelResume = useRef<(() => void) | null>(null);
   const fieldNames = useMemo(
     () => fields.map(({ fieldName }) => fieldName),
     [fields],
@@ -252,6 +311,34 @@ const MyahCampaignRichTextSettingsEditor = <FieldName extends string>({
   );
   const isDirty = dirtyFieldNames.length > 0;
   const blocker = useBlocker(isDirty);
+
+  useEffect(() => {
+    if (!interceptSidePanelTabChange || !isDirty) return;
+    const handleSidePanelChange = (event: Event) => {
+      const tabEvent = event as CustomEvent<PageLayoutSidePanelTabChangeDetail>;
+      if (tabEvent.detail.currentTabId === tabEvent.detail.nextTabId) return;
+      event.preventDefault();
+      pendingSidePanelResume.current = tabEvent.detail.resume;
+      openModal(unsavedChangesModalId);
+    };
+    window.addEventListener(
+      PAGE_LAYOUT_SIDE_PANEL_TAB_CHANGE_EVENT,
+      handleSidePanelChange,
+    );
+    return () =>
+      window.removeEventListener(
+        PAGE_LAYOUT_SIDE_PANEL_TAB_CHANGE_EVENT,
+        handleSidePanelChange,
+      );
+  }, [interceptSidePanelTabChange, isDirty, openModal, unsavedChangesModalId]);
+
+  useEffect(
+    () => () => {
+      if (pendingSidePanelResume.current) closeModal(unsavedChangesModalId);
+      pendingSidePanelResume.current = null;
+    },
+    [closeModal, unsavedChangesModalId],
+  );
 
   useEffect(() => {
     if (pendingSavedBodies) {
@@ -367,10 +454,15 @@ const MyahCampaignRichTextSettingsEditor = <FieldName extends string>({
   };
 
   const handleDiscardChanges = () => {
-    if (isSaving || blocker.state !== 'blocked') {
+    if (
+      isSaving ||
+      (blocker.state !== 'blocked' && !pendingSidePanelResume.current)
+    ) {
       return;
     }
 
+    const resume = pendingSidePanelResume.current;
+    pendingSidePanelResume.current = null;
     setDraftBodies(savedBodies);
     setEditorVersions((currentVersions) => {
       const nextVersions = { ...currentVersions };
@@ -381,9 +473,17 @@ const MyahCampaignRichTextSettingsEditor = <FieldName extends string>({
 
       return nextVersions;
     });
+    if (resume) {
+      closeModal(unsavedChangesModalId);
+      resume();
+    }
   };
 
   const handleKeepEditing = () => {
+    if (pendingSidePanelResume.current) {
+      pendingSidePanelResume.current = null;
+      closeModal(unsavedChangesModalId);
+    }
     if (blocker.state === 'blocked') {
       blocker.reset();
     }
@@ -436,10 +536,13 @@ const MyahCampaignRichTextSettingsEditor = <FieldName extends string>({
           disabled={!isDirty || isSaving}
           isLoading={isSaving}
           onClick={handleSave}
-          title={t`Save`}
+          title={copy.saveLabel ?? t`Save`}
         />
       }
       contentBeforeFields={contentBeforeFields}
+      contentAfterFields={contentAfterFields}
+      description={description}
+      sidebar={sidebar}
       fields={editorRows}
       modal={
         <ConfirmationModal
@@ -460,10 +563,14 @@ const MyahCampaignRichTextSettingsEditor = <FieldName extends string>({
 
 export const MyahCampaignRichTextSettings = <FieldName extends string>({
   campaignId,
+  description,
   contentBeforeFields,
+  contentAfterFields,
+  sidebar,
   copy,
   fields,
   modalIdPrefix,
+  interceptSidePanelTabChange,
   title,
 }: MyahCampaignRichTextSettingsProps<FieldName>): React.ReactElement => {
   const { objectMetadataItems } = useObjectMetadataItems();
@@ -506,8 +613,13 @@ export const MyahCampaignRichTextSettings = <FieldName extends string>({
   if (!isReady) {
     return (
       <MyahCampaignRichTextSettingsSurface
-        actions={<Button accent="brand" disabled title={t`Save`} />}
+        actions={
+          <Button accent="brand" disabled title={copy.saveLabel ?? t`Save`} />
+        }
         contentBeforeFields={contentBeforeFields}
+        contentAfterFields={contentAfterFields}
+        description={description}
+        sidebar={sidebar}
         fields={skeletonRows}
         title={title}
       />
@@ -525,10 +637,14 @@ export const MyahCampaignRichTextSettings = <FieldName extends string>({
     <MyahCampaignRichTextSettingsEditor
       campaignId={campaignId}
       contentBeforeFields={contentBeforeFields}
+      contentAfterFields={contentAfterFields}
+      description={description}
+      sidebar={sidebar}
       copy={copy}
       fields={resolvedFields}
       key={campaignId}
       modalIdPrefix={modalIdPrefix}
+      interceptSidePanelTabChange={interceptSidePanelTabChange}
       persistedBodies={persistedBodies}
       title={title}
     />

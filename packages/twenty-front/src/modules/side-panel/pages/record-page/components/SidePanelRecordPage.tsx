@@ -1,3 +1,4 @@
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
 import { viewableRecordIdComponentState } from '@/side-panel/pages/record-page/states/viewableRecordIdComponentState';
@@ -7,11 +8,17 @@ import { ContextStoreComponentInstanceContext } from '@/context-store/states/con
 import { INFORMATION_BANNER_HEIGHT } from '@/information-banner/constants/InformationBannerHeight';
 import { RecordComponentInstanceContextsWrapper } from '@/object-record/components/RecordComponentInstanceContextsWrapper';
 import { PageLayoutRecordPageRenderer } from '@/object-record/record-show/components/PageLayoutRecordPageRenderer';
+import {
+  CampaignRecordReadStatusMessage,
+  getCampaignRecordReadStatus,
+} from '@/object-record/record-show/components/CampaignRecordReadStatusMessage';
+import { useRecordShowRecord } from '@/object-record/record-show/hooks/useRecordShowRecord';
 import { type PageLayoutTabsRendererRenderMode } from '@/page-layout/components/PageLayoutTabsRenderer';
 import { useRecordShowPage } from '@/object-record/record-show/hooks/useRecordShowPage';
 import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
 import { useComponentInstanceStateContext } from '@/ui/utilities/state/component-state/hooks/useComponentInstanceStateContext';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 
@@ -25,6 +32,51 @@ const StyledSidePanelRecord = styled.div<{
     return `calc(100% - ${bannerOffset})`;
   }};
 `;
+
+const CampaignSidePanelRecord = ({
+  objectRecordId,
+  renderMode,
+}: {
+  objectRecordId: string;
+  renderMode?: PageLayoutTabsRendererRenderMode;
+}) => {
+  const {
+    record,
+    loading,
+    error,
+    hasReadPermission,
+    hasLoadedRecord,
+    refetch,
+  } = useRecordShowRecord({
+    objectNameSingular: 'campaign',
+    recordId: objectRecordId,
+  });
+  const status = getCampaignRecordReadStatus({
+    recordId: objectRecordId,
+    record,
+    loading,
+    error,
+    hasReadPermission,
+    hasLoadedRecord,
+  });
+
+  return status === 'ready' ? (
+    <PageLayoutRecordPageRenderer
+      targetRecordIdentifier={{
+        id: objectRecordId,
+        targetObjectNameSingular: 'campaign',
+      }}
+      isInSidePanel
+      renderMode={renderMode}
+      recordAlreadyLoaded
+    />
+  ) : (
+    <CampaignRecordReadStatusMessage
+      status={status}
+      onRetry={() => void refetch()}
+    />
+  );
+};
 
 type SidePanelRecordPageContentProps = {
   objectNameSingular: string;
@@ -41,6 +93,7 @@ export const SidePanelRecordPageContent = ({
     initialObjectNameSingular,
     initialObjectRecordId,
   );
+  const workspaceId = useAtomStateValue(currentWorkspaceState)?.id;
   const recordDeletedAt = useAtomFamilySelectorValue(
     recordStoreFamilySelector,
     {
@@ -75,14 +128,22 @@ export const SidePanelRecordPageContent = ({
                 recordId: objectRecordId,
               }}
             >
-              <PageLayoutRecordPageRenderer
-                targetRecordIdentifier={{
-                  id: objectRecordId,
-                  targetObjectNameSingular: objectNameSingular,
-                }}
-                isInSidePanel
-                renderMode={renderMode}
-              />
+              {objectNameSingular === 'campaign' ? (
+                <CampaignSidePanelRecord
+                  key={`${workspaceId ?? ''}:${objectRecordId}`}
+                  objectRecordId={objectRecordId}
+                  renderMode={renderMode}
+                />
+              ) : (
+                <PageLayoutRecordPageRenderer
+                  targetRecordIdentifier={{
+                    id: objectRecordId,
+                    targetObjectNameSingular: objectNameSingular,
+                  }}
+                  isInSidePanel
+                  renderMode={renderMode}
+                />
+              )}
             </TimelineActivityContext.Provider>
           </StyledSidePanelRecord>
         </CommandMenuComponentInstanceContext.Provider>

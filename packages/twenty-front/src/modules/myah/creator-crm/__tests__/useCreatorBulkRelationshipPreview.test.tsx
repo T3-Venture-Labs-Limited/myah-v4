@@ -183,6 +183,54 @@ describe('useCreatorBulkRelationshipPreview', () => {
     expect(result.current.isPreviewUnavailable).toBe(true);
   });
 
+  it('refuses to classify a Campaign membership when its direct-source field is unreadable', () => {
+    mockUseFindManyRecords.mockReturnValue({
+      records: [
+        {
+          id: 'membership-a',
+          __typename: 'CampaignCreator',
+          creatorId: 'creator-a',
+        },
+      ],
+      loading: false,
+      hasNextPage: false,
+      error: undefined,
+      hasReadPermission: true,
+      refetch: jest.fn(),
+    });
+
+    const { result } = renderHook(() =>
+      useCreatorBulkRelationshipPreview({
+        target: { kind: 'campaign', id: 'campaign-a', label: 'Campaign' },
+        selectedCreatorIds: ['creator-a'],
+      }),
+    );
+
+    expect(result.current.isPreviewUnavailable).toBe(true);
+    expect(result.current.canRetry).toBe(false);
+    expect(result.current.linkedCreatorIds).toEqual([]);
+  });
+
+  it('refuses to guess selected Creator identity when a relationship field is unreadable', () => {
+    mockUseFindManyRecords.mockReturnValue({
+      records: [{ id: 'membership-a', __typename: 'CreatorListMember' }],
+      loading: false,
+      hasNextPage: false,
+      error: undefined,
+      hasReadPermission: true,
+      refetch: jest.fn(),
+    });
+
+    const { result } = renderHook(() =>
+      useCreatorBulkRelationshipPreview({
+        target: creatorListTarget,
+        selectedCreatorIds: ['creator-a'],
+      }),
+    );
+    expect(result.current.isPreviewUnavailable).toBe(true);
+    expect(result.current.canRetry).toBe(false);
+  });
+
   it('does not query Campaign impact for a List membership removal preview', () => {
     mockUseFindManyRecords.mockReturnValue({
       records: [

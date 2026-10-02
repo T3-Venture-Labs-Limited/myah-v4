@@ -1,3 +1,5 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
+
 import { CustomResolverFetchMoreLoader } from '@/activities/components/CustomResolverFetchMoreLoader';
 import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
 import { useOpenCreateActivityDrawer } from '@/activities/hooks/useOpenCreateActivityDrawer';
@@ -36,6 +38,7 @@ export const NotesCard = () => {
     fetchMoreNotes,
     hasNextPage,
     error,
+    hasReadPermission,
   } = useNotes(targetRecord);
 
   const handleLastRowVisible = async () => {
@@ -57,8 +60,38 @@ export const NotesCard = () => {
   const objectPermissions = useObjectPermissionsForObject(
     objectMetadataItem.id,
   );
+  const { objectMetadataItem: noteMetadataItem } = useObjectMetadataItem({
+    objectNameSingular: CoreObjectNameSingular.Note,
+  });
+  const notePermissions = useObjectPermissionsForObject(noteMetadataItem.id);
 
   const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
+
+  const serverDeniedRead =
+    CombinedGraphQLErrors.is(error) &&
+    error.errors.some(
+      ({ extensions }) =>
+        extensions?.code === 'FORBIDDEN' ||
+        extensions?.code === 'UNAUTHENTICATED',
+    );
+
+  if (
+    !hasReadPermission ||
+    !notePermissions.canReadObjectRecords ||
+    !objectPermissions.canReadObjectRecords ||
+    serverDeniedRead
+  ) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            {t`You don't have permission to view notes`}
+          </AnimatedPlaceholderEmptyTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
+  }
 
   if (loading && isNotesEmpty) {
     return <SkeletonLoader />;
@@ -75,6 +108,19 @@ export const NotesCard = () => {
           <AnimatedPlaceholderEmptySubTitle>
             {t`Please refresh the page.`}
           </AnimatedPlaceholderEmptySubTitle>
+        </AnimatedPlaceholderEmptyTextContainer>
+      </AnimatedPlaceholderEmptyContainer>
+    );
+  }
+
+  if (isNotesEmpty && totalCountNotes > 0) {
+    return (
+      <AnimatedPlaceholderEmptyContainer>
+        <AnimatedPlaceholder type="errorIndex" />
+        <AnimatedPlaceholderEmptyTextContainer>
+          <AnimatedPlaceholderEmptyTitle>
+            {t`Notes are unavailable`}
+          </AnimatedPlaceholderEmptyTitle>
         </AnimatedPlaceholderEmptyTextContainer>
       </AnimatedPlaceholderEmptyContainer>
     );

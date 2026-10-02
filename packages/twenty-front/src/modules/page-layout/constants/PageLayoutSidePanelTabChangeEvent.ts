@@ -1,9 +1,10 @@
 export const PAGE_LAYOUT_SIDE_PANEL_TAB_CHANGE_EVENT =
   'page-layout-side-panel-tab-change';
 
-type PageLayoutSidePanelTabChangeDetail = {
+export type PageLayoutSidePanelTabChangeDetail = {
   currentTabId: string | null;
   nextTabId: string;
+  resume: () => void;
 };
 
 export function requestPageLayoutSidePanelTabChange(

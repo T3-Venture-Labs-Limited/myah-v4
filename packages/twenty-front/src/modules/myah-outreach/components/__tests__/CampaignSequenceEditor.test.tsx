@@ -50,6 +50,11 @@ describe('CampaignSequenceEditor', () => {
     const cards = within(list).getAllByRole('listitem');
     expect(cards[0]).toHaveTextContent('Second');
     expect(cards[1]).toHaveTextContent('First');
+    expect(screen.getByText('Wait before step 2')).toBeVisible();
+    expect(
+      screen.getByRole('spinbutton', { name: 'Wait before step 2' }),
+    ).toHaveValue(1);
+    fireEvent.click(screen.getByText('Edit precise delay'));
     expect(
       screen.getByRole('spinbutton', { name: 'Delay 1 days' }),
     ).toHaveValue(1);
@@ -58,12 +63,45 @@ describe('CampaignSequenceEditor', () => {
     ).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('shows waits as a single value while preserving precise existing durations', () => {
+    render(<Harness sequence={{ ...initial, delaysSeconds: [90000] }} />);
+    const wait = screen.getByRole('spinbutton', { name: 'Wait before step 2' });
+    expect(wait).toHaveValue(25);
+    expect(wait.closest('label')).toHaveTextContent('hours');
+    fireEvent.change(wait, { target: { value: '26' } });
+    fireEvent.click(screen.getByText('Edit precise delay'));
+    expect(
+      screen.getByRole('spinbutton', { name: 'Delay 1 days' }),
+    ).toHaveValue(1);
+    expect(
+      screen.getByRole('spinbutton', { name: 'Delay 1 hours' }),
+    ).toHaveValue(2);
+  });
+
+  it('marks the selected ordered step and preserves authored content through channel selection', () => {
+    render(<Harness />);
+
+    const list = screen.getByRole('list', { name: 'Campaign sequence' });
+    const cards = within(list).getAllByRole('listitem');
+    expect(cards[0]).toHaveAttribute('data-selected', 'true');
+    expect(cards[0]).toHaveTextContent('New conversation');
+    expect(cards[1]).toHaveAttribute('data-selected', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit message 2' }));
+    expect(within(list).getAllByRole('listitem')[1]).toHaveAttribute(
+      'data-selected',
+      'true',
+    );
+    expect(within(list).getAllByRole('listitem')[0]).toHaveTextContent('First');
+  });
+
   it('inserts an unset positional delay and reports missing, zero, and overflow durations', async () => {
     render(<Harness />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Instagram' }));
     expect(screen.getByText('Set a delay between messages')).toBeVisible();
 
+    fireEvent.click(screen.getAllByText('Edit precise delay')[1]);
     const seconds = screen.getByRole('spinbutton', { name: 'Delay 2 seconds' });
     fireEvent.change(seconds, { target: { value: '0' } });
     expect(screen.getByText('Delay must be greater than zero')).toBeVisible();
@@ -79,6 +117,26 @@ describe('CampaignSequenceEditor', () => {
     const controls = within(screen.getAllByRole('listitem')[0])
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'));
+    expect(
+      within(
+        screen.getByRole('group', { name: 'Add sequence step' }),
+      ).getAllByRole('button'),
+    ).toHaveLength(2);
+    expect(
+      within(
+        screen.getByRole('group', { name: 'Message 1 actions' }),
+      ).getAllByRole('button'),
+    ).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Add email' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Add Instagram' }),
+    ).toHaveAttribute('data-variant', 'secondary');
+    expect(
+      screen.getByRole('button', { name: 'Move message 1 down' }),
+    ).toHaveAttribute('data-variant', 'tertiary');
     expect(controls).toEqual([
       'Edit message 1',
       'Move message 1 up',
@@ -98,7 +156,7 @@ describe('CampaignSequenceEditor', () => {
     );
     expect(screen.getByRole('button', { name: 'Add email' })).toBeDisabled();
     expect(
-      screen.getByRole('spinbutton', { name: 'Delay 1 days' }),
+      screen.getByRole('spinbutton', { name: 'Wait before step 2' }),
     ).toBeDisabled();
   });
 });

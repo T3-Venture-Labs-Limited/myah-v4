@@ -43,12 +43,14 @@ type PageLayoutRecordPageRendererProps = {
   targetRecordIdentifier: TargetRecordIdentifier;
   isInSidePanel: boolean;
   renderMode?: PageLayoutTabsRendererRenderMode;
+  recordAlreadyLoaded?: boolean;
 };
 
 export const PageLayoutRecordPageRenderer = ({
   targetRecordIdentifier,
   isInSidePanel,
   renderMode,
+  recordAlreadyLoaded = false,
 }: PageLayoutRecordPageRendererProps) => {
   const recordDeletedAt = useAtomFamilySelectorValue(
     recordStoreFamilySelector,
@@ -77,10 +79,12 @@ export const PageLayoutRecordPageRenderer = ({
 
   return (
     <>
-      <RecordShowEffect
-        objectNameSingular={targetRecordIdentifier.targetObjectNameSingular}
-        recordId={targetRecordIdentifier.id}
-      />
+      {!recordAlreadyLoaded && (
+        <RecordShowEffect
+          objectNameSingular={targetRecordIdentifier.targetObjectNameSingular}
+          recordId={targetRecordIdentifier.id}
+        />
+      )}
 
       <RecordShowContainerContextStoreTargetedRecordsEffect
         recordId={targetRecordIdentifier.id}

@@ -7,7 +7,7 @@ import {
 } from 'twenty-shared/workflow';
 import { Status } from 'twenty-ui/data-display';
 import { IconSend } from 'twenty-ui/icon';
-import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { CampaignOutreachWorkflowActionBar } from '@/myah-outreach/components/CampaignOutreachWorkflowActionBar';
 import { CampaignSequenceEditor } from '@/myah-outreach/components/CampaignSequenceEditor';
@@ -18,6 +18,7 @@ import { PageCardHeader } from '@/ui/layout/page/components/PageCardHeader';
 import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
 
 const StyledEditor = styled.div`
+  container-type: inline-size;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -28,20 +29,39 @@ const StyledEditor = styled.div`
 const StyledContent = styled.div`
   display: grid;
   flex: 1;
-  gap: ${themeCssVariables.spacing[4]};
-  grid-template-columns: minmax(280px, 2fr) minmax(320px, 3fr);
+  gap: ${themeCssVariables.spacing[5]};
+  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   overflow: auto;
-  padding: ${themeCssVariables.spacing[4]};
+  padding: ${themeCssVariables.spacing[5]};
 
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
+  @container (max-width: 640px) {
     grid-template-columns: minmax(0, 1fr);
   }
 `;
 
-const StyledPanel = styled.div`
+const StyledIntro = styled.div`
+  grid-column: 1 / -1;
+
+  h2 {
+    font-size: ${themeCssVariables.font.size.md};
+    margin: 0 0 ${themeCssVariables.spacing[2]};
+  }
+  p {
+    color: ${themeCssVariables.font.color.secondary};
+    margin: 0;
+  }
+`;
+
+const StyledPanel = styled.section`
   min-width: 0;
+`;
+
+const StyledComposer = styled(StyledPanel)`
+  border: 1px solid ${themeCssVariables.border.color.medium};
+  border-radius: ${themeCssVariables.border.radius.md};
+  padding: ${themeCssVariables.spacing[4]};
 `;
 
 const StyledNotice = styled.p`
@@ -221,10 +241,17 @@ export const CampaignOutreachWorkflowEditor = ({
         showInformationBanner={false}
       >
         <StyledContent>
-          <StyledPanel>
-            <StyledNotice>
+          <StyledIntro>
+            <h2>Compose Campaign outreach</h2>
+            <p>
               Delays are elapsed-time estimates between positions. Campaign
               sending windows and lifecycle scheduling remain authoritative.
+            </p>
+          </StyledIntro>
+          <StyledPanel aria-label="Ordered steps">
+            <StyledNotice>
+              Instagram steps can be authored, but Campaign Start currently
+              sends email only.
             </StyledNotice>
             {error ? (
               <StyledError role="alert">
@@ -272,7 +299,7 @@ export const CampaignOutreachWorkflowEditor = ({
               sequence={draft}
             />
           </StyledPanel>
-          <StyledPanel>
+          <StyledComposer aria-label="Message composer">
             {selectedMessage ? (
               <CampaignSequenceMessageEditor
                 editable={editable}
@@ -299,7 +326,7 @@ export const CampaignOutreachWorkflowEditor = ({
                 Add or select a message to edit its Campaign-controlled content.
               </StyledNotice>
             )}
-          </StyledPanel>
+          </StyledComposer>
         </StyledContent>
       </PageCardLayout>
     </StyledEditor>

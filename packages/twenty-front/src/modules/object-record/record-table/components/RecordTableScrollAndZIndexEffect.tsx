@@ -1,3 +1,4 @@
+import { useOptionalRecordIndexContext } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { shouldCompactRecordIndexLabelIdentifierComponentState } from '@/object-record/record-index/states/shouldCompactRecordIndexLabelIdentifierComponentState';
 import { RECORD_TABLE_HORIZONTAL_SCROLL_SHADOW_VISIBILITY_CSS_VARIABLE_NAME } from '@/object-record/record-table/constants/RecordTableHorizontalScrollShadowVisibilityCssVariableName';
 import { RECORD_TABLE_VERTICAL_SCROLL_SHADOW_VISIBILITY_CSS_VARIABLE_NAME } from '@/object-record/record-table/constants/RecordTableVerticalScrollShadowVisibilityCssVariableName';
@@ -17,6 +18,12 @@ import { useIsMobile } from 'twenty-ui/utilities';
 
 export const RecordTableScrollAndZIndexEffect = () => {
   const { recordTableId } = useRecordTableContextOrThrow();
+  const recordIndexContext = useOptionalRecordIndexContext();
+  // The Campaign Creator chip opens a local panel; shrinking its sticky cell to
+  // 38px leaves the visible link painted over (but behind) adjacent cells.
+  const keepCampaignCreatorColumnFullWidth =
+    recordIndexContext?.objectNameSingular === 'campaignCreator' &&
+    recordIndexContext.openFirstColumnRelationInIndex === true;
   const { scrollWrapperHTMLElement } = useScrollWrapperHTMLElement();
   const isMobile = useIsMobile();
   const [
@@ -75,13 +82,11 @@ export const RecordTableScrollAndZIndexEffect = () => {
         );
 
         if (isMobile) {
-          if (newIsScrolledHorizontally) {
-            setShouldCompactRecordTableFirstColumn(true);
-            setShouldCompactRecordIndexLabelIdentifier(true);
-          } else {
-            setShouldCompactRecordTableFirstColumn(false);
-            setShouldCompactRecordIndexLabelIdentifier(false);
-          }
+          const shouldCompact =
+            newIsScrolledHorizontally && !keepCampaignCreatorColumnFullWidth;
+
+          setShouldCompactRecordTableFirstColumn(shouldCompact);
+          setShouldCompactRecordIndexLabelIdentifier(shouldCompact);
         }
       }
     };
@@ -99,6 +104,7 @@ export const RecordTableScrollAndZIndexEffect = () => {
     setIsRecordTableScrolledVertically,
     setIsRecordTableScrolledHorizontally,
     isMobile,
+    keepCampaignCreatorColumnFullWidth,
     setShouldCompactRecordTableFirstColumn,
     setShouldCompactRecordIndexLabelIdentifier,
   ]);

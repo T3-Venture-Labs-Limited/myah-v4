@@ -14,6 +14,7 @@ import { RECORD_TABLE_VERTICAL_SCROLL_SHADOW_VISIBILITY_CSS_VARIABLE_NAME } from
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useScrollTableToPosition } from '@/object-record/record-table/hooks/useScrollTableToPosition';
 import { isRecordTableInitialLoadingComponentState } from '@/object-record/record-table/states/isRecordTableInitialLoadingComponentState';
+import { recordTableInitialReadErrorComponentState } from '@/object-record/record-table/states/recordTableInitialReadErrorComponentState';
 import { isRecordTableScrolledHorizontallyComponentState } from '@/object-record/record-table/states/isRecordTableScrolledHorizontallyComponentState';
 import { isRecordTableScrolledVerticallyComponentState } from '@/object-record/record-table/states/isRecordTableScrolledVerticallyComponentState';
 import { updateRecordTableCSSVariable } from '@/object-record/record-table/utils/updateRecordTableCSSVariable';
@@ -40,7 +41,10 @@ import { isDefined } from 'twenty-shared/utils';
 export const useTriggerInitialRecordTableDataLoad = () => {
   const { recordTableId, objectNameSingular } = useRecordTableContextOrThrow();
 
-  const { recordLimit } = useRecordIndexContextOrThrow();
+  const { recordLimit, embeddedSurfaceOptions } =
+    useRecordIndexContextOrThrow();
+  const showInitialReadError =
+    embeddedSurfaceOptions?.showInitialReadError === true;
 
   const { findManyRecordsLazy } =
     useRecordIndexTableLazyQuery(objectNameSingular);
@@ -56,6 +60,10 @@ export const useTriggerInitialRecordTableDataLoad = () => {
 
   const isRecordTableInitialLoading = useAtomComponentStateCallbackState(
     isRecordTableInitialLoadingComponentState,
+    recordTableId,
+  );
+  const initialReadError = useAtomComponentStateCallbackState(
+    recordTableInitialReadErrorComponentState,
     recordTableId,
   );
 
@@ -132,6 +140,7 @@ export const useTriggerInitialRecordTableDataLoad = () => {
 
       try {
         store.set(isRecordTableInitialLoading, true);
+        if (showInitialReadError) store.set(initialReadError, false);
 
         resetTableFocuses();
 
@@ -177,9 +186,17 @@ export const useTriggerInitialRecordTableDataLoad = () => {
           [],
         );
 
-        const { records: findManyRecords, totalCount: findManyTotalCount } =
-          await findManyRecordsLazy();
+        const {
+          records: findManyRecords,
+          totalCount: findManyTotalCount,
+          error: readError,
+          data: readData,
+        } = await findManyRecordsLazy();
 
+        if (showInitialReadError && (readError || !readData)) {
+          store.set(initialReadError, true);
+          return;
+        }
         records = findManyRecords;
         totalCount = findManyTotalCount;
 
@@ -217,6 +234,9 @@ export const useTriggerInitialRecordTableDataLoad = () => {
             verticalScrollInPx: 0,
           });
         }
+      } catch (error) {
+        if (!showInitialReadError) throw error;
+        store.set(initialReadError, true);
       } finally {
         store.set(isInitializingVirtualTableDataLoadingCallbackState, false);
         store.set(isRecordTableInitialLoading, false);
@@ -224,6 +244,8 @@ export const useTriggerInitialRecordTableDataLoad = () => {
     },
     [
       isInitializingVirtualTableDataLoadingCallbackState,
+      showInitialReadError,
+      initialReadError,
       resetTableFocuses,
       resetVirtualizedRowTreadmill,
       recordIndexAllRecordIds,

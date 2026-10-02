@@ -9,12 +9,18 @@ import {
   type CampaignSequenceMessage,
 } from 'twenty-shared/workflow';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Button } from 'twenty-ui/input';
 
 const StyledSequence = styled.section`
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[3]};
   min-width: 0;
+`;
+
+const StyledHeading = styled.h2`
+  font-size: ${themeCssVariables.font.size.md};
+  margin: 0;
 `;
 
 const StyledList = styled.ol`
@@ -32,7 +38,36 @@ const StyledCard = styled.li`
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[2]};
+  min-width: 0;
   padding: ${themeCssVariables.spacing[3]};
+
+  &[data-selected='true'] {
+    background: ${themeCssVariables.background.primary};
+    border-color: ${themeCssVariables.color.pink};
+  }
+`;
+
+const StyledStep = styled.button`
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[1]};
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+`;
+
+const StyledSummary = styled.span`
+  color: ${themeCssVariables.font.color.secondary};
+`;
+
+const StyledMeta = styled.small`
+  color: ${themeCssVariables.font.color.secondary};
 `;
 
 const StyledRow = styled.div`
@@ -44,11 +79,24 @@ const StyledRow = styled.div`
 
 const StyledDelay = styled.fieldset`
   border: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${themeCssVariables.spacing[2]};
+  border-top: 1px solid ${themeCssVariables.border.color.medium};
   margin: 0;
-  padding: ${themeCssVariables.spacing[2]} 0;
+  min-width: 0;
+  padding: ${themeCssVariables.spacing[2]} 0 0;
+
+  input {
+    box-sizing: border-box;
+    margin: 0 ${themeCssVariables.spacing[2]};
+    width: 52px;
+  }
+  details {
+    color: ${themeCssVariables.font.color.secondary};
+    font-size: ${themeCssVariables.font.size.sm};
+    margin-top: ${themeCssVariables.spacing[2]};
+  }
+  summary {
+    cursor: pointer;
+  }
 `;
 
 const StyledIssue = styled.div`
@@ -158,26 +206,38 @@ export const CampaignSequenceEditor = ({
 
   return (
     <StyledSequence aria-label="Sequence messages">
-      <StyledRow>
-        <button
+      <StyledHeading>Ordered steps</StyledHeading>
+      <StyledRow role="group" aria-label="Add sequence step">
+        <Button
+          accent="brand"
           disabled={!editable}
           onClick={() => addMessage('EMAIL')}
+          size="small"
+          title="Add email"
           type="button"
-        >
-          Add email
-        </button>
-        <button
+          variant="primary"
+        />
+        <Button
           disabled={!editable}
           onClick={() => addMessage('INSTAGRAM')}
+          size="small"
+          title="Add Instagram"
           type="button"
-        >
-          Add Instagram
-        </button>
+          variant="secondary"
+        />
       </StyledRow>
       <StyledList aria-label="Campaign sequence">
         {sequence.messages.map((message, index) => {
           const delay = sequence.delaysSeconds[index];
           const delayParts = splitDelay(delay ?? null);
+          const primaryUnit =
+            delay === null || delay % 86400 === 0
+              ? delayUnits[0]
+              : delay % 3600 === 0
+                ? delayUnits[1]
+                : delay % 60 === 0
+                  ? delayUnits[2]
+                  : delayUnits[3];
           const delayIssue = issues.find(
             ({ path }) => path === `delaysSeconds.${index}`,
           );
@@ -188,20 +248,38 @@ export const CampaignSequenceEditor = ({
               !Number.isSafeInteger(delay * 1000));
 
           return (
-            <StyledCard key={message.id}>
-              <button
+            <StyledCard
+              data-selected={selectedMessageId === message.id}
+              key={message.id}
+            >
+              <StyledStep
                 aria-label={`Edit message ${index + 1}`}
                 aria-pressed={selectedMessageId === message.id}
                 onClick={() => onSelectMessage(message.id)}
                 type="button"
               >
-                {index + 1}.{' '}
-                {message.channel === 'EMAIL' ? 'Email' : 'Instagram'} —{' '}
-                {getMessageSummary(message)}
-              </button>
-              <StyledRow>
-                <button
-                  aria-label={`Move message ${index + 1} up`}
+                <strong>
+                  {index + 1}.{' '}
+                  {message.channel === 'EMAIL' ? 'Email' : 'Instagram'}
+                </strong>
+                <StyledSummary>{getMessageSummary(message)}</StyledSummary>
+                <StyledMeta>
+                  {message.channel === 'INSTAGRAM'
+                    ? 'Delivery unavailable'
+                    : message.replyToThread
+                      ? 'Reply to earlier email'
+                      : 'New conversation'}
+                </StyledMeta>
+              </StyledStep>
+              <StyledRow
+                role="group"
+                aria-label={`Message ${index + 1} actions`}
+              >
+                <Button
+                  ariaLabel={`Move message ${index + 1} up`}
+                  title="Move up"
+                  size="small"
+                  variant="tertiary"
                   disabled={!editable || index === 0}
                   onClick={() => {
                     onChange(
@@ -209,11 +287,12 @@ export const CampaignSequenceEditor = ({
                     );
                   }}
                   type="button"
-                >
-                  Move up
-                </button>
-                <button
-                  aria-label={`Move message ${index + 1} down`}
+                />
+                <Button
+                  ariaLabel={`Move message ${index + 1} down`}
+                  title="Move down"
+                  size="small"
+                  variant="tertiary"
                   disabled={!editable || index === sequence.messages.length - 1}
                   onClick={() => {
                     onChange(
@@ -221,11 +300,13 @@ export const CampaignSequenceEditor = ({
                     );
                   }}
                   type="button"
-                >
-                  Move down
-                </button>
-                <button
-                  aria-label={`Remove message ${index + 1}`}
+                />
+                <Button
+                  ariaLabel={`Remove message ${index + 1}`}
+                  title="Remove"
+                  size="small"
+                  variant="tertiary"
+                  accent="danger"
                   disabled={!editable}
                   onClick={() => {
                     const next = removeCampaignSequenceMessage(sequence, index);
@@ -238,29 +319,59 @@ export const CampaignSequenceEditor = ({
                     }
                   }}
                   type="button"
-                >
-                  Remove
-                </button>
+                />
               </StyledRow>
               {index < sequence.messages.length - 1 ? (
                 <StyledDelay>
-                  <legend>Estimated elapsed delay {index + 1}</legend>
-                  {delayUnits.map((unit) => (
-                    <label key={unit.key}>
-                      {unit.key}
-                      <input
-                        aria-label={`Delay ${index + 1} ${unit.key}`}
-                        disabled={!editable}
-                        min={0}
-                        onChange={(event) =>
-                          changeDelayPart(index, unit.key, event.target.value)
-                        }
-                        step={1}
-                        type="number"
-                        value={delayParts[unit.key]}
-                      />
-                    </label>
-                  ))}
+                  <legend>Wait before step {index + 2}</legend>
+                  <label>
+                    Wait
+                    <input
+                      aria-label={`Wait before step ${index + 2}`}
+                      disabled={!editable}
+                      min={1}
+                      step={1}
+                      type="number"
+                      value={delay === null ? '' : delay / primaryUnit.seconds}
+                      onChange={(event) => {
+                        const rawValue = event.target.value;
+                        const delaysSeconds = [...sequence.delaysSeconds];
+                        delaysSeconds[index] =
+                          rawValue === ''
+                            ? null
+                            : Number(rawValue) * primaryUnit.seconds;
+                        onChange({ ...sequence, delaysSeconds });
+                      }}
+                    />
+                    {delay === primaryUnit.seconds
+                      ? primaryUnit.key.replace(/s$/, '')
+                      : primaryUnit.key}
+                  </label>
+                  <details>
+                    <summary>Edit precise delay</summary>
+                    <StyledRow>
+                      {delayUnits.map((unit) => (
+                        <label key={unit.key}>
+                          {unit.key}
+                          <input
+                            aria-label={`Delay ${index + 1} ${unit.key}`}
+                            disabled={!editable}
+                            min={0}
+                            onChange={(event) =>
+                              changeDelayPart(
+                                index,
+                                unit.key,
+                                event.target.value,
+                              )
+                            }
+                            step={1}
+                            type="number"
+                            value={delayParts[unit.key]}
+                          />
+                        </label>
+                      ))}
+                    </StyledRow>
+                  </details>
                   {delay === null ? (
                     <StyledIssue>Set a delay between messages</StyledIssue>
                   ) : locallyInvalidDelay ? (

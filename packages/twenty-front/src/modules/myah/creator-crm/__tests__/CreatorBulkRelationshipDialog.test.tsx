@@ -1,12 +1,28 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { CreatorBulkRelationshipDialog } from '@/myah/creator-crm/components/CreatorBulkRelationshipDialog';
+import { type CreatorBulkRelationshipAction } from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
+import { useState } from 'react';
 
 const mockUseCreatorBulkRelationshipPreview = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
 const mockRemoveCreatorListMembers = jest.fn();
 const mockCloseModal = jest.fn();
 const mockUseQuery = jest.fn();
+let mockCampaignRead = true;
+let mockCampaignUpdate = true;
+
+jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
+  useObjectMetadataItems: () => ({
+    objectMetadataItems: [{ id: 'campaign-object', nameSingular: 'campaign' }],
+  }),
+}));
+jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
+  useObjectPermissionsForObject: () => ({
+    canReadObjectRecords: mockCampaignRead,
+    canUpdateObjectRecords: mockCampaignUpdate,
+  }),
+}));
 
 jest.mock('@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview', () => ({
   useCreatorBulkRelationshipPreview: (...args: unknown[]) =>
@@ -106,6 +122,8 @@ const readyPreview = {
 describe('CreatorBulkRelationshipDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCampaignRead = true;
+    mockCampaignUpdate = true;
     mockUseQuery.mockReturnValue({ data: undefined, loading: false });
   });
 
@@ -140,8 +158,39 @@ describe('CreatorBulkRelationshipDialog', () => {
 
     expect(screen.getByRole('button', { name: 'Add to list' })).toBeDisabled();
     expect(
-      screen.getByText('Unable to verify existing relationships. Try again.'),
+      screen.getByText('Unable to verify existing relationships.'),
     ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Retry preview' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers a read-only retry when the scoped preview failed before allowing an addition', () => {
+    const retryPreview = jest.fn();
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      ...readyPreview,
+      isPreviewUnavailable: true,
+      canRetry: true,
+      retryPreview,
+    });
+    const { rerender } = render(
+      <CreatorBulkRelationshipDialog
+        action={creatorListAction}
+        selectedCreatorIds={['creator-a', 'creator-b']}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Add to list' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry preview' }));
+    expect(retryPreview).toHaveBeenCalledTimes(1);
+    expect(mockApplyCreatorBulkRelationship).not.toHaveBeenCalled();
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
+    rerender(
+      <CreatorBulkRelationshipDialog
+        action={creatorListAction}
+        selectedCreatorIds={['creator-a', 'creator-b']}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Add to list' })).toBeEnabled();
   });
 
   it('keeps the confirmation open and disabled until an async addition succeeds', async () => {
@@ -278,6 +327,157 @@ describe('CreatorBulkRelationshipDialog', () => {
       screen.getByRole('button', { name: 'Add to campaign' }),
     ).toBeEnabled();
   });
+
+  it('describes existing list-sourced Campaign membership as direct-source promotion', () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      ...readyPreview,
+      selectedCreatorIds: ['creator-a'],
+      linkedCreatorIds: [],
+      unlinkedCreatorIds: ['creator-a'],
+      relationshipRecordIds: ['campaign-creator-a'],
+    });
+    render(
+      <CreatorBulkRelationshipDialog
+        action={campaignAction}
+        selectedCreatorIds={['creator-a']}
+      />,
+    );
+    expect(
+      screen.getByText('Will be directly added').parentElement,
+    ).toHaveTextContent('Will be directly added1 creator');
+    expect(
+      screen.getByText('Already directly added').parentElement,
+    ).toHaveTextContent('Already directly added0 creators');
+    expect(
+      screen.getByRole('button', { name: 'Add to campaign' }),
+    ).toBeEnabled();
+  });
+
+  it.each([
+    { access: 'read', canRead: false, canUpdate: true },
+    { access: 'update', canRead: true, canUpdate: false },
+  ])(
+    'invalidates the open shared Campaign action when parent Campaign $access access is revoked',
+    ({ canRead, canUpdate }) => {
+      const onClose = jest.fn();
+      mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
+      const view = () => (
+        <CreatorBulkRelationshipDialog
+          action={campaignAction}
+          selectedCreatorIds={['creator-a', 'creator-b']}
+          onClose={onClose}
+        />
+      );
+      const { rerender } = render(view());
+      expect(
+        screen.getByRole('button', { name: 'Add to campaign' }),
+      ).toBeEnabled();
+
+      const retryPreview = jest.fn();
+      mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+        ...readyPreview,
+        isPreviewUnavailable: true,
+        canRetry: true,
+        retryPreview,
+      });
+      mockCampaignRead = canRead;
+      mockCampaignUpdate = canUpdate;
+      rerender(view());
+      expect(
+        screen.getByRole('button', { name: 'Add to campaign' }),
+      ).toBeDisabled();
+      expect(
+        screen.queryByRole('button', { name: 'Retry preview' }),
+      ).not.toBeInTheDocument();
+      expect(retryPreview).not.toHaveBeenCalled();
+      expect(mockCloseModal).toHaveBeenCalledWith(
+        'creator-bulk-relationship-add-campaign-campaign-a',
+      );
+      expect(onClose).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Add to campaign' }));
+      expect(mockApplyCreatorBulkRelationship).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { next: 'list', open: 'Open list', add: 'Add to list', regrant: false },
+    {
+      next: 'same campaign',
+      open: 'Open campaign',
+      add: 'Add to campaign',
+      regrant: true,
+    },
+  ])(
+    'does not let a revoked Campaign addition close a newer $next action when it resolves',
+    async ({ open, add, regrant }) => {
+      let resolveMutation: (() => void) | undefined;
+      mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
+      mockApplyCreatorBulkRelationship.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveMutation = resolve;
+        }),
+      );
+
+      const ActionCycle = () => {
+        const [action, setAction] = useState<
+          CreatorBulkRelationshipAction | undefined
+        >(campaignAction);
+        const [selectedIds, setSelectedIds] = useState([
+          'creator-a',
+          'creator-b',
+        ]);
+
+        return (
+          <>
+            <button onClick={() => setAction(creatorListAction)}>
+              Open list
+            </button>
+            <button onClick={() => setAction(campaignAction)}>
+              Open campaign
+            </button>
+            <span data-testid="selected-creators">{selectedIds.join(',')}</span>
+            {action && (
+              <CreatorBulkRelationshipDialog
+                action={action}
+                selectedCreatorIds={selectedIds}
+                onClose={() => setAction(undefined)}
+                onSuccess={() => {
+                  setSelectedIds([]);
+                  setAction(undefined);
+                }}
+              />
+            )}
+          </>
+        );
+      };
+
+      const { rerender } = render(<ActionCycle />);
+      fireEvent.click(screen.getByRole('button', { name: 'Add to campaign' }));
+      expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledTimes(1);
+      mockCampaignRead = false;
+      rerender(<ActionCycle />);
+      expect(
+        screen.queryByRole('button', { name: 'Add to campaign' }),
+      ).not.toBeInTheDocument();
+      if (regrant) {
+        mockCampaignRead = true;
+        rerender(<ActionCycle />);
+      }
+      fireEvent.click(screen.getByRole('button', { name: open }));
+      expect(screen.getByRole('button', { name: add })).toBeEnabled();
+      mockCloseModal.mockClear();
+
+      await act(async () => {
+        resolveMutation?.();
+      });
+
+      expect(screen.getByRole('button', { name: add })).toBeEnabled();
+      expect(screen.getByTestId('selected-creators')).toHaveTextContent(
+        'creator-a,creator-b',
+      );
+      expect(mockCloseModal).not.toHaveBeenCalled();
+    },
+  );
 
   it('disables campaign confirmation for an empty or unavailable preview', () => {
     mockUseCreatorBulkRelationshipPreview.mockReturnValue({

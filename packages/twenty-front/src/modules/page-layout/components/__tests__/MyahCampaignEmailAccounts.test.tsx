@@ -1,8 +1,23 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createStore, Provider } from 'jotai';
 import { StrictMode } from 'react';
 import userEvent from '@testing-library/user-event';
 
 import { MyahCampaignEmailAccounts } from '@/page-layout/components/MyahCampaignEmailAccounts';
+import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
+import { focusStackState } from '@/ui/utilities/focus/states/focusStackState';
+
+jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
+  useObjectMetadataItem: () => ({
+    objectMetadataItem: { id: 'campaign-metadata-id' },
+  }),
+}));
+
+jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
+  useObjectPermissionsForObject: (...args: unknown[]) =>
+    mockUseObjectPermissionsForObject(...args),
+}));
 
 jest.mock('@/page-layout/hooks/useCurrentPageLayoutOrThrow', () => ({
   useCurrentPageLayoutOrThrow: () => ({
@@ -19,6 +34,7 @@ jest.mock('@/page-layout/hooks/useCurrentPageLayoutOrThrow', () => ({
 
 const mockUseQuery = jest.fn();
 const mockUseMutation = jest.fn();
+const mockUseObjectPermissionsForObject = jest.fn();
 const mockNavigate = jest.fn();
 const mockLocation = {
   hash: '#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
@@ -101,17 +117,21 @@ jest.mock('@/ui/layout/dropdown/hooks/useCloseDropdown', () => ({
 jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
   ConfirmationModal: ({
     confirmButtonText,
+    modalInstanceId,
     onClose,
     onConfirmClick,
     subtitle,
     title,
   }: {
     confirmButtonText: string;
+    modalInstanceId: string;
     onClose: () => void;
     onConfirmClick: () => void;
     subtitle: React.ReactNode;
     title: string;
   }) => {
+    const { closeModal } =
+      require('@/ui/layout/modal/hooks/useModal').useModal();
     const titleId = 'confirmation-title';
     const descriptionId = 'confirmation-description';
 
@@ -123,19 +143,27 @@ jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
       >
         <h2 id={titleId}>{title}</h2>
         <p id={descriptionId}>{subtitle}</p>
-        <button onClick={onClose} type="button">
+        <button
+          onClick={() => {
+            closeModal(modalInstanceId);
+            onClose();
+          }}
+          type="button"
+        >
           Cancel
         </button>
-        <button onClick={onConfirmClick} type="button">
+        <button
+          onClick={() => {
+            onConfirmClick();
+            closeModal(modalInstanceId);
+          }}
+          type="button"
+        >
           {confirmButtonText}
         </button>
       </div>
     );
   },
-}));
-
-jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
-  useModal: () => ({ closeModal: jest.fn(), openModal: jest.fn() }),
 }));
 
 jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
@@ -161,6 +189,16 @@ jest.mock('@/settings/accounts/components/EmailAccountConnectionCards', () => ({
       Connect email account
     </button>
   ),
+}));
+
+jest.mock('twenty-ui/navigation', () => ({
+  UndecoratedLink: ({
+    children,
+    to,
+  }: {
+    children: React.ReactNode;
+    to: string;
+  }) => <a href={to}>{children}</a>,
 }));
 
 jest.mock('twenty-ui/data-display', () => ({
@@ -332,10 +370,14 @@ const configureHooks = ({
 
 const renderWithAccounts = (options = {}) => {
   const hooks = configureHooks(options);
+  const store = createStore();
 
   return {
     ...hooks,
-    ...render(<MyahCampaignEmailAccounts campaignId="campaign-1" />),
+    store,
+    ...render(<MyahCampaignEmailAccounts campaignId="campaign-1" />, {
+      wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
+    }),
   };
 };
 
@@ -347,6 +389,21 @@ describe('MyahCampaignEmailAccounts', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLocation.search = '';
+    mockUseObjectPermissionsForObject.mockReturnValue({
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: true,
+    });
+  });
+
+  it('distinguishes drafting default from sender pool execution readiness', () => {
+    renderWithAccounts();
+
+    expect(screen.getByText(/Default is used for drafting/)).toBeVisible();
+    expect(
+      screen.getByText(
+        /Sender-pool readiness is checked separately before Start/,
+      ),
+    ).toBeVisible();
   });
 
   it('exposes Email Accounts as a real level-two heading', () => {
@@ -390,6 +447,16 @@ describe('MyahCampaignEmailAccounts', () => {
     expect(
       screen.getByRole('button', { name: 'Remove Unavailable email account' }),
     ).toBeEnabled();
+    expect(
+      screen.getByText(
+        /Remove this Campaign link, then add an available email account/,
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('link', {
+        name: /Review Unavailable email account connection/,
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it('announces account loading independently from candidate loading', () => {
@@ -418,6 +485,118 @@ describe('MyahCampaignEmailAccounts', () => {
       'Email drafting is paused',
     );
     expect(screen.queryByText('Default')).not.toBeInTheDocument();
+  });
+
+  it.each(['FORBIDDEN', 'UNAUTHENTICATED'])(
+    'hides cached linked accounts and actions when the server responds %s',
+    (code) => {
+      renderWithAccounts({
+        accountError: new CombinedGraphQLErrors({
+          errors: [{ message: 'Access denied', extensions: { code } }],
+          data: null,
+        }),
+      });
+
+      expect(
+        screen.getByText('Email accounts could not be loaded.'),
+      ).toBeVisible();
+      expect(screen.queryByText('sender@example.com')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Remove sender@example.com' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Add email account' }),
+      ).toBeDisabled();
+    },
+  );
+
+  it('hides cached linked accounts when local Campaign read permission is revoked', () => {
+    mockUseObjectPermissionsForObject.mockReturnValue({
+      canReadObjectRecords: false,
+    });
+    renderWithAccounts();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "You don't have permission to view email accounts.",
+    );
+    expect(
+      screen.queryByText('No email accounts linked.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('sender@example.com')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Remove sender@example.com' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Add email account' }),
+    ).toBeDisabled();
+  });
+
+  it('presents account identity and recovery but prevents mutations without campaign update permission', () => {
+    mockUseObjectPermissionsForObject.mockReturnValue({
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: false,
+    });
+    const { accountRefetch } = renderWithAccounts({
+      accounts: [
+        { ...linkedAccount, health: 'RECONNECT_REQUIRED' },
+        { ...candidate, id: 'campaign-account-2' },
+      ],
+    });
+
+    expect(screen.getByText('sender@example.com')).toBeVisible();
+    expect(
+      screen.getByRole('link', {
+        name: 'Review sender@example.com connection',
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Add email account' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Make team@example.com default' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Remove sender@example.com' }),
+    ).toBeDisabled();
+    expect(accountRefetch).not.toHaveBeenCalled();
+  });
+
+  it('closes an open picker and unmounts connection actions when Campaign update permission is revoked', () => {
+    const { rerender } = renderWithAccounts();
+    openAccountPicker();
+    expect(
+      screen.getByRole('button', { name: 'Connect email account' }),
+    ).toBeVisible();
+
+    mockUseObjectPermissionsForObject.mockReturnValue({
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: false,
+    });
+    rerender(<MyahCampaignEmailAccounts campaignId="campaign-1" />);
+
+    expect(mockCloseDropdown).toHaveBeenCalledWith(
+      'campaign-email-account-picker-campaign-1',
+    );
+    expect(
+      screen.queryByRole('dialog', { name: 'Email account candidates' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Connect email account' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Add email account' }),
+    ).toBeDisabled();
+  });
+
+  it('retains cached linked accounts after a transient refresh failure', () => {
+    renderWithAccounts({
+      accountError: new Error('temporary network failure'),
+    });
+
+    expect(
+      screen.getByText('Email accounts could not be loaded.'),
+    ).toBeVisible();
+    expect(screen.getByText('sender@example.com')).toBeVisible();
   });
 
   it('renders candidate query failures independently from linked account results', () => {
@@ -456,6 +635,35 @@ describe('MyahCampaignEmailAccounts', () => {
     await waitFor(() =>
       expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
         message: 'Email account connection failed. Try connecting it again.',
+      }),
+    );
+    expect(link).not.toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith(
+      {
+        hash: '#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+        pathname: '/object/campaign/campaign-1',
+        search: '',
+      },
+      { replace: true },
+    );
+  });
+
+  it('does not auto-link a returned connection when Campaign update permission is missing', async () => {
+    mockUseObjectPermissionsForObject.mockReturnValue({
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: false,
+    });
+    mockLocation.search =
+      '?linkConnectedAccount=1&connectedAccountId=123e4567-e89b-42d3-a456-426614174000';
+    const link = jest.fn();
+    configureHooks({ link });
+
+    render(<MyahCampaignEmailAccounts campaignId="campaign-1" />);
+
+    await waitFor(() =>
+      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
+        message:
+          'Campaign update permission is required to link an email account.',
       }),
     );
     expect(link).not.toHaveBeenCalled();
@@ -639,14 +847,162 @@ describe('MyahCampaignEmailAccounts', () => {
     ).toHaveTextContent('Removing the default account pauses email drafting.');
   });
 
-  it('warns that an unhealthy default pauses drafting', () => {
+  it('closes an open removal dialog on denied linked-account read and does not restore it', () => {
+    const remove = jest.fn();
+    const { rerender, store } = renderWithAccounts({ remove });
+    const modalId = 'campaign-email-account-remove-campaign-1';
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove sender@example.com' }),
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Remove sender@example.com?' }),
+    ).toBeVisible();
+    expect(
+      store.get(
+        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+      ),
+    ).toBe(true);
+
+    configureHooks({
+      accountError: new CombinedGraphQLErrors({
+        errors: [{ message: 'Forbidden', extensions: { code: 'FORBIDDEN' } }],
+        data: null,
+      }),
+      remove,
+    });
+    rerender(<MyahCampaignEmailAccounts campaignId="campaign-1" />);
+
+    expect(
+      store.get(
+        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+      ),
+    ).toBe(false);
+    expect(
+      store
+        .get(focusStackState.atom)
+        .some(({ focusId }) => focusId === modalId),
+    ).toBe(false);
+    expect(screen.queryByText('sender@example.com')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('dialog', { name: 'Remove sender@example.com?' }),
+    ).not.toBeInTheDocument();
+    expect(remove).not.toHaveBeenCalled();
+
+    configureHooks({ remove });
+    rerender(<MyahCampaignEmailAccounts campaignId="campaign-1" />);
+    expect(
+      screen.queryByRole('dialog', { name: 'Remove sender@example.com?' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('closes native modal state and focus on keyed Campaign navigation, then opens again on return', () => {
+    const remove = jest.fn();
+    const { rerender, store } = renderWithAccounts({ remove });
+    const modalId = 'campaign-email-account-remove-campaign-1';
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove sender@example.com' }),
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Remove sender@example.com?' }),
+    ).toBeVisible();
+    expect(
+      store.get(
+        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+      ),
+    ).toBe(true);
+    expect(
+      store
+        .get(focusStackState.atom)
+        .some(({ focusId }) => focusId === modalId),
+    ).toBe(true);
+
+    // The production rich-text editor is keyed by Campaign ID, unmounting this child.
+    rerender(
+      <MyahCampaignEmailAccounts campaignId="campaign-2" key="campaign-2" />,
+    );
+    expect(
+      screen.queryByRole('dialog', { name: 'Remove sender@example.com?' }),
+    ).not.toBeInTheDocument();
+    expect(
+      store.get(
+        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+      ),
+    ).toBe(false);
+    expect(
+      store
+        .get(focusStackState.atom)
+        .some(({ focusId }) => focusId === modalId),
+    ).toBe(false);
+
+    rerender(
+      <MyahCampaignEmailAccounts campaignId="campaign-1" key="campaign-1" />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove sender@example.com' }),
+    );
+    expect(
+      store.get(
+        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+      ),
+    ).toBe(true);
+    expect(
+      store
+        .get(focusStackState.atom)
+        .filter(({ focusId }) => focusId === modalId),
+    ).toHaveLength(1);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('closes the Campaign picker when its keyed host is replaced', () => {
+    const { rerender } = renderWithAccounts();
+    openAccountPicker();
+    expect(
+      screen.getByRole('dialog', { name: 'Email account candidates' }),
+    ).toBeVisible();
+
+    rerender(
+      <MyahCampaignEmailAccounts campaignId="campaign-2" key="campaign-2" />,
+    );
+    expect(mockCloseDropdown).toHaveBeenCalledWith(
+      'campaign-email-account-picker-campaign-1',
+    );
+    expect(
+      screen.queryByRole('dialog', { name: 'Email account candidates' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps unhealthy linked accounts distinct and routes recovery to existing account settings', () => {
     renderWithAccounts({
-      accounts: [{ ...linkedAccount, health: 'RECONNECT_REQUIRED' }],
+      accounts: [
+        { ...linkedAccount, health: 'RECONNECT_REQUIRED' },
+        { ...candidate, id: 'campaign-account-2', health: 'UNAVAILABLE' },
+      ],
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Email drafting is paused',
     );
+    expect(
+      screen.getByRole('link', {
+        name: 'Review sender@example.com connection',
+      }),
+    ).toHaveAttribute('href', '/settings/accounts');
+    expect(
+      screen.getByRole('link', { name: 'Review team@example.com connection' }),
+    ).toHaveAttribute('href', '/settings/accounts');
+    expect(screen.getByText('team@example.com')).toBeVisible();
+    expect(screen.getByText('Reconnect required')).toBeVisible();
+    expect(screen.getByText('Unavailable')).toBeVisible();
+  });
+
+  it('links shared email sending policy without pretending to edit campaign scheduling', () => {
+    renderWithAccounts();
+
+    expect(
+      screen.getByRole('link', { name: 'Manage shared email settings' }),
+    ).toHaveAttribute('href', '/settings/accounts/emails');
+    expect(screen.queryByLabelText('Sending window')).not.toBeInTheDocument();
   });
 
   it('keeps linked accounts rendered when removal fails', async () => {

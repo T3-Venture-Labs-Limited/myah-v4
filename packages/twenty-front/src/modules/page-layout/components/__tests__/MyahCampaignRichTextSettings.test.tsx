@@ -9,6 +9,7 @@ import { Provider } from 'jotai';
 import { type ReactNode } from 'react';
 import type * as ReactModule from 'react';
 
+import { tokenPairState } from '@/auth/states/tokenPairState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { MyahCampaignRichTextSettings } from '@/page-layout/components/MyahCampaignRichTextSettings';
 import { resetJotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
@@ -45,6 +46,7 @@ type SettingsField = {
 
 type SettingsCopy = {
   keepEditing: string;
+  saveLabel?: string;
   saveError: string;
   saveSuccess: string;
   unsavedChangesSubtitle: string;
@@ -254,7 +256,11 @@ jest.mock(
 
 type RenderSettingsOptions = {
   campaignId?: string;
+  description?: string;
   contentBeforeFields?: ReactNode;
+  contentAfterFields?: ReactNode;
+  sidebar?: ReactNode;
+  copy?: SettingsCopy;
   fields?: readonly SettingsField[];
   record?: ReturnType<typeof makeCampaign> | null;
   useCampaignMetadata?: boolean;
@@ -262,7 +268,11 @@ type RenderSettingsOptions = {
 
 const renderSettings = ({
   campaignId = 'campaign-1',
+  description,
   contentBeforeFields = <div>Native Status</div>,
+  contentAfterFields,
+  sidebar,
+  copy = settingsCopy,
   fields = settingsFields,
   record = makeCampaign(fields, {}, campaignId),
   useCampaignMetadata = true,
@@ -272,7 +282,11 @@ const renderSettings = ({
 
   const renderSurface = ({
     campaignId: nextCampaignId = campaignId,
+    description: nextDescription = description,
     contentBeforeFields: nextContentBeforeFields = contentBeforeFields,
+    contentAfterFields: nextContentAfterFields = contentAfterFields,
+    sidebar: nextSidebar = sidebar,
+    copy: nextCopy = copy,
     fields: nextFields = fields,
     useCampaignMetadata: shouldUseCampaignMetadata = useCampaignMetadata,
   }: Omit<RenderSettingsOptions, 'record'> = {}) => {
@@ -284,8 +298,11 @@ const renderSettings = ({
       <Provider store={store}>
         <MyahCampaignRichTextSettings
           campaignId={nextCampaignId}
+          description={nextDescription}
           contentBeforeFields={nextContentBeforeFields}
-          copy={settingsCopy}
+          contentAfterFields={nextContentAfterFields}
+          sidebar={nextSidebar}
+          copy={nextCopy}
           fields={nextFields}
           modalIdPrefix="campaign-operations-unsaved-changes"
           title="Campaign operations"
@@ -306,6 +323,43 @@ const renderSettings = ({
 };
 
 describe('MyahCampaignRichTextSettings', () => {
+  it('keeps the canonical fields and a supporting sidebar in the same editor', () => {
+    renderSettings({
+      description: 'Review the current Campaign delivery settings.',
+      sidebar: <p>Campaign readiness</p>,
+    });
+
+    const surface = screen.getByTestId('campaign-rich-text-settings-surface');
+    expect(surface).toHaveTextContent('Native Status');
+    expect(surface).toHaveTextContent(
+      'Review the current Campaign delivery settings.',
+    );
+    expect(surface).toHaveTextContent('Campaign readiness');
+    expect(screen.getByTestId('campaign-settings-editor')).toBeVisible();
+    expect(
+      screen.getByText('Campaign readiness').closest('aside'),
+    ).toBeVisible();
+  });
+
+  it('names the persistent save independently from a future offer preview', () => {
+    renderSettings({
+      copy: { ...settingsCopy, saveLabel: 'Save brief and notes' },
+    });
+    expect(
+      screen.getByRole('button', { name: 'Save brief and notes' }),
+    ).toBeDisabled();
+  });
+
+  it('keeps editable existing fields ahead of the read-only future offer layout', () => {
+    renderSettings({ contentAfterFields: <p>Future offer layout</p> });
+    const editor = screen.getByTestId('campaign-settings-editor');
+    const preview = screen.getByText('Future offer layout');
+    expect(
+      editor.compareDocumentPosition(preview) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockBlockerState = 'unblocked';
@@ -341,6 +395,36 @@ describe('MyahCampaignRichTextSettings', () => {
     expect(editor).toHaveAttribute('data-should-persist', 'false');
     expect(editor).toHaveAttribute('data-show-formatting-controls', 'true');
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('retains an unsaved Campaign draft when credentials rotate within the same workspace', async () => {
+    const { store, rerender } = renderSettings();
+    act(() => {
+      store.set(tokenPairState.atom, {
+        accessOrWorkspaceAgnosticToken: { token: 'same-login-initial-token' },
+      } as never);
+    });
+    mockEditorBodies.emailSignature = firstDraftBody;
+    fireEvent.click(screen.getByTestId('campaign-settings-editor'));
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+    act(() => {
+      store.set(tokenPairState.atom, {
+        accessOrWorkspaceAgnosticToken: { token: 'same-login-renewed-token' },
+      } as never);
+    });
+    rerender();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockUpdateOneRecord).toHaveBeenCalledWith({
+        idToUpdate: 'campaign-1',
+        objectNameSingular: 'campaign',
+        updateOneRecordInput: {
+          emailSignature: { blocknote: firstDraftBody, markdown: null },
+        },
+      }),
+    );
   });
 
   it('persists only on Save, updates baselines between saves, and clears canonically', async () => {

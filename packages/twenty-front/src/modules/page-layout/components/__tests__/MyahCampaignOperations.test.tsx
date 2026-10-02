@@ -20,7 +20,22 @@ type MockSettingsProps = {
   };
   modalIdPrefix: string;
   contentBeforeFields: ReactNode;
+  sidebar: ReactNode;
 };
+
+jest.mock('@/page-layout/components/MyahCampaignExecutionControls', () => ({
+  MyahCampaignExecutionControls: ({
+    campaignId,
+    variant,
+  }: {
+    campaignId: string;
+    variant: string;
+  }) => (
+    <section aria-label="Campaign launch review" data-campaign-id={campaignId}>
+      {variant}
+    </section>
+  ),
+}));
 
 jest.mock('@/page-layout/components/MyahCampaignEmailAccounts', () => ({
   MyahCampaignEmailAccounts: ({ campaignId }: { campaignId: string }) => (
@@ -36,6 +51,7 @@ jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
     copy,
     modalIdPrefix,
     contentBeforeFields,
+    sidebar,
   }: MockSettingsProps) => (
     <>
       {contentBeforeFields}
@@ -56,6 +72,7 @@ jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
         data-title={title}
         data-unsaved-subtitle={copy.unsavedChangesSubtitle}
       />
+      <aside aria-label="Campaign operations sidebar">{sidebar}</aside>
     </>
   ),
 }));
@@ -114,10 +131,22 @@ describe('MyahCampaignOperations', () => {
       'data-keep-editing',
       'Keep editing',
     );
+    expect(screen.getByText(/Email delivery settings/)).toBeVisible();
+    expect(
+      screen.getByText(
+        /Instagram messages can be authored but Campaign Start sends email only/,
+      ),
+    ).toBeVisible();
     expect(screen.getByTestId('email-accounts')).toHaveAttribute(
       'data-campaign-id',
       'campaign-1',
     );
+    expect(
+      screen.getByRole('region', { name: 'Campaign launch review' }),
+    ).toHaveAttribute('data-campaign-id', 'campaign-1');
+    expect(
+      screen.getByRole('region', { name: 'Campaign launch review' }),
+    ).toHaveTextContent('review');
     expect(screen.queryByTestId('native-status')).not.toBeInTheDocument();
     expect(
       screen

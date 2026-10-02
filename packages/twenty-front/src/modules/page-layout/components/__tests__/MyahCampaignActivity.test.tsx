@@ -1,3 +1,4 @@
+import { CombinedGraphQLErrors } from '@apollo/client';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { MyahCampaignActivity } from '@/page-layout/components/MyahCampaignActivity';
@@ -124,7 +125,10 @@ it('renders loading, empty, full-error, and partial-error states truthfully', ()
     error: undefined,
   };
   rerender(<MyahCampaignActivity campaignId="campaign" />);
-  expect(screen.getByText('No Creators in this Campaign.')).toBeVisible();
+  expect(screen.getByText(/No readable Creator activity/)).toBeVisible();
+  expect(
+    screen.queryByText('No Creators in this Campaign.'),
+  ).not.toBeInTheDocument();
 
   queryResult = {
     loading: false,
@@ -132,9 +136,7 @@ it('renders loading, empty, full-error, and partial-error states truthfully', ()
     error: new Error('forbidden'),
   };
   rerender(<MyahCampaignActivity campaignId="campaign" />);
-  expect(screen.getByRole('alert')).toHaveTextContent(
-    'unavailable or you no longer have permission',
-  );
+  expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded');
 
   queryResult = {
     ...queryResult,
@@ -150,6 +152,57 @@ it('renders loading, empty, full-error, and partial-error states truthfully', ()
     'Some Campaign activity is unavailable',
   );
   expect(screen.getByText('Ada')).toBeVisible();
+});
+
+it('does not claim a zero audience when the permission-scoped reader returns no nodes', () => {
+  queryResult = {
+    loading: false,
+    data: {
+      campaignActivity: {
+        nodes: [],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+    },
+    error: undefined,
+  };
+  render(<MyahCampaignActivity campaignId="campaign" />);
+  expect(
+    screen.getByText(/Creators you cannot access may not appear/),
+  ).toBeVisible();
+  expect(
+    screen.queryByText(/No Creators in this Campaign/),
+  ).not.toBeInTheDocument();
+});
+
+it('distinguishes explicit denial from a failed activity read without replacing partial facts', () => {
+  queryResult = {
+    loading: false,
+    data: undefined,
+    error: new CombinedGraphQLErrors({
+      errors: [{ message: 'Forbidden', extensions: { code: 'FORBIDDEN' } }],
+      data: null,
+    }),
+  };
+  const { rerender } = render(<MyahCampaignActivity campaignId="campaign" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('permission');
+  queryResult = {
+    ...queryResult,
+    data: {
+      campaignActivity: {
+        nodes: [fullRow],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+    },
+  };
+  rerender(<MyahCampaignActivity campaignId="campaign" />);
+  expect(screen.queryByText('Ada')).not.toBeInTheDocument();
+  queryResult = {
+    loading: false,
+    data: undefined,
+    error: new Error('network'),
+  };
+  rerender(<MyahCampaignActivity campaignId="campaign" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded');
 });
 
 it('shows only Campaign reader facts, loads the next page, and opens the exact readable Inbox target', () => {

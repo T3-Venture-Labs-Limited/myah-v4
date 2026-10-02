@@ -19,6 +19,11 @@ describe('CampaignOutreachWorkflowActionBar', () => {
       />,
     );
 
+    expect(screen.getByText('Unsaved changes')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Save draft' }),
+    ).not.toBeVisible();
+    fireEvent.click(screen.getByText('Sequence actions'));
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     fireEvent.click(screen.getByRole('button', { name: 'Reload from server' }));
     expect(onSave).toHaveBeenCalledTimes(1);
@@ -46,13 +51,13 @@ describe('CampaignOutreachWorkflowActionBar', () => {
       />,
     );
 
+    fireEvent.click(screen.getByText('Sequence actions'));
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
     expect(onReview).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Send test' })).toBeDisabled();
     expect(
-      screen.getByText('Campaign test integration unavailable'),
-    ).toBeVisible();
+      screen.queryByRole('button', { name: 'Send test' }),
+    ).not.toBeInTheDocument();
   });
 
   it('disables save for read-only, clean, unsafe, and in-flight states', () => {
@@ -68,6 +73,7 @@ describe('CampaignOutreachWorkflowActionBar', () => {
         saving={false}
       />,
     );
+    fireEvent.click(screen.getByText('Sequence actions'));
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
 
     rerender(

@@ -1,6 +1,7 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 
+import { ActivityAttribution } from '@/activities/components/ActivityAttribution';
 import { ActivityTargetsInlineCell } from '@/activities/inline-cell/components/ActivityTargetsInlineCell';
 import { useActivityTargetsComponentInstanceId } from '@/activities/inline-cell/hooks/useActivityTargetsComponentInstanceId';
 import { type Note } from '@/activities/types/Note';
@@ -93,6 +94,10 @@ export const NoteTile = ({
       >
         <StyledNoteTitle>{note.title ?? t`Task Title`}</StyledNoteTitle>
         <StyledCardContent>{body}</StyledCardContent>
+        <ActivityAttribution
+          createdAt={note.createdAt}
+          createdBy={note.createdBy}
+        />
       </StyledCardDetailsContainer>
       <StyledFooter>
         <FieldContextProvider

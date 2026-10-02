@@ -6,19 +6,31 @@ import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 describe('MYAH Campaign page layout', () => {
-  it('places Influencers immediately after Tasks and uses CampaignCreator rows', () => {
+  it('opens Influencers as the operational home while preserving native campaign destinations and stable IDs', () => {
     const tabs = Object.values(MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs);
     const { influencers } =
       MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.influencers.widgets;
     expect(tabs.map(({ title }) => title)).toEqual([
-      'Home',
-      'Outreach',
-      'Tasks',
+      'Campaign',
       'Influencers',
-      'Notes',
+      'Outreach',
       'Agent',
-      'Operations',
+      'Settings',
+      'Tasks',
+      'Notes',
     ]);
+    expect(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.defaultTabUniversalIdentifier,
+    ).toBe('04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596');
+    expect(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.home.universalIdentifier,
+    ).toBe('8482a6bc-bc2a-4f2d-8296-6d951f681c4f');
+    expect(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.tasks.widgets.tasks.type,
+    ).toBe(WidgetType.TASKS);
+    expect(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.notes.widgets.notes.type,
+    ).toBe(WidgetType.NOTES);
     expect(influencers.type).toBe(WidgetType.FIELD);
     expect(influencers.fieldUniversalIdentifier).toBe(
       MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators
@@ -36,9 +48,21 @@ describe('MYAH Campaign page layout', () => {
     ).not.toHaveProperty('creatorLists');
   });
 
-  it('reuses Campaign Home without an empty audience override', () => {
-    expect(MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.home).toBe(
-      MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
+  it('preserves the pinned Campaign fields widget and Home identity', () => {
+    expect(MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.home).toMatchObject({
+      universalIdentifier:
+        MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home.universalIdentifier,
+      widgets: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home.widgets,
+    });
+    // Desktop native layout pins the first sorted tab and activates the first remaining tab.
+    const [pinned, firstActive] = Object.values(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs,
+    ).sort((a, b) => a.position - b.position);
+    expect(pinned.universalIdentifier).toBe(
+      '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+    );
+    expect(firstActive.universalIdentifier).toBe(
+      '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
     );
   });
 });

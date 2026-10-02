@@ -1,4 +1,5 @@
 import { gql } from '@apollo/client';
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Chip, ChipVariant } from 'twenty-ui/data-display';
 import {
@@ -13,6 +14,8 @@ import { Button, LightIconButton } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { H2Title } from 'twenty-ui/typography';
 
+import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
@@ -22,8 +25,9 @@ import { styled } from '@linaria/react';
 import { EmailAccountConnectionCards } from '@/settings/accounts/components/EmailAccountConnectionCards';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AppPath } from 'twenty-shared/types';
-import { getAppPath } from 'twenty-shared/utils';
+import { AppPath, SettingsPath } from 'twenty-shared/types';
+import { getAppPath, getSettingsPath } from 'twenty-shared/utils';
+import { UndecoratedLink } from 'twenty-ui/navigation';
 
 import { MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignOperationsTabUniversalIdentifier';
 import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageLayoutOrThrow';
@@ -148,8 +152,10 @@ export const MyahCampaignEmailAccounts = ({
 }: {
   campaignId: string;
 }) => {
-  const [removingAccount, setRemovingAccount] =
-    useState<CampaignEmailAccount | null>(null);
+  const [removingAccount, setRemovingAccount] = useState<{
+    account: CampaignEmailAccount;
+    campaignId: string;
+  } | null>(null);
   const [removalTrigger, setRemovalTrigger] =
     useState<HTMLButtonElement | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -157,7 +163,14 @@ export const MyahCampaignEmailAccounts = ({
   const pickerActionRef = useRef<HTMLButtonElement>(null);
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
   const { closeDropdown } = useCloseDropdown();
-  const { openModal } = useModal();
+  const { openModal, closeModal } = useModal();
+  const { objectMetadataItem } = useObjectMetadataItem({
+    objectNameSingular: 'campaign',
+  });
+  const {
+    canReadObjectRecords: canReadCampaign,
+    canUpdateObjectRecords: canUpdateCampaign,
+  } = useObjectPermissionsForObject(objectMetadataItem.id);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentPageLayout } = useCurrentPageLayoutOrThrow();
@@ -168,11 +181,15 @@ export const MyahCampaignEmailAccounts = ({
   const pickerDropdownId = `campaign-email-account-picker-${campaignId}`;
   const accountQuery = useQuery<{
     campaignEmailAccounts: CampaignEmailAccount[];
-  }>(CAMPAIGN_EMAIL_ACCOUNTS, { variables: { input: { campaignId } } });
+  }>(CAMPAIGN_EMAIL_ACCOUNTS, {
+    variables: { input: { campaignId } },
+    skip: !canReadCampaign,
+  });
   const candidatesQuery = useQuery<{
     campaignEmailAccountCandidates: CampaignEmailAccount[];
   }>(CAMPAIGN_EMAIL_ACCOUNT_CANDIDATES, {
     variables: { input: { campaignId } },
+    skip: !canReadCampaign,
   });
   const [linkAccount, { loading: linking }] = useMutation<{
     linkCampaignEmailAccount: CampaignEmailAccount[];
@@ -184,8 +201,20 @@ export const MyahCampaignEmailAccounts = ({
     removeCampaignEmailAccount: CampaignEmailAccount[];
   }>(REMOVE_CAMPAIGN_EMAIL_ACCOUNT);
 
-  const displayedAccounts = accountQuery.data?.campaignEmailAccounts ?? [];
-  const candidates = candidatesQuery.data?.campaignEmailAccountCandidates ?? [];
+  const accountAccessDenied =
+    !canReadCampaign ||
+    (CombinedGraphQLErrors.is(accountQuery.error) &&
+      accountQuery.error.errors.some(
+        ({ extensions }) =>
+          extensions?.code === 'FORBIDDEN' ||
+          extensions?.code === 'UNAUTHENTICATED',
+      ));
+  const displayedAccounts = accountAccessDenied
+    ? []
+    : (accountQuery.data?.campaignEmailAccounts ?? []);
+  const candidates = accountAccessDenied
+    ? []
+    : (candidatesQuery.data?.campaignEmailAccountCandidates ?? []);
   const isLoading = accountQuery.loading;
   const hasDefault = displayedAccounts.some((account) => account.isDefault);
   const defaultAccount = displayedAccounts.find((account) => account.isDefault);
@@ -210,6 +239,45 @@ export const MyahCampaignEmailAccounts = ({
   )}#${campaignOperationsTabId}`;
 
   useEffect(() => {
+    if (
+      removingAccount &&
+      (accountAccessDenied ||
+        !canUpdateCampaign ||
+        removingAccount.campaignId !== campaignId)
+    ) {
+      closeModal(`campaign-email-account-remove-${removingAccount.campaignId}`);
+      setRemovingAccount(null);
+      setRemovalTrigger(null);
+    }
+  }, [
+    accountAccessDenied,
+    canUpdateCampaign,
+    campaignId,
+    closeModal,
+    removingAccount,
+  ]);
+
+  useEffect(
+    () => () => {
+      closeModal(removeModalId);
+      closeDropdown(pickerDropdownId);
+    },
+    [closeModal, closeDropdown, removeModalId, pickerDropdownId],
+  );
+
+  useEffect(() => {
+    if (isPickerOpen && (accountAccessDenied || !canUpdateCampaign)) {
+      closeDropdown(pickerDropdownId);
+    }
+  }, [
+    accountAccessDenied,
+    canUpdateCampaign,
+    closeDropdown,
+    isPickerOpen,
+    pickerDropdownId,
+  ]);
+
+  useEffect(() => {
     if (isPickerOpen) {
       pickerActionRef.current?.focus();
     }
@@ -223,6 +291,7 @@ export const MyahCampaignEmailAccounts = ({
   );
 
   const handleLink = async (candidate: CampaignEmailAccount) => {
+    if (accountAccessDenied || !canUpdateCampaign) return;
     try {
       await linkAccount({
         variables: {
@@ -277,6 +346,15 @@ export const MyahCampaignEmailAccounts = ({
       return;
     }
 
+    if (!canUpdateCampaign) {
+      clearConnectionParams();
+      enqueueErrorSnackBar({
+        message:
+          'Campaign update permission is required to link an email account.',
+      });
+      return;
+    }
+
     if (autoLinkedAccountRef.current) return;
 
     clearConnectionParams();
@@ -297,6 +375,7 @@ export const MyahCampaignEmailAccounts = ({
       });
   }, [
     campaignId,
+    canUpdateCampaign,
     enqueueErrorSnackBar,
     enqueueSuccessSnackBar,
     linkAccount,
@@ -307,6 +386,7 @@ export const MyahCampaignEmailAccounts = ({
   ]);
 
   const handleSetDefault = async (account: CampaignEmailAccount) => {
+    if (accountAccessDenied || !canUpdateCampaign) return;
     try {
       await setDefaultAccount({
         variables: { input: { campaignId, campaignAccountId: account.id } },
@@ -321,27 +401,39 @@ export const MyahCampaignEmailAccounts = ({
   };
 
   const openRemoval = (account: CampaignEmailAccount) => {
-    setRemovingAccount(account);
+    setRemovingAccount({ account, campaignId });
     openModal(removeModalId);
   };
 
   const closeRemoval = (focusAddAccount = false) => {
-    setRemovingAccount(null);
-    if (focusAddAccount) {
-      addEmailAccountButtonRef.current?.focus();
-    } else {
-      removalTrigger?.focus();
+    if (
+      !accountAccessDenied &&
+      canUpdateCampaign &&
+      (!removingAccount || removingAccount.campaignId === campaignId)
+    ) {
+      if (focusAddAccount) {
+        addEmailAccountButtonRef.current?.focus();
+      } else {
+        removalTrigger?.focus();
+      }
     }
+    setRemovingAccount(null);
     setRemovalTrigger(null);
   };
 
   const handleRemove = async () => {
-    if (!removingAccount) return;
+    if (
+      !removingAccount ||
+      accountAccessDenied ||
+      !canUpdateCampaign ||
+      removingAccount.campaignId !== campaignId
+    )
+      return;
 
     try {
       await removeAccount({
         variables: {
-          input: { campaignId, campaignAccountId: removingAccount.id },
+          input: { campaignId, campaignAccountId: removingAccount.account.id },
         },
       });
       await refreshAccountQueries();
@@ -362,7 +454,7 @@ export const MyahCampaignEmailAccounts = ({
               <LightIconButton
                 aria-label="Add email account"
                 Icon={IconPlus}
-                disabled={linking}
+                disabled={linking || accountAccessDenied || !canUpdateCampaign}
                 ref={addEmailAccountButtonRef}
               />
             }
@@ -370,16 +462,19 @@ export const MyahCampaignEmailAccounts = ({
             dropdownAriaLabel="Email account candidates"
             dropdownComponents={
               <div>
-                {candidatesQuery.loading ? (
+                {!accountAccessDenied && candidatesQuery.loading ? (
                   <p aria-live="polite">Loading available email accounts…</p>
                 ) : null}
-                {!candidatesQuery.loading && candidatesQuery.error ? (
+                {!accountAccessDenied &&
+                !candidatesQuery.loading &&
+                candidatesQuery.error ? (
                   <p role="alert">
                     Available email accounts could not be loaded.
                   </p>
                 ) : null}
                 {!candidatesQuery.loading &&
                 !candidatesQuery.error &&
+                !accountAccessDenied &&
                 candidates.length === 0 ? (
                   <p>No available email accounts.</p>
                 ) : null}
@@ -396,7 +491,11 @@ export const MyahCampaignEmailAccounts = ({
                       return (
                         <Button
                           ariaLabel={`Add ${accountIdentifier(candidate)}`}
-                          disabled={linking || !isCandidateAvailable}
+                          disabled={
+                            linking ||
+                            !canUpdateCampaign ||
+                            !isCandidateAvailable
+                          }
                           key={candidate.id}
                           ref={
                             candidate.id === firstAvailableCandidate?.id
@@ -415,9 +514,11 @@ export const MyahCampaignEmailAccounts = ({
                       );
                     })
                   : null}
-                <EmailAccountConnectionCards
-                  returnTo={campaignOperationsReturnPath}
-                />
+                {!accountAccessDenied && canUpdateCampaign ? (
+                  <EmailAccountConnectionCards
+                    returnTo={campaignOperationsReturnPath}
+                  />
+                ) : null}
               </div>
             }
             dropdownId={pickerDropdownId}
@@ -432,11 +533,27 @@ export const MyahCampaignEmailAccounts = ({
           />
         }
       />
-      {isLoading ? <p aria-live="polite">Loading email accounts…</p> : null}
-      {!isLoading && accountQuery.error ? (
+      <p>
+        Default is used for drafting. Sender-pool readiness is checked
+        separately before Start; linking an account here does not make it ready
+        to send.{' '}
+        <UndecoratedLink to={getSettingsPath(SettingsPath.AccountsEmails)}>
+          Manage shared email settings
+        </UndecoratedLink>
+        .
+      </p>
+      {!canReadCampaign ? (
+        <p role="alert">You don't have permission to view email accounts.</p>
+      ) : !isLoading && accountQuery.error ? (
         <p role="alert">Email accounts could not be loaded.</p>
       ) : null}
-      {!isLoading && !accountQuery.error && displayedAccounts.length === 0 ? (
+      {!accountAccessDenied && isLoading ? (
+        <p aria-live="polite">Loading email accounts…</p>
+      ) : null}
+      {!isLoading &&
+      !accountAccessDenied &&
+      !accountQuery.error &&
+      displayedAccounts.length === 0 ? (
         <p>No email accounts linked.</p>
       ) : null}
       {!isLoading &&
@@ -480,16 +597,30 @@ export const MyahCampaignEmailAccounts = ({
                 variant={ChipVariant.Static}
               />
               {account.health !== 'AVAILABLE' ? (
-                <span aria-label={`${accountIdentifier(account)} health`}>
-                  {account.health === 'RECONNECT_REQUIRED'
-                    ? 'Reconnect required'
-                    : 'Unavailable'}
-                </span>
+                <>
+                  <span aria-label={`${accountIdentifier(account)} health`}>
+                    {account.health === 'RECONNECT_REQUIRED'
+                      ? 'Reconnect required'
+                      : 'Unavailable'}
+                  </span>
+                  {account.provider === null && account.senderEmail === null ? (
+                    <span>
+                      Remove this Campaign link, then add an available email
+                      account.
+                    </span>
+                  ) : (
+                    <UndecoratedLink
+                      to={getSettingsPath(SettingsPath.Accounts)}
+                    >
+                      {`Review ${accountIdentifier(account)} connection`}
+                    </UndecoratedLink>
+                  )}
+                </>
               ) : null}
               {!account.isDefault ? (
                 <Button
                   ariaLabel={`Make ${accountIdentifier(account)} default`}
-                  disabled={settingDefault}
+                  disabled={settingDefault || !canUpdateCampaign}
                   onClick={() => void handleSetDefault(account)}
                   title="Make default"
                   type="button"
@@ -499,6 +630,7 @@ export const MyahCampaignEmailAccounts = ({
               <LightIconButton
                 aria-label={`Remove ${accountIdentifier(account)}`}
                 Icon={IconX}
+                disabled={!canUpdateCampaign}
                 onClick={(event) => {
                   setRemovalTrigger(event.currentTarget);
                   openRemoval(account);
@@ -508,7 +640,10 @@ export const MyahCampaignEmailAccounts = ({
           );
         })}
       </StyledAccountTags>
-      {removingAccount ? (
+      {removingAccount &&
+      removingAccount.campaignId === campaignId &&
+      !accountAccessDenied &&
+      canUpdateCampaign ? (
         <ConfirmationModal
           confirmButtonText="Remove account"
           loading={removing}
@@ -516,11 +651,11 @@ export const MyahCampaignEmailAccounts = ({
           onClose={() => closeRemoval()}
           onConfirmClick={() => void handleRemove()}
           subtitle={
-            removingAccount.isDefault
+            removingAccount.account.isDefault
               ? 'Removing the default account pauses email drafting. No replacement will be selected automatically.'
               : 'Removing this email account does not change the default email account.'
           }
-          title={`Remove ${accountIdentifier(removingAccount)}?`}
+          title={`Remove ${accountIdentifier(removingAccount.account)}?`}
         />
       ) : null}
     </Section>

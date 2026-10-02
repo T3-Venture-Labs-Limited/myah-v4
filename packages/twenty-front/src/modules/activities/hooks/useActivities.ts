@@ -51,6 +51,7 @@ export const useActivities = <T extends Task | Note>({
     fetchMoreActivityTargets,
     hasNextPage,
     error,
+    hasReadPermission,
   } = useActivityTargetsForTargetableObjects({
     objectNameSingular,
     targetableObjects,
@@ -95,5 +96,6 @@ export const useActivities = <T extends Task | Note>({
     fetchMoreActivities,
     hasNextPage,
     error,
+    hasReadPermission,
   };
 };

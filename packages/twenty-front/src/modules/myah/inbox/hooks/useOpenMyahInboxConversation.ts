@@ -1,6 +1,10 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { type CampaignMessageOverviewReturnTarget } from '@/myah/campaign-messages/types/CampaignMessageOverviewReturnTarget';
 import {
+  isCampaignCreatorInboxReturnTarget,
+  type CampaignCreatorInboxReturnTarget,
+} from '@/myah/inbox/types/CampaignCreatorInboxReturnTarget';
+import {
   myahInboxContactSelectionState,
   myahInboxPreserveSelectionOnUnmountState,
 } from '@/myah/inbox/states/myahInboxSelectionState';
@@ -20,8 +24,17 @@ export const useOpenMyahInboxConversation = () => {
       contactId: string;
       threadId: string;
       returnTarget?: CampaignMessageOverviewReturnTarget;
+      creatorReturnTarget?: CampaignCreatorInboxReturnTarget;
     }) => {
-      if (!currentWorkspace || target.workspaceId !== currentWorkspace.id)
+      if (
+        !currentWorkspace ||
+        target.workspaceId !== currentWorkspace.id ||
+        (target.creatorReturnTarget &&
+          !isCampaignCreatorInboxReturnTarget(
+            target.creatorReturnTarget,
+            currentWorkspace.id,
+          ))
+      )
         return false;
 
       store.set(myahInboxContactSelectionState.atom, {
@@ -33,9 +46,11 @@ export const useOpenMyahInboxConversation = () => {
       });
       store.set(myahInboxPreserveSelectionOnUnmountState.atom, true);
       navigate('/myah/inbox', {
-        state: target.returnTarget
-          ? { campaignMessageOverviewReturnTarget: target.returnTarget }
-          : null,
+        state: target.creatorReturnTarget
+          ? { campaignCreatorInboxReturnTarget: target.creatorReturnTarget }
+          : target.returnTarget
+            ? { campaignMessageOverviewReturnTarget: target.returnTarget }
+            : null,
       });
       return true;
     },

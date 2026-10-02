@@ -18,6 +18,11 @@ const StyledEditor = styled.section`
   min-width: 0;
 `;
 
+const StyledHeading = styled.h2`
+  font-size: ${themeCssVariables.font.size.md};
+  margin: 0;
+`;
+
 const StyledHint = styled.p`
   color: ${themeCssVariables.font.color.secondary};
   margin: 0;
@@ -106,6 +111,7 @@ export const CampaignSequenceMessageEditor = ({
   if (message.channel === 'INSTAGRAM') {
     return (
       <StyledEditor aria-label={`Edit Instagram message ${messageIndex + 1}`}>
+        <StyledHeading>Step {messageIndex + 1} · Instagram</StyledHeading>
         <strong>Instagram delivery unavailable</strong>
         <StyledHint>
           Instagram is text-only. Delivery cannot be enabled in this phase.
@@ -161,6 +167,7 @@ export const CampaignSequenceMessageEditor = ({
 
   return (
     <StyledEditor aria-label={`Edit email message ${messageIndex + 1}`}>
+      <StyledHeading>Step {messageIndex + 1} · Email</StyledHeading>
       <StyledHint>
         Sender and recipients are controlled by the Campaign. Each eligible
         Creator receives the resolved message; this step cannot override To, CC,
@@ -172,12 +179,24 @@ export const CampaignSequenceMessageEditor = ({
           error={
             messageIssues.find(({ path }) => path.endsWith('.subject'))?.message
           }
+          key={`${message.id}-${reloadGeneration}`}
           label="Subject"
           onChange={(subject) => onChange({ ...message, subject })}
           placeholder="Email subject"
-          readonly={!editable}
+          readonly={!editable || message.replyToThread}
         />
       </div>
+      {message.replyToThread ? (
+        <StyledHint>
+          This is the saved authored subject, not the earlier email's subject.
+          Sending resolves the verified earlier email thread separately for each
+          Creator. This is not an exact personalized preview.
+          {messageIssues.some(({ path }) => path.endsWith('.subject')) &&
+          editable
+            ? ' Turn off reply to edit the saved subject, then enable reply again.'
+            : ''}
+        </StyledHint>
+      ) : null}
       <div aria-label="Body" role="group">
         <FormAdvancedTextFieldInput
           contentType="json"

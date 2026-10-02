@@ -1,8 +1,10 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { render, screen } from '@testing-library/react';
 
 import { NotesCard } from '@/activities/notes/components/NotesCard';
 
 const mockUseNotes = jest.fn();
+const mockUseObjectPermissionsForObject = jest.fn();
 
 jest.mock('@/activities/notes/hooks/useNotes', () => ({
   useNotes: (...args: unknown[]) => mockUseNotes(...args),
@@ -40,9 +42,8 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
 }));
 
 jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
-  useObjectPermissionsForObject: () => ({
-    canUpdateObjectRecords: false,
-  }),
+  useObjectPermissionsForObject: (...args: unknown[]) =>
+    mockUseObjectPermissionsForObject(...args),
 }));
 
 const defaultNotesResult = {
@@ -52,11 +53,16 @@ const defaultNotesResult = {
   fetchMoreNotes: jest.fn(),
   hasNextPage: false,
   error: undefined,
+  hasReadPermission: true,
 };
 
 describe('NotesCard', () => {
   beforeEach(() => {
     mockUseNotes.mockReturnValue(defaultNotesResult);
+    mockUseObjectPermissionsForObject.mockReturnValue({
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: false,
+    });
   });
 
   afterEach(() => {
@@ -93,6 +99,38 @@ describe('NotesCard', () => {
     expect(screen.getByText('No notes')).toBeVisible();
   });
 
+  it('does not call a forbidden note read an empty state', () => {
+    mockUseNotes.mockReturnValue({
+      ...defaultNotesResult,
+      hasReadPermission: false,
+    });
+
+    render(<NotesCard />);
+
+    expect(
+      screen.getByText("You don't have permission to view notes"),
+    ).toBeVisible();
+    expect(screen.queryByText('No notes')).not.toBeInTheDocument();
+  });
+
+  it('hides cached notes after read permission is revoked', () => {
+    mockUseNotes.mockReturnValue({
+      ...defaultNotesResult,
+      notes: [{ id: 'note-id', title: 'Previously visible note' }],
+      totalCountNotes: 1,
+      hasReadPermission: false,
+    });
+
+    render(<NotesCard />);
+
+    expect(
+      screen.getByText("You don't have permission to view notes"),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Previously visible note'),
+    ).not.toBeInTheDocument();
+  });
+
   it('does not show the empty state when the initial read fails', () => {
     mockUseNotes.mockReturnValue({
       ...defaultNotesResult,
@@ -104,6 +142,51 @@ describe('NotesCard', () => {
     expect(screen.getByText("Notes couldn't be loaded")).toBeVisible();
     expect(screen.queryByText('No notes')).not.toBeInTheDocument();
   });
+
+  it('hides cached notes after target Creator read permission is revoked', () => {
+    mockUseNotes.mockReturnValue({
+      ...defaultNotesResult,
+      notes: [{ id: 'note-id', title: 'Previously visible note' }],
+      totalCountNotes: 1,
+    });
+    mockUseObjectPermissionsForObject.mockReturnValue({
+      canReadObjectRecords: false,
+      canUpdateObjectRecords: false,
+    });
+
+    render(<NotesCard />);
+
+    expect(
+      screen.getByText("You don't have permission to view notes"),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Previously visible note'),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(['FORBIDDEN', 'UNAUTHENTICATED'])(
+    'hides cached notes when the server responds %s despite stale local permission',
+    (code) => {
+      mockUseNotes.mockReturnValue({
+        ...defaultNotesResult,
+        notes: [{ id: 'note-id', title: 'Previously visible note' }],
+        totalCountNotes: 1,
+        error: new CombinedGraphQLErrors({
+          errors: [{ message: 'Access denied', extensions: { code } }],
+          data: null,
+        }),
+      });
+
+      render(<NotesCard />);
+
+      expect(
+        screen.getByText("You don't have permission to view notes"),
+      ).toBeVisible();
+      expect(
+        screen.queryByText('Previously visible note'),
+      ).not.toBeInTheDocument();
+    },
+  );
 
   it('keeps cached notes visible when a later read fails', () => {
     mockUseNotes.mockReturnValue({

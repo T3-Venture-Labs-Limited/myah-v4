@@ -80,7 +80,9 @@ describe('TaskGroups', () => {
     mockUseTasks.mockReturnValue({ tasks: [], tasksLoading: true });
     render(<TaskGroups targetableObject={creator} />);
     expect(screen.getByText('Loading tasks')).toBeVisible();
-    expect(screen.queryByText('Mission accomplished!')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No tasks linked to this record'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows linked tasks in order within their status group on an ordinary record', () => {
@@ -90,9 +92,10 @@ describe('TaskGroups', () => {
     expect(screen.getByText('TODO: Newer task, Older task')).toBeVisible();
   });
 
-  it('shows the successful empty state only for a genuine empty read', () => {
+  it('shows no linked work without implying completed obligations', () => {
     render(<TaskGroups targetableObject={creator} />);
-    expect(screen.getByText('Mission accomplished!')).toBeVisible();
+    expect(screen.getByText('No tasks linked to this record')).toBeVisible();
+    expect(screen.queryByText('Mission accomplished!')).not.toBeInTheDocument();
   });
 
   it('shows an error instead of empty success when the initial read fails', () => {
@@ -103,7 +106,9 @@ describe('TaskGroups', () => {
     });
     render(<TaskGroups targetableObject={creator} />);
     expect(screen.getByText("Tasks couldn't be loaded")).toBeVisible();
-    expect(screen.queryByText('Mission accomplished!')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No tasks linked to this record'),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps already visible tasks when a later read fails', () => {
@@ -114,7 +119,9 @@ describe('TaskGroups', () => {
     });
     render(<TaskGroups targetableObject={creator} />);
     expect(screen.getByText('TODO: Newer task, Older task')).toBeVisible();
-    expect(screen.queryByText('Mission accomplished!')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No tasks linked to this record'),
+    ).not.toBeInTheDocument();
   });
 
   it('observes a successor page only when one exists, without hiding current tasks', async () => {
@@ -191,7 +198,9 @@ describe('TaskGroups', () => {
       fetchMoreTasks,
     });
     render(<TaskGroups targetableObject={creator} />);
-    expect(screen.queryByText('Mission accomplished!')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No tasks linked to this record'),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Load next page'));
     await screen.findByText('Load more tasks');
     expect(fetchMoreTasks).toHaveBeenCalledTimes(1);

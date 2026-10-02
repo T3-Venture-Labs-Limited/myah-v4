@@ -2,6 +2,10 @@ import { type Activity } from '@/activities/types/Activity';
 import { type NoteTarget } from '@/activities/types/NoteTarget';
 
 export type Note = Activity & {
+  createdBy?: {
+    name?: string | null;
+    source?: string | null;
+  } | null;
   noteTargets?: NoteTarget[];
   __typename: 'Note';
 };

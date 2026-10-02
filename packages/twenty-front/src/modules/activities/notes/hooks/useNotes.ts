@@ -34,6 +34,7 @@ export const useNotes = (targetableObject: ActivityTargetableObject) => {
     fetchMoreActivities,
     hasNextPage,
     error,
+    hasReadPermission,
   } = useActivities<Note>({
     objectNameSingular: CoreObjectNameSingular.Note,
     activityTargetsOrderByVariables: notesQueryVariables.orderBy ?? [{}],
@@ -62,5 +63,6 @@ export const useNotes = (targetableObject: ActivityTargetableObject) => {
     fetchMoreNotes: fetchMoreActivities,
     hasNextPage,
     error,
+    hasReadPermission,
   };
 };

@@ -1,6 +1,7 @@
 import { render, renderHook, screen } from '@testing-library/react';
 
 import { CreatorListWorkspace } from '@/myah/creator-crm/components/CreatorListWorkspace';
+import { CampaignIndexWorkspace } from '@/myah/campaign/components/CampaignIndexWorkspace';
 import { RecordIndexContainerGater } from '@/object-record/record-index/components/RecordIndexContainerGater';
 import { useHandleIndexIdentifierClick } from '@/object-record/record-index/hooks/useHandleIndexIdentifierClick';
 import { RecordIndexPage } from '~/pages/object-record/RecordIndexPage';
@@ -21,6 +22,12 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: () => ({
     objectMetadataItems: mockObjectMetadataItems(),
   }),
+}));
+
+jest.mock('@/myah/campaign/components/CampaignIndexWorkspace', () => ({
+  CampaignIndexWorkspace: jest.fn(() => (
+    <div data-testid="campaign-workspace" />
+  )),
 }));
 
 jest.mock('@/myah/creator-crm/components/CreatorListWorkspace', () => ({
@@ -103,6 +110,19 @@ describe('RecordIndexPage Creator List workspace', () => {
 
     expect(screen.getByTestId('creator-list-workspace')).toBeVisible();
     expect(RecordIndexContainerGater).not.toHaveBeenCalled();
+  });
+
+  it('composes the Campaign workspace only for Campaign metadata', () => {
+    mockObjectMetadataItems.mockReturnValue([
+      { id: 'creator-list-metadata-id', nameSingular: 'campaign' },
+    ]);
+
+    render(<RecordIndexPage />);
+
+    expect(screen.getByTestId('campaign-workspace')).toBeVisible();
+    expect(CampaignIndexWorkspace).toHaveBeenCalled();
+    expect(RecordIndexContainerGater).not.toHaveBeenCalled();
+    expect(CreatorListWorkspace).not.toHaveBeenCalled();
   });
 
   it('keeps the ordinary native index path unchanged for Creator metadata', () => {
