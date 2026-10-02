@@ -1290,6 +1290,11 @@ msgstr "A draft already exists"
 msgid "A draft already exists for this workflow. Are you sure you want to erase it?"
 msgstr "A draft already exists for this workflow. Are you sure you want to erase it?"
 
+#. js-lingui-id: DlqasP
+#: src/modules/views/components/CreatorRecordIndexReferenceGate.tsx
+msgid "A filter or sort cannot be validated. Remove obsolete references or excess URL parameters before loading records."
+msgstr "A filter or sort cannot be validated. Remove obsolete references or excess URL parameters before loading records."
+
 #. js-lingui-id: C6xZqR
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
 msgid "A role must be selected for the API key"
@@ -1347,7 +1352,6 @@ msgstr "Abort"
 
 #. js-lingui-id: uyJsf6
 #: src/modules/settings/admin-panel/components/SettingsAdminGeneral.tsx
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
 #: src/modules/settings/logic-functions/components/SettingsLogicFunctionNewForm.tsx
 #: src/pages/settings/ai/SettingsSkillForm.tsx
 #: src/pages/settings/applications/SettingsApplicationDetails.tsx
@@ -1768,7 +1772,6 @@ msgid "Add email channel"
 msgstr "Add email channel"
 
 #. js-lingui-id: DpV70M
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
 msgid "Add Field"
 msgstr "Add Field"
@@ -1907,12 +1910,6 @@ msgstr "Add node"
 msgid "Add note"
 msgstr "Add note"
 
-#. js-lingui-id: dEO3Zx
-#: src/pages/settings/data-model/SettingsObjects.tsx
-#: src/pages/settings/data-model/SettingsObjects.tsx
-msgid "Add object"
-msgstr "Add object"
-
 #. js-lingui-id: mFtRj8
 #: src/pages/settings/members/roles/SettingsRoleAddObjectLevel.tsx
 #: src/pages/settings/members/roles/SettingsRoleAddObjectLevel.tsx
@@ -1945,11 +1942,6 @@ msgstr "Add permission"
 #: src/modules/settings/domains/components/SettingsPublicDomainsListCard.tsx
 msgid "Add Public Domain"
 msgstr "Add Public Domain"
-
-#. js-lingui-id: AmiJYR
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
-msgid "Add relation"
-msgstr "Add relation"
 
 #. js-lingui-id: 32bGrY
 #: src/modules/workflow/workflow-steps/workflow-actions/if-else-action/components/WorkflowEditActionIfElseBody.tsx
@@ -4995,11 +4987,6 @@ msgstr "Choose plan"
 msgid "Choose the default currency that will apply"
 msgstr "Choose the default currency that will apply"
 
-#. js-lingui-id: LHce7q
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-msgid "Choose the fields that will identify your records"
-msgstr "Choose the fields that will identify your records"
-
 #. js-lingui-id: hIJigY
 #: src/modules/settings/data-model/fields/forms/date/components/SettingsDataModelFieldDateForm.tsx
 msgid "Choose the format used to display date value"
@@ -5539,11 +5526,6 @@ msgstr "Configure fallback login methods for users with SSO bypass permissions"
 #: src/modules/settings/security/components/SettingsSecuritySettings.tsx
 msgid "Configure how long audit logs are retained"
 msgstr "Configure how long audit logs are retained"
-
-#. js-lingui-id: OLqG0t
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-msgid "Configure how this object appears in search results"
-msgstr "Configure how this object appears in search results"
 
 #. js-lingui-id: ghdb7+
 #: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelsGeneral.tsx
@@ -6671,6 +6653,11 @@ msgstr "Creating your data model..."
 msgid "Creating your workspace..."
 msgstr "Creating your workspace..."
 
+#. js-lingui-id: UE2beD
+#: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
+msgid "Creator"
+msgstr "Creator"
+
 #. js-lingui-id: zj5RMo
 #: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
 #: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
@@ -6984,11 +6971,6 @@ msgstr "Customer-owned"
 msgid "Customer-owned domain"
 msgstr "Customer-owned domain"
 
-#. js-lingui-id: MNGIVW
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
-msgid "Customise the fields available in the {objectLabelSingular} views and their display order in the {objectLabelSingular} detail view and menus."
-msgstr "Customise the fields available in the {objectLabelSingular} views and their display order in the {objectLabelSingular} detail view and menus."
-
 #. js-lingui-id: qqLY+j
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 #: src/pages/settings/data-model/new-field/SettingsObjectNewFieldConfigure.tsx
@@ -7087,7 +7069,6 @@ msgid "Daily Usage"
 msgstr "Daily Usage"
 
 #. js-lingui-id: Zz6Cxn
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
 #: src/modules/settings/developers/components/SettingsDevelopersWebhookForm.tsx
 #: src/modules/settings/profile/components/DeleteAccount.tsx
 #: src/modules/settings/profile/components/DeleteWorkspace.tsx
@@ -7288,7 +7269,6 @@ msgid "days trial"
 msgstr "days trial"
 
 #. js-lingui-id: 5y3O+A
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
 #: src/modules/settings/security/components/SSO/SettingsSecuritySSORowDropdownMenu.tsx
 #: src/pages/settings/ai/SettingsSkillForm.tsx
 #: src/pages/settings/data-model/SettingsObjectFieldEdit.tsx
@@ -7305,11 +7285,6 @@ msgstr "Deactivate \"Synchronize Label and API Name\" to set a custom API name"
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
 msgid "Deactivate \"Synchronize Objects Labels and API Names\" to set a custom API name"
 msgstr "Deactivate \"Synchronize Objects Labels and API Names\" to set a custom API name"
-
-#. js-lingui-id: T2YbXF
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-msgid "Deactivate object"
-msgstr "Deactivate object"
 
 #. js-lingui-id: OFJYGS
 #: src/pages/settings/ai/SettingsSkillForm.tsx
@@ -7474,8 +7449,6 @@ msgstr "delete"
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminDeleteJobsConfirmationModal.tsx
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobRowDropdownMenu.tsx
 #: src/modules/settings/data-model/object-details/components/SettingsObjectFieldDisabledActionDropdown.tsx
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
 #: src/modules/settings/data-model/object-details/components/tabs/SettingsObjectIndexesSection.tsx
 #: src/modules/settings/data-model/objects/components/SettingsObjectInactiveMenuDropDown.tsx
 #: src/modules/settings/developers/components/SettingsDevelopersWebhookForm.tsx
@@ -7513,11 +7486,6 @@ msgstr "Delete"
 #: src/pages/settings/data-model/SettingsObjectFieldEdit.tsx
 msgid "Delete {fieldLabel} field?"
 msgstr "Delete {fieldLabel} field?"
-
-#. js-lingui-id: j/OgnL
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-msgid "Delete {objectLabel} object?"
-msgstr "Delete {objectLabel} object?"
 
 #. js-lingui-id: 65N6Yr
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel.tsx
@@ -9712,6 +9680,11 @@ msgstr "Exclude the following people and domains from my email sync."
 msgid "Exclude the following people and domains from my email sync. Internal conversations will not be imported"
 msgstr "Exclude the following people and domains from my email sync. Internal conversations will not be imported"
 
+#. js-lingui-id: KJ/eAL
+#: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
+msgid "Excluded"
+msgstr "Excluded"
+
 #. js-lingui-id: v0QGYG
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
 msgid "Exclusive to your workspace"
@@ -10357,6 +10330,11 @@ msgstr "Fields (Optional)"
 msgid "Fields added to other objects"
 msgstr "Fields added to other objects"
 
+#. js-lingui-id: B7EqqN
+#: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
+msgid "Fields available on {objectLabelSingular} records"
+msgstr "Fields available on {objectLabelSingular} records"
+
 #. js-lingui-id: Tnz22x
 #: src/modules/object-record/record-merge/components/MergeSettingsTab.tsx
 msgid "Fields conflicts"
@@ -10440,7 +10418,13 @@ msgstr "File no longer exists - {label}"
 msgid "File upload failed"
 msgstr "File upload failed"
 
+#. js-lingui-id: CmbuKA
+#: src/modules/activities/files/components/FilesCard.tsx
+msgid "Files are not available"
+msgstr "Files are not available"
+
 #. js-lingui-id: XUP46e
+#: src/modules/activities/files/components/FilesCard.tsx
 #: src/modules/activities/files/components/FilesCard.tsx
 msgid "Files couldn't be loaded"
 msgstr "Files couldn't be loaded"
@@ -10599,6 +10583,11 @@ msgstr "First Name"
 #: src/pages/onboarding/CreateProfile.tsx
 msgid "First name can not be empty"
 msgstr "First name can not be empty"
+
+#. js-lingui-id: 3NJ3CN
+#: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
+msgid "First row preview"
+msgstr "First row preview"
 
 #. js-lingui-id: JREYkg
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -11636,7 +11625,7 @@ msgid "Import your contacts"
 msgstr "Import your contacts"
 
 #. js-lingui-id: j2Dqq6
-#. placeholder {0}: createInputs.length
+#. placeholder {0}: data.validStructuredRows.length
 #: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
 msgid "Imported {0} creators. {existing} already existed, {conflicts} conflicted, and {invalid} had validation errors."
 msgstr "Imported {0} creators. {existing} already existed, {conflicts} conflicted, and {invalid} had validation errors."
@@ -11870,6 +11859,16 @@ msgstr "Insert your billing details to get a {trialDuration}-day free trial and 
 #: src/pages/onboarding/UpgradeFreeTrial.tsx
 msgid "Insert your billing details to get a free trial and more AI credits"
 msgstr "Insert your billing details to get a free trial and more AI credits"
+
+#. js-lingui-id: IHpUs/
+#: src/pages/settings/data-model/SettingsObjects.tsx
+msgid "Inspect objects, fields and relationships"
+msgstr "Inspect objects, fields and relationships"
+
+#. js-lingui-id: KakuPl
+#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
+msgid "Inspect the indexes used by this object"
+msgstr "Inspect the indexes used by this object"
 
 #. js-lingui-id: SPhTzI
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -13525,11 +13524,6 @@ msgstr "Manage MCP, API keys, and webhooks"
 msgid "Manage Members"
 msgstr "Manage Members"
 
-#. js-lingui-id: LNz5UW
-#: src/pages/settings/data-model/SettingsObjects.tsx
-msgid "Manage objects, fields and relationships"
-msgstr "Manage objects, fields and relationships"
-
 #. js-lingui-id: JUwWxH
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Manage prewarmed mailboxes"
@@ -14453,11 +14447,6 @@ msgstr "Name"
 msgid "Name and describe your function"
 msgstr "Name and describe your function"
 
-#. js-lingui-id: zaxmAs
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-msgid "Name in both singular (e.g., 'Invoice') and plural (e.g., 'Invoices') forms."
-msgstr "Name in both singular (e.g., 'Invoice') and plural (e.g., 'Invoices') forms."
-
 #. js-lingui-id: z+6jaZ
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeysNew.tsx
@@ -14653,7 +14642,6 @@ msgstr "New field"
 
 #. js-lingui-id: 8YPqRx
 #: src/modules/settings/data-model/fields/forms/number/components/SettingsDataModelFieldNumberSettingsFormCard.tsx
-#: src/pages/settings/data-model/SettingsObjectDetailPage.tsx
 msgid "New Field"
 msgstr "New Field"
 
@@ -15886,12 +15874,18 @@ msgstr "Not synced"
 msgid "Not synced yet"
 msgstr "Not synced yet"
 
+#. js-lingui-id: kHzQBZ
+#: src/modules/activities/notes/components/NotesCard.tsx
+msgid "Notes are not available"
+msgstr "Notes are not available"
+
 #. js-lingui-id: dswCrr
 #: src/modules/activities/notes/components/NotesCard.tsx
 msgid "Notes are unavailable"
 msgstr "Notes are unavailable"
 
 #. js-lingui-id: f8W9q0
+#: src/modules/activities/notes/components/NotesCard.tsx
 #: src/modules/activities/notes/components/NotesCard.tsx
 msgid "Notes couldn't be loaded"
 msgstr "Notes couldn't be loaded"
@@ -16018,11 +16012,6 @@ msgstr "object"
 #: src/pages/settings/layout/SettingsLayoutViewDetail.tsx
 msgid "Object"
 msgstr "Object"
-
-#. js-lingui-id: 5Dll32
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-msgid "Object deleted"
-msgstr "Object deleted"
 
 #. js-lingui-id: Zrauom
 #: src/modules/settings/data-model/fields/forms/morph-relation/components/SettingsDataModelFieldRelationForm.tsx
@@ -16413,7 +16402,6 @@ msgstr "Optional secret used to compute the HMAC signature for webhook payloads"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdown.tsx
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableFilterDropdown.tsx
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectForm.tsx
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
 #: src/modules/ui/layout/dropdown/components/OptionsDropdownMenu.tsx
 #: src/pages/settings/data-model/new-index/SettingsObjectNewIndex.tsx
 msgid "Options"
@@ -17125,6 +17113,8 @@ msgstr "Please reconnect your mailbox {mailboxHandle} to update your email alias
 
 #. js-lingui-id: CjNkdJ
 #: src/modules/activities/files/components/FilesCard.tsx
+#: src/modules/activities/files/components/FilesCard.tsx
+#: src/modules/activities/notes/components/NotesCard.tsx
 #: src/modules/activities/notes/components/NotesCard.tsx
 #: src/modules/activities/tasks/components/TaskGroups.tsx
 #: src/modules/error-handler/components/AppRootErrorFallback.tsx
@@ -18250,11 +18240,6 @@ msgstr "Rejected"
 msgid "Relation"
 msgstr "Relation"
 
-#. js-lingui-id: dQHMbF
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
-msgid "Relation between this object and other objects"
-msgstr "Relation between this object and other objects"
-
 #. js-lingui-id: UiAJoB
 #: src/modules/settings/data-model/fields/forms/morph-relation/components/SettingsDataModelFieldRelationForm.tsx
 msgid "Relation type"
@@ -18266,6 +18251,11 @@ msgstr "Relation type"
 #: src/pages/settings/data-model/SettingsObjects.tsx
 msgid "Relations"
 msgstr "Relations"
+
+#. js-lingui-id: As6xu9
+#: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
+msgid "Relations between this object and other objects"
+msgstr "Relations between this object and other objects"
 
 #. js-lingui-id: ZrUSCK
 #: src/modules/settings/data-model/fields/forms/morph-relation/components/SettingsDataModelFieldRelationForm.tsx
@@ -19014,6 +19004,7 @@ msgid "Retry warmup {action}"
 msgstr "Retry warmup {action}"
 
 #. js-lingui-id: vUOn9d
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
@@ -20026,6 +20017,11 @@ msgstr "See Fields"
 msgid "See function"
 msgstr "See function"
 
+#. js-lingui-id: 86W11m
+#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
+msgid "See how this object appears in search results"
+msgstr "See how this object appears in search results"
+
 #. js-lingui-id: V7TecA
 #: src/pages/settings/applications/components/SettingsApplicationRegistrationShareLinkButtons.tsx
 msgid "See on marketplace"
@@ -21027,6 +21023,11 @@ msgstr "SMTP Username"
 msgid "smtp.example.com"
 msgstr "smtp.example.com"
 
+#. js-lingui-id: kmIHOY
+#: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
+msgid "Social profiles"
+msgstr "Social profiles"
+
 #. js-lingui-id: zfjcH5
 #: src/modules/settings/roles/role-permissions/object-level-permissions/components/SettingsRolePermissionsObjectLevelSeeFieldsValueForObject.tsx
 #: src/modules/settings/roles/role-permissions/object-level-permissions/components/SettingsRolePermissionsObjectLevelUpdateFieldsValueForObject.tsx
@@ -21198,11 +21199,6 @@ msgstr "Spaces and comma"
 #: src/pages/settings/profile/appearance/components/LocalePicker.tsx
 msgid "Spanish"
 msgstr "Spanish"
-
-#. js-lingui-id: pyfee5
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-msgid "Speed up reads on the fields you filter or sort by most. Each index also slows down writes and uses disk space, so add them with intent."
-msgstr "Speed up reads on the fields you filter or sort by most. Each index also slows down writes and uses disk space, so add them with intent."
 
 #. js-lingui-id: gsifzp
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
@@ -21769,6 +21765,11 @@ msgstr "Sum"
 #: src/pages/settings/profile/appearance/components/DateTimeSettingsCalendarStartDaySelect.tsx
 msgid "Sunday"
 msgstr "Sunday"
+
+#. js-lingui-id: QL6ShF
+#: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
+msgid "Supplementary note"
+msgstr "Supplementary note"
 
 #. js-lingui-id: XYLcNv
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
@@ -22865,6 +22866,11 @@ msgstr "This quote expired. Refresh it before completing this local review."
 msgid "This recipient could not be resolved. Add a valid Instagram handle to the Creator and check that its Instagram fields agree, or choose another recipient."
 msgstr "This recipient could not be resolved. Add a valid Instagram handle to the Creator and check that its Instagram fields agree, or choose another recipient."
 
+#. js-lingui-id: K+zWNI
+#: src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts
+msgid "This record cannot be created under a different owner."
+msgstr "This record cannot be created under a different owner."
+
 #. js-lingui-id: dWJTyU
 #: src/modules/information-banner/components/deleted-record/InformationBannerDeletedRecord.tsx
 msgid "This record has been deleted"
@@ -22997,11 +23003,6 @@ msgstr "This will modify {contextStoreNumberOfSelectedRecords} records. This act
 #: src/pages/settings/data-model/SettingsObjectFieldEdit.tsx
 msgid "This will permanently delete the field and all its data from {objectLabel}. Type \"yes\" to confirm."
 msgstr "This will permanently delete the field and all its data from {objectLabel}. Type \"yes\" to confirm."
-
-#. js-lingui-id: L85ZX9
-#: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
-msgid "This will permanently delete the object and all its records. Type \"yes\" to confirm."
-msgstr "This will permanently delete the object and all its records. Type \"yes\" to confirm."
 
 #. js-lingui-id: qEODFi
 #: src/modules/settings/two-factor-authentication/components/DeleteTwoFactorAuthenticationMethod.tsx
@@ -24744,6 +24745,11 @@ msgstr "View linked mailboxes"
 msgid "View managed-email subscription inventory"
 msgstr "View managed-email subscription inventory"
 
+#. js-lingui-id: lxr5Cw
+#: src/modules/views/components/CreatorRecordIndexReferenceGate.tsx
+msgid "View needs repair"
+msgstr "View needs repair"
+
 #. js-lingui-id: sAPirx
 #: src/modules/object-record/record-index/components/RecordIndexEmptyStateNotShared.tsx
 msgid "View not shared"
@@ -25928,15 +25934,15 @@ msgstr "You do not have permission to view this widget"
 msgid "You don't have access to this object."
 msgstr "You don't have access to this object."
 
-#. js-lingui-id: rCYJPD
+#. js-lingui-id: IGMDcw
 #: src/modules/activities/files/components/FilesCard.tsx
-msgid "You don't have permission to view files"
-msgstr "You don't have permission to view files"
+msgid "You don't have permission to view files."
+msgstr "You don't have permission to view files."
 
-#. js-lingui-id: P+7OTe
+#. js-lingui-id: tQBnDp
 #: src/modules/activities/notes/components/NotesCard.tsx
-msgid "You don't have permission to view notes"
-msgstr "You don't have permission to view notes"
+msgid "You don't have permission to view notes."
+msgstr "You don't have permission to view notes."
 
 #. js-lingui-id: RDAH2t
 #: src/modules/settings/billing/components/internal/SettingsBillingSubscriptionInfoModals.tsx

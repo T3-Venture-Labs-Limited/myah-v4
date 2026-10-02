@@ -6,7 +6,10 @@ import { ActionApprovalService } from 'src/engine/core-modules/action-approval/s
 import { InstagramMessageAuthorityReaderService } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.service';
 import { InstagramMessageReconciliationService } from 'src/engine/core-modules/instagram-message/services/instagram-message-reconciliation.service';
 import { ActionExecutionReceiptState } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
-import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
+import {
+  buildLegacyInstagramMessageActionAuthority,
+  buildInstagramMessageV3ActionAuthority,
+} from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 
 type SendService = {
   executeApprovedWithDraftLockHeld: (
@@ -844,11 +847,11 @@ const buildCurrentSourceHarness = async (
     creatorId: authority.canonicalGraph.draft.creatorRecordId,
     recipientUsername: 'creator.name',
     recipientProviderId: kind === 'REPLY' ? 'recipient-igsid' : 'creator.name',
-    conversationId: kind === 'REPLY' ? 'conversation-id' : null,
+    conversationId:
+      kind === 'REPLY'
+        ? authority.canonicalGraph.draft.conversationRecordId
+        : null,
     sentAt: null,
-    creatorInstagramUsername: '@Creator.Name',
-    creatorInstagramUrl: null as string | null,
-    creatorInstagramLinkPrimaryLinkUrl: null,
     providerConversationId: kind === 'REPLY' ? 'provider-chat' : null,
     conversationRecipientIgsid: kind === 'REPLY' ? 'recipient-igsid' : null,
     conversationRecipientUsername: null,
@@ -861,20 +864,86 @@ const buildCurrentSourceHarness = async (
     conversationCreatorId:
       kind === 'REPLY' ? authority.canonicalGraph.draft.creatorRecordId : null,
   };
+  const socialProfile = {
+    id: '00000000-0000-4000-8000-000000000011',
+    creatorId: draft.creatorId,
+    handle: 'creator.name',
+    profileUrl: null as string | null,
+    platformAccountId: null,
+  };
   const account = authority.canonicalGraph.account;
   const readClient = {
-    getChat: jest.fn().mockResolvedValue({ chatId: 'provider-chat' }),
-    listChats: jest.fn().mockResolvedValue({ chats: [], nextCursor: null }),
+    getChat: jest.fn().mockResolvedValue({
+      chatId: 'provider-chat',
+      accountId: 'provider-account',
+      type: 'ONE_TO_ONE',
+      attendeeProviderId: 'recipient-igsid',
+    }),
+    listChats: jest.fn().mockResolvedValue({
+      chats: [
+        {
+          chatId: 'provider-chat',
+          accountId: 'provider-account',
+          type: 'ONE_TO_ONE',
+          attendeeProviderId: 'recipient-igsid',
+        },
+      ],
+      nextCursor: null,
+    }),
+    getInstagramMessagingProfile: jest.fn().mockResolvedValue({
+      username: 'creator.name',
+      providerId: 'recipient-profile-id',
+      providerMessagingId: 'recipient-igsid',
+    }),
     listMessages: jest.fn(),
   };
   const query = jest.fn(async (sql: string) =>
-    sql.includes('"myahInstagramReplyDraft"') ? [{ ...draft }] : [],
+    sql.includes('"myahInstagramReplyDraft"')
+      ? [{ ...draft }]
+      : [
+          {
+            id: draft.conversationId,
+            providerConversationId: draft.providerConversationId,
+            recipientIgsid: draft.conversationRecipientIgsid,
+          },
+        ],
+  );
+  const profileRead = jest.fn(async () => socialProfile);
+  const getRepository = jest.fn(
+    async (_workspaceId, name, _rolePermissionConfig) => ({
+      findOne:
+        name === 'socialProfile'
+          ? profileRead
+          : jest.fn(
+              async () =>
+                ({
+                  creator: { id: draft.creatorId },
+                  myahInstagramReplyDraft: draft,
+                  myahSocialConversation: {
+                    id: draft.conversationId,
+                    providerConversationId: draft.providerConversationId,
+                    creatorId: draft.conversationCreatorId,
+                    recipientIgsid: draft.conversationRecipientIgsid,
+                    provider: draft.conversationProvider,
+                    lifecycle: draft.conversationLifecycle,
+                    instagramAccountId: draft.conversationInstagramAccountId,
+                  },
+                  myahInstagramAccount: {
+                    id: account.workspaceInstagramAccountRecordId,
+                  },
+                })[name as string],
+            ),
+      find: jest.fn(async () =>
+        name === 'socialProfile' ? [socialProfile] : [],
+      ),
+    }),
   );
   const reader = new InstagramMessageAuthorityReaderService(
     { findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }) } as never,
     {
       executeInWorkspaceContext: jest.fn(async (callback) => callback()),
       getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
+      getRepository,
     } as never,
     {
       find: jest
@@ -895,20 +964,43 @@ const buildCurrentSourceHarness = async (
     } as never,
     readClient as never,
   );
-  const original = buildLegacyInstagramMessageActionAuthority({
+  const original = buildInstagramMessageV3ActionAuthority({
     workspaceId,
     initiatorUserWorkspaceId: userWorkspaceId,
     threadId: null,
-    interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+    interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT',
     interactionContextId: draftId,
     draft: {
       ...authority.canonicalGraph.draft,
+      recipientSourceValues: [
+        { field: 'socialProfile.id', value: socialProfile.id },
+        { field: 'socialProfile.handle', value: socialProfile.handle },
+      ],
+      recipientProviderId: 'recipient-profile-id',
       kind,
       conversationRecordId: draft.conversationId,
       providerConversationId: draft.providerConversationId,
-      recipientProviderId: draft.recipientProviderId,
     },
     account,
+    composerInputDigest: kind === 'REPLY' ? null : 'e'.repeat(64),
+    instagramMessageSnapshot: {
+      actionKind: kind,
+      publicIdentifier: 'creator.name',
+      providerId: 'recipient-profile-id',
+      providerMessagingId: 'recipient-igsid',
+      creatorRecordId: draft.creatorId!,
+      accountBindingId: account.bindingId,
+      instagramAccountRecordId: account.workspaceInstagramAccountRecordId,
+      unipileAccountId: account.unipileAccountId,
+      instagramUserId: account.instagramUserId,
+      conversationRecordId: draft.conversationId,
+      providerChatId: draft.providerConversationId,
+      attendeeProviderId: kind === 'REPLY' ? 'recipient-igsid' : null,
+      recipientSourceValues: [
+        { field: 'socialProfile.id', value: socialProfile.id },
+        { field: 'socialProfile.handle', value: socialProfile.handle },
+      ],
+    } as never,
     evidenceLinks: [
       {
         objectMetadataId: 'account-metadata',
@@ -944,7 +1036,17 @@ const buildCurrentSourceHarness = async (
     await options.beforeDispatch();
     return { kind: 'ACCEPTED', value: { messageId: 'provider-message' } };
   });
-  return { ...harness, reader, readClient, draft, original, query };
+  return {
+    ...harness,
+    reader,
+    readClient,
+    draft,
+    socialProfile,
+    profileRead,
+    getRepository,
+    original,
+    query,
+  };
 };
 
 const expectNoDispatch = (
@@ -979,14 +1081,81 @@ const expectPreDispatchBlocked = (
   expect(harness.budgetService.releaseStartTarget).not.toHaveBeenCalled();
 };
 
+const currentExecuteInput = {
+  ...executeInput,
+  interactionContextType: 'MYAH_INSTAGRAM_MESSAGE_DRAFT' as const,
+};
+
 describe('InstagramMessageSendService real current-source authority', () => {
+  it.each(['socialProfile', 'creator'] as const)(
+    'refuses an unreceipted REPLY with an unreadable %s and readable conversation before dispatch',
+    async (denied) => {
+      const h = await buildCurrentSourceHarness();
+      const original = h.getRepository.getMockImplementation()!;
+      h.getRepository.mockImplementation(async (...args) => {
+        const repository = await original(...args);
+        if (args[1] === denied && args[2] === executeInput.rolePermissionConfig)
+          return {
+            ...repository,
+            findOne: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue([]),
+          };
+        return repository;
+      });
+      await expect(
+        h.service.executeApproved(currentExecuteInput),
+      ).rejects.toThrow();
+      expect(
+        h.actionApprovalService.reserveExecutionForBinding,
+      ).not.toHaveBeenCalled();
+      expectNoDispatch(h);
+    },
+  );
+
+  it('refuses a scalar-only unreceipted v2 REPLY before reservation or dispatch', async () => {
+    const h = await buildCurrentSourceHarness();
+    h.actionApprovalService.getApprovedBinding.mockResolvedValue(
+      authority.expectedActionBinding,
+    );
+    await expect(h.service.executeApproved(executeInput)).rejects.toThrow(
+      'historical recipient is unavailable',
+    );
+    expect(
+      h.actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expectNoDispatch(h);
+  });
+
+  it('replays accepted receipt without rereading a now-hidden profile or Creator', async () => {
+    const h = await buildCurrentSourceHarness();
+    h.getRepository.mockClear();
+    h.getRepository.mockRejectedValue(
+      new Error('current identity is forbidden'),
+    );
+    h.actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue({
+      id: receiptId,
+      state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+    });
+    await expect(
+      h.service.executeApproved(currentExecuteInput),
+    ).resolves.toEqual({
+      status: 'SENT',
+      receiptId,
+    });
+    expect(h.getRepository).not.toHaveBeenCalled();
+    expect(h.client.sendMessage).not.toHaveBeenCalled();
+    expect(h.client.startChat).not.toHaveBeenCalled();
+    expect(h.budgetService.markProviderAttempted).not.toHaveBeenCalled();
+    expect(h.projector.projectReceiptWithWriter).toHaveBeenCalledTimes(1);
+  });
+
   it.each([null, 'replacement-creator'])(
     'blocks saved REPLY with current Creator %s before receipt/budget mutation',
     async (creatorId) => {
       const harness = await buildCurrentSourceHarness();
       harness.draft.conversationCreatorId = creatorId;
       await expect(
-        harness.service.executeApproved(executeInput),
+        harness.service.executeApproved(currentExecuteInput),
       ).rejects.toThrow('REPLY draft target is stale');
       expect(harness.draft.revision).toBe(2);
       expect(
@@ -1008,6 +1177,8 @@ describe('InstagramMessageSendService real current-source authority', () => {
       const harness = await buildCurrentSourceHarness();
       const receipt = {
         id: receiptId,
+        workspaceId,
+        actionApprovalBindingId: approvalBindingId,
         state: ActionExecutionReceiptState.UNKNOWN,
         actionApprovalBinding: {
           ...harness.original.expectedActionBinding,
@@ -1031,10 +1202,12 @@ describe('InstagramMessageSendService real current-source authority', () => {
       harness.draft.conversationCreatorId = creatorId;
       await expect(
         reconciliation.reconcile({ workspaceId, receiptId }),
-      ).rejects.toThrow('REPLY draft target is stale');
+      ).resolves.toEqual({ kind: 'INDETERMINATE' });
       expect(receipt.state).toBe(ActionExecutionReceiptState.UNKNOWN);
       expect(harness.readClient.listMessages).not.toHaveBeenCalled();
-      expect(harness.readClient.getChat).not.toHaveBeenCalled();
+      // UNKNOWN recovery may verify the historical provider chat, but never
+      // consults the current profile/Creator as fresh send authority.
+      expect(harness.readClient.getChat).toHaveBeenCalledTimes(1);
       expect(harness.readClient.listChats).not.toHaveBeenCalled();
       expect(
         harness.actionApprovalService.recordProviderTerminalState,
@@ -1070,17 +1243,22 @@ describe('InstagramMessageSendService real current-source authority', () => {
             harness.readClient.getChat.mockImplementation(async () => {
               entered.resolve();
               await resume.promise;
-              return { chatId: 'provider-chat' };
+              return {
+                chatId: 'provider-chat',
+                accountId: 'provider-account',
+                type: 'ONE_TO_ONE',
+                attendeeProviderId: 'recipient-igsid',
+              };
             });
           }
-          const sending = harness.service.executeApproved(executeInput);
+          const sending = harness.service.executeApproved(currentExecuteInput);
           await entered.promise;
           expectNoDispatch(harness);
           if (change === 'conflicting URL')
-            harness.draft.creatorInstagramUrl =
+            harness.socialProfile.profileUrl =
               'https://instagram.com/other.creator/';
           if (change === 'same-username source fingerprint')
-            harness.draft.creatorInstagramUrl =
+            harness.socialProfile.profileUrl =
               'https://instagram.com/creator.name/';
           resume.resolve();
 
@@ -1103,7 +1281,7 @@ describe('InstagramMessageSendService real current-source authority', () => {
           expect(
             harness.budgetService.releasePreDispatch,
           ).not.toHaveBeenCalled();
-          const localReadOrder = harness.query.mock.invocationCallOrder;
+          const localReadOrder = harness.profileRead.mock.invocationCallOrder;
           const finalLocalRead = localReadOrder[localReadOrder.length - 1];
           expect(providerRead.mock.invocationCallOrder[0]).toBeLessThan(
             finalLocalRead,
@@ -1125,10 +1303,15 @@ describe('InstagramMessageSendService final readiness safety boundaries', () => 
       const harness = await buildCurrentSourceHarness();
       harness.readClient.getChat.mockImplementation(async () => {
         harness.draft.conversationCreatorId = creatorId;
-        return { chatId: 'provider-chat' };
+        return {
+          chatId: 'provider-chat',
+          accountId: 'provider-account',
+          type: 'ONE_TO_ONE',
+          attendeeProviderId: 'recipient-igsid',
+        };
       });
       await expect(
-        harness.service.executeApproved(executeInput),
+        harness.service.executeApproved(currentExecuteInput),
       ).resolves.toEqual({ status: 'BLOCKED', receiptId });
       expect(harness.readClient.getChat).toHaveBeenCalledWith({
         accountId: 'provider-account',
@@ -1147,7 +1330,7 @@ describe('InstagramMessageSendService final readiness safety boundaries', () => 
         new Error('Exact provider attendee mismatch'),
       );
       await expect(
-        harness.service.executeApproved(executeInput),
+        harness.service.executeApproved(currentExecuteInput),
       ).resolves.toEqual({ status: 'BLOCKED', receiptId });
       expectPreDispatchBlocked(harness);
     },
@@ -1158,8 +1341,7 @@ describe('InstagramMessageSendService final readiness safety boundaries', () => 
     harness.client.sendMessage.mockImplementation(async (_input, options) => {
       await options.beforeDispatch();
       // This edit is outside the last local read's guarantee; no Creator edit lock is claimed.
-      harness.draft.creatorInstagramUrl =
-        'https://instagram.com/other.creator/';
+      harness.socialProfile.profileUrl = 'https://instagram.com/other.creator/';
       return {
         kind: 'UNKNOWN',
         status: null,
@@ -1167,7 +1349,7 @@ describe('InstagramMessageSendService final readiness safety boundaries', () => 
       };
     });
     await expect(
-      harness.service.executeApproved(executeInput),
+      harness.service.executeApproved(currentExecuteInput),
     ).resolves.toEqual({ status: 'UNKNOWN', receiptId });
     expect(
       harness.actionApprovalService.recordProviderTerminalState,
@@ -1185,7 +1367,7 @@ describe('InstagramMessageSendService final readiness safety boundaries', () => 
       { id: receiptId, state: ActionExecutionReceiptState.UNKNOWN },
     );
     await expect(
-      harness.service.executeApproved(executeInput),
+      harness.service.executeApproved(currentExecuteInput),
     ).resolves.toEqual({ status: 'UNKNOWN', receiptId });
     expect(harness.client.sendMessage).toHaveBeenCalledTimes(1);
     expect(harness.budgetService.reserve).toHaveBeenCalledTimes(1);
@@ -1542,8 +1724,13 @@ describe('InstagramMessageSendService preserved entrypoint validation and REPLY 
     expect(harness.client.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('blocks saved FIRST_MESSAGE using the real current-source reader before reconstruction or reads', async () => {
+  it('blocks historical scalar-only FIRST_MESSAGE before reconstruction or reads', async () => {
     const harness = await buildCurrentSourceHarness('START_CHAT');
+    harness.actionApprovalService.getApprovedBinding.mockResolvedValue({
+      ...harness.original.expectedActionBinding,
+      actionVersion: 2,
+      interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
+    });
     harness.query.mockClear();
     await expect(harness.service.executeApproved(executeInput)).rejects.toThrow(
       'Instagram first-contact sending is unavailable',

@@ -35,7 +35,7 @@ import { makeMetadataAPIRequest } from 'test/integration/metadata/suites/utils/m
 // MYAH-315: a generic AI-chat approval authorizes only the exact reviewed
 // action, at most once. Runs as seeded member Jony on a disposable role in
 // the seed Apple workspace, with disposable Creators Alice and Tim. Creator
-// state is read and set through the admin GraphQL API.
+// location is read and set through the admin GraphQL API.
 const marker = randomUUID();
 const chatThreadId = randomUUID();
 const client = request(`http://localhost:${APP_PORT}`);
@@ -46,27 +46,27 @@ let disposableRoleId: string;
 let originalJonyRoleId: string;
 let creatorObjectMetadataId: string;
 
-const readStatus = async (creatorId: string) => {
+const readLocation = async (creatorId: string) => {
   const response = await makeGraphqlAPIRequest(
     findOneOperationFactory({
       objectMetadataSingularName: 'creator',
-      gqlFields: 'id creatorStatus',
+      gqlFields: 'id location',
       filter: { id: { eq: creatorId } },
     }),
   );
 
   expect(response.body.errors).toBeUndefined();
 
-  return response.body.data.creator.creatorStatus as string;
+  return response.body.data.creator.location as string;
 };
 
-const setStatus = async (creatorId: string, creatorStatus: string) => {
+const setLocation = async (creatorId: string, location: string) => {
   const response = await makeGraphqlAPIRequest(
     updateOneOperationFactory({
       objectMetadataSingularName: 'creator',
       gqlFields: 'id',
       recordId: creatorId,
-      data: { creatorStatus },
+      data: { location },
     }),
   );
 
@@ -129,7 +129,7 @@ const createCreator = async (name: string) => {
       data: {
         name: `${name} ${marker}`,
         email: `${name.toLowerCase()}-${marker}@example.com`,
-        creatorStatus: 'NEW',
+        location: 'New York',
       },
       gqlFields: 'id',
     }),
@@ -257,24 +257,24 @@ describe('MYAH-315 generic write approval binding', () => {
   });
 
   beforeEach(async () => {
-    await setStatus(aliceId, 'NEW');
-    await setStatus(timId, 'NEW');
+    await setLocation(aliceId, 'New York');
+    await setLocation(timId, 'New York');
   });
 
-  it('(a) runs Alice -> Qualified exactly once and changes nothing else', async () => {
-    const approval = await approve({ id: aliceId, creatorStatus: 'QUALIFIED' });
+  it('(a) updates Alice’s location exactly once and changes nothing else', async () => {
+    const approval = await approve({ id: aliceId, location: 'Lisbon' });
     // Snapshot of the approved message as a queued resume payload carries it.
     const approvedSnapshot = await approval.loadMessage();
 
     // Reordered keys are the same exact action.
     const output = await runApprovedResume(approval, {
-      creatorStatus: 'QUALIFIED',
+      location: 'Lisbon',
       id: aliceId,
     });
 
     expect(output.success).toBe(true);
-    expect(await readStatus(aliceId)).toBe('QUALIFIED');
-    expect(await readStatus(timId)).toBe('NEW');
+    expect(await readLocation(aliceId)).toBe('Lisbon');
+    expect(await readLocation(timId)).toBe('New York');
     expect(await readApprovalResult(approval.messageId)).toMatchObject({
       status: 'consumed',
       executionOutcome: 'succeeded',
@@ -286,9 +286,9 @@ describe('MYAH-315 generic write approval binding', () => {
               recordId: aliceId,
               changes: [
                 {
-                  field: 'creatorStatus',
-                  current: 'NEW',
-                  proposed: 'QUALIFIED',
+                  field: 'location',
+                  current: 'New York',
+                  proposed: 'Lisbon',
                 },
               ],
             },
@@ -299,13 +299,13 @@ describe('MYAH-315 generic write approval binding', () => {
 
     // (d) Replay: Alice is reset to the reviewed value, so only durable
     // consumption can stop a second write from the same approval.
-    await setStatus(aliceId, 'NEW');
+    await setLocation(aliceId, 'New York');
 
     // Re-streaming from stored state: the approval reads consumed, so the
     // write tool is not even unlocked.
     const storedReplay = await runApprovedResume(approval, {
       id: aliceId,
-      creatorStatus: 'QUALIFIED',
+      location: 'Lisbon',
     });
 
     expect(storedReplay).toMatchObject({
@@ -317,7 +317,7 @@ describe('MYAH-315 generic write approval binding', () => {
     // conditional consume refuses it.
     const staleReplay = await runApprovedResume(
       approval,
-      { id: aliceId, creatorStatus: 'QUALIFIED' },
+      { id: aliceId, location: 'Lisbon' },
       approvedSnapshot,
     );
 
@@ -325,40 +325,40 @@ describe('MYAH-315 generic write approval binding', () => {
       success: false,
       error: expect.stringContaining('APPROVAL_ALREADY_USED'),
     });
-    expect(await readStatus(aliceId)).toBe('NEW');
+    expect(await readLocation(aliceId)).toBe('New York');
     expect(await readApprovalResult(approval.messageId)).toMatchObject({
       status: 'consumed',
     });
   });
 
   it('executes an unchanged multi-field write after the stored jsonb reorders argument keys', async () => {
-    const bio = `MYAH-315 multi-field ${marker}`;
+    const source = `MYAH-315 multi-field ${marker}`;
 
     try {
       const approval = await approve({
         id: aliceId,
-        creatorStatus: 'QUALIFIED',
-        instagramBio: bio,
+        location: 'Lisbon',
+        source,
       });
       const output = await runApprovedResume(approval, {
         id: aliceId,
-        instagramBio: bio,
-        creatorStatus: 'QUALIFIED',
+        source,
+        location: 'Lisbon',
       });
 
       expect(output.success).toBe(true);
-      expect(await readStatus(aliceId)).toBe('QUALIFIED');
-      expect(await readStatus(timId)).toBe('NEW');
+      expect(await readLocation(aliceId)).toBe('Lisbon');
+      expect(await readLocation(timId)).toBe('New York');
       const readback = await makeGraphqlAPIRequest(
         findOneOperationFactory({
           objectMetadataSingularName: 'creator',
-          gqlFields: 'id instagramBio',
+          gqlFields: 'id source',
           filter: { id: { eq: aliceId } },
         }),
       );
 
       expect(readback.body.errors).toBeUndefined();
-      expect(readback.body.data.creator.instagramBio).toBe(bio);
+      expect(readback.body.data.creator.source).toBe(source);
       expect(await readApprovalResult(approval.messageId)).toMatchObject({
         status: 'consumed',
         executionOutcome: 'succeeded',
@@ -369,7 +369,7 @@ describe('MYAH-315 generic write approval binding', () => {
           objectMetadataSingularName: 'creator',
           gqlFields: 'id',
           recordId: aliceId,
-          data: { instagramBio: null },
+          data: { source: null },
         }),
       );
 
@@ -380,7 +380,7 @@ describe('MYAH-315 generic write approval binding', () => {
   it('runs only the two reviewed records in an update_many filter', async () => {
     const args = {
       filter: { id: { in: [aliceId, timId] } },
-      data: { creatorStatus: 'QUALIFIED' },
+      data: { location: 'Lisbon' },
     };
     const approval = await approve(args, 'approved', 'update_many_creators');
     const output = await runApprovedResume(
@@ -391,8 +391,8 @@ describe('MYAH-315 generic write approval binding', () => {
     );
 
     expect(output.success).toBe(true);
-    expect(await readStatus(aliceId)).toBe('QUALIFIED');
-    expect(await readStatus(timId)).toBe('QUALIFIED');
+    expect(await readLocation(aliceId)).toBe('Lisbon');
+    expect(await readLocation(timId)).toBe('Lisbon');
     expect(await readApprovalResult(approval.messageId)).toMatchObject({
       status: 'consumed',
       executionOutcome: 'succeeded',
@@ -506,17 +506,14 @@ describe('MYAH-315 generic write approval binding', () => {
   });
 
   it('refuses delete_many when another record joins the reviewed filter', async () => {
-    await setStatus(timId, 'REVIEWING');
+    await setLocation(timId, 'Dublin');
     // Keep the destructive regression scoped to this suite's disposable rows.
     const args = {
-      filter: {
-        id: { in: [aliceId, timId] },
-        creatorStatus: { eq: 'NEW' },
-      },
+      filter: { id: { in: [aliceId, timId] }, location: { eq: 'New York' } },
     };
     const approval = await approve(args, 'approved', 'delete_many_creators');
 
-    await setStatus(timId, 'NEW');
+    await setLocation(timId, 'New York');
     const output = await runApprovedResume(
       approval,
       args,
@@ -528,24 +525,24 @@ describe('MYAH-315 generic write approval binding', () => {
       success: false,
       error: expect.stringContaining('TARGET_CHANGED'),
     });
-    expect(await readStatus(aliceId)).toBe('NEW');
-    expect(await readStatus(timId)).toBe('NEW');
+    expect(await readLocation(aliceId)).toBe('New York');
+    expect(await readLocation(timId)).toBe('New York');
   });
 
-  it("(b) refuses Tim -> Qualified under Alice's approval and burns it", async () => {
-    const approval = await approve({ id: aliceId, creatorStatus: 'QUALIFIED' });
+  it("(b) refuses Tim’s location change under Alice's approval and burns it", async () => {
+    const approval = await approve({ id: aliceId, location: 'Lisbon' });
 
     const output = await runApprovedResume(approval, {
       id: timId,
-      creatorStatus: 'QUALIFIED',
+      location: 'Lisbon',
     });
 
     expect(output).toMatchObject({
       success: false,
       error: expect.stringContaining('ACTION_CHANGED'),
     });
-    expect(await readStatus(aliceId)).toBe('NEW');
-    expect(await readStatus(timId)).toBe('NEW');
+    expect(await readLocation(aliceId)).toBe('New York');
+    expect(await readLocation(timId)).toBe('New York');
     expect(await readApprovalResult(approval.messageId)).toMatchObject({
       status: 'invalidated',
       invalidReason: 'ACTION_CHANGED',
@@ -554,57 +551,56 @@ describe('MYAH-315 generic write approval binding', () => {
     // The burnt approval cannot fall back to the original action either.
     const fallback = await runApprovedResume(approval, {
       id: aliceId,
-      creatorStatus: 'QUALIFIED',
+      location: 'Lisbon',
     });
 
     expect(fallback.success).toBe(false);
-    expect(await readStatus(aliceId)).toBe('NEW');
+    expect(await readLocation(aliceId)).toBe('New York');
   });
 
   it('(c) refuses a different value for Alice under her approval', async () => {
-    // REJECTED is not a Creator status here; ARCHIVED is a valid value, so the
-    // refusal can only come from the approval binding.
-    const approval = await approve({ id: aliceId, creatorStatus: 'QUALIFIED' });
+    // Both location values are writable; the refusal comes from the approval binding.
+    const approval = await approve({ id: aliceId, location: 'Lisbon' });
 
     const output = await runApprovedResume(approval, {
       id: aliceId,
-      creatorStatus: 'ARCHIVED',
+      location: 'Berlin',
     });
 
     expect(output).toMatchObject({
       success: false,
       error: expect.stringContaining('ACTION_CHANGED'),
     });
-    expect(await readStatus(aliceId)).toBe('NEW');
+    expect(await readLocation(aliceId)).toBe('New York');
   });
 
   it('refuses an added side effect under the same approval', async () => {
-    const approval = await approve({ id: aliceId, creatorStatus: 'QUALIFIED' });
+    const approval = await approve({ id: aliceId, location: 'Lisbon' });
 
     const output = await runApprovedResume(approval, {
       id: aliceId,
-      creatorStatus: 'QUALIFIED',
-      location: 'Somewhere else',
+      location: 'Lisbon',
+      language: 'French',
     });
 
     expect(output.success).toBe(false);
-    expect(await readStatus(aliceId)).toBe('NEW');
+    expect(await readLocation(aliceId)).toBe('New York');
   });
 
   it('(e) refuses when Alice changed after the founder reviewed her', async () => {
-    const approval = await approve({ id: aliceId, creatorStatus: 'QUALIFIED' });
+    const approval = await approve({ id: aliceId, location: 'Lisbon' });
 
-    await setStatus(aliceId, 'REVIEWING');
+    await setLocation(aliceId, 'Dublin');
     const output = await runApprovedResume(approval, {
       id: aliceId,
-      creatorStatus: 'QUALIFIED',
+      location: 'Lisbon',
     });
 
     expect(output).toMatchObject({
       success: false,
       error: expect.stringContaining('TARGET_CHANGED'),
     });
-    expect(await readStatus(aliceId)).toBe('REVIEWING');
+    expect(await readLocation(aliceId)).toBe('Dublin');
     expect(await readApprovalResult(approval.messageId)).toMatchObject({
       status: 'invalidated',
       invalidReason: 'TARGET_CHANGED',
@@ -612,7 +608,7 @@ describe('MYAH-315 generic write approval binding', () => {
   });
 
   it('(f) refuses when creator write permission is removed after approval', async () => {
-    const approval = await approve({ id: aliceId, creatorStatus: 'QUALIFIED' });
+    const approval = await approve({ id: aliceId, location: 'Lisbon' });
 
     const revoke = await makeMetadataAPIRequest(
       createUpsertObjectPermissionsOperation(disposableRoleId, [
@@ -631,11 +627,11 @@ describe('MYAH-315 generic write approval binding', () => {
     try {
       const output = await runApprovedResume(approval, {
         id: aliceId,
-        creatorStatus: 'QUALIFIED',
+        location: 'Lisbon',
       });
 
       expect(output.success).toBe(false);
-      expect(await readStatus(aliceId)).toBe('NEW');
+      expect(await readLocation(aliceId)).toBe('New York');
       expect(await readApprovalResult(approval.messageId)).toMatchObject({
         status: 'invalidated',
         invalidReason: 'NOT_AUTHORIZED_OR_UNAVAILABLE',
@@ -661,17 +657,17 @@ describe('MYAH-315 generic write approval binding', () => {
     '(g) makes no write available after %s',
     async (decision) => {
       const approval = await approve(
-        { id: aliceId, creatorStatus: 'QUALIFIED' },
+        { id: aliceId, location: 'Lisbon' },
         decision,
       );
 
       const output = await runApprovedResume(approval, {
         id: aliceId,
-        creatorStatus: 'QUALIFIED',
+        location: 'Lisbon',
       });
 
       expect(output.success).toBe(false);
-      expect(await readStatus(aliceId)).toBe('NEW');
+      expect(await readLocation(aliceId)).toBe('New York');
     },
   );
 
@@ -682,7 +678,7 @@ describe('MYAH-315 generic write approval binding', () => {
         {
           id: randomUUID(),
           role: 'user',
-          parts: [{ type: 'text', text: 'Qualify Alice.' }],
+          parts: [{ type: 'text', text: 'Change Alice’s location.' }],
         },
       ],
       calls: [
@@ -694,7 +690,7 @@ describe('MYAH-315 generic write approval binding', () => {
           toolName: 'execute_tool',
           input: {
             toolName: 'update_one_creator',
-            arguments: { id: aliceId, creatorStatus: 'QUALIFIED' },
+            arguments: { id: aliceId, location: 'Lisbon' },
           },
         },
       ],
@@ -714,7 +710,7 @@ describe('MYAH-315 generic write approval binding', () => {
       ],
     });
     expect(outputOf('execute_tool')).toMatchObject({ success: false });
-    expect(await readStatus(aliceId)).toBe('NEW');
+    expect(await readLocation(aliceId)).toBe('New York');
   });
 
   it.each(['code_interpreter', 'http_request', 'send_myah_inbox_reply'])(

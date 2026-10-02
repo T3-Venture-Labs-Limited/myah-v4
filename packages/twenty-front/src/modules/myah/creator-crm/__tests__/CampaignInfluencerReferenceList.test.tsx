@@ -26,24 +26,51 @@ const records = [
     creator: {
       id: 'creator-1',
       name: 'Ava Rivera',
-      instagramUsername: 'ava.studio',
     },
   },
 ];
 
-const setup = (overrides: Record<string, unknown> = {}) => {
-  (useFindManyRecords as jest.Mock).mockReturnValue({
-    records,
-    totalCount: 3,
-    loading: false,
-    error: undefined,
-    hasReadPermission: true,
-    hasNextPage: true,
-    isFetchingMoreRecords: false,
-    fetchMoreRecords: fetchMore,
-    refetch,
-    ...overrides,
-  });
+const fetchMoreProfiles = jest.fn();
+const refetchProfiles = jest.fn();
+const setup = (
+  overrides: Record<string, unknown> = {},
+  profileOverrides: Record<string, unknown> = {},
+) => {
+  (useFindManyRecords as jest.Mock).mockImplementation(
+    ({ objectNameSingular }: { objectNameSingular: string }) =>
+      objectNameSingular === 'socialProfile'
+        ? {
+            records: [
+              {
+                id: 'profile-1',
+                creatorId: 'creator-1',
+                platform: 'INSTAGRAM',
+                handle: 'ava.studio',
+              },
+            ],
+            totalCount: 1,
+            loading: false,
+            error: undefined,
+            hasReadPermission: true,
+            hasNextPage: false,
+            isFetchingMoreRecords: false,
+            fetchMoreRecords: fetchMoreProfiles,
+            refetch: refetchProfiles,
+            ...profileOverrides,
+          }
+        : {
+            records,
+            totalCount: 3,
+            loading: false,
+            error: undefined,
+            hasReadPermission: true,
+            hasNextPage: true,
+            isFetchingMoreRecords: false,
+            fetchMoreRecords: fetchMore,
+            refetch,
+            ...overrides,
+          },
+  );
   return render(
     <CampaignInfluencerReferenceList
       campaignId="campaign-1"
@@ -51,7 +78,13 @@ const setup = (overrides: Record<string, unknown> = {}) => {
       creatorMetadataId="creator-metadata"
       creatorFieldIds={{
         name: 'name-field',
-        instagramUsername: 'handle-field',
+        socialProfiles: 'social-profiles-field',
+      }}
+      socialProfileMetadataId="profile-metadata"
+      socialProfileFieldIds={{
+        platform: 'platform-field',
+        handle: 'handle-field',
+        creator: 'profile-creator-field',
       }}
       stageOptions={[{ value: 'NEGOTIATING', label: 'Negotiating' }]}
       onOpenCreatorContext={onOpen}
@@ -68,6 +101,8 @@ beforeEach(() => {
         nameSingular: 'campaignCreator',
         fields: [{ id: 'stage-field', name: 'stage' }],
       },
+      { id: 'creator-metadata', nameSingular: 'creator', fields: [] },
+      { id: 'profile-metadata', nameSingular: 'socialProfile', fields: [] },
     ],
   });
   (useObjectPermissionsForObject as jest.Mock).mockReturnValue({
@@ -88,6 +123,26 @@ it('renders only permission-scoped Campaign rows with recorded metadata stage, s
   expect(screen.getByText('Latest activity')).toBeVisible();
   const row = screen.getByRole('button', { name: /Ava Rivera/ });
   expect(row).toHaveTextContent('@ava.studio');
+  expect(
+    (useFindManyRecords as jest.Mock).mock.calls[0][0].recordGqlFields.creator,
+  ).toEqual({ id: true, name: true });
+  expect((useFindManyRecords as jest.Mock).mock.calls[1][0]).toEqual(
+    expect.objectContaining({
+      objectNameSingular: 'socialProfile',
+      filter: {
+        and: [
+          { creatorId: { in: ['creator-1'] } },
+          { platform: { eq: 'INSTAGRAM' } },
+        ],
+      },
+      recordGqlFields: {
+        id: true,
+        creatorId: true,
+        platform: true,
+        handle: true,
+      },
+    }),
+  );
   expect(row).toHaveTextContent('Negotiating');
   expect(row).toHaveTextContent('Not available yet');
   fireEvent.click(row);
@@ -109,6 +164,111 @@ it('renders only permission-scoped Campaign rows with recorded metadata stage, s
   );
   expect(fetchMore).toHaveBeenCalledTimes(1);
   expect(screen.getByText(/1 loaded of 3/)).toBeVisible();
+});
+
+it('searches every loaded readable Instagram account without choosing a default identity', () => {
+  setup(
+    {},
+    {
+      records: [
+        {
+          id: 'profile-1',
+          creatorId: 'creator-1',
+          platform: 'INSTAGRAM',
+          handle: 'ava.studio',
+        },
+        {
+          id: 'profile-2',
+          creatorId: 'creator-1',
+          platform: 'INSTAGRAM',
+          handle: 'ava.second',
+        },
+        {
+          id: 'profile-3',
+          creatorId: 'creator-2',
+          platform: 'INSTAGRAM',
+          handle: 'foreign',
+        },
+      ],
+      totalCount: 3,
+    },
+  );
+  const search = screen.getByRole('searchbox', {
+    name: 'Search loaded influencers',
+  });
+  expect(screen.getByRole('button', { name: /Ava Rivera/ })).toHaveTextContent(
+    '2 Instagram accounts',
+  );
+  expect(screen.queryByText('@ava.studio')).not.toBeInTheDocument();
+  fireEvent.change(search, { target: { value: 'ava.second' } });
+  expect(screen.getByRole('button', { name: /Ava Rivera/ })).toBeVisible();
+  fireEvent.change(search, { target: { value: 'foreign' } });
+  expect(screen.getByText(/No matches in loaded influencers/)).toBeVisible();
+});
+
+it('does not claim a unique handle or a complete search when 61st Instagram profile is not loaded', () => {
+  const firstPage = Array.from({ length: 60 }, (_, i) => ({
+    id: `profile-${i}`,
+    creatorId: 'creator-1',
+    platform: 'INSTAGRAM',
+    handle: `ava.${i}`,
+  }));
+  const view = setup(
+    {},
+    { records: firstPage, totalCount: 61, hasNextPage: true },
+  );
+  const search = screen.getByRole('searchbox', {
+    name: 'Search loaded influencers',
+  });
+  expect(screen.getByRole('button', { name: /Ava Rivera/ })).toHaveTextContent(
+    'Instagram profiles still loading',
+  );
+  fireEvent.change(search, { target: { value: 'ava.last' } });
+  expect(
+    screen.getByText(/Load more profiles to search further/),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more profiles' }));
+  expect(fetchMoreProfiles).toHaveBeenCalledTimes(1);
+  view.unmount();
+  setup(
+    {},
+    {
+      records: [
+        ...firstPage,
+        {
+          id: 'profile-last',
+          creatorId: 'creator-1',
+          platform: 'INSTAGRAM',
+          handle: 'ava.last',
+        },
+      ],
+      totalCount: 61,
+      hasNextPage: false,
+    },
+  );
+  fireEvent.change(
+    screen.getByRole('searchbox', { name: 'Search loaded influencers' }),
+    { target: { value: 'ava.last' } },
+  );
+  expect(screen.getByRole('button', { name: /Ava Rivera/ })).toHaveTextContent(
+    '61 Instagram accounts',
+  );
+});
+
+it('retries a failed profile page instead of treating it as a complete search', () => {
+  setup({}, { error: new Error('Profile read failed'), hasNextPage: true });
+  fireEvent.change(
+    screen.getByRole('searchbox', { name: 'Search loaded influencers' }),
+    { target: { value: 'missing' } },
+  );
+  expect(
+    screen.getByText('Profile search is unavailable. Retry profiles.'),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Load more profiles' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry profiles' }));
+  expect(refetchProfiles).toHaveBeenCalledTimes(1);
 });
 
 it('does not misrepresent an incomplete or failed page as an empty campaign', () => {
@@ -157,7 +317,7 @@ it('does not request or show restricted Creator identity fields', () => {
     canReadObjectRecords: true,
     restrictedFields: {
       'name-field': { canRead: false },
-      'handle-field': { canRead: false },
+      'social-profiles-field': { canRead: false },
     },
   });
   setup();
@@ -168,10 +328,56 @@ it('does not request or show restricted Creator identity fields', () => {
   );
   expect(screen.queryByText('Ava Rivera')).not.toBeInTheDocument();
   expect(screen.queryByText('@ava.studio')).not.toBeInTheDocument();
+  expect(
+    (useFindManyRecords as jest.Mock).mock.calls[0][0].recordGqlFields.creator,
+  ).not.toHaveProperty('socialProfiles');
+  expect((useFindManyRecords as jest.Mock).mock.calls[1][0].skip).toBe(true);
   expect(screen.getByText('Creator unavailable')).toBeVisible();
   expect(
     screen.getByRole('button', { name: /Creator unavailable/ }),
   ).toHaveTextContent('?');
+});
+
+it('never displays another platform or Creator handle from a profile response', () => {
+  setup(
+    {},
+    {
+      records: [
+        {
+          id: 'other-platform',
+          creatorId: 'creator-1',
+          platform: 'TIKTOK',
+          handle: 'wrong-platform',
+        },
+        {
+          id: 'other-creator',
+          creatorId: 'creator-2',
+          platform: 'INSTAGRAM',
+          handle: 'wrong-creator',
+        },
+      ],
+      totalCount: 2,
+    },
+  );
+  expect(screen.getByRole('button', { name: /Ava Rivera/ })).toHaveTextContent(
+    'Handle unavailable',
+  );
+  expect(screen.queryByText('@wrong-platform')).not.toBeInTheDocument();
+  expect(screen.queryByText('@wrong-creator')).not.toBeInTheDocument();
+});
+
+it('does not show a handle when the SocialProfile read permission is denied', () => {
+  (useObjectPermissionsForObject as jest.Mock).mockImplementation(
+    (id: string) => ({
+      canReadObjectRecords: id !== 'profile-metadata',
+    }),
+  );
+  setup();
+  expect(screen.queryByText('@ava.studio')).not.toBeInTheDocument();
+  expect(
+    (useFindManyRecords as jest.Mock).mock.calls[0][0].recordGqlFields.creator,
+  ).not.toHaveProperty('socialProfiles');
+  expect((useFindManyRecords as jest.Mock).mock.calls[1][0].skip).toBe(true);
 });
 
 it('keeps readable membership rows when stage is denied without requesting or displaying cached stage', () => {

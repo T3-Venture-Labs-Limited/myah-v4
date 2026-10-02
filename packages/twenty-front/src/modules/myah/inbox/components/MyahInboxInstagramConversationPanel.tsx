@@ -845,8 +845,9 @@ const MyahInboxInstagramReplyPanel = ({
     setHasNewerMessages(false);
   };
 
-  const username =
-    activeConversation?.recipientUsername ?? contact.instagramUsername;
+  // A selected conversation is the display source; a contact-level handle must
+  // never substitute a different account when its recipient is unavailable.
+  const username = activeConversation.recipientUsername;
   const provider = activeConversation?.provider;
   const isHistorical =
     provider === 'COMPOSIO_HISTORY' ||

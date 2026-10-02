@@ -4,6 +4,8 @@ import { plainToClass, Transform } from 'class-transformer';
 import {
   IsDateString,
   IsDefined,
+  isFQDN,
+  isIP,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -20,6 +22,7 @@ import {
   IsArray,
   type ValidationError,
   validateSync,
+  ValidateBy,
 } from 'class-validator';
 import { isDefined } from 'twenty-shared/utils';
 import { type LoggerOptions } from 'typeorm/logger/LoggerOptions';
@@ -1809,6 +1812,24 @@ export class ConfigVariables {
   @CastToPositiveNumber()
   @IsOptional()
   NODE_PORT = 3000;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.SERVER_CONFIG,
+    description: 'Optional listen host for the node server',
+    type: ConfigVariableType.STRING,
+    isEnvOnly: true,
+  })
+  @IsOptional()
+  @ValidateBy({
+    name: 'isListenHost',
+    validator: {
+      validate: (value: unknown) =>
+        typeof value === 'string' &&
+        (isIP(value) || isFQDN(value, { require_tld: false })),
+      defaultMessage: () => 'NODE_HOST must be a valid IP address or hostname',
+    },
+  })
+  NODE_HOST: string | undefined = undefined;
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.SERVER_CONFIG,

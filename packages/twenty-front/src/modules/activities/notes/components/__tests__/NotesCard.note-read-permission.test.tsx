@@ -107,8 +107,9 @@ describe('NotesCard with the native note-target query mapping', () => {
         filter: { targetCreatorId: { eq: 'creator-id' } },
       }),
     );
+    expect(screen.getByText('Notes are not available')).toBeVisible();
     expect(
-      screen.getByText("You don't have permission to view notes"),
+      screen.getByText("You don't have permission to view notes."),
     ).toBeVisible();
     expect(screen.queryByText('No notes')).not.toBeInTheDocument();
   });

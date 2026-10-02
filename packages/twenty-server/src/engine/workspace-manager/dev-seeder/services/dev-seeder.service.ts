@@ -9,6 +9,7 @@ import { ApplicationService } from 'src/engine/core-modules/application/applicat
 import { EmailingDomainDriver } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-driver.type';
 import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
+import { MyahInboxContactTriageSchemaService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-schema.service';
 import { SdkClientGenerationService } from 'src/engine/core-modules/sdk-client/sdk-client-generation.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
@@ -19,6 +20,9 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { WorkspaceCacheStorageService } from 'src/engine/workspace-cache-storage/workspace-cache-storage.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceDataSourceService } from 'src/engine/workspace-datasource/workspace-datasource.service';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { seedBillingCustomers } from 'src/engine/workspace-manager/dev-seeder/core/billing/utils/seed-billing-customers.util';
 import { seedBillingSubscriptions } from 'src/engine/workspace-manager/dev-seeder/core/billing/utils/seed-billing-subscriptions.util';
 import {
@@ -66,6 +70,8 @@ export class DevSeederService {
     private readonly prefillFrontComponentService: PrefillFrontComponentService,
     private readonly prefillLogicFunctionService: PrefillLogicFunctionService,
     private readonly secretEncryptionService: SecretEncryptionService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly myahInboxContactTriageSchemaService: MyahInboxContactTriageSchemaService,
     @InjectDataSource()
     private readonly coreDataSource: DataSource,
     @InjectRepository(WorkspaceEntity)
@@ -154,6 +160,32 @@ export class DevSeederService {
       workspaceCustomFlatApplication,
       light,
     });
+
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const workspaceDataSource =
+        await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+
+      await workspaceDataSource.transaction(
+        async (manager: WorkspaceEntityManager) => {
+          const { queryRunner } = manager;
+
+          if (!queryRunner) {
+            throw new Error(
+              'Workspace transaction did not provide a raw SQL query runner',
+            );
+          }
+
+          await this.myahInboxContactTriageSchemaService.ensureWorkspaceTables(
+            queryRunner,
+            workspaceId,
+          );
+          await this.myahInboxContactTriageSchemaService.initializeNewWorkspaceInTransaction(
+            queryRunner,
+            workspaceId,
+          );
+        },
+      );
+    }, buildSystemAuthContext(workspaceId));
 
     const objectMetadataRepository =
       this.coreDataSource.getRepository(ObjectMetadataEntity);

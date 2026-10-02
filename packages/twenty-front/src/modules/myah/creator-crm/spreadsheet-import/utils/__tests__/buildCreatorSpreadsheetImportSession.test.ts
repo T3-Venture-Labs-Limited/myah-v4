@@ -23,6 +23,17 @@ const metadataItems = [
   ['twitter-id', 'twitterLink'],
   ['source-id', 'importSource'],
   ['imported-at-id', 'lastImportedAt'],
+  ['language-id', 'language'],
+  ['instagram-url-id', 'instagramUrl'],
+  ['instagram-username-id', 'instagramUsername'],
+  ['instagram-followers-id', 'instagramFollowerCount'],
+  ['instagram-engagement-id', 'instagramEngagementPercent'],
+  ['youtube-subscribers-id', 'youtubeSubscriberCount'],
+  ['twitch-url-id', 'twitchUrl'],
+  ['twitch-followers-id', 'twitchTotalFollowers'],
+  ['patreon-url-id', 'patreonUrl'],
+  ['notes-id', 'notes'],
+  ['owner-id', 'owner'],
 ].map(([id, name]) => ({ id, name }));
 
 const field = (
@@ -64,6 +75,17 @@ const spreadsheetImportFields = [
   field('twitter', 'twitter-id', 'primaryLinkUrl'),
   field('importSource', 'source-id'),
   field('lastImportedAt', 'imported-at-id'),
+  field('language', 'language-id'),
+  field('instagramUrl', 'instagram-url-id'),
+  field('instagramUsername', 'instagram-username-id'),
+  field('instagramFollowerCount', 'instagram-followers-id'),
+  field('instagramEngagementPercent', 'instagram-engagement-id'),
+  field('youtubeSubscriberCount', 'youtube-subscribers-id'),
+  field('twitchUrl', 'twitch-url-id'),
+  field('twitchTotalFollowers', 'twitch-followers-id'),
+  field('patreonUrl', 'patreon-url-id'),
+  field('notes', 'notes-id'),
+  field('owner', 'owner-id'),
 ];
 
 const influencerClubHeaders = [
@@ -112,7 +134,24 @@ const createSession = (
   buildCreatorSpreadsheetImportSession({
     availableFieldMetadataItems: metadataItems,
     spreadsheetImportFields,
-    queryExistingCreators,
+    queryExistingCreators: async () => {
+      const fixtures = await queryExistingCreators();
+      return fixtures.flatMap((creator: { id: string; [key: string]: any }) =>
+        ['instagram', 'tiktok', 'youtube', 'twitter'].flatMap((provider) => {
+          const url = creator[`${provider}Link`]?.primaryLinkUrl;
+          return url
+            ? [
+                {
+                  id: `${creator.id}-${provider}`,
+                  creatorId: creator.id,
+                  platform: provider.toUpperCase(),
+                  profileUrl: url,
+                },
+              ]
+            : [];
+        }),
+      );
+    },
   });
 
 const runTableHook = (
@@ -128,6 +167,176 @@ const runTableHook = (
 };
 
 describe('buildCreatorSpreadsheetImportSession', () => {
+  it('preserves an explicitly mapped note on the clean schema without adding a Creator field', async () => {
+    const session = buildCreatorSpreadsheetImportSession({
+      availableFieldMetadataItems: [{ id: 'name-id', name: 'name' }],
+      spreadsheetImportFields: [field('name', 'name-id')],
+      queryExistingCreators: jest.fn().mockResolvedValue([]),
+    });
+    expect(session.spreadsheetImportFields).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'notes' })]),
+    );
+    const rows = await session.matchColumnsStepHook(
+      [{ name: 'Ada', notes: 'Prefers email' }],
+      [['Ada', 'Prefers email']],
+      columnsFor(['first_name', 'notes']),
+      undefined,
+    );
+    const plan = session.buildRowCommitPlan(rows[0]);
+    expect(plan.creator).toEqual({ name: 'Ada' });
+    expect(plan.note?.markdown).toContain('Prefers email');
+    expect(session.getRowPreview(rows[0]).supplementaryNoteFields).toHaveLength(
+      1,
+    );
+    expect(session.getRowPreview(rows[0]).excludedFields).toEqual([]);
+
+    const [remappedRow] = await session.matchColumnsStepHook(
+      [{ name: 'Ada', notes: 'No exclusivity' }],
+      [['Ada', 'Prefers email', 'No exclusivity']],
+      [
+        {
+          index: 0,
+          header: 'Name',
+          type: SpreadsheetColumnType.matched,
+          value: 'name',
+        },
+        {
+          index: 1,
+          header: 'Original notes',
+          type: SpreadsheetColumnType.ignored,
+        },
+        {
+          index: 2,
+          header: 'Brand preference',
+          type: SpreadsheetColumnType.matched,
+          value: 'notes',
+        },
+      ],
+      undefined,
+    );
+    expect(session.getRowPreview(remappedRow).excludedFields).toEqual([
+      'Original notes',
+    ]);
+    expect(session.buildRowCommitPlan(remappedRow).note?.markdown).toContain(
+      'No exclusivity',
+    );
+  });
+
+  it('maps clean Creator metadata social URLs to UI-only fields and canonical profiles', async () => {
+    const session = buildCreatorSpreadsheetImportSession({
+      availableFieldMetadataItems: metadataItems.filter(
+        ({ name }) =>
+          ![
+            'instagramLink',
+            'tiktokLink',
+            'youtubeLink',
+            'twitterLink',
+          ].includes(name),
+      ),
+      spreadsheetImportFields: spreadsheetImportFields.filter(
+        ({ key }) =>
+          !['instagram', 'tiktok', 'youtube', 'twitter'].includes(key),
+      ),
+      queryExistingCreators: jest.fn().mockResolvedValue([]),
+    });
+    expect(session.spreadsheetImportFields.map(({ key }) => key)).toEqual(
+      expect.arrayContaining(['instagram', 'tiktok', 'youtube', 'twitter']),
+    );
+    expect(session.headerAliases.instagram_link.fieldKey).toBe('instagram');
+    const rows = await session.matchColumnsStepHook(
+      [
+        {
+          name: 'Ada',
+          instagram: 'https://www.instagram.com/ada/?ref=csv',
+          tiktok: 'https://tiktok.com/@ada',
+        },
+      ],
+      [[]],
+      columnsFor(['first_name', 'instagram_link', 'tiktok_link']),
+      undefined,
+    );
+    const { rows: validated, errors } = runTableHook(session, rows);
+    expect(errors).toEqual([]);
+    expect(session.buildRowCommitPlan(validated[0]).profiles).toEqual([
+      { platform: 'INSTAGRAM', profileUrl: 'https://instagram.com/ada' },
+      { platform: 'TIKTOK', profileUrl: 'https://tiktok.com/@ada' },
+    ]);
+    const invalidRows = await session.matchColumnsStepHook(
+      [{ name: 'Ada', instagram: 'https://not-instagram.example/ada' }],
+      [['Ada', 'https://not-instagram.example/ada']],
+      columnsFor(['first_name', 'instagram_link']),
+      undefined,
+    );
+    expect(runTableHook(session, invalidRows).errors).toEqual([
+      expect.objectContaining({
+        fieldKey: 'instagram',
+        message: 'Enter a valid social profile URL',
+      }),
+    ]);
+  });
+
+  it('fails visibly rather than discarding a populated supported social header', async () => {
+    const session = createSession();
+    await expect(
+      session.matchColumnsStepHook(
+        [{ name: 'Ada' }],
+        [['Ada', 'https://instagram.com/ada']],
+        [
+          columnsFor(['first_name'])[0],
+          {
+            index: 1,
+            header: 'instagram_link',
+            type: SpreadsheetColumnType.ignored,
+          },
+        ],
+        undefined,
+      ),
+    ).rejects.toThrow(
+      'Map instagram_link to its Social profile URL destination',
+    );
+  });
+
+  it('indexes two profiles of one Creator and rejects a cross-Creator collision', async () => {
+    const session = buildCreatorSpreadsheetImportSession({
+      availableFieldMetadataItems: metadataItems,
+      spreadsheetImportFields,
+      queryExistingCreators: jest.fn().mockResolvedValue([
+        {
+          id: 'p1',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          profileUrl: 'https://instagram.com/ada',
+        },
+        {
+          id: 'p2',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          profileUrl: 'https://instagram.com/ada.two',
+        },
+        {
+          id: 'p3',
+          creatorId: 'creator-b',
+          platform: 'INSTAGRAM',
+          profileUrl: 'https://instagram.com/ada.two/',
+        },
+      ]),
+    });
+    const rows = await session.matchColumnsStepHook(
+      [
+        { instagram: 'https://instagram.com/ada' },
+        { instagram: 'https://instagram.com/ada.two' },
+      ],
+      [[], []],
+      columnsFor(['instagram_link']),
+      undefined,
+    );
+    const { errors } = runTableHook(session, rows);
+    expect(errors.map(({ message }) => message)).toEqual([
+      'Creator already exists for this social profile',
+      'Social profiles match different or ambiguous Creators',
+    ]);
+  });
+
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-24T12:00:00.000Z'));
   });
@@ -190,6 +399,99 @@ describe('buildCreatorSpreadsheetImportSession', () => {
         'unexpected',
       ]),
     ).toBe(false);
+  });
+
+  it('previews one representative vendor row as Creator, profiles, note fields, and exclusions', async () => {
+    const session = createSession();
+    const [row] = await session.matchColumnsStepHook(
+      [
+        {
+          name: 'Ada',
+          email: 'ada@example.com',
+          language: 'English',
+          gender: 'FEMALE',
+          instagramUrl: 'https://instagram.com/ada',
+          instagramUsername: 'ada',
+          instagramFollowerCount: '1200',
+          instagramEngagementPercent: '4.2',
+          youtubeSubscriberCount: '800',
+          twitchUrl: 'https://twitch.tv/ada',
+          twitchTotalFollowers: '500',
+          patreonUrl: 'https://patreon.com/ada',
+          notes: 'Prefers email',
+          owner: 'unsupported-owner-id',
+        },
+      ],
+      [['preserve visibly']],
+      [
+        {
+          index: 0,
+          header: 'unsupported_vendor_column',
+          type: SpreadsheetColumnType.ignored,
+        },
+      ],
+      undefined,
+    );
+
+    expect(session.getRowPreview(row)).toEqual({
+      creatorFields: ['name', 'email', 'language'],
+      socialProfiles: [
+        {
+          platform: 'Instagram',
+          fields: [
+            'instagramUrl',
+            'instagramUsername',
+            'instagramFollowerCount',
+          ],
+        },
+        {
+          platform: 'Twitch',
+          fields: ['twitchUrl', 'twitchTotalFollowers'],
+        },
+        {
+          platform: 'Patreon',
+          fields: ['patreonUrl'],
+        },
+      ],
+      supplementaryNoteFields: [
+        'gender',
+        'instagramEngagementPercent',
+        'youtubeSubscriberCount',
+        'notes',
+      ],
+      excludedFields: ['owner', 'unsupported_vendor_column'],
+    });
+    expect(session.buildRowCommitPlan(row)).toEqual({
+      creator: {
+        name: 'Ada',
+        email: 'ada@example.com',
+        language: 'English',
+      },
+      profiles: [
+        {
+          platform: 'INSTAGRAM',
+          handle: 'ada',
+          profileUrl: 'https://instagram.com/ada',
+          followerCount: 1200,
+          followerCountSource: 'Spreadsheet import',
+        },
+        {
+          platform: 'TWITCH',
+          profileUrl: 'https://twitch.tv/ada',
+          followerCount: 500,
+          followerCountSource: 'Spreadsheet import',
+        },
+        {
+          platform: 'PATREON',
+          profileUrl: 'https://patreon.com/ada',
+        },
+      ],
+      note: {
+        title: 'Imported supplementary Creator context',
+        markdown:
+          '- **gender**: FEMALE\n- **instagramEngagementPercent**: 4.2\n- **youtubeSubscriberCount**: 800\n- **notes**: Prefers email',
+      },
+    });
   });
 
   it('normalizes only recognized mappings and adds exact-profile provenance', async () => {
@@ -313,6 +615,21 @@ describe('buildCreatorSpreadsheetImportSession', () => {
       'phone',
       'youtube',
     ]);
+  });
+
+  it('rejects Creator emails that the server would reject before importing any rows', async () => {
+    const session = createSession();
+    const rows = await session.matchColumnsStepHook(
+      [{ email: 'person@domain..com' }, { email: 'person@domain.c' }],
+      [[], []],
+      columnsFor(['email']),
+      undefined,
+    );
+
+    const { errors } = runTableHook(session, rows);
+    expect(errors.filter(({ fieldKey }) => fieldKey === 'email')).toHaveLength(
+      2,
+    );
   });
 
   it('preserves unmatched Gender source values for explicit validation', async () => {

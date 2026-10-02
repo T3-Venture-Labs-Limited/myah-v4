@@ -1,11 +1,8 @@
 import request from 'supertest';
 import { deleteOneRoleOperationFactory } from 'test/integration/graphql/utils/delete-one-role-operation-factory.util';
-import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
-import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
 import { PermissionFlagType } from 'twenty-shared/constants';
 
-import { fieldTextMock } from 'src/engine/api/__mocks__/object-metadata-item.mock';
 import { ErrorCode } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import {
   PermissionsExceptionCode,
@@ -419,36 +416,25 @@ describe('roles permissions', () => {
 
     describe('upsertObjectPermission', () => {
       let listingObjectId = '';
+      let locationFieldId = '';
 
       beforeAll(async () => {
-        const { data } = await createOneObjectMetadata({
+        const { objects } = await findManyObjectMetadata({
+          input: { filter: {}, paging: { first: 1000 } },
+          gqlFields: 'id nameSingular fieldsList { id name }',
           expectToFail: false,
-          input: {
-            nameSingular: 'house',
-            namePlural: 'houses',
-            labelSingular: 'House',
-            labelPlural: 'Houses',
-            icon: 'IconBuildingSkyscraper',
-          },
         });
+        const creator = objects.find(
+          (object) => object.nameSingular === 'creator',
+        );
+        const location = creator?.fieldsList?.find(
+          (field) => field.name === 'location',
+        );
 
-        listingObjectId = data.createOneObject.id;
-      });
-
-      afterAll(async () => {
-        await updateOneObjectMetadata({
-          expectToFail: false,
-          input: {
-            idToUpdate: listingObjectId,
-            updatePayload: {
-              isActive: false,
-            },
-          },
-        });
-        await deleteOneObjectMetadata({
-          expectToFail: false,
-          input: { idToDelete: listingObjectId },
-        });
+        expect(creator).toBeDefined();
+        expect(location).toBeDefined();
+        listingObjectId = creator!.id;
+        locationFieldId = location!.id;
       });
 
       const upsertObjectPermissionMutation = ({
@@ -541,7 +527,7 @@ describe('roles permissions', () => {
           const query = {
             query: `
               mutation UpsertFieldPermissions {
-                upsertFieldPermissions(upsertFieldPermissionsInput: {roleId: "${guestRoleId}", fieldPermissions: [{objectMetadataId: "${listingObjectId}", fieldMetadataId: "${fieldTextMock.id}", canReadFieldValue: false, canUpdateFieldValue: false}]}) {
+                upsertFieldPermissions(upsertFieldPermissionsInput: {roleId: "${guestRoleId}", fieldPermissions: [{objectMetadataId: "${listingObjectId}", fieldMetadataId: "${locationFieldId}", canReadFieldValue: false, canUpdateFieldValue: false}]}) {
                   id
                   roleId
                   objectMetadataId

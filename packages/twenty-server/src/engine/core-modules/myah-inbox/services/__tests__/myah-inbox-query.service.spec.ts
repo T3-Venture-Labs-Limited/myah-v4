@@ -840,10 +840,10 @@ describe('MyahInboxQueryService', () => {
         name: null,
         language: 'English',
         location: 'London',
-        categories: ['Beauty'],
-        niches: ['Skincare'],
       },
     });
+    expect(briefing.creator).not.toHaveProperty('categories');
+    expect(briefing.creator).not.toHaveProperty('niches');
     expect(JSON.stringify(briefing)).not.toContain(
       'Relation name is unreadable',
     );

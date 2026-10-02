@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { type QueryRunner, type Repository } from 'typeorm';
+import { IsNull, type QueryRunner, type Repository } from 'typeorm';
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { type ObjectRecord } from 'twenty-shared/types';
+import { type SocialProfileRecord } from 'src/modules/myah-creator-social-profile/types/social-profile-record.type';
 import { INSTAGRAM_MESSAGE_MAX_BODY_BYTES } from 'twenty-shared/constants';
 import { getUtf8ByteLength } from 'twenty-shared/utils';
 
@@ -10,16 +13,22 @@ import { isInstagramMessageIdentitySnapshot } from 'src/engine/core-modules/acti
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { resolveInstagramRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-instagram-recipient.util';
 import { buildSystemAuthContext } from 'src/engine/core-modules/auth/utils/build-system-auth-context.util';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
+import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { InstagramMessageDraftLockService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft-lock.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { resolveRoleIdFromAuthContext } from 'src/engine/twenty-orm/utils/resolve-role-id-from-auth-context.util';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 export type SaveInstagramMessageDraftInput = {
   workspaceId: string;
   workspaceMemberId: string;
+  rolePermissionConfig: RolePermissionConfig;
+  authContext: UserWorkspaceAuthContext;
   draftId: string;
   expectedRevision: number;
   kind: 'FIRST_MESSAGE' | 'REPLY';
@@ -166,9 +175,42 @@ export class InstagramMessageDraftService {
       throw new Error('Instagram message draft is locked for execution');
     }
     const workspace = await this.getWorkspace(input.workspaceId);
+    const authContext = input.authContext;
+    if (
+      !isUserAuthContext(authContext) ||
+      !authContext.user ||
+      !authContext.workspaceMember ||
+      authContext.workspace.id !== workspace.id ||
+      authContext.workspaceMemberId !== input.workspaceMemberId ||
+      authContext.workspaceMember.id !== input.workspaceMemberId
+    ) {
+      throw new Error('Instagram draft actor context is unavailable');
+    }
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
+        const context = getWorkspaceContext();
+        const roleId = resolveRoleIdFromAuthContext({
+          authContext,
+          userWorkspaceRoleMap: context.userWorkspaceRoleMap,
+          apiKeyRoleMap: context.apiKeyRoleMap,
+        });
+        if (
+          !roleId ||
+          !(
+            'unionOf' in input.rolePermissionConfig ||
+            'intersectionOf' in input.rolePermissionConfig
+          ) ||
+          ('unionOf' in input.rolePermissionConfig
+            ? input.rolePermissionConfig.unionOf
+            : input.rolePermissionConfig.intersectionOf
+          ).length !== 1 ||
+          ('unionOf' in input.rolePermissionConfig
+            ? input.rolePermissionConfig.unionOf[0]
+            : input.rolePermissionConfig.intersectionOf[0]) !== roleId
+        ) {
+          throw new Error('Instagram draft actor permissions are unavailable');
+        }
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(workspace.id);
@@ -293,7 +335,7 @@ export class InstagramMessageDraftService {
           return this.toResult('CONFLICT', current);
         });
       },
-      buildSystemAuthContext({ workspace }),
+      authContext,
     );
   }
 
@@ -389,35 +431,23 @@ export class InstagramMessageDraftService {
           'FIRST_MESSAGE draft requires a Creator and no conversation',
         );
       }
-      const [creator] = await dataSource.query<
-        Array<{
-          instagramUsername: string | null;
-          instagramUrl: string | null;
-          instagramLinkPrimaryLinkUrl: string | null;
-        }>
-      >(
-        `SELECT "instagramUsername", "instagramUrl", "instagramLinkPrimaryLinkUrl"
-         FROM "${schemaName}"."creator"
-         WHERE "id" = $1 AND "deletedAt" IS NULL
-         LIMIT 1`,
-        [input.creatorRecordId],
+      const recipientUsername = await this.resolveCreatorProfile(
+        dataSource,
         queryRunner,
-        { shouldBypassPermissionChecks: true },
+        schemaName,
+        input.creatorRecordId,
       );
-      if (!creator) throw new Error('Creator is unavailable');
-      const recipient = resolveInstagramRecipient({
-        instagramUsername: creator.instagramUsername,
-        instagramUrl: creator.instagramUrl,
-        instagramLink: {
-          primaryLinkUrl: creator.instagramLinkPrimaryLinkUrl,
-        },
-      });
+      await this.assertReadableTarget(
+        input,
+        input.creatorRecordId,
+        recipientUsername,
+      );
 
       return {
         creatorRecordId: input.creatorRecordId,
         conversationRecordId: null,
-        recipientUsername: recipient.normalizedUsername,
-        recipientProviderId: recipient.normalizedUsername,
+        recipientUsername,
+        recipientProviderId: recipientUsername,
       };
     }
 
@@ -454,36 +484,119 @@ export class InstagramMessageDraftService {
       throw new Error('Active Unipile conversation is unavailable');
     }
 
-    const [creator] = await dataSource.query<
-      Array<{
-        instagramUsername: string | null;
-        instagramUrl: string | null;
-        instagramLinkPrimaryLinkUrl: string | null;
-      }>
-    >(
-      `SELECT "instagramUsername", "instagramUrl", "instagramLinkPrimaryLinkUrl"
-       FROM "${schemaName}"."creator"
-       WHERE "id" = $1 AND "deletedAt" IS NULL
-       LIMIT 1`,
-      [conversation.creatorId],
+    const recipientUsername = await this.resolveCreatorProfile(
+      dataSource,
       queryRunner,
-      { shouldBypassPermissionChecks: true },
+      schemaName,
+      conversation.creatorId,
+      conversation.recipientUsername,
     );
-    if (!creator) throw new Error('Creator is unavailable');
-    const recipient = resolveInstagramRecipient({
-      instagramUsername: creator.instagramUsername,
-      instagramUrl: creator.instagramUrl,
-      instagramLink: {
-        primaryLinkUrl: creator.instagramLinkPrimaryLinkUrl,
-      },
-    });
+    await this.assertReadableTarget(
+      input,
+      conversation.creatorId,
+      recipientUsername,
+    );
 
     return {
       creatorRecordId: conversation.creatorId,
       conversationRecordId: conversation.id,
-      recipientUsername: recipient.normalizedUsername,
+      recipientUsername,
       recipientProviderId: conversation.recipientIgsid.trim(),
     };
+  }
+
+  private async assertReadableTarget(
+    input: SaveInstagramMessageDraftInput,
+    creatorId: string,
+    recipientUsername: string,
+  ): Promise<void> {
+    const creators =
+      await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+        input.workspaceId,
+        'creator',
+        input.rolePermissionConfig,
+      );
+    const profiles =
+      await this.globalWorkspaceOrmManager.getRepository<SocialProfileRecord>(
+        input.workspaceId,
+        'socialProfile',
+        input.rolePermissionConfig,
+      );
+    const readableCreator = await creators.findOne({
+      where: { id: creatorId, deletedAt: IsNull() },
+      select: { id: true },
+    });
+    const readableProfiles = await profiles.find({
+      where: { creatorId, platform: 'INSTAGRAM', deletedAt: IsNull() },
+      select: { id: true, handle: true, profileUrl: true },
+    });
+    if (
+      !readableCreator ||
+      !readableProfiles.some((profile) => {
+        try {
+          return (
+            resolveInstagramRecipient({
+              instagramUsername: profile.handle,
+              instagramUrl: profile.profileUrl,
+              instagramLink: null,
+            }).normalizedUsername === recipientUsername
+          );
+        } catch {
+          return false;
+        }
+      })
+    )
+      throw new Error('Instagram recipient identity is unavailable');
+  }
+
+  private async resolveCreatorProfile(
+    dataSource: GlobalWorkspaceDataSource,
+    queryRunner: QueryRunner | undefined,
+    schemaName: string,
+    creatorId: string,
+    boundUsername?: string | null,
+  ): Promise<string> {
+    const [creator] = await dataSource.query<Array<{ id: string }>>(
+      `SELECT "id" FROM "${schemaName}"."creator"
+       WHERE "id" = $1 AND "deletedAt" IS NULL LIMIT 1`,
+      [creatorId],
+      queryRunner,
+      { shouldBypassPermissionChecks: true },
+    );
+    if (!creator) throw new Error('Creator is unavailable');
+    const profiles = await dataSource.query<
+      Array<{ handle: string | null; profileUrl: string | null }>
+    >(
+      `SELECT "handle", "profileUrl" FROM "${schemaName}"."socialProfile"
+       WHERE "creatorId" = $1 AND "platform" = 'INSTAGRAM'
+         AND "deletedAt" IS NULL ${boundUsername ? '' : 'LIMIT 2'}`,
+      [creatorId],
+      queryRunner,
+      { shouldBypassPermissionChecks: true },
+    );
+    const matching = boundUsername
+      ? profiles.filter((profile) => {
+          try {
+            return (
+              resolveInstagramRecipient({
+                instagramUsername: profile.handle,
+                instagramUrl: profile.profileUrl,
+                instagramLink: null,
+              }).normalizedUsername === boundUsername.trim().toLowerCase()
+            );
+          } catch {
+            return false;
+          }
+        })
+      : profiles;
+    if (matching.length !== 1 || (!boundUsername && profiles.length !== 1)) {
+      throw new Error('Instagram recipient identity is unavailable');
+    }
+    return resolveInstagramRecipient({
+      instagramUsername: matching[0].handle,
+      instagramUrl: matching[0].profileUrl,
+      instagramLink: null,
+    }).normalizedUsername;
   }
 
   private toResult(

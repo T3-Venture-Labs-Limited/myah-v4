@@ -1348,6 +1348,24 @@ export enum CommandMenuItemAvailabilityType {
 
 export type CommandMenuItemPayload = ObjectMetadataCommandMenuItemPayload | PathCommandMenuItemPayload;
 
+export type CommitCreatorImportInput = {
+  attemptKey: Scalars['UUID']['input'];
+  creator: CreatorImportCreatorInput;
+  note?: InputMaybe<CreatorImportNoteInput>;
+  operationKey: Scalars['String']['input'];
+  profiles: Array<CreatorImportSocialProfileInput>;
+};
+
+export type CommitCreatorImportResult = {
+  __typename?: 'CommitCreatorImportResult';
+  creatorId: Scalars['UUID']['output'];
+  noteId?: Maybe<Scalars['UUID']['output']>;
+  noteTargetId?: Maybe<Scalars['UUID']['output']>;
+  receiptId: Scalars['UUID']['output'];
+  replayed: Scalars['Boolean']['output'];
+  socialProfileIds: Array<Scalars['UUID']['output']>;
+};
+
 export type ConnectWorkspaceMailboxInput = {
   accountType: Scalars['String']['input'];
   connectionParameters: WorkspaceMailboxConnectionParametersInput;
@@ -1722,6 +1740,33 @@ export type CreateWebhookInput = {
   operations: Array<Scalars['String']['input']>;
   secret?: InputMaybe<Scalars['String']['input']>;
   targetUrl: Scalars['String']['input'];
+};
+
+export type CreatorImportCreatorInput = {
+  email?: InputMaybe<Scalars['String']['input']>;
+  importSource?: InputMaybe<Scalars['String']['input']>;
+  language?: InputMaybe<Scalars['String']['input']>;
+  lastImportedAt?: InputMaybe<Scalars['String']['input']>;
+  location?: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+  phone?: InputMaybe<Scalars['String']['input']>;
+  source?: InputMaybe<Scalars['String']['input']>;
+  sourceUrl?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type CreatorImportNoteInput = {
+  markdown: Scalars['String']['input'];
+  title: Scalars['String']['input'];
+};
+
+export type CreatorImportSocialProfileInput = {
+  followerCount?: InputMaybe<Scalars['Int']['input']>;
+  followerCountObservedAt?: InputMaybe<Scalars['String']['input']>;
+  followerCountSource?: InputMaybe<Scalars['String']['input']>;
+  handle?: InputMaybe<Scalars['String']['input']>;
+  platform: Scalars['String']['input'];
+  platformAccountId?: InputMaybe<Scalars['String']['input']>;
+  profileUrl?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type CreatorListMemberDto = {
@@ -3246,6 +3291,7 @@ export type Mutation = {
   checkCustomDomainValidRecords?: Maybe<DomainValidRecords>;
   checkPublicDomainValidRecords?: Maybe<DomainValidRecords>;
   checkoutSession: BillingSession;
+  commitCreatorImport: CommitCreatorImportResult;
   completeFileUpload: FileWithSignedUrl;
   completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus;
   completeManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod;
@@ -3385,7 +3431,9 @@ export type Mutation = {
   resetPageLayoutToDefault: PageLayout;
   resetPageLayoutWidgetToDefault: PageLayoutWidget;
   resolveAgentChatApproval: SendChatMessageResult;
+  restoreSocialProfile: SocialProfileDto;
   resumeManagedEmailWarmup: ManagedEmailActionResult;
+  retireSocialProfile: SocialProfileDto;
   retryChatMessage: SendChatMessageResult;
   revokeApiKey?: Maybe<ApiKey>;
   revokeWorkspaceMailbox: RevokeWorkspaceMailboxResult;
@@ -3450,6 +3498,7 @@ export type Mutation = {
   updatePageLayoutWithTabsAndWidgets: PageLayout;
   updatePasswordViaResetToken: InvalidatePassword;
   updateSkill: Skill;
+  updateSocialProfileIdentity: SocialProfileDto;
   updateUnsubscribeTopic: UnsubscribeTopic;
   updateUserEmail: Scalars['Boolean']['output'];
   updateView: View;
@@ -3587,6 +3636,11 @@ export type MutationCheckoutSessionArgs = {
   recurringInterval: SubscriptionInterval;
   requirePaymentMethod?: Scalars['Boolean']['input'];
   successUrlPath?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationCommitCreatorImportArgs = {
+  input: CommitCreatorImportInput;
 };
 
 
@@ -4273,8 +4327,18 @@ export type MutationResolveAgentChatApprovalArgs = {
 };
 
 
+export type MutationRestoreSocialProfileArgs = {
+  input: RestoreSocialProfileInput;
+};
+
+
 export type MutationResumeManagedEmailWarmupArgs = {
   input: ManagedEmailMailboxActionInput;
+};
+
+
+export type MutationRetireSocialProfileArgs = {
+  input: RetireSocialProfileInput;
 };
 
 
@@ -4608,6 +4672,11 @@ export type MutationUpdatePasswordViaResetTokenArgs = {
 
 export type MutationUpdateSkillArgs = {
   input: UpdateSkillInput;
+};
+
+
+export type MutationUpdateSocialProfileIdentityArgs = {
+  input: UpdateSocialProfileIdentityInput;
 };
 
 
@@ -5972,6 +6041,14 @@ export type ResolveExactCampaignEmailSenderInput = {
   expectedSenderPoolFingerprint: Scalars['String']['input'];
 };
 
+export type RestoreSocialProfileInput = {
+  id: Scalars['UUID']['input'];
+};
+
+export type RetireSocialProfileInput = {
+  id: Scalars['UUID']['input'];
+};
+
 export type RevokeApiKeyInput = {
   id: Scalars['UUID']['input'];
 };
@@ -6272,6 +6349,21 @@ export type Skill = {
   label: Scalars['String']['output'];
   name: Scalars['String']['output'];
   updatedAt: Scalars['DateTime']['output'];
+};
+
+export type SocialProfileDto = {
+  __typename?: 'SocialProfileDTO';
+  creatorId: Scalars['UUID']['output'];
+  deletedAt?: Maybe<Scalars['DateTime']['output']>;
+  followerCount?: Maybe<Scalars['Int']['output']>;
+  followerCountObservedAt?: Maybe<Scalars['DateTime']['output']>;
+  followerCountSource?: Maybe<Scalars['String']['output']>;
+  handle?: Maybe<Scalars['String']['output']>;
+  id: Scalars['UUID']['output'];
+  name: Scalars['String']['output'];
+  platform: Scalars['String']['output'];
+  platformAccountId?: Maybe<Scalars['String']['output']>;
+  profileUrl?: Maybe<Scalars['String']['output']>;
 };
 
 export type StandaloneRichTextConfiguration = {
@@ -6719,6 +6811,17 @@ export type UpdateSkillInput = {
   isActive?: InputMaybe<Scalars['Boolean']['input']>;
   label?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type UpdateSocialProfileIdentityInput = {
+  followerCount?: InputMaybe<Scalars['Int']['input']>;
+  followerCountObservedAt?: InputMaybe<Scalars['String']['input']>;
+  followerCountSource?: InputMaybe<Scalars['String']['input']>;
+  handle?: InputMaybe<Scalars['String']['input']>;
+  id: Scalars['UUID']['input'];
+  platform?: InputMaybe<Scalars['String']['input']>;
+  platformAccountId?: InputMaybe<Scalars['String']['input']>;
+  profileUrl?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateUnsubscribeTopicInput = {

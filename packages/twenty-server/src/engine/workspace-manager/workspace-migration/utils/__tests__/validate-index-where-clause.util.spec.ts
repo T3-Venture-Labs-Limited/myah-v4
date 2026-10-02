@@ -18,6 +18,13 @@ describe('validateAndReturnIndexWhereClause', () => {
     ).toBe('"deletedAt" IS NULL AND "isDefault" = true');
   });
 
+  it.each([
+    '"deletedAt" IS NULL AND NULLIF(BTRIM("platformAccountId"), \'\') IS NOT NULL',
+    '"deletedAt" IS NULL AND NULLIF(BTRIM("normalizedLocator"), \'\') IS NOT NULL',
+  ])('should return the reviewed SocialProfile clause %s', (clause) => {
+    expect(validateAndReturnIndexWhereClause(clause)).toBe(clause);
+  });
+
   it('should throw for clauses not in the allowlist', () => {
     expect(() =>
       validateAndReturnIndexWhereClause('1=1; DROP TABLE users;'),

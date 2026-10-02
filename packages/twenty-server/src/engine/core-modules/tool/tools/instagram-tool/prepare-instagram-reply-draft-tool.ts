@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 import { InstagramMessageDraftService } from 'src/engine/core-modules/instagram-message/services/instagram-message-draft.service';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { InstagramMessageRecordAccessService } from 'src/engine/core-modules/instagram-message/services/instagram-message-record-access.service';
 import { type ToolExecutionContext } from 'src/engine/core-modules/tool/types/tool-execution-context.type';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
@@ -56,6 +57,11 @@ export class PrepareInstagramReplyDraftTool implements Tool {
       !context.userWorkspaceId ||
       !context.workspaceMemberId ||
       !context.rolePermissionConfig ||
+      !context.authContext ||
+      !isUserAuthContext(context.authContext) ||
+      context.authContext.workspace.id !== context.workspaceId ||
+      context.authContext.userWorkspaceId !== context.userWorkspaceId ||
+      context.authContext.workspaceMemberId !== context.workspaceMemberId ||
       !context.threadId
     ) {
       return {
@@ -81,6 +87,8 @@ export class PrepareInstagramReplyDraftTool implements Tool {
       const result = await this.instagramMessageDraftService.saveDraft({
         workspaceId: context.workspaceId,
         workspaceMemberId: context.workspaceMemberId,
+        rolePermissionConfig: context.rolePermissionConfig,
+        authContext: context.authContext,
         draftId,
         expectedRevision,
         kind: 'REPLY',

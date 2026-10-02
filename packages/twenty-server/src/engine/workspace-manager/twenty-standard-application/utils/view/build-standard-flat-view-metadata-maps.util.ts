@@ -12,6 +12,7 @@ import {
   computeMyahCampaignViews,
   computeMyahCreatorListViews,
   computeMyahCreatorViews,
+  computeMyahSocialProfileViews,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/view/compute-myah-views.util';
 import { computeStandardBlocklistViews } from 'src/engine/workspace-manager/twenty-standard-application/utils/view/compute-standard-blocklist-views.util';
 import { computeStandardCalendarChannelEventAssociationViews } from 'src/engine/workspace-manager/twenty-standard-application/utils/view/compute-standard-calendar-channel-event-association-views.util';
@@ -79,6 +80,7 @@ const STANDARD_FLAT_VIEW_METADATA_BUILDERS_BY_OBJECT_NAME = {
   campaign: computeMyahCampaignViews,
   creatorList: computeMyahCreatorListViews,
   creator: computeMyahCreatorViews,
+  socialProfile: computeMyahSocialProfileViews,
 } as const satisfies {
   [P in AllStandardObjectName]?: StandardViewBuilder<P>;
 };

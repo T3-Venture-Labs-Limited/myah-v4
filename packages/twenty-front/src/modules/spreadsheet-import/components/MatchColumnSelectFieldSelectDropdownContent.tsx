@@ -5,6 +5,7 @@ import { getFieldMetadataTypeLabel } from '@/object-record/object-filter-dropdow
 import { DO_NOT_IMPORT_OPTION_KEY } from '@/spreadsheet-import/constants/DoNotImportOptionKey';
 import { useSpreadsheetImportInternal } from '@/spreadsheet-import/hooks/useSpreadsheetImportInternal';
 import { hasNestedFields } from '@/spreadsheet-import/utils/spreadsheetImportHasNestedFields';
+import { type SpreadsheetImportFieldOption } from '@/spreadsheet-import/types/SpreadsheetImportFieldOption';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { DropdownMenuHeader } from '@/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader';
 import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent';
@@ -34,8 +35,10 @@ export const MatchColumnSelectFieldSelectDropdownContent = ({
   onCancelSelect,
   onDoNotImportSelect,
   suggestedOptions,
+  options,
 }: {
   selectedValue: SelectOption | undefined;
+  options: readonly Readonly<SpreadsheetImportFieldOption>[];
   onSelectFieldMetadataItem: (
     selectedFieldMetadataItem: FieldMetadataItem,
   ) => void;
@@ -73,7 +76,9 @@ export const MatchColumnSelectFieldSelectDropdownContent = ({
   };
 
   const handleSuggestedOptionClick = (suggestedOption: SelectOption) => {
-    onSelectSuggestedOption(suggestedOption);
+    if (!suggestedOption.disabled) {
+      onSelectSuggestedOption(suggestedOption);
+    }
   };
 
   const handleCancelClick = () => {
@@ -122,6 +127,7 @@ export const MatchColumnSelectFieldSelectDropdownContent = ({
                       <MenuItemSelect
                         key={option.value}
                         selected={selectedValue?.value === option.value}
+                        disabled={option.disabled}
                         onClick={() => handleSuggestedOptionClick(option)}
                         LeftIcon={option.Icon}
                         text={option.label}
@@ -136,6 +142,25 @@ export const MatchColumnSelectFieldSelectDropdownContent = ({
             </>
           )}
           <DropdownMenuItemsContainer scrollable={false}>
+            {options
+              .filter(
+                (option) =>
+                  option.fieldMetadataItemId?.startsWith('virtual:') &&
+                  normalizeSearchText(option.label).includes(
+                    normalizeSearchText(searchFilter),
+                  ),
+              )
+              .map((option) => (
+                <MenuItemSelect
+                  key={option.value}
+                  selected={selectedValue?.value === option.value}
+                  disabled={option.disabled}
+                  onClick={() => handleSuggestedOptionClick(option)}
+                  LeftIcon={option.Icon}
+                  text={option.label}
+                  contextualText={option.fieldMetadataTypeLabel}
+                />
+              ))}
             {filteredAvailableFieldMetadataItems.map((field) => (
               <MenuItemSelect
                 key={field.id}

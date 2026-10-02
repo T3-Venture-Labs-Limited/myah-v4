@@ -1,6 +1,5 @@
 import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
 import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
-import { extractRecordIdsAndDatesAsExpectAny } from 'test/utils/extract-record-ids-and-dates-as-expect-any';
 import { jestExpectToBeDefined } from 'test/utils/jest-expect-to-be-defined.util.test';
 import {
   eachTestingContextFilter,
@@ -19,7 +18,7 @@ type UpdateOneStandardObjectMetadataTestingContext = EachTestingContext<
   | Partial<UpdateObjectPayload>
 >[];
 
-const successfulUpdateTestsUseCase: UpdateOneStandardObjectMetadataTestingContext =
+const deniedUpdateTestsUseCase: UpdateOneStandardObjectMetadataTestingContext =
   [
     {
       title: 'when updating description',
@@ -54,9 +53,20 @@ const successfulUpdateTestsUseCase: UpdateOneStandardObjectMetadataTestingContex
     },
   ];
 
-const allTestsUseCases = [...successfulUpdateTestsUseCase];
+const companyMetadataFields = `
+  id
+  nameSingular
+  namePlural
+  labelSingular
+  labelPlural
+  color
+  description
+  icon
+  isActive
+  shortcut
+`;
 
-describe('Standard object metadata update should succeed', () => {
+describe('Product-managed standard object metadata updates are denied', () => {
   let companyObjectMetadataId: string;
   let originalCompanyMetadata: ObjectMetadataDTO;
 
@@ -67,18 +77,7 @@ describe('Standard object metadata update should succeed', () => {
         filter: {},
         paging: { first: 100 },
       },
-      gqlFields: `
-        id
-        nameSingular
-        namePlural
-        labelSingular
-        labelPlural
-        color
-        description
-        icon
-        isActive
-        shortcut
-      `,
+      gqlFields: companyMetadataFields,
     });
 
     const companyObject = objects.find((o) => o.nameSingular === 'company');
@@ -88,24 +87,7 @@ describe('Standard object metadata update should succeed', () => {
     originalCompanyMetadata = companyObject;
   });
 
-  afterEach(async () => {
-    await updateOneObjectMetadata({
-      expectToFail: false,
-      input: {
-        idToUpdate: companyObjectMetadataId,
-        updatePayload: {
-          labelSingular: originalCompanyMetadata.labelSingular,
-          labelPlural: originalCompanyMetadata.labelPlural,
-          description: originalCompanyMetadata.description,
-          icon: originalCompanyMetadata.icon,
-          isActive: originalCompanyMetadata.isActive,
-          shortcut: originalCompanyMetadata.shortcut,
-        },
-      },
-    });
-  });
-
-  it.each(eachTestingContextFilter(allTestsUseCases))(
+  it.each(eachTestingContextFilter(deniedUpdateTestsUseCase))(
     '$title',
     async ({ context }) => {
       const updatePayload =
@@ -113,40 +95,31 @@ describe('Standard object metadata update should succeed', () => {
           ? context({ objectMetadataId: companyObjectMetadataId })
           : context;
 
-      const {
-        data: { updateOneObject },
-        errors,
-      } = await updateOneObjectMetadata({
+      const { errors } = await updateOneObjectMetadata({
         input: {
           idToUpdate: companyObjectMetadataId,
           updatePayload,
         },
+        expectToFail: true,
+      });
+
+      expect(errors).toEqual([
+        expect.objectContaining({
+          message:
+            'Schema definitions are managed by the product and cannot be changed by customers',
+          extensions: expect.objectContaining({ code: 'FORBIDDEN' }),
+        }),
+      ]);
+
+      const { objects } = await findManyObjectMetadata({
         expectToFail: false,
-        gqlFields: `
-          id
-          nameSingular
-          namePlural
-          labelSingular
-          labelPlural
-          color
-          description
-          icon
-          isActive
-          shortcut
-        `,
+        input: { filter: {}, paging: { first: 100 } },
+        gqlFields: companyMetadataFields,
       });
 
-      expect(errors).toBeUndefined();
-      expect(updateOneObject).toBeDefined();
-      expect(updateOneObject.id).toBe(companyObjectMetadataId);
-
-      expect(updateOneObject).toMatchObject({
-        ...updatePayload,
-      });
-
-      expect(updateOneObject).toMatchSnapshot(
-        extractRecordIdsAndDatesAsExpectAny({ ...updateOneObject }),
-      );
+      expect(
+        objects.find((object) => object.id === companyObjectMetadataId),
+      ).toEqual(originalCompanyMetadata);
     },
   );
 });

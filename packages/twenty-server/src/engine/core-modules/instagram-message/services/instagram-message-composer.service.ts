@@ -340,7 +340,19 @@ export class InstagramMessageComposerService {
                 computeInstagramComposerPreparationFingerprint(
                   { recipient: input.recipient },
                   authenticatedContext,
-                  { ...graph, creatorRecordId: null },
+                  {
+                    ...graph,
+                    creatorRecordId: null,
+                    recipient: {
+                      ...graph.recipient,
+                      sourceValues: [
+                        {
+                          field: 'rawHandle',
+                          value: input.recipient.rawHandle!,
+                        },
+                      ],
+                    },
+                  },
                 );
             if (
               (persistedDraft && !resumesCommittedAttempt) ||
@@ -804,9 +816,10 @@ export class InstagramMessageComposerService {
     if (!/^workspace_[a-z0-9]+$/.test(schemaName)) {
       throw new Error('Instagram composer workspace schema is unavailable');
     }
-    const creatorTableLockSql = [
+    const identityTablesLockSql = [
       'LOCK TABLE',
-      `${dataSource.driver.escape(schemaName)}."creator"`,
+      `${dataSource.driver.escape(schemaName)}."creator",`,
+      `${dataSource.driver.escape(schemaName)}."socialProfile"`,
       'IN SHARE ROW EXCLUSIVE MODE',
     ].join(' ');
     const runner: WorkspaceQueryRunner = dataSource.createQueryRunner();
@@ -838,10 +851,10 @@ export class InstagramMessageComposerService {
             );
           };
           await beforeQuery();
-          // Ordinary Creator DML conflicts with this lock. The subsequent READ
-          // COMMITTED scan observes preceding writers; later writers wait until
-          // commit. This is not a permanent canonical uniqueness guarantee.
-          await runner.query(creatorTableLockSql);
+          // Ordinary Creator/SocialProfile DML conflicts with this lock. The
+          // subsequent READ COMMITTED scan observes preceding identity writers;
+          // later writers wait until commit.
+          await runner.query(identityTablesLockSql);
           await this.recipientService.assertCreatorMatchesUnderLock(
             input.graph,
             input.authenticatedContext,
@@ -850,30 +863,63 @@ export class InstagramMessageComposerService {
           );
           let creatorRecordId = input.graph.creatorRecordId;
           if (!creatorRecordId) {
+            const permissionForNewIdentity =
+              input.authenticatedContext.manualHumanAccess &&
+              this.permissionService.isVerifiedManualHuman({
+                workspaceId: input.authenticatedContext.workspaceId,
+                manualHumanAccess: input.authenticatedContext.manualHumanAccess,
+              })
+                ? ({ shouldBypassPermissionChecks: true } as const)
+                : input.authenticatedContext.rolePermissionConfig;
             const creatorRepository =
               await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
                 input.authenticatedContext.workspaceId,
                 'creator',
-                input.authenticatedContext.manualHumanAccess &&
-                  this.permissionService.isVerifiedManualHuman({
-                    workspaceId: input.authenticatedContext.workspaceId,
-                    manualHumanAccess:
-                      input.authenticatedContext.manualHumanAccess,
-                  })
-                  ? { shouldBypassPermissionChecks: true }
-                  : input.authenticatedContext.rolePermissionConfig,
+                permissionForNewIdentity,
               );
             await beforeQuery();
-            const inserted = await creatorRepository.insert(
-              { instagramUsername: input.graph.normalizedHandle },
-              manager,
-              ['id'],
-            );
+            const inserted = await creatorRepository.insert({}, manager, [
+              'id',
+            ]);
             const id = inserted.identifiers[0]?.id;
             if (typeof id !== 'string') {
               throw new Error('Instagram composer Creator is unavailable');
             }
             creatorRecordId = id;
+            const profileRepository =
+              await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+                input.authenticatedContext.workspaceId,
+                'socialProfile',
+                permissionForNewIdentity,
+              );
+            await beforeQuery();
+            const profile = await profileRepository.insert(
+              {
+                creatorId: creatorRecordId,
+                platform: 'INSTAGRAM',
+                name: `@${input.graph.normalizedHandle} on INSTAGRAM`,
+                handle: input.graph.normalizedHandle,
+                normalizedLocator: `handle:${input.graph.normalizedHandle}`,
+                profileUrl: `https://www.instagram.com/${input.graph.normalizedHandle}/`,
+              },
+              manager,
+              ['id'],
+            );
+            const profileId = profile.identifiers[0]?.id;
+            if (typeof profileId !== 'string') {
+              throw new Error('Instagram composer profile is unavailable');
+            }
+            input.graph.recipient.sourceValues = [
+              { field: 'socialProfile.id', value: profileId },
+              {
+                field: 'socialProfile.handle',
+                value: input.graph.normalizedHandle,
+              },
+              {
+                field: 'socialProfile.profileUrl',
+                value: `https://www.instagram.com/${input.graph.normalizedHandle}/`,
+              },
+            ];
           }
           const snapshot = this.toSnapshot({ ...input.graph, creatorRecordId });
 

@@ -1052,14 +1052,7 @@ export const MYAH_STANDARD_OBJECTS = {
       email: { universalIdentifier: 'c4bccf25-cfd1-5648-918e-bf20b32ed375' },
       phone: { universalIdentifier: 'ccdc5be6-6c2b-5920-acd8-fa0ad52eeb29' },
       location: { universalIdentifier: '48ea973f-0a2b-5650-910b-6e0c5b4b34ce' },
-      gender: { universalIdentifier: '14a9ada5-6439-4ea8-8557-e6a2ca815330' },
       language: { universalIdentifier: '54971f3a-9443-51e1-94d7-ca76e9889f08' },
-      profileType: {
-        universalIdentifier: 'ec240f13-8462-54ad-be55-b27275f0f58a',
-      },
-      creatorStatus: {
-        universalIdentifier: 'b887feac-6623-5e8f-b84e-bd502abb8972',
-      },
       owner: { universalIdentifier: '654e0df0-0c1f-4083-bc30-f85252269092' },
       source: { universalIdentifier: '22ad8e62-9b3c-5321-b1a1-8120a7566cd4' },
       sourceUrl: {
@@ -1071,200 +1064,8 @@ export const MYAH_STANDARD_OBJECTS = {
       lastImportedAt: {
         universalIdentifier: '364b7d34-15e8-54f5-896c-c7d871dc3626',
       },
-      hasLinkInBio: {
-        universalIdentifier: 'c6e8a5e1-5efd-5c91-a5ba-e5d0a30c7bbc',
-      },
-      hasBrandDeals: {
-        universalIdentifier: 'c4493bec-5da6-57bc-8a5c-bcad9d57cc86',
-      },
-      promotesAffiliateLinks: {
-        universalIdentifier: 'c9e348e1-803d-5e62-bd76-d3fe4f371b1e',
-      },
-      hasMerch: { universalIdentifier: 'e0ec78f5-8453-58ef-ba4d-c6ff1c2dae76' },
-      linksInBio: {
-        universalIdentifier: '5f918fd0-dbea-5c96-ac19-8cf69e358ae5',
-      },
-      externalUrls: {
-        universalIdentifier: '27e916a0-3331-5239-8e46-2aa0461fc9f8',
-      },
-      hashtagsUsed: {
-        universalIdentifier: 'f06e2a81-794f-5afd-ae94-f02df347b5a0',
-      },
-      categories: {
-        universalIdentifier: 'f2b6b04b-c3a7-5440-9915-52deef3d0f17',
-      },
-      niches: { universalIdentifier: '825176a0-bedd-54a5-8fd7-b98b5a81e3d0' },
-      notes: { universalIdentifier: '465d4f65-450f-507c-82b3-be142f608885' },
-      instagramUrl: {
-        universalIdentifier: '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b',
-      },
-      instagramLink: {
-        universalIdentifier: 'f0d18169-7558-487c-bafd-eb0e6adaf63a',
-      },
-      instagramUsername: {
-        universalIdentifier: '1186d5b4-385f-5566-a4ba-87b8f65cdee5',
-      },
-      instagramBio: {
-        universalIdentifier: 'd383c2c2-9617-548f-a0ab-266b7dbe0789',
-      },
-      instagramFollowerCount: {
-        universalIdentifier: '8b74efdb-518f-5826-bacf-a0fdc34e19ff',
-      },
-      instagramEngagementPercent: {
-        universalIdentifier: 'b2eaec35-b0ef-57cf-8010-e6c51ee3caba',
-      },
-      instagramMostRecentPostDate: {
-        universalIdentifier: '6f73e724-4e44-5663-a0f7-596cb363ad9b',
-      },
-      instagramMediaCount: {
-        universalIdentifier: '3d47e3bd-dbcb-5204-b5f0-a42b002ac95c',
-      },
-      instagramAvgLikes: {
-        universalIdentifier: '3574c8db-eb8f-58af-853e-fdc6e049a0d3',
-      },
-      instagramAvgComments: {
-        universalIdentifier: '663c7e77-5a0b-5aa5-877b-def51bcc81dc',
-      },
-      instagramReelsPercent: {
-        universalIdentifier: '1be6555f-4544-53cc-95bb-d196fa6cf820',
-      },
-      instagramReelsAvgViewCount: {
-        universalIdentifier: '53db1f45-e030-5dbd-8f87-e124dcbe3786',
-      },
-      instagramPostingFrequencyRecentMonths: {
-        universalIdentifier: 'e7525fa2-b583-5602-bafb-d93f68257a3c',
-      },
-      instagramEstimatedIncomeMin: {
-        universalIdentifier: '8568c880-be20-52fb-ae4d-d93520f77fc2',
-      },
-      instagramEstimatedIncomeMax: {
-        universalIdentifier: '5b4b9184-7df7-54e6-8b10-2b706d6cec26',
-      },
-      tiktokUrl: {
-        universalIdentifier: 'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31',
-      },
-      tiktokLink: {
-        universalIdentifier: '184b0e66-11d9-45bd-8dde-e694355c57f1',
-      },
-      tiktokUsername: {
-        universalIdentifier: '3db5e356-13b9-539d-8320-7c6606e3c574',
-      },
-      tiktokBio: {
-        universalIdentifier: '52162ce6-20b6-536d-b6b1-c21271c96006',
-      },
-      tiktokFollowerCount: {
-        universalIdentifier: '37078d35-ad1a-5804-bd6c-b7b6b7a332f7',
-      },
-      tiktokMostRecentPostDate: {
-        universalIdentifier: '4d1c28ec-c011-5aea-a13e-3d75ac6c6447',
-      },
-      tiktokEngagementPercent: {
-        universalIdentifier: 'e56f72b8-cf14-5549-9d5c-9f9ff8c8bc02',
-      },
-      tiktokVideoCount: {
-        universalIdentifier: 'b4d417cb-9a24-50fb-b0f5-8d98732f54b6',
-      },
-      tiktokPlayCountMedian: {
-        universalIdentifier: '4d8bee01-c6bb-5c0c-8943-5233c01e2489',
-      },
-      tiktokAvgLikes: {
-        universalIdentifier: '535a8720-43ea-5b25-9cac-4bcf26fddc7b',
-      },
-      tiktokAvgComments: {
-        universalIdentifier: 'a0bf2b36-21a3-5d68-84e2-d5c8ae256593',
-      },
-      tiktokAvgDownloads: {
-        universalIdentifier: '414e5ecf-cca5-55f7-89c6-3aa94b78b954',
-      },
-      tiktokPostingFrequencyRecentMonths: {
-        universalIdentifier: 'cdce06f2-f7d6-5587-8ea9-02e58c0d6b47',
-      },
-      youtubeUrl: {
-        universalIdentifier: 'af645cc7-31fc-5175-af8d-427845ebe1ed',
-      },
-      youtubeLink: {
-        universalIdentifier: 'dcb35d52-cad9-4871-8ae2-8e97e38578f1',
-      },
-      youtubeCustomUrl: {
-        universalIdentifier: 'cba072b8-6758-5eaa-bc1c-72e94a75b112',
-      },
-      youtubeTitle: {
-        universalIdentifier: '6430e3f1-71aa-5b6a-bc7a-b635d4f2c3ab',
-      },
-      youtubeDescription: {
-        universalIdentifier: 'bdaf9a54-8931-5e51-836f-eb1cf6b11fcb',
-      },
-      youtubeTopicDetails: {
-        universalIdentifier: 'f82741c8-5e43-5ac0-bebc-75b0edb2e3a2',
-      },
-      youtubeSubscriberCount: {
-        universalIdentifier: '047c19e7-43aa-557c-b1a9-5b1824a26c5e',
-      },
-      youtubeLastUploadDate: {
-        universalIdentifier: '7ce4f52f-6963-5b4c-b012-21dbdd723048',
-      },
-      youtubeLastStreamUploadDate: {
-        universalIdentifier: '4cc3ad51-3ca3-5044-b09f-1b57ba0c927e',
-      },
-      youtubeShortsPercentage: {
-        universalIdentifier: '784644f6-24bb-5955-b2bc-557b17f6f07c',
-      },
-      youtubeVideoCount: {
-        universalIdentifier: '162a494a-9981-5b6f-b131-3ff7dae5cc95',
-      },
-      youtubeEngagementPercent: {
-        universalIdentifier: '77684c8c-d06b-50a9-a404-ea58ca2d8fd3',
-      },
-      youtubeAvgViewsLong: {
-        universalIdentifier: '536e5718-d023-58e8-99b7-35d5f2759e69',
-      },
-      youtubeAvgViewsShorts: {
-        universalIdentifier: '8077992b-d61d-5176-a166-c6933469b56b',
-      },
-      youtubeAvgStreamViews: {
-        universalIdentifier: '296f47d1-e288-5d15-95b9-ea750532c05a',
-      },
-      youtubeAvgStreamDuration: {
-        universalIdentifier: '972f8c77-ffe7-5385-9b38-4128a8ac5d98',
-      },
-      youtubePostingFrequencyRecentMonths: {
-        universalIdentifier: '7a7775dd-23ba-58d3-a9c6-455cdee72e72',
-      },
-      youtubeEstimatedIncomeMin: {
-        universalIdentifier: '461e1478-1109-58b6-b9bf-ae2d6aa7cb99',
-      },
-      youtubeEstimatedIncomeMax: {
-        universalIdentifier: '1ed40657-e379-5a8f-8295-b7e1c072be68',
-      },
-      twitterUrl: {
-        universalIdentifier: 'bbfda234-327c-5d9d-ac39-8a33fd06779d',
-      },
-      twitterLink: {
-        universalIdentifier: '8bb2d28c-cecf-4111-b043-89b6c7255710',
-      },
-      twitterUsername: {
-        universalIdentifier: 'cba84727-9219-502a-9880-a14bee741515',
-      },
-      twitterBio: {
-        universalIdentifier: 'b286bdf2-3024-575d-b852-adf935061749',
-      },
-      twitterFollowerCount: {
-        universalIdentifier: '269f07b6-b2a8-551c-b23e-b44dd95e1e36',
-      },
-      twitterEngagementPercent: {
-        universalIdentifier: '701fa901-6773-5637-b5d2-c85fdd4a34e7',
-      },
-      twitchUrl: {
-        universalIdentifier: 'fa743d1a-aa43-5976-b6b2-8131a533ae5b',
-      },
-      twitchUsername: {
-        universalIdentifier: '789717de-3c12-59c3-b91a-ca4a70d00886',
-      },
-      twitchDisplayName: {
-        universalIdentifier: 'f10ed5aa-ff19-5cbe-b176-ae4bf642edf1',
-      },
-      twitchTotalFollowers: {
-        universalIdentifier: 'a996b7a6-aeee-523a-b90f-30416891e37e',
+      socialProfiles: {
+        universalIdentifier: 'c3f0a457-f701-534f-a5d9-33ab84bb8602',
       },
       listMemberships: {
         universalIdentifier: '32db62ac-6217-5316-89d9-f9d7290dff70',
@@ -1280,9 +1081,6 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       attachments: {
         universalIdentifier: '68ea5fd3-32b0-542f-ae42-9162331b53e8',
-      },
-      patreonUrl: {
-        universalIdentifier: 'd68083f5-0db1-5c77-ac35-640a2fdb1f3f',
       },
       noteTargets: {
         universalIdentifier: '42b8e10b-8500-4530-b148-695ed3b5092a',
@@ -1303,9 +1101,6 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: 'fdbaccb5-56d4-4c36-98c7-0f5ab0b7cc1e',
         viewFields: {
           name: { universalIdentifier: 'b5bc3c54-01bb-4fc6-b88d-14e1a55b2577' },
-          creatorStatus: {
-            universalIdentifier: '7ea32ccf-4538-4162-8290-59fd1c7c93a3',
-          },
           owner: {
             universalIdentifier: '948ade2e-b3c5-4a6c-a02d-300e2a51b354',
           },
@@ -1315,14 +1110,8 @@ export const MYAH_STANDARD_OBJECTS = {
           phone: {
             universalIdentifier: '18d116ff-6058-46e9-a89d-2b5d24043706',
           },
-          profileType: {
-            universalIdentifier: '4e4a6f78-c5e9-4280-ad1b-d9bd0babfe35',
-          },
-          categories: {
-            universalIdentifier: 'b2dd3a83-483b-4029-a0a0-d40683eed272',
-          },
-          niches: {
-            universalIdentifier: '04629f9e-c028-4ad0-987a-02ce3b394a95',
+          socialProfiles: {
+            universalIdentifier: '549fbcb7-1984-445b-be2b-1272ac966eac',
           },
           location: {
             universalIdentifier: 'f65e5e49-5486-436c-8d89-adf09797ac00',
@@ -1336,33 +1125,6 @@ export const MYAH_STANDARD_OBJECTS = {
           sourceUrl: {
             universalIdentifier: 'e1d56d59-7d80-4aa9-b9ef-48343462f709',
           },
-          notes: {
-            universalIdentifier: '91e0a34a-3927-4858-925a-ddfd2b4639ec',
-          },
-          instagramUsername: {
-            universalIdentifier: '6a6c6dac-2951-40e5-ad91-89bb753d35b6',
-          },
-          instagramFollowerCount: {
-            universalIdentifier: 'e16bee73-14bc-4171-a67f-53f0099c6969',
-          },
-          tiktokUsername: {
-            universalIdentifier: 'a09a68fe-985b-4db0-8ed8-7335138e1944',
-          },
-          tiktokFollowerCount: {
-            universalIdentifier: '9283c933-d80e-4161-83fa-d517cd7c98b5',
-          },
-          youtubeTitle: {
-            universalIdentifier: 'c9383b7e-ac59-4d51-bef0-2a54c6d3332b',
-          },
-          youtubeSubscriberCount: {
-            universalIdentifier: '3efca5c3-31a3-49b9-8086-77c1d4b66483',
-          },
-          patreonUrl: {
-            universalIdentifier: '5fc47ee7-760f-4e73-aad0-cae7ac579c30',
-          },
-          youtubeUrl: {
-            universalIdentifier: '1d7dd6cc-9fdb-43c1-b990-550aa62e32c1',
-          },
         },
       },
       viewa5abdae3: {
@@ -1372,103 +1134,110 @@ export const MYAH_STANDARD_OBJECTS = {
           email: {
             universalIdentifier: 'd779e826-cf8c-5e36-9685-0f9a6989142d',
           },
-          gender: {
-            universalIdentifier: '32b1c350-f11e-4118-8d22-531a631b4147',
-          },
           location: {
             universalIdentifier: '566647f6-312a-5357-adb9-a98c084989b3',
           },
           phone: {
             universalIdentifier: '9d5a2863-7216-4889-a6ee-91aacbf7158f',
           },
-          tiktokLink: {
-            universalIdentifier: '4f4a0263-7e5f-4f5e-826d-d642ae5197af',
-          },
-          instagramLink: {
-            universalIdentifier: '99404764-56ea-4f25-bea5-fb746c77c97b',
-          },
-          youtubeLink: {
-            universalIdentifier: '6f715c13-46b7-4939-8ec7-9b41259ac3de',
-          },
-          twitterLink: {
-            universalIdentifier: 'c6b9840c-7684-4889-9f24-3592febefe57',
-          },
-          creatorStatus: {
-            universalIdentifier: 'f2d9c0cc-7838-477b-88fb-38a3f9a552ea',
+          socialProfiles: {
+            universalIdentifier: 'd041b1cc-117a-4869-9c35-1e624f3a1ca6',
           },
           source: {
             universalIdentifier: 'c2581172-2575-532c-8975-a79e55188fab',
           },
         },
       },
-      creatorMetrics: {
-        universalIdentifier: 'd1758d79-a3e7-48e7-b960-2103a7a3be19',
-        viewFields: {
-          name: { universalIdentifier: '721888aa-6983-4c7f-8593-60afdf75a088' },
-          instagramFollowerCount: {
-            universalIdentifier: 'e957624d-df26-4d29-9f84-9d53149924e3',
-          },
-          instagramEngagementPercent: {
-            universalIdentifier: '122472c1-39f1-49e9-9309-7053cf91f80d',
-          },
-          tiktokFollowerCount: {
-            universalIdentifier: '8dee3cc3-373a-4dd1-937e-3cf2ff15acee',
-          },
-          tiktokEngagementPercent: {
-            universalIdentifier: '7fa03bfe-0ab3-4979-a7ec-5c7a4e4acecd',
-          },
-          tiktokPlayCountMedian: {
-            universalIdentifier: 'c7c4b4fb-a3e3-49ca-92f8-877350668c6c',
-          },
-          youtubeSubscriberCount: {
-            universalIdentifier: '0923a836-29f9-4d9f-9c1b-978af2bee1f9',
-          },
-          youtubeEngagementPercent: {
-            universalIdentifier: 'bd10a7d9-acdd-415e-b172-af6a88b4d04e',
-          },
-          youtubeAvgViewsLong: {
-            universalIdentifier: 'd0ccee20-d308-45b5-b6f5-de04b33bdbb7',
-          },
-          hasBrandDeals: {
-            universalIdentifier: '84ebcf92-7c3f-423f-af6d-062216402fa6',
-          },
-          promotesAffiliateLinks: {
-            universalIdentifier: '45ba4f40-035e-49fa-bc9e-26540d8298c3',
-          },
-          source: {
-            universalIdentifier: '82e70d56-2b81-4311-bcc4-b68d1182d19c',
-          },
-        },
+    },
+  },
+  socialProfile: {
+    universalIdentifier: '48af2a1d-1903-5eeb-b216-d5c450f83e71',
+    fields: {
+      id: { universalIdentifier: 'b73cb862-8e4a-5eca-9cf0-00041ece5524' },
+      createdAt: {
+        universalIdentifier: '73b5dbff-b94f-5cfd-ac27-6f66e0aa905d',
       },
-      qualifiedCreatorsWithEmail: {
-        universalIdentifier: '19483764-6f84-4d09-8f03-945e7d0a4b28',
-        viewFields: {
-          name: { universalIdentifier: 'dd61ecce-0046-4b14-9cbf-7398f47849d6' },
-          creatorStatus: {
-            universalIdentifier: 'b3c7407a-07be-42e3-8663-e06fe7389c84',
-          },
-          owner: {
-            universalIdentifier: '1d0ec242-c56a-4942-959d-de1c8621221c',
-          },
-          email: {
-            universalIdentifier: '1c53246e-fd62-46ef-9484-2003d1a90040',
-          },
-          instagramLink: {
-            universalIdentifier: 'c9178a1f-2c30-4ab2-aa6c-a208223d1250',
-          },
-          instagramFollowerCount: {
-            universalIdentifier: '82068ee3-064a-43ea-8e8b-5cdca0e3d53e',
-          },
-          source: {
-            universalIdentifier: '81c5939d-eb4c-43b9-8f91-3c3214d3161d',
+      updatedAt: {
+        universalIdentifier: '1b27fcbb-746b-5a40-8eaf-ddf502be9fb6',
+      },
+      deletedAt: {
+        universalIdentifier: '398d78a5-51f6-5f63-96ae-8a8f4e1d2b55',
+      },
+      position: {
+        universalIdentifier: 'b51e32f7-11a7-5ce2-bbf5-c474c5ff64ea',
+      },
+      createdBy: {
+        universalIdentifier: 'c8b6418e-6e9a-591b-ad50-e1d165d5881a',
+      },
+      updatedBy: {
+        universalIdentifier: '977879f5-21fc-5141-9b27-07174a3d369f',
+      },
+      searchVector: {
+        universalIdentifier: 'ae3b7dbf-d25e-5394-96ef-503c8bc0fd36',
+      },
+      name: { universalIdentifier: '5d1f7cf1-5611-55ab-b97c-14d44b584169' },
+      creator: {
+        universalIdentifier: '75966e9d-dbc9-5adf-879c-51fb09f42cd6',
+      },
+      platform: {
+        universalIdentifier: '6a3c0383-fb27-5e93-a289-0be4047c4b9b',
+      },
+      handle: {
+        universalIdentifier: '60e7329c-7989-59a8-b11c-1e850deb9463',
+      },
+      profileUrl: {
+        universalIdentifier: 'e9daea50-e62b-576c-9be4-f4a94d3f5ead',
+      },
+      normalizedLocator: {
+        universalIdentifier: 'e6909402-a8a4-5736-9eaa-66aaff5bde33',
+      },
+      platformAccountId: {
+        universalIdentifier: '8b6a29f3-7631-5000-8007-1257a7ce0cb9',
+      },
+      followerCount: {
+        universalIdentifier: 'f3d13b6a-4d5d-57fc-874e-67a2e3f062f4',
+      },
+      followerCountObservedAt: {
+        universalIdentifier: '9496875e-e430-5876-b375-e55b51f7ebc2',
+      },
+      followerCountSource: {
+        universalIdentifier: 'dac531a6-976e-5514-a9c4-a57315b9dfbf',
+      },
+    },
+    indexes: {
+      creatorPlatformIndex: {
+        universalIdentifier: '5ffa3128-36b2-5e8b-a7f4-825e7da5166a',
+      },
+      platformAccountIdUniqueIndex: {
+        universalIdentifier: 'ed043449-a8b8-5a45-8eb2-7f0b6c4485f3',
+      },
+      normalizedLocatorUniqueIndex: {
+        universalIdentifier: '6d3f977b-8e52-5417-8447-be9cd9427075',
+      },
+    },
+    views: {
+      socialProfiles: {
+        universalIdentifier: 'f389d0c7-9743-4c61-b80c-d59a643cb0da',
+        viewFilters: {
+          creatorCurrentRecord: {
+            universalIdentifier: '7768cc23-dcb5-4f46-826e-5b48e33bd06e',
           },
         },
-        viewFilters: {
-          creatorStatus: {
-            universalIdentifier: '03ddcbb7-42dd-4078-bc0a-c985c6a9c131',
+        viewFields: {
+          name: {
+            universalIdentifier: '933e4404-fa85-4916-ac59-1a1ea172d417',
           },
-          email: {
-            universalIdentifier: 'd1319af0-eeb2-4ca3-8afc-31e66c8a4277',
+          platform: {
+            universalIdentifier: '4b06fc29-d266-4936-9e81-f970679f83d6',
+          },
+          handle: {
+            universalIdentifier: '716a344f-458c-4f1b-b434-defaba15f509',
+          },
+          profileUrl: {
+            universalIdentifier: '6c7ba9a1-48dc-4227-b6ad-5c25634fa23e',
+          },
+          followerCount: {
+            universalIdentifier: '0e6b2347-e7da-4958-8e55-1936b93953fa',
           },
         },
       },

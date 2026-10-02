@@ -22,6 +22,18 @@ describe('combineFilters', () => {
     });
   });
 
+  it('preserves a relation constraint when a group or search filter uses the same field', () => {
+    const required: RecordGqlOperationFilter = {
+      creatorId: { in: ['creator-a'] },
+    };
+    const group: RecordGqlOperationFilter = {
+      creatorId: { in: ['creator-b'] },
+    };
+    expect(combineFilters([required, group])).toEqual({
+      and: [required, group],
+    });
+  });
+
   it('should handle an empty array by returning an empty object', () => {
     const result = combineFilters([]);
     expect(result).toEqual({});

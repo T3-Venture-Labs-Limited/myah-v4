@@ -60,34 +60,28 @@ export const NotesCard = () => {
   const objectPermissions = useObjectPermissionsForObject(
     objectMetadataItem.id,
   );
-  const { objectMetadataItem: noteMetadataItem } = useObjectMetadataItem({
-    objectNameSingular: CoreObjectNameSingular.Note,
-  });
-  const notePermissions = useObjectPermissionsForObject(noteMetadataItem.id);
-
   const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
-
-  const serverDeniedRead =
-    CombinedGraphQLErrors.is(error) &&
-    error.errors.some(
-      ({ extensions }) =>
-        extensions?.code === 'FORBIDDEN' ||
-        extensions?.code === 'UNAUTHENTICATED',
-    );
-
-  if (
-    !hasReadPermission ||
-    !notePermissions.canReadObjectRecords ||
+  const isReadDenied =
     !objectPermissions.canReadObjectRecords ||
-    serverDeniedRead
-  ) {
+    !hasReadPermission ||
+    (CombinedGraphQLErrors.is(error) &&
+      error.errors.some(
+        ({ extensions }) =>
+          extensions?.code === 'FORBIDDEN' ||
+          extensions?.code === 'UNAUTHENTICATED',
+      ));
+
+  if (isReadDenied) {
     return (
       <AnimatedPlaceholderEmptyContainer>
         <AnimatedPlaceholder type="errorIndex" />
         <AnimatedPlaceholderEmptyTextContainer>
           <AnimatedPlaceholderEmptyTitle>
-            {t`You don't have permission to view notes`}
+            {t`Notes are not available`}
           </AnimatedPlaceholderEmptyTitle>
+          <AnimatedPlaceholderEmptySubTitle>
+            {t`You don't have permission to view notes.`}
+          </AnimatedPlaceholderEmptySubTitle>
         </AnimatedPlaceholderEmptyTextContainer>
       </AnimatedPlaceholderEmptyContainer>
     );
@@ -156,6 +150,12 @@ export const NotesCard = () => {
 
   return (
     <StyledNotesContainer>
+      {error && (
+        <div role="alert">
+          <strong>{t`Notes couldn't be loaded`}</strong>{' '}
+          {t`Please refresh the page.`}
+        </div>
+      )}
       <NoteList
         title={t`All`}
         notes={notes}

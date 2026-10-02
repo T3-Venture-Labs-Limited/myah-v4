@@ -219,7 +219,12 @@ export const wrapRepositoryWithUpgradeAwareProxy = <Entity extends object>({
 
       const value = Reflect.get(target, prop, receiver);
 
-      if (typeof value === 'function' && !isClassConstructor(value)) {
+      // Repository.target is entity identity, not a method, even when SWC emits it as a function.
+      if (
+        prop !== 'target' &&
+        typeof value === 'function' &&
+        !isClassConstructor(value)
+      ) {
         return value.bind(target);
       }
 

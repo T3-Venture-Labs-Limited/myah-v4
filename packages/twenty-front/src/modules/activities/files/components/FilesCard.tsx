@@ -7,6 +7,7 @@ import { AttachmentList } from '@/activities/files/components/AttachmentList';
 import { DropZone } from '@/activities/files/components/DropZone';
 import { useAttachments } from '@/activities/files/hooks/useAttachments';
 import { useUploadAttachmentFile } from '@/activities/files/hooks/useUploadAttachmentFile';
+import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
@@ -82,6 +83,22 @@ export const FilesCard = () => {
   );
 
   const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
+  const { objectMetadataItem: attachmentMetadataItem } = useObjectMetadataItem({
+    objectNameSingular: CoreObjectNameSingular.Attachment,
+  });
+  const attachmentPermissions = useObjectPermissionsForObject(
+    attachmentMetadataItem.id,
+  );
+  const isReadDenied =
+    !objectPermissions.canReadObjectRecords ||
+    !attachmentPermissions.canReadObjectRecords ||
+    !hasReadPermission ||
+    (CombinedGraphQLErrors.is(error) &&
+      error.errors.some(
+        ({ extensions }) =>
+          extensions?.code === 'FORBIDDEN' ||
+          extensions?.code === 'UNAUTHENTICATED',
+      ));
 
   const hasUploadPermission = useHasPermissionFlag(
     PermissionFlagType.UPLOAD_FILE,
@@ -89,26 +106,17 @@ export const FilesCard = () => {
 
   const canUploadFiles = hasObjectUpdatePermissions && hasUploadPermission;
 
-  const serverDeniedRead =
-    CombinedGraphQLErrors.is(error) &&
-    error.errors.some(
-      ({ extensions }) =>
-        extensions?.code === 'FORBIDDEN' ||
-        extensions?.code === 'UNAUTHENTICATED',
-    );
-
-  if (
-    !hasReadPermission ||
-    !objectPermissions.canReadObjectRecords ||
-    serverDeniedRead
-  ) {
+  if (isReadDenied) {
     return (
       <AnimatedPlaceholderEmptyContainer>
         <AnimatedPlaceholder type="errorIndex" />
         <AnimatedPlaceholderEmptyTextContainer>
           <AnimatedPlaceholderEmptyTitle>
-            {t`You don't have permission to view files`}
+            <Trans>Files are not available</Trans>
           </AnimatedPlaceholderEmptyTitle>
+          <AnimatedPlaceholderEmptySubTitle>
+            <Trans>You don't have permission to view files.</Trans>
+          </AnimatedPlaceholderEmptySubTitle>
         </AnimatedPlaceholderEmptyTextContainer>
       </AnimatedPlaceholderEmptyContainer>
     );
@@ -124,10 +132,10 @@ export const FilesCard = () => {
         <AnimatedPlaceholder type="errorIndex" />
         <AnimatedPlaceholderEmptyTextContainer>
           <AnimatedPlaceholderEmptyTitle>
-            {t`Files couldn't be loaded`}
+            <Trans>Files couldn't be loaded</Trans>
           </AnimatedPlaceholderEmptyTitle>
           <AnimatedPlaceholderEmptySubTitle>
-            {t`Please refresh the page.`}
+            <Trans>Please refresh the page.</Trans>
           </AnimatedPlaceholderEmptySubTitle>
         </AnimatedPlaceholderEmptyTextContainer>
       </AnimatedPlaceholderEmptyContainer>
@@ -177,6 +185,14 @@ export const FilesCard = () => {
 
   return (
     <StyledAttachmentsContainer>
+      {error && (
+        <div role="alert">
+          <strong>
+            <Trans>Files couldn't be loaded</Trans>
+          </strong>{' '}
+          <Trans>Please refresh the page.</Trans>
+        </div>
+      )}
       <StyledFileInput
         ref={inputFileRef}
         onChange={handleFileChange}

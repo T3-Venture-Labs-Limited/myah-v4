@@ -10,6 +10,7 @@ const mockOnSubmit = jest.fn();
 const mockOnClose = jest.fn();
 const mockHideStepBar = jest.fn();
 const mockEnqueueDialog = jest.fn();
+const mockSetCurrentStepState = jest.fn();
 
 let mockContext: Record<string, unknown>;
 
@@ -74,13 +75,20 @@ jest.mock('twenty-ui/surfaces', () => ({
 jest.mock('twenty-ui/theme-constants', () => ({
   themeCssVariables: {
     background: { secondary: 'white' },
-    border: { color: { medium: 'gray' }, radius: { md: '4px' } },
+    border: {
+      color: { light: 'lightgray', medium: 'gray' },
+      radius: { md: '4px' },
+    },
     spacing: { 2: '8px', 3: '12px', 8: '32px' },
     boxShadow: { strong: 'none' },
     font: {
-      color: { secondary: 'gray', tertiary: 'lightgray' },
-      size: { md: '14px' },
-      weight: { regular: 400 },
+      color: {
+        primary: 'black',
+        secondary: 'gray',
+        tertiary: 'lightgray',
+      },
+      size: { sm: '12px', md: '14px' },
+      weight: { regular: 400, semiBold: 600 },
     },
   },
 }));
@@ -120,7 +128,7 @@ const renderStep = () =>
       ]}
       file={new File(['first_name\nAda'], 'creators.csv')}
       onBack={jest.fn()}
-      setCurrentStepState={jest.fn()}
+      setCurrentStepState={mockSetCurrentStepState}
     />,
   );
 
@@ -140,6 +148,37 @@ describe('ValidationStep pre-submit hooks', () => {
     mockAddErrorsAndRunHooks
       .mockReturnValueOnce(initialRows)
       .mockReturnValueOnce(refreshedConflictRows);
+  });
+
+  it('renders an optional multi-record preview for the first row', () => {
+    mockAddErrorsAndRunHooks.mockReset().mockReturnValue(initialRows);
+    mockContext.getValidationPreview = jest.fn().mockReturnValue({
+      title: 'First row preview',
+      sections: [
+        { label: 'Creator', items: ['name', 'email'] },
+        { label: 'Social profiles', items: ['Instagram (URL, followers)'] },
+        { label: 'Supplementary note', items: ['engagement'] },
+        { label: 'Excluded', items: [] },
+      ],
+    });
+
+    renderStep();
+
+    expect(mockContext.getValidationPreview).toHaveBeenCalledWith(
+      initialRows[0],
+    );
+    expect(
+      screen.getByTestId('spreadsheet-import-validation-preview'),
+    ).toHaveTextContent('Creator: name, email');
+    expect(
+      screen.getByTestId('spreadsheet-import-validation-preview'),
+    ).toHaveTextContent('Social profiles: Instagram (URL, followers)');
+    expect(
+      screen.getByTestId('spreadsheet-import-validation-preview'),
+    ).toHaveTextContent('Supplementary note: engagement');
+    expect(
+      screen.getByTestId('spreadsheet-import-validation-preview'),
+    ).toHaveTextContent('Excluded: None');
   });
 
   it('uses one refreshed local snapshot for the guard and blocks submission', async () => {
@@ -245,6 +284,25 @@ describe('ValidationStep pre-submit hooks', () => {
     expect(mockOnClose).not.toHaveBeenCalled();
   });
 
+  it('does not call a partial import a validation refresh failure', async () => {
+    mockGetSubmissionBlockReason.mockReturnValue(undefined);
+    mockAddErrorsAndRunHooks.mockReset().mockReturnValue(initialRows);
+    mockOnSubmit.mockRejectedValue(new Error('a later row failed'));
+    renderStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() =>
+      expect(mockEnqueueDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Import may be incomplete',
+          message:
+            'Some rows may already have been imported. Review your records before starting another import.',
+        }),
+      ),
+    );
+    expect(mockOnClose).not.toHaveBeenCalled();
+  });
+
   it('preserves generic submission when optional callbacks are absent', async () => {
     mockContext.beforeSubmitHook = undefined;
     mockContext.getSubmissionBlockReason = undefined;
@@ -260,11 +318,45 @@ describe('ValidationStep pre-submit hooks', () => {
     expect(mockOnSubmit).toHaveBeenCalledWith(
       {
         validStructuredRows: [{ name: 'Ada' }],
+        validStructuredRowIndexes: [0],
         invalidStructuredRows: [],
         allStructuredRows: initialRows,
       },
       expect.any(File),
     );
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the exact failed snapshot without duplicate preflight after response loss', async () => {
+    mockGetSubmissionBlockReason.mockReset().mockReturnValue(undefined);
+    mockAddErrorsAndRunHooks.mockReset().mockReturnValue(initialRows);
+    mockOnSubmit
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce(undefined);
+
+    renderStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+    expect(mockSetCurrentStepState).toHaveBeenLastCalledWith({
+      type: 'validateData',
+      data: initialRows,
+      importedColumns: [
+        {
+          index: 0,
+          header: 'first_name',
+          type: SpreadsheetColumnType.matched,
+          value: 'name',
+        },
+      ],
+    });
+    expect(mockOnClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(2));
+    expect(mockBeforeSubmitHook).toHaveBeenCalledTimes(1);
+    expect(mockOnSubmit.mock.calls[1]).toEqual(mockOnSubmit.mock.calls[0]);
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 });

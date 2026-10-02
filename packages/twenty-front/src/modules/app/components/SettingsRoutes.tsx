@@ -16,6 +16,10 @@ import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
+import {
+  getReadOnlyDataModelRedirectPath,
+  READ_ONLY_DATA_MODEL_MUTATION_PATHS,
+} from '~/pages/settings/data-model/utils/read-only-data-model-routing';
 
 const SettingsGraphQLPlayground = lazy(() =>
   import('~/pages/settings/developers/playground/SettingsGraphQLPlayground').then(
@@ -93,12 +97,6 @@ const SettingsAccountsConfiguration = lazy(() =>
 const SettingsNewAccount = lazy(() =>
   import('~/pages/settings/accounts/SettingsNewAccount').then((module) => ({
     default: module.SettingsNewAccount,
-  })),
-);
-
-const SettingsNewObject = lazy(() =>
-  import('~/pages/settings/data-model/SettingsNewObject').then((module) => ({
-    default: module.SettingsNewObject,
   })),
 );
 
@@ -452,37 +450,6 @@ const SettingsDevelopersWebhookDetail = lazy(() =>
   ),
 );
 
-const SettingsObjectNewFieldSelect = lazy(() =>
-  import('~/pages/settings/data-model/new-field/SettingsObjectNewFieldSelect').then(
-    (module) => ({
-      default: module.SettingsObjectNewFieldSelect,
-    }),
-  ),
-);
-
-const SettingsObjectNewFieldConfigure = lazy(() =>
-  import('~/pages/settings/data-model/new-field/SettingsObjectNewFieldConfigure').then(
-    (module) => ({
-      default: module.SettingsObjectNewFieldConfigure,
-    }),
-  ),
-);
-
-const SettingsObjectNewIndex = lazy(() =>
-  import('~/pages/settings/data-model/new-index/SettingsObjectNewIndex').then(
-    (module) => ({
-      default: module.SettingsObjectNewIndex,
-    }),
-  ),
-);
-const SettingsObjectFieldEdit = lazy(() =>
-  import('~/pages/settings/data-model/SettingsObjectFieldEdit').then(
-    (module) => ({
-      default: module.SettingsObjectFieldEdit,
-    }),
-  ),
-);
-
 const SettingsSecuritySSOIdentifyProvider = lazy(() =>
   import('~/pages/settings/security/SettingsSecuritySSOIdentifyProvider').then(
     (module) => ({
@@ -670,6 +637,14 @@ const MyahTeamSettingsElementGuard = ({
   }
 
   return <>{children}</>;
+};
+
+const SettingsObjectReadOnlyRedirect = () => {
+  const { objectNamePlural } = useParams();
+
+  return (
+    <Navigate to={getReadOnlyDataModelRedirectPath(objectNamePlural)} replace />
+  );
 };
 
 export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
@@ -883,23 +858,13 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
           path={SettingsPath.ObjectDetail}
           element={<SettingsObjectDetailPage />}
         />
-        <Route path={SettingsPath.NewObject} element={<SettingsNewObject />} />
-        <Route
-          path={SettingsPath.ObjectNewFieldSelect}
-          element={<SettingsObjectNewFieldSelect />}
-        />
-        <Route
-          path={SettingsPath.ObjectNewFieldConfigure}
-          element={<SettingsObjectNewFieldConfigure />}
-        />
-        <Route
-          path={SettingsPath.ObjectNewIndex}
-          element={<SettingsObjectNewIndex />}
-        />
-        <Route
-          path={SettingsPath.ObjectFieldEdit}
-          element={<SettingsObjectFieldEdit />}
-        />
+        {READ_ONLY_DATA_MODEL_MUTATION_PATHS.map((path) => (
+          <Route
+            key={path}
+            path={path}
+            element={<SettingsObjectReadOnlyRedirect />}
+          />
+        ))}
       </Route>
       <Route
         element={

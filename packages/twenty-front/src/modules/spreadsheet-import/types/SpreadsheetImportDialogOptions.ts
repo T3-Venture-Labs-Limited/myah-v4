@@ -12,6 +12,14 @@ import { type SpreadsheetImportRowHook } from '@/spreadsheet-import/types/Spread
 import { type SpreadsheetImportTableHook } from '@/spreadsheet-import/types/SpreadsheetImportTableHook';
 import { type SpreadsheetImportStep } from '@/spreadsheet-import/steps/types/SpreadsheetImportStep';
 
+export type SpreadsheetImportValidationPreview = {
+  title: string;
+  sections: Array<{
+    label: string;
+    items: string[];
+  }>;
+};
+
 export type SpreadsheetImportDialogOptions = {
   // callback when RSI is closed before final submit
   onClose: () => void;
@@ -76,4 +84,8 @@ export type SpreadsheetImportDialogOptions = {
   getSubmissionBlockReason?: (
     rows: readonly ImportedStructuredRow[],
   ) => string | undefined;
+  // Optional summary of how one structured row will be split across records.
+  getValidationPreview?: (
+    row: ImportedStructuredRow,
+  ) => SpreadsheetImportValidationPreview;
 };

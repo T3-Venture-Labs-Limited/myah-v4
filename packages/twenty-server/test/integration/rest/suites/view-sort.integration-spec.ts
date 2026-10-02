@@ -1,7 +1,5 @@
-import { createOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/create-one-field-metadata.util';
-import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
-import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
+import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
 import { makeRestAPIRequest } from 'test/integration/rest/utils/make-rest-api-request.util';
 import {
   assertRestApiErrorNotFoundResponse,
@@ -15,7 +13,7 @@ import {
 } from 'test/integration/rest/utils/view-rest-api.util';
 import { assertViewSortStructure } from 'test/integration/utils/view-test.util';
 import { jestExpectToBeDefined } from 'test/utils/jest-expect-to-be-defined.util.test';
-import { FieldMetadataType, ViewSortDirection } from 'twenty-shared/types';
+import { ViewSortDirection } from 'twenty-shared/types';
 
 import { type ViewSortDTO } from 'src/engine/metadata-modules/view-sort/dtos/view-sort.dto';
 import {
@@ -30,45 +28,20 @@ describe('View Sort REST API', () => {
   let testViewSortId: string | undefined;
 
   beforeAll(async () => {
-    const {
-      data: {
-        createOneObject: { id: objectMetadataId },
-      },
-    } = await createOneObjectMetadata({
-      input: {
-        nameSingular: 'testViewSortObject',
-        namePlural: 'testViewSortObjects',
-        labelSingular: 'Test View Sort Object',
-        labelPlural: 'Test View Sort Objects',
-        icon: 'IconSort',
-      },
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular fieldsList { id name type }',
+      expectToFail: false,
     });
+    const creator = objects.find((object) => object.nameSingular === 'creator');
+    const location = creator?.fieldsList?.find(
+      (field) => field.name === 'location',
+    );
 
-    testObjectMetadataId = objectMetadataId;
-
-    const createFieldInput = {
-      name: 'testField',
-      label: 'Test Field',
-      type: FieldMetadataType.TEXT,
-      objectMetadataId: testObjectMetadataId,
-      isLabelSyncedWithName: true,
-    };
-
-    const {
-      data: {
-        createOneField: { id: fieldMetadataId },
-      },
-    } = await createOneFieldMetadata({
-      input: createFieldInput,
-      gqlFields: `
-          id
-          name
-          label
-          isLabelSyncedWithName
-        `,
-    });
-
-    testFieldMetadataId = fieldMetadataId;
+    expect(creator).toBeDefined();
+    expect(location?.type).toBe('TEXT');
+    testObjectMetadataId = creator!.id;
+    testFieldMetadataId = location!.id;
 
     const testView = await createTestViewWithRestApi({
       name: 'Test View for Sort Integration',
@@ -79,18 +52,7 @@ describe('View Sort REST API', () => {
   });
 
   afterAll(async () => {
-    await updateOneObjectMetadata({
-      expectToFail: false,
-      input: {
-        idToUpdate: testObjectMetadataId,
-        updatePayload: {
-          isActive: false,
-        },
-      },
-    });
-    await deleteOneObjectMetadata({
-      input: { idToDelete: testObjectMetadataId },
-    });
+    await destroyOneView({ viewId: testViewId, expectToFail: false });
   });
 
   afterEach(async () => {

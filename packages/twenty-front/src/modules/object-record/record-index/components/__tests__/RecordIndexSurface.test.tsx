@@ -16,6 +16,16 @@ import { IconArrowLeft } from 'twenty-ui/icon';
 import { IconButton } from 'twenty-ui/input';
 import { ViewFilterOperand, ViewType } from 'twenty-shared/types';
 
+// This suite exercises surface layout; reference validation has its own
+// router/metadata-ready tests at the Creator gate boundary.
+jest.mock('@/views/components/CreatorRecordIndexReferenceGate', () => ({
+  ConnectedCreatorRecordIndexReferenceGate: ({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) => <>{children}</>,
+}));
+
 const mockRecordIndexContainer = jest.fn();
 const mockViewBar = jest.fn();
 const mockRecordTableWidget = jest.fn();

@@ -68,7 +68,7 @@ const rawRows = [
     displayName: 'Creator One',
     creatorId,
     creatorName: 'Creator One',
-    creatorInstagramUsername: 'creator.one',
+    instagramDisplayHandle: 'creator.one',
     preview: 'Latest Instagram reply',
     sender: '@creator.one',
     emailThreadIds: [emailThreadAId, emailThreadBId],
@@ -111,7 +111,7 @@ const rawRows = [
     displayName: 'unmatched@example.com',
     creatorId: null,
     creatorName: null,
-    creatorInstagramUsername: null,
+    instagramDisplayHandle: null,
     preview: 'Unmatched email',
     sender: 'unmatched@example.com',
     emailThreadIds: [emailThreadAId],
@@ -133,7 +133,7 @@ const rawRows = [
     displayName: '@unmatched.creator',
     creatorId: null,
     creatorName: null,
-    creatorInstagramUsername: null,
+    instagramDisplayHandle: null,
     preview: 'Unmatched Instagram',
     sender: '@unmatched.creator',
     emailThreadIds: [],
@@ -182,6 +182,8 @@ const buildHarness = (
   canReadCanonicalTriage = true,
   useProductionPermissionDenial = false,
   hasRolePermissionConfig = true,
+  denySocialProfileRead = false,
+  missingSocialProfileMetadata = false,
   responseFocusEnabled = true,
   sqlFixture = false,
 ) => {
@@ -212,6 +214,12 @@ const buildHarness = (
       where: jest.fn(),
       setParameters: jest.fn(),
       validatePermissionsBeforeSerialization: jest.fn(() => {
+        if (denySocialProfileRead && objectName === 'socialProfile') {
+          throw new PermissionsException(
+            'profile read denied',
+            PermissionsExceptionCode.PERMISSION_DENIED,
+          );
+        }
         if (
           productionPermissionDenialPending &&
           objectName === 'messageThread'
@@ -261,9 +269,14 @@ const buildHarness = (
     getGlobalWorkspaceDataSource: jest
       .fn()
       .mockResolvedValue({ query: dataSourceQuery }),
-    getRepository: jest.fn(async (_workspaceId, objectName) =>
-      getRepository(objectName),
-    ),
+    getRepository: jest.fn(async (_workspaceId, objectName) => {
+      if (missingSocialProfileMetadata && objectName === 'socialProfile') {
+        const error = new Error('metadata missing');
+        error.name = 'EntityMetadataNotFoundError';
+        throw error;
+      }
+      return getRepository(objectName);
+    }),
   };
   const visibilityPolicy = {
     buildSqlVisibilityProjection: jest.fn().mockReturnValue({
@@ -616,7 +629,7 @@ describe('MyahInboxContactQueryService', () => {
       edges: [
         {
           node: {
-            instagramUsername: 'creator.one',
+            instagramDisplayHandle: 'creator.one',
             identityKind: 'CREATOR',
             displayName: 'Creator One',
             creator: { id: creatorId, name: 'Creator One' },
@@ -655,6 +668,77 @@ describe('MyahInboxContactQueryService', () => {
     const creatorContact = (result.edges as Array<{ node: { id: string } }>)[0]
       .node;
     expect(creatorContact.id).not.toContain(creatorId);
+  });
+
+  it('projects a display handle only from one permission-readable active Instagram profile after contact paging', async () => {
+    const harness = buildHarness([{ ...rawRows[0], totalCount: '3' }]);
+    const result = await harness.service.listContacts(request({ first: 1 }));
+    const sql = harness.query.mock.calls[0][0] as string;
+
+    expect(result).toMatchObject({
+      totalCount: 3,
+      edges: [{ node: { instagramDisplayHandle: 'creator.one' } }],
+    });
+    expect(sql).toContain('readable_social_profiles AS (');
+    expect(sql).toContain("profile.platform::text = 'INSTAGRAM'");
+    expect(sql).toContain('COUNT(*) = 1');
+    expect(sql).toContain("NULLIF(BTRIM(profile.handle), '') IS NOT NULL");
+    expect(sql).toContain('SELECT DISTINCT "creatorId" FROM paged_contacts');
+    expect(sql).toContain('GROUP BY profile."creatorId"');
+    expect(sql).not.toContain('JOIN "socialProfile"');
+    expect(sql).toMatch(
+      /paged_contacts AS \([\s\S]*?\),\s*profile_aggregation AS \(/,
+    );
+    expect(sql).not.toContain('creator."instagramUsername"');
+    expect(
+      harness.globalWorkspaceOrmManager.getRepository,
+    ).toHaveBeenCalledWith(
+      workspaceId,
+      'socialProfile',
+      resolvedRolePermissionConfig,
+    );
+    expect(harness.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not bypass a denied SocialProfile read with a raw workspace join', async () => {
+    const harness = buildHarness(rawRows, true, false, true, true);
+    await expect(
+      harness.service.listContacts(request()),
+    ).rejects.toBeInstanceOf(PermissionsException);
+    expect(harness.query).not.toHaveBeenCalled();
+  });
+
+  it('fails closed to null when optional SocialProfile metadata is unavailable', async () => {
+    const harness = buildHarness(
+      [{ ...rawRows[0], instagramDisplayHandle: null }],
+      true,
+      false,
+      true,
+      false,
+      true,
+    );
+    const result = await harness.service.listContacts(request());
+    expect(result.edges).toMatchObject([
+      { node: { instagramDisplayHandle: null } },
+    ]);
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'NULL::text AS handle WHERE FALSE',
+    );
+  });
+
+  it('does not supply a display handle for zero or ambiguous readable profiles', async () => {
+    const harness = buildHarness([
+      { ...rawRows[0], instagramDisplayHandle: null },
+      { ...rawRows[1], instagramDisplayHandle: null },
+    ]);
+    const result = await harness.service.listContacts(request());
+    expect(
+      (
+        result.edges as Array<{
+          node: { instagramDisplayHandle: string | null };
+        }>
+      ).map(({ node }) => node.instagramDisplayHandle),
+    ).toEqual([null, null]);
   });
 
   it('projects the READY canonical tuple and preserves total count on an empty cursor page', async () => {
@@ -1048,7 +1132,7 @@ describe('MyahInboxContactQueryService', () => {
   });
 
   it('keeps every visible Email in the default list while response focus is disabled', async () => {
-    const harness = buildHarness([], true, false, true, false);
+    const harness = buildHarness([], true, false, true, false, false, false);
     await harness.service.listContacts(request());
     const [sql] = harness.query.mock.calls[0];
     expect(sql).toMatch(

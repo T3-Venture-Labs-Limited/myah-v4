@@ -11,10 +11,32 @@ export type CreatorImportClassification =
 
 export type ExistingCreatorSocialProfile = {
   id: string;
-  instagramLink?: { primaryLinkUrl?: string | null } | null;
-  tiktokLink?: { primaryLinkUrl?: string | null } | null;
-  youtubeLink?: { primaryLinkUrl?: string | null } | null;
-  twitterLink?: { primaryLinkUrl?: string | null } | null;
+  creatorId: string;
+  platform: string;
+  profileUrl?: string | null;
+};
+
+export type CreatorImportCommitPlan = {
+  creator: Record<string, string> & { name: string };
+  profiles: Array<{
+    platform: string;
+    handle?: string;
+    profileUrl?: string;
+    followerCount?: number;
+    followerCountObservedAt?: string;
+    followerCountSource?: string;
+  }>;
+  note?: { title: string; markdown: string };
+};
+
+export type CreatorImportRowPreview = {
+  creatorFields: string[];
+  socialProfiles: Array<{
+    platform: string;
+    fields: string[];
+  }>;
+  supplementaryNoteFields: string[];
+  excludedFields: string[];
 };
 
 export type CreatorSpreadsheetImportSession = {
@@ -35,4 +57,6 @@ export type CreatorSpreadsheetImportSession = {
     existing: number;
     conflicts: number;
   };
+  getRowPreview: (row: ImportedStructuredRow) => CreatorImportRowPreview;
+  buildRowCommitPlan: (row: ImportedStructuredRow) => CreatorImportCommitPlan;
 };

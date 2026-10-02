@@ -1,4 +1,9 @@
+import { useApolloClient } from '@apollo/client/react';
 import { triggerUpdateRecordOptimisticEffect } from '@/apollo/optimistic-effect/utils/triggerUpdateRecordOptimisticEffect';
+import {
+  RESTORE_SOCIAL_PROFILE,
+  toCanonicalSocialProfileRecord,
+} from '@/myah/creator-crm/socialProfileOperations';
 import { apiConfigState } from '@/client-config/states/apiConfigState';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
@@ -40,6 +45,7 @@ export const useRestoreManyRecords = ({
     apiConfig?.mutationMaximumAffectedRecords ?? DEFAULT_MUTATION_BATCH_SIZE;
 
   const apolloCoreClient = useApolloCoreClient();
+  const apolloMetadataClient = useApolloClient();
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -55,23 +61,29 @@ export const useRestoreManyRecords = ({
 
   const { objectMetadataItems } = useObjectMetadataItems();
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
-  const mutationResponseField = getRestoreManyRecordsMutationResponseField(
-    objectMetadataItem.namePlural,
-  );
+  const isManagedSocialProfile = objectNameSingular === 'socialProfile';
+  const mutationResponseField = isManagedSocialProfile
+    ? 'restoreSocialProfile'
+    : getRestoreManyRecordsMutationResponseField(objectMetadataItem.namePlural);
 
   const restoreManyRecords = async ({
     idsToRestore,
     delayInMsBetweenRequests,
     skipOptimisticEffect = false,
   }: RestoreManyRecordsProps) => {
-    const numberOfBatches = Math.ceil(idsToRestore.length / mutationPageSize);
+    const effectiveMutationPageSize = isManagedSocialProfile
+      ? 1
+      : mutationPageSize;
+    const numberOfBatches = Math.ceil(
+      idsToRestore.length / effectiveMutationPageSize,
+    );
 
     const restoredRecords = [];
 
     for (let batchIndex = 0; batchIndex < numberOfBatches; batchIndex++) {
       const batchedIdsToRestore = idsToRestore.slice(
-        batchIndex * mutationPageSize,
-        (batchIndex + 1) * mutationPageSize,
+        batchIndex * effectiveMutationPageSize,
+        (batchIndex + 1) * effectiveMutationPageSize,
       );
 
       const cachedRecords = batchedIdsToRestore
@@ -130,12 +142,17 @@ export const useRestoreManyRecords = ({
         });
       }
 
-      const restoredRecordsResponse = await apolloCoreClient
+      const restoredRecordsResponse = await (
+        isManagedSocialProfile ? apolloMetadataClient : apolloCoreClient
+      )
         .mutate({
-          mutation: restoreManyRecordsMutation,
-          variables: {
-            filter: { id: { in: batchedIdsToRestore } },
-          },
+          mutation: isManagedSocialProfile
+            ? RESTORE_SOCIAL_PROFILE
+            : restoreManyRecordsMutation,
+          fetchPolicy: isManagedSocialProfile ? 'no-cache' : undefined,
+          variables: isManagedSocialProfile
+            ? { input: { id: batchedIdsToRestore[0] } }
+            : { filter: { id: { in: batchedIdsToRestore } } },
         })
         .catch((error: Error) => {
           if (skipOptimisticEffect) {
@@ -194,10 +211,67 @@ export const useRestoreManyRecords = ({
           throw error;
         });
 
-      const restoredRecordsForThisBatch =
-        (restoredRecordsResponse.data as Record<string, any>)?.[
-          mutationResponseField
-        ] ?? [];
+      const restoredRecordsForThisBatch = isManagedSocialProfile
+        ? [
+            (
+              restoredRecordsResponse.data as Record<
+                string,
+                ObjectRecord | undefined
+              >
+            )?.[mutationResponseField],
+          ]
+            .filter(isDefined)
+            .map((record) =>
+              toCanonicalSocialProfileRecord({ ...record, deletedAt: null }),
+            )
+        : ((
+            restoredRecordsResponse.data as Record<
+              string,
+              ObjectRecord[] | undefined
+            >
+          )?.[mutationResponseField] ?? []);
+
+      if (isManagedSocialProfile) {
+        restoredRecordsForThisBatch.forEach((restoredRecord) => {
+          updateRecordFromCache({
+            objectMetadataItems,
+            objectMetadataItem,
+            cache: apolloCoreClient.cache,
+            record: restoredRecord,
+            recordGqlFields: { deletedAt: true },
+            objectPermissionsByObjectMetadataId,
+          });
+          upsertRecordsInStore({ partialRecords: [restoredRecord] });
+
+          const cachedRecord = cachedRecords.find(
+            (record) => record.id === restoredRecord.id,
+          );
+          const currentRecord = getRecordNodeFromRecord<ObjectRecord>({
+            record: cachedRecord ?? restoredRecord,
+            objectMetadataItem,
+            objectMetadataItems,
+            computeReferences: true,
+          });
+          const updatedRecord = getRecordNodeFromRecord<ObjectRecord>({
+            record: restoredRecord,
+            objectMetadataItem,
+            objectMetadataItems,
+            computeReferences: true,
+          });
+
+          if (isDefined(currentRecord) && isDefined(updatedRecord)) {
+            triggerUpdateRecordOptimisticEffect({
+              cache: apolloCoreClient.cache,
+              objectMetadataItem,
+              currentRecord,
+              updatedRecord,
+              objectMetadataItems,
+              objectPermissionsByObjectMetadataId,
+              upsertRecordsInStore,
+            });
+          }
+        });
+      }
 
       restoredRecords.push(...restoredRecordsForThisBatch);
 

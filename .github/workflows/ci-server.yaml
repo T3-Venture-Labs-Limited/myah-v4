@@ -258,6 +258,7 @@ jobs:
       CLICKHOUSE_URL: "http://default:clickhousePassword@localhost:8123/twenty"
       CLICKHOUSE_PASSWORD: clickhousePassword
       SHARD_COUNTER: ${{ github.event_name == 'push' && 16 || 3 }}
+      MYAH_FRESH_ONLY_CI: 'true'
     steps:
       - name: Fetch custom Github Actions and base branch history
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

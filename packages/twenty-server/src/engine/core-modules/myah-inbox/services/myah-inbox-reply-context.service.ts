@@ -176,8 +176,6 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
                 name: string | null;
                 language: string | null;
                 location: string | null;
-                categories: string | null;
-                niches: string | null;
                 deletedAt: Date | null;
               }>(input.workspace.id, 'creator', rolePermissionConfig),
               this.globalWorkspaceOrmManager.getRepository<{
@@ -218,8 +216,6 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
                   name: true,
                   language: true,
                   location: true,
-                  categories: true,
-                  niches: true,
                 },
               })
             : null;
@@ -489,8 +485,6 @@ export class MyahInboxReplyContextQueryEvidenceResolver implements MyahInboxRepl
               creator.name,
               creator.language,
               creator.location,
-              creator.categories,
-              creator.niches,
               input.replyContext.kind,
               selectedCampaign?.id ?? null,
               eligibilityEvidenceDigest,

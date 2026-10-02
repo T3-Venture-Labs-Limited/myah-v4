@@ -23,7 +23,6 @@ export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
   creator: [
     { name: 'name', type: FieldMetadataType.TEXT },
     { name: 'email', type: FieldMetadataType.TEXT },
-    { name: 'instagramUsername', type: FieldMetadataType.TEXT },
   ],
   creatorList: [{ name: 'name', type: FieldMetadataType.TEXT }],
   creatorListMember: [],
@@ -36,6 +35,10 @@ export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
   outreachSequence: [],
   outreachStep: [],
   promotedAsset: [],
+  socialProfile: [
+    { name: 'name', type: FieldMetadataType.TEXT },
+    { name: 'handle', type: FieldMetadataType.TEXT },
+  ],
   calendarChannelEventAssociation: [
     { name: 'eventExternalId', type: FieldMetadataType.TEXT },
   ],

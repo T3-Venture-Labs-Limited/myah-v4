@@ -1,3 +1,4 @@
+import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { PrepareInstagramReplyDraftTool } from 'src/engine/core-modules/tool/tools/instagram-tool/prepare-instagram-reply-draft-tool';
 
 const draftId = '00000000-0000-4000-8000-000000000001';
@@ -13,7 +14,15 @@ const context = {
   workspaceId: 'workspace-id',
   userWorkspaceId: 'user-workspace-id',
   workspaceMemberId: 'workspace-member-id',
-  rolePermissionConfig: { shouldBypassPermissionChecks: true as const },
+  rolePermissionConfig: { unionOf: ['role'] },
+  authContext: {
+    type: 'user' as const,
+    workspace: { id: 'workspace-id' },
+    userWorkspaceId: 'user-workspace-id',
+    workspaceMemberId: 'workspace-member-id',
+    workspaceMember: { id: 'workspace-member-id' },
+    user: { id: 'user-id' },
+  } as UserWorkspaceAuthContext,
   threadId: 'thread-id',
 };
 
@@ -43,6 +52,8 @@ describe('PrepareInstagramReplyDraftTool', () => {
     expect(draftService.saveDraft).toHaveBeenCalledWith({
       workspaceId: context.workspaceId,
       workspaceMemberId: context.workspaceMemberId,
+      rolePermissionConfig: context.rolePermissionConfig,
+      authContext: context.authContext,
       draftId,
       expectedRevision: 0,
       kind: 'REPLY',

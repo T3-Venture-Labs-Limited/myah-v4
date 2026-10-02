@@ -39,7 +39,7 @@ export type MyahInboxContact = {
   id: string;
   identityKind: MyahInboxContactIdentityKind;
   displayName: string;
-  instagramUsername: string | null;
+  instagramDisplayHandle: string | null;
   creator: { id: string; name: string | null } | null;
   lastActivityAt: string;
   latestChannel: MyahInboxChannel;

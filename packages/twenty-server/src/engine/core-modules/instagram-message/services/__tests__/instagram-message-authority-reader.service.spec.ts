@@ -1,207 +1,205 @@
 import { buildLegacyInstagramMessageActionAuthority } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
-import { resolveInstagramRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-instagram-recipient.util';
-import { InstagramMessageLocalAuthorityReaderService } from 'src/engine/core-modules/action-approval/services/instagram-message-local-authority-reader.service';
 import { PermissionsException } from 'src/engine/metadata-modules/permissions/permissions.exception';
-import { InstagramMessageAuthorityReaderService } from 'src/engine/core-modules/instagram-message/services/instagram-message-authority-reader.service';
 import { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+import { InstagramMessageAuthorityReaderService } from '../instagram-message-authority-reader.service';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const draftId = '00000000-0000-4000-8000-000000000002';
 const creatorId = '00000000-0000-4000-8000-000000000003';
-const accountRecordId = '00000000-0000-4000-8000-000000000004';
+const accountId = '00000000-0000-4000-8000-000000000004';
+const conversationId = '00000000-0000-4000-8000-000000000005';
+const profileId = '00000000-0000-4000-8000-000000000006';
+const actorId = '00000000-0000-4000-8000-000000000007';
+const rolePermissionConfig = { unionOf: ['role'] };
 
-const objectMetadata = [
-  ['2d357469-831a-4629-ad4b-47335900e883', 'account-metadata'],
-  ['85762d24-541b-407f-9d6a-cdf89552c665', 'draft-metadata'],
-  ['36817464-855f-42db-9fbb-f8853643f8d6', 'conversation-metadata'],
-  ['5ca82f72-9778-4ae1-8a8e-9b762c4ce0de', 'creator-metadata'],
-].map(([universalIdentifier, id]) => ({ universalIdentifier, id }));
-
-const firstDraft = {
-  id: draftId,
-  body: 'Hello creator',
-  revision: 2,
-  kind: 'FIRST_MESSAGE',
-  creatorId,
-  recipientUsername: 'creator.name',
-  recipientProviderId: 'creator.name',
-  conversationId: null,
-  sentAt: null,
-  creatorInstagramUsername: '@Creator.Name',
-  creatorInstagramUrl: 'https://instagram.com/creator.name/',
-  creatorInstagramLinkPrimaryLinkUrl: null,
-  providerConversationId: null,
-  conversationRecipientIgsid: null,
-  conversationRecipientUsername: null,
-  conversationProvider: null,
-  conversationLifecycle: null,
-  conversationInstagramAccountId: null,
-  conversationCreatorId: null,
-};
-
-const buildHarness = (
-  draft: Record<string, unknown> = firstDraft,
-  dataSourceOverride?: {
-    transaction: jest.Mock;
-    query: jest.Mock;
-  },
-) => {
-  const dataSource = dataSourceOverride ?? {
-    transaction: jest.fn(async (callback) => callback({ query: jest.fn() })),
-    query: jest.fn(async (sql: string) =>
-      sql.includes('"myahInstagramReplyDraft"') ? [draft] : [],
-    ),
+const setup = (dataSourceOverride?: { query: jest.Mock }) => {
+  const draft = {
+    id: draftId,
+    body: 'Hello creator',
+    revision: 2,
+    kind: 'REPLY',
+    creatorId,
+    recipientUsername: 'creator.name',
+    recipientProviderId: 'recipient-igsid',
+    conversationId,
+    sentAt: null,
+    providerConversationId: 'provider-chat',
+    conversationCreatorId: creatorId as string | null,
+    conversationRecipientIgsid: 'recipient-igsid',
+    conversationProvider: 'UNIPILE',
+    conversationLifecycle: 'ACTIVE',
+    conversationInstagramAccountId: accountId,
   };
-  const globalWorkspaceOrmManager = {
-    executeInWorkspaceContext: jest.fn(async (callback) => callback()),
-    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
+  const profile = {
+    id: profileId,
+    creatorId,
+    platform: 'INSTAGRAM',
+    handle: 'creator.name',
+    profileUrl: null,
+    platformAccountId: null,
+    deletedAt: null,
   };
-  const accountBinding = {
-    id: 'binding-id',
+  const account = {
+    id: '00000000-0000-4000-8000-000000000008',
     workspaceId,
-    workspaceInstagramAccountRecordId: accountRecordId,
+    workspaceInstagramAccountRecordId: accountId,
     unipileAccountId: 'provider-account',
     instagramUserId: 'brand-user',
     status: 'ACTIVE',
     deactivatedAt: null,
   };
-  const client = {
-    listChats: jest.fn().mockResolvedValue({ chats: [], nextCursor: null }),
-    getChat: jest.fn().mockResolvedValue({ chatId: 'provider-chat' }),
+  const chat = {
+    chatId: 'provider-chat',
+    accountId: 'provider-account',
+    type: 'ONE_TO_ONE',
+    attendeeProviderId: 'recipient-igsid',
   };
-  const service = new InstagramMessageAuthorityReaderService(
+  const client = {
+    getInstagramMessagingProfile: jest.fn().mockResolvedValue({
+      username: 'creator.name',
+      providerId: 'recipient-profile-id',
+      providerMessagingId: 'recipient-igsid',
+    }),
+    listChats: jest.fn().mockResolvedValue({ chats: [chat], nextCursor: null }),
+    getChat: jest.fn().mockResolvedValue(chat),
+  };
+  const query = jest.fn(async (sql: string) =>
+    sql.includes('"myahInstagramReplyDraft"')
+      ? [draft]
+      : [
+          {
+            id: conversationId,
+            providerConversationId: 'provider-chat',
+            recipientIgsid: 'recipient-igsid',
+          },
+        ],
+  );
+  const getRepository = jest.fn(
+    async (_workspaceId: string, name: string, permissions: unknown) => ({
+      findOne: jest.fn(
+        async () =>
+          ({
+            creator: { id: creatorId },
+            socialProfile: profile,
+            myahInstagramReplyDraft: draft,
+            myahSocialConversation: {
+              id: conversationId,
+              creatorId: draft.conversationCreatorId,
+              providerConversationId: draft.providerConversationId,
+              recipientIgsid: draft.conversationRecipientIgsid,
+              provider: draft.conversationProvider,
+              lifecycle: draft.conversationLifecycle,
+              instagramAccountId: draft.conversationInstagramAccountId,
+            },
+            myahInstagramAccount: { id: accountId },
+          })[name],
+      ),
+      find: jest.fn(async () => (name === 'socialProfile' ? [profile] : [])),
+      permissions,
+    }),
+  );
+  const reader = new InstagramMessageAuthorityReaderService(
     { findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }) } as never,
-    globalWorkspaceOrmManager as never,
-    { find: jest.fn().mockResolvedValue([accountBinding]) } as never,
-    { find: jest.fn().mockResolvedValue(objectMetadata) } as never,
+    {
+      getRepository,
+      executeInWorkspaceContext: jest.fn(async (callback) => callback()),
+      getGlobalWorkspaceDataSource: jest
+        .fn()
+        .mockResolvedValue(dataSourceOverride ?? { query }),
+    } as never,
+    { find: jest.fn().mockResolvedValue([account]) } as never,
+    {
+      find: jest.fn().mockResolvedValue(
+        [
+          ['2d357469-831a-4629-ad4b-47335900e883', 'account-metadata'],
+          ['85762d24-541b-407f-9d6a-cdf89552c665', 'draft-metadata'],
+          ['36817464-855f-42db-9fbb-f8853643f8d6', 'conversation-metadata'],
+          ['5ca82f72-9778-4ae1-8a8e-9b762c4ce0de', 'creator-metadata'],
+        ].map(([universalIdentifier, id]) => ({ universalIdentifier, id })),
+      ),
+    } as never,
     client as never,
   );
-
-  return { client, dataSource, service, draft, accountBinding };
+  const input = {
+    workspaceId,
+    initiatorUserWorkspaceId: actorId,
+    draftId,
+    expectedRevision: 2,
+    rolePermissionConfig,
+  };
+  return {
+    reader,
+    client,
+    query,
+    getRepository,
+    draft,
+    profile,
+    account,
+    input,
+  };
 };
 
-const readLegacyAuthority = async (
-  h: ReturnType<typeof buildHarness>,
-  input: {
-    workspaceId: string;
-    initiatorUserWorkspaceId: string;
-    draftId: string;
-    expectedRevision?: number;
-    threadId?: string;
-  },
-) => {
-  const draft = h.draft as typeof firstDraft;
-  const recipient = resolveInstagramRecipient({
-    instagramUsername: draft.creatorInstagramUsername,
-    instagramUrl: draft.creatorInstagramUrl,
-    instagramLink: { primaryLinkUrl: draft.creatorInstagramLinkPrimaryLinkUrl },
-  });
-  const sourceValues = recipient.sourceFields.map((field) => ({
-    field,
-    value:
-      field === 'instagramUsername'
-        ? draft.creatorInstagramUsername
-        : field === 'instagramUrl'
-          ? draft.creatorInstagramUrl
-          : draft.creatorInstagramLinkPrimaryLinkUrl!,
-  }));
-  const original = buildLegacyInstagramMessageActionAuthority({
-    workspaceId,
-    initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
-    threadId: input.threadId ?? null,
-    interactionContextType: input.threadId
-      ? null
-      : 'MYAH_INBOX_INSTAGRAM_DRAFT',
-    interactionContextId: input.threadId ? null : draftId,
-    draft: {
-      id: draft.id,
-      body: draft.body,
-      revision: draft.revision,
-      kind: draft.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY',
-      creatorRecordId: draft.creatorId,
-      recipientUsername: recipient.normalizedUsername,
-      recipientProviderId: draft.recipientProviderId,
-      recipientSourceValues: sourceValues,
-      conversationRecordId: draft.conversationId,
-      providerConversationId: draft.providerConversationId,
-    },
-    account: {
-      bindingId: h.accountBinding.id,
-      workspaceInstagramAccountRecordId: accountRecordId,
-      unipileAccountId: h.accountBinding.unipileAccountId,
-      instagramUserId: h.accountBinding.instagramUserId,
-    },
-    evidenceLinks: [
-      {
-        objectMetadataId: 'account-metadata',
-        recordId: accountRecordId,
-        role: 'INSTAGRAM_ACCOUNT',
-      },
-      {
-        objectMetadataId: 'draft-metadata',
-        recordId: draftId,
-        role: 'INSTAGRAM_MESSAGE_DRAFT',
-      },
-      ...(draft.conversationId
-        ? [
-            {
-              objectMetadataId: 'conversation-metadata',
-              recordId: draft.conversationId,
-              role: 'SOCIAL_CONVERSATION',
-            },
-          ]
-        : []),
-      {
-        objectMetadataId: 'creator-metadata',
-        recordId: creatorId,
-        role: 'CREATOR',
-      },
-    ],
-  });
-  return h.service.rebuildExecutionAuthority({
-    workspaceId,
-    binding: original.expectedActionBinding,
-  });
-};
-
-describe('InstagramMessageAuthorityReaderService historical v2 reconstruction', () => {
-  it('reconstructs historical START_CHAT authority without minting a fresh approval', async () => {
-    const harness = buildHarness();
-
-    const authority = await readLegacyAuthority(harness, {
-      workspaceId,
-      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
-      draftId,
-      expectedRevision: 2,
-    });
-
-    expect(authority).toMatchObject({
-      expectedActionBinding: {
-        actionName: 'send_instagram_message',
-        actionVersion: 2,
-        actionKind: 'START_CHAT',
+describe('InstagramMessageAuthorityReaderService canonical reply authority', () => {
+  it.each(['START_CHAT', 'REPLY'] as const)(
+    'refuses scalar-only historical v2 %s before any draft or provider read',
+    async (kind) => {
+      const h = setup();
+      const historical = buildLegacyInstagramMessageActionAuthority({
+        workspaceId,
+        initiatorUserWorkspaceId: actorId,
         threadId: null,
+        interactionContextType: 'MYAH_INBOX_INSTAGRAM_DRAFT',
         interactionContextId: draftId,
-      },
-    });
-    expect(harness.client.listChats).not.toHaveBeenCalled();
-    expect(harness.client.getChat).not.toHaveBeenCalled();
+        draft: {
+          id: draftId,
+          revision: 2,
+          body: 'Hello creator',
+          kind,
+          creatorRecordId: creatorId,
+          recipientUsername: 'creator.name',
+          recipientProviderId: 'recipient-igsid',
+          recipientSourceValues: [
+            { field: 'instagramUsername', value: 'creator.name' },
+          ],
+          conversationRecordId: kind === 'REPLY' ? conversationId : null,
+          providerConversationId: kind === 'REPLY' ? 'provider-chat' : null,
+        },
+        account: {
+          bindingId: h.account.id,
+          workspaceInstagramAccountRecordId: accountId,
+          unipileAccountId: h.account.unipileAccountId,
+          instagramUserId: h.account.instagramUserId,
+        },
+        evidenceLinks: [],
+      });
+      await expect(
+        h.reader.rebuildExecutionAuthority({
+          workspaceId,
+          binding: historical.expectedActionBinding,
+          rolePermissionConfig,
+        }),
+      ).rejects.toThrow('historical recipient is unavailable');
+      expect(h.query).not.toHaveBeenCalled();
+      expect(h.client.getChat).not.toHaveBeenCalled();
+      expect(h.client.listChats).not.toHaveBeenCalled();
+      expect(h.client.getInstagramMessagingProfile).not.toHaveBeenCalled();
+    },
+  );
 
-    await harness.service.assertReadyAfterReservation(authority);
-
-    expect(harness.client.listChats).toHaveBeenCalledTimes(1);
-    const sql = harness.dataSource.query.mock.calls
-      .map(([statement]) => statement)
-      .join('\n');
-    expect(sql).toMatch(/LEFT JOIN "workspace_[^"]+"\."creator" creator/);
-    expect(sql).not.toContain('"_creator"');
-  });
-
-  it('requires the GlobalWorkspaceDataSource raw-query permission option for draft and local conversation authority reads', async () => {
+  it('requires explicit raw-query permission options for canonical v3 draft and conversation reads', async () => {
+    let draftRow: ReturnType<typeof setup>['draft'] | undefined;
     const queryRunner = {
       isReleased: false,
       query: jest.fn(async (sql: string) =>
-        sql.includes('"myahInstagramReplyDraft"') ? [firstDraft] : [],
+        sql.includes('"myahInstagramReplyDraft"')
+          ? [draftRow]
+          : [
+              {
+                id: conversationId,
+                providerConversationId: 'provider-chat',
+                recipientIgsid: 'recipient-igsid',
+              },
+            ],
       ),
       release: jest.fn(),
     };
@@ -211,25 +209,11 @@ describe('InstagramMessageAuthorityReaderService historical v2 reconstruction', 
     Object.defineProperty(dataSource, 'createQueryRunner', {
       value: jest.fn(() => queryRunner),
     });
-    Object.defineProperty(dataSource, 'transaction', {
-      value: jest.fn(async (callback) => callback({ query: jest.fn() })),
-    });
-    const harness = buildHarness(firstDraft, dataSource as never);
+    const h = setup(dataSource as never);
+    draftRow = h.draft;
 
-    try {
-      await dataSource.query('SELECT 1');
-      throw new Error('GlobalWorkspaceDataSource query should require options');
-    } catch (error) {
-      expect(error).toBeInstanceOf(PermissionsException);
-    }
-
-    await readLegacyAuthority(harness, {
-      workspaceId,
-      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
-      draftId,
-      expectedRevision: 2,
-    });
-
+    expect(() => dataSource.query('SELECT 1')).toThrow(PermissionsException);
+    await h.reader.createDirectAuthority(h.input);
     expect(
       queryRunner.query.mock.calls.map(([sql]) => sql).join('\n'),
     ).toContain('"myahInstagramReplyDraft"');
@@ -238,204 +222,120 @@ describe('InstagramMessageAuthorityReaderService historical v2 reconstruction', 
     ).toContain('"myahSocialConversation"');
   });
 
-  it('blocks START_CHAT when a current provider chat already exists', async () => {
-    const harness = buildHarness();
-    harness.client.listChats.mockResolvedValue({
-      chats: [
-        {
-          chatId: 'provider-chat',
-          attendeeProviderId: 'creator.name',
-        },
-      ],
-      nextCursor: null,
-    });
-
-    const authority = await readLegacyAuthority(harness, {
-      workspaceId,
-      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
-      draftId,
-      expectedRevision: 2,
-    });
-
+  it('rebuilds a canonical v3 reply under role-readable repositories without provider reads', async () => {
+    const h = setup();
+    const authority = await h.reader.createDirectAuthority(h.input);
+    h.client.getChat.mockClear();
+    h.client.getInstagramMessagingProfile.mockClear();
+    h.getRepository.mockClear();
     await expect(
-      harness.service.assertReadyAfterReservation(authority),
-    ).rejects.toThrow(
-      'START_CHAT authority cannot target an existing conversation',
-    );
-  });
-
-  it('requires and provider-verifies the exact active Unipile conversation for REPLY', async () => {
-    const harness = buildHarness({
-      ...firstDraft,
-      kind: 'REPLY',
-      conversationId: 'conversation-id',
-      providerConversationId: 'provider-chat',
-      conversationRecipientIgsid: 'creator.name',
-      conversationRecipientUsername: null,
-      conversationProvider: 'UNIPILE',
-      conversationLifecycle: 'ACTIVE',
-      conversationInstagramAccountId: accountRecordId,
-      conversationCreatorId: creatorId,
-    });
-
-    const authority = await readLegacyAuthority(harness, {
+      h.reader.rebuildExecutionAuthority({
+        workspaceId,
+        binding: authority.expectedActionBinding,
+        rolePermissionConfig,
+      }),
+    ).resolves.toEqual(authority);
+    expect(h.getRepository).toHaveBeenCalledWith(
       workspaceId,
-      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000005',
-      threadId: '00000000-0000-4000-8000-000000000006',
-      draftId,
-    });
+      'socialProfile',
+      rolePermissionConfig,
+    );
+    expect(h.getRepository).toHaveBeenCalledWith(
+      workspaceId,
+      'creator',
+      rolePermissionConfig,
+    );
+    expect(h.client.getChat).not.toHaveBeenCalled();
+    expect(h.client.getInstagramMessagingProfile).not.toHaveBeenCalled();
+  });
 
-    expect(authority).toMatchObject({
-      expectedActionBinding: {
-        actionKind: 'REPLY',
-        threadId: '00000000-0000-4000-8000-000000000006',
-      },
-    });
-    expect(harness.client.getChat).not.toHaveBeenCalled();
+  it('retains provider-free v3 reconciliation and verifies the exact REPLY only after reservation', async () => {
+    const h = setup();
+    const authority = await h.reader.createDirectAuthority(h.input);
+    h.client.getChat.mockClear();
+    h.client.listChats.mockClear();
+    await expect(
+      h.reader.rebuildForReconciliation({
+        workspaceId,
+        binding: authority.expectedActionBinding,
+      }),
+    ).resolves.toEqual(authority);
+    expect(h.client.getChat).not.toHaveBeenCalled();
+    expect(h.client.listChats).not.toHaveBeenCalled();
 
-    await harness.service.assertReadyAfterReservation(authority);
-
-    expect(harness.client.getChat).toHaveBeenCalledWith({
-      accountId: 'provider-account',
+    await h.reader.assertReadyAfterReservation(authority, rolePermissionConfig);
+    expect(h.client.getChat).toHaveBeenCalledWith({
+      accountId: h.account.unipileAccountId,
       chatId: 'provider-chat',
-      expectedAttendeeId: 'creator.name',
+      expectedAttendeeId: 'recipient-igsid',
     });
   });
-});
 
-describe('InstagramMessageAuthorityReaderService shared local extraction', () => {
-  it.each(['rebuildExecutionAuthority', 'rebuildForReconciliation'] as const)(
-    'keeps %s authority equivalent and provider-free until reservation',
-    async (method) => {
-      const harness = buildHarness({
-        ...firstDraft,
-        kind: 'REPLY',
-        conversationId: 'conversation-id',
-        providerConversationId: 'provider-chat',
-        conversationRecipientIgsid: 'creator.name',
-        conversationProvider: 'UNIPILE',
-        conversationLifecycle: 'ACTIVE',
-        conversationInstagramAccountId: accountRecordId,
-        conversationCreatorId: creatorId,
+  it.each(['socialProfile', 'creator'] as const)(
+    'rejects unreadable %s during unreceipted v3 rebuild despite a readable conversation',
+    async (denied) => {
+      const h = setup();
+      const authority = await h.reader.createDirectAuthority(h.input);
+      const repository = h.getRepository.getMockImplementation()!;
+      h.getRepository.mockImplementation(async (...args) => {
+        const result = await repository(...args);
+        if (args[1] === denied && args[2] === rolePermissionConfig)
+          return {
+            ...result,
+            findOne: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue([]),
+          };
+        return result;
       });
-      const original = await readLegacyAuthority(harness, {
-        workspaceId,
-        initiatorUserWorkspaceId: 'viewer-id',
-        threadId: 'thread-id',
-        draftId,
-      });
-      expect(harness.service).toBeInstanceOf(
-        InstagramMessageLocalAuthorityReaderService,
-      );
+      h.client.getChat.mockClear();
       await expect(
-        harness.service[method]({
+        h.reader.rebuildExecutionAuthority({
           workspaceId,
-          binding: original.expectedActionBinding,
+          binding: authority.expectedActionBinding,
+          rolePermissionConfig,
         }),
-      ).resolves.toEqual(original);
-      expect(harness.client.listChats).not.toHaveBeenCalled();
-      expect(harness.client.getChat).not.toHaveBeenCalled();
-      expect(harness.dataSource.query).toHaveBeenLastCalledWith(
-        expect.stringContaining('"myahInstagramReplyDraft"'),
-        [draftId, method === 'rebuildForReconciliation'],
-        undefined,
-        { shouldBypassPermissionChecks: true },
-      );
-      await harness.service.assertReadyAfterReservation(original);
-      expect(harness.client.getChat).toHaveBeenCalledTimes(1);
+      ).rejects.toThrow();
+      expect(h.client.getChat).not.toHaveBeenCalled();
     },
   );
 
-  it.each(['rebuildExecutionAuthority', 'rebuildForReconciliation'] as const)(
-    'preserves %s fingerprint mismatch rejection',
-    async (method) => {
-      const harness = buildHarness();
-      const authority = await readLegacyAuthority(harness, {
+  it('rejects a changed canonical source fingerprint without provider verification', async () => {
+    const h = setup();
+    const authority = await h.reader.createDirectAuthority(h.input);
+    h.profile.handle = 'changed';
+    h.client.getChat.mockClear();
+    await expect(
+      h.reader.rebuildExecutionAuthority({
         workspaceId,
-        initiatorUserWorkspaceId: 'viewer-id',
-        draftId,
-        expectedRevision: 2,
-      });
-      await expect(
-        harness.service[method]({
-          workspaceId,
-          binding: {
-            ...authority.expectedActionBinding,
-            actionContextFingerprint: 'stale',
-          },
-        }),
-      ).rejects.toThrow('source graph is unavailable');
-      expect(harness.client.listChats).not.toHaveBeenCalled();
-      expect(harness.client.getChat).not.toHaveBeenCalled();
-    },
-  );
-});
+        binding: authority.expectedActionBinding,
+        rolePermissionConfig,
+      }),
+    ).rejects.toThrow();
+    expect(h.client.getChat).not.toHaveBeenCalled();
+  });
 
-describe('InstagramMessageAuthorityReaderService current conversation Creator linkage', () => {
   it.each([null, 'replacement-creator'])(
-    'rejects saved REPLY after Creator link becomes %s without changing revision or provider target',
-    async (conversationCreatorId) => {
-      const draft = {
-        ...firstDraft,
-        kind: 'REPLY',
-        recipientProviderId: 'recipient-igsid',
-        conversationId: 'conversation-id',
-        providerConversationId: 'provider-chat',
-        conversationRecipientIgsid: 'recipient-igsid',
-        conversationProvider: 'UNIPILE',
-        conversationLifecycle: 'ACTIVE',
-        conversationInstagramAccountId: accountRecordId,
-        conversationCreatorId: creatorId as string | null,
-      };
-      const harness = buildHarness(draft);
-      const input = {
-        workspaceId,
-        initiatorUserWorkspaceId: 'viewer-id',
-        draftId,
-        expectedRevision: 2,
-      };
-      const original = await readLegacyAuthority(harness, input);
-      draft.conversationCreatorId = conversationCreatorId;
-
-      await expect(readLegacyAuthority(harness, input)).rejects.toThrow(
-        'REPLY draft target is stale',
-      );
+    'rejects current conversation Creator link %s without rewriting its immutable binding',
+    async (creator) => {
+      const h = setup();
+      const authority = await h.reader.createDirectAuthority(h.input);
+      h.client.getChat.mockClear();
+      h.draft.conversationCreatorId = creator;
       await expect(
-        readLegacyAuthority(harness, {
-          ...input,
-          threadId: 'thread-id',
+        h.reader.rebuildExecutionAuthority({
+          workspaceId,
+          binding: authority.expectedActionBinding,
+          rolePermissionConfig,
         }),
       ).rejects.toThrow('REPLY draft target is stale');
-      for (const method of [
-        'rebuildExecutionAuthority',
-        'rebuildForReconciliation',
-      ] as const) {
-        await expect(
-          harness.service[method]({
-            workspaceId,
-            binding: original.expectedActionBinding,
-          }),
-        ).rejects.toThrow('REPLY draft target is stale');
-      }
-      expect(draft.revision).toBe(2);
-      expect(harness.client.getChat).not.toHaveBeenCalled();
-      expect(harness.client.listChats).not.toHaveBeenCalled();
-      expect(harness.dataSource.query).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'conversation."creatorId" AS "conversationCreatorId"',
-        ),
-        [draftId, true],
-        undefined,
-        { shouldBypassPermissionChecks: true },
-      );
-
-      draft.conversationCreatorId = creatorId;
       await expect(
-        harness.service.rebuildExecutionAuthority({
+        h.reader.rebuildForReconciliation({
           workspaceId,
-          binding: original.expectedActionBinding,
+          binding: authority.expectedActionBinding,
         }),
-      ).resolves.toEqual(original);
+      ).rejects.toThrow('REPLY draft target is stale');
+      expect(authority.expectedActionBinding.actionVersion).toBe(3);
+      expect(h.client.getChat).not.toHaveBeenCalled();
     },
   );
 });

@@ -4,6 +4,7 @@ import { type CampaignCreatorInboxReturnTarget } from '@/myah/inbox/types/Campai
 import { TimelineCard } from '@/activities/timeline-activities/components/TimelineCard';
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
+import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
@@ -27,9 +28,13 @@ type Creator = ObjectRecord & {
   id: string;
   name?: string | null;
   email?: string | null;
-  instagramUsername?: string | null;
-  instagramBio?: string | null;
-  instagramFollowerCount?: number | null;
+};
+type SocialProfile = ObjectRecord & {
+  creatorId: string;
+  platform?: string | null;
+  handle?: string | null;
+  profileUrl?: string | null;
+  followerCount?: number | null;
 };
 
 const StyledPanel = styled.aside`
@@ -162,6 +167,20 @@ export const MyahCampaignCreatorContextPanel = ({
   const creatorMetadata = objectMetadataItems.find(
     (item) => item.nameSingular === 'creator',
   );
+  const profileMetadata = objectMetadataItems.find(
+    (item) => item.nameSingular === 'socialProfile',
+  );
+  const profilePermissions = useObjectPermissionsForObject(
+    profileMetadata?.id ?? '',
+  );
+  const profileFieldReadable = (name: string) => {
+    const field = profileMetadata?.fields.find((item) => item.name === name);
+    return (
+      !!field &&
+      profileMetadata?.readableFields.some((item) => item.id === field.id) &&
+      profilePermissions.restrictedFields?.[field.id]?.canRead !== false
+    );
+  };
   const membershipPermissions = useObjectPermissionsForObject(
     membershipMetadata?.id ?? '',
   );
@@ -186,9 +205,14 @@ export const MyahCampaignCreatorContextPanel = ({
     membershipFieldReadable('campaign') && membershipFieldReadable('creator');
   const canReadName = creatorFieldReadable('name');
   const canReadEmail = creatorFieldReadable('email');
-  const canReadHandle = creatorFieldReadable('instagramUsername');
-  const canReadBio = creatorFieldReadable('instagramBio');
-  const canReadFollowers = creatorFieldReadable('instagramFollowerCount');
+  const canReadProfiles =
+    profilePermissions.canReadObjectRecords &&
+    profileFieldReadable('id') &&
+    profileFieldReadable('creator') &&
+    profileFieldReadable('platform');
+  const canReadHandle = profileFieldReadable('handle');
+  const canReadProfileUrl = profileFieldReadable('profileUrl');
+  const canReadFollowers = profileFieldReadable('followerCount');
   const {
     record: membership,
     loading,
@@ -225,9 +249,6 @@ export const MyahCampaignCreatorContextPanel = ({
       id: true,
       ...(canReadName ? { name: true } : {}),
       ...(canReadEmail ? { email: true } : {}),
-      ...(canReadHandle ? { instagramUsername: true } : {}),
-      ...(canReadBio ? { instagramBio: true } : {}),
-      ...(canReadFollowers ? { instagramFollowerCount: true } : {}),
     },
     skip: !creatorId,
   });
@@ -243,13 +264,36 @@ export const MyahCampaignCreatorContextPanel = ({
       ? creator
       : undefined;
 
-  const instagramUsername = (
-    canReadHandle ? readableCreator?.instagramUsername : undefined
-  )?.replace(/^@/, '');
-  const instagramProfileUrl =
-    instagramUsername && /^[a-zA-Z0-9._]{1,30}$/.test(instagramUsername)
-      ? `https://www.instagram.com/${instagramUsername}/`
-      : undefined;
+  const {
+    records: profiles,
+    loading: profileLoading,
+    hasReadPermission: canReadProfileRecords,
+    error: profileError,
+    hasNextPage: hasMoreProfiles,
+  } = useFindManyRecords<SocialProfile>({
+    objectNameSingular: 'socialProfile',
+    filter: { creatorId: { eq: creatorId } },
+    recordGqlFields: {
+      id: true,
+      creatorId: true,
+      ...(canReadProfiles ? { platform: true } : {}),
+      ...(canReadHandle ? { handle: true } : {}),
+      ...(canReadProfileUrl ? { profileUrl: true } : {}),
+      ...(canReadFollowers ? { followerCount: true } : {}),
+    },
+    limit: 100,
+    fetchPolicy: 'no-cache',
+    skip: !readableCreator || !canReadProfiles,
+  });
+  const canShowProfiles =
+    !!readableCreator &&
+    canReadProfiles &&
+    canReadProfileRecords &&
+    !profileLoading &&
+    !profileError;
+  const readableProfiles = canShowProfiles
+    ? profiles.filter((profile) => profile.creatorId === creatorId)
+    : [];
   const stageLabel =
     canReadStage && membership?.stage
       ? (membershipMetadata?.fields
@@ -289,29 +333,31 @@ export const MyahCampaignCreatorContextPanel = ({
         ) : (
           <h2>Creator context</h2>
         )}
-        {canReadHandle && readableCreator?.instagramUsername ? (
-          <p>
-            {instagramProfileUrl ? (
-              <a
-                href={instagramProfileUrl}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                Instagram: @{instagramUsername}
-              </a>
-            ) : (
-              <>Instagram: @{readableCreator.instagramUsername}</>
-            )}
-          </p>
-        ) : null}
-        {canReadBio && readableCreator?.instagramBio ? (
-          <p>{readableCreator.instagramBio}</p>
-        ) : null}
-        {canReadFollowers && readableCreator?.instagramFollowerCount != null ? (
-          <p>
-            {readableCreator.instagramFollowerCount.toLocaleString()} Instagram
-            followers
-          </p>
+        {readableProfiles.map((profile) => {
+          const label = `${profile.platform ?? 'Social'}: ${canReadHandle && profile.handle ? `@${profile.handle.replace(/^@/, '')}` : 'Profile'}`;
+          const safeUrl =
+            canReadProfileUrl &&
+            profile.profileUrl &&
+            /^https:\/\//i.test(profile.profileUrl)
+              ? profile.profileUrl
+              : undefined;
+          return (
+            <p key={profile.id}>
+              {safeUrl ? (
+                <a href={safeUrl} rel="noopener noreferrer" target="_blank">
+                  {label}
+                </a>
+              ) : (
+                label
+              )}
+              {canReadFollowers && profile.followerCount != null
+                ? ` · ${profile.followerCount.toLocaleString()} followers`
+                : null}
+            </p>
+          );
+        })}
+        {canShowProfiles && hasMoreProfiles ? (
+          <p>More profiles are available on the Creator record.</p>
         ) : null}
         {belongsToCampaign && !loading && !error ? (
           <p>Recorded campaign stage: {stageLabel} · not outreach evidence</p>

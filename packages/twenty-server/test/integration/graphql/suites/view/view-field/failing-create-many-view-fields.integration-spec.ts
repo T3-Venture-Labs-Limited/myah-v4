@@ -1,11 +1,9 @@
 import { expectOneNotInternalServerErrorSnapshot } from 'test/integration/graphql/utils/expect-one-not-internal-server-error-snapshot.util';
-import { createOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/create-one-field-metadata.util';
-import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
-import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
+import { deleteOneView } from 'test/integration/metadata/suites/view/utils/delete-one-view.util';
+import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
 import { createManyViewFields } from 'test/integration/metadata/suites/view-field/utils/create-many-view-fields.util';
 import { createOneView } from 'test/integration/metadata/suites/view/utils/create-one-view.util';
-import { FieldMetadataType } from 'twenty-shared/types';
 import { v4 as uuidv4 } from 'uuid';
 
 import { type CreateViewFieldInput } from 'src/engine/metadata-modules/view-field/dtos/inputs/create-view-field.input';
@@ -13,103 +11,44 @@ import { type CreateViewFieldInput } from 'src/engine/metadata-modules/view-fiel
 describe('View Field Resolver - Failing Create Many Operations', () => {
   let testSetup: {
     testViewId: string;
-    testObjectMetadataId: string;
     firstTestFieldMetadataId: string;
     secondTestFieldMetadataId: string;
   };
 
   beforeAll(async () => {
-    const {
-      data: {
-        createOneObject: { id: objectMetadataId },
-      },
-    } = await createOneObjectMetadata({
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular fieldsList { id name }',
       expectToFail: false,
-      input: {
-        nameSingular: 'myFieldTestObject',
-        namePlural: 'myFieldTestObjects',
-        labelSingular: 'My Field Test Object',
-        labelPlural: 'My Field Test Objects',
-        icon: 'Icon123',
-      },
     });
+    const creator = objects.find((object) => object.nameSingular === 'creator');
+    const name = creator?.fieldsList?.find((field) => field.name === 'name');
+    const location = creator?.fieldsList?.find(
+      (field) => field.name === 'location',
+    );
 
-    const {
-      data: {
-        createOneField: { id: firstTestFieldMetadataId },
-      },
-    } = await createOneFieldMetadata({
-      expectToFail: false,
-      input: {
-        name: 'testField',
-        label: 'Test Field',
-        type: FieldMetadataType.TEXT,
-        objectMetadataId,
-        isLabelSyncedWithName: true,
-      },
-      gqlFields: `
-          id
-          name
-          label
-          isLabelSyncedWithName
-        `,
-    });
-
-    const {
-      data: {
-        createOneField: { id: secondTestFieldMetadataId },
-      },
-    } = await createOneFieldMetadata({
-      expectToFail: false,
-      input: {
-        name: 'secondTestField',
-        label: 'Test Field',
-        type: FieldMetadataType.TEXT,
-        objectMetadataId,
-        isLabelSyncedWithName: false,
-      },
-      gqlFields: `
-          id
-          name
-          label
-          isLabelSyncedWithName
-        `,
-    });
-
-    const {
-      data: {
-        createView: { id: testViewId },
-      },
-    } = await createOneView({
+    expect(creator).toBeDefined();
+    expect(name).toBeDefined();
+    expect(location).toBeDefined();
+    const { data } = await createOneView({
       input: {
         icon: 'icon123',
-        objectMetadataId,
+        objectMetadataId: creator!.id,
         name: 'TestViewForFields',
       },
       expectToFail: false,
     });
 
     testSetup = {
-      testViewId,
-      testObjectMetadataId: objectMetadataId,
-      firstTestFieldMetadataId,
-      secondTestFieldMetadataId,
+      testViewId: data.createView.id,
+      firstTestFieldMetadataId: name!.id,
+      secondTestFieldMetadataId: location!.id,
     };
   });
 
   afterAll(async () => {
-    await updateOneObjectMetadata({
-      input: {
-        idToUpdate: testSetup.testObjectMetadataId,
-        updatePayload: {
-          isActive: false,
-        },
-      },
-    });
-    await deleteOneObjectMetadata({
-      expectToFail: false,
-      input: { idToDelete: testSetup.testObjectMetadataId },
-    });
+    await deleteOneView({ viewId: testSetup.testViewId, expectToFail: false });
+    await destroyOneView({ viewId: testSetup.testViewId, expectToFail: false });
   });
 
   it('should accumulate multiple validation errors when some inputs are invalid', async () => {

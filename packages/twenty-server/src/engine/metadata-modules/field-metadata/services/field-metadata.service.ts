@@ -26,6 +26,11 @@ import { fromUpdateFieldInputToFlatFieldMetadata } from 'src/engine/metadata-mod
 import { throwOnFieldInputTranspilationsError } from 'src/engine/metadata-modules/flat-field-metadata/utils/throw-on-field-input-transpilations-error.util';
 import { computeFlatViewFieldsFromFieldsWidgets } from 'src/engine/metadata-modules/flat-view-field/utils/compute-flat-view-fields-from-fields-widgets.util';
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
+import {
+  assertProductSchemaWriteAuthority,
+  type ProductSchemaWriteAuthority,
+} from 'src/engine/metadata-modules/utils/product-schema-write-authority.util';
+import { resolveWorkspaceUpgradeSchemaWriteAuthority } from 'src/engine/metadata-modules/utils/workspace-upgrade-schema-write-scope.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { EMPTY_ORCHESTRATOR_FAILURE_REPORT } from 'src/engine/workspace-manager/workspace-migration/constant/empty-orchestrator-failure-report.constant';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
@@ -49,15 +54,18 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
     createFieldInput,
     workspaceId,
     ownerFlatApplication,
+    schemaWriteAuthority,
   }: {
     createFieldInput: Omit<CreateFieldInput, 'workspaceId'>;
     workspaceId: string;
     ownerFlatApplication?: FlatApplication;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatFieldMetadata> {
     const [createdFieldMetadata] = await this.createManyFields({
       workspaceId,
       createFieldInputs: [createFieldInput],
       ownerFlatApplication,
+      schemaWriteAuthority,
     });
 
     if (!isDefined(createdFieldMetadata)) {
@@ -75,12 +83,16 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
     workspaceId,
     isSystemBuild = false,
     ownerFlatApplication,
+    schemaWriteAuthority,
   }: {
     deleteOneFieldInput: DeleteOneFieldInput;
     workspaceId: string;
     isSystemBuild?: boolean;
     ownerFlatApplication?: FlatApplication;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatFieldMetadata> {
+    assertProductSchemaWriteAuthority(schemaWriteAuthority);
+
     const resolvedOwnerFlatApplication =
       ownerFlatApplication ??
       (
@@ -204,12 +216,16 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
     workspaceId,
     isSystemBuild = false,
     ownerFlatApplication,
+    schemaWriteAuthority,
   }: {
     updateFieldInput: Omit<UpdateFieldInput, 'workspaceId'>;
     workspaceId: string;
     isSystemBuild?: boolean;
     ownerFlatApplication?: FlatApplication;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatFieldMetadata> {
+    assertProductSchemaWriteAuthority(schemaWriteAuthority);
+
     const resolvedOwnerFlatApplication =
       ownerFlatApplication ??
       (
@@ -360,12 +376,20 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
     workspaceId,
     ownerFlatApplication,
     isSystemBuild = false,
+    schemaWriteAuthority,
   }: {
     createFieldInputs: Omit<CreateFieldInput, 'workspaceId'>[];
     workspaceId: string;
     ownerFlatApplication?: FlatApplication;
     isSystemBuild?: boolean;
+    schemaWriteAuthority?: ProductSchemaWriteAuthority;
   }): Promise<FlatFieldMetadata[]> {
+    assertProductSchemaWriteAuthority(
+      schemaWriteAuthority === undefined
+        ? resolveWorkspaceUpgradeSchemaWriteAuthority(workspaceId)
+        : schemaWriteAuthority,
+    );
+
     if (createFieldInputs.length === 0) {
       return [];
     }

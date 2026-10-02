@@ -100,7 +100,7 @@ type ContactRaw = {
   displayName: string | null;
   creatorId: string | null;
   creatorName: string | null;
-  creatorInstagramUsername: string | null;
+  instagramDisplayHandle: string | null;
   preview: string | null;
   sender: string | null;
   emailThreadIds: string[] | null;
@@ -284,6 +284,7 @@ export class MyahInboxContactQueryService {
           messageParticipantRepository,
           messageThreadRepository,
           creatorRepository,
+          socialProfileRepository,
           campaignRepository,
           workspaceMemberRepository,
           socialConversationRepository,
@@ -293,6 +294,7 @@ export class MyahInboxContactQueryService {
           repository('messageParticipant'),
           repository('messageThread'),
           repository('creator'),
+          optionalRepository('socialProfile'),
           repository('campaign'),
           repository('workspaceMember'),
           optionalRepository('myahSocialConversation'),
@@ -350,8 +352,19 @@ export class MyahInboxContactQueryService {
               .createQueryBuilder('creator')
               .select('creator.id', 'id')
               .addSelect('creator.name', 'name')
-              .addSelect('creator."instagramUsername"', 'instagramUsername')
               .where('creator."deletedAt" IS NULL'),
+          ),
+          serializeOptionalPermissionQuery(
+            socialProfileRepository,
+            (repository) =>
+              repository
+                .createQueryBuilder('social_profile')
+                .select('social_profile.id', 'id')
+                .addSelect('social_profile."creatorId"', 'creatorId')
+                .addSelect('social_profile.platform', 'platform')
+                .addSelect('social_profile.handle', 'handle')
+                .where('social_profile."deletedAt" IS NULL'),
+            `SELECT NULL::uuid AS id, NULL::uuid AS "creatorId", NULL::text AS platform, NULL::text AS handle WHERE FALSE`,
           ),
           serializePermissionQuery(
             workspaceMemberRepository
@@ -422,6 +435,7 @@ export class MyahInboxContactQueryService {
           readableParticipantsSql,
           readableThreadsSql,
           readableCreatorsSql,
+          readableSocialProfilesSql,
           readableWorkspaceMembersSql,
           readableSocialConversationsSql,
           readableSocialMessagesSql,
@@ -616,6 +630,7 @@ readable_messages AS (${readableMessagesSql}),
 readable_participants AS (${readableParticipantsSql}),
 readable_threads AS (${readableThreadsSql}),
 readable_creators AS (${readableCreatorsSql}),
+readable_social_profiles AS (${readableSocialProfilesSql}),
 readable_campaigns AS (${readableCampaignsSql}),
 readable_workspace_members AS (${readableWorkspaceMembersSql}),
 readable_social_conversations AS (${readableSocialConversationsSql}),
@@ -729,7 +744,6 @@ email_source_rows AS (
     thread."snoozedUntil",
     creator.name AS "creatorName",
     creator.id AS "creatorId",
-    creator."instagramUsername" AS "creatorInstagramUsername",
     NULL::uuid AS "instagramConversationId",
     NULL::text AS "providerConversationId",
     NULL::text AS "instagramProvider",
@@ -763,7 +777,6 @@ instagram_source_rows AS (
     NULL::timestamptz AS "snoozedUntil",
     creator.name AS "creatorName",
     creator.id AS "creatorId",
-    creator."instagramUsername" AS "creatorInstagramUsername",
     conversation.id AS "instagramConversationId",
     conversation."providerConversationId",
     conversation.provider::text AS "instagramProvider",
@@ -963,7 +976,6 @@ contact AS (
     ) AS "displayName",
     latest."creatorId",
     latest."creatorName",
-    latest."creatorInstagramUsername",
     latest.preview,
     latest.sender,
     latest."triageIsAvailable",
@@ -998,8 +1010,18 @@ paged_contacts AS (
   ${cursorCondition}
   ORDER BY contact."lastActivityAt" DESC, contact."orderingKey" DESC
   LIMIT ${limit}
+),
+profile_aggregation AS (
+  SELECT profile."creatorId",
+    CASE WHEN COUNT(*) = 1 THEN MAX(BTRIM(profile.handle)) ELSE NULL END AS "instagramDisplayHandle"
+  FROM readable_social_profiles profile
+  INNER JOIN (SELECT DISTINCT "creatorId" FROM paged_contacts WHERE "creatorId" IS NOT NULL) paged_creators
+    ON paged_creators."creatorId" = profile."creatorId"
+  WHERE profile.platform::text = 'INSTAGRAM'
+    AND NULLIF(BTRIM(profile.handle), '') IS NOT NULL
+  GROUP BY profile."creatorId"
 )
-SELECT paged_contacts.*, filtered_total."totalCount",
+SELECT paged_contacts.*, profile_aggregation."instagramDisplayHandle", filtered_total."totalCount",
   triage_capability."isAvailable" AS "triageCapabilityAvailable",
   to_char(
     paged_contacts."lastActivityAt" AT TIME ZONE 'UTC',
@@ -1008,6 +1030,7 @@ SELECT paged_contacts.*, filtered_total."totalCount",
 FROM filtered_total
 CROSS JOIN triage_capability
 LEFT JOIN paged_contacts ON TRUE
+LEFT JOIN profile_aggregation ON profile_aggregation."creatorId" = paged_contacts."creatorId"
 ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderingKey" DESC NULLS LAST`;
         const rows = await dataSource.query<ContactRaw[]>(
           sql,
@@ -1084,7 +1107,7 @@ ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderi
       creator: row.creatorId
         ? { id: row.creatorId, name: row.creatorName }
         : null,
-      instagramUsername: row.creatorInstagramUsername,
+      instagramDisplayHandle: row.instagramDisplayHandle ?? null,
       lastActivityAt,
       latestChannel: row.latestChannel,
       initialSelection: {

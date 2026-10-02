@@ -248,6 +248,85 @@ describe('SynchronizeSourceControlledMyahMetadataService', () => {
     expect(incrementMetadataVersion).not.toHaveBeenCalled();
   });
 
+  it('adds the missing Creator widget scope filter without replacing saved views or other filters', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        now: '2026-08-04T00:00:00.000Z',
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+      });
+    const currentMetadata = structuredClone(allFlatEntityMaps);
+    const view = MYAH_STANDARD_OBJECTS.socialProfile.views.socialProfiles;
+    const filterId =
+      view.viewFilters.creatorCurrentRecord.universalIdentifier;
+    // Historical saved audience IDs are pinned fixtures, not current source views.
+    // Keep the old filter in cached workspace metadata to prove scoped sync does
+    // not broaden or replace a customer's existing saved audience.
+    const savedViewId = '19483764-6f84-4d09-8f03-945e7d0a4b28';
+    const savedFilterId = 'd1319af0-eeb2-4ca3-8afc-31e66c8a4277';
+    const widgetView = currentMetadata.flatViewMaps.byUniversalIdentifier[
+      view.universalIdentifier
+    ];
+    const sourceFilter = currentMetadata.flatViewFilterMaps
+      .byUniversalIdentifier[filterId];
+    const sourceView = currentMetadata.flatViewMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.creator.views.viewa5abdae3.universalIdentifier
+    ];
+    if (!sourceFilter || !sourceView || !widgetView) {
+      throw new Error('Existing view and filter are required by the fixture');
+    }
+    const savedFilter = structuredClone(sourceFilter);
+    savedFilter.universalIdentifier = savedFilterId;
+    savedFilter.viewUniversalIdentifier = savedViewId;
+    savedFilter.fieldMetadataUniversalIdentifier =
+      MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier;
+    savedFilter.value = JSON.stringify(['custom-workspace-value']);
+    currentMetadata.flatViewFilterMaps.byUniversalIdentifier[savedFilterId] = savedFilter;
+    currentMetadata.flatViewMaps.byUniversalIdentifier[savedViewId] = {
+      ...structuredClone(sourceView),
+      universalIdentifier: savedViewId,
+    };
+    widgetView.name = 'Workspace-specific widget title';
+    delete currentMetadata.flatViewFilterMaps.byUniversalIdentifier[filterId];
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService({ ...currentMetadata, featureFlagsMap: {} });
+
+    await service.synchronizeWorkspace(
+      createArgs(),
+      { viewFilter: new Set([filterId]) },
+      { synchronizeExistingSelectedMetadata: true },
+    );
+
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).toHaveBeenCalledTimes(1);
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatViewFilterMaps.from
+        .byUniversalIdentifier,
+    ).toEqual({});
+    expect(
+      Object.keys(
+        migrationInput.fromToAllFlatEntityMaps.flatViewFilterMaps.to
+          .byUniversalIdentifier,
+      ),
+    ).toEqual([filterId]);
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatViewMaps.to
+        .byUniversalIdentifier,
+    ).toEqual({});
+    expect(
+      migrationInput.dependencyAllFlatEntityMaps.flatViewMaps
+        .byUniversalIdentifier[view.universalIdentifier],
+    ).toMatchObject({ name: 'Workspace-specific widget title' });
+    expect(
+      migrationInput.dependencyAllFlatEntityMaps.flatViewFilterMaps
+        .byUniversalIdentifier[savedFilterId],
+    ).toMatchObject({ value: JSON.stringify(['custom-workspace-value']) });
+    expect(migrationInput.buildOptions.inferDeletionFromMissingEntities).toEqual(
+      {},
+    );
+  });
+
   it('creates a missing field under an existing object without selecting or diffing its parent', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({

@@ -65,7 +65,6 @@ export class ApiClient {
           const hasAuthError = response.data.errors.some(
             (error: { message?: string; extensions?: { code?: string } }) =>
               error.extensions?.code === 'UNAUTHENTICATED' ||
-              error.extensions?.code === 'FORBIDDEN' ||
               (typeof error.message === 'string' &&
                 error.message.toLowerCase().includes('unauthenticated')),
           );

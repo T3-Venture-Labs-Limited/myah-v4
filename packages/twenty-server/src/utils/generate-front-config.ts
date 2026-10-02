@@ -2,10 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { config } from 'dotenv';
-config({
-  path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
-  override: true,
-});
+
+import { getServerEnvFilePath } from 'src/utils/get-server-env-file-path';
+
+config({ path: getServerEnvFilePath(), override: true });
 
 export function generateFrontConfig(): void {
   // When FRONT_AUTO_BASE_URL=true (or SERVER_URL is unset), inject an empty

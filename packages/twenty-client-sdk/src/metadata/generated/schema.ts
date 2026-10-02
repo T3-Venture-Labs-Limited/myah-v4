@@ -1800,6 +1800,31 @@ export interface CreatorListMembershipRemovalImpactDTO {
     __typename: 'CreatorListMembershipRemovalImpactDTO'
 }
 
+export interface CommitCreatorImportResult {
+    receiptId: Scalars['UUID']
+    creatorId: Scalars['UUID']
+    socialProfileIds: Scalars['UUID'][]
+    noteId?: Scalars['UUID']
+    noteTargetId?: Scalars['UUID']
+    replayed: Scalars['Boolean']
+    __typename: 'CommitCreatorImportResult'
+}
+
+export interface SocialProfileDTO {
+    id: Scalars['UUID']
+    creatorId: Scalars['UUID']
+    name: Scalars['String']
+    platform: Scalars['String']
+    handle?: Scalars['String']
+    profileUrl?: Scalars['String']
+    platformAccountId?: Scalars['String']
+    followerCount?: Scalars['Int']
+    followerCountObservedAt?: Scalars['DateTime']
+    followerCountSource?: Scalars['String']
+    deletedAt?: Scalars['DateTime']
+    __typename: 'SocialProfileDTO'
+}
+
 export interface ApprovedAccessDomain {
     id: Scalars['UUID']
     domain: Scalars['String']
@@ -3495,6 +3520,10 @@ export interface Mutation {
     deleteApplicationRegistrationVariable: Scalars['Boolean']
     uploadAppTarball: ApplicationRegistration
     transferApplicationRegistrationOwnership: ApplicationRegistration
+    commitCreatorImport: CommitCreatorImportResult
+    updateSocialProfileIdentity: SocialProfileDTO
+    retireSocialProfile: SocialProfileDTO
+    restoreSocialProfile: SocialProfileDTO
     createOneField: Field
     updateOneField: Field
     deleteOneField: Field
@@ -5556,6 +5585,33 @@ export interface CreatorListMembershipRemovalImpactDTOGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface CommitCreatorImportResultGenqlSelection{
+    receiptId?: boolean | number
+    creatorId?: boolean | number
+    socialProfileIds?: boolean | number
+    noteId?: boolean | number
+    noteTargetId?: boolean | number
+    replayed?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SocialProfileDTOGenqlSelection{
+    id?: boolean | number
+    creatorId?: boolean | number
+    name?: boolean | number
+    platform?: boolean | number
+    handle?: boolean | number
+    profileUrl?: boolean | number
+    platformAccountId?: boolean | number
+    followerCount?: boolean | number
+    followerCountObservedAt?: boolean | number
+    followerCountSource?: boolean | number
+    deletedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface ApprovedAccessDomainGenqlSelection{
     id?: boolean | number
     domain?: boolean | number
@@ -7449,6 +7505,10 @@ export interface MutationGenqlSelection{
     deleteApplicationRegistrationVariable?: { __args: {id: Scalars['String']} }
     uploadAppTarball?: (ApplicationRegistrationGenqlSelection & { __args: {file: Scalars['Upload'], universalIdentifier?: (Scalars['String'] | null)} })
     transferApplicationRegistrationOwnership?: (ApplicationRegistrationGenqlSelection & { __args: {applicationRegistrationId: Scalars['String'], targetWorkspaceSubdomain: Scalars['String']} })
+    commitCreatorImport?: (CommitCreatorImportResultGenqlSelection & { __args: {input: CommitCreatorImportInput} })
+    updateSocialProfileIdentity?: (SocialProfileDTOGenqlSelection & { __args: {input: UpdateSocialProfileIdentityInput} })
+    retireSocialProfile?: (SocialProfileDTOGenqlSelection & { __args: {input: RetireSocialProfileInput} })
+    restoreSocialProfile?: (SocialProfileDTOGenqlSelection & { __args: {input: RestoreSocialProfileInput} })
     createOneField?: (FieldGenqlSelection & { __args: {input: CreateOneFieldMetadataInput} })
     updateOneField?: (FieldGenqlSelection & { __args: {input: UpdateOneFieldMetadataInput} })
     deleteOneField?: (FieldGenqlSelection & { __args: {input: DeleteOneFieldInput} })
@@ -7688,6 +7748,20 @@ export interface CreateApplicationRegistrationVariableInput {applicationRegistra
 export interface UpdateApplicationRegistrationVariableInput {id: Scalars['String'],update: UpdateApplicationRegistrationVariablePayload}
 
 export interface UpdateApplicationRegistrationVariablePayload {value?: (Scalars['String'] | null),resetValue?: (Scalars['Boolean'] | null),description?: (Scalars['String'] | null)}
+
+export interface CommitCreatorImportInput {attemptKey: Scalars['UUID'],operationKey: Scalars['String'],creator: CreatorImportCreatorInput,profiles: CreatorImportSocialProfileInput[],note?: (CreatorImportNoteInput | null)}
+
+export interface CreatorImportCreatorInput {name: Scalars['String'],email?: (Scalars['String'] | null),phone?: (Scalars['String'] | null),location?: (Scalars['String'] | null),language?: (Scalars['String'] | null),source?: (Scalars['String'] | null),sourceUrl?: (Scalars['String'] | null),importSource?: (Scalars['String'] | null),lastImportedAt?: (Scalars['String'] | null)}
+
+export interface CreatorImportSocialProfileInput {platform: Scalars['String'],handle?: (Scalars['String'] | null),profileUrl?: (Scalars['String'] | null),platformAccountId?: (Scalars['String'] | null),followerCount?: (Scalars['Int'] | null),followerCountObservedAt?: (Scalars['String'] | null),followerCountSource?: (Scalars['String'] | null)}
+
+export interface CreatorImportNoteInput {title: Scalars['String'],markdown: Scalars['String']}
+
+export interface UpdateSocialProfileIdentityInput {id: Scalars['UUID'],platform?: (Scalars['String'] | null),handle?: (Scalars['String'] | null),profileUrl?: (Scalars['String'] | null),platformAccountId?: (Scalars['String'] | null),followerCount?: (Scalars['Int'] | null),followerCountObservedAt?: (Scalars['String'] | null),followerCountSource?: (Scalars['String'] | null)}
+
+export interface RetireSocialProfileInput {id: Scalars['UUID']}
+
+export interface RestoreSocialProfileInput {id: Scalars['UUID']}
 
 export interface CreateOneFieldMetadataInput {
 /** The record to create */
@@ -9283,6 +9357,22 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isCreatorListMembershipRemovalImpactDTO = (obj?: { __typename?: any } | null): obj is CreatorListMembershipRemovalImpactDTO => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isCreatorListMembershipRemovalImpactDTO"')
       return CreatorListMembershipRemovalImpactDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CommitCreatorImportResult_possibleTypes: string[] = ['CommitCreatorImportResult']
+    export const isCommitCreatorImportResult = (obj?: { __typename?: any } | null): obj is CommitCreatorImportResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCommitCreatorImportResult"')
+      return CommitCreatorImportResult_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const SocialProfileDTO_possibleTypes: string[] = ['SocialProfileDTO']
+    export const isSocialProfileDTO = (obj?: { __typename?: any } | null): obj is SocialProfileDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSocialProfileDTO"')
+      return SocialProfileDTO_possibleTypes.includes(obj.__typename)
     }
 
 

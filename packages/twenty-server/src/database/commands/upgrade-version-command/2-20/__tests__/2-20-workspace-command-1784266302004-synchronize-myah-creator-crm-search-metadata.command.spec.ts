@@ -105,7 +105,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
   });
 
-  it('persists the five missing Creator CRM search-field metadata rows', async () => {
+  it('persists the four current Creator CRM search-field metadata rows', async () => {
     const { command, validateBuildAndRunWorkspaceMigration } = createCommand(
       createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
     );
@@ -118,7 +118,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         .allFlatEntityOperationByMetadataName.searchFieldMetadata
         .flatEntityToCreate;
 
-    expect(flatEntityToCreate).toHaveLength(5);
+    expect(flatEntityToCreate).toHaveLength(4);
     expect(flatEntityToCreate).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -144,8 +144,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
   it('does not create search metadata when all Creator CRM field pairs exist', async () => {
     const { command, validateBuildAndRunWorkspaceMigration } = createCommand(
       buildExistingSearchFieldMetadataMaps([
-        MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
-          .universalIdentifier,
+        '1186d5b4-385f-5566-a4ba-87b8f65cdee5' /* historical Creator username field */,
         MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier,
@@ -173,7 +172,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         .allFlatEntityOperationByMetadataName.searchFieldMetadata
         .flatEntityToCreate;
 
-    expect(flatEntityToCreate).toHaveLength(3);
+    expect(flatEntityToCreate).toHaveLength(2);
     expect(
       flatEntityToCreate
         .map(
@@ -186,8 +185,6 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         .sort(),
     ).toEqual(
       [
-        MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
-          .universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
         MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
       ].sort(),

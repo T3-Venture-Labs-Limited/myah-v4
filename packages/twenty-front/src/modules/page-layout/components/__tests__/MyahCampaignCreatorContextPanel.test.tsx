@@ -3,6 +3,7 @@ import { useContext } from 'react';
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
 import { MyahCampaignCreatorContextPanel } from '@/page-layout/components/MyahCampaignCreatorContextPanel';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
+import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 
@@ -14,6 +15,9 @@ jest.mock('react-router-dom', () => ({
 }));
 jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
   useFindOneRecord: jest.fn(),
+}));
+jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
+  useFindManyRecords: jest.fn(),
 }));
 jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: jest.fn(),
@@ -52,34 +56,44 @@ jest.mock('@/ui/layout/side-panel/contexts/SidePanelContext', () => ({
 }));
 
 const mockFind = useFindOneRecord as jest.Mock;
+const mockProfiles = useFindManyRecords as jest.Mock;
 const mockMetadata = useObjectMetadataItems as jest.Mock;
 const mockPermissions = useObjectPermissionsForObject as jest.Mock;
+const panel = (
+  campaignId = 'campaign-a',
+  membershipId = 'membership-a',
+  initialTab?: 'messages',
+) => (
+  <MyahCampaignCreatorContextPanel
+    campaignId={campaignId}
+    membershipId={membershipId}
+    onClose={jest.fn()}
+    initialTab={initialTab}
+    returnTarget={{
+      workspaceId: 'workspace-a',
+      campaignId,
+      membershipId,
+      influencerTabId: 'influencers-tab',
+      pathname: '/object/campaign/campaign-a',
+      search: '',
+    }}
+  />
+);
 const showPanel = (
   campaignId = 'campaign-a',
   membershipId = 'membership-a',
   initialTab?: 'messages',
-) =>
-  render(
-    <MyahCampaignCreatorContextPanel
-      campaignId={campaignId}
-      membershipId={membershipId}
-      onClose={jest.fn()}
-      initialTab={initialTab}
-      returnTarget={{
-        workspaceId: 'workspace-a',
-        campaignId,
-        membershipId,
-        influencerTabId: 'influencers-tab',
-        pathname: '/object/campaign/campaign-a',
-        search: '',
-      }}
-    />,
-  );
+) => render(panel(campaignId, membershipId, initialTab));
 
 describe('MyahCampaignCreatorContextPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPermissions.mockReturnValue({ canReadObjectRecords: true });
+    mockProfiles.mockReturnValue({
+      records: [],
+      loading: false,
+      hasReadPermission: true,
+    });
     mockMetadata.mockReturnValue({
       objectMetadataItems: [
         {
@@ -102,13 +116,30 @@ describe('MyahCampaignCreatorContextPanel', () => {
         {
           id: 'creator-metadata',
           nameSingular: 'creator',
+          fields: ['name', 'email', 'socialProfiles'].map((name) => ({
+            id: `${name}-field`,
+            name,
+          })),
+        },
+        {
+          id: 'social-profile-metadata',
+          nameSingular: 'socialProfile',
+          readableFields: [
+            'id',
+            'creator',
+            'platform',
+            'handle',
+            'profileUrl',
+            'followerCount',
+          ].map((name) => ({ id: `profile-${name}`, name })),
           fields: [
-            'name',
-            'email',
-            'instagramUsername',
-            'instagramBio',
-            'instagramFollowerCount',
-          ].map((name) => ({ id: `${name}-field`, name })),
+            'id',
+            'creator',
+            'platform',
+            'handle',
+            'profileUrl',
+            'followerCount',
+          ].map((name) => ({ id: `profile-${name}`, name })),
         },
       ],
     });
@@ -130,9 +161,6 @@ describe('MyahCampaignCreatorContextPanel', () => {
                 id: 'creator-a',
                 name: 'Ava Rivera',
                 email: 'ava@example.invalid',
-                instagramUsername: 'ava.studio',
-                instagramBio: 'Thoughtful routines',
-                instagramFollowerCount: 42800,
               },
               loading: false,
               hasReadPermission: true,
@@ -140,19 +168,158 @@ describe('MyahCampaignCreatorContextPanel', () => {
     );
   });
 
-  it('keeps readable Creator context when an optional profile field is denied', () => {
-    mockPermissions.mockImplementation((id: string) => ({
-      canReadObjectRecords: true,
-      restrictedFields:
-        id === 'creator-metadata'
-          ? { 'instagramBio-field': { canRead: false } }
-          : {},
-    }));
+  it('keeps independent native Notes and Creator access for zero profiles', () => {
     showPanel();
     expect(mockFind.mock.calls[1][0].recordGqlFields).not.toHaveProperty(
-      'instagramBio',
+      'instagramUsername',
     );
-    expect(screen.queryByText('Thoughtful routines')).not.toBeInTheDocument();
+    expect(mockProfiles.mock.calls[0][0]).toMatchObject({
+      objectNameSingular: 'socialProfile',
+      filter: { creatorId: { eq: 'creator-a' } },
+    });
+    expect(screen.queryByText(/Instagram:/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Notes' }));
+    expect(screen.getByText('Native Creator notes')).toBeVisible();
+  });
+
+  it('shows both readable Instagram identities rather than choosing the first', () => {
+    mockProfiles.mockReturnValue({
+      records: [
+        {
+          id: 'profile-a',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          handle: 'ava.studio',
+          profileUrl: 'https://www.instagram.com/ava.studio/',
+          followerCount: 42800,
+        },
+        {
+          id: 'profile-b',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          handle: 'ava.alt',
+          profileUrl: 'https://www.instagram.com/ava.alt/',
+          followerCount: 900,
+        },
+      ],
+      loading: false,
+      hasReadPermission: true,
+    });
+    showPanel();
+    expect(screen.getByText(/INSTAGRAM: @ava.studio/)).toBeVisible();
+    expect(screen.getByText(/INSTAGRAM: @ava.alt/)).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Notes' }));
+    expect(screen.getByText('Native Creator notes')).toBeVisible();
+  });
+
+  it('hides cached same-Creator profiles until a fresh authorized result, while Notes remain available', () => {
+    const cachedProfile = {
+      id: 'old-profile',
+      creatorId: 'creator-a',
+      platform: 'INSTAGRAM',
+      handle: 'now-private',
+    };
+    mockProfiles.mockReturnValue({
+      records: [cachedProfile],
+      loading: true,
+      hasReadPermission: true,
+    });
+    const view = showPanel();
+    expect(mockProfiles.mock.calls[0][0].fetchPolicy).toBe('no-cache');
+    expect(screen.queryByText(/now-private/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Notes' }));
+    expect(screen.getByText('Native Creator notes')).toBeVisible();
+
+    mockProfiles.mockReturnValue({
+      records: [cachedProfile],
+      loading: false,
+      hasReadPermission: true,
+      error: new Error('Profile row access revoked'),
+    });
+    view.rerender(panel());
+    expect(screen.queryByText(/now-private/)).not.toBeInTheDocument();
+    expect(screen.getByText('Native Creator notes')).toBeVisible();
+
+    mockProfiles.mockReturnValue({
+      records: [
+        {
+          id: 'allowed-profile',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          handle: 'still-public',
+        },
+      ],
+      loading: false,
+      hasReadPermission: true,
+    });
+    view.rerender(panel());
+    expect(screen.getByText('INSTAGRAM: @still-public')).toBeVisible();
+    expect(screen.queryByText(/now-private/)).not.toBeInTheDocument();
+    expect(screen.getByText('Native Creator notes')).toBeVisible();
+  });
+
+  it('does not request or reveal restricted profile fields but keeps Notes', () => {
+    mockMetadata.mockReturnValue({
+      objectMetadataItems: mockMetadata().objectMetadataItems.map(
+        (item: {
+          nameSingular: string;
+          readableFields?: Array<{ name: string }>;
+        }) =>
+          item.nameSingular === 'socialProfile'
+            ? {
+                ...item,
+                readableFields: ['id', 'creator', 'platform'].map((name) => ({
+                  id: `profile-${name}`,
+                  name,
+                })),
+              }
+            : item,
+      ),
+    });
+    mockProfiles.mockReturnValue({
+      records: [
+        {
+          id: 'cached-profile',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          handle: 'secret',
+          followerCount: 900,
+        },
+      ],
+      loading: false,
+      hasReadPermission: true,
+    });
+    showPanel();
+    expect(mockProfiles.mock.calls[0][0].recordGqlFields).not.toHaveProperty(
+      'handle',
+    );
+    expect(mockProfiles.mock.calls[0][0].recordGqlFields).not.toHaveProperty(
+      'followerCount',
+    );
+    expect(screen.queryByText(/secret/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Notes' }));
+    expect(screen.getByText('Native Creator notes')).toBeVisible();
+  });
+
+  it('keeps Creator context when SocialProfile records are denied', () => {
+    mockPermissions.mockImplementation((id: string) => ({
+      canReadObjectRecords: id !== 'social-profile-metadata',
+      restrictedFields: {},
+    }));
+    mockProfiles.mockReturnValue({
+      records: [
+        {
+          id: 'cached',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          handle: 'secret',
+        },
+      ],
+      hasReadPermission: true,
+    });
+    showPanel();
+    expect(mockProfiles.mock.calls[0][0].skip).toBe(true);
+    expect(screen.queryByText(/secret/)).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ava Rivera' })).toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Notes' }));
     expect(screen.getByText('Native Creator notes')).toBeVisible();
@@ -265,10 +432,9 @@ describe('MyahCampaignCreatorContextPanel', () => {
     expect(
       screen.getByText(/Recorded campaign stage: Negotiating/),
     ).toBeVisible();
-    expect(screen.getByText('42,800 Instagram followers')).toBeVisible();
-    expect(
-      screen.getByRole('link', { name: 'Instagram: @ava.studio' }),
-    ).toHaveAttribute('href', 'https://www.instagram.com/ava.studio/');
+    expect(mockProfiles.mock.calls[0][0].filter).toEqual({
+      creatorId: { eq: 'creator-a' },
+    });
     expect(
       screen.getByLabelText('No profile image available'),
     ).toHaveTextContent('AR');
@@ -342,36 +508,26 @@ describe('MyahCampaignCreatorContextPanel', () => {
     ).toHaveFocus();
   });
 
-  it('does not turn a malformed handle into a navigable URL', () => {
-    mockFind.mockImplementation(
-      ({ objectNameSingular }: { objectNameSingular: string }) =>
-        objectNameSingular === 'campaignCreator'
-          ? {
-              record: {
-                id: 'membership-a',
-                campaignId: 'campaign-a',
-                creatorId: 'creator-a',
-              },
-              loading: false,
-              hasReadPermission: true,
-            }
-          : {
-              record: {
-                id: 'creator-a',
-                name: 'Ava Rivera',
-                instagramUsername: 'not/a-valid-handle',
-              },
-              loading: false,
-              hasReadPermission: true,
-            },
-    );
-
+  it('does not turn a non-HTTPS profile URL into a navigable link', () => {
+    mockProfiles.mockReturnValue({
+      records: [
+        {
+          id: 'profile-a',
+          creatorId: 'creator-a',
+          platform: 'INSTAGRAM',
+          handle: 'ava.studio',
+          // eslint-disable-next-line eslint/no-script-url -- deliberate unsafe URL fixture
+          profileUrl: 'javascript:alert(1)',
+        },
+      ],
+      loading: false,
+      hasReadPermission: true,
+    });
     showPanel();
-
     expect(
-      screen.queryByRole('link', { name: /Instagram/ }),
+      screen.queryByRole('link', { name: /INSTAGRAM/ }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Instagram: @not/a-valid-handle')).toBeVisible();
+    expect(screen.getByText('INSTAGRAM: @ava.studio')).toBeVisible();
   });
 
   it('scopes native timeline activity to the Creator rather than the enclosing campaign', () => {

@@ -9,7 +9,7 @@ const contact: MyahInboxContact = {
   id: 'contact-1',
   identityKind: 'CREATOR',
   displayName: 'Creator One',
-  instagramUsername: 'creator',
+  instagramDisplayHandle: 'creator',
   creator: { id: 'creator-1', name: 'Creator One' },
   lastActivityAt: '2026-09-05T12:00:00.000Z',
   latestChannel: 'INSTAGRAM',
@@ -151,7 +151,7 @@ describe('getMyahInboxContactSelection', () => {
         workspaceId: 'workspace-1',
         contact: {
           ...contact,
-          instagramUsername: null,
+          instagramDisplayHandle: null,
           initialSelection: {
             channel: 'INSTAGRAM',
             emailThreadId: null,
@@ -168,6 +168,27 @@ describe('getMyahInboxContactSelection', () => {
         latestOutreachThreadId: 'thread-2',
       }),
     ).toMatchObject({ channel: 'EMAIL', emailThreadId: 'thread-2' });
+  });
+
+  it('keeps the exact readable conversation available even without a contact display handle', () => {
+    expect(
+      getMyahInboxContactSelection({
+        workspaceId: 'workspace-1',
+        contact: {
+          ...contact,
+          instagramDisplayHandle: null,
+          initialSelection: {
+            channel: 'INSTAGRAM',
+            emailThreadId: null,
+            instagramConversationId: 'conversation-1',
+          },
+        },
+        previousSelection: null,
+      }),
+    ).toMatchObject({
+      channel: 'INSTAGRAM',
+      instagramConversationId: 'conversation-1',
+    });
   });
 
   it('preserves a pinned exact Email target despite partial contact membership', () => {
@@ -288,7 +309,7 @@ describe('getMyahInboxContactSelection', () => {
         workspaceId: 'workspace-1',
         contact: {
           ...contact,
-          instagramUsername: null,
+          instagramDisplayHandle: null,
           instagram: {
             isAvailable: false,
             state: 'UNAVAILABLE',

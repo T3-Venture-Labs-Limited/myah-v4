@@ -156,7 +156,7 @@ describe('Filter by relation field (e2e)', () => {
 
     await makeGraphqlAPIRequest(createPets);
 
-    await makeGraphqlAPIRequest(
+    const creatorsResponse = await makeGraphqlAPIRequest(
       createManyOperationFactory({
         objectMetadataSingularName: 'creator',
         objectMetadataPluralName: 'creators',
@@ -165,28 +165,26 @@ describe('Filter by relation field (e2e)', () => {
           {
             id: TEST_CREATOR_IDS.MATCHING,
             name: 'Matching creator',
-            twitterFollowerCount: 100,
           },
           {
             id: TEST_CREATOR_IDS.NON_MEMBER,
             name: 'Non-member creator',
-            twitterFollowerCount: 200,
           },
           {
             id: TEST_CREATOR_IDS.ZERO_CHILD,
             name: 'Creator without memberships',
-            twitterFollowerCount: 300,
           },
           {
             id: TEST_CREATOR_IDS.SOFT_DELETED_CHILD,
             name: 'Creator with a soft-deleted membership',
-            twitterFollowerCount: 400,
           },
         ],
         upsert: true,
       }),
     );
-    await makeGraphqlAPIRequest(
+    expect(creatorsResponse.body.errors).toBeUndefined();
+
+    const listsResponse = await makeGraphqlAPIRequest(
       createManyOperationFactory({
         objectMetadataSingularName: 'creatorList',
         objectMetadataPluralName: 'creatorLists',
@@ -198,7 +196,9 @@ describe('Filter by relation field (e2e)', () => {
         upsert: true,
       }),
     );
-    await makeGraphqlAPIRequest(
+    expect(listsResponse.body.errors).toBeUndefined();
+
+    const membersResponse = await makeGraphqlAPIRequest(
       createManyOperationFactory({
         objectMetadataSingularName: 'creatorListMember',
         objectMetadataPluralName: 'creatorListMembers',
@@ -232,6 +232,7 @@ describe('Filter by relation field (e2e)', () => {
         upsert: true,
       }),
     );
+    expect(membersResponse.body.errors).toBeUndefined();
   });
 
   it('should filter people by company name (exact match)', async () => {
@@ -708,7 +709,6 @@ describe('Filter by relation field (e2e)', () => {
         query Creators($filter: CreatorFilterInput) {
           creators(filter: $filter, first: 10) {
             totalCount
-            sumTwitterFollowerCount
             edges {
               node {
                 id
@@ -735,7 +735,7 @@ describe('Filter by relation field (e2e)', () => {
 
     expect(response.body.errors).toBeUndefined();
     expect(response.body.data.creators.totalCount).toBe(1);
-    expect(response.body.data.creators.sumTwitterFollowerCount).toBe(100);
+    expect(response.body.data.creators.edges).toHaveLength(1);
   });
 
   it('should not match a one-to-many relation through a soft-deleted child', async () => {

@@ -411,14 +411,16 @@ describe('Field permissions restrictions', () => {
       objectMetadataSingularName: 'company',
       objectMetadataPluralName: 'companies',
       gqlFields: COMPANY_GQL_FIELDS_WITH_PEOPLE_JOB_TITLE,
+      filter: { id: { eq: companyId } },
     });
     const response =
       await makeGraphqlAPIRequestWithMemberRole(graphqlOperation);
 
     expectNoGraphQLErrors(response);
+    expect(response.body.data.companies.edges[0].node.id).toBe(companyId);
     expect(
-      response.body.data.companies.edges[0].node.people.edges[0].node.jobTitle,
-    ).toBeDefined();
+      response.body.data.companies.edges[0].node.people.edges[0].node,
+    ).toEqual(expect.objectContaining({ id: personId, jobTitle: 'Paris' }));
   });
 
   it('should reject a filter-only one-to-many target field without read permission', async () => {

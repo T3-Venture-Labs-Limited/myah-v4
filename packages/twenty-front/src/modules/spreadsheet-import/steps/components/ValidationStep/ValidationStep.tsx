@@ -75,6 +75,24 @@ const StyledErrorToggleDescription = styled.span`
   margin-left: ${themeCssVariables.spacing[2]};
 `;
 
+const StyledValidationPreview = styled.div`
+  border-bottom: 1px solid ${themeCssVariables.border.color.light};
+  display: grid;
+  gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[3]};
+`;
+
+const StyledValidationPreviewTitle = styled.div`
+  color: ${themeCssVariables.font.color.primary};
+  font-size: ${themeCssVariables.font.size.md};
+  font-weight: ${themeCssVariables.font.weight.semiBold};
+`;
+
+const StyledValidationPreviewSection = styled.div`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
+`;
+
 const StyledScrollContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -123,6 +141,7 @@ export const ValidationStep = ({
     tableHook,
     beforeSubmitHook,
     getSubmissionBlockReason,
+    getValidationPreview,
   } = useSpreadsheetImportInternal();
 
   const [data, setData] = useState<
@@ -140,6 +159,9 @@ export const ValidationStep = ({
   // Guards duplicate submissions synchronously before React commits state.
   // oxlint-disable-next-line twenty/no-state-useref
   const isSubmittingRef = useRef(false);
+  const [failedSubmissionRows, setFailedSubmissionRows] = useState<
+    typeof data | null
+  >(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedRows, setSelectedRows] = useState<
     ReadonlySet<number | string>
@@ -236,6 +258,14 @@ export const ValidationStep = ({
     return data;
   }, [data, filterByErrors]);
 
+  const validationPreview = useMemo(() => {
+    if (data.length === 0 || !isDefined(getValidationPreview)) {
+      return undefined;
+    }
+
+    return getValidationPreview(data[0]);
+  }, [data, getValidationPreview]);
+
   const rowKeyGetter = useCallback(
     (row: ImportedStructuredRow & ImportedStructuredRowMetadata) => row.__index,
     [],
@@ -248,6 +278,7 @@ export const ValidationStep = ({
         if (isDefined(__errors)) {
           for (const key in __errors) {
             if (__errors[key].level === 'error') {
+              // SAFETY: only validation metadata keys are removed from a structured row.
               acc.invalidStructuredRows.push(
                 values as unknown as ImportedStructuredRow,
               );
@@ -255,26 +286,45 @@ export const ValidationStep = ({
             }
           }
         }
+        // SAFETY: only validation metadata keys are removed from a structured row.
         acc.validStructuredRows.push(
           values as unknown as ImportedStructuredRow,
         );
+        acc.validStructuredRowIndexes.push(__index);
         return acc;
       },
       {
         validStructuredRows: [] as ImportedStructuredRow[],
+        validStructuredRowIndexes: [] as string[],
         invalidStructuredRows: [] as ImportedStructuredRow[],
         allStructuredRows: rows,
       } satisfies SpreadsheetImportImportValidationResult,
     );
 
-    setCurrentStepState({
-      type: SpreadsheetImportStepType.importData,
-      recordsToImportCount: calculatedData.validStructuredRows.length,
-    });
-    hideStepBar();
-
-    await onSubmit(calculatedData, file);
-    onClose();
+    try {
+      await onSubmit(calculatedData, file);
+      setFailedSubmissionRows(null);
+      setCurrentStepState({
+        type: SpreadsheetImportStepType.importData,
+        recordsToImportCount: calculatedData.validStructuredRows.length,
+      });
+      hideStepBar();
+      onClose();
+    } catch {
+      // Retry within this dialog reuses the exact rows and Creator attempt key.
+      setFailedSubmissionRows(rows);
+      setCurrentStepState({
+        type: SpreadsheetImportStepType.validateData,
+        data: rows,
+        importedColumns,
+      });
+      enqueueDialog({
+        title: 'Import may be incomplete',
+        message:
+          'Some rows may already have been imported. Review your records before starting another import.',
+        buttons: [{ title: t`Return` }],
+      });
+    }
   };
   const onContinue = async () => {
     if (isSubmittingRef.current) {
@@ -285,6 +335,11 @@ export const ValidationStep = ({
     setIsSubmitting(true);
 
     try {
+      if (failedSubmissionRows) {
+        await submitData(failedSubmissionRows);
+        return;
+      }
+
       await beforeSubmitHook?.(dataRef.current);
 
       const refreshedRows = addErrorsAndRunHooks(
@@ -367,6 +422,19 @@ export const ValidationStep = ({
     <>
       <ModalContent noPadding>
         <StyledContentWrapper>
+          {validationPreview && (
+            <StyledValidationPreview data-testid="spreadsheet-import-validation-preview">
+              <StyledValidationPreviewTitle>
+                {validationPreview.title}
+              </StyledValidationPreviewTitle>
+              {validationPreview.sections.map((section) => (
+                <StyledValidationPreviewSection key={section.label}>
+                  <strong>{section.label}:</strong>{' '}
+                  {section.items.length > 0 ? section.items.join(', ') : 'None'}
+                </StyledValidationPreviewSection>
+              ))}
+            </StyledValidationPreview>
+          )}
           {filterByErrors && tableData.length === 0 ? (
             <StyledNoRowsWithErrorsContainer>
               <Trans>No rows with errors</Trans>

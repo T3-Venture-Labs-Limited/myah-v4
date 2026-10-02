@@ -30,6 +30,7 @@ import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { type SocialProfileRecord } from 'src/modules/myah-creator-social-profile/types/social-profile-record.type';
 import {
   UnipileInstagramAccountBindingEntity,
   UnipileInstagramAccountBindingStatus,
@@ -45,9 +46,11 @@ export type InstagramMessageAuthorityDraftRow = {
   recipientProviderId: string | null;
   conversationId: string | null;
   sentAt: Date | null;
-  creatorInstagramUsername: string | null;
-  creatorInstagramUrl: string | null;
-  creatorInstagramLinkPrimaryLinkUrl: string | null;
+  // Retained as optional type-only fixture fields for old in-memory evidence;
+  // current Creator rows never select these removed physical columns.
+  creatorInstagramUsername?: string | null;
+  creatorInstagramUrl?: string | null;
+  creatorInstagramLinkPrimaryLinkUrl?: string | null;
   providerConversationId: string | null;
   conversationRecipientIgsid: string | null;
   conversationRecipientUsername: string | null;
@@ -88,8 +91,9 @@ export class InstagramMessageLocalAuthorityReaderService {
   async rebuildExecutionAuthority(input: {
     workspaceId: string;
     binding: ExpectedActionBindingWithWorkspace;
+    rolePermissionConfig: RolePermissionConfig;
   }): Promise<InstagramMessageActionAuthority> {
-    return this.rebuildAuthority(input, false);
+    return this.rebuildAuthority(input, false, input.rolePermissionConfig);
   }
 
   // Historical reads never reconstruct a sendable draft or re-resolve a handle.
@@ -186,6 +190,9 @@ export class InstagramMessageLocalAuthorityReaderService {
       throw new Error('Instagram message source graph is unavailable');
     }
 
+    if (input.binding.actionVersion === 2 && !allowExistingTarget) {
+      throw new Error('Instagram historical recipient is unavailable');
+    }
     const workspace = await this.getWorkspace(input.workspaceId);
     const accountBinding = await this.getActiveAccountBinding(
       input.workspaceId,
@@ -208,6 +215,7 @@ export class InstagramMessageLocalAuthorityReaderService {
               composerInputDigest: input.binding.composerInputDigest,
             }
           : undefined,
+      rolePermissionConfig,
       approvalContext: {
         initiatorUserWorkspaceId: input.binding.initiatorUserWorkspaceId,
         threadId: input.binding.threadId,
@@ -247,6 +255,7 @@ export class InstagramMessageLocalAuthorityReaderService {
       snapshot: InstagramMessageIdentitySnapshot;
       composerInputDigest: string | null;
     };
+    rolePermissionConfig?: RolePermissionConfig;
     approvalContext: Pick<
       Extract<
         ExpectedActionBindingWithWorkspace,
@@ -260,12 +269,11 @@ export class InstagramMessageLocalAuthorityReaderService {
   }): Promise<InstagramMessageActionAuthority> {
     const draftKind =
       input.draft.kind === 'FIRST_MESSAGE' ? 'START_CHAT' : 'REPLY';
-    const recipient = resolveInstagramRecipient({
-      instagramUsername: input.draft.creatorInstagramUsername,
-      instagramUrl: input.draft.creatorInstagramUrl,
-      instagramLink: {
-        primaryLinkUrl: input.draft.creatorInstagramLinkPrimaryLinkUrl,
-      },
+    const recipient = await this.resolveAuthorityRecipient({
+      workspaceId: input.workspace.id,
+      draft: input.draft,
+      snapshot: input.v3?.snapshot,
+      rolePermissionConfig: input.rolePermissionConfig,
     });
     const recipientProviderId = input.v3
       ? input.v3.snapshot.providerId
@@ -338,15 +346,7 @@ export class InstagramMessageLocalAuthorityReaderService {
         kind: draftKind,
         creatorRecordId: input.draft.creatorId,
         recipientUsername: recipient.normalizedUsername,
-        recipientSourceValues: recipient.sourceFields.map((field) => ({
-          field,
-          value:
-            field === 'instagramUsername'
-              ? (input.draft.creatorInstagramUsername ?? '')
-              : field === 'instagramUrl'
-                ? (input.draft.creatorInstagramUrl ?? '')
-                : (input.draft.creatorInstagramLinkPrimaryLinkUrl ?? ''),
-        })),
+        recipientSourceValues: recipient.sourceValues,
         conversationRecordId: input.draft.conversationId,
         providerConversationId: input.draft.providerConversationId,
         recipientProviderId,
@@ -367,6 +367,118 @@ export class InstagramMessageLocalAuthorityReaderService {
           composerInputDigest: input.v3.composerInputDigest,
         })
       : buildLegacyInstagramMessageActionAuthority(authorityInput);
+  }
+
+  protected async resolveAuthorityRecipient(input: {
+    workspaceId: string;
+    draft: InstagramMessageAuthorityDraftRow;
+    snapshot?: InstagramMessageIdentitySnapshot;
+    rolePermissionConfig?: RolePermissionConfig;
+  }): Promise<{
+    normalizedUsername: string;
+    sourceValues: Array<{ field: string; value: string }>;
+  }> {
+    const profileId = input.snapshot?.recipientSourceValues.find(
+      ({ field }) => field === 'socialProfile.id',
+    )?.value;
+    // A historical scalar-only binding cannot prove ownership after the wide
+    // Creator columns are removed. Accepted/UNKNOWN receipt recovery reads its
+    // immutable snapshot separately and never executes this path.
+    if (input.snapshot && !profileId) {
+      throw new Error('Instagram historical recipient is unavailable');
+    }
+    if (!input.draft.creatorId || !input.draft.recipientUsername) {
+      throw new Error('Instagram draft recipient is unavailable');
+    }
+    const repository =
+      await this.globalWorkspaceOrmManager.getRepository<SocialProfileRecord>(
+        input.workspaceId,
+        'socialProfile',
+        input.rolePermissionConfig ?? { shouldBypassPermissionChecks: true },
+      );
+    const select = {
+      id: true,
+      creatorId: true,
+      handle: true,
+      profileUrl: true,
+      platformAccountId: true,
+    } as const;
+    const where = {
+      creatorId: input.draft.creatorId,
+      platform: 'INSTAGRAM' as const,
+      deletedAt: IsNull(),
+    };
+    let profile: SocialProfileRecord | undefined;
+    if (profileId) {
+      profile =
+        (await repository.findOne({
+          where: { ...where, id: profileId },
+          select,
+        })) ?? undefined;
+    } else {
+      const profiles = await repository.find({ where, select });
+      const matching = profiles.filter((candidate) => {
+        try {
+          return (
+            resolveInstagramRecipient({
+              instagramUsername: candidate.handle,
+              instagramUrl: candidate.profileUrl,
+              instagramLink: null,
+            }).normalizedUsername ===
+            input.draft.recipientUsername?.trim().toLowerCase()
+          );
+        } catch {
+          return false;
+        }
+      });
+      if (matching.length === 1) profile = matching[0];
+    }
+    if (!profile) throw new Error('Instagram draft recipient is unavailable');
+    if (input.rolePermissionConfig) {
+      const creators =
+        await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+          input.workspaceId,
+          'creator',
+          input.rolePermissionConfig,
+        );
+      const creator = await creators.findOne({
+        where: { id: profile.creatorId, deletedAt: IsNull() },
+        select: { id: true },
+      });
+      if (!creator) throw new Error('Instagram draft Creator is unavailable');
+    }
+
+    const resolved = resolveInstagramRecipient({
+      instagramUsername: profile.handle,
+      instagramUrl: profile.profileUrl,
+      instagramLink: null,
+    });
+    const sourceValues = [
+      { field: 'socialProfile.id', value: profile.id },
+      ...(profile.handle
+        ? [{ field: 'socialProfile.handle', value: profile.handle }]
+        : []),
+      ...(profile.profileUrl
+        ? [{ field: 'socialProfile.profileUrl', value: profile.profileUrl }]
+        : []),
+      ...(profile.platformAccountId
+        ? [
+            {
+              field: 'socialProfile.platformAccountId',
+              value: profile.platformAccountId,
+            },
+          ]
+        : []),
+    ];
+    if (
+      input.snapshot &&
+      JSON.stringify(input.snapshot.recipientSourceValues) !==
+        JSON.stringify(sourceValues)
+    ) {
+      throw new Error('Instagram draft recipient is stale');
+    }
+
+    return { normalizedUsername: resolved.normalizedUsername, sourceValues };
   }
 
   protected async assertNoLocalCurrentConversation(
@@ -431,9 +543,6 @@ export class InstagramMessageLocalAuthorityReaderService {
              d."id", d."body", d."revision", d."kind", d."creatorId",
              d."recipientUsername", d."recipientProviderId",
              d."conversationId", d."sentAt",
-             creator."instagramUsername" AS "creatorInstagramUsername",
-             creator."instagramUrl" AS "creatorInstagramUrl",
-             creator."instagramLinkPrimaryLinkUrl" AS "creatorInstagramLinkPrimaryLinkUrl",
              conversation."providerConversationId",
              conversation."creatorId" AS "conversationCreatorId",
              conversation."recipientIgsid" AS "conversationRecipientIgsid",
@@ -511,20 +620,9 @@ export class InstagramMessageLocalAuthorityReaderService {
       recipientProviderId: true,
       conversationId: true,
     });
-    const creator = draft.creatorId
-      ? await read<
-          ObjectRecord & {
-            instagramUsername: string | null;
-            instagramUrl: string | null;
-            instagramLink: { primaryLinkUrl: string | null } | null;
-          }
-        >('creator', draft.creatorId, {
-          id: true,
-          instagramUsername: true,
-          instagramUrl: true,
-          instagramLink: true,
-        })
-      : null;
+    if (draft.creatorId) {
+      await read('creator', draft.creatorId, { id: true });
+    }
     const conversation = draft.conversationId
       ? await read<
           ObjectRecord & {
@@ -549,10 +647,6 @@ export class InstagramMessageLocalAuthorityReaderService {
     return {
       ...draft,
       sentAt: null,
-      creatorInstagramUsername: creator?.instagramUsername ?? null,
-      creatorInstagramUrl: creator?.instagramUrl ?? null,
-      creatorInstagramLinkPrimaryLinkUrl:
-        creator?.instagramLink?.primaryLinkUrl ?? null,
       providerConversationId: conversation?.providerConversationId ?? null,
       conversationCreatorId: conversation?.creatorId ?? null,
       conversationRecipientIgsid: conversation?.recipientIgsid ?? null,

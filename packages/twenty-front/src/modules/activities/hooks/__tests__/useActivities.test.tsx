@@ -67,7 +67,9 @@ describe('useActivities', () => {
     );
 
     await act(async () => {
-      expect(await result.current.fetchMoreActivities()).toBeUndefined();
+      await expect(result.current.fetchMoreActivities()).rejects.toThrow(
+        'page failed',
+      );
       expect(await result.current.fetchMoreActivities()).toEqual([]);
     });
     expect(fetchMoreActivityTargets).toHaveBeenCalledTimes(2);
@@ -96,5 +98,51 @@ describe('useActivities', () => {
     });
 
     expect(result.current.activities).toEqual([mockActivity]);
+  });
+
+  it('does not silently swallow a failed fetch-more', async () => {
+    const { useActivityTargetsForTargetableObjects } = jest.requireMock(
+      '@/activities/hooks/useActivityTargetsForTargetableObjects',
+    );
+    const failure = new Error('Notes page unavailable');
+    useActivityTargetsForTargetableObjects.mockReturnValue({
+      activityTargets: [],
+      fetchMoreActivityTargets: jest.fn().mockResolvedValue({ error: failure }),
+    });
+
+    const { result } = renderHook(() =>
+      useActivities({
+        objectNameSingular: CoreObjectNameSingular.Note,
+        targetableObjects: [{ targetObjectNameSingular: 'creator', id: '123' }],
+        limit: 10,
+        activityTargetsOrderByVariables: [{}],
+      }),
+    );
+
+    await expect(result.current.fetchMoreActivities()).rejects.toBe(failure);
+  });
+
+  it('propagates denied target read instead of reporting successful empty', () => {
+    const { useActivityTargetsForTargetableObjects } = jest.requireMock(
+      '@/activities/hooks/useActivityTargetsForTargetableObjects',
+    );
+    useActivityTargetsForTargetableObjects.mockReturnValue({
+      activityTargets: [],
+      loadingActivityTargets: false,
+      totalCountActivityTargets: 0,
+      hasReadPermission: false,
+    });
+
+    const { result } = renderHook(() =>
+      useActivities({
+        objectNameSingular: CoreObjectNameSingular.Note,
+        targetableObjects: [{ targetObjectNameSingular: 'creator', id: '123' }],
+        limit: 10,
+        activityTargetsOrderByVariables: [{}],
+      }),
+    );
+
+    expect(result.current.hasReadPermission).toBe(false);
+    expect(result.current.activities).toEqual([]);
   });
 });

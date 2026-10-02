@@ -16,6 +16,7 @@ const STANDARD_FLAT_VIEW_FILTER_METADATA_BUILDERS_BY_OBJECT_NAME = {
   task: computeStandardTaskViewFilters,
   brandBrainUpdateProposal: computeMyahViewFilters,
   creator: computeMyahViewFilters,
+  socialProfile: computeMyahViewFilters,
   campaignCreator: computeMyahViewFilters,
   campaignCreatorList: computeMyahViewFilters,
   workflow: computeStandardWorkflowViewFilters,

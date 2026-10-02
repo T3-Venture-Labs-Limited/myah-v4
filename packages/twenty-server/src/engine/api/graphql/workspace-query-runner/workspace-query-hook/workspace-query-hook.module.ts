@@ -9,6 +9,7 @@ import { BlocklistQueryHookModule } from 'src/modules/blocklist/query-hooks/bloc
 import { DashboardQueryHookModule } from 'src/modules/dashboard/query-hooks/dashboard-query-hook.module';
 import { MessagingQueryHookModule } from 'src/modules/messaging/common/query-hooks/messaging-query-hook.module';
 import { MyahCampaignQueryHookModule } from 'src/modules/myah-campaign/query-hooks/myah-campaign-query-hook.module';
+import { MyahCreatorSocialProfileModule } from 'src/modules/myah-creator-social-profile/myah-creator-social-profile.module';
 import { NoteQueryHookModule } from 'src/modules/note/query-hooks/note-query-hook.module';
 import { TaskQueryHookModule } from 'src/modules/task/query-hooks/task-query-hook.module';
 import { WorkspaceMemberQueryHookModule } from 'src/modules/workspace-member/query-hooks/workspace-member-query-hook.module';
@@ -21,6 +22,7 @@ import { WorkspaceMemberQueryHookModule } from 'src/modules/workspace-member/que
     WorkspaceMemberQueryHookModule,
     NoteQueryHookModule,
     MyahCampaignQueryHookModule,
+    MyahCreatorSocialProfileModule,
     TaskQueryHookModule,
     DiscoveryModule,
   ],

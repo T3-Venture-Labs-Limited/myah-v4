@@ -1,33 +1,36 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
-import { CombinedGraphQLErrors } from '@apollo/client/errors';
-import { render as renderWithoutI18n, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import { messages as enMessages } from '~/locales/generated/en';
 import { type ReactNode } from 'react';
 
 import { FilesCard } from '@/activities/files/components/FilesCard';
 
-const render = (node: ReactNode) =>
-  renderWithoutI18n(<I18nProvider i18n={i18n}>{node}</I18nProvider>);
+const mockUseFindManyRecords = jest.fn();
+let canReadCreator = true;
 
-const mockUseAttachments = jest.fn();
-const mockUseObjectPermissionsForObject = jest.fn();
+jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
+  useFindManyRecords: (...args: unknown[]) => mockUseFindManyRecords(...args),
+}));
 
-jest.mock('@/activities/files/hooks/useAttachments', () => ({
-  useAttachments: (...args: unknown[]) => mockUseAttachments(...args),
+jest.mock('@/activities/files/components/AttachmentList', () => ({
+  AttachmentList: ({
+    attachments,
+    button,
+  }: {
+    attachments: Array<{ name: string }>;
+    button?: ReactNode;
+  }) => (
+    <div>
+      {attachments.map(({ name }) => name).join(', ')}
+      {button}
+    </div>
+  ),
 }));
 
 jest.mock('@/activities/components/SkeletonLoader', () => ({
   SkeletonLoader: () => <div>Loading files</div>,
-}));
-
-jest.mock('@/activities/files/components/AttachmentList', () => ({
-  AttachmentList: ({ attachments }: { attachments: Array<{ id: string }> }) => (
-    <div>{attachments.map(({ id }) => id).join(', ')}</div>
-  ),
-}));
-
-jest.mock('@/activities/files/components/DropZone', () => ({
-  DropZone: () => null,
 }));
 
 jest.mock('@/activities/files/hooks/useUploadAttachmentFile', () => ({
@@ -42,144 +45,99 @@ jest.mock('@/ui/layout/contexts/useTargetRecord', () => ({
 }));
 
 jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
-  useObjectMetadataItem: () => ({
-    objectMetadataItem: { id: 'creator-object-metadata-id' },
+  useObjectMetadataItem: ({
+    objectNameSingular,
+  }: {
+    objectNameSingular: string;
+  }) => ({
+    objectMetadataItem: { id: `${objectNameSingular}-object-metadata-id` },
   }),
 }));
 
 jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
-  useObjectPermissionsForObject: (...args: unknown[]) =>
-    mockUseObjectPermissionsForObject(...args),
+  useObjectPermissionsForObject: (objectMetadataId: string) => ({
+    canReadObjectRecords:
+      objectMetadataId === 'creator-object-metadata-id' ? canReadCreator : true,
+    canUpdateObjectRecords: true,
+  }),
 }));
 
 jest.mock('@/settings/roles/hooks/useHasPermissionFlag', () => ({
-  useHasPermissionFlag: () => false,
+  useHasPermissionFlag: () => true,
 }));
 
-const defaultAttachmentsResult = {
-  attachments: [],
+const cachedAttachment = { id: 'attachment-id', name: 'Private draft.pdf' };
+const defaultAttachmentResult = {
+  records: [cachedAttachment],
   loading: false,
-  hasReadPermission: true,
   error: undefined,
+  hasReadPermission: true,
 };
+
+const renderFilesCard = () =>
+  render(
+    <I18nProvider i18n={i18n}>
+      <FilesCard />
+    </I18nProvider>,
+  );
 
 describe('FilesCard', () => {
   beforeEach(() => {
-    mockUseAttachments.mockReturnValue(defaultAttachmentsResult);
-    mockUseObjectPermissionsForObject.mockReturnValue({
-      canReadObjectRecords: true,
-      canUpdateObjectRecords: false,
-    });
+    i18n.load('en', enMessages);
+    i18n.activate('en');
+    canReadCreator = true;
+    mockUseFindManyRecords.mockReturnValue(defaultAttachmentResult);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  it('shows the empty state after a successful read', () => {
-    render(<FilesCard />);
-
-    expect(screen.getByText('No Files')).toBeVisible();
-  });
-
-  it('does not claim there are no files when attachment reads are forbidden', () => {
-    mockUseAttachments.mockReturnValue({
-      ...defaultAttachmentsResult,
-      hasReadPermission: false,
-    });
-
-    render(<FilesCard />);
-
-    expect(
-      screen.getByText("You don't have permission to view files"),
-    ).toBeVisible();
-    expect(screen.queryByText('No Files')).not.toBeInTheDocument();
-  });
-
-  it('hides cached files after read permission is revoked', () => {
-    mockUseAttachments.mockReturnValue({
-      ...defaultAttachmentsResult,
-      attachments: [{ id: 'previously-visible-file' }],
-      hasReadPermission: false,
-    });
-
-    render(<FilesCard />);
-
-    expect(
-      screen.getByText("You don't have permission to view files"),
-    ).toBeVisible();
-    expect(
-      screen.queryByText('previously-visible-file'),
-    ).not.toBeInTheDocument();
-  });
-
-  it('does not claim there are no files when the initial read fails', () => {
-    mockUseAttachments.mockReturnValue({
-      ...defaultAttachmentsResult,
-      error: new Error('Unable to load files'),
-    });
-
-    render(<FilesCard />);
-
-    expect(screen.getByText("Files couldn't be loaded")).toBeVisible();
-    expect(screen.queryByText('No Files')).not.toBeInTheDocument();
-  });
-
-  it('hides cached files after target Creator read permission is revoked', () => {
-    mockUseAttachments.mockReturnValue({
-      ...defaultAttachmentsResult,
-      attachments: [{ id: 'previously-visible-file' }],
-    });
-    mockUseObjectPermissionsForObject.mockReturnValue({
-      canReadObjectRecords: false,
-      canUpdateObjectRecords: false,
-    });
-
-    render(<FilesCard />);
-
-    expect(
-      screen.getByText("You don't have permission to view files"),
-    ).toBeVisible();
-    expect(
-      screen.queryByText('previously-visible-file'),
-    ).not.toBeInTheDocument();
-  });
-
   it.each(['FORBIDDEN', 'UNAUTHENTICATED'])(
-    'hides cached files when the server responds %s despite stale local permission',
+    'hides cached files and upload on a %s GraphQL response even when local read permission remains true',
     (code) => {
-      mockUseAttachments.mockReturnValue({
-        ...defaultAttachmentsResult,
-        attachments: [{ id: 'previously-visible-file' }],
+      mockUseFindManyRecords.mockReturnValue({
+        ...defaultAttachmentResult,
         error: new CombinedGraphQLErrors({
           errors: [{ message: 'Access denied', extensions: { code } }],
-          data: null,
         }),
       });
 
-      render(<FilesCard />);
+      renderFilesCard();
 
+      expect(screen.getByText('Files are not available')).toBeVisible();
+      expect(screen.queryByText('Private draft.pdf')).not.toBeInTheDocument();
       expect(
-        screen.getByText("You don't have permission to view files"),
-      ).toBeVisible();
-      expect(
-        screen.queryByText('previously-visible-file'),
+        screen.queryByRole('button', { name: 'Add file' }),
       ).not.toBeInTheDocument();
+      expect(screen.queryByText('No Files')).not.toBeInTheDocument();
     },
   );
 
-  it('keeps cached files visible when a later read fails', () => {
-    mockUseAttachments.mockReturnValue({
-      ...defaultAttachmentsResult,
-      attachments: [{ id: 'cached-file' }],
-      error: new Error('Unable to refresh files'),
+  it('hides cached files and upload when the target Creator cannot be read', () => {
+    canReadCreator = false;
+
+    renderFilesCard();
+
+    expect(screen.getByText('Files are not available')).toBeVisible();
+    expect(screen.queryByText('Private draft.pdf')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add file' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('No Files')).not.toBeInTheDocument();
+  });
+
+  it('keeps cached files and upload visible but reports an ordinary failed refresh', () => {
+    mockUseFindManyRecords.mockReturnValue({
+      ...defaultAttachmentResult,
+      error: new Error('Connection lost'),
     });
 
-    render(<FilesCard />);
+    renderFilesCard();
 
-    expect(screen.getByText('cached-file')).toBeVisible();
-    expect(
-      screen.queryByText("Files couldn't be loaded"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText('Private draft.pdf')).toBeVisible();
+    expect(screen.getByText("Files couldn't be loaded")).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add file' })).toBeVisible();
+    expect(screen.queryByText('No Files')).not.toBeInTheDocument();
   });
 });

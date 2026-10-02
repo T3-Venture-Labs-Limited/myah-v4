@@ -249,7 +249,7 @@ describe('workflowResolver command menu item label', () => {
       .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
       .send({
         query: `
-          mutation UpdateWorkflow($id: ID!, $name: String) {
+          mutation UpdateWorkflow($id: UUID!, $name: String) {
             updateWorkflow(id: $id, data: { name: $name }) {
               id
               name
@@ -389,7 +389,7 @@ describe('workflowResolver command menu item label', () => {
         .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
         .send({
           query: `
-            mutation DestroyWorkflow($id: ID!) {
+            mutation DestroyWorkflow($id: UUID!) {
               destroyWorkflow(id: $id) {
                 id
               }

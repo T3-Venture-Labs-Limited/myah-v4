@@ -228,7 +228,7 @@ describe('redactJsonParserErrorMiddleware', () => {
     expect(registration).toBeGreaterThan(
       main.lastIndexOf('app.useBodyParser('),
     );
-    expect(registration).toBeLessThan(main.indexOf('await app.listen('));
+    expect(registration).toBeLessThan(main.indexOf('app.listen('));
   });
 
   describe.each([false, true])(

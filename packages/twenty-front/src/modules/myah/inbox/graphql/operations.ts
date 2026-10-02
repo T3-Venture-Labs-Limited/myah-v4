@@ -132,7 +132,7 @@ const MYAH_INBOX_CONTACT_FIELDS = gql`
     id
     identityKind
     displayName
-    instagramUsername
+    instagramDisplayHandle
     lastActivityAt
     latestChannel
     initialSelection {

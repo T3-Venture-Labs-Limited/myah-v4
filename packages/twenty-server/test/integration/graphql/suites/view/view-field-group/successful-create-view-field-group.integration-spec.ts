@@ -1,11 +1,11 @@
-import {
-  type ViewFieldGroupTestSetup,
-  cleanupViewFieldGroupTest,
-  setupViewFieldGroupTest,
-} from 'test/integration/graphql/suites/view/utils/setup-view-field-group-test.util';
+import { type ViewFieldGroupTestSetup } from 'test/integration/graphql/suites/view/utils/setup-view-field-group-test.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
 import { createOneViewFieldGroup } from 'test/integration/metadata/suites/view-field-group/utils/create-one-view-field-group.util';
 import { deleteOneViewFieldGroup } from 'test/integration/metadata/suites/view-field-group/utils/delete-one-view-field-group.util';
 import { destroyOneViewFieldGroup } from 'test/integration/metadata/suites/view-field-group/utils/destroy-one-view-field-group.util';
+import { createOneView } from 'test/integration/metadata/suites/view/utils/create-one-view.util';
+import { deleteOneView } from 'test/integration/metadata/suites/view/utils/delete-one-view.util';
+import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
 import { assertViewFieldGroupStructure } from 'test/integration/utils/view-test.util';
 import {
   type EachTestingContext,
@@ -28,11 +28,31 @@ describe('View Field Group Resolver - Successful Create Operations', () => {
   let createdViewFieldGroupId: string | undefined;
 
   beforeAll(async () => {
-    testSetup = await setupViewFieldGroupTest();
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular',
+      expectToFail: false,
+    });
+    const creator = objects.find((object) => object.nameSingular === 'creator');
+
+    expect(creator).toBeDefined();
+    const { data } = await createOneView({
+      input: {
+        icon: 'icon123',
+        objectMetadataId: creator!.id,
+        name: 'TestViewForFieldGroups',
+      },
+      expectToFail: false,
+    });
+    testSetup = {
+      testViewId: data.createView.id,
+      testObjectMetadataId: creator!.id,
+    };
   });
 
   afterAll(async () => {
-    await cleanupViewFieldGroupTest(testSetup.testObjectMetadataId);
+    await deleteOneView({ viewId: testSetup.testViewId, expectToFail: false });
+    await destroyOneView({ viewId: testSetup.testViewId, expectToFail: false });
   });
 
   afterEach(async () => {

@@ -14,9 +14,7 @@ import {
   updateViewFilterGroupData,
 } from 'test/integration/graphql/utils/view-data-factory.util';
 import { createTestViewWithGraphQL } from 'test/integration/graphql/utils/view-graphql.util';
-import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
-import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
 import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
 import { assertViewFilterGroupStructure } from 'test/integration/utils/view-test.util';
 import { jestExpectToBeDefined } from 'test/utils/jest-expect-to-be-defined.util.test';
@@ -40,38 +38,15 @@ describe('View Filter Group Resolver', () => {
   let createdViewFilterGroup: string[] = [];
 
   beforeAll(async () => {
-    const {
-      data: {
-        createOneObject: { id: objectMetadataId },
-      },
-    } = await createOneObjectMetadata({
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular',
       expectToFail: false,
-      input: {
-        nameSingular: 'myFilterGroupTestObject',
-        namePlural: 'myFilterGroupTestObjects',
-        labelSingular: 'My Filter Group Test Object',
-        labelPlural: 'My Filter Group Test Objects',
-        icon: 'Icon123',
-      },
     });
+    const creator = objects.find((object) => object.nameSingular === 'creator');
 
-    testObjectMetadataId = objectMetadataId;
-  });
-
-  afterAll(async () => {
-    await updateOneObjectMetadata({
-      expectToFail: false,
-      input: {
-        idToUpdate: testObjectMetadataId,
-        updatePayload: {
-          isActive: false,
-        },
-      },
-    });
-    await deleteOneObjectMetadata({
-      expectToFail: false,
-      input: { idToDelete: testObjectMetadataId },
-    });
+    expect(creator).toBeDefined();
+    testObjectMetadataId = creator!.id;
   });
 
   beforeEach(async () => {

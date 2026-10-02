@@ -1,3 +1,4 @@
+import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import {
   type InstagramMessageActionAuthority,
   type InstagramMessageV3ActionAuthority,
@@ -26,18 +27,21 @@ export type InstagramMessageAuthorityReader = {
   }) => Promise<'START_CHAT' | 'REPLY'>;
   assertReadyAfterReservation: (
     authority: InstagramMessageActionAuthority,
+    rolePermissionConfig: RolePermissionConfig,
   ) => Promise<void>;
   createDirectAuthority: (input: {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
     draftId: string;
     expectedRevision: number;
+    rolePermissionConfig: RolePermissionConfig;
   }) => Promise<InstagramMessageV3ActionAuthority>;
   createThreadReplyAuthority: (input: {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
     threadId: string;
     draftId: string;
+    rolePermissionConfig: RolePermissionConfig;
   }) => Promise<InstagramMessageV3ActionAuthority>;
   rebuildForReconciliation: (input: {
     workspaceId: string;
@@ -46,5 +50,6 @@ export type InstagramMessageAuthorityReader = {
   rebuildExecutionAuthority: (input: {
     workspaceId: string;
     binding: ExpectedActionBindingWithWorkspace;
+    rolePermissionConfig: RolePermissionConfig;
   }) => Promise<InstagramMessageActionAuthority>;
 };

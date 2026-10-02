@@ -519,8 +519,7 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // Preserve append-only ordering through exact approvals, Instagram adoption,
-    // Campaign layout, and outreach defaults without changing applied identities.
+    // Both profile commands, Campaign layout and outreach defaults remain append-only.
     const expectedTail = [
       '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
       '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
@@ -531,6 +530,8 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
       '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
       '2.20.0_RefreshMyahAssistantSkillsWorkspaceCommand_1789645911006',
+      '2.20.0_MigrateMyahCreatorSocialProfilesCommand_1789645911011',
+      '2.20.0_ScopeMyahCreatorSocialProfilesForwardCommand_1789645911012',
       '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
       '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
       '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',
@@ -558,6 +559,8 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
       '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
       '2.20.0_RefreshMyahAssistantSkillsWorkspaceCommand_1789645911006',
+      '2.20.0_MigrateMyahCreatorSocialProfilesCommand_1789645911011',
+      '2.20.0_ScopeMyahCreatorSocialProfilesForwardCommand_1789645911012',
       '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
       '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
       '2.20.0_ResynchronizeMyahCampaignLayoutCommand_1790537642854',

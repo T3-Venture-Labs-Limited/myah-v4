@@ -1,4 +1,3 @@
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import {
   ContextStorePageType,
   type CommandMenuContextApi,
@@ -31,8 +30,8 @@ const desired = () =>
   }).allFlatEntityMaps;
 const commandId =
   STANDARD_COMMAND_MENU_ITEMS.messageOnInstagram.universalIdentifier;
-const usernameId =
-  MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername.universalIdentifier;
+// Pinned historical field ID: never reassign to a new Creator field.
+const usernameId = '1186d5b4-385f-5566-a4ba-87b8f65cdee5';
 const Constructor =
   SynchronizeInstagramComposerMetadataCommand as unknown as new (
     ...params: unknown[]
@@ -85,7 +84,7 @@ const setup = (
 };
 
 describe('SynchronizeInstagramComposerMetadataCommand', () => {
-  it('fresh standard installation contains exactly one stable global command and username search field', () => {
+  it('fresh standard installation retains the stable global command without legacy Creator username search', () => {
     for (const maps of [desired(), desired()]) {
       const commands = Object.values(
         maps.flatCommandMenuItemMaps.byUniversalIdentifier,
@@ -109,7 +108,7 @@ describe('SynchronizeInstagramComposerMetadataCommand', () => {
         .filter(
           (field) => field.fieldMetadataUniversalIdentifier === usernameId,
         );
-      expect(fields).toHaveLength(1);
+      expect(fields).toHaveLength(0);
     }
   });
   it('upgrades a pre-feature workspace twice without duplicate command/search pairs and touches no app draft metadata', async () => {
@@ -131,11 +130,7 @@ describe('SynchronizeInstagramComposerMetadataCommand', () => {
       'searchFieldMetadata',
     ]);
     expect(operations.commandMenuItem.flatEntityToCreate).toHaveLength(1);
-    expect(operations.searchFieldMetadata.flatEntityToCreate).toHaveLength(1);
-    expect(
-      operations.searchFieldMetadata.flatEntityToCreate[0]
-        .fieldMetadataUniversalIdentifier,
-    ).toBe(usernameId);
+    expect(operations.searchFieldMetadata.flatEntityToCreate).toEqual([]);
     for (const operation of Object.values(operations) as {
       flatEntityToUpdate: unknown[];
       flatEntityToDelete: unknown[];

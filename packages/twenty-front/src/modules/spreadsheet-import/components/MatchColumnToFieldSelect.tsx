@@ -144,6 +144,7 @@ export const MatchColumnToFieldSelect = ({
           />
         ) : (
           <MatchColumnSelectFieldSelectDropdownContent
+            options={options}
             selectedValue={value}
             onSelectFieldMetadataItem={handleFieldMetadataItemSelect}
             onSelectSuggestedOption={handleSelectSuggestedOption}

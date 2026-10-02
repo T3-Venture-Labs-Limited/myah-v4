@@ -123,6 +123,7 @@ export class InstagramMessageSendService {
       initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
       draftId: input.draftId,
       expectedRevision: input.expectedRevision,
+      rolePermissionConfig: input.rolePermissionConfig,
     });
     const binding =
       await this.actionApprovalService.createApprovedInstagramMessageBinding(
@@ -224,6 +225,7 @@ export class InstagramMessageSendService {
     const authority = await this.authorityReader.rebuildExecutionAuthority({
       workspaceId: input.workspaceId,
       binding,
+      rolePermissionConfig: input.rolePermissionConfig,
     });
 
     if (
@@ -330,7 +332,10 @@ export class InstagramMessageSendService {
           throw new Error('Instagram approval changed');
       }
       // Provider verification and the final local fingerprint comparison run last.
-      await this.authorityReader.assertReadyAfterReservation(authority);
+      await this.authorityReader.assertReadyAfterReservation(
+        authority,
+        input.rolePermissionConfig,
+      );
     } catch {
       await this.budgetService.releasePreDispatch({
         workspaceId: input.workspaceId,

@@ -130,18 +130,16 @@ describe('Myah standard skills', () => {
       expect.stringContaining('request_approval immediately before'),
     );
     for (const fieldOrRelation of [
-      'gender',
       'source',
       'sourceUrl',
       'language',
-      'categories',
-      'niches',
-      'notes',
-      'instagram',
-      'tiktok',
-      'youtube',
-      'twitter',
-      'twitch',
+      'lastImportedAt',
+      'SocialProfile owns per-platform identity',
+      'find_many_social_profiles',
+      'create_one_social_profile',
+      'update_one_social_profile',
+      'create_one_note',
+      'create_one_note_target with note and targetCreator',
       'listMemberships',
       'campaignCreators',
       'inboxThreads',
@@ -157,6 +155,14 @@ describe('Myah standard skills', () => {
         expect.stringContaining(fieldOrRelation),
       );
     }
+    expect(creators.content).not.toContain('person.companyId');
+    expect(creators.content).not.toContain(
+      'Creator owns canonical identity, contact, source, and profile-state',
+    );
+    expect(creators.content).not.toContain('create_object_metadata');
+    expect(creators.content).not.toContain(
+      'Creator owns canonical identity, source, profile, social, and metric fields',
+    );
   });
 
   it('attaches an initial Creator List directly and gates only later changes through candidates', () => {
@@ -422,7 +428,7 @@ describe('Myah standard skills', () => {
     );
     expect(myahCampaigns.content).toEqual(
       expect.stringContaining(
-        'Do not conflate Campaign status with Creator status',
+        'Do not conflate Campaign status with CampaignCreator.stage',
       ),
     );
   });

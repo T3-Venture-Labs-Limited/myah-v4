@@ -597,6 +597,7 @@ const buildFieldPermissionHarness = (deniedField?: string) => {
     workspace,
     userWorkspaceId,
     workspaceMemberId,
+    workspaceMember: { id: workspaceMemberId },
     user: { id: 'user-id' },
   };
   let currentContext = authContext as {
@@ -618,10 +619,15 @@ const buildFieldPermissionHarness = (deniedField?: string) => {
       id: 'conversation-id',
       instagramAccountId: 'account-id',
     }),
+    find: jest
+      .fn()
+      .mockResolvedValue([{ handle: 'creator.name', profileUrl: null }]),
   };
-  // The real draft service executes its system/bypass SQL against this in-memory adapter.
+  // GET uses system context; saves keep the authenticated actor for trusted SQL.
   const query = jest.fn(async (sql: string) => {
-    expect(currentContext.type).toBe('system');
+    if (currentContext.type === 'user')
+      expect(currentContext).toBe(authContext);
+    else expect(currentContext.type).toBe('system');
     if (sql.includes('"myahSocialConversation"')) {
       return [
         {
@@ -631,9 +637,9 @@ const buildFieldPermissionHarness = (deniedField?: string) => {
         },
       ];
     }
-    if (sql.includes('"creator"')) {
-      return [{ instagramUsername: 'creator.name' }];
-    }
+    if (sql.includes('"creator"')) return [{ id: 'creator-id' }];
+    if (sql.includes('"socialProfile"'))
+      return [{ handle: 'creator.name', profileUrl: null }];
     if (sql.trimStart().startsWith('UPDATE')) return [[], 0];
     if (sql.trimStart().startsWith('INSERT')) return [];
 
@@ -670,7 +676,10 @@ const buildFieldPermissionHarness = (deniedField?: string) => {
   mockGetWorkspaceContext.mockImplementation(() => {
     expect(currentContext).toBe(authContext);
 
-    return { userWorkspaceRoleMap: new Map(), apiKeyRoleMap: new Map() };
+    return {
+      userWorkspaceRoleMap: { [userWorkspaceId]: 'current-role-id' },
+      apiKeyRoleMap: new Map(),
+    };
   });
   mockResolveRolePermissionConfig.mockReturnValue(rolePermissionConfig);
   const draftService = new InstagramMessageDraftService(

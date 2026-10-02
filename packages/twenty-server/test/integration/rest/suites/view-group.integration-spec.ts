@@ -1,7 +1,5 @@
-import { createOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/create-one-field-metadata.util';
-import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
-import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
-import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
+import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
 import { destroyOneViewGroup } from 'test/integration/metadata/suites/view-group/utils/destroy-one-view-group.util';
 import { makeRestAPIRequest } from 'test/integration/rest/utils/make-rest-api-request.util';
 import {
@@ -14,7 +12,6 @@ import {
 } from 'test/integration/rest/utils/view-rest-api.util';
 import { assertViewGroupStructure } from 'test/integration/utils/view-test.util';
 import { extractRecordIdsAndDatesAsExpectAny } from 'test/utils/extract-record-ids-and-dates-as-expect-any';
-import { FieldMetadataType } from 'twenty-shared/types';
 
 describe('View Group REST API', () => {
   let testObjectMetadataId: string;
@@ -23,52 +20,22 @@ describe('View Group REST API', () => {
   let testViewGroupId: string | undefined;
 
   beforeAll(async () => {
-    const {
-      data: {
-        createOneObject: { id: objectMetadataId },
-      },
-    } = await createOneObjectMetadata({
+    const { objects } = await findManyObjectMetadata({
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular fieldsList { id name type }',
       expectToFail: false,
-      input: {
-        nameSingular: 'testViewGroupObject',
-        namePlural: 'testViewGroupObjects',
-        labelSingular: 'Test View Group Object',
-        labelPlural: 'Test View Group Objects',
-        icon: 'IconGroup',
-      },
     });
+    const socialProfile = objects.find(
+      (object) => object.nameSingular === 'socialProfile',
+    );
+    const platform = socialProfile?.fieldsList?.find(
+      (field) => field.name === 'platform',
+    );
 
-    testObjectMetadataId = objectMetadataId;
-
-    const createFieldInput = {
-      name: 'testField',
-      label: 'Test Field',
-      type: FieldMetadataType.SELECT,
-      objectMetadataId: testObjectMetadataId,
-      isLabelSyncedWithName: true,
-      options: [
-        { label: 'Option 1', value: 'OPTION_1', color: 'blue', position: 0 },
-        { label: 'Option 2', value: 'OPTION_2', color: 'red', position: 1 },
-        { label: 'Option 3', value: 'OPTION_3', color: 'green', position: 2 },
-      ],
-    };
-
-    const {
-      data: {
-        createOneField: { id: fieldMetadataId },
-      },
-    } = await createOneFieldMetadata({
-      expectToFail: false,
-      input: createFieldInput,
-      gqlFields: `
-          id
-          name
-          label
-          isLabelSyncedWithName
-        `,
-    });
-
-    testFieldMetadataId = fieldMetadataId;
+    expect(socialProfile).toBeDefined();
+    expect(platform?.type).toBe('SELECT');
+    testObjectMetadataId = socialProfile!.id;
+    testFieldMetadataId = platform!.id;
 
     const testView = await createTestViewWithRestApi({
       name: 'Test View for Group Integration',
@@ -80,19 +47,7 @@ describe('View Group REST API', () => {
   });
 
   afterAll(async () => {
-    await updateOneObjectMetadata({
-      expectToFail: false,
-      input: {
-        idToUpdate: testObjectMetadataId,
-        updatePayload: {
-          isActive: false,
-        },
-      },
-    });
-    await deleteOneObjectMetadata({
-      expectToFail: false,
-      input: { idToDelete: testObjectMetadataId },
-    });
+    await destroyOneView({ viewId: testViewId, expectToFail: false });
   });
 
   afterEach(async () => {
@@ -131,9 +86,15 @@ describe('View Group REST API', () => {
 
       const returnedViewGroups = response.body;
 
-      expect(returnedViewGroups).toHaveLength(4);
-      // For a nullable field with three options, we expect groups for OPTION_1, OPTION_2, OPTION_3, and '' (empty string)
-      const expectedFieldValues = ['OPTION_1', 'OPTION_2', 'OPTION_3', ''];
+      expect(returnedViewGroups).toHaveLength(6);
+      const expectedFieldValues = [
+        'INSTAGRAM',
+        'TIKTOK',
+        'YOUTUBE',
+        'TWITTER',
+        'TWITCH',
+        'PATREON',
+      ];
 
       // Check structure and visibility for each group
       expectedFieldValues.forEach((expectedFieldValue) => {
@@ -157,7 +118,7 @@ describe('View Group REST API', () => {
       });
 
       const viewGroup = viewGroupsFromViewReponse.body.find(
-        (group: any) => group.fieldValue === 'OPTION_1',
+        (group: any) => group.fieldValue === 'INSTAGRAM',
       );
 
       const response = await makeRestAPIRequest({
@@ -170,7 +131,7 @@ describe('View Group REST API', () => {
       assertViewGroupStructure(response.body, {
         id: viewGroup.id,
         viewId: testViewId,
-        fieldValue: 'OPTION_1',
+        fieldValue: 'INSTAGRAM',
         isVisible: true,
       });
 

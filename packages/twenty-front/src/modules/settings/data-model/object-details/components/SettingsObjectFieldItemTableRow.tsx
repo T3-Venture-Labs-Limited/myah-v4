@@ -1,14 +1,8 @@
-import { useDeleteOneFieldMetadataItem } from '@/object-metadata/hooks/useDeleteOneFieldMetadataItem';
-import { useFieldMetadataItem } from '@/object-metadata/hooks/useFieldMetadataItem';
-import { useGetIsMetadataItemCustom } from '@/object-metadata/hooks/useGetIsMetadataItemCustom';
 import { useGetRelationMetadata } from '@/object-metadata/hooks/useGetRelationMetadata';
 import { isLabelIdentifierField } from '@/object-metadata/utils/isLabelIdentifierField';
-import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
-import { isObjectMetadataReadOnly } from '@/object-record/read-only/utils/isObjectMetadataReadOnly';
 import { SettingsItemTypeTag } from '@/settings/components/SettingsItemTypeTag';
 import { SettingsNameCellSecondaryLabel } from '@/settings/components/SettingsNameCellSecondaryLabel';
 import { RELATION_TYPES } from '@/settings/data-model/constants/RelationTypes';
-import { SettingsObjectFieldInactiveActionDropdown } from '@/settings/data-model/object-details/components/SettingsObjectFieldDisabledActionDropdown';
 import { settingsObjectFieldsFamilyState } from '@/settings/data-model/object-details/states/settingsObjectFieldsFamilyState';
 import { isFieldTypeSupportedInSettings } from '@/settings/data-model/utils/isFieldTypeSupportedInSettings';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
@@ -16,21 +10,13 @@ import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { useContext, useMemo } from 'react';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
 import { FieldMetadataType, SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import {
-  IconChevronRight,
-  IconMinus,
-  IconPlus,
-  useIcons,
-} from 'twenty-ui/icon';
+import { IconMinus, IconPlus, useIcons } from 'twenty-ui/icon';
 import { LightIconButton } from 'twenty-ui/input';
-import { UndecoratedLink } from 'twenty-ui/navigation';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 import { RelationType } from '~/generated-metadata/graphql';
-import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 import { type SettingsObjectDetailTableItem } from '~/pages/settings/data-model/types/SettingsObjectDetailTableItem';
 import { SettingsObjectFieldDataType } from './SettingsObjectFieldDataType';
 
@@ -57,12 +43,6 @@ const StyledNameLabel = styled.div`
   white-space: nowrap;
 `;
 
-const StyledIconChevronRightContainer = styled.span`
-  align-items: center;
-  color: ${themeCssVariables.font.color.tertiary};
-  display: flex;
-`;
-
 export const SettingsObjectFieldItemTableRow = ({
   settingsObjectDetailTableItem,
   mode,
@@ -72,17 +52,6 @@ export const SettingsObjectFieldItemTableRow = ({
   const { t } = useLingui();
   const { fieldMetadataItem, objectMetadataItem } =
     settingsObjectDetailTableItem;
-
-  const getIsMetadataItemCustom = useGetIsMetadataItemCustom();
-
-  const isDDLLocked = useAtomStateValue(isDDLLockedState);
-
-  const readonly =
-    isObjectMetadataReadOnly({
-      objectMetadataItem,
-    }) || isDDLLocked;
-
-  const navigate = useNavigateSettings();
 
   const { getIcon } = useIcons();
   const Icon = getIcon(fieldMetadataItem.icon);
@@ -107,22 +76,6 @@ export const SettingsObjectFieldItemTableRow = ({
   });
 
   const canToggleField = !isLabelIdentifier;
-
-  const linkToNavigate = getSettingsPath(SettingsPath.ObjectFieldEdit, {
-    objectNamePlural: objectMetadataItem.namePlural,
-    fieldName: fieldMetadataItem.name,
-  });
-
-  // oxlint-disable-next-line twenty/no-navigate-prefer-link
-  const navigateToFieldEdit = () =>
-    navigate(SettingsPath.ObjectFieldEdit, {
-      objectNamePlural: objectMetadataItem.namePlural,
-      fieldName: fieldMetadataItem.name,
-    });
-
-  const { activateMetadataField } = useFieldMetadataItem();
-
-  const { deleteOneFieldMetadataItem } = useDeleteOneFieldMetadataItem();
 
   const setSettingsObjectFields = useSetAtomFamilyState(
     settingsObjectFieldsFamilyState,
@@ -164,34 +117,31 @@ export const SettingsObjectFieldItemTableRow = ({
   return (
     <TableRow
       gridTemplateColumns={OBJECT_FIELD_TABLE_ROW_GRID_TEMPLATE_COLUMNS}
-      onClick={mode === 'view' ? navigateToFieldEdit : undefined}
     >
-      <UndecoratedLink to={linkToNavigate}>
-        <TableCell
-          color={themeCssVariables.font.color.primary}
-          gap={themeCssVariables.spacing[2]}
-        >
-          {isDefined(Icon) && (
-            <Icon
-              style={{
-                minWidth: theme.icon.size.md,
-              }}
-              size={theme.icon.size.md}
-              stroke={theme.icon.stroke.sm}
-            />
+      <TableCell
+        color={themeCssVariables.font.color.primary}
+        gap={themeCssVariables.spacing[2]}
+      >
+        {isDefined(Icon) && (
+          <Icon
+            style={{
+              minWidth: theme.icon.size.md,
+            }}
+            size={theme.icon.size.md}
+            stroke={theme.icon.stroke.sm}
+          />
+        )}
+        <StyledNameContainer>
+          <StyledNameLabel title={fieldMetadataItem.label}>
+            {fieldMetadataItem.label}
+          </StyledNameLabel>
+          {!fieldMetadataItem.isActive && (
+            <SettingsNameCellSecondaryLabel>
+              {t`Deactivated`}
+            </SettingsNameCellSecondaryLabel>
           )}
-          <StyledNameContainer>
-            <StyledNameLabel title={fieldMetadataItem.label}>
-              {fieldMetadataItem.label}
-            </StyledNameLabel>
-            {!fieldMetadataItem.isActive && (
-              <SettingsNameCellSecondaryLabel>
-                {t`Deactivated`}
-              </SettingsNameCellSecondaryLabel>
-            )}
-          </StyledNameContainer>
-        </TableCell>
-      </UndecoratedLink>
+        </StyledNameContainer>
+      </TableCell>
 
       <TableCell>
         <SettingsItemTypeTag
@@ -209,7 +159,7 @@ export const SettingsObjectFieldItemTableRow = ({
           }
           to={
             isRelatedObjectLinkable
-              ? getSettingsPath(SettingsPath.Objects, {
+              ? getSettingsPath(SettingsPath.ObjectDetail, {
                   objectNamePlural: relationObjectMetadataItem.namePlural,
                 })
               : undefined
@@ -226,44 +176,9 @@ export const SettingsObjectFieldItemTableRow = ({
         align="center"
         padding={`0 ${themeCssVariables.spacing[1]} 0 ${themeCssVariables.spacing[2]}`}
       >
-        {status === 'active' ? (
-          mode === 'view' ? (
-            <UndecoratedLink to={linkToNavigate}>
-              <StyledIconChevronRightContainer>
-                <IconChevronRight
-                  size={theme.icon.size.md}
-                  stroke={theme.icon.stroke.sm}
-                />
-              </StyledIconChevronRightContainer>
-            </UndecoratedLink>
-          ) : (
-            canToggleField && (
-              <LightIconButton
-                Icon={IconMinus}
-                accent="tertiary"
-                onClick={handleToggleField}
-              />
-            )
-          )
-        ) : mode === 'view' ? (
-          <SettingsObjectFieldInactiveActionDropdown
-            isCustomField={getIsMetadataItemCustom(fieldMetadataItem)}
-            isSystemField={fieldMetadataItem.isSystem === true}
-            readonly={readonly}
-            fieldMetadataItemId={fieldMetadataItem.id}
-            onEdit={navigateToFieldEdit}
-            onActivate={() =>
-              activateMetadataField(fieldMetadataItem.id, objectMetadataItem.id)
-            }
-            onDelete={() =>
-              deleteOneFieldMetadataItem({
-                idToDelete: fieldMetadataItem.id,
-              })
-            }
-          />
-        ) : (
+        {mode === 'new-field' && canToggleField && (
           <LightIconButton
-            Icon={IconPlus}
+            Icon={status === 'active' ? IconMinus : IconPlus}
             accent="tertiary"
             onClick={handleToggleField}
           />

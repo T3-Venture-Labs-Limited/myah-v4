@@ -166,6 +166,13 @@ jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
           hasReadPermission: true,
         },
 }));
+jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
+  useFindManyRecords: () => ({
+    records: [],
+    hasReadPermission: false,
+    hasNextPage: false,
+  }),
+}));
 jest.mock('@/activities/notes/components/NotesCard', () => ({
   NotesCard: () => <div>Native private Creator notes</div>,
 }));

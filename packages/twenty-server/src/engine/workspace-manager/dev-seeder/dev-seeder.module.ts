@@ -8,6 +8,7 @@ import { ApplicationModule } from 'src/engine/core-modules/application/applicati
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { SdkClientModule } from 'src/engine/core-modules/sdk-client/sdk-client.module';
 import { SecretEncryptionModule } from 'src/engine/core-modules/secret-encryption/secret-encryption.module';
+import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { FileStorageModule } from 'src/engine/core-modules/file-storage/file-storage.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
@@ -59,6 +60,7 @@ import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace
     TwentyStandardApplicationModule,
     SdkClientModule,
     SecretEncryptionModule,
+    MyahInboxContactTriageModule,
     UpgradeModule,
   ],
   exports: [DevSeederService],

@@ -252,10 +252,16 @@ export class InstagramMessageResolver {
           rolePermissionConfig,
         });
 
+        const authContext = getWorkspaceAuthContext();
+        if (!isUserAuthContext(authContext)) {
+          throw new ForbiddenException('Instagram messaging requires a user');
+        }
         const result = await this.draftService.saveDraft({
           ...input,
           workspaceId: workspace.id,
           workspaceMemberId,
+          rolePermissionConfig,
+          authContext,
         });
         if (result.status === 'CONFLICT') {
           await this.recordAccessService.assertCanReadDraft({

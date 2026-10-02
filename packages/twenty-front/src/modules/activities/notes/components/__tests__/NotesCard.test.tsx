@@ -1,10 +1,13 @@
-import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { render, screen } from '@testing-library/react';
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
+import { i18n } from '@lingui/core';
+import { type ReactNode } from 'react';
+import { messages as enMessages } from '~/locales/generated/en';
 
 import { NotesCard } from '@/activities/notes/components/NotesCard';
 
 const mockUseNotes = jest.fn();
-const mockUseObjectPermissionsForObject = jest.fn();
+let canReadCreator = true;
 
 jest.mock('@/activities/notes/hooks/useNotes', () => ({
   useNotes: (...args: unknown[]) => mockUseNotes(...args),
@@ -15,8 +18,17 @@ jest.mock('@/activities/components/SkeletonLoader', () => ({
 }));
 
 jest.mock('@/activities/notes/components/NoteList', () => ({
-  NoteList: ({ notes }: { notes: Array<{ title: string }> }) => (
-    <div>{notes.map(({ title }) => title).join(', ')}</div>
+  NoteList: ({
+    notes,
+    button,
+  }: {
+    notes: Array<{ title: string }>;
+    button?: ReactNode;
+  }) => (
+    <div>
+      {notes.map(({ title }) => title).join(', ')}
+      {button}
+    </div>
   ),
 }));
 
@@ -42,8 +54,10 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
 }));
 
 jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
-  useObjectPermissionsForObject: (...args: unknown[]) =>
-    mockUseObjectPermissionsForObject(...args),
+  useObjectPermissionsForObject: () => ({
+    canReadObjectRecords: canReadCreator,
+    canUpdateObjectRecords: true,
+  }),
 }));
 
 const defaultNotesResult = {
@@ -58,11 +72,8 @@ const defaultNotesResult = {
 
 describe('NotesCard', () => {
   beforeEach(() => {
+    canReadCreator = true;
     mockUseNotes.mockReturnValue(defaultNotesResult);
-    mockUseObjectPermissionsForObject.mockReturnValue({
-      canReadObjectRecords: true,
-      canUpdateObjectRecords: false,
-    });
   });
 
   afterEach(() => {
@@ -99,38 +110,6 @@ describe('NotesCard', () => {
     expect(screen.getByText('No notes')).toBeVisible();
   });
 
-  it('does not call a forbidden note read an empty state', () => {
-    mockUseNotes.mockReturnValue({
-      ...defaultNotesResult,
-      hasReadPermission: false,
-    });
-
-    render(<NotesCard />);
-
-    expect(
-      screen.getByText("You don't have permission to view notes"),
-    ).toBeVisible();
-    expect(screen.queryByText('No notes')).not.toBeInTheDocument();
-  });
-
-  it('hides cached notes after read permission is revoked', () => {
-    mockUseNotes.mockReturnValue({
-      ...defaultNotesResult,
-      notes: [{ id: 'note-id', title: 'Previously visible note' }],
-      totalCountNotes: 1,
-      hasReadPermission: false,
-    });
-
-    render(<NotesCard />);
-
-    expect(
-      screen.getByText("You don't have permission to view notes"),
-    ).toBeVisible();
-    expect(
-      screen.queryByText('Previously visible note'),
-    ).not.toBeInTheDocument();
-  });
-
   it('does not show the empty state when the initial read fails', () => {
     mockUseNotes.mockReturnValue({
       ...defaultNotesResult,
@@ -140,55 +119,94 @@ describe('NotesCard', () => {
     render(<NotesCard />);
 
     expect(screen.getByText("Notes couldn't be loaded")).toBeVisible();
+    expect(screen.queryByText('Unable to load notes')).not.toBeInTheDocument();
     expect(screen.queryByText('No notes')).not.toBeInTheDocument();
   });
 
-  it('hides cached notes after target Creator read permission is revoked', () => {
+  it.each([
+    { notes: [] },
+    { notes: [{ id: 'note-id', title: 'Cached private note' }] },
+  ])(
+    'shows forbidden instead of empty or cached notes when NoteTarget read is denied',
+    ({ notes }) => {
+      mockUseNotes.mockReturnValue({
+        ...defaultNotesResult,
+        notes,
+        hasReadPermission: false,
+      });
+
+      render(<NotesCard />);
+
+      expect(screen.getByText('Notes are not available')).toBeVisible();
+      expect(screen.queryByText('Cached private note')).not.toBeInTheDocument();
+      expect(screen.queryByText('No notes')).not.toBeInTheDocument();
+    },
+  );
+
+  it('renders readable English permission copy from the compiled catalog', () => {
+    expect(enMessages['kHzQBZ']).toEqual(['Notes are not available']);
+    expect(enMessages['tQBnDp']).toEqual([
+      "You don't have permission to view notes.",
+    ]);
+    i18n.load('en', enMessages);
+    i18n.activate('en');
     mockUseNotes.mockReturnValue({
       ...defaultNotesResult,
-      notes: [{ id: 'note-id', title: 'Previously visible note' }],
-      totalCountNotes: 1,
-    });
-    mockUseObjectPermissionsForObject.mockReturnValue({
-      canReadObjectRecords: false,
-      canUpdateObjectRecords: false,
+      hasReadPermission: false,
     });
 
     render(<NotesCard />);
 
+    expect(screen.getByText('Notes are not available')).toBeVisible();
     expect(
-      screen.getByText("You don't have permission to view notes"),
+      screen.getByText("You don't have permission to view notes."),
     ).toBeVisible();
-    expect(
-      screen.queryByText('Previously visible note'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('kHzQBZ')).not.toBeInTheDocument();
+    expect(screen.queryByText('tQBnDp')).not.toBeInTheDocument();
   });
 
   it.each(['FORBIDDEN', 'UNAUTHENTICATED'])(
-    'hides cached notes when the server responds %s despite stale local permission',
+    'hides cached notes and creation on a %s GraphQL response even when local read permission remains true',
     (code) => {
       mockUseNotes.mockReturnValue({
         ...defaultNotesResult,
-        notes: [{ id: 'note-id', title: 'Previously visible note' }],
+        notes: [{ id: 'note-id', title: 'Cached private note' }],
         totalCountNotes: 1,
         error: new CombinedGraphQLErrors({
           errors: [{ message: 'Access denied', extensions: { code } }],
-          data: null,
         }),
       });
 
       render(<NotesCard />);
 
+      expect(screen.getByText('Notes are not available')).toBeVisible();
+      expect(screen.queryByText('Cached private note')).not.toBeInTheDocument();
       expect(
-        screen.getByText("You don't have permission to view notes"),
-      ).toBeVisible();
-      expect(
-        screen.queryByText('Previously visible note'),
+        screen.queryByRole('button', { name: 'Add note' }),
       ).not.toBeInTheDocument();
+      expect(screen.queryByText('No notes')).not.toBeInTheDocument();
     },
   );
 
-  it('keeps cached notes visible when a later read fails', () => {
+  it('hides cached notes and creation when the target Creator cannot be read', () => {
+    canReadCreator = false;
+    mockUseNotes.mockReturnValue({
+      ...defaultNotesResult,
+      notes: [{ id: 'note-id', title: 'Cached private note' }],
+      totalCountNotes: 1,
+    });
+
+    render(<NotesCard />);
+
+    expect(screen.getByText('Notes are not available')).toBeVisible();
+    expect(screen.queryByText('Cached private note')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add note' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('No notes')).not.toBeInTheDocument();
+  });
+
+  it('reports a failed refresh while retaining cached notes', () => {
     mockUseNotes.mockReturnValue({
       ...defaultNotesResult,
       notes: [{ id: 'note-id', title: 'Cached creator note' }],
@@ -199,8 +217,8 @@ describe('NotesCard', () => {
     render(<NotesCard />);
 
     expect(screen.getByText('Cached creator note')).toBeVisible();
-    expect(
-      screen.queryByText("Notes couldn't be loaded"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Notes couldn't be loaded")).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeVisible();
+    expect(screen.queryByText('No notes')).not.toBeInTheDocument();
   });
 });

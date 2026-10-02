@@ -1,3 +1,4 @@
+import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useQueryExistingCreatorSocialProfiles } from '@/myah/creator-crm/spreadsheet-import/hooks/useQueryExistingCreatorSocialProfiles';
 import { buildCreatorSpreadsheetImportSession } from '@/myah/creator-crm/spreadsheet-import/utils/buildCreatorSpreadsheetImportSession';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
@@ -14,12 +15,33 @@ import { spreadsheetImportCreatedRecordsProgressState } from '@/spreadsheet-impo
 import { type SpreadsheetImportDialogOptions } from '@/spreadsheet-import/types';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { gql } from '@apollo/client';
+import { useApolloClient } from '@apollo/client/react';
+import { useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { useLingui } from '@lingui/react/macro';
+
+const COMMIT_CREATOR_IMPORT = gql`
+  mutation CommitCreatorImport($input: CommitCreatorImportInput!) {
+    commitCreatorImport(input: $input) {
+      receiptId
+      creatorId
+      socialProfileIds
+      noteId
+      noteTargetId
+      replayed
+    }
+  }
+`;
 
 export const useOpenObjectRecordsSpreadsheetImportDialog = (
   objectNameSingular: string,
 ) => {
   const apolloCoreClient = useApolloCoreClient();
+  const apolloMetadataClient = useApolloClient();
+  const [creatorImportAttemptKey, setCreatorImportAttemptKey] = useState<
+    string | null
+  >(null);
   const { openSpreadsheetImportDialog } = useOpenSpreadsheetImportDialog();
   const { buildSpreadsheetImportFields } = useBuildSpreadsheetImportFields();
 
@@ -74,6 +96,13 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
             queryExistingCreators: queryExistingCreatorSocialProfiles,
           })
         : undefined;
+    const currentCreatorImportAttemptKey = creatorSession
+      ? (creatorImportAttemptKey ?? uuidv4())
+      : null;
+
+    if (creatorSession && !creatorImportAttemptKey) {
+      setCreatorImportAttemptKey(currentCreatorImportAttemptKey);
+    }
     const nativeTableHook =
       spreadsheetImportGetUnicityTableHook(objectMetadataItem);
     const tableHook = creatorSession
@@ -87,19 +116,46 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
     openSpreadsheetImportDialog({
       ...options,
       onSubmit: async (data) => {
-        const createInputs = data.validStructuredRows.map((record) =>
-          buildRecordFromImportedStructuredRow({
-            importedStructuredRow: record,
-            fieldMetadataItems: availableFieldMetadataItemsToImport,
-            spreadsheetImportFields,
-          }),
-        );
+        const createInputs = creatorSession
+          ? []
+          : data.validStructuredRows.map((record) =>
+              buildRecordFromImportedStructuredRow({
+                importedStructuredRow: record,
+                fieldMetadataItems: availableFieldMetadataItemsToImport,
+                spreadsheetImportFields,
+              }),
+            );
 
         try {
-          if (!creatorSession || createInputs.length > 0) {
+          if (creatorSession && currentCreatorImportAttemptKey) {
+            for (const [rowIndex, row] of data.validStructuredRows.entries()) {
+              const sourceRowIndex = data.validStructuredRowIndexes[rowIndex];
+              if (!sourceRowIndex) {
+                throw new Error('Creator import row identity is unavailable');
+              }
+
+              await apolloMetadataClient.mutate({
+                mutation: COMMIT_CREATOR_IMPORT,
+                variables: {
+                  input: {
+                    attemptKey: currentCreatorImportAttemptKey,
+                    operationKey: `row-${sourceRowIndex}`,
+                    ...creatorSession.buildRowCommitPlan(row),
+                  },
+                },
+              });
+              setSpreadsheetImportCreatedRecordsProgress(rowIndex + 1);
+            }
+            setCreatorImportAttemptKey(null);
+            // Same table-reload signal the native batch-create path emits.
+            dispatchObjectRecordOperationBrowserEvent({
+              objectMetadataItem,
+              operation: { type: 'create-many' },
+            });
+          } else if (createInputs.length > 0) {
             await batchCreateManyRecords({
               recordsToCreate: createInputs,
-              upsert: !creatorSession,
+              upsert: true,
             });
           }
           await apolloCoreClient.refetchQueries({
@@ -118,13 +174,14 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
             );
 
             enqueueSuccessSnackBar({
-              message: t`Imported ${createInputs.length} creators. ${existing} already existed, ${conflicts} conflicted, and ${invalid} had validation errors.`,
+              message: t`Imported ${data.validStructuredRows.length} creators. ${existing} already existed, ${conflicts} conflicted, and ${invalid} had validation errors.`,
             });
           }
         } catch (error: any) {
           enqueueErrorSnackBar({
             apolloError: error,
           });
+          throw error;
         }
       },
       ...(creatorSession
@@ -134,12 +191,42 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
             matchColumnsStepHook: creatorSession.matchColumnsStepHook,
             beforeSubmitHook: creatorSession.beforeSubmitHook,
             getSubmissionBlockReason: creatorSession.getSubmissionBlockReason,
+            getValidationPreview: (row) => {
+              const preview = creatorSession.getRowPreview(row);
+
+              return {
+                title: t`First row preview`,
+                sections: [
+                  {
+                    label: t`Creator`,
+                    items: preview.creatorFields,
+                  },
+                  {
+                    label: t`Social profiles`,
+                    items: preview.socialProfiles.map(
+                      ({ platform, fields }) =>
+                        `${platform} (${fields.join(', ')})`,
+                    ),
+                  },
+                  {
+                    label: t`Supplementary note`,
+                    items: preview.supplementaryNoteFields,
+                  },
+                  {
+                    label: t`Excluded`,
+                    items: preview.excludedFields,
+                  },
+                ],
+              };
+            },
           }
         : {}),
-      spreadsheetImportFields,
+      spreadsheetImportFields:
+        creatorSession?.spreadsheetImportFields ?? spreadsheetImportFields,
       availableFieldMetadataItems: availableFieldMetadataItemsToImport,
       onAbortSubmit: () => {
         abortController.abort();
+        setCreatorImportAttemptKey(null);
       },
       tableHook,
     });

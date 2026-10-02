@@ -402,7 +402,7 @@ describe('relation connect in workspace createOne/createMany resolvers  (e2e)', 
     );
   });
 
-  it('should throw an error if connect field is not set with field from unique constraint', async () => {
+  it('rejects a connect key outside the current typed input before dispatch', async () => {
     const graphqlOperation = createOneOperationFactory({
       objectMetadataSingularName: 'person',
       gqlFields: PERSON_GQL_FIELDS_WITH_COMPANY,
@@ -420,10 +420,10 @@ describe('relation connect in workspace createOne/createMany resolvers  (e2e)', 
 
     expect(response.body.errors).toBeDefined();
     expect(response.body.errors[0].message).toBe(
-      "Missing required fields: at least one unique constraint have to be fully populated for 'company'.",
+      'Invalid GraphQL variable value.',
     );
     expect(response.body.errors[0].extensions.code).toBe(
-      ErrorCode.BAD_USER_INPUT,
+      ErrorCode.GRAPHQL_VALIDATION_FAILED,
     );
   });
 

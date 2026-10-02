@@ -70,6 +70,10 @@ export const useActivities = <T extends Task | Note>({
   const fetchMoreActivities = async () => {
     const result = await fetchMoreActivityTargets();
 
+    if (result?.error) {
+      throw result.error;
+    }
+
     if (!isDefined(result?.data)) {
       return undefined;
     }

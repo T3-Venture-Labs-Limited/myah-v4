@@ -145,7 +145,7 @@ export class MyahInboxContactSummary {
   lastActivityAt: string;
 
   @Field(() => String, { nullable: true })
-  instagramUsername: string | null;
+  instagramDisplayHandle: string | null;
 
   @Field(() => MyahInboxContactLatestChannel)
   latestChannel: MyahInboxContactLatestChannel;
