@@ -1,3 +1,4 @@
+import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useQueryExistingCreatorSocialProfiles } from '@/myah/creator-crm/spreadsheet-import/hooks/useQueryExistingCreatorSocialProfiles';
 import { buildCreatorSpreadsheetImportSession } from '@/myah/creator-crm/spreadsheet-import/utils/buildCreatorSpreadsheetImportSession';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
@@ -146,6 +147,11 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
               setSpreadsheetImportCreatedRecordsProgress(rowIndex + 1);
             }
             setCreatorImportAttemptKey(null);
+            // Same table-reload signal the native batch-create path emits.
+            dispatchObjectRecordOperationBrowserEvent({
+              objectMetadataItem,
+              operation: { type: 'create-many' },
+            });
           } else if (createInputs.length > 0) {
             await batchCreateManyRecords({
               recordsToCreate: createInputs,

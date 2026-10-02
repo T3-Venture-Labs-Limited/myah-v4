@@ -3,6 +3,7 @@ import { act } from 'react';
 import gql from 'graphql-tag';
 
 import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { OBJECT_RECORD_OPERATION_BROWSER_EVENT_NAME } from '@/browser-event/constants/ObjectRecordOperationBrowserEventName';
 import { spreadsheetImportDialogState } from '@/spreadsheet-import/states/spreadsheetImportDialogState';
 import { useOpenObjectRecordsSpreadsheetImportDialog } from '@/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog';
 import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
@@ -468,6 +469,13 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
         },
       },
     });
+    const recordOperationEvents: unknown[] = [];
+    const recordOperationListener = (event: Event) =>
+      recordOperationEvents.push((event as CustomEvent).detail);
+    window.addEventListener(
+      OBJECT_RECORD_OPERATION_BROWSER_EVENT_NAME,
+      recordOperationListener,
+    );
     const { result } = renderHook(
       () =>
         useOpenObjectRecordsSpreadsheetImportDialog('creator')
@@ -509,6 +517,10 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     expect(mockApolloCoreClient.refetchQueries).toHaveBeenCalledWith(
       expect.objectContaining({ updateCache: expect.any(Function) }),
     );
+    // An open Creator table reloads its rows, not only its count.
+    expect(recordOperationEvents).toEqual([
+      expect.objectContaining({ operation: { type: 'create-many' } }),
+    ]);
   });
 
   it('reuses the attempt and stable source-row identity after response loss', async () => {
