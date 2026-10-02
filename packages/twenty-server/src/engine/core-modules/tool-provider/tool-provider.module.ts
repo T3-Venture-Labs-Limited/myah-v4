@@ -6,7 +6,6 @@ import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-camp
 import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
 import { ActionToolProvider } from 'src/engine/core-modules/tool-provider/providers/action-tool.provider';
-import { DashboardToolProvider } from 'src/engine/core-modules/tool-provider/providers/dashboard-tool.provider';
 import { DatabaseToolProvider } from 'src/engine/core-modules/tool-provider/providers/database-tool.provider';
 import { LogicFunctionToolProvider } from 'src/engine/core-modules/tool-provider/providers/logic-function-tool.provider';
 import { MetadataToolProvider } from 'src/engine/core-modules/tool-provider/providers/metadata-tool.provider';
@@ -40,11 +39,10 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
 import { ToolIndexResolver } from './resolvers/tool-index.resolver';
 import { ToolRegistryService } from './services/tool-registry.service';
 
-// NOTE: This module does NOT import WorkflowToolsModule or DashboardToolsModule
-// directly: their service graphs transitively reach AiAgentExecutionModule which
-// forwardRef's back into ToolProviderModule. Those two @Global() modules provide
-// a service token that their respective providers consume via @Optional()
-// @Inject, breaking the cycle.
+// NOTE: This module does NOT import WorkflowToolsModule directly: its service
+// graph transitively reaches AiAgentExecutionModule which forwardRef's back into
+// ToolProviderModule. That @Global() module provides a service token that the
+// workflow provider consumes via @Optional() @Inject, breaking the cycle.
 //
 // Webhook and NavigationMenuItem do NOT have that cycle, so we import their
 // entity modules directly and the providers inject the services the normal way
@@ -78,7 +76,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
     ToolExecutorService,
     ExternalWritePolicyService,
     ActionToolProvider,
-    DashboardToolProvider,
     DatabaseToolProvider,
     MetadataToolProvider,
     NavigationMenuItemToolProvider,
@@ -104,7 +101,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
         viewProvider: ViewToolProvider,
         webhookProvider: WebhookToolProvider,
         workflowProvider: WorkflowToolProvider,
-        dashboardProvider: DashboardToolProvider,
         myahInboxProvider: MyahInboxToolProvider,
         myahCreatorOpsProvider: MyahCreatorOpsToolProvider,
         myahCampaignOutreachProvider: MyahCampaignOutreachToolProvider,
@@ -117,7 +113,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
         viewProvider,
         webhookProvider,
         workflowProvider,
-        dashboardProvider,
         myahInboxProvider,
         myahCreatorOpsProvider,
         myahCampaignOutreachProvider,
@@ -131,7 +126,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
         ViewToolProvider,
         WebhookToolProvider,
         WorkflowToolProvider,
-        DashboardToolProvider,
         MyahInboxToolProvider,
         MyahCreatorOpsToolProvider,
         MyahCampaignOutreachToolProvider,

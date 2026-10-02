@@ -5,9 +5,6 @@ export const STANDARD_SKILL = {
   'data-manipulation': {
     universalIdentifier: '20202020-0c39-4523-9543-e6c2a807937e',
   },
-  'dashboard-building': {
-    universalIdentifier: '20202020-ffdb-4623-abfb-036b9abeb121',
-  },
   'metadata-building': {
     universalIdentifier: '20202020-7b80-4a14-8fb9-d1512b89c078',
   },

@@ -121,17 +121,8 @@ describe('MyahNavigationRouteDispatcher', () => {
 
   it.each<{
     routes: ResolvedMyahNavigationRoute[];
-    initialEntry:
-      | '/myah/brand-brain'
-      | '/myah/segments'
-      | '/myah/creator-discovery';
+    initialEntry: '/myah/segments' | '/myah/creator-discovery';
   }>([
-    {
-      initialEntry: '/myah/brand-brain',
-      routes: [
-        { status: 'missing', route: getMyahNavigationRoute('brand-brain') },
-      ],
-    },
     {
       initialEntry: '/myah/segments',
       routes: [

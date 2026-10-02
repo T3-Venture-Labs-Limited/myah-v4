@@ -398,14 +398,6 @@ const SettingsAccountsEmails = lazy(() =>
   })),
 );
 
-const SettingsAccountsCalendars = lazy(() =>
-  import('~/pages/settings/accounts/SettingsAccountsCalendars').then(
-    (module) => ({
-      default: module.SettingsAccountsCalendars,
-    }),
-  ),
-);
-
 const SettingsAccountsInstagram = lazy(() =>
   import('~/pages/settings/accounts/SettingsAccountsInstagram').then(
     (module) => ({
@@ -700,10 +692,6 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.AccountsEmails}
           element={<SettingsAccountsEmails />}
-        />
-        <Route
-          path={SettingsPath.AccountsCalendars}
-          element={<SettingsAccountsCalendars />}
         />
         <Route
           path={SettingsPath.AccountsComposio}
