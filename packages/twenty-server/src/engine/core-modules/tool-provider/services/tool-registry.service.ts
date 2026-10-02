@@ -413,11 +413,7 @@ export class ToolRegistryService {
   ): T[] {
     const nativeToolNames = new Set(
       descriptors
-        .filter(
-          (descriptor) =>
-            descriptor.category === 'BRAND_BRAIN' ||
-            descriptor.category === 'MYAH_INBOX',
-        )
+        .filter((descriptor) => descriptor.category === 'MYAH_INBOX')
         .map((descriptor) => descriptor.name),
     );
 

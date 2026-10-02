@@ -9,12 +9,10 @@ import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomStat
 import { useCreateWorkspaceInvitation } from '@/workspace-invitation/hooks/useCreateWorkspaceInvitation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLingui } from '@lingui/react/macro';
-import { useQuery } from '@apollo/client/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { type SubmitHandler, useFieldArray, useForm } from 'react-hook-form';
 import { Key } from 'ts-key-enum';
 import { isDefined } from 'twenty-shared/utils';
-import { GetInviteSuggestionsDocument } from '~/generated-metadata/graphql';
 import { z } from 'zod';
 
 const validationSchema = z.object({
@@ -35,8 +33,7 @@ export const useInviteTeam = () => {
     control,
     handleSubmit,
     watch,
-    reset,
-    formState: { isValid, isSubmitting, isDirty },
+    formState: { isValid, isSubmitting },
   } = useForm<InviteTeamFormInput>({
     mode: 'onChange',
     defaultValues: {
@@ -49,41 +46,6 @@ export const useInviteTeam = () => {
     control,
     name: 'emails',
   });
-
-  const [hasPrefilledSuggestions, setHasPrefilledSuggestions] = useState(false);
-
-  const { data: inviteSuggestionsData } = useQuery(
-    GetInviteSuggestionsDocument,
-    {
-      fetchPolicy: 'cache-first',
-    },
-  );
-
-  const inviteSuggestions = useMemo(
-    () => inviteSuggestionsData?.getInviteSuggestions ?? [],
-    [inviteSuggestionsData],
-  );
-  const hasInviteSuggestions = inviteSuggestions.length > 0;
-
-  useEffect(() => {
-    if (hasPrefilledSuggestions || !hasInviteSuggestions || isDirty) {
-      return;
-    }
-
-    setHasPrefilledSuggestions(true);
-    reset({
-      emails: [
-        ...inviteSuggestions.map((suggestion) => ({ email: suggestion.email })),
-        { email: '' },
-      ],
-    });
-  }, [
-    hasPrefilledSuggestions,
-    hasInviteSuggestions,
-    inviteSuggestions,
-    isDirty,
-    reset,
-  ]);
 
   useEffect(() => {
     const subscription = watch(({ emails }) => {
