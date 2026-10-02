@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { CalendarModule } from 'src/modules/calendar/calendar.module';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
 import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execution/campaign-execution-orchestration.module';
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
@@ -11,7 +10,6 @@ import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-me
 @Module({
   imports: [
     MessagingModule,
-    CalendarModule,
     CampaignExecutionOrchestrationModule,
     ConnectedAccountModule,
     MyahUnipileModule,

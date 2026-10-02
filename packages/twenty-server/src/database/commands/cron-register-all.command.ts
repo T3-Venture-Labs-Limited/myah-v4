@@ -21,11 +21,7 @@ import { CheckCustomDomainValidRecordsCronCommand } from 'src/engine/core-module
 import { TrashCleanupCronCommand } from 'src/engine/trash-cleanup/commands/trash-cleanup.cron.command';
 import { CleanOnboardingWorkspacesCronCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/clean-onboarding-workspaces.cron.command';
 import { CleanSuspendedWorkspacesCronCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/clean-suspended-workspaces.cron.command';
-import { CalendarEventListFetchCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-event-list-fetch.cron.command';
 import { CampaignEmailRuntimeCronCommand } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.command';
-import { CalendarEventsImportCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-import.cron.command';
-import { CalendarOngoingStaleCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-ongoing-stale.cron.command';
-import { CalendarRelaunchFailedCalendarChannelsCronCommand } from 'src/modules/calendar/calendar-event-import-manager/crons/commands/calendar-relaunch-failed-calendar-channels.cron.command';
 import { MessagingMessageListFetchCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-message-list-fetch.cron.command';
 import { MessagingMessagesImportCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-messages-import.cron.command';
 import { MessagingOngoingStaleCronCommand } from 'src/modules/messaging/message-import-manager/crons/commands/messaging-ongoing-stale.cron.command';
@@ -49,11 +45,6 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly messagingMessageListFetchCronCommand: MessagingMessageListFetchCronCommand,
     private readonly messagingOngoingStaleCronCommand: MessagingOngoingStaleCronCommand,
     private readonly messagingRelaunchFailedMessageChannelsCronCommand: MessagingRelaunchFailedMessageChannelsCronCommand,
-
-    private readonly calendarEventListFetchCronCommand: CalendarEventListFetchCronCommand,
-    private readonly calendarEventsImportCronCommand: CalendarEventsImportCronCommand,
-    private readonly calendarOngoingStaleCronCommand: CalendarOngoingStaleCronCommand,
-    private readonly calendarRelaunchFailedCalendarChannelsCronCommand: CalendarRelaunchFailedCalendarChannelsCronCommand,
 
     private readonly workflowCronTriggerCronCommand: WorkflowCronTriggerCronCommand,
     private readonly workflowRunEnqueueCronCommand: WorkflowRunEnqueueCronCommand,
@@ -123,22 +114,6 @@ export class CronRegisterAllCommand extends CommandRunner {
       {
         name: 'MessagingRelaunchFailedMessageChannels',
         command: this.messagingRelaunchFailedMessageChannelsCronCommand,
-      },
-      {
-        name: 'CalendarEventListFetch',
-        command: this.calendarEventListFetchCronCommand,
-      },
-      {
-        name: 'CalendarEventsImport',
-        command: this.calendarEventsImportCronCommand,
-      },
-      {
-        name: 'CalendarOngoingStale',
-        command: this.calendarOngoingStaleCronCommand,
-      },
-      {
-        name: 'CalendarRelaunchFailedCalendarChannels',
-        command: this.calendarRelaunchFailedCalendarChannelsCronCommand,
       },
       {
         name: 'CheckCustomDomainValidRecords',

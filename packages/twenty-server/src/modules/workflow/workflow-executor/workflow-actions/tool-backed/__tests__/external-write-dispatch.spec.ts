@@ -2,7 +2,6 @@ import { WorkflowActionType } from 'twenty-shared/workflow';
 
 import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { WorkflowActionFactory } from 'src/modules/workflow/workflow-executor/factories/workflow-action.factory';
-import { CreateCalendarEventWorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/create-calendar-event/create-calendar-event.workflow-action';
 import { HttpRequestWorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/http-request/http-request.workflow-action';
 import { DraftEmailWorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/mail-sender/draft-email.workflow-action';
 import { SendEmailWorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/mail-sender/send-email.workflow-action';
@@ -20,7 +19,6 @@ const workflowRunStepLogService = {
 const externalWriteActionTypes = [
   WorkflowActionType.SEND_EMAIL,
   WorkflowActionType.DRAFT_EMAIL,
-  WorkflowActionType.CREATE_CALENDAR_EVENT,
   WorkflowActionType.HTTP_REQUEST,
 ] as const;
 
@@ -55,30 +53,6 @@ const buildInput = (type: ExternalWriteActionType): WorkflowActionInput => {
                 connectedAccountId: 'account-id',
                 recipients: { to: 'person@example.com' },
                 subject: 'Subject',
-              },
-            },
-          },
-        ],
-        context: {},
-        runInfo: { workspaceId: 'workspace-id', workflowRunId: 'run-id' },
-      };
-    case WorkflowActionType.CREATE_CALENDAR_EVENT:
-      return {
-        currentStepId: 'step-1',
-        steps: [
-          {
-            ...step,
-            type,
-            settings: {
-              ...baseSettings,
-              input: {
-                connectedAccountId: 'account-id',
-                title: 'Event',
-                startsAt: '2026-07-16T12:00:00.000Z',
-                endsAt: '2026-07-16T13:00:00.000Z',
-                isFullDay: false,
-                sendInvitations: false,
-                addConferencing: false,
               },
             },
           },
@@ -195,12 +169,6 @@ describe('workflow external write dispatch', () => {
         connectedAccountRepository,
         userWorkspaceRepository,
       );
-      const createCalendarEventWorkflowAction =
-        new CreateCalendarEventWorkflowAction(
-          tool as never,
-          workflowRunStepLogService,
-          externalWritePolicyService,
-        );
       const httpRequestWorkflowAction = new HttpRequestWorkflowAction(
         tool as never,
         workflowRunStepLogService,
@@ -222,7 +190,6 @@ describe('workflow external write dispatch', () => {
         httpRequestWorkflowAction,
         sendEmailWorkflowAction,
         draftEmailWorkflowAction,
-        createCalendarEventWorkflowAction,
         {} as never,
         {} as never,
         {} as never,

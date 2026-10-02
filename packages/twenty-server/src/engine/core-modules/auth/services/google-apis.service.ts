@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import {
-  CalendarChannelSyncStage,
   type CalendarChannelVisibility,
   ConnectedAccountProvider,
   MessageChannelSyncStage,
@@ -17,7 +16,6 @@ import {
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
 import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
-import { CreateCalendarChannelService } from 'src/engine/core-modules/auth/services/create-calendar-channel.service';
 import { CreateConnectedAccountService } from 'src/engine/core-modules/auth/services/create-connected-account.service';
 import { CreateMessageChannelService } from 'src/engine/core-modules/auth/services/create-message-channel.service';
 import { GoogleAPIScopesService } from 'src/engine/core-modules/auth/services/google-apis-scopes';
@@ -29,16 +27,10 @@ import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queu
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
-import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-import {
-  CalendarEventListFetchJob,
-  type CalendarEventListFetchJobData,
-} from 'src/modules/calendar/calendar-event-import-manager/jobs/calendar-event-list-fetch.job';
-import { CalendarChannelSyncStatusService } from 'src/modules/calendar/common/services/calendar-channel-sync-status.service';
 import { EmailAliasManagerService } from 'src/modules/connected-account/email-alias-manager/services/email-alias-manager.service';
 import { AccountsToReconnectService } from 'src/modules/connected-account/services/accounts-to-reconnect.service';
 
@@ -55,14 +47,10 @@ export class GoogleAPIsService {
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectMessageQueue(MessageQueue.messagingQueue)
     private readonly messageQueueService: MessageQueueService,
-    @InjectMessageQueue(MessageQueue.calendarQueue)
-    private readonly calendarQueueService: MessageQueueService,
     private readonly twentyConfigService: TwentyConfigService,
     private readonly accountsToReconnectService: AccountsToReconnectService,
     private readonly createMessageChannelService: CreateMessageChannelService,
     private readonly messagingChannelSyncStatusService: MessageChannelSyncStatusService,
-    private readonly calendarChannelSyncStatusService: CalendarChannelSyncStatusService,
-    private readonly createCalendarChannelService: CreateCalendarChannelService,
     private readonly createConnectedAccountService: CreateConnectedAccountService,
     private readonly updateConnectedAccountOnReconnectService: UpdateConnectedAccountOnReconnectService,
     private readonly googleAPIScopesService: GoogleAPIScopesService,
@@ -75,8 +63,6 @@ export class GoogleAPIsService {
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
-    @InjectRepository(CalendarChannelEntity)
-    private readonly calendarChannelRepository: Repository<CalendarChannelEntity>,
   ) {}
 
   async refreshGoogleRefreshToken(input: {
@@ -95,14 +81,9 @@ export class GoogleAPIsService {
       workspaceId,
       userId,
       workspaceMemberId,
-      calendarVisibility,
       messageVisibility,
       skipMessageChannelConfiguration,
     } = input;
-
-    const isCalendarEnabled = this.twentyConfigService.get(
-      'CALENDAR_PROVIDER_GOOGLE_ENABLED',
-    );
 
     const isMessagingEnabled = this.twentyConfigService.get(
       'MESSAGING_PROVIDER_GMAIL_ENABLED',
@@ -120,14 +101,14 @@ export class GoogleAPIsService {
       );
     }
 
-    const { isMessagingAvailable, isCalendarAvailable } =
+    const { isMessagingAvailable } =
       await this.googleApisServiceAvailabilityService.checkServicesAvailability(
         input.accessToken,
       );
 
-    if (!isMessagingAvailable && !isCalendarAvailable) {
+    if (!isMessagingAvailable) {
       throw new AuthException(
-        'Unable to connect: Your Google account does not have access to Gmail or Calendar. Please contact your workspace administrator.',
+        'Unable to connect: Your Google account does not have access to Gmail. Please contact your workspace administrator.',
         AuthExceptionCode.INSUFFICIENT_SCOPES,
       );
     }
@@ -162,14 +143,6 @@ export class GoogleAPIsService {
 
         const existingMessageChannels =
           await this.messageChannelRepository.find({
-            where: {
-              connectedAccountId: newOrExistingConnectedAccountId,
-              workspaceId,
-            },
-          });
-
-        const existingCalendarChannels =
-          await this.calendarChannelRepository.find({
             where: {
               connectedAccountId: newOrExistingConnectedAccountId,
               workspaceId,
@@ -219,21 +192,6 @@ export class GoogleAPIsService {
                 connectedAccountId: newOrExistingConnectedAccountId,
                 handle,
                 messageVisibility,
-                skipMessageChannelConfiguration,
-                transactionManager,
-              });
-            }
-
-            if (
-              isCalendarEnabled &&
-              isCalendarAvailable &&
-              existingCalendarChannels.length === 0
-            ) {
-              await this.createCalendarChannelService.createCalendarChannel({
-                workspaceId,
-                connectedAccountId: newOrExistingConnectedAccountId,
-                handle,
-                calendarVisibility,
                 skipMessageChannelConfiguration,
                 transactionManager,
               });
@@ -307,40 +265,6 @@ export class GoogleAPIsService {
                 await this.messageQueueService.add<MessagingMessageListFetchJobData>(
                   MessagingMessageListFetchJob.name,
                   { workspaceId, messageChannelId: messageChannel.id },
-                );
-              }
-            }
-          }
-        }
-
-        if (isCalendarEnabled) {
-          const calendarChannels = await this.calendarChannelRepository.find({
-            where: {
-              connectedAccountId: newOrExistingConnectedAccountId,
-              workspaceId,
-            },
-          });
-
-          if (!isCalendarAvailable && calendarChannels.length > 0) {
-            await this.calendarChannelSyncStatusService.markAsFailedInsufficientPermissionsAndFlushCalendarEventsToImport(
-              calendarChannels.map((channel) => channel.id),
-              workspaceId,
-            );
-          }
-
-          if (isCalendarAvailable) {
-            for (const calendarChannel of calendarChannels) {
-              if (
-                calendarChannel.syncStage !==
-                CalendarChannelSyncStage.PENDING_CONFIGURATION
-              ) {
-                await this.calendarChannelSyncStatusService.resetAndMarkAsCalendarEventListFetchPending(
-                  [calendarChannel.id],
-                  workspaceId,
-                );
-                await this.calendarQueueService.add<CalendarEventListFetchJobData>(
-                  CalendarEventListFetchJob.name,
-                  { workspaceId, calendarChannelId: calendarChannel.id },
                 );
               }
             }
