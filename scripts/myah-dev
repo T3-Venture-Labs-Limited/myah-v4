@@ -3,6 +3,7 @@
 #
 #   scripts/myah-dev up [--reset]   start Postgres/Redis containers, API, worker and frontend
 #   scripts/myah-dev down           stop everything and delete this environment's data
+#   scripts/myah-dev restart [api|worker|front]   restart one process (the worker does not hot-reload)
 #   scripts/myah-dev status         show URLs and process state
 #   scripts/myah-dev logs [api|worker|front]
 #
@@ -112,10 +113,26 @@ up() {
   echo "Waiting for the API (first start builds the server)..."
   wait_http "http://localhost:$API_PORT/healthz" 600 ||
     { echo "API did not start, see $STATE/api.log" >&2; exit 1; }
-  start_bg worker $(yarn_cmd) nx worker twenty-server
+  start_worker
   start_bg front $(yarn_cmd) nx start twenty-front
   wait_http "http://localhost:$FRONT_PORT" 300 || echo "Frontend still starting, see $STATE/front.log" >&2
   status
+}
+
+# The worker runs the API watcher's compiled output instead of a second watch compiler
+# (each `nest start --watch` holds ~5 GB). Use `restart worker` after changing worker code.
+start_worker() {
+  start_bg worker env -C "$ROOT/packages/twenty-server" NODE_ENV=development \
+    node dist/queue-worker/queue-worker.js
+}
+
+restart() {
+  case "${1:-}" in
+    api) stop_bg api; start_bg api $(yarn_cmd) nx start twenty-server ;;
+    worker) stop_bg worker; start_worker ;;
+    front) stop_bg front; start_bg front $(yarn_cmd) nx start twenty-front ;;
+    *) echo "usage: myah-dev restart api|worker|front" >&2; exit 1 ;;
+  esac
 }
 
 down() {
@@ -140,6 +157,7 @@ case "${1:-}" in
   up) up "${2:-}" ;;
   down) down ;;
   status) status ;;
+  restart) restart "${2:-}" ;;
   logs) tail -n 100 -f "$STATE/${2:-api}.log" ;;
-  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

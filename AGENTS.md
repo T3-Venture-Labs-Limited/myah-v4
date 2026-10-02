@@ -71,3 +71,5 @@ yarn workspace twenty-shared exec tsgo --noEmit -p ../../packages/twenty-server/
 ```
 
 Use the same commands with `twenty-front` or `twenty-shared` for those packages. Lint includes formatting. `lint:diff-with-main` only checks committed changes.
+
+For fast type feedback while editing, the language server `scripts/tsgo-lsp` (native `tsgo --lsp`, memory-capped; used by pi-lens through `.pi-lens.json`) checks an open file in seconds. Server and front code import `twenty-shared` from its build output, so if type errors mention missing `twenty-shared` exports, run `yarn nx build twenty-shared` (`scripts/myah-dev up` does this).

@@ -9,5 +9,30 @@
     "autoFix": {
       "enabled": false
     }
+  },
+  "lsp": {
+    "disabledServers": [
+      "typescript",
+      "deno"
+    ],
+    "servers": {
+      "tsgo": {
+        "name": "TypeScript (tsgo, memory-capped)",
+        "extensions": [
+          ".ts",
+          ".tsx",
+          ".mts",
+          ".cts"
+        ],
+        "command": "bash",
+        "args": [
+          "-c",
+          "exec \"$(git rev-parse --show-toplevel)/scripts/tsgo-lsp\""
+        ],
+        "rootMarkers": [
+          "tsconfig.json"
+        ]
+      }
+    }
   }
 }
