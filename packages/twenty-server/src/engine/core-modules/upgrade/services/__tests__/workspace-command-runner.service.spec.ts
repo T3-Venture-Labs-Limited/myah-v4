@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { Repository } from 'typeorm';
+import type { QueryRunner, Repository } from 'typeorm';
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
@@ -8,6 +8,7 @@ import type { TwentyConfigService } from 'src/engine/core-modules/twenty-config/
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import type { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
+import type { UpgradeWriteLockService } from 'src/engine/core-modules/upgrade/services/upgrade-write-lock.service';
 import {
   type RunWorkspaceCommandsArgs,
   WorkspaceCommandRunnerService,
@@ -64,6 +65,27 @@ const createHarness = () => {
   const invalidateInstanceAndAllWorkspacesStatus = jest
     .fn()
     .mockResolvedValue(undefined);
+  const pinned = {
+    isTransactionActive: false,
+    isReleased: false,
+    startTransaction: jest.fn(async () => {
+      pinned.isTransactionActive = true;
+    }),
+    commitTransaction: jest.fn(async () => {
+      pinned.isTransactionActive = false;
+    }),
+    rollbackTransaction: jest.fn(async () => {
+      pinned.isTransactionActive = false;
+    }),
+    manager: { getRepository: () => repository },
+    query: jest.fn(async (sql: string) => {
+      if (sql.includes('FROM core.workspace'))
+        return [{ databaseSchema: getWorkspaceSchemaName(workspaceId) }];
+      return sql.includes('information_schema.columns')
+        ? appSyncedColumns
+        : undefined;
+    }),
+  };
   const runner = new WorkspaceCommandRunnerService(
     {
       get: jest.fn().mockReturnValue('2.20.0'),
@@ -74,6 +96,9 @@ const createHarness = () => {
     {
       invalidateInstanceAndAllWorkspacesStatus,
     } as unknown as UpgradeStatusService,
+    {
+      currentRunner: () => pinned as unknown as QueryRunner,
+    } as UpgradeWriteLockService,
   );
   const query = jest.fn(async (sql: string) => {
     if (sql.includes('FROM core.workspace')) {
@@ -99,6 +124,7 @@ const createHarness = () => {
 
   return {
     runner,
+    pinned,
     repository,
     rows,
     query,
@@ -116,6 +142,106 @@ describe('WorkspaceCommandRunnerService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('rejects an unadapted command before its first database write', async () => {
+    const harness = createHarness();
+    const unadapted = jest.fn(async () => {
+      await harness.dataSource.query('unsafe write');
+    });
+
+    await expect(
+      harness.runner.runWorkspaceCommands({
+        iteratorContext: harness.iteratorContext,
+        options: {},
+        workspaceCommands: [
+          {
+            name: 'unadapted',
+            command: { runOnWorkspace: unadapted } as never,
+          },
+        ],
+      }),
+    ).rejects.toThrow('not adapted to the pinned upgrade transaction');
+    expect(unadapted).not.toHaveBeenCalled();
+    expect(harness.query).not.toHaveBeenCalled();
+    expect(harness.rows).toEqual([
+      {
+        name: 'unadapted',
+        workspaceId,
+        attempt: 1,
+        status: 'failed',
+        executedByVersion: '2.20.0',
+        errorMessage: expect.any(String),
+      },
+    ]);
+  });
+
+  it('runs metadata cache/events only after the completed receipt commits', async () => {
+    const harness = createHarness();
+    const afterCommitEffect = jest.fn();
+    const metadataCommand = {
+      runOnWorkspaceInUpgradeTransaction: jest.fn(
+        async (_args, _runner, afterCommit) => {
+          afterCommit(afterCommitEffect);
+          expect(afterCommitEffect).not.toHaveBeenCalled();
+        },
+      ),
+    } as never;
+
+    await harness.runner.runWorkspaceCommands({
+      iteratorContext: harness.iteratorContext,
+      options: {},
+      workspaceCommands: [{ name: 'metadata', command: metadataCommand }],
+    });
+    expect(harness.rows[0].status).toBe('completed');
+    expect(
+      harness.pinned.commitTransaction.mock.invocationCallOrder[0],
+    ).toBeLessThan(afterCommitEffect.mock.invocationCallOrder[0]);
+  });
+
+  it('does not claim a failed receipt when COMMIT outcome is uncertain', async () => {
+    const harness = createHarness();
+    harness.pinned.commitTransaction.mockRejectedValueOnce(
+      new Error('commit response lost'),
+    );
+
+    await expect(
+      harness.runner.runWorkspaceCommands({
+        iteratorContext: harness.iteratorContext,
+        options: {},
+        workspaceCommands: [harness.workspaceCommands[0]],
+      }),
+    ).rejects.toThrow('commit response lost');
+    expect(harness.rows).toHaveLength(1); // Mock repository cannot model server rollback; no second receipt.
+    expect(harness.rows[0].status).toBe('completed');
+    expect(harness.pinned.rollbackTransaction).not.toHaveBeenCalled();
+  });
+
+  it('does not emit a deferred metadata event if COMMIT fails', async () => {
+    const harness = createHarness();
+    const effect = jest.fn();
+    harness.pinned.commitTransaction.mockRejectedValueOnce(
+      new Error('commit response lost'),
+    );
+    await expect(
+      harness.runner.runWorkspaceCommands({
+        iteratorContext: harness.iteratorContext,
+        options: {},
+        workspaceCommands: [
+          {
+            name: 'metadata',
+            command: {
+              runOnWorkspaceInUpgradeTransaction: async (
+                _args: unknown,
+                _runner: unknown,
+                afterCommit: (effect: () => void) => void,
+              ) => afterCommit(effect),
+            } as never,
+          },
+        ],
+      }),
+    ).rejects.toThrow('commit response lost');
+    expect(effect).not.toHaveBeenCalled();
   });
 
   it('executes real authority and history commands in order before acknowledging each completion', async () => {
@@ -140,20 +266,26 @@ describe('WorkspaceCommandRunnerService', () => {
         errorMessage: null,
       })),
     );
-    expect(harness.query).toHaveBeenCalledTimes(4);
-    expect(harness.query.mock.calls[0][0]).toContain('send_instagram_reply');
-    expect(harness.query.mock.calls[1][0]).toContain('FROM core.workspace');
-    expect(harness.query.mock.calls[2][0]).toContain(
+    expect(harness.query).not.toHaveBeenCalled();
+    expect(harness.pinned.query).toHaveBeenCalledTimes(4);
+    expect(harness.pinned.commitTransaction).toHaveBeenCalledTimes(2);
+    expect(harness.pinned.query.mock.calls[0][0]).toContain(
+      'send_instagram_reply',
+    );
+    expect(harness.pinned.query.mock.calls[1][0]).toContain(
+      'FROM core.workspace',
+    );
+    expect(harness.pinned.query.mock.calls[2][0]).toContain(
       'information_schema.columns',
     );
-    expect(harness.query.mock.calls[3][0]).toContain('COMPOSIO_HISTORY');
-    expect(harness.query.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(harness.pinned.query.mock.calls[3][0]).toContain('COMPOSIO_HISTORY');
+    expect(harness.pinned.query.mock.invocationCallOrder[0]).toBeLessThan(
       harness.repository.save.mock.invocationCallOrder[0],
     );
     expect(harness.repository.save.mock.invocationCallOrder[0]).toBeLessThan(
-      harness.query.mock.invocationCallOrder[1],
+      harness.pinned.query.mock.invocationCallOrder[1],
     );
-    expect(harness.query.mock.invocationCallOrder[3]).toBeLessThan(
+    expect(harness.pinned.query.mock.invocationCallOrder[3]).toBeLessThan(
       harness.repository.save.mock.invocationCallOrder[1],
     );
   });

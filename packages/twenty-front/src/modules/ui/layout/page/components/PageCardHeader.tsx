@@ -23,19 +23,25 @@ type PageCardHeaderProps = {
   centerTitle?: boolean;
   titleColor?: string;
   showTitleOnMobile?: boolean;
+  reserveActionSpace?: boolean;
 };
 
-const StyledHeader = styled.div<{ centerTitle?: boolean }>`
+const StyledHeader = styled.div<{
+  centerTitle?: boolean;
+  reserveActionSpace?: boolean;
+}>`
   align-items: center;
   background-color: ${themeCssVariables.background.secondary};
   border-bottom: 1px solid ${themeCssVariables.border.color.medium};
   box-sizing: border-box;
   column-gap: ${themeCssVariables.spacing[2]};
   display: grid;
-  grid-template-columns: ${({ centerTitle }) =>
+  grid-template-columns: ${({ centerTitle, reserveActionSpace }) =>
     centerTitle
       ? 'minmax(0, 1fr) auto minmax(0, 1fr)'
-      : 'minmax(0, auto) minmax(0, 1fr)'};
+      : reserveActionSpace
+        ? 'minmax(0, 1fr) max-content'
+        : 'minmax(0, auto) minmax(0, 1fr)'};
   min-height: ${SIDE_PANEL_TOP_BAR_HEIGHT}px;
   padding: 0 ${themeCssVariables.spacing[3]};
   width: 100%;
@@ -92,6 +98,7 @@ export const PageCardHeader = ({
   centerTitle = false,
   titleColor,
   showTitleOnMobile = false,
+  reserveActionSpace = false,
 }: PageCardHeaderProps) => {
   const isMobile = useIsMobile();
   const isNavigationDrawerExpanded = useNavigationDrawerExpanded();
@@ -110,7 +117,10 @@ export const PageCardHeader = ({
   );
 
   return (
-    <StyledHeader centerTitle={shouldCenterTitle}>
+    <StyledHeader
+      centerTitle={shouldCenterTitle}
+      reserveActionSpace={reserveActionSpace}
+    >
       <StyledLeft>
         {!isNavigationDrawerExpanded && (
           <NavigationDrawerCollapseButton direction="right" />

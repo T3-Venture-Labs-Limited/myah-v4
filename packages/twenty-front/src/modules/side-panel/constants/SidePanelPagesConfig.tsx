@@ -9,12 +9,9 @@ import { SidePanelComposeEmailPage } from '@/side-panel/pages/compose-email/comp
 import { SidePanelInstagramMessagePage } from '@/side-panel/pages/instagram-message/components/SidePanelInstagramMessagePage';
 import { SidePanelFrontComponentPage } from '@/side-panel/pages/front-component/components/SidePanelFrontComponentPage';
 import { SidePanelMyahInboxContextPage } from '@/side-panel/pages/myah-inbox-context/components/SidePanelMyahInboxContextPage';
-import { SidePanelDashboardChartSettings } from '@/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardChartSettings';
-import { SidePanelDashboardIframeSettings } from '@/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardIframeSettings';
-import { SidePanelDashboardRecordTableSettings } from '@/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings';
+import { SidePanelCampaignMessageOverviewPage } from '@/side-panel/pages/campaign-message-overview/components/SidePanelCampaignMessageOverviewPage';
 import { SidePanelRecordPageFieldSettings } from '@/side-panel/pages/page-layout/components/record-page/SidePanelRecordPageFieldSettings';
 import { SidePanelRecordPageFieldsSettings } from '@/side-panel/pages/page-layout/components/record-page/SidePanelRecordPageFieldsSettings';
-import { SidePanelPageLayoutDashboardWidgetTypeSelect } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutDashboardWidgetTypeSelect';
 import { SidePanelPageLayoutRecordPageWidgetTypeSelect } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutRecordPageWidgetTypeSelect';
 import { SidePanelPageLayoutTabSettings } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutTabSettings';
 import { SidePanelMergeRecordPage } from '@/side-panel/pages/record-page/components/SidePanelMergeRecordPage';
@@ -52,23 +49,11 @@ export const SIDE_PANEL_PAGES_CONFIG = new Map<SidePanelPages, React.ReactNode>(
     [SidePanelPages.SearchRecords, <SidePanelSearchRecordsPage />],
     [SidePanelPages.AskAI, <SidePanelAskAiPage />],
     [SidePanelPages.ViewPreviousAiChats, <SidePanelAiChatThreadsPage />],
-    [
-      SidePanelPages.PageLayoutDashboardWidgetTypeSelect,
-      <SidePanelPageLayoutDashboardWidgetTypeSelect />,
-    ],
-    [
-      SidePanelPages.DashboardChartSettings,
-      <SidePanelDashboardChartSettings />,
-    ],
-    [
-      SidePanelPages.DashboardIframeSettings,
-      <SidePanelDashboardIframeSettings />,
-    ],
+    [SidePanelPages.PageLayoutDashboardWidgetTypeSelect, null],
+    [SidePanelPages.DashboardChartSettings, null],
+    [SidePanelPages.DashboardIframeSettings, null],
     [SidePanelPages.PageLayoutTabSettings, <SidePanelPageLayoutTabSettings />],
-    [
-      SidePanelPages.DashboardRecordTableSettings,
-      <SidePanelDashboardRecordTableSettings />,
-    ],
+    [SidePanelPages.DashboardRecordTableSettings, null],
     [
       SidePanelPages.RecordPageFieldsSettings,
       <SidePanelRecordPageFieldsSettings />,
@@ -79,6 +64,10 @@ export const SIDE_PANEL_PAGES_CONFIG = new Map<SidePanelPages, React.ReactNode>(
     ],
     [SidePanelPages.ViewFrontComponent, <SidePanelFrontComponentPage />],
     [SidePanelPages.MyahInboxContext, <SidePanelMyahInboxContextPage />],
+    [
+      SidePanelPages.CampaignMessageOverview,
+      <SidePanelCampaignMessageOverviewPage />,
+    ],
     [
       SidePanelPages.PageLayoutRecordPageWidgetTypeSelect,
       <SidePanelPageLayoutRecordPageWidgetTypeSelect />,

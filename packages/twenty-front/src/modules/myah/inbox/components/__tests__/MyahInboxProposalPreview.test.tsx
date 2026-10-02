@@ -131,6 +131,76 @@ describe('MyahInboxProposalPreview', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('refreshes an untouched incoming-stale proposal once through the guarded path', async () => {
+    const proposal = {
+      body: { markdown: 'Refreshed reply.', blocknote: null },
+      contextFingerprint: mockContextFingerprint,
+    };
+    mockGenerateProposal.mockResolvedValue(proposal);
+    const { rerender } = render(
+      <MyahInboxProposalPreview
+        draftKey={mockDraftKey}
+        disabled={false}
+        incomingUpdate="auto"
+      />,
+    );
+    await act(async () => {});
+    rerender(
+      <MyahInboxProposalPreview
+        draftKey={mockDraftKey}
+        disabled={false}
+        incomingUpdate="auto"
+      />,
+    );
+    await act(async () => {});
+    expect(mockGenerateProposal).toHaveBeenCalledTimes(1);
+    expect(mockApplyProposal).toHaveBeenCalledWith(mockCapture, proposal.body);
+  });
+
+  it('offers an explicit Update draft for edited or legacy drafts that still requires review', async () => {
+    const proposal = {
+      body: { markdown: 'Updated reply.', blocknote: null },
+      contextFingerprint: mockContextFingerprint,
+    };
+    mockGenerateProposal.mockResolvedValue(proposal);
+    render(
+      <MyahInboxProposalPreview
+        draftKey={mockDraftKey}
+        disabled={false}
+        incomingUpdate="explicit"
+      />,
+    );
+    await act(async () => {});
+    expect(mockGenerateProposal).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('New creator message since this draft was written.'),
+    ).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Update draft' }));
+    });
+    expect(mockApplyProposal).toHaveBeenCalledWith(mockCapture, proposal.body, {
+      requireReview: true,
+    });
+  });
+
+  it('uses conservative wording for a legacy draft without a known baseline', async () => {
+    render(
+      <MyahInboxProposalPreview
+        draftKey={mockDraftKey}
+        disabled={false}
+        incomingUpdate="explicit"
+        incomingState="UNKNOWN"
+      />,
+    );
+    await act(async () => {});
+    expect(
+      screen.getByText('This draft may not reflect the latest messages.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('New creator message since this draft was written.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('renders Generate Reply as the only normal draft action', () => {
     render(
       <MyahInboxProposalPreview

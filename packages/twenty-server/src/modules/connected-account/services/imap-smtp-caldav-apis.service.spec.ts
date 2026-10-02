@@ -8,6 +8,11 @@ describe('ImapSmtpCalDavAPIService calendar retirement', () => {
   it('creates only an email channel when legacy CalDAV parameters are present', async () => {
     const save = jest.fn();
     const transactionManager = {
+      queryRunner: {
+        isTransactionActive: true,
+        isReleased: false,
+        query: jest.fn(),
+      },
       getRepository: jest.fn((entity) => {
         if (entity === ConnectedAccountEntity) {
           return { save };

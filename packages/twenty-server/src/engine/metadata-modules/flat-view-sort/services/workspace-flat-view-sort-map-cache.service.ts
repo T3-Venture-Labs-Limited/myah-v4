@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -35,21 +35,31 @@ export class WorkspaceFlatViewSortMapCacheService extends WorkspaceCacheProvider
   }
 
   async computeForCache(workspaceId: string): Promise<FlatViewSortMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatViewSortMaps> {
     const [existingViewSorts, applications, views, fieldMetadatas] =
       await Promise.all([
-        this.viewSortRepository.find(workspaceId, {
+        this.viewSortRepository.withManager(manager).find(workspaceId, {
           withDeleted: true,
         }),
-        this.applicationRepository.find({
+        manager.getRepository(ApplicationEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.viewRepository.find(workspaceId, {
+        this.viewRepository.withManager(manager).find(workspaceId, {
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.fieldMetadataRepository.find({
+        manager.getRepository(FieldMetadataEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,

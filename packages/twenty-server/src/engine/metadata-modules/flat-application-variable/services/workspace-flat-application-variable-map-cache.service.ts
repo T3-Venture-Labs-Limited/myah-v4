@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -29,11 +29,33 @@ export class WorkspaceFlatApplicationVariableMapCacheService extends WorkspaceCa
   async computeForCache(
     workspaceId: string,
   ): Promise<FlatApplicationVariableMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationVariableRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatApplicationVariableMaps> {
+    // TypeORM can omit an undefined WHERE value, turning a scoped read into a
+    // workspace-wide read. Check before starting either direct repository find.
+    if (
+      workspaceId === undefined ||
+      workspaceId === null ||
+      workspaceId === ''
+    ) {
+      throw new Error(
+        'WorkspaceScopedRepository: workspaceId must be a non-empty string.',
+      );
+    }
+
     const [applicationVariables, applications] = await Promise.all([
-      this.applicationVariableRepository.find({
+      manager.getRepository(ApplicationVariableEntity).find({
         where: { workspaceId },
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
       }),

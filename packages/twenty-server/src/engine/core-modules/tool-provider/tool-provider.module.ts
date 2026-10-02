@@ -6,7 +6,6 @@ import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-camp
 import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
 import { ActionToolProvider } from 'src/engine/core-modules/tool-provider/providers/action-tool.provider';
-import { DashboardToolProvider } from 'src/engine/core-modules/tool-provider/providers/dashboard-tool.provider';
 import { DatabaseToolProvider } from 'src/engine/core-modules/tool-provider/providers/database-tool.provider';
 import { LogicFunctionToolProvider } from 'src/engine/core-modules/tool-provider/providers/logic-function-tool.provider';
 import { MetadataToolProvider } from 'src/engine/core-modules/tool-provider/providers/metadata-tool.provider';
@@ -78,7 +77,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
     ToolExecutorService,
     ExternalWritePolicyService,
     ActionToolProvider,
-    DashboardToolProvider,
     DatabaseToolProvider,
     MetadataToolProvider,
     NavigationMenuItemToolProvider,
@@ -104,7 +102,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
         viewProvider: ViewToolProvider,
         webhookProvider: WebhookToolProvider,
         workflowProvider: WorkflowToolProvider,
-        dashboardProvider: DashboardToolProvider,
         myahInboxProvider: MyahInboxToolProvider,
         myahCreatorOpsProvider: MyahCreatorOpsToolProvider,
         myahCampaignOutreachProvider: MyahCampaignOutreachToolProvider,
@@ -117,7 +114,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
         viewProvider,
         webhookProvider,
         workflowProvider,
-        dashboardProvider,
         myahInboxProvider,
         myahCreatorOpsProvider,
         myahCampaignOutreachProvider,
@@ -131,7 +127,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
         ViewToolProvider,
         WebhookToolProvider,
         WorkflowToolProvider,
-        DashboardToolProvider,
         MyahInboxToolProvider,
         MyahCreatorOpsToolProvider,
         MyahCampaignOutreachToolProvider,

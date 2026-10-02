@@ -23,6 +23,7 @@ const expectedCreatorImportSyncOptions = {
     MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
   ]),
   migrateLegacyMyahApplication: false,
+  preserveCreatorImportPermissions: true,
 };
 
 describe('MigrateMyahCreatorImportMetadataCommand', () => {
@@ -66,6 +67,21 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     expect(migrate.mock.invocationCallOrder[0]).toBeLessThan(
       synchronizeWorkspace.mock.invocationCallOrder[1],
     );
+  });
+
+  it('does not copy social links or start the second pass after the first permission refusal', async () => {
+    const synchronizeWorkspace = jest.fn().mockRejectedValue(new Error('Unsafe Creator import: object permission would drift'));
+    const migrate = jest.fn();
+    const command = new MigrateMyahCreatorImportMetadataCommand(
+      {} as WorkspaceIteratorService,
+      { synchronizeWorkspace } as unknown as SynchronizeMyahStandardMetadataCommand,
+      { migrate } as unknown as MigrateMyahCreatorSocialLinksService,
+    );
+
+    await expect(command.runOnWorkspace(args)).rejects.toThrow('Unsafe Creator import');
+    expect(synchronizeWorkspace).toHaveBeenCalledTimes(1);
+    expect(synchronizeWorkspace).toHaveBeenCalledWith(args, expectedCreatorImportSyncOptions);
+    expect(migrate).not.toHaveBeenCalled();
   });
 
   it('does not remove old metadata during dry-run', async () => {

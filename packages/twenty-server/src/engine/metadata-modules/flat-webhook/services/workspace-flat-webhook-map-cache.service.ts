@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { IsNull, Repository } from 'typeorm';
+import { type EntityManager, IsNull, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -29,11 +29,21 @@ export class WorkspaceFlatWebhookMapCacheService extends WorkspaceCacheProvider<
   }
 
   async computeForCache(workspaceId: string): Promise<FlatWebhookMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatWebhookMaps> {
     const [webhooks, applications] = await Promise.all([
-      this.webhookRepository.find(workspaceId, {
+      this.webhookRepository.withManager(manager).find(workspaceId, {
         where: { deletedAt: IsNull() },
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
       }),

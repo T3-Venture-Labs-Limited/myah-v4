@@ -177,7 +177,7 @@ export const createV3RecoveryFixture = (
   };
   const query = jest.fn(async (sql: string, parameters: unknown[] = []) => {
     if (sql.includes('pg_advisory')) return [];
-    const table = Object.keys(rows).find((name) => sql.includes(`"_${name}"`));
+    const table = Object.keys(rows).find((name) => sql.includes(`"${name}"`));
     if (!table) throw new Error(`Unexpected SQL: ${sql}`);
     const records = rows[table];
     if (sql.includes('INSERT INTO')) {

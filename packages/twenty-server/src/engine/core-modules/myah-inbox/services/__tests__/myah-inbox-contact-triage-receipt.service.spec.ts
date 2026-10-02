@@ -340,7 +340,7 @@ describe('MyahInboxContactTriageReceiptService', () => {
     );
     const sourceRowLockIndex = query.mock.calls.findIndex(
       ([sql]) =>
-        String(sql).includes('_myahSocialConversation') &&
+        String(sql).includes('myahSocialConversation') &&
         String(sql).includes('FOR UPDATE'),
     );
     const completionCallIndex = query.mock.calls.findIndex(([sql]) =>

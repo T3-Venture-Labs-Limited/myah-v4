@@ -101,6 +101,70 @@ export default meta;
 
 type Story = StoryObj<typeof AiChatApprovalCard>;
 
+export const CreatorStatusChange: Story = {
+  args: {
+    pendingApproval: {
+      messageId: 'creator-approval-message',
+      toolCallId: 'update-creator-tool-call',
+      request: {
+        title: 'Set Tim to Qualified',
+        summary: 'Set Tim to Qualified.',
+        actionKind: 'internal_record_write',
+        riskLevel: 'low',
+        toolName: 'update_one_creator',
+        proposedArguments: {
+          id: '00000000-0000-4000-8000-000000000315',
+          creatorStatus: 'QUALIFIED',
+        },
+        consequences: ['The creator status changes.'],
+      },
+      reviewedAction: {
+        version: 1,
+        toolName: 'update_one_creator',
+        toolLabel: 'Update creator',
+        argumentsDigest: 'a'.repeat(64),
+        arguments: {
+          id: '00000000-0000-4000-8000-000000000315',
+          creatorStatus: 'QUALIFIED',
+        },
+        target: {
+          kind: 'record_write',
+          operation: 'update',
+          objectNameSingular: 'creator',
+          records: [
+            {
+              recordId: '00000000-0000-4000-8000-000000000315',
+              label: 'MYAH-315 UAT Alice',
+              changes: [
+                {
+                  field: 'creatorStatus',
+                  current: 'NEW',
+                  proposed: 'QUALIFIED',
+                },
+              ],
+              linkedRecords: [],
+            },
+          ],
+          totalCount: 1,
+          targetFingerprint: 'b'.repeat(64),
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('What will change')).toBeVisible();
+    await expect(
+      canvas.getByText('MYAH-315 UAT Alice (creator)'),
+    ).toBeVisible();
+    await expect(
+      canvas.getByText('creatorStatus: NEW → QUALIFIED'),
+    ).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  },
+};
+
 export const InboxReply: Story = {
   args: { pendingApproval },
   play: async ({ canvasElement }) => {

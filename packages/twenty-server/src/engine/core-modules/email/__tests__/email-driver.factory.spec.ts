@@ -41,6 +41,28 @@ describe('EmailDriverFactory', () => {
     jest.clearAllMocks();
   });
 
+  describe('fixture isolation', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalFlag = process.env.E2E_TEST_FIXTURES;
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalFlag === undefined) delete process.env.E2E_TEST_FIXTURES;
+      else process.env.E2E_TEST_FIXTURES = originalFlag;
+    });
+
+    it('routes direct SMTP factory callers to logger without reading credentials', () => {
+      process.env.NODE_ENV = 'test';
+      process.env.E2E_TEST_FIXTURES = 'true';
+      mockTwentyConfigService.get.mockReturnValue(EmailDriver.SMTP);
+      expect(factory.getCurrentDriver().constructor.name).toBe('LoggerDriver');
+      expect(mockConfigGroupHashService.computeHash).not.toHaveBeenCalled();
+      expect(mockTwentyConfigService.get).not.toHaveBeenCalledWith(
+        'EMAIL_SMTP_PASSWORD',
+      );
+    });
+  });
+
   describe('buildConfigKey', () => {
     it('should return "logger" for logger driver', () => {
       jest

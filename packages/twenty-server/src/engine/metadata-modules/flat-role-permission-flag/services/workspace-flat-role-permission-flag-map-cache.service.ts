@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { createEmptyFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-flat-entity-maps.constant';
@@ -21,8 +21,6 @@ import { addFlatEntityToFlatEntityMapsThroughMutationOrThrow } from 'src/engine/
 @WorkspaceCache('flatRolePermissionFlagMaps')
 export class WorkspaceFlatRolePermissionFlagMapCacheService extends WorkspaceCacheProvider<FlatRolePermissionFlagMaps> {
   constructor(
-    @InjectRepository(RolePermissionFlagEntity)
-    private readonly rolePermissionFlagRepository: Repository<RolePermissionFlagEntity>,
     @InjectRepository(ApplicationEntity)
     private readonly applicationRepository: Repository<ApplicationEntity>,
     @InjectWorkspaceScopedRepository(RoleEntity)
@@ -36,22 +34,42 @@ export class WorkspaceFlatRolePermissionFlagMapCacheService extends WorkspaceCac
   async computeForCache(
     workspaceId: string,
   ): Promise<FlatRolePermissionFlagMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatRolePermissionFlagMaps> {
+    if (
+      workspaceId === undefined ||
+      workspaceId === null ||
+      workspaceId === ''
+    ) {
+      throw new Error(
+        'WorkspaceScopedRepository: workspaceId must be a non-empty string.',
+      );
+    }
+
     const [rolePermissionFlags, applications, roles, permissionFlags] =
       await Promise.all([
-        this.rolePermissionFlagRepository.find({
+        manager.getRepository(RolePermissionFlagEntity).find({
           where: { workspaceId },
           withDeleted: true,
         }),
-        this.applicationRepository.find({
+        manager.getRepository(ApplicationEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.roleRepository.find(workspaceId, {
+        this.roleRepository.withManager(manager).find(workspaceId, {
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.permissionFlagRepository.find(workspaceId, {
+        this.permissionFlagRepository.withManager(manager).find(workspaceId, {
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { E2eFixtureRejectingEmailingDomainDriver } from 'src/engine/core-modules/emailing-domain/drivers/e2e-fixture-rejecting-emailing-domain-driver';
 import { type AwsSesDriverConfig } from 'src/engine/core-modules/emailing-domain/drivers/interfaces/driver-config.interface';
 import { type EmailingDomainDriverInterface } from 'src/engine/core-modules/emailing-domain/drivers/interfaces/emailing-domain-driver.interface';
 
@@ -11,6 +12,7 @@ import { AwsSesSendEmailService } from 'src/engine/core-modules/emailing-domain/
 import { LogEmailingDomainDriver } from 'src/engine/core-modules/emailing-domain/drivers/log/services/log-emailing-domain-driver.service';
 import { EmailingDomainDriver } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-driver.type';
 import { UnsubscribeContentService } from 'src/engine/core-modules/emailing-domain/services/unsubscribe-content.service';
+import { isE2eTestFixturesEnabled } from 'src/engine/core-modules/twenty-config/utils/is-e2e-test-fixtures-enabled.util';
 import { DriverFactoryBase } from 'src/engine/core-modules/twenty-config/dynamic-factory.base';
 import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
 import { ConfigGroupHashService } from 'src/engine/core-modules/twenty-config/services/config-group-hash.service';
@@ -32,10 +34,14 @@ export class EmailingDomainDriverFactory extends DriverFactoryBase<EmailingDomai
   }
 
   protected buildConfigKey(): string {
+    const fixtureMode = isE2eTestFixturesEnabled();
     const driver = this.twentyConfigService.get('EMAILING_DOMAIN_DRIVER');
 
     switch (driver) {
       case EmailingDomainDriver.AWS_SES: {
+        if (fixtureMode) {
+          return 'fixture-reject';
+        }
         const awsConfigHash = this.configGroupHashService.computeHash(
           ConfigVariablesGroup.AWS_SES_SETTINGS,
         );
@@ -43,17 +49,23 @@ export class EmailingDomainDriverFactory extends DriverFactoryBase<EmailingDomai
         return `aws-ses|${awsConfigHash}`;
       }
       case EmailingDomainDriver.LOG:
-        return 'log';
+        return fixtureMode ? 'fixture-reject' : 'log';
       default:
         throw new Error(`Unsupported emailing domain driver: ${driver}`);
     }
   }
 
   protected createDriver(): EmailingDomainDriverInterface {
+    const fixtureMode = isE2eTestFixturesEnabled();
     const driver = this.twentyConfigService.get('EMAILING_DOMAIN_DRIVER');
 
     switch (driver) {
       case EmailingDomainDriver.AWS_SES: {
+        if (fixtureMode) {
+          return new E2eFixtureRejectingEmailingDomainDriver(
+            this.logEmailingDomainDriver,
+          );
+        }
         const region = this.twentyConfigService.get('AWS_SES_REGION');
         const accountId = this.twentyConfigService.get('AWS_SES_ACCOUNT_ID');
         const accessKeyId = this.twentyConfigService.get(
@@ -86,7 +98,11 @@ export class EmailingDomainDriverFactory extends DriverFactoryBase<EmailingDomai
       }
 
       case EmailingDomainDriver.LOG:
-        return this.logEmailingDomainDriver;
+        return fixtureMode
+          ? new E2eFixtureRejectingEmailingDomainDriver(
+              this.logEmailingDomainDriver,
+            )
+          : this.logEmailingDomainDriver;
 
       default:
         throw new Error(`Invalid emailing domain driver: ${driver}`);

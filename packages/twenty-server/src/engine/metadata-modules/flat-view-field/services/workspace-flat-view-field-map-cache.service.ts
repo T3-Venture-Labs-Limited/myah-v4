@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -38,26 +38,36 @@ export class WorkspaceFlatViewFieldMapCacheService extends WorkspaceCacheProvide
   }
 
   async computeForCache(workspaceId: string): Promise<FlatViewFieldMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatViewFieldMaps> {
     const [viewFields, applications, fieldMetadatas, views, viewFieldGroups] =
       await Promise.all([
-        this.viewFieldRepository.find(workspaceId, {
+        this.viewFieldRepository.withManager(manager).find(workspaceId, {
           withDeleted: true,
         }),
-        this.applicationRepository.find({
+        manager.getRepository(ApplicationEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.fieldMetadataRepository.find({
+        manager.getRepository(FieldMetadataEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.viewRepository.find(workspaceId, {
+        this.viewRepository.withManager(manager).find(workspaceId, {
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.viewFieldGroupRepository.find(workspaceId, {
+        this.viewFieldGroupRepository.withManager(manager).find(workspaceId, {
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),

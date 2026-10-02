@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -36,21 +36,42 @@ export class WorkspaceFlatPageLayoutTabMapCacheService extends WorkspaceCachePro
   }
 
   async computeForCache(workspaceId: string): Promise<FlatPageLayoutTabMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatPageLayoutTabMaps> {
+    // Direct repositories do not guard undefined workspace IDs before issuing SQL.
+    if (
+      workspaceId === undefined ||
+      workspaceId === null ||
+      workspaceId === ''
+    ) {
+      throw new Error(
+        'WorkspaceScopedRepository: workspaceId must be a non-empty string.',
+      );
+    }
+
     const [pageLayoutTabs, pageLayoutWidgets, applications, pageLayouts] =
       await Promise.all([
-        this.pageLayoutTabRepository.find(workspaceId, {
+        this.pageLayoutTabRepository.withManager(manager).find(workspaceId, {
           withDeleted: true,
         }),
-        this.pageLayoutWidgetRepository.find(workspaceId, {
+        this.pageLayoutWidgetRepository.withManager(manager).find(workspaceId, {
           select: ['id', 'universalIdentifier', 'pageLayoutTabId'],
           withDeleted: true,
         }),
-        this.applicationRepository.find({
+        manager.getRepository(ApplicationEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.pageLayoutRepository.find(workspaceId, {
+        this.pageLayoutRepository.withManager(manager).find(workspaceId, {
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),

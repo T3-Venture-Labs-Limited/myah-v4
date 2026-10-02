@@ -17,7 +17,10 @@ import { type ParsedUpgradeCommandOptions } from 'src/database/commands/upgrade-
 import { type UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { UpgradeCommandRegistryService } from 'src/engine/core-modules/upgrade/services/upgrade-command-registry.service';
 import { type InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
-import { UpgradeSequenceReaderService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
+import {
+  type UpgradeStep,
+  UpgradeSequenceReaderService,
+} from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import { UpgradeSequenceRunnerService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-runner.service';
 import { WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
 import { type UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade-aware/upgrade-aware-entity-metadata.adapter';
@@ -55,6 +58,193 @@ const workspaceCommand = {
 };
 
 describe('UpgradeSequenceRunnerService', () => {
+  it('does not refresh metadata or read workspace state when the upgrade lock is busy', async () => {
+    const getActiveOrSuspendedWorkspaceIds = jest.fn();
+    const refresh = jest.fn();
+    const withLock = jest.fn(async () => {
+      throw new Error('upgrade busy');
+    });
+    const service = new UpgradeSequenceRunnerService(
+      {} as UpgradeMigrationService,
+      {} as InstanceCommandRunnerService,
+      {} as WorkspaceCommandRunnerService,
+      {} as UpgradeSequenceReaderService,
+      { refresh } as unknown as UpgradeAwareEntityMetadataAdapter,
+      {} as WorkspaceIteratorService,
+      {
+        getActiveOrSuspendedWorkspaceIds,
+      } as unknown as WorkspaceVersionService,
+      { withLock } as never,
+    );
+
+    await expect(
+      service.run({ sequence: [pendingCheck as never], options: {} }),
+    ).rejects.toThrow('upgrade busy');
+    expect(withLock).toHaveBeenCalledWith(expect.any(Function), {
+      requireNoOngoingActivation: true,
+    });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(getActiveOrSuspendedWorkspaceIds).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206',
+      'completed',
+      {},
+      false,
+      false,
+    ],
+    [
+      '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206',
+      'failed',
+      {},
+      false,
+      false,
+    ],
+    [
+      '2.19.0_AddInstagramReplyApprovalProviderBindingSlowInstanceCommand_1784106536001',
+      'completed',
+      { dryRun: true },
+      false,
+      false,
+    ],
+    [
+      '2.19.0_FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand_1784112963059',
+      'failed',
+      { workspaceIds: [WORKSPACE_ID] },
+      false,
+      false,
+    ],
+    [
+      '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206',
+      'completed',
+      {},
+      true,
+      false,
+    ],
+    [
+      '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206',
+      'completed',
+      {},
+      true,
+      true,
+    ],
+  ] satisfies Array<
+    [
+      string,
+      'completed' | 'failed',
+      ParsedUpgradeCommandOptions,
+      boolean,
+      boolean,
+    ]
+  >)(
+    'gates a 2.19 prerequisite hole before cursor resolution at %s',
+    async (
+      lastName,
+      status,
+      options,
+      auditCompleted,
+      allPrerequisitesCompleted,
+    ) => {
+      const getLastAttemptedCommandNameOrThrow = jest.fn().mockResolvedValue({
+        name: lastName,
+        status,
+      });
+      const isLastAttemptCompleted = jest
+        .fn()
+        .mockImplementation(
+          async ({ name }: { name: string }) =>
+            (name ===
+              '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206' &&
+              status === 'completed') ||
+            (name ===
+              '2.19.0_CreateInstagramReplyAuditFastInstanceCommand_1784106536000' &&
+              auditCompleted) ||
+            (allPrerequisitesCompleted === true &&
+              name.includes('FastInstanceCommand_')),
+        );
+      const runFastInstanceCommand = jest
+        .fn()
+        .mockResolvedValue({ status: 'success' });
+      const runSlowInstanceCommand = jest
+        .fn()
+        .mockResolvedValue({ status: 'success' });
+      const runWorkspaceCommands = jest.fn();
+      const runner = new UpgradeSequenceRunnerService(
+        {
+          getLastAttemptedCommandNameOrThrow,
+          getWorkspaceLastAttemptedCommandNameOrThrow: jest
+            .fn()
+            .mockResolvedValue(
+              new Map([
+                [WORKSPACE_ID, { name: lastName, status: 'completed' }],
+              ]),
+            ),
+          isLastAttemptCompleted,
+        } as unknown as UpgradeMigrationService,
+        {
+          runFastInstanceCommand,
+          runSlowInstanceCommand,
+        } as unknown as InstanceCommandRunnerService,
+        { runWorkspaceCommands } as unknown as WorkspaceCommandRunnerService,
+        new UpgradeSequenceReaderService({} as UpgradeCommandRegistryService),
+        {
+          refresh: jest.fn().mockResolvedValue(undefined),
+        } as unknown as UpgradeAwareEntityMetadataAdapter,
+        {} as WorkspaceIteratorService,
+        {
+          getActiveOrSuspendedWorkspaceIds: jest
+            .fn()
+            .mockResolvedValue([WORKSPACE_ID]),
+        } as unknown as WorkspaceVersionService,
+        {
+          withLock: async (operation: () => Promise<unknown>) => operation(),
+        } as never,
+      );
+
+      const sequence = [
+        { kind: 'fast-instance' as const, ...pendingCheck },
+        {
+          kind: 'slow-instance' as const,
+          command: {},
+          name: '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206',
+          timestamp: 1784005792206,
+          version: VERSION,
+        },
+        {
+          kind: 'slow-instance' as const,
+          command: {},
+          name: '2.19.0_FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand_1784112963059',
+          timestamp: 1784112963059,
+          version: VERSION,
+        },
+      ];
+
+      const upgrade = runner.run({
+        options,
+        sequence: sequence as unknown as UpgradeStep[],
+      });
+
+      if (allPrerequisitesCompleted) {
+        await expect(upgrade).resolves.toEqual({
+          totalFailures: 0,
+          totalSuccesses: 0,
+        });
+        expect(runSlowInstanceCommand).toHaveBeenCalled();
+      } else {
+        await expect(upgrade).rejects.toThrow(
+          '2.19 prerequisite reconciliation is not available',
+        );
+        expect(runFastInstanceCommand).not.toHaveBeenCalled();
+        expect(runSlowInstanceCommand).not.toHaveBeenCalled();
+        expect(runWorkspaceCommands).not.toHaveBeenCalled();
+      }
+
+      expect(getLastAttemptedCommandNameOrThrow).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('resumes a completed pending check through repair, provider binding, and workspace commands', async () => {
     const sequenceReader = new UpgradeSequenceReaderService({
       getBundleForVersion: (version: string) =>
@@ -151,6 +341,9 @@ describe('UpgradeSequenceRunnerService', () => {
           .fn()
           .mockResolvedValue([WORKSPACE_ID]),
       } as unknown as WorkspaceVersionService,
+      {
+        withLock: async (operation: () => Promise<unknown>) => operation(),
+      } as never,
     );
 
     await expect(runner.run({ options: {}, sequence })).resolves.toEqual({
@@ -294,6 +487,9 @@ describe('UpgradeSequenceRunnerService', () => {
           .fn()
           .mockResolvedValue([WORKSPACE_ID]),
       } as unknown as WorkspaceVersionService,
+      {
+        withLock: async (operation: () => Promise<unknown>) => operation(),
+      } as never,
     );
 
     await expect(
@@ -448,6 +644,9 @@ describe('Instagram durable resume boundaries', () => {
           .fn()
           .mockResolvedValue(workspaceIds),
       } as unknown as WorkspaceVersionService,
+      {
+        withLock: async (operation: () => Promise<unknown>) => operation(),
+      } as never,
     );
     await expect(
       runner.run({ sequence: reader.getUpgradeSequence(), options: {} }),
@@ -593,6 +792,9 @@ describe('UpgradeSequenceRunnerService orphaned object-navigation repair deliver
         {
           getActiveOrSuspendedWorkspaceIds,
         } as unknown as WorkspaceVersionService,
+        {
+          withLock: async (operation: () => Promise<unknown>) => operation(),
+        } as never,
       );
       const options = dryRun ? { dryRun: true } : {};
       await expect(
@@ -792,6 +994,9 @@ describe('Instagram appended verifier resume boundaries', () => {
           .fn()
           .mockResolvedValue(workspaceIds),
       } as unknown as WorkspaceVersionService,
+      {
+        withLock: async (operation: () => Promise<unknown>) => operation(),
+      } as never,
     );
     await expect(
       runner.run({ sequence: reader.getUpgradeSequence(), options: {} }),

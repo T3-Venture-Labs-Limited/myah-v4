@@ -10,8 +10,15 @@ import { isValidUuid } from 'twenty-shared/utils';
 
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  ReplyChannel,
+  ReplyContextKind,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
+import { MyahInboxReplyContextDraftService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-draft.service';
+import { MyahInboxReplyContextOptionsService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context-options.service';
+import { MyahInboxReplyContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-context.service';
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxReplySendService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-send.service';
 import {
@@ -19,10 +26,15 @@ import {
   getMyahInboxReplySendReadinessInputSchema,
   getMyahInboxReplySendStatusInputSchema,
   getMyahInboxThreadContextInputSchema,
+  listMyahInboxReplyContextsInputSchema,
   saveMyahInboxReplyDraftInputSchema,
   searchMyahInboxThreadsInputSchema,
   updateMyahInboxThreadInputSchema,
 } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.schemas';
+import {
+  encodeMyahInboxContactId,
+  type MyahInboxContactIdentity,
+} from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 
 @Injectable()
@@ -32,6 +44,9 @@ export class MyahInboxToolWorkspaceService {
     private readonly myahInboxReplyProposalService: MyahInboxReplyProposalService,
     private readonly myahInboxMutationService: MyahInboxMutationService,
     private readonly myahInboxReplySendService: MyahInboxReplySendService,
+    private readonly myahInboxReplyContextOptionsService: MyahInboxReplyContextOptionsService,
+    private readonly myahInboxReplyContextService: MyahInboxReplyContextService,
+    private readonly myahInboxReplyContextDraftService: MyahInboxReplyContextDraftService,
   ) {}
 
   generateMyahInboxTools(context: ToolProviderContext): ToolSet {
@@ -60,6 +75,29 @@ export class MyahInboxToolWorkspaceService {
 
       return parseThreadId(messageThreadId ?? selectedThreadId);
     };
+    const resolveThreadTarget = async (messageThreadId: string) => {
+      const threadId = parseThreadId(messageThreadId);
+      const thread = await this.myahInboxQueryService.getThreadSummary({
+        ...requestContext,
+        threadId,
+      });
+      const contactIdentity: MyahInboxContactIdentity = thread.creator
+        ? { kind: 'creator', recordId: thread.creator.id }
+        : { kind: 'email-thread', recordId: threadId };
+
+      return {
+        threadId,
+        contactIdentity,
+        target: {
+          channel: ReplyChannel.EMAIL as const,
+          contactId: encodeMyahInboxContactId({
+            workspaceId: context.workspaceId,
+            identity: contactIdentity,
+          }),
+          threadId,
+        },
+      };
+    };
     const searchThreadsTool = {
       name: 'search_myah_inbox_threads' as const,
       description:
@@ -80,24 +118,107 @@ export class MyahInboxToolWorkspaceService {
         };
       },
     };
+    const listReplyContextsTool = {
+      name: 'list_myah_inbox_reply_contexts' as const,
+      description:
+        'List policy-authorized Campaign reply contexts and General availability for one exact Myah Inbox Email thread.',
+      inputSchema: listMyahInboxReplyContextsInputSchema,
+      execute: async ({
+        messageThreadId,
+        ...page
+      }: z.infer<typeof listMyahInboxReplyContextsInputSchema>) => {
+        const { target } = await resolveThreadTarget(messageThreadId);
+        const result =
+          await this.myahInboxReplyContextOptionsService.listOptions({
+            ...requestContext,
+            expectedWorkspaceId: context.workspaceId,
+            target,
+            ...page,
+          });
+
+        return {
+          success: true,
+          message: 'Listed Myah Inbox reply contexts',
+          result,
+        };
+      },
+    };
     const getThreadContextTool = {
       name: 'get_myah_inbox_thread_context' as const,
       description:
-        'Read the policy-visible reply briefing for a Myah Inbox MessageThread.',
+        'Read the policy-visible reply briefing for a Myah Inbox MessageThread, optionally bound to one explicit listed reply context.',
       inputSchema: getMyahInboxThreadContextInputSchema,
       execute: async (
         input: z.infer<typeof getMyahInboxThreadContextInputSchema>,
       ) => {
-        const result =
+        const threadId = resolveSelectedThreadId(input.messageThreadId);
+        if (!input.replyContext) {
+          const result =
+            await this.myahInboxReplyProposalService.getReplyBriefing({
+              authContext,
+              threadId,
+            });
+
+          return {
+            success: true,
+            message: 'Retrieved Myah Inbox thread context',
+            result,
+          };
+        }
+
+        const { target, contactIdentity } = await resolveThreadTarget(threadId);
+        if (input.replyContext.kind === ReplyContextKind.GENERAL) {
+          const options =
+            await this.myahInboxReplyContextOptionsService.listOptions({
+              ...requestContext,
+              expectedWorkspaceId: context.workspaceId,
+              target,
+              first: 1,
+            });
+          if (!options.generalAvailable) {
+            throw new ForbiddenException(
+              'General reply context is not available',
+            );
+          }
+        }
+        const resolvedContext =
+          await this.myahInboxReplyContextService.resolveForAction({
+            ...requestContext,
+            target,
+            contactIdentity,
+            replyContext: input.replyContext,
+          });
+        if (!resolvedContext.contextFingerprint) {
+          throw new ForbiddenException('Reply context is not readable');
+        }
+        const draft = await this.myahInboxReplyContextDraftService.read({
+          workspaceId: context.workspaceId,
+          contactAnchorKind: resolvedContext.target.contactAnchor.kind,
+          contactAnchorId: resolvedContext.target.contactAnchor.id,
+          channel: resolvedContext.target.channel,
+          deliveryTargetId: resolvedContext.target.deliveryTargetId,
+          context: resolvedContext.selected,
+        });
+        const briefing =
           await this.myahInboxReplyProposalService.getReplyBriefing({
             authContext,
-            threadId: resolveSelectedThreadId(input.messageThreadId),
+            threadId,
+            selectedContext: resolvedContext,
           });
 
         return {
           success: true,
           message: 'Retrieved Myah Inbox thread context',
-          result,
+          result: {
+            ...briefing,
+            selectedContext: {
+              ...resolvedContext.selected,
+              campaignName: resolvedContext.campaignName,
+              contextFingerprint: resolvedContext.contextFingerprint,
+              draftRevision: draft.revision,
+              draftBody: draft.body,
+            },
+          },
         };
       },
     };
@@ -156,12 +277,14 @@ export class MyahInboxToolWorkspaceService {
         messageThreadId,
         ...input
       }: z.infer<typeof saveMyahInboxReplyDraftInputSchema>) => {
-        const result =
-          await this.myahInboxMutationService.saveMyahInboxDraftForThread({
-            ...requestContext,
-            ...input,
-            threadId: parseThreadId(messageThreadId),
-          });
+        const { target } = await resolveThreadTarget(messageThreadId);
+        const result = await this.myahInboxMutationService.saveMyahInboxDraft({
+          ...requestContext,
+          ...input,
+          expectedWorkspaceId: context.workspaceId,
+          target,
+          proposalContextFingerprint: null,
+        });
 
         return {
           success: true,
@@ -215,6 +338,7 @@ export class MyahInboxToolWorkspaceService {
 
     return {
       [searchThreadsTool.name]: searchThreadsTool,
+      [listReplyContextsTool.name]: listReplyContextsTool,
       [getThreadContextTool.name]: getThreadContextTool,
       [generateReplyProposalTool.name]: generateReplyProposalTool,
       [updateThreadTool.name]: updateThreadTool,

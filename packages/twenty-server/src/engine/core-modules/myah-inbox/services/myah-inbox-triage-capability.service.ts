@@ -53,8 +53,8 @@ const normalizeSerializedSql = (sql: string): string =>
 
 const readCapabilitySources = [
   ['messageThread', 'message_thread', 'messageThread'],
-  ['myahSocialConversation', 'social_conversation', '_myahSocialConversation'],
-  ['myahSocialMessage', 'social_message', '_myahSocialMessage'],
+  ['myahSocialConversation', 'social_conversation', 'myahSocialConversation'],
+  ['myahSocialMessage', 'social_message', 'myahSocialMessage'],
 ] as const;
 
 const canonicalUnrestrictedReadSql = ({

@@ -3,7 +3,7 @@ import { Command } from 'nest-commander';
 import { InjectRepository } from '@nestjs/typeorm';
 import { getIndexUniversalIdentifier } from 'twenty-shared/application';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
+import { type QueryRunner, Repository } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -19,6 +19,19 @@ import { isSystemUniqueFlatIndexMetadata } from 'src/engine/metadata-modules/fla
 import { IndexMetadataEntity } from 'src/engine/metadata-modules/index-metadata/index-metadata.entity';
 import { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/workspace-metadata-version/services/workspace-metadata-version.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import type { UpgradeWorkspaceTransaction } from 'src/engine/workspace-manager/workspace-migration/types/upgrade-workspace-transaction.type';
+
+export const SYSTEM_UNIQUE_INDEX_BACKFILL_UPGRADE_NAME =
+  '2.19.0_BackfillSystemUniqueIndexUniversalIdentifierCommand_1783093620000';
+
+const indexRelatedMetadataNames = [
+  'index',
+  ...getMetadataRelatedMetadataNames('index'),
+  ...getMetadataSerializedRelationNames('index'),
+] as const;
+const indexCacheKeysToFlush = [
+  ...new Set(indexRelatedMetadataNames.map(getMetadataFlatEntityMapsKey)),
+];
 
 @RegisteredWorkspaceCommand('2.19.0', 1783093620000)
 @Command({
@@ -38,10 +51,31 @@ export class BackfillSystemUniqueIndexUniversalIdentifierCommand extends ActiveO
     super(workspaceIteratorService);
   }
 
-  override async runOnWorkspace({
-    workspaceId,
-    options,
-  }: RunOnWorkspaceArgs): Promise<void> {
+  override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    await this.backfill(args);
+  }
+
+  override async runOnWorkspaceInUpgradeTransaction(
+    args: RunOnWorkspaceArgs,
+    queryRunner: QueryRunner,
+    afterCommit: UpgradeWorkspaceTransaction['afterCommit'],
+  ): Promise<void> {
+    await this.backfill(args, { queryRunner, afterCommit });
+  }
+
+  // Invoked on every locked ordered resume with an authoritative completed
+  // receipt, including when COMMIT succeeded but acknowledgement was lost.
+  async reconcileCommittedUpgrade(workspaceId: string): Promise<void> {
+    await this.workspaceCacheService.flush(workspaceId, indexCacheKeysToFlush);
+    await this.workspaceMetadataVersionService.publishCommittedMetadataVersion(
+      workspaceId,
+    );
+  }
+
+  private async backfill(
+    { workspaceId, options }: RunOnWorkspaceArgs,
+    upgradeTransaction?: UpgradeWorkspaceTransaction,
+  ): Promise<void> {
     const isDryRun = options.dryRun ?? false;
 
     const {
@@ -146,27 +180,35 @@ export class BackfillSystemUniqueIndexUniversalIdentifierCommand extends ActiveO
       return;
     }
 
+    const repository = upgradeTransaction
+      ? upgradeTransaction.queryRunner.manager.getRepository(
+          IndexMetadataEntity,
+        )
+      : this.indexMetadataRepository;
     for (const { id, deterministicUniversalIdentifier } of indexesToBackfill) {
-      await this.indexMetadataRepository.update(
+      await repository.update(
         { id, workspaceId },
         { universalIdentifier: deterministicUniversalIdentifier },
       );
     }
 
-    const indexRelatedMetadataNames = [
-      'index',
-      ...getMetadataRelatedMetadataNames('index'),
-      ...getMetadataSerializedRelationNames('index'),
-    ] as const;
-    const cacheKeysToFlush = [
-      ...new Set(indexRelatedMetadataNames.map(getMetadataFlatEntityMapsKey)),
-    ];
-
-    await this.workspaceCacheService.flush(workspaceId, cacheKeysToFlush);
-
-    await this.workspaceMetadataVersionService.incrementMetadataVersion(
-      workspaceId,
-    );
+    if (upgradeTransaction) {
+      upgradeTransaction.afterCommit(() =>
+        this.workspaceCacheService.flush(workspaceId, indexCacheKeysToFlush),
+      );
+      await this.workspaceMetadataVersionService.incrementMetadataVersion(
+        workspaceId,
+        upgradeTransaction,
+      );
+    } else {
+      await this.workspaceCacheService.flush(
+        workspaceId,
+        indexCacheKeysToFlush,
+      );
+      await this.workspaceMetadataVersionService.incrementMetadataVersion(
+        workspaceId,
+      );
+    }
 
     this.logger.log(
       `Backfilled ${indexesToBackfill.length} system unique index universal identifier(s) for workspace ${workspaceId}`,

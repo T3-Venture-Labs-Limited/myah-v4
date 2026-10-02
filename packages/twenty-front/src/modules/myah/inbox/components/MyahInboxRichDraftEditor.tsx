@@ -48,6 +48,14 @@ const MYAH_REPLY_BLOCK_SCHEMA = BlockNoteSchema.create({
   },
 });
 
+const MYAH_PLAIN_TEXT_BLOCK_SCHEMA = BlockNoteSchema.create({
+  blockSpecs: { paragraph: defaultBlockSpecs.paragraph },
+  // @ts-expect-error BlockNote's public type requires its built-in link spec,
+  // but the runtime schema supports a verified text-only inline contract.
+  inlineContentSpecs: { text: defaultInlineContentSpecs.text },
+  styleSpecs: {},
+});
+
 const StyledRichDraftEditor = styled.div`
   &[data-main-reply-editor] .bn-container,
   &[data-main-reply-editor] .bn-editor,
@@ -108,6 +116,7 @@ type MyahInboxRichDraftEditorProps = {
   onDraftChange: (body: MyahInboxRichText) => void;
   autoFocus?: boolean;
   presentation?: 'default' | 'main';
+  mode?: 'rich' | 'plain-text';
 };
 
 export const MyahInboxRichDraftEditor = ({
@@ -119,7 +128,9 @@ export const MyahInboxRichDraftEditor = ({
   onDraftChange,
   autoFocus = false,
   presentation = 'default',
+  mode = 'rich',
 }: MyahInboxRichDraftEditorProps) => {
+  const isPlainText = mode === 'plain-text';
   const initialContent = useMemo(
     () =>
       parseMyahReplyRichText(body).blocks ??
@@ -139,7 +150,9 @@ export const MyahInboxRichDraftEditor = ({
   const editor = useCreateBlockNote(
     {
       initialContent,
-      schema: MYAH_REPLY_BLOCK_SCHEMA,
+      schema: isPlainText
+        ? MYAH_PLAIN_TEXT_BLOCK_SCHEMA
+        : MYAH_REPLY_BLOCK_SCHEMA,
       trailingBlock: false,
       domAttributes: {
         editor: {
@@ -148,21 +161,24 @@ export const MyahInboxRichDraftEditor = ({
           role: 'textbox',
         },
       },
-      links: { isValidLink: isAllowedRichLink },
+      ...(isPlainText ? {} : { links: { isValidLink: isAllowedRichLink } }),
       pasteHandler: ({ event, editor: currentEditor }) => {
         const text = event.clipboardData?.getData('text/plain') ?? '';
         currentEditor.insertInlineContent(text);
         return true;
       },
     },
-    [editorVersion],
+    [editorVersion, isPlainText],
   );
 
   useEffect(() => {
-    latestBodyRef.current = serializeMyahReplyBlocks(
+    const serializedBody = serializeMyahReplyBlocks(
       editor.document as MyahReplyBlock[],
     );
-  }, [editor]);
+    latestBodyRef.current = isPlainText
+      ? { markdown: serializedBody.markdown, blocknote: null }
+      : serializedBody;
+  }, [editor, isPlainText]);
 
   useEffect(() => {
     onDraftChangeRef.current = onDraftChange;
@@ -200,9 +216,12 @@ export const MyahInboxRichDraftEditor = ({
 
   useEffect(() => {
     const unsubscribe = editor.onChange((currentEditor) => {
-      const nextBody = serializeMyahReplyBlocks(
+      const serializedBody = serializeMyahReplyBlocks(
         currentEditor.document as MyahReplyBlock[],
       );
+      const nextBody = isPlainText
+        ? { markdown: serializedBody.markdown, blocknote: null }
+        : serializedBody;
       if (
         nextBody.markdown === latestBodyRef.current.markdown &&
         nextBody.blocknote === latestBodyRef.current.blocknote
@@ -214,7 +233,7 @@ export const MyahInboxRichDraftEditor = ({
     });
 
     return unsubscribe;
-  }, [editor]);
+  }, [editor, isPlainText]);
 
   useEffect(() => {
     if (autoFocus) editor.focus();
@@ -268,7 +287,7 @@ export const MyahInboxRichDraftEditor = ({
         onFocus={handleFocus}
         onBlur={handleBlur}
       >
-        {!disabled && (
+        {!disabled && !isPlainText && (
           <FormattingToolbarController
             formattingToolbar={() => (
               <FormattingToolbar>

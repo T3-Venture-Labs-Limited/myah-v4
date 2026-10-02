@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
@@ -7,6 +8,7 @@ import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/wo
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
+import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
 import { type FlatNavigationMenuItem } from 'src/engine/metadata-modules/flat-navigation-menu-item/types/flat-navigation-menu-item.type';
 import { addFlatNavigationMenuItemToMapsAndUpdateIndex } from 'src/engine/metadata-modules/flat-navigation-menu-item/utils/add-flat-navigation-menu-item-to-maps-and-update-index.util';
 import { fromCreateNavigationMenuItemInputToFlatNavigationMenuItemToCreate } from 'src/engine/metadata-modules/flat-navigation-menu-item/utils/from-create-navigation-menu-item-input-to-flat-navigation-menu-item-to-create.util';
@@ -30,6 +32,73 @@ import { NavigationMenuItemRecordIdentifierService } from 'src/engine/metadata-m
 import { PermissionsException } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
+
+// Historical identities are recovery anchors; folders and unrelated custom targets are not retired.
+const retiredMenuUid = '43f7a291-b0a4-481d-a5e4-b557e1a8f65d';
+const retiredLayoutUid = 'c8e159f8-1815-4138-9203-c29f59703386';
+const retiredObjectUids = new Set<string>([
+  MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.brandBrainLink.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.brandBrainUpdateProposal.universalIdentifier,
+]);
+
+type NavigationTargetMaps = Pick<
+  AllFlatEntityMaps,
+  'flatObjectMetadataMaps' | 'flatViewMaps' | 'flatPageLayoutMaps'
+>;
+type NavigationTarget = Partial<
+  Pick<
+    FlatNavigationMenuItem,
+    'targetObjectMetadataId' | 'viewId' | 'pageLayoutId'
+  >
+> & { universalIdentifier?: string };
+
+const isRetiredNavigationTarget = (
+  item: NavigationTarget,
+  maps: NavigationTargetMaps,
+): boolean => {
+  if (item.universalIdentifier === retiredMenuUid) return true;
+
+  const isRetiredObject = (id: string | null | undefined) =>
+    isDefined(id) &&
+    retiredObjectUids.has(
+      maps.flatObjectMetadataMaps.universalIdentifierById[id] ?? '',
+    );
+
+  if (isRetiredObject(item.targetObjectMetadataId)) return true;
+
+  const viewUid = isDefined(item.viewId)
+    ? maps.flatViewMaps.universalIdentifierById[item.viewId]
+    : undefined;
+  const view = isDefined(viewUid)
+    ? maps.flatViewMaps.byUniversalIdentifier[viewUid]
+    : undefined;
+
+  if (isRetiredObject(view?.objectMetadataId)) return true;
+
+  const layoutUid = isDefined(item.pageLayoutId)
+    ? maps.flatPageLayoutMaps.universalIdentifierById[item.pageLayoutId]
+    : undefined;
+  if (layoutUid === retiredLayoutUid) return true;
+
+  const layout = isDefined(layoutUid)
+    ? maps.flatPageLayoutMaps.byUniversalIdentifier[layoutUid]
+    : undefined;
+
+  return isRetiredObject(layout?.objectMetadataId);
+};
+
+const assertNavigationTargetAvailable = (
+  item: NavigationTarget,
+  maps: NavigationTargetMaps,
+): void => {
+  if (isRetiredNavigationTarget(item, maps)) {
+    throw new NavigationMenuItemException(
+      'Retired Brand Brain navigation menu item is unavailable',
+      NavigationMenuItemExceptionCode.NAVIGATION_MENU_ITEM_NOT_FOUND,
+    );
+  }
+};
 
 @Injectable()
 export class NavigationMenuItemService {
@@ -56,13 +125,28 @@ export class NavigationMenuItemService {
     type?: NavigationMenuItemType;
     limit?: number;
   }): Promise<NavigationMenuItemDTO[]> {
-    const { flatNavigationMenuItemMaps } =
+    const {
+      flatNavigationMenuItemMaps,
+      flatObjectMetadataMaps,
+      flatViewMaps,
+      flatPageLayoutMaps,
+    } =
       await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
           workspaceId,
-          flatMapsKeys: ['flatNavigationMenuItemMaps'],
+          flatMapsKeys: [
+            'flatNavigationMenuItemMaps',
+            'flatObjectMetadataMaps',
+            'flatViewMaps',
+            'flatPageLayoutMaps',
+          ],
         },
       );
+    const targetMaps = {
+      flatObjectMetadataMaps,
+      flatViewMaps,
+      flatPageLayoutMaps,
+    };
 
     const filtered = Object.values(
       flatNavigationMenuItemMaps.byUniversalIdentifier,
@@ -84,6 +168,7 @@ export class NavigationMenuItemService {
         // scope === 'user'
         return itemIsUserScoped && item.userWorkspaceId === userWorkspaceId;
       })
+      .filter((item) => !isRetiredNavigationTarget(item, targetMaps))
       .filter((item) => !isDefined(folderId) || item.folderId === folderId)
       .filter((item) => !isDefined(type) || item.type === type)
       .sort((a, b) => a.position - b.position);
@@ -100,11 +185,21 @@ export class NavigationMenuItemService {
     id: string;
     workspaceId: string;
   }): Promise<NavigationMenuItemDTO | null> {
-    const { flatNavigationMenuItemMaps } =
+    const {
+      flatNavigationMenuItemMaps,
+      flatObjectMetadataMaps,
+      flatViewMaps,
+      flatPageLayoutMaps,
+    } =
       await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
           workspaceId,
-          flatMapsKeys: ['flatNavigationMenuItemMaps'],
+          flatMapsKeys: [
+            'flatNavigationMenuItemMaps',
+            'flatObjectMetadataMaps',
+            'flatViewMaps',
+            'flatPageLayoutMaps',
+          ],
         },
       );
 
@@ -113,7 +208,14 @@ export class NavigationMenuItemService {
       flatEntityMaps: flatNavigationMenuItemMaps,
     });
 
-    if (!isDefined(flatNavigationMenuItem)) {
+    if (
+      !isDefined(flatNavigationMenuItem) ||
+      isRetiredNavigationTarget(flatNavigationMenuItem, {
+        flatObjectMetadataMaps,
+        flatViewMaps,
+        flatPageLayoutMaps,
+      })
+    ) {
       return null;
     }
 
@@ -224,6 +326,21 @@ export class NavigationMenuItemService {
         ],
       },
     );
+
+    const targetMaps = {
+      flatObjectMetadataMaps,
+      flatViewMaps,
+      flatPageLayoutMaps,
+    };
+    for (const input of inputs) {
+      if (input.id === retiredMenuUid) {
+        throw new NavigationMenuItemException(
+          'Retired Brand Brain navigation menu item is unavailable',
+          NavigationMenuItemExceptionCode.NAVIGATION_MENU_ITEM_NOT_FOUND,
+        );
+      }
+      assertNavigationTargetAvailable(input, targetMaps);
+    }
 
     const optimisticFlatNavigationMenuItemMaps = structuredClone(
       existingFlatNavigationMenuItemMaps,
@@ -372,15 +489,26 @@ export class NavigationMenuItemService {
 
     const {
       flatNavigationMenuItemMaps: existingFlatNavigationMenuItemMaps,
+      flatObjectMetadataMaps,
+      flatViewMaps,
       flatPageLayoutMaps,
-    } =
-      await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-        {
-          workspaceId,
-          flatMapsKeys: ['flatNavigationMenuItemMaps', 'flatPageLayoutMaps'],
-        },
-      );
+    } = await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+      {
+        workspaceId,
+        flatMapsKeys: [
+          'flatNavigationMenuItemMaps',
+          'flatObjectMetadataMaps',
+          'flatViewMaps',
+          'flatPageLayoutMaps',
+        ],
+      },
+    );
 
+    const targetMaps = {
+      flatObjectMetadataMaps,
+      flatViewMaps,
+      flatPageLayoutMaps,
+    };
     const flatNavigationMenuItemsToUpdate: FlatNavigationMenuItem[] = [];
 
     for (const { id, update } of inputs) {
@@ -395,6 +523,7 @@ export class NavigationMenuItemService {
       });
 
       if (isDefined(existingNavigationMenuItem)) {
+        assertNavigationTargetAvailable(existingNavigationMenuItem, targetMaps);
         await this.navigationMenuItemAccessService.canUserUpdateNavigationMenuItem(
           {
             userWorkspaceId: authUserWorkspaceId,
@@ -406,15 +535,17 @@ export class NavigationMenuItemService {
         );
       }
 
-      flatNavigationMenuItemsToUpdate.push(
+      const proposedItem =
         fromUpdateNavigationMenuItemInputToFlatNavigationMenuItemToUpdateOrThrow(
           {
             flatNavigationMenuItemMaps: existingFlatNavigationMenuItemMaps,
             flatPageLayoutMaps,
             updateNavigationMenuItemInput: updateInput,
           },
-        ),
-      );
+        );
+
+      assertNavigationTargetAvailable(proposedItem, targetMaps);
+      flatNavigationMenuItemsToUpdate.push(proposedItem);
     }
 
     const validateAndBuildResult =
@@ -524,13 +655,27 @@ export class NavigationMenuItemService {
         { workspaceId },
       );
 
-    const { flatNavigationMenuItemMaps: existingFlatNavigationMenuItemMaps } =
-      await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-        {
-          workspaceId,
-          flatMapsKeys: ['flatNavigationMenuItemMaps'],
-        },
-      );
+    const {
+      flatNavigationMenuItemMaps: existingFlatNavigationMenuItemMaps,
+      flatObjectMetadataMaps,
+      flatViewMaps,
+      flatPageLayoutMaps,
+    } = await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+      {
+        workspaceId,
+        flatMapsKeys: [
+          'flatNavigationMenuItemMaps',
+          'flatObjectMetadataMaps',
+          'flatViewMaps',
+          'flatPageLayoutMaps',
+        ],
+      },
+    );
+    const targetMaps = {
+      flatObjectMetadataMaps,
+      flatViewMaps,
+      flatPageLayoutMaps,
+    };
 
     const flatEntitiesToDeleteOrdered: FlatNavigationMenuItem[] = [];
     const seenDeleteId = new Set<string>();
@@ -545,6 +690,8 @@ export class NavigationMenuItemService {
           flatNavigationMenuItemMaps: existingFlatNavigationMenuItemMaps,
           navigationMenuItemId: requestedId,
         });
+
+      assertNavigationTargetAvailable(flatNavigationMenuItemRoot, targetMaps);
 
       await this.navigationMenuItemAccessService.canUserDeleteNavigationMenuItem(
         {
@@ -576,6 +723,7 @@ export class NavigationMenuItemService {
       }
 
       for (const flatEntity of flatEntitiesForRoot) {
+        assertNavigationTargetAvailable(flatEntity, targetMaps);
         if (!seenDeleteId.has(flatEntity.id)) {
           seenDeleteId.add(flatEntity.id);
           flatEntitiesToDeleteOrdered.push(flatEntity);
@@ -632,6 +780,24 @@ export class NavigationMenuItemService {
     workspaceId: string;
     authContext: WorkspaceAuthContext;
   }): Promise<RecordIdentifierDTO | null> {
+    const { flatObjectMetadataMaps } =
+      await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+        {
+          workspaceId,
+          flatMapsKeys: ['flatObjectMetadataMaps'],
+        },
+      );
+
+    if (
+      retiredObjectUids.has(
+        flatObjectMetadataMaps.universalIdentifierById[
+          targetObjectMetadataId
+        ] ?? '',
+      )
+    ) {
+      return null;
+    }
+
     try {
       return await this.navigationMenuItemRecordIdentifierService.resolveRecordIdentifier(
         {

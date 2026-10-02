@@ -7,6 +7,18 @@ import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-m
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 
+// A direct Error with an own 4xx responseCode is recognized by the outbound
+// dispatcher's trap-safe classifier as definitely unaccepted. No provider call occurs.
+const gmailFixtureSendRejection = (): Error & { responseCode: number } => {
+  const error = new Error('E2E fixtures never send Gmail messages') as Error & {
+    responseCode: number;
+  };
+
+  error.responseCode = 403;
+
+  return error;
+};
+
 @Injectable()
 export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDriver {
   readonly providerRequestTimeoutMs =
@@ -69,7 +81,7 @@ export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDri
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
     this.recordSendAttempt(connectedAccount);
-    throw new Error('E2E fixtures never send Gmail messages');
+    throw gmailFixtureSendRejection();
   }
 
   async createDraft(
@@ -99,7 +111,7 @@ export class E2eFixtureGmailMessageOutboundService implements MessageOutboundDri
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
     this.recordSendAttempt(connectedAccount);
-    throw new Error('E2E fixtures never send Gmail messages');
+    throw gmailFixtureSendRejection();
   }
 
   async deleteDraft(_: string, __: ConnectedAccountEntity): Promise<void> {

@@ -280,7 +280,7 @@ export class MyahInboxContactTriageReceiptService {
                     [source.id],
                   )
                 : await query(
-                    'SELECT id, "creatorId" FROM "_myahSocialConversation" WHERE id=$1 FOR UPDATE',
+                    'SELECT id, "creatorId" FROM "myahSocialConversation" WHERE id=$1 FOR UPDATE',
                     [source.id],
                   )
             ) as Array<{ id: string; creatorId: string | null }>;

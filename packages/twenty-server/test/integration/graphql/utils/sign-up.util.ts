@@ -66,7 +66,7 @@ export const signUp = async ({
         ...input,
       },
     },
-    undefined, // Public endpoint - no authentication required
+    null, // Public endpoint - no authentication required
   );
 
   if (expectToFail === true) {

@@ -37,11 +37,12 @@ import {
   PageLayoutExceptionMessageKey,
   generatePageLayoutExceptionMessage,
 } from 'src/engine/metadata-modules/page-layout/exceptions/page-layout.exception';
+import { assertPageLayoutMutationIsAllowed } from 'src/engine/metadata-modules/page-layout/utils/assert-page-layout-mutation-is-allowed.util';
 import { fromFlatPageLayoutWithTabsAndWidgetsToPageLayoutDto } from 'src/engine/metadata-modules/page-layout/utils/from-flat-page-layout-with-tabs-and-widgets-to-page-layout-dto.util';
+import { resolveOverridableEntityProperty } from 'src/engine/metadata-modules/utils/resolve-overridable-entity-property.util';
 import { ViewService } from 'src/engine/metadata-modules/view/services/view.service';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
-import { DashboardSyncService } from 'src/modules/dashboard-sync/services/dashboard-sync.service';
 
 @Injectable()
 export class PageLayoutResetService {
@@ -51,7 +52,6 @@ export class PageLayoutResetService {
     private readonly workspaceMigrationValidateBuildAndRunService: WorkspaceMigrationValidateBuildAndRunService,
     private readonly workspaceManyOrAllFlatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly applicationService: ApplicationService,
-    private readonly dashboardSyncService: DashboardSyncService,
     private readonly viewService: ViewService,
   ) {}
 
@@ -64,6 +64,9 @@ export class PageLayoutResetService {
   }): Promise<PageLayoutWidgetDTO> {
     const {
       flatPageLayoutWidgetMaps,
+      flatPageLayoutTabMaps,
+      flatPageLayoutMaps,
+      flatObjectMetadataMaps,
       flatViewFieldGroupMaps,
       flatViewFieldMaps,
     } =
@@ -72,6 +75,9 @@ export class PageLayoutResetService {
           workspaceId,
           flatMapsKeys: [
             'flatPageLayoutWidgetMaps',
+            'flatPageLayoutTabMaps',
+            'flatPageLayoutMaps',
+            'flatObjectMetadataMaps',
             'flatViewFieldGroupMaps',
             'flatViewFieldMaps',
           ],
@@ -92,6 +98,14 @@ export class PageLayoutResetService {
         PageLayoutWidgetExceptionCode.PAGE_LAYOUT_WIDGET_NOT_FOUND,
       );
     }
+
+    assertPageLayoutMutationIsAllowed({
+      flatObjectMetadataMaps,
+      pageLayoutWidgetId: id,
+      flatPageLayoutMaps,
+      flatPageLayoutTabMaps,
+      flatPageLayoutWidgetMaps,
+    });
 
     if (
       !isFlatPageLayoutWidgetConfigurationOfType(
@@ -129,6 +143,16 @@ export class PageLayoutResetService {
       universalOverrides: null,
       updatedAt: now,
     };
+
+    assertPageLayoutMutationIsAllowed({
+      flatObjectMetadataMaps,
+      pageLayoutTabId: resolveOverridableEntityProperty(
+        widgetToUpdate,
+        'pageLayoutTabId',
+      ),
+      flatPageLayoutMaps,
+      flatPageLayoutTabMaps,
+    });
 
     const viewId = widget.configuration.viewId;
 
@@ -200,12 +224,6 @@ export class PageLayoutResetService {
       flatEntityMaps: recomputedWidgetMaps,
     });
 
-    await this.dashboardSyncService.updateLinkedDashboardsUpdatedAtByWidgetId({
-      widgetId: id,
-      workspaceId,
-      updatedAt: new Date(now),
-    });
-
     return fromFlatPageLayoutWidgetToPageLayoutWidgetDto(updatedWidget);
   }
 
@@ -219,6 +237,8 @@ export class PageLayoutResetService {
     const {
       flatPageLayoutTabMaps,
       flatPageLayoutWidgetMaps,
+      flatPageLayoutMaps,
+      flatObjectMetadataMaps,
       flatViewFieldGroupMaps,
       flatViewFieldMaps,
     } =
@@ -228,6 +248,8 @@ export class PageLayoutResetService {
           flatMapsKeys: [
             'flatPageLayoutTabMaps',
             'flatPageLayoutWidgetMaps',
+            'flatPageLayoutMaps',
+            'flatObjectMetadataMaps',
             'flatViewFieldGroupMaps',
             'flatViewFieldMaps',
           ],
@@ -248,6 +270,13 @@ export class PageLayoutResetService {
         PageLayoutTabExceptionCode.PAGE_LAYOUT_TAB_NOT_FOUND,
       );
     }
+
+    assertPageLayoutMutationIsAllowed({
+      flatObjectMetadataMaps,
+      pageLayoutTabId: id,
+      flatPageLayoutMaps,
+      flatPageLayoutTabMaps,
+    });
 
     const { workspaceCustomFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
@@ -290,6 +319,24 @@ export class PageLayoutResetService {
         workspaceCustomFlatApplication.universalIdentifier,
       now,
     });
+
+    for (const widget of [...widgetsToUpdate, ...widgetsToDelete]) {
+      assertPageLayoutMutationIsAllowed({
+        flatObjectMetadataMaps,
+        pageLayoutTabId: widget.pageLayoutTabId,
+        flatPageLayoutMaps,
+        flatPageLayoutTabMaps,
+      });
+      assertPageLayoutMutationIsAllowed({
+        flatObjectMetadataMaps,
+        pageLayoutTabId: resolveOverridableEntityProperty(
+          widget,
+          'pageLayoutTabId',
+        ),
+        flatPageLayoutMaps,
+        flatPageLayoutTabMaps,
+      });
+    }
 
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
@@ -348,12 +395,6 @@ export class PageLayoutResetService {
       flatEntityMaps: recomputedTabMaps,
     });
 
-    await this.dashboardSyncService.updateLinkedDashboardsUpdatedAtByTabId({
-      tabId: id,
-      workspaceId,
-      updatedAt: new Date(now),
-    });
-
     return fromFlatPageLayoutTabToPageLayoutTabDto(updatedTab);
   }
 
@@ -366,6 +407,7 @@ export class PageLayoutResetService {
   }): Promise<PageLayoutDTO> {
     const {
       flatPageLayoutMaps,
+      flatObjectMetadataMaps,
       flatPageLayoutTabMaps,
       flatPageLayoutWidgetMaps,
       flatViewFieldGroupMaps,
@@ -376,6 +418,7 @@ export class PageLayoutResetService {
           workspaceId,
           flatMapsKeys: [
             'flatPageLayoutMaps',
+            'flatObjectMetadataMaps',
             'flatPageLayoutTabMaps',
             'flatPageLayoutWidgetMaps',
             'flatViewFieldGroupMaps',
@@ -398,6 +441,12 @@ export class PageLayoutResetService {
         PageLayoutExceptionCode.PAGE_LAYOUT_NOT_FOUND,
       );
     }
+
+    assertPageLayoutMutationIsAllowed({
+      flatObjectMetadataMaps,
+      pageLayoutId: id,
+      flatPageLayoutMaps,
+    });
 
     const { workspaceCustomFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
@@ -473,6 +522,24 @@ export class PageLayoutResetService {
       allOrphanedViewIds = [...allOrphanedViewIds, ...orphanedViewIds];
     }
 
+    for (const widget of [...allWidgetsToUpdate, ...allWidgetsToDelete]) {
+      assertPageLayoutMutationIsAllowed({
+        flatObjectMetadataMaps,
+        pageLayoutTabId: widget.pageLayoutTabId,
+        flatPageLayoutMaps,
+        flatPageLayoutTabMaps,
+      });
+      assertPageLayoutMutationIsAllowed({
+        flatObjectMetadataMaps,
+        pageLayoutTabId: resolveOverridableEntityProperty(
+          widget,
+          'pageLayoutTabId',
+        ),
+        flatPageLayoutMaps,
+        flatPageLayoutTabMaps,
+      });
+    }
+
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
         {
@@ -537,14 +604,6 @@ export class PageLayoutResetService {
       flatEntityMaps: recomputedLayoutMaps,
     });
 
-    await this.dashboardSyncService.updateLinkedDashboardsUpdatedAtByPageLayoutId(
-      {
-        pageLayoutId: id,
-        workspaceId,
-        updatedAt: new Date(now),
-      },
-    );
-
     return fromFlatPageLayoutWithTabsAndWidgetsToPageLayoutDto(
       reconstructFlatPageLayoutWithTabsAndWidgets({
         layout: updatedLayout,
@@ -589,7 +648,8 @@ export class PageLayoutResetService {
       .filter(isDefined)
       .filter(
         (widget) =>
-          widget.pageLayoutTabId === tabId && !isDefined(widget.deletedAt),
+          resolveOverridableEntityProperty(widget, 'pageLayoutTabId') ===
+            tabId && !isDefined(widget.deletedAt),
       );
 
     const { toHardDelete: widgetsToDelete, toReset: widgetsToReset } =

@@ -3,7 +3,9 @@ import { Module } from '@nestjs/common';
 import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { CampaignSequenceAuthorityModule } from 'src/engine/core-modules/campaign-sequence-authority/campaign-sequence-authority.module';
 import { WorkspaceCampaignCapacityTimeZoneModule } from 'src/engine/core-modules/myah/workspace-campaign-capacity-time-zone.module';
+import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { WorkspaceCampaignCapacityTimeZoneService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone.service';
+import { ConnectedAccountMetadataModule } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.module';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -34,6 +36,7 @@ import {
 } from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
 import { CampaignExecutionResolver } from 'src/modules/campaign-execution/resolvers/campaign-execution.resolver';
 import { CampaignActivityReaderService } from 'src/modules/campaign-execution/services/campaign-activity-reader.service';
+import { CampaignMessageOverviewReaderService } from 'src/modules/campaign-execution/services/campaign-message-overview-reader.service';
 import { CampaignCreatorExclusionService } from 'src/modules/campaign-execution/services/campaign-creator-exclusion.service';
 import { CampaignExecutionApplicationService } from 'src/modules/campaign-execution/services/campaign-execution-application.service';
 import { CampaignExecutionService } from 'src/modules/campaign-execution/services/campaign-execution.service';
@@ -54,6 +57,7 @@ import { CampaignFinalSubmissionAuthorityAdapter } from 'src/modules/campaign-ex
 import { CampaignSentProjectionService } from 'src/modules/campaign-execution/services/campaign-sent-projection.service';
 import { CampaignMicrosoftHeaderReconciliationService } from 'src/modules/campaign-execution/services/campaign-microsoft-header-reconciliation.service';
 import { CampaignEmailRuntimeService } from 'src/modules/campaign-execution/services/campaign-email-runtime.service';
+import { CampaignForecastRefreshService } from 'src/modules/campaign-execution/services/campaign-forecast-refresh.service';
 import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
@@ -69,6 +73,7 @@ import { CampaignReplyService } from 'src/modules/campaign-execution/services/ca
   imports: [
     CampaignExecutionModule,
     CampaignSequenceAuthorityModule,
+    MyahInboxContactTriageModule,
     EmailingModule,
     CampaignOutreachWorkflowModule,
     MyahCampaignLifecycleModule,
@@ -77,6 +82,7 @@ import { CampaignReplyService } from 'src/modules/campaign-execution/services/ca
     MessagingImportManagerModule,
     MessagingQueryHookModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
+    ConnectedAccountMetadataModule,
   ],
   providers: [
     CampaignLifecycleActorPermissionResolverAdapter,
@@ -199,6 +205,7 @@ import { CampaignReplyService } from 'src/modules/campaign-execution/services/ca
       ],
     },
     CampaignEmailRuntimeService,
+    CampaignForecastRefreshService,
     CampaignReplyService,
     {
       provide: CAMPAIGN_REPLY_EVIDENCE_PORT,
@@ -229,6 +236,7 @@ import { CampaignReplyService } from 'src/modules/campaign-execution/services/ca
     CampaignExecutionApplicationService,
     CampaignCreatorExclusionService,
     CampaignActivityReaderService,
+    CampaignMessageOverviewReaderService,
     CampaignExecutionResolver,
   ],
   exports: [

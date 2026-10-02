@@ -12,6 +12,7 @@ import { MessagingIMAPDriverModule } from 'src/modules/messaging/message-import-
 import { MessagingSmtpDriverModule } from 'src/modules/messaging/message-import-manager/drivers/smtp/messaging-smtp-driver.module';
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { MessagingMessageCleanerModule } from 'src/modules/messaging/message-cleaner/messaging-message-cleaner.module';
+import { E2eFixtureRejectingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/e2e-fixture-rejecting-message-outbound.service';
 import { EmailGroupMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/email-group/services/email-group-message-outbound.service';
 import { E2eFixtureGmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/e2e-fixture-gmail-message-outbound.service';
 import { GmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/gmail-message-outbound.service';
@@ -23,7 +24,8 @@ import { SendEmailService } from 'src/modules/messaging/message-outbound-manager
 import { SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
 import { isE2eTestFixturesEnabled } from 'src/engine/core-modules/twenty-config/utils/is-e2e-test-fixtures-enabled.util';
 
-const gmailMessageOutboundProvider = isE2eTestFixturesEnabled()
+const fixtureMode = isE2eTestFixturesEnabled();
+const gmailMessageOutboundProvider = fixtureMode
   ? {
       provide: GmailMessageOutboundService,
       useClass: E2eFixtureGmailMessageOutboundService,
@@ -47,9 +49,26 @@ const gmailMessageOutboundProvider = isE2eTestFixturesEnabled()
   ],
   providers: [
     gmailMessageOutboundProvider,
-    MicrosoftMessageOutboundService,
-    ImapSmtpMessageOutboundService,
-    EmailGroupMessageOutboundService,
+    ...(fixtureMode
+      ? [
+          {
+            provide: MicrosoftMessageOutboundService,
+            useClass: E2eFixtureRejectingMessageOutboundService,
+          },
+          {
+            provide: ImapSmtpMessageOutboundService,
+            useClass: E2eFixtureRejectingMessageOutboundService,
+          },
+          {
+            provide: EmailGroupMessageOutboundService,
+            useClass: E2eFixtureRejectingMessageOutboundService,
+          },
+        ]
+      : [
+          MicrosoftMessageOutboundService,
+          ImapSmtpMessageOutboundService,
+          EmailGroupMessageOutboundService,
+        ]),
     MessagingMessageOutboundService,
     MessagingDraftSendService,
     SendEmailService,

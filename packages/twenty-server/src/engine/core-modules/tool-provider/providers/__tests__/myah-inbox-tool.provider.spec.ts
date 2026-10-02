@@ -61,6 +61,7 @@ const createProvider = ({
   const workspaceService = {
     generateMyahInboxTools: jest.fn().mockReturnValue({
       search_myah_inbox_threads: tool('search_myah_inbox_threads'),
+      list_myah_inbox_reply_contexts: tool('list_myah_inbox_reply_contexts'),
       get_myah_inbox_thread_context: tool('get_myah_inbox_thread_context'),
       generate_myah_inbox_reply_proposal: tool(
         'generate_myah_inbox_reply_proposal',
@@ -152,6 +153,7 @@ describe('MyahInboxToolProvider', () => {
     expect(names.sort()).toEqual([
       'generate_myah_inbox_reply_proposal',
       'get_myah_inbox_thread_context',
+      'list_myah_inbox_reply_contexts',
       'search_myah_inbox_threads',
     ]);
     expect(workspaceService.generateMyahInboxTools).toHaveBeenCalledWith(

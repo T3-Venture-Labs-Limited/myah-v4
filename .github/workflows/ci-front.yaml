@@ -35,7 +35,6 @@ jobs:
         packages/twenty-ui/**
         packages/twenty-shared/**
         packages/twenty-sdk/**
-        !packages/twenty-sdk/package.json
   front-sb-build:
     needs: [changed-files-check, select-runner]
     if: >-

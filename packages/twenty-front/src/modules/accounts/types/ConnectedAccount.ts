@@ -6,6 +6,7 @@ import { type MessageChannel } from './MessageChannel';
 export type ConnectedAccountSendingPolicy = {
   dailySendLimit: number;
   minimumSendIntervalMs: number;
+  sendingPolicyRevision?: number;
 };
 
 export type ConnectedAccount = ConnectedAccountSendingPolicy & {

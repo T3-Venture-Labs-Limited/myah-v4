@@ -5,6 +5,13 @@ import {
   WorkspaceIteratorService,
 } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type ParsedUpgradeCommandOptions } from 'src/database/commands/upgrade-version-command/upgrade.command';
+import {
+  BackfillSystemUniqueIndexUniversalIdentifierCommand,
+  SYSTEM_UNIQUE_INDEX_BACKFILL_UPGRADE_NAME,
+} from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1783093620000-backfill-system-unique-index-universal-identifier.command';
+import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
+import { RetireBrandBrainMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790000000410-retire-brand-brain-metadata.command';
+import { LEGACY_2_19_PREREQUISITE_COMMAND_NAMES } from 'src/engine/core-modules/upgrade/constants/legacy-2-19-prerequisite-command-names.constant';
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import {
   UpgradeMigrationService,
@@ -17,10 +24,18 @@ import {
   UpgradeSequenceReaderService,
 } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import { WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
+import { UpgradeWriteLockService } from 'src/engine/core-modules/upgrade/services/upgrade-write-lock.service';
 import { formatUpgradeLog } from 'src/engine/core-modules/upgrade/utils/format-upgrade-log.util';
 import { UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade-aware/upgrade-aware-entity-metadata.adapter';
 import { WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
+
+const LEGACY_REBRAND_COMMAND_NAME =
+  '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206';
+const LEGACY_PROVIDER_BINDING_COMMAND_NAME =
+  '2.19.0_AddInstagramReplyApprovalProviderBindingSlowInstanceCommand_1784106536001';
+const LEGACY_FINALIZE_COMMAND_NAME =
+  '2.19.0_FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand_1784112963059';
 
 export type UpgradeSequenceRunnerReport = {
   totalSuccesses: number;
@@ -39,6 +54,7 @@ export class UpgradeSequenceRunnerService {
     private readonly upgradeAwareEntityMetadataAdapter: UpgradeAwareEntityMetadataAdapter,
     private readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly workspaceVersionService: WorkspaceVersionService,
+    private readonly upgradeWriteLockService: UpgradeWriteLockService,
   ) {}
 
   async run({
@@ -48,26 +64,32 @@ export class UpgradeSequenceRunnerService {
     sequence: UpgradeStep[];
     options: ParsedUpgradeCommandOptions;
   }): Promise<UpgradeSequenceRunnerReport> {
-    if (sequence.length === 0) {
-      return { totalSuccesses: 0, totalFailures: 0 };
-    }
+    // The first authoritative cursor and workspace reads occur inside the lock.
+    return this.upgradeWriteLockService.withLock(
+      async () => {
+        if (sequence.length === 0) {
+          return { totalSuccesses: 0, totalFailures: 0 };
+        }
 
-    await this.upgradeAwareEntityMetadataAdapter.refresh();
-
-    try {
-      return await this.runInner({ sequence, options });
-    } finally {
-      try {
         await this.upgradeAwareEntityMetadataAdapter.refresh();
-      } catch (refreshError) {
-        this.logger.error(
-          `Failed to refresh upgrade-aware entity metadata after run`,
-          refreshError instanceof Error
-            ? refreshError.stack
-            : String(refreshError),
-        );
-      }
-    }
+
+        try {
+          return await this.runInner({ sequence, options });
+        } finally {
+          try {
+            await this.upgradeAwareEntityMetadataAdapter.refresh();
+          } catch (refreshError) {
+            this.logger.error(
+              'Failed to refresh upgrade-aware entity metadata after run',
+              refreshError instanceof Error
+                ? refreshError.stack
+                : String(refreshError),
+            );
+          }
+        }
+      },
+      { requireNoOngoingActivation: true },
+    );
   }
 
   private async runInner({
@@ -79,6 +101,13 @@ export class UpgradeSequenceRunnerService {
   }): Promise<UpgradeSequenceRunnerReport> {
     const allActiveOrSuspendedWorkspaceIds =
       await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds();
+
+    if (!options.dryRun) {
+      await this.reconcileCommittedWorkspaceSteps({
+        sequence,
+        workspaceIds: allActiveOrSuspendedWorkspaceIds,
+      });
+    }
 
     const startCursor = await this.resolveStartCursor({
       sequence,
@@ -213,6 +242,31 @@ export class UpgradeSequenceRunnerService {
         allActiveOrSuspendedWorkspaceIds,
       );
 
+    // The old native Rebrand cursor predates these fast prerequisites. Block
+    // incomplete receipts even on a failed Rebrand retry; a completed receipt
+    // set is not a physical-schema postcondition for an inconsistent database.
+    if (
+      [
+        LEGACY_REBRAND_COMMAND_NAME,
+        LEGACY_PROVIDER_BINDING_COMMAND_NAME,
+        LEGACY_FINALIZE_COMMAND_NAME,
+      ].includes(lastAttempted.name)
+    ) {
+      for (const name of LEGACY_2_19_PREREQUISITE_COMMAND_NAMES) {
+        if (
+          !(await this.upgradeMigrationService.isLastAttemptCompleted({
+            name,
+            workspaceId: null,
+          }))
+        ) {
+          throw new Error(
+            `Historical 2.19 prerequisite receipt ${name} is missing before ${lastAttempted.name}; ` +
+              '2.19 prerequisite reconciliation is not available. Refusing ordered upgrade before approval consumers.',
+          );
+        }
+      }
+    }
+
     const lastAttemptedCursor =
       this.upgradeSequenceReaderService.locateStepInSequenceOrThrow({
         sequence,
@@ -245,6 +299,52 @@ export class UpgradeSequenceRunnerService {
       }
       default:
         assertUnreachable(lastAttemptedStep);
+    }
+  }
+
+  private async reconcileCommittedWorkspaceSteps({
+    sequence,
+    workspaceIds,
+  }: {
+    sequence: UpgradeStep[];
+    workspaceIds: string[];
+  }): Promise<void> {
+    const recoverable = [
+      {
+        name: SYSTEM_UNIQUE_INDEX_BACKFILL_UPGRADE_NAME,
+        command: BackfillSystemUniqueIndexUniversalIdentifierCommand,
+      },
+      {
+        name: '2.20.0_SynchronizeMyahStandardMetadataCommand_1784266302001',
+        command: SynchronizeMyahStandardMetadataCommand,
+      },
+      {
+        name: '2.20.0_RetireBrandBrainMetadataCommand_1790000000410',
+        command: RetireBrandBrainMetadataCommand,
+      },
+    ] as const;
+    for (const recovery of recoverable) {
+      const step = sequence.find((item) => item.name === recovery.name);
+      if (!step) continue;
+      if (
+        step.kind !== 'workspace' ||
+        !(step.command instanceof recovery.command)
+      )
+        throw new Error(`Recovery command not registered: ${recovery.name}`);
+      const queryRunner = this.upgradeWriteLockService.currentRunner();
+      for (const workspaceId of workspaceIds) {
+        if (
+          await this.upgradeMigrationService.isLastAttemptCompleted({
+            name: recovery.name,
+            workspaceId,
+            queryRunner,
+          })
+        ) {
+          // COMMIT and receipt are durable even if Redis callbacks failed.
+          // Heal before reading any cursor or running another step.
+          await step.command.reconcileCommittedUpgrade(workspaceId);
+        }
+      }
     }
   }
 

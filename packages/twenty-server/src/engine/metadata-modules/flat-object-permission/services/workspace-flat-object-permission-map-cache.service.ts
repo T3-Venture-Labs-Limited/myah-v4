@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { createEmptyFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-flat-entity-maps.constant';
@@ -36,21 +36,31 @@ export class WorkspaceFlatObjectPermissionMapCacheService extends WorkspaceCache
   async computeForCache(
     workspaceId: string,
   ): Promise<FlatObjectPermissionMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatObjectPermissionMaps> {
     const [objectPermissions, applications, roles, objectMetadatas] =
       await Promise.all([
-        this.objectPermissionRepository.find(workspaceId, {
+        this.objectPermissionRepository.withManager(manager).find(workspaceId, {
           withDeleted: true,
         }),
-        this.applicationRepository.find({
+        manager.getRepository(ApplicationEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.roleRepository.find(workspaceId, {
+        this.roleRepository.withManager(manager).find(workspaceId, {
           select: ['id', 'universalIdentifier'],
           withDeleted: true,
         }),
-        this.objectMetadataRepository.find({
+        manager.getRepository(ObjectMetadataEntity).find({
           where: { workspaceId },
           select: ['id', 'universalIdentifier'],
           withDeleted: true,

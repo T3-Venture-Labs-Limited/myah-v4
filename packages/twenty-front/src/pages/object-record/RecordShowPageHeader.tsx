@@ -7,10 +7,12 @@ export const RecordShowPageHeader = ({
   objectNameSingular,
   objectRecordId,
   children,
+  compactOnMobile = false,
 }: {
   objectNameSingular: string;
   objectRecordId: string;
   children?: React.ReactNode;
+  compactOnMobile?: boolean;
 }) => {
   const { objectMetadataItem } = useRecordShowPagePagination(
     objectNameSingular,
@@ -28,9 +30,11 @@ export const RecordShowPageHeader = ({
           objectRecordId={objectRecordId}
           objectLabel={objectMetadataItem.labelPlural}
           labelIdentifierFieldMetadataItem={labelIdentifierFieldMetadataItem}
+          compactOnMobile={compactOnMobile}
         />
       }
       actionButton={children}
+      reserveActionSpace={compactOnMobile}
     />
   );
 };

@@ -302,9 +302,11 @@ export class WorkspaceMigrationBuildOrchestratorService {
     'fromToAllFlatEntityMaps' | 'dependencyAllFlatEntityMaps'
   >): AllUniversalFlatEntityMaps {
     if (isDefined(dependencyAllFlatEntityMaps)) {
+      // Builders mutate optimistic maps; dependency maps may belong to the
+      // workspace cache and must remain unchanged until the runner commits.
       return {
         ...createEmptyAllFlatEntityMaps(),
-        ...dependencyAllFlatEntityMaps,
+        ...structuredClone(dependencyAllFlatEntityMaps),
       };
     }
     const allFromToFlatEntityMapsKeys = Object.keys(

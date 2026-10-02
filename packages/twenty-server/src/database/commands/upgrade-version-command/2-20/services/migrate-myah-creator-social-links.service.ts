@@ -1,8 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
+import { isUUID } from 'class-validator';
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import type { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+
+import { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/workspace-metadata-version/services/workspace-metadata-version.service';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import type { UpgradeWorkspaceTransaction } from 'src/engine/workspace-manager/workspace-migration/types/upgrade-workspace-transaction.type';
 
 import { WorkspaceMigrationRunnerService } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/services/workspace-migration-runner.service';
 
@@ -218,7 +224,381 @@ export class MigrateMyahCreatorSocialLinksService {
     @InjectDataSource()
     private readonly coreDataSource: DataSource,
     private readonly workspaceMigrationRunnerService: WorkspaceMigrationRunnerService,
+    private readonly workspaceMetadataVersionService: WorkspaceMetadataVersionService,
   ) {}
+
+  // Dormant leaf only: the eventual outer adapter must verify the upgrade lock's
+  // runner identity. This method never owns the transaction or its receipt.
+  async migrateInUpgradeTransaction({
+    workspaceId,
+    schemaName,
+    upgradeTransaction,
+  }: {
+    workspaceId: string;
+    schemaName: string;
+    upgradeTransaction: UpgradeWorkspaceTransaction;
+  }): Promise<{ canDeleteOldFields: boolean }> {
+    const runner = upgradeTransaction?.queryRunner;
+
+    if (
+      !isUUID(workspaceId) ||
+      schemaName !== getWorkspaceSchemaName(workspaceId) ||
+      !runner ||
+      runner.isReleased ||
+      !runner.isTransactionActive ||
+      !runner.manager ||
+      runner.manager.queryRunner !== runner ||
+      typeof upgradeTransaction.afterCommit !== 'function'
+    ) {
+      throw new Error(
+        'Creator social migration requires a bound upgrade transaction and workspace schema',
+      );
+    }
+
+    const query = (sql: string, parameters: unknown[] = []): Promise<unknown> =>
+      runner.query(sql, parameters);
+    const rows = async <T>(
+      sql: string,
+      parameters: unknown[] = [],
+    ): Promise<T[]> => {
+      const result = await query(sql, parameters);
+
+      if (!Array.isArray(result))
+        throw new Error('Invalid Creator social query result');
+      return result as T[];
+    };
+    const count = async (
+      sql: string,
+      parameters: unknown[] = [],
+    ): Promise<number> => {
+      const result = await rows<{ count: unknown }>(sql, parameters);
+      const value = result[0]?.count;
+
+      if (
+        result.length !== 1 ||
+        typeof value !== 'string' ||
+        !/^(0|[1-9]\d*)$/.test(value) ||
+        !Number.isSafeInteger(Number(value))
+      )
+        throw new Error('Invalid Creator social count');
+      return Number(value);
+    };
+
+    const workspace = await rows<{ databaseSchema: string }>(
+      `SELECT "databaseSchema" FROM core."workspace" WHERE id = $1`,
+      [workspaceId],
+    );
+
+    if (workspace.length !== 1 || workspace[0].databaseSchema !== schemaName) {
+      throw new Error('Creator social workspace schema mismatch');
+    }
+    if (
+      (await count(
+        `SELECT COUNT(*)::text AS count FROM information_schema.tables
+       WHERE table_schema = $1 AND table_name = 'creator' AND table_type = 'BASE TABLE'`,
+        [schemaName],
+      )) !== 1
+    )
+      throw new Error('Creator table is missing');
+
+    const columnRows = await rows<{ columnName: string; dataType: string }>(
+      `SELECT column_name AS "columnName", data_type AS "dataType"
+       FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'creator'`,
+      [schemaName],
+    );
+    const columns = new Map(
+      columnRows.map(({ columnName, dataType }) => [columnName, dataType]),
+    );
+
+    if (
+      columnRows.length === 0 ||
+      columns.size !== columnRows.length ||
+      columnRows.some(
+        ({ columnName, dataType }) =>
+          typeof columnName !== 'string' || typeof dataType !== 'string',
+      )
+    )
+      throw new Error('Invalid Creator column catalog');
+
+    const presentPairs = CREATOR_SOCIAL_LINK_FIELD_PAIRS.filter((pair) =>
+      columns.has(pair.oldColumnName),
+    );
+
+    if (presentPairs.length === 0) {
+      if (
+        await count(
+          `SELECT COUNT(*)::text AS count FROM core."fieldMetadata"
+         WHERE "workspaceId" = $1 AND "universalIdentifier" = ANY($2::uuid[])`,
+          [
+            workspaceId,
+            CREATOR_SOCIAL_LINK_FIELD_PAIRS.map(
+              (pair) => pair.oldUniversalIdentifier,
+            ),
+          ],
+        )
+      )
+        throw new Error(
+          'Creator obsolete field metadata remains without data columns',
+        );
+      return { canDeleteOldFields: true };
+    }
+
+    for (const pair of presentPairs) {
+      const textType = (name: string) =>
+        ['text', 'character varying'].includes(columns.get(name) ?? '');
+
+      if (
+        !textType(pair.oldColumnName) ||
+        !textType(pair.newPrimaryUrlColumnName) ||
+        !textType(pair.newPrimaryLabelColumnName) ||
+        columns.get(pair.newSecondaryLinksColumnName) !== 'jsonb'
+      )
+        throw new Error(
+          'Creator social columns are missing or have incompatible types',
+        );
+    }
+
+    // Only the fixed pair names interpolate into SQL; the schema identifier is
+    // generated from the validated UUID and escaped by the installed PG driver.
+    const creator = `${runner.connection.driver.escape(schemaName)}.${runner.connection.driver.escape('creator')}`;
+    const fieldIds = presentPairs.flatMap((pair) => [
+      pair.oldUniversalIdentifier,
+      pair.newUniversalIdentifier,
+    ]);
+    const fields = await rows<{
+      id: string;
+      universalIdentifier: string;
+      name: string;
+      type: string;
+      objectMetadataId: string;
+      applicationId: string;
+      objectUniversalIdentifier: string;
+      objectName: string;
+      objectApplicationId: string;
+    }>(
+      `SELECT f.id, f."universalIdentifier", f.name, f.type,
+              f."objectMetadataId", f."applicationId",
+              o."universalIdentifier" AS "objectUniversalIdentifier",
+              o."nameSingular" AS "objectName", o."applicationId" AS "objectApplicationId"
+       FROM core."fieldMetadata" f
+       JOIN core."objectMetadata" o ON o.id = f."objectMetadataId"
+         AND o."workspaceId" = f."workspaceId"
+       JOIN core."application" a ON a.id = f."applicationId"
+         AND a."workspaceId" = f."workspaceId" AND a."deletedAt" IS NULL
+       WHERE f."workspaceId" = $1 AND f."universalIdentifier" = ANY($2::uuid[])`,
+      [workspaceId, fieldIds],
+    );
+    const byUid = new Map(
+      fields.map((field) => [field.universalIdentifier, field]),
+    );
+
+    if (fields.length !== fieldIds.length || byUid.size !== fieldIds.length) {
+      throw new Error('Creator social field metadata is missing or ambiguous');
+    }
+
+    for (const pair of presentPairs) {
+      const old = byUid.get(pair.oldUniversalIdentifier)!;
+      const replacement = byUid.get(pair.newUniversalIdentifier)!;
+      const newName = pair.newPrimaryUrlColumnName.replace(
+        'PrimaryLinkUrl',
+        '',
+      );
+
+      if (
+        old.name !== pair.oldColumnName ||
+        old.type !== 'TEXT' ||
+        replacement.name !== newName ||
+        replacement.type !== 'LINKS' ||
+        old.objectMetadataId !== replacement.objectMetadataId ||
+        old.applicationId !== replacement.applicationId ||
+        old.applicationId !== old.objectApplicationId ||
+        replacement.applicationId !== replacement.objectApplicationId ||
+        old.objectUniversalIdentifier !==
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier ||
+        replacement.objectUniversalIdentifier !==
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier ||
+        old.objectName !== 'creator' ||
+        replacement.objectName !== 'creator'
+      )
+        throw new Error('Creator social field ownership or identity mismatch');
+    }
+
+    // All preflight checks precede every write. Unknown companion values and
+    // duplicate view references have no approved lossless merge policy.
+    for (const pair of presentPairs) {
+      if (
+        await count(
+          `SELECT COUNT(*)::text AS count FROM ${creator}
+         WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
+           AND (NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NOT NULL
+             AND BTRIM("${pair.oldColumnName}") <> BTRIM("${pair.newPrimaryUrlColumnName}")
+             OR "${pair.newSecondaryLinksColumnName}" IS NOT NULL
+               AND jsonb_typeof("${pair.newSecondaryLinksColumnName}") <> 'array')`,
+        )
+      )
+        throw new Error(
+          'Creator social URL conflict or malformed secondary links',
+        );
+
+      const old = byUid.get(pair.oldUniversalIdentifier)!;
+      const replacement = byUid.get(pair.newUniversalIdentifier)!;
+
+      if (
+        await count(
+          `SELECT COUNT(*)::text AS count FROM core."fieldPermission" p
+         LEFT JOIN core."role" r ON r.id = p."roleId" AND r."workspaceId" = p."workspaceId"
+         WHERE p."workspaceId" = $1 AND p."fieldMetadataId" IN ($2, $3)
+           AND (p."objectMetadataId" <> $4 OR p."applicationId" <> $5 OR r.id IS NULL
+             OR p."canReadFieldValue" IS TRUE OR p."canUpdateFieldValue" IS TRUE)`,
+          [
+            workspaceId,
+            old.id,
+            replacement.id,
+            old.objectMetadataId,
+            old.applicationId,
+          ],
+        )
+      )
+        throw new Error(
+          'Creator social field permissions have invalid owners or values',
+        );
+
+      for (const table of ['viewField', 'viewFilter', 'viewSort']) {
+        if (
+          await count(
+            `SELECT COUNT(*)::text AS count FROM core."${table}" obsolete
+           LEFT JOIN core."view" v ON v.id = obsolete."viewId" AND v."workspaceId" = obsolete."workspaceId"
+           WHERE obsolete."workspaceId" = $1 AND obsolete."fieldMetadataId" IN ($2, $3)
+             AND obsolete."deletedAt" IS NULL
+             AND (v.id IS NULL OR v."deletedAt" IS NOT NULL OR
+               (obsolete."fieldMetadataId" = $2 AND EXISTS (
+                 SELECT 1 FROM core."${table}" replacement
+                 WHERE replacement."workspaceId" = $1 AND replacement."viewId" = obsolete."viewId"
+                   AND replacement."fieldMetadataId" = $3 AND replacement."deletedAt" IS NULL)))`,
+            [workspaceId, old.id, replacement.id],
+          )
+        )
+          throw new Error(
+            'Creator social view ownership or duplicate reference is ambiguous',
+          );
+      }
+    }
+
+    for (const pair of presentPairs) {
+      const old = byUid.get(pair.oldUniversalIdentifier)!;
+      const replacement = byUid.get(pair.newUniversalIdentifier)!;
+      const ids = [workspaceId, old.id, replacement.id];
+
+      // Keep obsolete restrictions; FALSE on either side wins. The insert runs
+      // after the update, so the two statements cannot update the same row.
+      await query(
+        `UPDATE core."fieldPermission" replacement SET
+        "canReadFieldValue" = CASE WHEN replacement."canReadFieldValue" IS FALSE OR obsolete."canReadFieldValue" IS FALSE THEN FALSE ELSE NULL END,
+        "canUpdateFieldValue" = CASE WHEN replacement."canUpdateFieldValue" IS FALSE OR obsolete."canUpdateFieldValue" IS FALSE THEN FALSE ELSE NULL END
+        FROM core."fieldPermission" obsolete WHERE replacement."workspaceId" = $1
+          AND obsolete."workspaceId" = $1 AND obsolete."fieldMetadataId" = $2
+          AND replacement."fieldMetadataId" = $3 AND replacement."roleId" = obsolete."roleId"`,
+        ids,
+      );
+      await query(
+        `INSERT INTO core."fieldPermission" (
+        "workspaceId", "roleId", "objectMetadataId", "fieldMetadataId",
+        "canReadFieldValue", "canUpdateFieldValue", "universalIdentifier", "applicationId")
+        SELECT obsolete."workspaceId", obsolete."roleId", obsolete."objectMetadataId", $3,
+          obsolete."canReadFieldValue", obsolete."canUpdateFieldValue", gen_random_uuid(), obsolete."applicationId"
+        FROM core."fieldPermission" obsolete WHERE obsolete."workspaceId" = $1
+          AND obsolete."fieldMetadataId" = $2 AND NOT EXISTS (
+            SELECT 1 FROM core."fieldPermission" replacement WHERE replacement."workspaceId" = $1
+              AND replacement."fieldMetadataId" = $3 AND replacement."roleId" = obsolete."roleId")
+        ON CONFLICT ("fieldMetadataId", "roleId") DO NOTHING`,
+        ids,
+      );
+
+      await query(`UPDATE ${creator} SET
+        "${pair.newPrimaryUrlColumnName}" = COALESCE(NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), ''), BTRIM("${pair.oldColumnName}")),
+        "${pair.newPrimaryLabelColumnName}" = COALESCE("${pair.newPrimaryLabelColumnName}", ''),
+        "${pair.newSecondaryLinksColumnName}" = COALESCE("${pair.newSecondaryLinksColumnName}", '[]'::jsonb)
+        WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
+          AND (NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NULL
+            OR "${pair.newPrimaryLabelColumnName}" IS NULL
+            OR "${pair.newSecondaryLinksColumnName}" IS NULL)`);
+
+      for (const table of ['viewField', 'viewFilter', 'viewSort']) {
+        await query(
+          `UPDATE core."${table}" SET "fieldMetadataId" = $3${table === 'viewField' ? '' : ', "subFieldName" = \'primaryLinkUrl\''}
+          WHERE "workspaceId" = $1 AND "fieldMetadataId" = $2 AND "deletedAt" IS NULL`,
+          ids,
+        );
+      }
+    }
+
+    for (const pair of presentPairs) {
+      if (
+        await count(`SELECT COUNT(*)::text AS count FROM ${creator}
+        WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
+          AND (NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NULL
+            OR BTRIM("${pair.oldColumnName}") <> BTRIM("${pair.newPrimaryUrlColumnName}")
+            OR "${pair.newPrimaryLabelColumnName}" IS NULL
+            OR jsonb_typeof("${pair.newSecondaryLinksColumnName}") IS DISTINCT FROM 'array')`)
+      ) {
+        throw new Error('Creator social data verification failed');
+      }
+      const old = byUid.get(pair.oldUniversalIdentifier)!;
+      const replacement = byUid.get(pair.newUniversalIdentifier)!;
+
+      if (
+        await count(
+          `SELECT COUNT(*)::text AS count FROM core."fieldPermission" obsolete
+        WHERE obsolete."workspaceId" = $1 AND obsolete."fieldMetadataId" = $2
+          AND NOT EXISTS (SELECT 1 FROM core."fieldPermission" replacement
+            WHERE replacement."workspaceId" = $1 AND replacement."roleId" = obsolete."roleId"
+              AND replacement."fieldMetadataId" = $3
+              AND (obsolete."canReadFieldValue" IS DISTINCT FROM FALSE OR replacement."canReadFieldValue" IS FALSE)
+              AND (obsolete."canUpdateFieldValue" IS DISTINCT FROM FALSE OR replacement."canUpdateFieldValue" IS FALSE))`,
+          [workspaceId, old.id, replacement.id],
+        )
+      )
+        throw new Error('Creator social permissions verification failed');
+    }
+    if (
+      await count(
+        `SELECT (
+      (SELECT COUNT(*) FROM core."viewField" WHERE "workspaceId" = $1 AND "fieldMetadataId" = ANY($2::uuid[]) AND "deletedAt" IS NULL) +
+      (SELECT COUNT(*) FROM core."viewFilter" WHERE "workspaceId" = $1 AND "fieldMetadataId" = ANY($2::uuid[]) AND "deletedAt" IS NULL) +
+      (SELECT COUNT(*) FROM core."viewSort" WHERE "workspaceId" = $1 AND "fieldMetadataId" = ANY($2::uuid[]) AND "deletedAt" IS NULL)
+    )::text AS count`,
+        [
+          workspaceId,
+          presentPairs.map(
+            (pair) => byUid.get(pair.oldUniversalIdentifier)!.id,
+          ),
+        ],
+      )
+    ) {
+      throw new Error('Creator social obsolete view references remain');
+    }
+
+    await this.workspaceMetadataVersionService.incrementMetadataVersion(
+      workspaceId,
+      upgradeTransaction,
+    );
+    upgradeTransaction.afterCommit(async () => {
+      await this.workspaceMigrationRunnerService.invalidateCache({
+        allFlatEntityMapsKeys: [
+          'flatFieldPermissionMaps',
+          'flatFieldMetadataMaps',
+          'flatObjectMetadataMaps',
+          'flatRoleMaps',
+          'flatViewFieldMaps',
+          'flatViewFilterMaps',
+          'flatViewSortMaps',
+        ],
+        workspaceId,
+        incrementVersion: false,
+      });
+    });
+    return { canDeleteOldFields: true };
+  }
 
   async migrate({
     workspaceId,
@@ -318,7 +698,9 @@ export class MigrateMyahCreatorSocialLinksService {
     );
     const hasMissingFieldMetadata = presentPairs.some(
       (pair) =>
-        !fieldMetadataIdByUniversalIdentifier.has(pair.oldUniversalIdentifier) ||
+        !fieldMetadataIdByUniversalIdentifier.has(
+          pair.oldUniversalIdentifier,
+        ) ||
         !fieldMetadataIdByUniversalIdentifier.has(pair.newUniversalIdentifier),
     );
 
@@ -349,12 +731,8 @@ export class MigrateMyahCreatorSocialLinksService {
       for (const pair of presentPairs) {
         await this.coreDataSource.query(COPY_FIELD_PERMISSIONS_SQL, [
           workspaceId,
-          fieldMetadataIdByUniversalIdentifier.get(
-            pair.oldUniversalIdentifier,
-          ),
-          fieldMetadataIdByUniversalIdentifier.get(
-            pair.newUniversalIdentifier,
-          ),
+          fieldMetadataIdByUniversalIdentifier.get(pair.oldUniversalIdentifier),
+          fieldMetadataIdByUniversalIdentifier.get(pair.newUniversalIdentifier),
         ]);
       }
 
@@ -439,7 +817,9 @@ export class MigrateMyahCreatorSocialLinksService {
       const obsoleteFieldMetadataIds = presentPairs.map((pair) =>
         fieldMetadataIdByUniversalIdentifier.get(pair.oldUniversalIdentifier),
       );
-      const remainingReferenceRows = await this.coreDataSource.query<CountRow[]>(
+      const remainingReferenceRows = await this.coreDataSource.query<
+        CountRow[]
+      >(
         `
           SELECT (
             (SELECT COUNT(*) FROM core."viewField"
@@ -460,8 +840,7 @@ export class MigrateMyahCreatorSocialLinksService {
       );
 
       return {
-        canDeleteOldFields:
-          Number(remainingReferenceRows[0]?.count ?? 0) === 0,
+        canDeleteOldFields: Number(remainingReferenceRows[0]?.count ?? 0) === 0,
       };
     } finally {
       await this.invalidateMetadataCache(workspaceId);

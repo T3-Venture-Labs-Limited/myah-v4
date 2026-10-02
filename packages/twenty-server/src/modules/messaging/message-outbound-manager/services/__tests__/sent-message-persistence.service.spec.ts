@@ -92,6 +92,7 @@ describe('SentMessagePersistenceService', () => {
         {} as GlobalWorkspaceOrmManager,
         triageService as unknown as MyahInboxContactTriageService,
         receiptService as unknown as MyahInboxContactTriageReceiptService,
+        {} as never,
         undefined,
       );
     const service = new SentMessagePersistenceService(

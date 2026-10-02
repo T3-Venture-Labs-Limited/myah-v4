@@ -40,8 +40,8 @@ const authContext = {
 
 const sources = [
   ['messageThread', 'message_thread', 'messageThread'],
-  ['myahSocialConversation', 'social_conversation', '_myahSocialConversation'],
-  ['myahSocialMessage', 'social_message', '_myahSocialMessage'],
+  ['myahSocialConversation', 'social_conversation', 'myahSocialConversation'],
+  ['myahSocialMessage', 'social_message', 'myahSocialMessage'],
 ] as const;
 
 const restrictionId = '00000000-0000-4000-8000-000000000004';
@@ -188,9 +188,9 @@ describe('MyahInboxTriageCapabilityService', () => {
     expect(canonicalUnrestrictedReadFixtures).toEqual({
       messageThread: expect.stringContaining('"messageThread"'),
       myahSocialConversation: expect.stringContaining(
-        '"_myahSocialConversation"',
+        '"myahSocialConversation"',
       ),
-      myahSocialMessage: expect.stringContaining('"_myahSocialMessage"'),
+      myahSocialMessage: expect.stringContaining('"myahSocialMessage"'),
     });
   });
 

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -53,6 +53,16 @@ export class WorkspaceFlatRoleMapCacheService extends WorkspaceCacheProvider<
   async computeForCache(
     workspaceId: string,
   ): Promise<FlatEntityMaps<FlatRole>> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatEntityMaps<FlatRole>> {
     const [
       roles,
       applications,
@@ -63,39 +73,43 @@ export class WorkspaceFlatRoleMapCacheService extends WorkspaceCacheProvider<
       rowLevelPermissionPredicates,
       rowLevelPermissionPredicateGroups,
     ] = await Promise.all([
-      this.roleRepository.find(workspaceId, {
+      this.roleRepository.withManager(manager).find(workspaceId, {
         withDeleted: true,
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.roleTargetRepository.find(workspaceId, {
+      this.roleTargetRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'roleId'],
         withDeleted: true,
       }),
-      this.objectPermissionRepository.find(workspaceId, {
+      this.objectPermissionRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'roleId'],
         withDeleted: true,
       }),
-      this.rolePermissionFlagRepository.find({
+      manager.getRepository(RolePermissionFlagEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier', 'roleId'],
         withDeleted: true,
       }),
-      this.fieldPermissionRepository.find(workspaceId, {
+      this.fieldPermissionRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'roleId'],
         withDeleted: true,
       }),
-      this.rowLevelPermissionPredicateRepository.find(workspaceId, {
-        select: ['id', 'universalIdentifier', 'roleId'],
-        withDeleted: true,
-      }),
-      this.rowLevelPermissionPredicateGroupRepository.find(workspaceId, {
-        select: ['id', 'universalIdentifier', 'roleId'],
-        withDeleted: true,
-      }),
+      this.rowLevelPermissionPredicateRepository
+        .withManager(manager)
+        .find(workspaceId, {
+          select: ['id', 'universalIdentifier', 'roleId'],
+          withDeleted: true,
+        }),
+      this.rowLevelPermissionPredicateGroupRepository
+        .withManager(manager)
+        .find(workspaceId, {
+          select: ['id', 'universalIdentifier', 'roleId'],
+          withDeleted: true,
+        }),
     ]);
 
     const [

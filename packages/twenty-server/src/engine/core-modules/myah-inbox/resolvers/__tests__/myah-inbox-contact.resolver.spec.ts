@@ -1,7 +1,12 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { validateSync } from 'class-validator';
 import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
 
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
+import {
+  MyahInboxEmailCardInput,
+  MyahInboxEmailCardMessagesInput,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-email-read.input';
 import { MyahInboxModule } from 'src/engine/core-modules/myah-inbox/myah-inbox.module';
 import { MyahInboxContactResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox-contact.resolver';
 import { MyahInboxContactEmailQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-email-query.service';
@@ -116,6 +121,70 @@ describe('MyahInboxContactResolver', () => {
       .mocked(getWorkspaceAuthContext)
       .mockReturnValue(userAuthContext as never);
   });
+
+  it.each([MyahInboxEmailCardInput, MyahInboxEmailCardMessagesInput])(
+    'keeps %p valid without a key and validates the optional keyed form',
+    (Input) => {
+      const values = {
+        contactId: 'opaque-contact',
+        expectedWorkspaceId: '00000000-0000-4000-8000-000000000001',
+        threadId: '00000000-0000-4000-8000-000000000002',
+        ...(Input === MyahInboxEmailCardMessagesInput
+          ? { snapshot: 'snapshot' }
+          : {}),
+      };
+      expect(validateSync(Object.assign(new Input(), values))).toEqual([]);
+      expect(
+        validateSync(
+          Object.assign(new Input(), {
+            ...values,
+            anchorKey: 'attempt:00000000-0000-4000-8000-000000000003',
+          }),
+        ),
+      ).toEqual([]);
+      expect(
+        validateSync(
+          Object.assign(new Input(), {
+            ...values,
+            anchorKey: 'x'.repeat(129),
+          }),
+        ),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    ['myahInboxContactEmailCard', 'readCard'],
+    ['myahInboxContactEmailCardMessages', 'listCardMessages'],
+  ] as const)(
+    'forwards a supplied group key to %s without reinterpretation',
+    async (operation, reader) => {
+      const dispatch = jest.fn().mockResolvedValue({ card: null });
+      const resolver = new MyahInboxContactResolver(
+        {} as never,
+        { [reader]: dispatch } as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        { assertWrite: jest.fn() } as never,
+      );
+      const input = {
+        contactId: 'opaque-contact',
+        expectedWorkspaceId: workspace.id,
+        threadId: '00000000-0000-4000-8000-000000000002',
+        anchorKey: 'attempt:00000000-0000-4000-8000-000000000003',
+        snapshot: 'snapshot',
+      };
+      await resolver[operation](
+        input as never,
+        workspace as never,
+        workspaceMemberId,
+      );
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ anchorKey: input.anchorKey }),
+      );
+    },
+  );
 
   it('forwards Contact list and Email timeline requests with exact authenticated context', async () => {
     const harness = buildResolver();

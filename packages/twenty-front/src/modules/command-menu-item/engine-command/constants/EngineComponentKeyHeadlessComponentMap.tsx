@@ -22,10 +22,6 @@ import { ExportNoteSingleRecordCommand } from '@/command-menu-item/engine-comman
 import { NavigateToNextRecordSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/components/NavigateToNextRecordSingleRecordCommand';
 import { NavigateToPreviousRecordSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/components/NavigateToPreviousRecordSingleRecordCommand';
 import { RemoveFromFavoritesSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/components/RemoveFromFavoritesSingleRecordCommand';
-import { CancelDashboardSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/dashboard/components/CancelDashboardSingleRecordCommand';
-import { DuplicateDashboardSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/dashboard/components/DuplicateDashboardSingleRecordCommand';
-import { EditDashboardSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/dashboard/components/EditDashboardSingleRecordCommand';
-import { SaveDashboardSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/dashboard/components/SaveDashboardSingleRecordCommand';
 import { ReplyToEmailThreadCommand } from '@/command-menu-item/engine-command/record/single-record/message-thread/components/ReplyToEmailThreadCommand';
 import { EditRecordPageLayoutSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/record-page-layout/components/EditRecordPageLayoutSingleRecordCommand';
 import { SeeVersionWorkflowRunSingleRecordCommand } from '@/command-menu-item/engine-command/record/single-record/workflow-runs/components/SeeVersionWorkflowRunSingleRecordCommand';
@@ -68,9 +64,9 @@ export const ENGINE_COMPONENT_KEY_COMPONENT_MAP: Record<
     <RemoveFromFavoritesSingleRecordCommand />
   ),
   [EngineComponentKey.MERGE_MULTIPLE_RECORDS]: <MergeMultipleRecordsCommand />,
-  [EngineComponentKey.DUPLICATE_DASHBOARD]: (
-    <DuplicateDashboardSingleRecordCommand />
-  ),
+  // Preserved legacy keys intentionally render nothing: historical command rows must
+  // not revive retired Dashboard authoring.
+  [EngineComponentKey.DUPLICATE_DASHBOARD]: null,
   [EngineComponentKey.DUPLICATE_WORKFLOW]: (
     <DuplicateWorkflowSingleRecordCommand />
   ),
@@ -93,9 +89,7 @@ export const ENGINE_COMPONENT_KEY_COMPONENT_MAP: Record<
   [EngineComponentKey.USE_AS_DRAFT_WORKFLOW_VERSION]: (
     <UseAsDraftWorkflowVersionSingleRecordCommand />
   ),
-  [EngineComponentKey.SAVE_DASHBOARD_LAYOUT]: (
-    <SaveDashboardSingleRecordCommand />
-  ),
+  [EngineComponentKey.SAVE_DASHBOARD_LAYOUT]: null,
   [EngineComponentKey.TIDY_UP_WORKFLOW]: <TidyUpWorkflowSingleRecordCommand />,
   [EngineComponentKey.NAVIGATE_TO_NEXT_RECORD]: (
     <NavigateToNextRecordSingleRecordCommand />
@@ -124,12 +118,8 @@ export const ENGINE_COMPONENT_KEY_COMPONENT_MAP: Record<
   [EngineComponentKey.EDIT_RECORD_PAGE_LAYOUT]: (
     <EditRecordPageLayoutSingleRecordCommand />
   ),
-  [EngineComponentKey.EDIT_DASHBOARD_LAYOUT]: (
-    <EditDashboardSingleRecordCommand />
-  ),
-  [EngineComponentKey.CANCEL_DASHBOARD_LAYOUT]: (
-    <CancelDashboardSingleRecordCommand />
-  ),
+  [EngineComponentKey.EDIT_DASHBOARD_LAYOUT]: null,
+  [EngineComponentKey.CANCEL_DASHBOARD_LAYOUT]: null,
   [EngineComponentKey.NAVIGATION]: <NavigationEngineCommand />,
   // TODO: Remove these keys once we have ran the migration command `upgrade:1-21:refactor-navigation-commands`
   // These keys are kept for backward compatibility during migration

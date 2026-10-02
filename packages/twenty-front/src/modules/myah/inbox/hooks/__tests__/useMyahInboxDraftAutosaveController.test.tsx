@@ -272,7 +272,10 @@ describe('useMyahInboxDraftAutosaveController', () => {
     });
     expect(controller.getEntry(threadKey)?.executionState).toBe('NEEDS_REVIEW');
     expect(controller.acquire(threadKey, 'sending')).toBeNull();
-    expect(controller.acquire(threadKey, 'generating')).toBeNull();
+    // Stale-but-readable: only a guarded generation/update may start.
+    const generation = controller.acquire(threadKey, 'generating');
+    expect(generation).not.toBeNull();
+    controller.release(generation!);
     expect(controller.acquire(threadKey, 'reviewing')).not.toBeNull();
     expect(saveDraft).toHaveBeenCalledTimes(1);
   });
@@ -676,7 +679,9 @@ describe('useMyahInboxDraftAutosaveController', () => {
             dirty: false,
             pendingDebounceVersion: null,
           });
-          expect(controller.acquire(threadKey, 'generating')).toBeNull();
+          const generation = controller.acquire(threadKey, 'generating');
+          expect(generation).not.toBeNull();
+          controller.release(generation!);
           expect(controller.acquire(threadKey, 'sending')).toBeNull();
           const review = controller.acquire(threadKey, 'reviewing');
           expect(review?.confirmedRevision).toBe(change === 'revision' ? 3 : 2);
@@ -885,8 +890,10 @@ describe('useMyahInboxDraftAutosaveController', () => {
       executionState,
       body: { markdown: 'stored', blocknote: null },
     });
-    expect(result.current.acquire(threadKey, 'generating')).toBeNull();
     expect(result.current.acquire(threadKey, 'sending')).toBeNull();
+    expect(result.current.acquire(threadKey, 'generating') === null).toBe(
+      executionState !== 'NEEDS_REVIEW',
+    );
     expect(result.current.getEntry(threadKey)?.localBody.markdown).toBe(
       executionState === 'NEEDS_REVIEW' ? 'stored' : '',
     );
@@ -1139,6 +1146,51 @@ describe('useMyahInboxDraftAutosaveController', () => {
       operation: null,
       localBody: { markdown: 'proposal' },
     });
+  });
+
+  it('allows guarded generation from a stale-but-readable draft and keeps other locks', async () => {
+    const saveDraft = jest.fn().mockResolvedValue({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'updated', blocknote: null },
+    });
+    mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
+    const { result, store } = renderAutosaveController();
+    authorize(result.current, {
+      ...reconcileThread(),
+      executionState: 'NEEDS_REVIEW',
+      contextFingerprint: 'f'.repeat(64),
+      incomingState: 'STALE',
+      bodyEdited: true,
+    });
+    expect(readEntry(store, threadKey)).toMatchObject({
+      incomingState: 'STALE',
+      bodyEdited: true,
+    });
+    const operation = result.current.acquire(threadKey, 'generating')!;
+    expect(operation).not.toBeNull();
+    await expect(
+      result.current.applyProposalIfCurrent(
+        operation,
+        { markdown: 'updated', blocknote: null },
+        { requireReview: true },
+      ),
+    ).resolves.toBe(true);
+    result.current.release(operation);
+    expect(saveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proposalContextFingerprint: 'f'.repeat(64),
+        requireReview: true,
+      }),
+    );
+    for (const executionState of [
+      'OUTCOME_PENDING',
+      'OUTCOME_UNKNOWN',
+      'CONTEXT_UNAVAILABLE',
+    ] as const) {
+      authorize(result.current, { ...reconcileThread(), executionState });
+      expect(result.current.acquire(threadKey, 'generating')).toBeNull();
+    }
   });
 
   it('rechecks every key after another key finishes flushing', async () => {

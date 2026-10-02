@@ -11,6 +11,7 @@ import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
 import { CoreEntityCacheService } from 'src/engine/core-entity-cache/services/core-entity-cache.service';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
+import { LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME as R } from 'src/engine/core-modules/upgrade/constants/legacy-2-19-prerequisite-reconciliation-name.constant';
 import { UpgradeSequenceReaderService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import { UpgradeStatusCacheService } from 'src/engine/core-modules/upgrade/services/upgrade-status-cache.service';
 import { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
@@ -56,6 +57,7 @@ describe('UpgradeStatusService', () => {
   let service: UpgradeStatusService;
   let getUpgradeSequence: jest.Mock;
   let getLastAttemptedInstanceCommand: jest.Mock;
+  let getLatestPrerequisiteReconciliationAttempt: jest.Mock;
   let getInferredVersion: jest.Mock;
   let getWorkspaceLastAttemptedCommandName: jest.Mock;
   let workspaceFind: jest.Mock;
@@ -77,6 +79,9 @@ describe('UpgradeStatusService', () => {
   beforeEach(async () => {
     getUpgradeSequence = jest.fn(() => MOCK_SEQUENCE);
     getLastAttemptedInstanceCommand = jest.fn();
+    getLatestPrerequisiteReconciliationAttempt = jest
+      .fn()
+      .mockResolvedValue(null);
     getInferredVersion = jest.fn(async (name?: string) => {
       if (!name) return null;
       const idx = name.indexOf('_');
@@ -100,6 +105,7 @@ describe('UpgradeStatusService', () => {
           provide: UpgradeMigrationService,
           useValue: {
             getLastAttemptedInstanceCommand,
+            getLatestPrerequisiteReconciliationAttempt,
             getInferredVersion,
             getWorkspaceLastAttemptedCommandName,
           },
@@ -177,6 +183,126 @@ describe('UpgradeStatusService', () => {
   );
 
   describe('getInstanceStatus', () => {
+    it.each([
+      ['2.19.0_Rebrand_165', 'completed'],
+      ['2.19.0_Finalize_167', 'failed'],
+    ] as const)(
+      'surfaces failed R over original %s cursor without advancing version',
+      async (name, status) => {
+        const original = {
+          name,
+          status,
+          executedByVersion: '2.19.0',
+          errorMessage: status === 'failed' ? 'original failure' : null,
+          createdAt: new Date('2026-09-12'),
+        };
+        const receipt = {
+          name: R,
+          status: 'failed',
+          executedByVersion: '2.20.0',
+          errorMessage: 'reconciliation failure',
+          createdAt: new Date('2026-09-13'),
+        };
+        getLastAttemptedInstanceCommand.mockResolvedValue(original);
+        getLatestPrerequisiteReconciliationAttempt.mockResolvedValue(receipt);
+
+        expect(await service.getInstanceStatus()).toEqual({
+          inferredVersion: '2.19.0',
+          health: UpgradeHealthEnum.FAILED,
+          latestCommand: receipt,
+        });
+        expect(getInferredVersion).toHaveBeenCalledWith(name);
+      },
+    );
+
+    it('does not treat successful R as progress or hide a failed normal command', async () => {
+      const original = {
+        name: '2.19.0_Finalize_167',
+        status: 'failed',
+        executedByVersion: '2.19.0',
+        errorMessage: 'original failure',
+        createdAt: new Date('2026-09-12'),
+      };
+      getLastAttemptedInstanceCommand.mockResolvedValue(original);
+      getLatestPrerequisiteReconciliationAttempt.mockResolvedValue({
+        name: R,
+        status: 'completed',
+        executedByVersion: '2.20.0',
+        errorMessage: null,
+        createdAt: new Date('2026-09-13'),
+      });
+
+      expect(await service.getInstanceStatus()).toEqual({
+        inferredVersion: '2.19.0',
+        health: UpgradeHealthEnum.FAILED,
+        latestCommand: original,
+      });
+    });
+
+    it('does not mark the last step complete from successful R when original cursor is behind', async () => {
+      const original = {
+        name: EARLIER_COMMAND,
+        status: 'completed' as const,
+        executedByVersion: '1.22.0',
+        errorMessage: null,
+        createdAt: new Date('2025-06-01'),
+      };
+      getLastAttemptedInstanceCommand.mockResolvedValue(original);
+      getLatestPrerequisiteReconciliationAttempt.mockResolvedValue({
+        name: R,
+        status: 'completed',
+        executedByVersion: '2.20.0',
+        errorMessage: null,
+        createdAt: new Date('2026-09-13'),
+      });
+
+      expect(await service.getInstanceStatus()).toEqual({
+        inferredVersion: '1.22.0',
+        health: UpgradeHealthEnum.BEHIND,
+        latestCommand: original,
+      });
+    });
+
+    it('clears an earlier R failure after a successful retry without masking completed normal progress', async () => {
+      const original = {
+        name: LAST_INSTANCE_COMMAND,
+        status: 'completed',
+        executedByVersion: '1.23.0',
+        errorMessage: null,
+        createdAt: new Date('2025-06-01'),
+      };
+      getLastAttemptedInstanceCommand.mockResolvedValue(original);
+      getLatestPrerequisiteReconciliationAttempt.mockResolvedValue({
+        name: R,
+        status: 'completed',
+        executedByVersion: '2.20.0',
+        errorMessage: null,
+        createdAt: new Date('2026-09-13'),
+      });
+
+      expect(await service.getInstanceStatus()).toEqual({
+        inferredVersion: '1.23.0',
+        health: UpgradeHealthEnum.UP_TO_DATE,
+        latestCommand: original,
+      });
+    });
+
+    it('surfaces R failure with no original cursor without inferring its version', async () => {
+      getLastAttemptedInstanceCommand.mockResolvedValue(null);
+      getLatestPrerequisiteReconciliationAttempt.mockResolvedValue({
+        name: R,
+        status: 'failed',
+        executedByVersion: '2.20.0',
+        errorMessage: 'reconciliation failure',
+        createdAt: new Date('2026-09-13'),
+      });
+      expect(await service.getInstanceStatus()).toMatchObject({
+        inferredVersion: null,
+        health: UpgradeHealthEnum.FAILED,
+        latestCommand: { name: R, errorMessage: 'reconciliation failure' },
+      });
+      expect(getInferredVersion).not.toHaveBeenCalled();
+    });
     it('should return up-to-date when cursor is at last instance command', async () => {
       getLastAttemptedInstanceCommand.mockResolvedValue({
         name: LAST_INSTANCE_COMMAND,
@@ -190,6 +316,9 @@ describe('UpgradeStatusService', () => {
 
       expect(result.health).toBe(UpgradeHealthEnum.UP_TO_DATE);
       expect(result.inferredVersion).toBe('1.23.0');
+      expect(getLatestPrerequisiteReconciliationAttempt).toHaveBeenCalledTimes(
+        1,
+      );
     });
 
     it('should return behind when cursor is before last instance command', async () => {

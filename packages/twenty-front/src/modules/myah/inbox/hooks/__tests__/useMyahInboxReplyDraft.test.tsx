@@ -67,6 +67,59 @@ const setup = (
   );
 };
 
+describe('useMyahInboxReplyDraft background arrival', () => {
+  it('updates incoming staleness while typing without replacing text or locking the editor', async () => {
+    const store = createStore();
+    store.set(currentWorkspaceState.atom, { id: 'workspace' } as never);
+    const query = jest.fn().mockResolvedValueOnce(draft('a'));
+    jest.mocked(useApolloCoreClient).mockReturnValue({ query } as never);
+    jest.mocked(useMyahInboxThreadMutations).mockReturnValue({
+      saveDraft: jest.fn(() => new Promise(() => {})),
+    } as never);
+    const { result, rerender } = renderHook(
+      ({ epoch }: { epoch: number }) => {
+        const controller = useMyahInboxDraftAutosaveController();
+        return {
+          ...useMyahInboxReplyDraft(input, controller, '', epoch),
+          controller,
+        };
+      },
+      {
+        initialProps: { epoch: 0 },
+        wrapper: ({ children }: PropsWithChildren) => (
+          <Provider store={store}>{children}</Provider>
+        ),
+      },
+    );
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    act(() =>
+      result.current.controller.updateDraft({
+        key: result.current.key!,
+        body: { markdown: 'still typing', blocknote: null },
+        editorOwner: result.current.editorOwner,
+      }),
+    );
+    const arrived = draft('a', 'NEEDS_REVIEW');
+    Object.assign(arrived.data.myahInboxReplyDraft, {
+      incomingState: 'STALE',
+      bodyEdited: true,
+    });
+    arrived.data.myahInboxReplyDraft.body.markdown = 'server body';
+    query.mockResolvedValueOnce(arrived);
+    rerender({ epoch: 1 });
+    await waitFor(() => expect(query).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(result.current.entry).toMatchObject({
+        incomingState: 'STALE',
+        executionState: 'READY',
+        dirty: true,
+        localBody: { markdown: 'still typing' },
+      }),
+    );
+    expect(result.current.status).toBe('ready');
+  });
+});
+
 describe('useMyahInboxReplyDraft', () => {
   describe('authoritative NEEDS_REVIEW reads and conflict adoption', () => {
     beforeEach(() => jest.useFakeTimers());
@@ -156,14 +209,21 @@ describe('useMyahInboxReplyDraft', () => {
                 });
               }
               if (executionState === 'NEEDS_REVIEW') {
-                for (const kind of ['generating', 'sending'] as const)
-                  expect(
-                    result.current.controller.acquire(
-                      key,
-                      kind,
-                      result.current.editorOwner,
-                    ),
-                  ).toBeNull();
+                expect(
+                  result.current.controller.acquire(
+                    key,
+                    'sending',
+                    result.current.editorOwner,
+                  ),
+                ).toBeNull();
+                // Only a guarded generation/update may start from this state;
+                // uncommitted dirty/saving/error bytes still block it.
+                const generation = result.current.controller.acquire(
+                  key,
+                  'generating',
+                  result.current.editorOwner,
+                );
+                if (generation) result.current.controller.release(generation);
                 query.mockResolvedValueOnce(response);
                 await act(async () =>
                   expect(await result.current.review()).toBe(true),
@@ -351,14 +411,22 @@ describe('useMyahInboxReplyDraft', () => {
             error: null,
           });
           if (outcome === 'NEEDS_REVIEW') {
-            for (const kind of ['generating', 'sending'] as const)
-              expect(
-                current.result.current.controller.acquire(
-                  key,
-                  kind,
-                  current.result.current.editorOwner,
-                ),
-              ).toBeNull();
+            expect(
+              current.result.current.controller.acquire(
+                key,
+                'sending',
+                current.result.current.editorOwner,
+              ),
+            ).toBeNull();
+            {
+              const generation = current.result.current.controller.acquire(
+                key,
+                'generating',
+                current.result.current.editorOwner,
+              );
+              if (generation)
+                current.result.current.controller.release(generation);
+            }
             query.mockResolvedValueOnce(response);
             await act(async () =>
               expect(await current.result.current.review()).toBe(true),
@@ -476,14 +544,21 @@ describe('useMyahInboxReplyDraft', () => {
       localBody: { markdown: 'first manual' },
       confirmedRevision: 3,
     });
-    for (const kind of ['sending', 'generating'] as const)
-      expect(
-        second.result.current.controller.acquire(
-          key,
-          kind,
-          second.result.current.editorOwner,
-        ),
-      ).toBeNull();
+    expect(
+      second.result.current.controller.acquire(
+        key,
+        'sending',
+        second.result.current.editorOwner,
+      ),
+    ).toBeNull();
+    {
+      const generation = second.result.current.controller.acquire(
+        key,
+        'generating',
+        second.result.current.editorOwner,
+      );
+      if (generation) second.result.current.controller.release(generation);
+    }
     query.mockResolvedValueOnce(response);
     await act(async () => {
       expect(await second.result.current.review()).toBe(true);
@@ -625,9 +700,10 @@ describe('useMyahInboxReplyDraft', () => {
                     result.current.editorOwner,
                   );
                 });
+                // Generation is guarded but allowed in both readable states.
                 if (
-                  (kind === 'reviewing') ===
-                  (executionState === 'NEEDS_REVIEW')
+                  kind === 'generating' ||
+                  (kind === 'reviewing') === (executionState === 'NEEDS_REVIEW')
                 ) {
                   expect(capture?.confirmedRevision).toBe(7);
                   act(() => result.current.controller.release(capture!));
@@ -751,13 +827,15 @@ describe('useMyahInboxReplyDraft', () => {
           );
           expect(saveDraft).not.toHaveBeenCalled();
           if (executionState === 'NEEDS_REVIEW') {
-            expect(
-              result.current.controller.acquire(
+            {
+              // Stale-but-readable NEEDS_REVIEW permits only a guarded generation.
+              const generation = result.current.controller.acquire(
                 key,
                 'generating',
                 result.current.editorOwner,
-              ),
-            ).toBeNull();
+              );
+              if (generation) result.current.controller.release(generation);
+            }
             expect(
               result.current.controller.acquire(
                 key,
@@ -893,13 +971,15 @@ describe('useMyahInboxReplyDraft', () => {
           );
           expect(saveDraft).not.toHaveBeenCalled();
           if (executionState === 'NEEDS_REVIEW') {
-            expect(
-              result.current.controller.acquire(
+            {
+              // Stale-but-readable NEEDS_REVIEW permits only a guarded generation.
+              const generation = result.current.controller.acquire(
                 key,
                 'generating',
                 result.current.editorOwner,
-              ),
-            ).toBeNull();
+              );
+              if (generation) result.current.controller.release(generation);
+            }
             expect(
               result.current.controller.acquire(
                 key,
@@ -997,13 +1077,15 @@ describe('useMyahInboxReplyDraft', () => {
             operation: null,
           });
           if (executionState === 'NEEDS_REVIEW') {
-            expect(
-              result.current.controller.acquire(
+            {
+              // Stale-but-readable NEEDS_REVIEW permits only a guarded generation.
+              const generation = result.current.controller.acquire(
                 key,
                 'generating',
                 result.current.editorOwner,
-              ),
-            ).toBeNull();
+              );
+              if (generation) result.current.controller.release(generation);
+            }
             expect(
               result.current.controller.acquire(
                 key,
@@ -1085,13 +1167,15 @@ describe('useMyahInboxReplyDraft', () => {
       variables: { input },
       fetchPolicy: 'no-cache',
     });
-    expect(
-      result.current.controller.acquire(
+    {
+      // Stale-but-readable NEEDS_REVIEW permits only a guarded generation.
+      const generation = result.current.controller.acquire(
         key,
         'generating',
         result.current.editorOwner,
-      ),
-    ).toBeNull();
+      );
+      if (generation) result.current.controller.release(generation);
+    }
     await act(async () => {
       resolve(reviewed);
       await saved;
@@ -1101,13 +1185,15 @@ describe('useMyahInboxReplyDraft', () => {
       executionState: 'NEEDS_REVIEW',
       localBody: { markdown: 'manual' },
     });
-    expect(
-      result.current.controller.acquire(
+    {
+      // Stale-but-readable NEEDS_REVIEW permits only a guarded generation.
+      const generation = result.current.controller.acquire(
         key,
         'generating',
         result.current.editorOwner,
-      ),
-    ).toBeNull();
+      );
+      if (generation) result.current.controller.release(generation);
+    }
     expect(
       result.current.controller.acquire(
         key,

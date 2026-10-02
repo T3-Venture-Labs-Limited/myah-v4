@@ -54,6 +54,7 @@ export const MYAH_OUTREACH_EMAIL_TOOL_NAMES = Object.freeze([
 
 export const MYAH_INBOX_TOOL_NAMES = Object.freeze([
   'search_myah_inbox_threads',
+  'list_myah_inbox_reply_contexts',
   'get_myah_inbox_thread_context',
   'generate_myah_inbox_reply_proposal',
   'update_myah_inbox_thread',
@@ -64,6 +65,7 @@ export const MYAH_INBOX_TOOL_NAMES = Object.freeze([
 
 export const MYAH_INBOX_READ_TOOL_NAMES = Object.freeze([
   'search_myah_inbox_threads',
+  'list_myah_inbox_reply_contexts',
   'get_myah_inbox_thread_context',
   'generate_myah_inbox_reply_proposal',
 ] as const);

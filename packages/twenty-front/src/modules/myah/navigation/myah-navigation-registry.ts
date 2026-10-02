@@ -22,10 +22,19 @@ import {
   IconVideo,
 } from 'twenty-ui/icon';
 
+// Campaign detail uses the same shell as the Inbox; the Campaigns entry still opens its native list.
+export const getMyahCampaignPath = (campaignId: string): string =>
+  `/myah/campaigns/${encodeURIComponent(campaignId)}`;
+
 const MyahInboxPage = lazy(() =>
   import('@/myah/inbox/components/MyahInboxPage').then((module) => ({
     default: module.MyahInboxPage,
   })),
+);
+const MyahCampaignMessagesPage = lazy(() =>
+  import('@/myah/campaign-messages/components/MyahCampaignMessagesPage').then(
+    (module) => ({ default: module.MyahCampaignMessagesPage }),
+  ),
 );
 
 const CREATOR_OBJECT_UNIVERSAL_IDENTIFIER =
@@ -106,6 +115,18 @@ export const MYAH_NAVIGATION_ROUTES = [
         kind: 'app-object',
         universalIdentifier: CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
       },
+    },
+  },
+  {
+    id: 'messages',
+    label: 'Campaign messages',
+    Icon: IconInbox,
+    group: 'campaign-operations',
+    entryPath: '/myah/messages',
+    availability: 'available',
+    destination: {
+      kind: 'myah-page',
+      Component: MyahCampaignMessagesPage,
     },
   },
   {

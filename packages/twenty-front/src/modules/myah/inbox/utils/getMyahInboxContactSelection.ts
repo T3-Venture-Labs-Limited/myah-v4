@@ -86,13 +86,48 @@ export const getMyahInboxContactSelection = ({
       ? previousSelection.channel
       : null;
 
-  return getMyahInboxSelectionForChannel({
+  if (previousChannel) {
+    return getMyahInboxSelectionForChannel({
+      workspaceId,
+      contact,
+      channel: previousChannel,
+      previousSelection,
+      latestOutreachThreadId,
+    });
+  }
+
+  const selection = getMyahInboxSelectionForChannel({
     workspaceId,
     contact,
-    channel: previousChannel ?? contact.latestChannel,
-    previousSelection,
+    channel: contact.initialSelection.channel,
+    previousSelection: null,
     latestOutreachThreadId,
   });
+
+  if (selection.channel !== contact.initialSelection.channel) {
+    return selection;
+  }
+
+  if (selection.channel === 'EMAIL') {
+    selection.emailThreadId = contact.email.threadIds.includes(
+      contact.initialSelection.emailThreadId ?? '',
+    )
+      ? contact.initialSelection.emailThreadId
+      : null;
+  } else if (
+    selection.channel === 'INSTAGRAM' &&
+    contact.instagram.state === 'READY' &&
+    contact.instagram.conversations.length === 1 &&
+    contact.instagram.conversations[0].id ===
+      contact.initialSelection.instagramConversationId
+  ) {
+    selection.instagramConversationId =
+      contact.initialSelection.instagramConversationId;
+  } else {
+    selection.instagramConversationId = null;
+  }
+
+  return selection;
 };
 
 export const getMyahInboxRegroupedContactSelection = ({

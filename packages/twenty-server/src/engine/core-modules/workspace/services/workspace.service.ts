@@ -39,6 +39,7 @@ import { SdkClientGenerationService } from 'src/engine/core-modules/sdk-client/s
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { UpgradeSequenceReaderService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
+import { UpgradeWriteLockService } from 'src/engine/core-modules/upgrade/services/upgrade-write-lock.service';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
@@ -64,7 +65,6 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { WorkspaceDataSourceService } from 'src/engine/workspace-datasource/workspace-datasource.service';
 import { PrefillLogicFunctionService } from 'src/engine/workspace-manager/standard-objects-prefill-data/services/prefill-logic-function.service';
 import { prefillCompanies } from 'src/engine/workspace-manager/standard-objects-prefill-data/utils/prefill-companies.util';
-import { prefillDashboards } from 'src/engine/workspace-manager/standard-objects-prefill-data/utils/prefill-dashboards.util';
 import { prefillOpportunities } from 'src/engine/workspace-manager/standard-objects-prefill-data/utils/prefill-opportunities.util';
 import { prefillPeople } from 'src/engine/workspace-manager/standard-objects-prefill-data/utils/prefill-people.util';
 import { getCreateCompanyWhenAddingNewPersonCodeStepLogicFunctionDefinitions } from 'src/engine/workspace-manager/standard-objects-prefill-data/utils/prefill-workflow-code-step-logic-functions.util';
@@ -79,6 +79,35 @@ import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspa
 // PENDING_CREATION) and may be retried. It is far longer than a real activation
 // takes, so a genuinely in-progress activation is never reclaimed.
 const WORKSPACE_ACTIVATION_STALE_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
+const ACTIVATION_OUTCOME_UNKNOWN_MESSAGE =
+  'Workspace activation outcome could not be confirmed. Please retry.';
+const ACTIVATION_CACHE_UNAVAILABLE_MESSAGE =
+  'Workspace activation is temporarily unavailable. Please retry.';
+
+const activationCacheUnavailableError = (
+  cacheError: unknown,
+  uncertainCommit?: ActivationCommitOutcomeUnknownError,
+): Error => {
+  const error = new Error(ACTIVATION_CACHE_UNAVAILABLE_MESSAGE);
+  // Keep diagnostics available internally without exposing provider/driver
+  // messages through GraphQL's error.message or enumerable properties.
+  Object.defineProperty(error, 'cause', {
+    value: { cacheError, uncertainCommit },
+    enumerable: false,
+  });
+  return error;
+};
+
+class ActivationCommitOutcomeUnknownError extends Error {
+  constructor(
+    readonly initialReceiptName: string,
+    readonly initialReceiptStatus: 'completed' | 'failed',
+    cause: unknown,
+  ) {
+    super(ACTIVATION_OUTCOME_UNKNOWN_MESSAGE);
+    Object.defineProperty(this, 'cause', { value: cause, enumerable: false });
+  }
+}
 
 @Injectable()
 // oxlint-disable-next-line twenty/inject-workspace-repository
@@ -148,6 +177,7 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     private readonly upgradeMigrationService: UpgradeMigrationService,
     private readonly upgradeSequenceReaderService: UpgradeSequenceReaderService,
     private readonly sdkClientGenerationService: SdkClientGenerationService,
+    private readonly upgradeWriteLockService: UpgradeWriteLockService,
   ) {
     super(workspaceRepository);
   }
@@ -322,6 +352,15 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
   }
 
   async activateWorkspace(user: AuthContextUser, workspace: WorkspaceEntity) {
+    return this.upgradeWriteLockService.withLock(() =>
+      this.activateWorkspaceUnderLock(user, workspace),
+    );
+  }
+
+  private async activateWorkspaceUnderLock(
+    user: AuthContextUser,
+    workspace: WorkspaceEntity,
+  ) {
     // Acquire the activation lock by atomically moving the workspace to
     // ONGOING_CREATION. First try the normal case (PENDING_CREATION). If nothing
     // matches, the workspace may be stuck in ONGOING_CREATION from a prior
@@ -329,7 +368,10 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     // but only once the lock is stale, so a genuinely concurrent activation is
     // never interrupted. Postgres row locking serializes concurrent reclaims, and
     // repository.update bumps updatedAt, so a reclaimed lock is immediately fresh.
-    let activationLockResult = await this.workspaceRepository.update(
+    const admissionRepository = this.upgradeWriteLockService
+      .currentRunner()
+      .manager.getRepository(WorkspaceEntity);
+    let activationLockResult = await admissionRepository.update(
       {
         id: workspace.id,
         activationStatus: WorkspaceActivationStatus.PENDING_CREATION,
@@ -338,7 +380,7 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     );
 
     if ((activationLockResult.affected ?? 0) === 0) {
-      activationLockResult = await this.workspaceRepository.update(
+      activationLockResult = await admissionRepository.update(
         {
           id: workspace.id,
           activationStatus: WorkspaceActivationStatus.ONGOING_CREATION,
@@ -362,16 +404,48 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
       if (
         existingWorkspace?.activationStatus === WorkspaceActivationStatus.ACTIVE
       ) {
+        // A reader could have cached ONGOING after the prior invalidation and
+        // before the original activation transaction committed.
+        try {
+          await this.coreEntityCacheService.invalidate(
+            'workspaceEntity',
+            workspace.id,
+          );
+        } catch (cacheError) {
+          throw activationCacheUnavailableError(cacheError);
+        }
         return existingWorkspace;
       }
 
       throw new Error('Workspace is already being created');
     }
 
-    await this.coreEntityCacheService.invalidate(
-      'workspaceEntity',
-      workspace.id,
-    );
+    try {
+      await this.coreEntityCacheService.invalidate(
+        'workspaceEntity',
+        workspace.id,
+      );
+    } catch (cacheError) {
+      // No activation COMMIT has started. Restore only our claimed status on
+      // the locked backend, then retry eviction so a cached ONGOING cannot
+      // outlive the repaired PENDING state. Never expose provider errors.
+      try {
+        await admissionRepository.update(
+          {
+            id: workspace.id,
+            activationStatus: WorkspaceActivationStatus.ONGOING_CREATION,
+          },
+          { activationStatus: WorkspaceActivationStatus.PENDING_CREATION },
+        );
+        await this.coreEntityCacheService.invalidate(
+          'workspaceEntity',
+          workspace.id,
+        );
+      } catch (repairError) {
+        throw activationCacheUnavailableError({ cacheError, repairError });
+      }
+      throw activationCacheUnavailableError(cacheError);
+    }
 
     try {
       await this.workspaceManagerService.init({
@@ -395,15 +469,70 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         workspaceId: workspace.id,
       });
     } catch (error) {
-      await this.workspaceRepository.update(workspace.id, {
-        activationStatus: WorkspaceActivationStatus.PENDING_CREATION,
-      });
-      await this.coreEntityCacheService.invalidate(
-        'workspaceEntity',
-        workspace.id,
-      );
+      if (error instanceof ActivationCommitOutcomeUnknownError) {
+        // Inspect from the pool, not the connection whose COMMIT response was
+        // lost. Never compensate a potentially committed ACTIVE + receipt.
+        let committedWorkspace: WorkspaceEntity | null = null;
+        let receiptCommitted = false;
+        let inspectionError: unknown;
+        try {
+          committedWorkspace = await this.workspaceRepository.findOneBy({
+            id: workspace.id,
+          });
+          receiptCommitted =
+            await this.upgradeMigrationService.hasWorkspaceInitialReceipt({
+              workspaceId: workspace.id,
+              name: error.initialReceiptName,
+              status: error.initialReceiptStatus,
+            });
+        } catch (readError) {
+          inspectionError = readError;
+          Object.defineProperty(error, 'inspectionFailure', {
+            value: readError,
+            enumerable: false,
+          });
+        }
 
-      throw error;
+        try {
+          // Even an unresolved COMMIT must evict a cached ONGOING status. A
+          // later ACTIVE retry also invalidates before returning its result.
+          await this.coreEntityCacheService.invalidate(
+            'workspaceEntity',
+            workspace.id,
+          );
+        } catch (cacheError) {
+          throw activationCacheUnavailableError(cacheError, error);
+        }
+
+        if (inspectionError) {
+          this.logger.error(
+            'Unable to inspect uncertain workspace activation; leaving status unchanged',
+          );
+          throw error;
+        }
+        if (
+          committedWorkspace?.activationStatus !==
+            WorkspaceActivationStatus.ACTIVE ||
+          !receiptCommitted
+        ) {
+          // Unknown is not rollback. Leave ONGOING_CREATION for bounded stale
+          // recovery rather than write PENDING over a possibly live activation.
+          throw error;
+        }
+      } else {
+        await this.workspaceRepository.update(
+          {
+            id: workspace.id,
+            activationStatus: WorkspaceActivationStatus.ONGOING_CREATION,
+          },
+          { activationStatus: WorkspaceActivationStatus.PENDING_CREATION },
+        );
+        await this.coreEntityCacheService.invalidate(
+          'workspaceEntity',
+          workspace.id,
+        );
+        throw error;
+      }
     }
 
     try {
@@ -418,10 +547,16 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
       this.exceptionHandlerService.captureExceptions([error as Error]);
     }
 
-    await this.coreEntityCacheService.invalidate(
-      'workspaceEntity',
-      workspace.id,
-    );
+    try {
+      await this.coreEntityCacheService.invalidate(
+        'workspaceEntity',
+        workspace.id,
+      );
+    } catch (cacheError) {
+      // ACTIVE and its initial receipt already committed; fail closed and let
+      // an ACTIVE retry evict the stale workspace cache without compensation.
+      throw activationCacheUnavailableError(cacheError);
+    }
 
     return await this.workspaceRepository.findOneBy({
       id: workspace.id,
@@ -433,23 +568,29 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
   }: {
     workspaceId: string;
   }): Promise<void> {
-    const lastAttemptedInstanceCommand =
-      await this.upgradeMigrationService.getLastAttemptedInstanceCommandOrThrow();
-
-    const initialCursor =
-      this.upgradeSequenceReaderService.getInitialCursorForNewWorkspace(
-        lastAttemptedInstanceCommand,
-      );
-
     const executedByVersion =
       this.twentyConfigService.get('APP_VERSION') ?? 'unknown';
 
-    const queryRunner = this.coreDataSource.createQueryRunner();
+    const queryRunner = this.upgradeWriteLockService.currentRunner();
 
-    await queryRunner.connect();
     await queryRunner.startTransaction();
+    let commitStarted = false;
 
     try {
+      // The pinned upgrade-lock connection also owns the final transaction.
+      // A lost lock connection cannot leave ACTIVE/initial receipt committing
+      // on a surviving pooled backend after another upgrader enters.
+      // Read the cursor on the same transaction
+      // that commits ACTIVE and the corresponding initial receipt.
+      const lastAttemptedInstanceCommand =
+        await this.upgradeMigrationService.getLastAttemptedInstanceCommandOrThrow(
+          queryRunner,
+        );
+      const initialCursor =
+        this.upgradeSequenceReaderService.getInitialCursorForNewWorkspace(
+          lastAttemptedInstanceCommand,
+        );
+
       await queryRunner.manager.update(WorkspaceEntity, workspaceId, {
         activationStatus: WorkspaceActivationStatus.ACTIVE,
       });
@@ -462,12 +603,23 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         queryRunner,
       });
 
-      await queryRunner.commitTransaction();
+      commitStarted = true;
+      try {
+        await queryRunner.commitTransaction();
+      } catch (error) {
+        throw new ActivationCommitOutcomeUnknownError(
+          initialCursor.name,
+          initialCursor.status,
+          error,
+        );
+      }
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      // An unknown COMMIT response needs fresh-session inspection; do not
+      // issue another receipt or claim rollback when the outcome is uncertain.
+      if (!commitStarted && queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
       throw error;
-    } finally {
-      await queryRunner.release();
     }
   }
 
@@ -827,19 +979,11 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     workspaceId: string;
     schemaName: string;
   }): Promise<void> {
-    const {
-      flatObjectMetadataMaps,
-      flatFieldMetadataMaps,
-      flatPageLayoutMaps,
-    } =
+    const { flatObjectMetadataMaps, flatFieldMetadataMaps } =
       await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
           workspaceId,
-          flatMapsKeys: [
-            'flatObjectMetadataMaps',
-            'flatFieldMetadataMaps',
-            'flatPageLayoutMaps',
-          ],
+          flatMapsKeys: ['flatObjectMetadataMaps', 'flatFieldMetadataMaps'],
         },
       );
 
@@ -910,30 +1054,6 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         );
         this.exceptionHandlerService.captureExceptions([error as Error]);
       }
-    }
-
-    const dashboardQueryRunner = this.coreDataSource.createQueryRunner();
-
-    await dashboardQueryRunner.connect();
-
-    try {
-      await dashboardQueryRunner.startTransaction();
-
-      await prefillDashboards(
-        dashboardQueryRunner.manager,
-        schemaName,
-        flatPageLayoutMaps,
-      );
-
-      await dashboardQueryRunner.commitTransaction();
-    } catch (error) {
-      if (dashboardQueryRunner.isTransactionActive) {
-        await dashboardQueryRunner.rollbackTransaction();
-      }
-
-      throw error;
-    } finally {
-      await dashboardQueryRunner.release();
     }
 
     try {

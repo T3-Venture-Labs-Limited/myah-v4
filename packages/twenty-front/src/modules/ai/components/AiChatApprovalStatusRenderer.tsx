@@ -8,6 +8,8 @@ import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { ShimmeringText } from '@/ai/components/ShimmeringText';
 import { AiChatActionApprovalEvidenceRenderer } from '@/ai/components/AiChatActionApprovalEvidenceRenderer';
+import { AiChatReviewedActionSummary } from '@/ai/components/AiChatReviewedActionSummary';
+import { reviewedGenericActionSchema } from '@/ai/states/selectors/agentChatPendingApprovalComponentSelector';
 import { GET_ACTION_APPROVAL_PROPOSAL } from '@/ai/graphql/queries/getActionApprovalProposal';
 
 const StyledContainer = styled.div`
@@ -86,6 +88,16 @@ export const AiChatApprovalStatusRenderer = ({
       (resultStatus === 'pending' ? 'PENDING' : 'RESOLVED'))
     : (resultStatus ?? 'pending');
   const evidenceLifecycleState = `${resultStatus ?? 'unknown'}:${status}:${isStreaming ? 'streaming' : 'complete'}`;
+  const parsedReviewedAction = actionApprovalBindingId
+    ? undefined
+    : reviewedGenericActionSchema.safeParse(result?.reviewedAction);
+  const reviewedAction = parsedReviewedAction?.success
+    ? parsedReviewedAction.data
+    : undefined;
+  const invalidReason =
+    typeof result?.invalidReason === 'string'
+      ? result.invalidReason
+      : undefined;
 
   if (status === 'pending' || status === 'PENDING') {
     const label = t`Waiting for approval...`;
@@ -120,19 +132,48 @@ export const AiChatApprovalStatusRenderer = ({
           : status === 'EXPIRED'
             ? t`Expired`
             : t`Approval resolved`
-    : result?.decision === 'approved'
-      ? t`Approved`
-      : result?.decision === 'rejected'
-        ? t`Rejected`
-        : t`Changes requested`;
+    : resultStatus === 'consumed'
+      ? result?.executionOutcome === 'succeeded'
+        ? t`Approved and run`
+        : result?.executionOutcome === 'failed'
+          ? t`Approved, execution reported a failure`
+          : t`Approved, outcome unconfirmed`
+      : resultStatus === 'invalidated'
+        ? t`Approved, but not run`
+        : result?.decision === 'approved'
+          ? t`Approved`
+          : result?.decision === 'rejected'
+            ? t`Rejected`
+            : t`Changes requested`;
+  const executionDetail =
+    !actionApprovalBindingId &&
+    resultStatus === 'consumed' &&
+    result?.executionOutcome !== 'succeeded'
+      ? t`The tool may have made changes. Check the records before requesting a new approval.`
+      : undefined;
+  const invalidDetail =
+    resultStatus !== 'invalidated'
+      ? undefined
+      : invalidReason === 'TARGET_CHANGED'
+        ? t`The records changed after review. Nothing was changed; ask for a new approval.`
+        : invalidReason === 'NOT_AUTHORIZED_OR_UNAVAILABLE'
+          ? t`Permission is missing or the records are unavailable. Nothing was changed.`
+          : invalidReason === 'APPROVAL_EXPIRED'
+            ? t`The approval expired before it ran. Nothing was changed; ask for a new approval.`
+            : t`The assistant tried a different action than the one approved. Nothing was changed; ask for a new approval.`;
 
   return (
     <StyledContainer>
       <IconShield size={theme.icon.size.sm} />
       <StyledContent>
         <StyledMessage>{decisionLabel}</StyledMessage>
+        {invalidDetail && <StyledDetail>{invalidDetail}</StyledDetail>}
+        {executionDetail && <StyledDetail>{executionDetail}</StyledDetail>}
         {!actionApprovalBindingId && comment && (
           <StyledDetail>{comment}</StyledDetail>
+        )}
+        {reviewedAction && (
+          <AiChatReviewedActionSummary reviewedAction={reviewedAction} />
         )}
       </StyledContent>
       {actionApprovalBindingId && (

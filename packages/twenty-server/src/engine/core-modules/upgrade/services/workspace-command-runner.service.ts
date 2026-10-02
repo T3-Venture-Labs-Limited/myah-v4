@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { type WorkspaceIteratorContext } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type ParsedUpgradeCommandOptions } from 'src/database/commands/upgrade-version-command/upgrade.command';
@@ -7,6 +7,7 @@ import { type RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
 import { formatUpgradeLog } from 'src/engine/core-modules/upgrade/utils/format-upgrade-log.util';
+import { UpgradeWriteLockService } from 'src/engine/core-modules/upgrade/services/upgrade-write-lock.service';
 
 type WorkspaceCommandEntry = Pick<
   RegisteredWorkspaceCommand,
@@ -27,6 +28,8 @@ export class WorkspaceCommandRunnerService {
     private readonly twentyConfigService: TwentyConfigService,
     private readonly upgradeMigrationService: UpgradeMigrationService,
     private readonly upgradeStatusService: UpgradeStatusService,
+    @Inject(UpgradeWriteLockService)
+    private readonly upgradeWriteLockService?: UpgradeWriteLockService,
   ) {}
 
   async runWorkspaceCommands({
@@ -117,35 +120,87 @@ export class WorkspaceCommandRunnerService {
     iteratorContext: WorkspaceIteratorContext;
   }): Promise<void> {
     const { name, command: workspaceCommand } = workspaceCommandEntry;
+    let commitAttempted = false;
 
     try {
-      await workspaceCommand.runOnWorkspace({
+      const args = {
         options,
         workspaceId,
         dataSource: iteratorContext.dataSource,
         index: iteratorContext.index,
         total: iteratorContext.total,
-      });
+      };
 
-      if (!options.dryRun) {
+      if (options.dryRun) {
+        await workspaceCommand.runOnWorkspace(args);
+        return;
+      }
+
+      const queryRunner = this.upgradeWriteLockService?.currentRunner();
+      if (!queryRunner)
+        throw new Error(
+          'Upgrade write lock is required for workspace commands',
+        );
+
+      if (!workspaceCommand.runOnWorkspaceInUpgradeTransaction) {
+        throw new Error(
+          `Workspace command ${name} is not adapted to the pinned upgrade transaction`,
+        );
+      }
+      const afterCommitEffects: (() => Promise<void> | void)[] = [];
+      await queryRunner.startTransaction();
+      try {
+        await workspaceCommand.runOnWorkspaceInUpgradeTransaction(
+          args,
+          queryRunner,
+          (effect) => afterCommitEffects.push(effect),
+        );
         await this.upgradeMigrationService.recordUpgradeMigration({
           name,
           workspaceIds: [workspaceId],
           isInstance: false,
           status: 'completed',
           executedByVersion,
+          queryRunner,
         });
+        commitAttempted = true;
+        await queryRunner.commitTransaction();
+        for (const effect of afterCommitEffects) await effect();
+      } catch (error) {
+        if (
+          !commitAttempted &&
+          queryRunner.isTransactionActive &&
+          !queryRunner.isReleased
+        ) {
+          await queryRunner.rollbackTransaction();
+        }
+        throw error;
       }
     } catch (error) {
-      if (!options.dryRun) {
-        await this.upgradeMigrationService.recordUpgradeMigration({
-          name,
-          workspaceIds: [workspaceId],
-          isInstance: false,
-          status: 'failed',
-          executedByVersion,
-          error,
-        });
+      // An uncertain COMMIT is resolved by a fresh process/ledger inspection;
+      // never append a contradictory failed attempt after sending COMMIT.
+      if (!options.dryRun && !commitAttempted) {
+        const queryRunner = this.upgradeWriteLockService?.currentRunner();
+        if (!queryRunner) throw error;
+        if (queryRunner.isTransactionActive || queryRunner.isReleased)
+          throw error;
+        await queryRunner.startTransaction();
+        try {
+          await this.upgradeMigrationService.recordUpgradeMigration({
+            name,
+            workspaceIds: [workspaceId],
+            isInstance: false,
+            status: 'failed',
+            executedByVersion,
+            error,
+            queryRunner,
+          });
+          await queryRunner.commitTransaction();
+        } catch (receiptError) {
+          if (queryRunner.isTransactionActive && !queryRunner.isReleased)
+            await queryRunner.rollbackTransaction();
+          throw receiptError;
+        }
       }
 
       throw error;

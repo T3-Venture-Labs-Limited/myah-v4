@@ -507,6 +507,7 @@ jobs:
     needs:
       [
         changed-files-check,
+        upgrade-changed-files-check,
         server-build,
         server-lint-typecheck,
         server-previous-version-upgrade-mutation-guard,
@@ -518,5 +519,8 @@ jobs:
       ]
     steps:
       - name: Fail job if any needs failed
-        if: contains(needs.*.result, 'failure') || needs.select-runner.result != 'success'
+        if: >-
+          contains(needs.*.result, 'failure') ||
+          needs.select-runner.result != 'success' ||
+          needs.upgrade-changed-files-check.result != 'success'
         run: exit 1

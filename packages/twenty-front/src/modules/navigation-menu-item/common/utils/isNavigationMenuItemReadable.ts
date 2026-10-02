@@ -1,3 +1,4 @@
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { NavigationMenuItemType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
@@ -6,6 +7,14 @@ import { getObjectMetadataForNavigationMenuItem } from '@/navigation-menu-item/d
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { type ViewWithRelations } from '@/views/types/ViewWithRelations';
+
+// Keep recoverable metadata and read grants, but do not advertise the retired
+// feature through preserved OBJECT/VIEW/RECORD navigation rows.
+const retiredBrandBrainObjectUids = new Set<string>([
+  MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.brandBrainLink.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.brandBrainUpdateProposal.universalIdentifier,
+]);
 
 type IsNavigationMenuItemReadableArgs = {
   item: NavigationMenuItem;
@@ -45,6 +54,9 @@ export const isNavigationMenuItemReadable = ({
 
     return (
       isDefined(objectMetadataItem) &&
+      !retiredBrandBrainObjectUids.has(
+        objectMetadataItem.universalIdentifier,
+      ) &&
       getObjectPermissionsForObject(
         objectPermissionsByObjectMetadataId,
         objectMetadataItem.id,

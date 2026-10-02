@@ -45,7 +45,7 @@ const getDomainService = <T>(serviceName: string): T => {
 };
 
 describe('Campaign reply PostgreSQL query', () => {
-  it('updates the matched Campaign Creator through the real workspace manager and metadata', async () => {
+  it('updates the matched Campaign Creator through the real workspace manager when evidence schema is absent', async () => {
     const workspaceId = SEED_APPLE_WORKSPACE_ID;
     const campaignId = randomUUID();
     const campaignCreatorId = randomUUID();
@@ -80,36 +80,50 @@ describe('Campaign reply PostgreSQL query', () => {
             'WorkspaceEntityManager',
           );
           expect(runner.manager.queryRunner).toBe(runner);
+          // UUID-derived workspace schema identifier; values remain bound.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}"."campaign" (id,name) VALUES ($1,'MYAH-400')`,
             [campaignId],
           );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}"."creator" (id,name) VALUES ($1,'MYAH-400 Creator')`,
             [creatorId],
           );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}"."campaignCreator" (id,"campaignId","creatorId",stage)
              VALUES ($1,$2,$3,'CONTACTED')`,
             [campaignCreatorId, campaignId, creatorId],
           );
-          const query = jest.spyOn(runner, 'query').mockResolvedValueOnce([
-            {
-              workspaceId,
-              campaignId,
-              enrollmentId: randomUUID(),
-              authorizationId: randomUUID(),
-              authorizationGeneration: 1,
-              activationId: randomUUID(),
-              workflowVersionId: randomUUID(),
-              occurrenceId: randomUUID(),
-              connectedAccountId: randomUUID(),
-              messageChannelId: randomUUID(),
-              attemptId: randomUUID(),
-              campaignCreatorId,
-              creatorId,
-            },
-          ]);
+          const actualQuery = runner.query.bind(runner);
+          const query = jest
+            .spyOn(runner, 'query')
+            .mockImplementation(async (sql: string, parameters?: unknown[]) =>
+              sql.includes('to_regclass')
+                ? [{ exists: false }]
+                : sql.includes('FROM core."outboundEmailAttempt"') &&
+                    sql.includes("e.state='ACTIVE'")
+                  ? [
+                      {
+                        workspaceId,
+                        campaignId,
+                        enrollmentId: randomUUID(),
+                        authorizationId: randomUUID(),
+                        authorizationGeneration: 1,
+                        activationId: randomUUID(),
+                        workflowVersionId: randomUUID(),
+                        occurrenceId: randomUUID(),
+                        connectedAccountId: randomUUID(),
+                        messageChannelId: randomUUID(),
+                        attemptId: randomUUID(),
+                        campaignCreatorId,
+                        creatorId,
+                      },
+                    ]
+                  : actualQuery(sql, parameters),
+            );
 
           await expect(
             service.reconcileInboundMessageInTransaction(
@@ -119,11 +133,13 @@ describe('Campaign reply PostgreSQL query', () => {
                 threadExternalId: 'matched-thread',
                 fromHandle: 'sender@example.com',
                 inboundEvidenceId: randomUUID(),
+                inboundMessageThreadId: randomUUID(),
               },
               runner.manager,
             ),
           ).resolves.toBeUndefined();
 
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           const [creator] = await runner.query(
             `SELECT stage FROM "${schemaName}"."campaignCreator" WHERE id=$1`,
             [campaignCreatorId],
@@ -178,6 +194,7 @@ describe('Campaign reply PostgreSQL query', () => {
       'GlobalWorkspaceOrmManager',
     );
     const service = new CampaignReplyService(new CampaignProgressionService());
+    const inboundThreadId = randomUUID();
 
     await orm.executeInWorkspaceContext(
       async () => {
@@ -199,14 +216,18 @@ describe('Campaign reply PostgreSQL query', () => {
           );
           expect(routing).toBeDefined();
 
+          // UUID-derived workspace schema identifier; values remain bound.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}".campaign (id,name) VALUES ($1,'MYAH-400'),($2,'MYAH-400 control')`,
             [ids.campaign, ids.controlCampaign],
           );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}".creator (id,name) VALUES ($1,'MYAH-400 Creator')`,
             [ids.creator],
           );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await runner.query(
             `INSERT INTO "${schemaName}"."campaignCreator" (id,"campaignId","creatorId",stage)
              VALUES ($1,$2,$3,'CONTACTED'),($4,$5,$3,'CONTACTED')`,
@@ -300,10 +321,10 @@ describe('Campaign reply PostgreSQL query', () => {
               provider,"normalizedSenderHandle","normalizedRecipient","selectionConstraintKind","senderPoolFingerprint",
               "localDate","claimedAt","slotAt","unknownAfter","campaignId","enrollmentId","occurrenceId",
               "authorizationId","workflowVersionId","messageId","attemptNumber","renderDigest","finalEvidenceDigest",
-              "providerMessageId","providerMessageExternalId","providerAcceptedAt",retryable,"resolvedThreadExternalId")
+              "providerMessageId","providerMessageExternalId","providerHeaderMessageId","providerAcceptedAt",retryable,"resolvedThreadExternalId")
              VALUES ($1,$2,'CAMPAIGN_SEQUENCE','ACCEPTED','CONSUMED',$3,$4,'google',$5,'creator@example.com',
               'ROTATE',repeat('b',64),current_date,now(),now(),now()+interval '1 minute',$6,$7,$8,$9,$10,$11,1,
-              repeat('c',64),repeat('d',64),'provider-message','provider-message-external',now(),false,'matched-thread')`,
+              repeat('c',64),repeat('d',64),'provider-message','provider-message-external','<accepted@campaign.test>',now(),false,'matched-thread')`,
             [
               ids.attempt,
               workspaceId,
@@ -318,6 +339,18 @@ describe('Campaign reply PostgreSQL query', () => {
               ids.message,
             ],
           );
+          // A delayed acceptance receipt or skewed Date header must not permit a follow-up send.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          await runner.query(
+            `INSERT INTO "${schemaName}"."messageThread" (id,subject) VALUES ($1,'Campaign reply')`,
+            [inboundThreadId],
+          );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          await runner.query(
+            `INSERT INTO "${schemaName}".message (id,"messageThreadId","receivedAt",subject,"isDraft")
+             VALUES ($1,$2,now()-interval '1 hour','Creator reply',false)`,
+            [ids.evidence, inboundThreadId],
+          );
 
           await service.reconcileInboundMessageInTransaction(
             {
@@ -326,6 +359,8 @@ describe('Campaign reply PostgreSQL query', () => {
               threadExternalId: 'matched-thread',
               fromHandle: 'creator@example.com',
               inboundEvidenceId: ids.evidence,
+              inboundMessageThreadId: inboundThreadId,
+              inReplyToTokens: ['<accepted@campaign.test>'],
             },
             runner.manager,
           );
@@ -360,6 +395,7 @@ describe('Campaign reply PostgreSQL query', () => {
               terminalReason: 'ENROLLMENT_REPLIED',
             },
           ]);
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           const creators = await runner.query(
             `SELECT id,stage FROM "${schemaName}"."campaignCreator" WHERE id=ANY($1::uuid[]) ORDER BY id`,
             [[ids.campaignCreator, ids.controlCampaignCreator]],
@@ -383,6 +419,8 @@ describe('Campaign reply PostgreSQL query', () => {
               threadExternalId: 'matched-thread',
               fromHandle: 'creator@example.com',
               inboundEvidenceId: ids.evidence,
+              inboundMessageThreadId: inboundThreadId,
+              inReplyToTokens: ['<accepted@campaign.test>'],
             },
             runner.manager,
           );
@@ -400,6 +438,8 @@ describe('Campaign reply PostgreSQL query', () => {
       { lite: true },
     );
 
+    // UUID-derived workspace schema identifier; values remain bound.
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     const [rolledBack] = await global.testDataSource.query(
       `SELECT
        (SELECT count(*)::int FROM core."campaignEnrollment" WHERE id=$1) enrollments,
@@ -421,11 +461,12 @@ describe('Campaign reply PostgreSQL query', () => {
       await expect(
         service.reconcileInboundMessageInTransaction(
           {
-            workspaceId: randomUUID(),
+            workspaceId: SEED_APPLE_WORKSPACE_ID,
             messageChannelId: randomUUID(),
             threadExternalId: 'ordinary-thread',
             fromHandle: 'sender@example.com',
             inboundEvidenceId: randomUUID(),
+            inboundMessageThreadId: randomUUID(),
           },
           runner.manager as never,
         ),

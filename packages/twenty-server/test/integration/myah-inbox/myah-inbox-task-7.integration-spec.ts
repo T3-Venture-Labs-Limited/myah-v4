@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
+
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import gql from 'graphql-tag';
 
-import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 
 import { findManyOperationFactory } from 'test/integration/graphql/utils/find-many-operation-factory.util';
@@ -11,11 +13,13 @@ import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graph
 import {
   cleanupMyahInboxTask7Fixture,
   seedMyahInboxTask7Fixture,
+  task7FixtureContactKeys,
   type MyahInboxTask7CleanupEvidence,
   type MyahInboxTask7Fixture,
 } from 'test/integration/myah-inbox/utils/seed-myah-inbox-task-7-fixture.util';
 
-const inboxThreadsQuery = gql`  query Task7InboxThreads(
+const inboxThreadsQuery = gql`
+  query Task7InboxThreads(
     $first: Int
     $after: String
     $campaignId: String
@@ -156,25 +160,100 @@ const expectFixtureAbsent = (
 };
 
 describe('Myah Inbox Task 7 fixture failure cleanup', () => {
-  it('removes every partially seeded fixture resource after setup fails', async () => {
+  it('removes partial fixture contact state without removing unrelated contact state', async () => {
     const operatorAccessToken = APPLE_JANE_ADMIN_ACCESS_TOKEN;
     const injectedFailure = new Error('Injected Task 7 seed failure');
+    const fixtureKey = task7FixtureContactKeys[1];
+    const unrelatedKey = `email-thread:${randomUUID()}`;
+    const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+    const runner = global.testDataSource.createQueryRunner();
+    let inserted = false;
+    let contactCounts:
+      | {
+          fixtureIdentityCount: number;
+          fixtureTriageCount: number;
+          unrelatedIdentityCount: number;
+          unrelatedTriageCount: number;
+        }
+      | undefined;
 
+    await runner.connect();
     try {
-      await seedMyahInboxTask7Fixture({
-        operatorAccessToken,
-        afterNativeRecordsSeeded: () => {
-          throw injectedFailure;
-        },
-      });
-      throw new Error('Expected Task 7 fixture seeding to fail');
-    } catch (error) {
-      expect(error).toBe(injectedFailure);
+      try {
+        await seedMyahInboxTask7Fixture({
+          operatorAccessToken,
+          afterNativeRecordsSeeded: async () => {
+            await runner.startTransaction();
+            try {
+              await runner.query("SELECT set_config('search_path', $1, true)", [
+                schema,
+              ]);
+              await runner.query(
+                'INSERT INTO "myahInboxContactIdentity" ("contactIdentityKey") VALUES ($1), ($2)',
+                [fixtureKey, unrelatedKey],
+              );
+              await runner.query(
+                `INSERT INTO "myahInboxContactTriage" ("contactIdentityKey", "identityGeneration", "inboxState", revision, "stateDecisionAt", "triageChangedAt")
+                 VALUES ($1, 1, 'NEEDS_REPLY', 1, now(), now()), ($2, 1, 'NEEDS_REPLY', 1, now(), now())`,
+                [fixtureKey, unrelatedKey],
+              );
+              await runner.commitTransaction();
+              inserted = true;
+            } catch (error) {
+              await runner.rollbackTransaction();
+              throw error;
+            }
+            throw injectedFailure;
+          },
+        });
+        throw new Error('Expected Task 7 fixture seeding to fail');
+      } catch (error) {
+        expect(error).toBe(injectedFailure);
+      } finally {
+        try {
+          expectFixtureAbsent(
+            await cleanupMyahInboxTask7Fixture({ operatorAccessToken }),
+          );
+        } finally {
+          if (inserted) {
+            await runner.startTransaction();
+            try {
+              await runner.query("SELECT set_config('search_path', $1, true)", [
+                schema,
+              ]);
+              [contactCounts] = await runner.query(
+                `SELECT
+                   (SELECT count(*)::int FROM "myahInboxContactIdentity" WHERE "contactIdentityKey"=$1) AS "fixtureIdentityCount",
+                   (SELECT count(*)::int FROM "myahInboxContactTriage" WHERE "contactIdentityKey"=$1) AS "fixtureTriageCount",
+                   (SELECT count(*)::int FROM "myahInboxContactIdentity" WHERE "contactIdentityKey"=$2) AS "unrelatedIdentityCount",
+                   (SELECT count(*)::int FROM "myahInboxContactTriage" WHERE "contactIdentityKey"=$2) AS "unrelatedTriageCount"`,
+                [fixtureKey, unrelatedKey],
+              );
+              await runner.query(
+                'DELETE FROM "myahInboxContactTriage" WHERE "contactIdentityKey"=$1',
+                [unrelatedKey],
+              );
+              await runner.query(
+                'DELETE FROM "myahInboxContactIdentity" WHERE "contactIdentityKey"=$1',
+                [unrelatedKey],
+              );
+              await runner.commitTransaction();
+            } catch (error) {
+              await runner.rollbackTransaction();
+              throw error;
+            }
+          }
+        }
+      }
     } finally {
-      expectFixtureAbsent(
-        await cleanupMyahInboxTask7Fixture({ operatorAccessToken }),
-      );
+      await runner.release();
     }
+    expect(contactCounts).toEqual({
+      fixtureIdentityCount: 0,
+      fixtureTriageCount: 0,
+      unrelatedIdentityCount: 1,
+      unrelatedTriageCount: 1,
+    });
   });
 });
 

@@ -25,6 +25,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { AppPath } from 'twenty-shared/types';
 import { getAppPath } from 'twenty-shared/utils';
 
+import { getMyahCampaignPath } from '@/myah/navigation/myah-navigation-registry';
 import { MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignOperationsTabUniversalIdentifier';
 import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageLayoutOrThrow';
 
@@ -143,10 +144,54 @@ const isUuid = (value: string | null): value is string =>
     value,
   );
 
-export const MyahCampaignEmailAccounts = ({
+const MyahCampaignEmailAccountsWithLayout = ({
   campaignId,
 }: {
   campaignId: string;
+}) => {
+  const { currentPageLayout } = useCurrentPageLayoutOrThrow();
+  const campaignOperationsTabId =
+    currentPageLayout.tabs.find(
+      (tab) =>
+        tab.universalIdentifier ===
+        MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER,
+    )?.id ?? MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER;
+  const returnTo = `${getAppPath(
+    AppPath.RecordShowPage,
+    { objectNameSingular: 'campaign', objectRecordId: campaignId },
+    { linkConnectedAccount: 1 },
+  )}#${campaignOperationsTabId}`;
+
+  return (
+    <MyahCampaignEmailAccountsContent
+      campaignId={campaignId}
+      returnTo={returnTo}
+    />
+  );
+};
+
+export const MyahCampaignEmailAccounts = ({
+  campaignId,
+  dedicatedPage = false,
+}: {
+  campaignId: string;
+  dedicatedPage?: boolean;
+}) =>
+  dedicatedPage ? (
+    <MyahCampaignEmailAccountsContent
+      campaignId={campaignId}
+      returnTo={`${getMyahCampaignPath(campaignId)}?section=operations&linkConnectedAccount=1`}
+    />
+  ) : (
+    <MyahCampaignEmailAccountsWithLayout campaignId={campaignId} />
+  );
+
+const MyahCampaignEmailAccountsContent = ({
+  campaignId,
+  returnTo,
+}: {
+  campaignId: string;
+  returnTo: string;
 }) => {
   const [removingAccount, setRemovingAccount] =
     useState<CampaignEmailAccount | null>(null);
@@ -160,7 +205,6 @@ export const MyahCampaignEmailAccounts = ({
   const { openModal } = useModal();
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentPageLayout } = useCurrentPageLayoutOrThrow();
   // Persists the one-shot mutation through StrictMode's duplicate effect setup.
   // oxlint-disable-next-line twenty/no-state-useref
   const autoLinkedAccountRef = useRef<string | null>(null);
@@ -197,18 +241,6 @@ export const MyahCampaignEmailAccounts = ({
           account.connectedAccountId === candidate.connectedAccountId,
       ),
   );
-  const campaignOperationsTabId =
-    currentPageLayout.tabs.find(
-      (tab) =>
-        tab.universalIdentifier ===
-        MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER,
-    )?.id ?? MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER;
-  const campaignOperationsReturnPath = `${getAppPath(
-    AppPath.RecordShowPage,
-    { objectNameSingular: 'campaign', objectRecordId: campaignId },
-    { linkConnectedAccount: 1 },
-  )}#${campaignOperationsTabId}`;
-
   useEffect(() => {
     if (isPickerOpen) {
       pickerActionRef.current?.focus();
@@ -415,9 +447,7 @@ export const MyahCampaignEmailAccounts = ({
                       );
                     })
                   : null}
-                <EmailAccountConnectionCards
-                  returnTo={campaignOperationsReturnPath}
-                />
+                <EmailAccountConnectionCards returnTo={returnTo} />
               </div>
             }
             dropdownId={pickerDropdownId}

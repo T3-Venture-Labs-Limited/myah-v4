@@ -4,15 +4,21 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import chalk from 'chalk';
 import { Command, CommandRunner, Option } from 'nest-commander';
 import { DataSource } from 'typeorm';
+import { MigrationExecutor } from 'typeorm/migration/MigrationExecutor';
 
+import { LEGACY_2_19_PREREQUISITE_COMMAND_NAMES } from 'src/engine/core-modules/upgrade/constants/legacy-2-19-prerequisite-command-names.constant';
+import { LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME } from 'src/engine/core-modules/upgrade/constants/legacy-2-19-prerequisite-reconciliation-name.constant';
 import { TWENTY_PREVIOUS_VERSIONS } from 'src/engine/core-modules/upgrade/constants/twenty-previous-versions.constant';
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import { UpgradeCommandRegistryService } from 'src/engine/core-modules/upgrade/services/upgrade-command-registry.service';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { UpgradeSequenceReaderService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
+import { UpgradeWriteLockService } from 'src/engine/core-modules/upgrade/services/upgrade-write-lock.service';
 import { WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
 
+const LEGACY_REBRAND_COMMAND_NAME =
+  '2.19.0_RebrandEmailSenderToMyahSlowInstanceCommand_1784005792206';
 type RunInstanceCommandsOptions = {
   force?: boolean;
   includeSlow?: boolean;
@@ -36,6 +42,7 @@ export class RunInstanceCommandsCommand extends CommandRunner {
     private readonly instanceUpgradeService: InstanceCommandRunnerService,
     private readonly upgradeMigrationService: UpgradeMigrationService,
     private readonly upgradeStatusService: UpgradeStatusService,
+    private readonly upgradeWriteLockService: UpgradeWriteLockService,
   ) {
     super();
   }
@@ -62,9 +69,46 @@ export class RunInstanceCommandsCommand extends CommandRunner {
     _passedParams: string[],
     options: RunInstanceCommandsOptions,
   ): Promise<void> {
-    try {
+    return this.upgradeWriteLockService.withLock(
+      async (emptyCoreBootstrap) => {
+        await this.runUnderLock(options, emptyCoreBootstrap);
+      },
+      { requireNoOngoingActivation: true, allowEmptyCoreBootstrap: true },
+    );
+  }
+
+  private async runUnderLock(
+    options: RunInstanceCommandsOptions,
+    emptyCoreBootstrap = false,
+  ): Promise<void> {
+    // The initial empty core has no upgrade ledger or workspace table until
+    // the pinned legacy TypeORM migrations create both under this lock.
+    // Existing databases retain both preflight checks before any writes.
+    // DataSource.runMigrations() creates a different pooled runner and can outlive
+    // the session advisory lock when its backend is lost.
+    if (!emptyCoreBootstrap) {
+      await this.checkLegacyUpgradeReceiptHole();
       await this.checkWorkspaceVersionSafety(options);
-      await this.runLegacyPendingTypeOrmMigrations();
+    }
+    const runner = this.upgradeWriteLockService.currentRunner();
+    const executor = new MigrationExecutor(this.dataSource, runner);
+    executor.transaction = 'each';
+    const pendingMigrations = await executor.getPendingMigrations();
+    const nontransactional = pendingMigrations.filter(
+      (migration) => migration.instance?.transaction === false,
+    );
+
+    if (nontransactional.length > 0) {
+      throw new Error(
+        `Unable to run legacy TypeORM migrations: pending nontransactional migrations cannot safely pair SQL with a receipt: ${nontransactional.map((migration) => migration.name).join(', ')}`,
+      );
+    }
+
+    try {
+      await this.runLegacyPendingTypeOrmMigrations(
+        executor,
+        pendingMigrations.length,
+      );
 
       const activeOrSuspendedWorkspaceIds =
         await this.workspaceVersionService.getActiveOrSuspendedWorkspaceIds();
@@ -108,6 +152,43 @@ export class RunInstanceCommandsCommand extends CommandRunner {
       throw error;
     } finally {
       await this.safeInvalidateUpgradeStatusCache();
+    }
+  }
+
+  private async checkLegacyUpgradeReceiptHole(): Promise<void> {
+    if (
+      await this.upgradeMigrationService.hasInstanceAttempt(
+        LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME,
+      )
+    ) {
+      throw new Error(
+        `Unable to run-instance-commands: ${LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME} has an attempt. ` +
+          'Use the ordered upgrade route; --force and --include-slow cannot bypass this guard.',
+      );
+    }
+
+    // A failed Rebrand may be retried in this invocation, and later genuine
+    // cursors still retain the same skipped fast-command hole. Neither case
+    // can use a successful-Rebrand-only guard.
+    if (
+      await this.upgradeMigrationService.hasInstanceAttempt(
+        LEGACY_REBRAND_COMMAND_NAME,
+      )
+    ) {
+      for (const name of LEGACY_2_19_PREREQUISITE_COMMAND_NAMES) {
+        if (
+          !(await this.upgradeMigrationService.isLastAttemptCompleted({
+            name,
+            workspaceId: null,
+          }))
+        ) {
+          throw new Error(
+            `Unable to run-instance-commands: ${LEGACY_REBRAND_COMMAND_NAME} has an attempt but completed ${name} is missing. ` +
+              'This historical 2.19 sequence has an instance-command prerequisite hole; unrestricted replay can duplicate existing approval tables. ' +
+              'Use the ordered upgrade route after the 2.19 prerequisite reconciliation is available. --force and --include-slow cannot bypass this guard.',
+          );
+        }
+      }
     }
   }
 
@@ -169,12 +250,18 @@ export class RunInstanceCommandsCommand extends CommandRunner {
     }
   }
 
-  private async runLegacyPendingTypeOrmMigrations(): Promise<void> {
+  private async runLegacyPendingTypeOrmMigrations(
+    executor: MigrationExecutor,
+    pendingCount: number,
+  ): Promise<void> {
     this.logger.log('Running legacy TypeORM migrations...');
 
-    const migrations = await this.dataSource.runMigrations({
-      transaction: 'each',
-    });
+    // An absent table with no registered migrations needs no synthetic receipt.
+    // TypeORM executes each migration and its original migration-table row in
+    // the same transaction on the pinned lock backend.
+    const migrations = pendingCount
+      ? await executor.executePendingMigrations()
+      : [];
 
     if (migrations.length === 0) {
       this.logger.log('No pending legacy migrations');

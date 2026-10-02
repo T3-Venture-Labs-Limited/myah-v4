@@ -1,4 +1,5 @@
 import { myahInboxPendingInstagramSelectionState } from '@/myah/inbox/states/myahInboxPendingInstagramSelectionState';
+import { isCampaignMessageOverviewReturnTarget } from '@/myah/campaign-messages/types/CampaignMessageOverviewReturnTarget';
 import {
   useCallback,
   useContext,
@@ -54,6 +55,8 @@ import { styled } from '@linaria/react';
 import { IconInbox } from 'twenty-ui/icon';
 import { Button, SegmentedControl } from 'twenty-ui/input';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { isDeeplyEqual } from '~/utils/isDeeplyEqual';
 
 const StyledWorkspace = styled.div`
   display: grid;
@@ -117,6 +120,21 @@ const StyledMobilePanel = styled.div`
 
 type MobilePanel = 'contacts' | 'conversation';
 
+// Owner-approved ambient arrival interval while the Inbox tab is visible.
+const MYAH_INBOX_AMBIENT_ARRIVAL_MS = 30_000;
+// Full retained-set re-authorization bound when nothing visibly changed.
+const MYAH_INBOX_FULL_REAUTHORIZATION_MS = 5 * 60_000;
+
+// Readable-response signature of a contact row; changes when a creator replies.
+const getMyahInboxContactSignature = (contact: MyahInboxContact | null) =>
+  contact
+    ? JSON.stringify([
+        contact.lastActivityAt,
+        contact.preview,
+        contact.triage.revision,
+      ])
+    : null;
+
 export const MyahInboxPage = () => {
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const workspaceId = currentWorkspace?.id ?? null;
@@ -167,6 +185,14 @@ const MyahInboxPageContent = ({
   workspaceId: string | null;
 }) => {
   const isMobile = useIsMobile();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const returnTarget = workspaceId
+    ? location.state?.campaignMessageOverviewReturnTarget
+    : null;
+  const canReturnToMessages =
+    workspaceId !== null &&
+    isCampaignMessageOverviewReturnTarget(returnTarget, workspaceId);
   const store = useStore();
   const [
     myahInboxPendingInstagramSelection,
@@ -204,6 +230,30 @@ const MyahInboxPageContent = ({
   );
   const [draftAuthorizationGeneration, setDraftAuthorizationGeneration] =
     useState(0);
+  // Background arrival ticks: metadata-only draft rereads, never a reauthorization.
+  const [draftArrivalEpoch, setDraftArrivalEpoch] = useState(0);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const ambientArrivalInFlightRef = useRef(false);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const ambientArrivalRef = useRef<(() => Promise<void>) | null>(null);
+  // Last full history/draft re-authorization for the selected contact.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const fullReauthorizationRef = useRef<{
+    contactId: string | null;
+    at: number;
+  }>({ contactId: null, at: 0 });
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible')
+        void ambientArrivalRef.current?.();
+    };
+    const interval = setInterval(tick, MYAH_INBOX_AMBIENT_ARRIVAL_MS);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, []);
   const [restoringPreservedSelection, setRestoringPreservedSelection] =
     useState(() => Boolean(preservedReturnSelectionRef.current?.contactId));
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('contacts');
@@ -645,28 +695,35 @@ const MyahInboxPageContent = ({
       return;
     }
 
-    if (contactId === currentSelection.contactId) {
-      if (isMobile && options?.openConversation) {
-        setMobilePanel('conversation');
-      }
-      return;
-    }
-
     const contact = contacts.contacts.find(({ id }) => id === contactId);
 
     if (!contact) {
       return;
     }
 
-    if (!(await flushAffectedDrafts())) return;
+    const recommendedSelection = getMyahInboxContactSelection({
+      workspaceId,
+      contact,
+      previousSelection: null,
+    });
+    const isExplicitReopen =
+      contactId === currentSelection.contactId && options?.openConversation;
+
+    if (contactId === currentSelection.contactId && !isExplicitReopen) {
+      return;
+    }
+
+    if (
+      !isDeeplyEqual(recommendedSelection, currentSelection) &&
+      !(await flushAffectedDrafts())
+    ) {
+      if (isExplicitReopen && isMobile) {
+        setMobilePanel('conversation');
+      }
+      return;
+    }
     setRetainedContact(contact);
-    commitContactSelection(
-      getMyahInboxContactSelection({
-        workspaceId,
-        contact,
-        previousSelection: null,
-      }),
-    );
+    commitContactSelection(recommendedSelection);
 
     if (isMobile && options?.openConversation) {
       setMobilePanel('conversation');
@@ -777,6 +834,67 @@ const MyahInboxPageContent = ({
     }
   };
 
+  // Ambient arrival (visible tab only): re-authorizes the retained list,
+  // history and draft metadata without changing selection or masking content.
+  const runAmbientArrival = async () => {
+    if (!workspaceId || ambientArrivalInFlightRef.current) return;
+    ambientArrivalInFlightRef.current = true;
+    const generation = selectionGenerationRef.current;
+    const selection = currentSelection;
+    try {
+      const result = await contacts.ambientRefresh(selection.contactId);
+      if (
+        workspaceRef.current !== workspaceId ||
+        selectionGenerationRef.current !== generation
+      )
+        return;
+      if (result.status !== 'success') {
+        if (result.status === 'failed' && selection.channel === 'EMAIL')
+          email.purge();
+        return;
+      }
+      if (selection.contactId && !result.selectedContact) {
+        invalidateWorkspace(workspaceId);
+        setRetainedContact(null);
+        commitContactSelection(EMPTY_MYAH_INBOX_CONTACT_SELECTION);
+        return;
+      }
+      if (result.selectedContact) setRetainedContact(result.selectedContact);
+      // A newly opened contact was just loaded authoritatively.
+      const now = Date.now();
+      if (fullReauthorizationRef.current.contactId !== selection.contactId)
+        fullReauthorizationRef.current = {
+          contactId: selection.contactId,
+          at: now,
+        };
+      const changed =
+        getMyahInboxContactSignature(result.selectedContact) !==
+        getMyahInboxContactSignature(selectedContact);
+      if (
+        !changed &&
+        now - fullReauthorizationRef.current.at <
+          MYAH_INBOX_FULL_REAUTHORIZATION_MS
+      )
+        return;
+      if (selection.channel === 'EMAIL' && !(await email.ambientRefresh())) {
+        // A busy or failed history read did not complete authorization.
+        fullReauthorizationRef.current = {
+          contactId: selection.contactId,
+          at: 0,
+        };
+        return;
+      }
+      fullReauthorizationRef.current = {
+        contactId: selection.contactId,
+        at: now,
+      };
+      setDraftArrivalEpoch((epoch) => epoch + 1);
+    } finally {
+      ambientArrivalInFlightRef.current = false;
+    }
+  };
+  ambientArrivalRef.current = runAmbientArrival;
+
   const handleFiltersChange = async (nextFilters: MyahInboxFilters) => {
     cancelPendingDestination();
     if (!(await flushAffectedDrafts())) return;
@@ -859,6 +977,7 @@ const MyahInboxPageContent = ({
         selectionChannel={currentSelection.channel}
         selectedEmailThreadId={currentSelection.emailThreadId}
         draftScopeGeneration={`${workspaceId}:${currentSelection.contactId}:${draftAuthorizationGeneration}`}
+        draftArrivalEpoch={draftArrivalEpoch}
         draftScopeAvailable={
           email.status === 'ready' &&
           !contacts.isRefreshing &&
@@ -902,7 +1021,26 @@ const MyahInboxPageContent = ({
         <PageCardHeader
           icon={<IconInbox size={theme.icon.size.md} />}
           title="Inbox"
-          actionButton={<SidePanelToggleButton />}
+          actionButton={
+            <>
+              {canReturnToMessages ? (
+                <Button
+                  title="Return to Campaign messages"
+                  variant="secondary"
+                  size="small"
+                  onClick={async () => {
+                    if (!(await flushAffectedDrafts())) return;
+                    navigate(`${returnTarget.pathname}${returnTarget.search}`, {
+                      state: {
+                        campaignMessageOverviewReturnTarget: returnTarget,
+                      },
+                    });
+                  }}
+                />
+              ) : null}
+              <SidePanelToggleButton />
+            </>
+          }
         />
       }
     >

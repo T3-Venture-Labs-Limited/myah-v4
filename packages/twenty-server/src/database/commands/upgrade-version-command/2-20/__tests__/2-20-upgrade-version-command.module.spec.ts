@@ -6,6 +6,9 @@ import { VerifyInstagramSecurityCutoverWorkspaceCommand } from 'src/database/com
 import { SynchronizeCampaignLifecycleStatusMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971535-synchronize-campaign-lifecycle-status-metadata.command';
 import { SynchronizeCampaignActivityControlMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789313971536-synchronize-campaign-activity-control-metadata.command';
 import { CatchUpCampaignActivityControlMetadataWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789633748003-catch-up-campaign-activity-control-metadata.command';
+import { SynchronizeMyahAssistantSkillsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1788250000000-synchronize-myah-assistant-skills.command';
+import { CreateCampaignForecastProjectionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172618-create-campaign-forecast-projection';
+import { AddConnectedAccountSendingPolicyRevisionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172619-add-connected-account-sending-policy-revision';
 import { RepairInstagramSecurityCutoverCommand } from 'src/database/commands/upgrade-version-command/2-20/repair-instagram-security-cutover.command';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -26,6 +29,8 @@ import { SynchronizeMyahCampaignAutomationMetadataCommand } from 'src/database/c
 import { BackfillComposioInstagramHistoryWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619373-backfill-composio-instagram-history.command';
 import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1789307619370-invalidate-composio-instagram-authorities.command';
 import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/workspace-migration-runner.module';
+import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
+import { CoreEntityCacheModule } from 'src/engine/core-entity-cache/core-entity-cache.module';
 import { RetireShopifyConnectionsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1790000000411-retire-shopify-connections.command';
 
 describe('V2_20_UpgradeVersionCommandModule', () => {
@@ -36,6 +41,8 @@ describe('V2_20_UpgradeVersionCommandModule', () => {
     ) as unknown[];
 
     expect(imports).toContain(WorkspaceMigrationRunnerModule);
+    expect(imports).toContain(WorkspaceCacheStorageModule);
+    expect(imports).toContain(CoreEntityCacheModule);
   });
 
   it('provides the retained Campaign Creator List source migration', () => {
@@ -60,15 +67,6 @@ describe('V2_20_UpgradeVersionCommandModule', () => {
     );
   });
 
-  it('provides the Shopify connection retirement command', () => {
-    const providers = Reflect.getMetadata(
-      MODULE_METADATA.PROVIDERS,
-      V2_20_UpgradeVersionCommandModule,
-    ) as unknown[];
-
-    expect(providers).toContain(RetireShopifyConnectionsCommand);
-  });
-
   it('provides the Composio Instagram history cutover after app metadata sync', () => {
     const providers = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
@@ -80,6 +78,69 @@ describe('V2_20_UpgradeVersionCommandModule', () => {
     );
     expect(providers).toContain(
       BackfillComposioInstagramHistoryWorkspaceCommand,
+    );
+  });
+
+  it('appends the MYAH-315 exact-approval Myah assistant skill refresh', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      V2_20_UpgradeVersionCommandModule,
+    ) as Function[];
+    const refresh = providers.find(
+      (provider) =>
+        provider.name ===
+        'RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand',
+    );
+
+    expect(refresh).toBeDefined();
+    expect(Object.getPrototypeOf(refresh)).toBe(
+      SynchronizeMyahAssistantSkillsCommand,
+    );
+    expect(getRegisteredWorkspaceCommandMetadata(refresh!)).toEqual({
+      version: '2.20.0',
+      timestamp: 1790161829172,
+    });
+    expect(Reflect.getMetadata(CommandMeta, refresh!)).toMatchObject({
+      name: 'upgrade:2-20:refresh-myah-assistant-skills-for-exact-approvals',
+    });
+  });
+
+  it('appends a distinct idempotent Myah assistant skill refresh command', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      V2_20_UpgradeVersionCommandModule,
+    ) as Function[];
+    const refresh = providers.find(
+      (provider) =>
+        provider.name === 'RefreshMyahAssistantSkillsWorkspaceCommand',
+    );
+
+    expect(refresh).toBeDefined();
+    expect(getRegisteredWorkspaceCommandMetadata(refresh!)).toEqual({
+      version: '2.20.0',
+      timestamp: 1789645911006,
+    });
+    expect(Reflect.getMetadata(CommandMeta, refresh!)).toMatchObject({
+      name: 'upgrade:2-20:refresh-myah-assistant-skills',
+    });
+    expect(
+      getRegisteredWorkspaceCommandMetadata(
+        SynchronizeMyahAssistantSkillsCommand,
+      ),
+    ).toEqual({ version: '2.20.0', timestamp: 1788250000000 });
+    expect(
+      Reflect.getMetadata(CommandMeta, SynchronizeMyahAssistantSkillsCommand),
+    ).toMatchObject({
+      name: 'upgrade:2-20:synchronize-myah-assistant-skills',
+    });
+  });
+
+  it('registers the Campaign forecast and sending-policy instance commands', () => {
+    expect(INSTANCE_COMMANDS).toEqual(
+      expect.arrayContaining([
+        CreateCampaignForecastProjectionFastInstanceCommand,
+        AddConnectedAccountSendingPolicyRevisionFastInstanceCommand,
+      ]),
     );
   });
 });
@@ -347,40 +408,28 @@ describe('Instagram production upgrade provider compatibility', () => {
         unaffected.every((step) => step.timestamp < identities[0].timestamp),
       ).toBe(true);
     }
-    // Retirement commands are the final append-only 2.20.0 workspace steps.
-    expect(sequence[sequence.length - 1]?.name).toBe(
-      '2.20.0_RetireShopifyConnectionsCommand_1790000000411',
-    );
-    expect(sequence[sequence.length - 2]?.name).toBe(
-      '2.20.0_RetireBrandBrainMetadataCommand_1790000000410',
-    );
-    expect(sequence[sequence.length - 3]?.name).toBe(
-      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
-    );
-    expect(sequence[sequence.length - 4]?.name).toBe(
-      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
-    );
-    expect(sequence[sequence.length - 5]?.name).toBe(
-      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
-    );
-    expect(sequence[sequence.length - 6]?.name).toBe(
-      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
-    );
-    expect(sequence[sequence.length - 7]?.name).toBe(
-      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
-    );
-    expect(sequence[sequence.length - 8]?.name).toBe(
-      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
-    );
-    expect(sequence[sequence.length - 9]?.name).toBe(
-      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
-    );
-    expect(sequence[sequence.length - 10]?.name).toBe(
-      '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
-    );
     const workspaceCommands = sequence
       .filter((step) => step.kind === 'workspace')
       .filter((step) => step.version === '2.20.0');
+    // Preserve the retirement sequence, exact-approval refresh, and newer
+    // source-controlled Instagram adoption in their durable timestamp order.
+    expect(workspaceCommands.slice(-15).map(({ name }) => name)).toEqual([
+      '2.20.0_VerifyInstagramSecurityCutoverWorkspaceCommand_1789313971534',
+      '2.20.0_SynchronizeCampaignLifecycleStatusMetadataCommand_1789313971535',
+      '2.20.0_SynchronizeCampaignActivityControlMetadataCommand_1789313971536',
+      '2.20.0_InitializeMyahInboxContactTriageWorkspaceCommand_1789633748001',
+      '2.20.0_CatchUpMyahInboxContactTriageWorkspaceCommand_1789633748002',
+      '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
+      '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
+      '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
+      '2.20.0_RefreshMyahAssistantSkillsWorkspaceCommand_1789645911006',
+      '2.20.0_RetireBrandBrainMetadataCommand_1790000000410',
+      '2.20.0_RetireShopifyConnectionsCommand_1790000000411',
+      '2.20.0_RetireCalendarSyncCommand_1790000000412',
+      '2.20.0_RetireDashboardCommand_1790000000413',
+      '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
+      '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
+    ]);
     expect(
       reader
         .getPendingWorkspaceCommands({
@@ -395,8 +444,27 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_CatchUpCampaignActivityControlMetadataWorkspaceCommand_1789633748003',
       '2.20.0_SynchronizeInstagramComposerMetadataCommand_1789633748005',
       '2.20.0_InstallMyahInboxEmailGeneralProvenanceCommand_1789645911004',
+      '2.20.0_RefreshMyahAssistantSkillsWorkspaceCommand_1789645911006',
       '2.20.0_RetireBrandBrainMetadataCommand_1790000000410',
       '2.20.0_RetireShopifyConnectionsCommand_1790000000411',
+      '2.20.0_RetireCalendarSyncCommand_1790000000412',
+      '2.20.0_RetireDashboardCommand_1790000000413',
+      '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
+      '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
+    ]);
+    // Workspaces already completed through MYAH-315 still run Instagram adoption.
+    expect(
+      reader
+        .getPendingWorkspaceCommands({
+          workspaceCommands,
+          workspaceCursor: {
+            name: '2.20.0_RefreshMyahAssistantSkillsForExactApprovalsWorkspaceCommand_1790161829172',
+            status: 'completed',
+          },
+        })
+        .map(({ name }) => name),
+    ).toEqual([
+      '2.20.0_SynchronizeInstagramSourceControlledMetadataCommand_1790491923604',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(

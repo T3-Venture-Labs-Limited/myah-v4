@@ -7,6 +7,7 @@ import { PageLayoutComponentInstanceContext } from '@/page-layout/states/context
 import { getTabListInstanceIdFromPageLayoutAndRecord } from '@/page-layout/utils/getTabListInstanceIdFromPageLayoutAndRecord';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { TabListComponentInstanceContext } from '@/ui/layout/tab-list/states/contexts/TabListComponentInstanceContext';
+import { PageLayoutType } from '~/generated-metadata/graphql';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -20,6 +21,10 @@ export const PageLayoutRenderer = ({
   renderMode,
 }: PageLayoutRendererProps) => {
   const { targetRecordIdentifier, layoutType } = useLayoutRenderingContext();
+
+  if (layoutType === PageLayoutType.DASHBOARD) {
+    return <>Dashboards are no longer available.</>;
+  }
 
   const tabListInstanceId = getTabListInstanceIdFromPageLayoutAndRecord({
     pageLayoutId,

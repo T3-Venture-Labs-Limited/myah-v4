@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
@@ -37,6 +37,16 @@ export class WorkspaceFlatFieldPermissionMapCacheService extends WorkspaceCacheP
   }
 
   async computeForCache(workspaceId: string): Promise<FlatFieldPermissionMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatFieldPermissionMaps> {
     const [
       fieldPermissions,
       applications,
@@ -44,24 +54,24 @@ export class WorkspaceFlatFieldPermissionMapCacheService extends WorkspaceCacheP
       objectMetadatas,
       fieldMetadatas,
     ] = await Promise.all([
-      this.fieldPermissionRepository.find(workspaceId, {
+      this.fieldPermissionRepository.withManager(manager).find(workspaceId, {
         withDeleted: true,
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.roleRepository.find(workspaceId, {
+      this.roleRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.objectMetadataRepository.find({
+      manager.getRepository(ObjectMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.fieldMetadataRepository.find({
+      manager.getRepository(FieldMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,

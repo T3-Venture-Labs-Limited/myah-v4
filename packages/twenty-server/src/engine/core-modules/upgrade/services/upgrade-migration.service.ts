@@ -9,6 +9,7 @@ import {
   UpgradeMigrationEntity,
   UpgradeMigrationStatus,
 } from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
+import { LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME } from 'src/engine/core-modules/upgrade/constants/legacy-2-19-prerequisite-reconciliation-name.constant';
 import { formatUpgradeErrorForStorage } from 'src/engine/core-modules/upgrade/utils/format-upgrade-error-for-storage.util';
 import { extractVersionFromCommandName } from 'src/engine/core-modules/upgrade/utils/extract-version-from-command-name.util';
 
@@ -46,11 +47,16 @@ export class UpgradeMigrationService {
   async isLastAttemptCompleted({
     name,
     workspaceId,
+    queryRunner,
   }: {
     name: string;
     workspaceId: string | null;
+    queryRunner?: QueryRunner;
   }): Promise<boolean> {
-    const latestAttempt = await this.upgradeMigrationRepository.findOne({
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(UpgradeMigrationEntity)
+      : this.upgradeMigrationRepository;
+    const latestAttempt = await repository.findOne({
       where: {
         name,
         workspaceId: workspaceId === null ? IsNull() : workspaceId,
@@ -59,6 +65,38 @@ export class UpgradeMigrationService {
     });
 
     return isDefined(latestAttempt) && latestAttempt.status === 'completed';
+  }
+
+  // Used only after an uncertain activation COMMIT. This pooled repository
+  // must observe durable state independently of the failed pinned backend.
+  async hasWorkspaceInitialReceipt({
+    workspaceId,
+    name,
+    status,
+  }: {
+    workspaceId: string;
+    name: string;
+    status: UpgradeMigrationStatus;
+  }): Promise<boolean> {
+    return this.upgradeMigrationRepository.exists({
+      where: { workspaceId, name, status, attempt: 1, isInitial: true },
+    });
+  }
+
+  async hasInstanceAttempt(name: string): Promise<boolean> {
+    return this.upgradeMigrationRepository.exists({
+      where: { name, workspaceId: IsNull() },
+    });
+  }
+
+  async getLatestPrerequisiteReconciliationAttempt(): Promise<UpgradeMigrationEntity | null> {
+    return this.upgradeMigrationRepository.findOne({
+      where: {
+        name: LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME,
+        workspaceId: IsNull(),
+      },
+      order: { attempt: 'DESC' },
+    });
   }
 
   async recordUpgradeMigration(
@@ -198,6 +236,9 @@ export class UpgradeMigrationService {
       .createQueryBuilder('migration')
       .select(['migration.name', 'migration.status'])
       .andWhere('migration."isInitial" = false')
+      .andWhere('migration.name != :nonProgressName', {
+        nonProgressName: LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME,
+      })
       .andWhere(
         `migration.attempt = (
           SELECT MAX(sub.attempt)
@@ -270,11 +311,12 @@ export class UpgradeMigrationService {
             "isInitial"
           FROM core."upgradeMigration"
           WHERE "workspaceId" = ANY($1)
+            AND name != $2
           ORDER BY "workspaceId", name, attempt DESC
         ) latest_per_name
         ORDER BY latest_per_name."workspaceId", latest_per_name."createdAt" DESC
       `,
-      [workspaceIds],
+      [workspaceIds, LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME],
     );
 
     const cursors = new Map<string, WorkspaceLastAttemptedCommand>();
@@ -344,14 +386,17 @@ export class UpgradeMigrationService {
     return completedCount === workspaceIds.length;
   }
 
-  async getLastAttemptedInstanceCommand(): Promise<{
+  async getLastAttemptedInstanceCommand(queryRunner?: QueryRunner): Promise<{
     name: string;
     status: UpgradeMigrationStatus;
     executedByVersion: string;
     errorMessage: string | null;
     createdAt: Date;
   } | null> {
-    const migration = await this.upgradeMigrationRepository
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(UpgradeMigrationEntity)
+      : this.upgradeMigrationRepository;
+    const migration = await repository
       .createQueryBuilder('migration')
       .select([
         'migration.name',
@@ -362,6 +407,9 @@ export class UpgradeMigrationService {
       ])
       .where('migration."workspaceId" IS NULL')
       .andWhere('migration."isInitial" = false')
+      .andWhere('migration.name != :nonProgressName', {
+        nonProgressName: LEGACY_2_19_PREREQUISITE_RECONCILIATION_NAME,
+      })
       .andWhere(
         `migration.attempt = (
           SELECT MAX(sub.attempt)
@@ -386,11 +434,13 @@ export class UpgradeMigrationService {
     };
   }
 
-  async getLastAttemptedInstanceCommandOrThrow(): Promise<{
+  async getLastAttemptedInstanceCommandOrThrow(
+    queryRunner?: QueryRunner,
+  ): Promise<{
     name: string;
     status: UpgradeMigrationStatus;
   }> {
-    const result = await this.getLastAttemptedInstanceCommand();
+    const result = await this.getLastAttemptedInstanceCommand(queryRunner);
 
     if (!result) {
       throw new Error(

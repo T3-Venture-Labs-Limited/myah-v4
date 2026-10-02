@@ -30,6 +30,9 @@ export type ReplyContextDraftSnapshot = {
   body: MyahRichText | null;
   proposalContextFingerprint: string | null;
   reviewedContextFingerprint: string | null;
+  // Incoming snapshot the body was authored against; NULL means legacy/unknown.
+  authoredIncomingBaseline: string | null;
+  bodyProvenance: 'PROPOSAL' | 'EDITED' | null;
 };
 
 export type SaveReplyContextDraftInput = AnchoredReplyIdentity & {
@@ -37,6 +40,11 @@ export type SaveReplyContextDraftInput = AnchoredReplyIdentity & {
   body: MyahRichText | null;
   // This value is provided only by the verified proposal-result path.
   proposalContextFingerprint?: string | null;
+  clearContextAcknowledgement?: boolean;
+  // Current authorized incoming snapshot from the same fresh context resolution.
+  incomingBaseline?: string | null;
+  // False for an explicit update: validated proposal text without acknowledgement.
+  acknowledgeProposal?: boolean;
 };
 
 export type ReviewReplyContextDraftInput = AnchoredReplyIdentity & {
@@ -50,6 +58,8 @@ type ReplyContextDraftRow = {
   bodyBlocknote: string | null;
   proposalContextFingerprint: string | null;
   reviewedContextFingerprint: string | null;
+  authoredIncomingBaseline: string | null;
+  bodyProvenance: 'PROPOSAL' | 'EDITED' | null;
 };
 
 const replyContextLockKey = (identity: AnchoredReplyIdentity) =>
@@ -74,6 +84,10 @@ const identityValues = (identity: AnchoredReplyIdentity) => [
   identity.context.campaignId ?? null,
 ];
 
+const DRAFT_COLUMNS = `"id", "revision", "bodyMarkdown", "bodyBlocknote",
+  "proposalContextFingerprint", "reviewedContextFingerprint",
+  "authoredIncomingBaseline", "bodyProvenance"`;
+
 const IDENTITY_PREDICATE = `
   "workspaceId" = $1 AND "contactAnchorKind" = $2
   AND "contactAnchorId" = $3 AND "channel" = $4
@@ -87,8 +101,7 @@ export class MyahInboxReplyContextDraftService {
   async read(input: AnchoredReplyIdentity): Promise<ReplyContextDraftSnapshot> {
     this.assertIdentity(input);
     const rows = await this.dataSource.query<ReplyContextDraftRow[]>(
-      `SELECT "id", "revision", "bodyMarkdown", "bodyBlocknote",
-              "proposalContextFingerprint", "reviewedContextFingerprint"
+      `SELECT ${DRAFT_COLUMNS}
        FROM core."myahInboxReplyContextDraft"
        WHERE ${IDENTITY_PREDICATE}`,
       identityValues(input),
@@ -122,16 +135,20 @@ export class MyahInboxReplyContextDraftService {
           `INSERT INTO core."myahInboxReplyContextDraft" (
             "workspaceId", "contactAnchorKind", "contactAnchorId", "channel",
             "deliveryTargetId", "contextKind", "campaignId", "bodyMarkdown",
-            "bodyBlocknote", "revision", "proposalContextFingerprint"
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10)
+            "bodyBlocknote", "revision", "proposalContextFingerprint",
+            "authoredIncomingBaseline", "bodyProvenance"
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1,
+            CASE WHEN $12::boolean THEN $10::varchar END, $11,
+            CASE WHEN $10::varchar IS NOT NULL THEN 'PROPOSAL' ELSE 'EDITED' END)
           ON CONFLICT DO NOTHING
-          RETURNING "id", "revision", "bodyMarkdown", "bodyBlocknote",
-                    "proposalContextFingerprint", "reviewedContextFingerprint"`,
+          RETURNING ${DRAFT_COLUMNS}`,
           [
             ...identityValues(input),
             input.body?.markdown ?? null,
             input.body?.blocknote ?? null,
             input.proposalContextFingerprint ?? null,
+            input.incomingBaseline ?? null,
+            input.acknowledgeProposal ?? true,
           ],
         );
         const created = rows[0];
@@ -152,24 +169,40 @@ export class MyahInboxReplyContextDraftService {
          SET "bodyMarkdown" = $8, "bodyBlocknote" = $9,
              "revision" = "revision" + 1,
              "proposalContextFingerprint" = CASE
-               WHEN $10::varchar IS NULL THEN "proposalContextFingerprint"
-               ELSE $10::varchar
+               WHEN $10::varchar IS NOT NULL AND $15::boolean THEN $10::varchar
+               WHEN $10::varchar IS NOT NULL THEN NULL
+               WHEN $11::boolean THEN NULL
+               ELSE "proposalContextFingerprint"
              END,
              "reviewedContextFingerprint" = CASE
-               WHEN $10::varchar IS NULL THEN "reviewedContextFingerprint"
-               ELSE NULL
+               WHEN $10::varchar IS NOT NULL OR $11::boolean THEN NULL
+               ELSE "reviewedContextFingerprint"
+             END,
+             -- A validated proposal or a first body captures the current
+             -- incoming snapshot; later human/chat saves never rebaseline.
+             "authoredIncomingBaseline" = CASE
+               WHEN $8::text IS NULL THEN NULL
+               WHEN $10::varchar IS NOT NULL OR "bodyMarkdown" IS NULL THEN $14::text
+               ELSE "authoredIncomingBaseline"
+             END,
+             "bodyProvenance" = CASE
+               WHEN $8::text IS NULL THEN NULL
+               WHEN $10::varchar IS NOT NULL THEN 'PROPOSAL'
+               ELSE 'EDITED'
              END,
              "updatedAt" = NOW()
-         WHERE ${IDENTITY_PREDICATE} AND "revision" = $11 AND "id" = $12
-         RETURNING "id", "revision", "bodyMarkdown", "bodyBlocknote",
-                   "proposalContextFingerprint", "reviewedContextFingerprint"`,
+         WHERE ${IDENTITY_PREDICATE} AND "revision" = $12 AND "id" = $13
+         RETURNING ${DRAFT_COLUMNS}`,
         [
           ...identityValues(input),
           input.body?.markdown ?? null,
           input.body?.blocknote ?? null,
           input.proposalContextFingerprint ?? null,
+          input.clearContextAcknowledgement ?? false,
           input.expectedRevision,
           current.id,
+          input.incomingBaseline ?? null,
+          input.acknowledgeProposal ?? true,
         ],
       );
 
@@ -204,8 +237,7 @@ export class MyahInboxReplyContextDraftService {
         `UPDATE core."myahInboxReplyContextDraft"
          SET "reviewedContextFingerprint" = $8, "updatedAt" = NOW()
          WHERE ${IDENTITY_PREDICATE} AND "id" = $9
-         RETURNING "id", "revision", "bodyMarkdown", "bodyBlocknote",
-                   "proposalContextFingerprint", "reviewedContextFingerprint"`,
+         RETURNING ${DRAFT_COLUMNS}`,
         [
           ...identityValues(input),
           input.reviewedContextFingerprint,
@@ -232,8 +264,7 @@ export class MyahInboxReplyContextDraftService {
     input: AnchoredReplyIdentity,
   ): Promise<ReplyContextDraftRow | undefined> {
     const rows = await manager.query<ReplyContextDraftRow[]>(
-      `SELECT "id", "revision", "bodyMarkdown", "bodyBlocknote",
-              "proposalContextFingerprint", "reviewedContextFingerprint"
+      `SELECT ${DRAFT_COLUMNS}
        FROM core."myahInboxReplyContextDraft"
        WHERE ${IDENTITY_PREDICATE}`,
       identityValues(input),
@@ -261,6 +292,8 @@ export class MyahInboxReplyContextDraftService {
         body: null,
         proposalContextFingerprint: null,
         reviewedContextFingerprint: null,
+        authoredIncomingBaseline: null,
+        bodyProvenance: null,
       };
     }
 
@@ -273,6 +306,8 @@ export class MyahInboxReplyContextDraftService {
           : { markdown: row.bodyMarkdown, blocknote: row.bodyBlocknote },
       proposalContextFingerprint: row.proposalContextFingerprint,
       reviewedContextFingerprint: row.reviewedContextFingerprint,
+      authoredIncomingBaseline: row.authoredIncomingBaseline,
+      bodyProvenance: row.bodyProvenance,
     };
   }
 

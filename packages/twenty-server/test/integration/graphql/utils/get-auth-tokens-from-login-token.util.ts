@@ -47,7 +47,7 @@ export const getAuthTokensFromLoginToken = async ({
         origin,
       },
     },
-    undefined, // Public endpoint - no authentication required
+    null, // Public endpoint - no authentication required
   );
 
   if (expectToFail === true) {

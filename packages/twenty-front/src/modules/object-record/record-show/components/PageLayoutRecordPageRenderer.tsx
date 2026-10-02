@@ -75,6 +75,17 @@ export const PageLayoutRecordPageRenderer = ({
   const hasPinnedWidgetCommandMenuItems =
     pinnedWidgetCommandMenuItems.length > 0;
 
+  if (
+    targetRecordIdentifier.targetObjectNameSingular ===
+    CoreObjectNameSingular.Dashboard
+  ) {
+    return (
+      <StyledContentContainer isInSidePanel={isInSidePanel}>
+        Dashboards are no longer available.
+      </StyledContentContainer>
+    );
+  }
+
   return (
     <>
       <RecordShowEffect

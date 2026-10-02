@@ -6,6 +6,7 @@ import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspac
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
 import { CampaignSentProjectionService } from 'src/modules/campaign-execution/services/campaign-sent-projection.service';
+import { CampaignReplyService } from 'src/modules/campaign-execution/services/campaign-reply.service';
 import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 import { buildCampaignFinalEvidenceDigest } from 'src/modules/campaign-execution/utils/campaign-launch-proof.util';
 import { computeCampaignProjectedMessageId } from 'src/modules/campaign-execution/utils/campaign-execution-identity.util';
@@ -60,6 +61,7 @@ export class CampaignEmailRuntimeService {
     private readonly progression: CampaignProgressionService,
     private readonly dispatch: OutboundEmailDispatchService,
     private readonly projection: CampaignSentProjectionService,
+    private readonly replyService: CampaignReplyService,
   ) {}
 
   async runDueOccurrences(): Promise<void> {
@@ -103,11 +105,49 @@ export class CampaignEmailRuntimeService {
             ORDER BY a."updatedAt",a."attemptId" LIMIT 100
          ) SELECT * FROM pending UNION ALL SELECT * FROM reserved UNION ALL SELECT * FROM processing UNION ALL SELECT * FROM accepted UNION ALL SELECT * FROM definitelyUnaccepted UNION ALL SELECT * FROM unknown UNION ALL SELECT * FROM blocked`,
     );
+    // Inbox acceptance repair must not be gated by occurrence success or sent
+    // projection: those can complete before an inbound import inserts pending.
+    const replySchema = await this.query(
+      `SELECT to_regclass('core."myahCampaignReplyPending"') IS NOT NULL AS "exists"`,
+    );
+    if (replySchema[0]?.exists === true) {
+      work.push(
+        ...(await this.query(
+          `SELECT DISTINCT ON (p."workspaceId",p."messageId")
+             'PENDING_REPLY' AS kind,p."workspaceId",a."campaignId",p."messageId" AS id,a."attemptId"
+             FROM core."myahCampaignReplyPending" p
+             JOIN core."outboundEmailAttempt" a ON a."workspaceId"=p."workspaceId"
+              AND (a."attemptId"=ANY(p."candidateAttemptIds") OR
+                (p."candidateOverflow" AND a."messageChannelId"=p."messageChannelId"
+                  AND a."normalizedRecipient"=p."normalizedSender"
+                  AND (a."resolvedThreadExternalId"=p."threadExternalId"
+                    OR a."resolvedThreadExternalId" IS NULL)))
+            WHERE a.source='CAMPAIGN_SEQUENCE'
+              AND a."attemptState" IN ('ACCEPTED','DEFINITELY_UNACCEPTED','BLOCKED')
+              AND p."updatedAt" <= clock_timestamp() - interval '10 seconds'
+              AND NOT EXISTS (
+                SELECT 1 FROM core."myahCampaignReplyEvidence" ev
+                 WHERE ev."workspaceId"=p."workspaceId" AND ev."inboundMessageId"=p."messageId"
+                   AND ev."classification"='EXACT')
+            ORDER BY p."workspaceId",p."messageId",a."providerAcceptedAt",a."attemptId"
+            LIMIT 100`,
+        )),
+      );
+    }
     for (const item of work) {
       const workspaceId = String(item.workspaceId);
 
       try {
         await this.orm.executeInWorkspaceContext(async () => {
+          if (item.kind === 'PENDING_REPLY') {
+            await dataSource.transaction((manager) =>
+              this.replyService.reconcilePendingMessageInTransaction(
+                { workspaceId, inboundEvidenceId: String(item.id) },
+                manager as never,
+              ),
+            );
+            return;
+          }
           if (item.kind === 'ACCEPTED') {
             await this.reconcileAcceptedAttempt(
               workspaceId,

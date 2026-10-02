@@ -17,6 +17,8 @@ import {
   type RecoverOutboundEmailOutcomeInput,
   type SuspendAwareMonotonicClock,
 } from 'src/modules/campaign-execution/types/outbound-email-dispatch.type';
+import { E2eFixtureRejectingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/e2e-fixture-rejecting-message-outbound.service';
+import { E2eFixtureGmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/e2e-fixture-gmail-message-outbound.service';
 import { type MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 
 const ids = {
@@ -1452,6 +1454,70 @@ describe('OutboundEmailDispatchService', () => {
         ).resolves.toMatchObject({ status: 'DEFINITELY_UNACCEPTED_RECORDED' });
       }
       expect(harness.outboundService.sendMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it('records a fixture-only rejection as definitely unaccepted instead of unknown', async () => {
+    const harness = createHarness();
+    const fixtureDriver = new E2eFixtureRejectingMessageOutboundService();
+    harness.outboundService.sendMessage.mockImplementationOnce(
+      (input, account) => fixtureDriver.sendMessage(input, account),
+    );
+
+    await expect(
+      harness.service.dispatch(dispatchInput()),
+    ).resolves.toMatchObject({
+      status: 'DEFINITELY_UNACCEPTED_RECORDED',
+    });
+    expect(
+      harness.attemptService.recordDefinitelyUnaccepted,
+    ).toHaveBeenCalledTimes(1);
+    expect(harness.attemptService.recordAccepted).not.toHaveBeenCalled();
+    expect(
+      harness.attemptService.markUnknownAfterDeadline,
+    ).not.toHaveBeenCalled();
+  });
+
+  it.each(['sendMessage', 'sendDraft'] as const)(
+    'records Gmail fixture %s as definitely unaccepted, not unknown',
+    async (method) => {
+      const harness = createHarness();
+      const fixtureDriver = new E2eFixtureGmailMessageOutboundService();
+      E2eFixtureGmailMessageOutboundService.releaseSendAttemptCounts([
+        ids.account,
+      ]);
+      harness.outboundService.sendMessage.mockImplementationOnce(
+        (input, connectedAccount) =>
+          method === 'sendMessage'
+            ? fixtureDriver.sendMessage(input, connectedAccount)
+            : fixtureDriver.sendDraft(
+                'myah-e2e-local-draft',
+                input,
+                connectedAccount,
+              ),
+      );
+
+      try {
+        await expect(
+          harness.service.dispatch(dispatchInput()),
+        ).resolves.toMatchObject({ status: 'DEFINITELY_UNACCEPTED_RECORDED' });
+        expect(
+          E2eFixtureGmailMessageOutboundService.getSendAttemptCount([
+            ids.account,
+          ]),
+        ).toBe(1);
+        expect(
+          harness.attemptService.recordDefinitelyUnaccepted,
+        ).toHaveBeenCalledTimes(1);
+        expect(harness.attemptService.recordAccepted).not.toHaveBeenCalled();
+        expect(
+          harness.attemptService.markUnknownAfterDeadline,
+        ).not.toHaveBeenCalled();
+      } finally {
+        E2eFixtureGmailMessageOutboundService.releaseSendAttemptCounts([
+          ids.account,
+        ]);
+      }
     },
   );
 

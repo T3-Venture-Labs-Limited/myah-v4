@@ -217,13 +217,15 @@ const insertConversation = async ({
   id,
   creatorId,
   updatedAt,
+  native = false,
 }: {
   id: string;
   creatorId: string | null;
   updatedAt: string;
+  native?: boolean;
 }) =>
   global.testDataSource.query(
-    `INSERT INTO "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialConversation" (id,"creatorId","updatedAt","createdAt")
+    `INSERT INTO "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."${native ? 'myahSocialConversation' : '_myahSocialConversation'}" (id,"creatorId","updatedAt","createdAt")
      VALUES ($1,$2,$3::timestamptz,$3::timestamptz)`,
     [id, creatorId, updatedAt],
   );
@@ -331,6 +333,17 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
       id uuid PRIMARY KEY, "conversationId" uuid NOT NULL, direction text NOT NULL,
       "providerCreatedAt" timestamptz, "createdAt" timestamptz NOT NULL, "deletedAt" timestamptz
     )`);
+    // The historical baseline reads `_` tables; only post-upgrade runtime reads these native tables.
+    await global.testDataSource.query(
+      `CREATE TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialConversation" (
+         LIKE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialConversation" INCLUDING ALL
+       )`,
+    );
+    await global.testDataSource.query(
+      `CREATE TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialMessage" (
+         LIKE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialMessage" INCLUDING ALL
+       )`,
+    );
     await global.testDataSource.query(
       `INSERT INTO "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."workspaceMember" (id) VALUES ($1),($2)`,
       [ownerOld, ownerNew],
@@ -575,12 +588,14 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
     await global.testDataSource.query(`DELETE FROM core."user" WHERE id=$1`, [
       coreUserId,
     ]);
-    await global.testDataSource.query(`DELETE FROM core."workspace" WHERE id=$1`, [
-      workspaceId,
-    ]);
-    await global.testDataSource.query(`DELETE FROM core."application" WHERE id=$1`, [
-      coreApplicationId,
-    ]);
+    await global.testDataSource.query(
+      `DELETE FROM core."workspace" WHERE id=$1`,
+      [workspaceId],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM core."application" WHERE id=$1`,
+      [coreApplicationId],
+    );
   });
 
   it('uses the millisecond future-clamped baseline expression in UTC and Asia/Kathmandu', async () => {
@@ -859,6 +874,7 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
           id: testCase.sourceRecordId,
           creatorId: null,
           updatedAt: '2026-09-15T08:00:00.000Z',
+          native: true,
         });
       }
       await global.testDataSource.transaction(async (manager) => {
@@ -899,6 +915,7 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
       id: sourceRecordId,
       creatorId: null,
       updatedAt: '2026-09-15T08:00:00.000Z',
+      native: true,
     });
     await global.testDataSource.transaction(async (manager) => {
       const workspaceManager = Object.assign(manager, {
@@ -1794,10 +1811,10 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
 
   it('serializes an Instagram first-persistence transaction before the baseline without deadlock', async () => {
     await global.testDataSource.query(
-      `ALTER TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialMessage"
+      `ALTER TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialMessage"
        ADD CONSTRAINT "myahInboxTriageInstagramMessageConversationFk"
        FOREIGN KEY ("conversationId")
-       REFERENCES "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialConversation"(id)`,
+       REFERENCES "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialConversation"(id)`,
     );
     await global.testDataSource.query(
       `TRUNCATE TABLE
@@ -1818,6 +1835,7 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
       id: conversationId,
       creatorId: null,
       updatedAt: occurredAt,
+      native: true,
     });
 
     const producerAfterMessageInsert = deferred();
@@ -1828,13 +1846,13 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
       await producer.query("SELECT set_config('search_path', $1, true)", [
         'workspace_1wgvd1ht5ajtgz36va8w3nc3l',
       ]);
-      // A MIGRATING producer owns the marker's write lock before its source
-      // write, matching the projection's canonical marker/source order.
+      // The native producer and legacy baseline share the marker/receipt fence,
+      // not a source row. Keep the canonical marker-before-source order.
       await producer.query(
         'SELECT id FROM "myahInboxTriageMigration" WHERE id=true FOR UPDATE',
       );
       await producer.query(
-        `INSERT INTO "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialMessage" (
+        `INSERT INTO "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialMessage" (
           id, "conversationId", direction, "providerCreatedAt", "createdAt"
         ) VALUES ($1, $2, 'INBOUND', $3::timestamptz, $3::timestamptz)`,
         [persistedMessageId, conversationId, occurredAt],
@@ -1932,13 +1950,13 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
     'uses the actual Instagram producer and canonical marker/source lock order when %s',
     async (order) => {
       await global.testDataSource.query(
-        `ALTER TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialConversation"
+        `ALTER TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialConversation"
            ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'UNIPILE',
            ADD COLUMN IF NOT EXISTS "instagramAccountId" uuid,
            ADD COLUMN IF NOT EXISTS "providerConversationId" text`,
       );
       await global.testDataSource.query(
-        `ALTER TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialMessage"
+        `ALTER TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialMessage"
            ADD COLUMN IF NOT EXISTS text text,
            ADD COLUMN IF NOT EXISTS "sentVia" text,
            ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'UNIPILE',
@@ -1958,7 +1976,7 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
            ADD COLUMN IF NOT EXISTS "updatedAt" timestamptz NOT NULL DEFAULT now()`,
       );
       await global.testDataSource.query(
-        'ALTER TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialMessage" ALTER COLUMN "createdAt" SET DEFAULT now()',
+        'ALTER TABLE "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialMessage" ALTER COLUMN "createdAt" SET DEFAULT now()',
       );
       const schemaRunner = global.testDataSource.createQueryRunner();
       await schemaRunner.connect();
@@ -1986,12 +2004,14 @@ describe('Myah Inbox contact triage workspace upgrade (postgres)', () => {
       const accountRecordId = randomUUID();
       const occurredAt = '2099-09-15T15:00:00.000Z';
       await global.testDataSource.query(
-        `INSERT INTO "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."_myahSocialConversation" (
+        `INSERT INTO "workspace_1wgvd1ht5ajtgz36va8w3nc3l"."myahSocialConversation" (
            id, "creatorId", provider, "instagramAccountId", "providerConversationId", "updatedAt", "createdAt"
          ) VALUES ($1, NULL, 'UNIPILE', $2, $3, $4::timestamptz, $4::timestamptz)`,
         [conversationId, accountRecordId, `race:${order}`, occurredAt],
       );
 
+      // The historical baseline locks only `_` sources; the native producer still
+      // takes its own source lock after the shared marker/receipt fence.
       const sourceLockEntered = deferred();
       const releaseSourceLock = deferred();
       const markerLockAttempted = deferred();

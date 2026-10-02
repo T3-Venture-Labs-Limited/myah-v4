@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -46,6 +46,27 @@ export class WorkspaceFlatPageLayoutWidgetMapCacheService extends WorkspaceCache
   async computeForCache(
     workspaceId: string,
   ): Promise<FlatPageLayoutWidgetMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatPageLayoutWidgetMaps> {
+    // Direct repositories cannot reject an invalid workspace before issuing SQL.
+    if (
+      workspaceId === undefined ||
+      workspaceId === null ||
+      workspaceId === ''
+    ) {
+      throw new Error(
+        'WorkspaceScopedRepository: workspaceId must be a non-empty string.',
+      );
+    }
+
     const [
       existingPageLayoutWidgets,
       applications,
@@ -55,34 +76,34 @@ export class WorkspaceFlatPageLayoutWidgetMapCacheService extends WorkspaceCache
       frontComponents,
       views,
     ] = await Promise.all([
-      this.pageLayoutWidgetRepository.find(workspaceId, {
+      this.pageLayoutWidgetRepository.withManager(manager).find(workspaceId, {
         withDeleted: true,
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.pageLayoutTabRepository.find(workspaceId, {
+      this.pageLayoutTabRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.objectMetadataRepository.find({
+      manager.getRepository(ObjectMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.fieldMetadataRepository.find({
+      manager.getRepository(FieldMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.frontComponentRepository.find({
+      manager.getRepository(FrontComponentEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.viewRepository.find(workspaceId, {
+      this.viewRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),

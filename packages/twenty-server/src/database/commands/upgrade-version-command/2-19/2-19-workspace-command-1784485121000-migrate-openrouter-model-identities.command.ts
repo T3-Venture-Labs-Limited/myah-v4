@@ -1,6 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { Command } from 'nest-commander';
-import { Repository } from 'typeorm';
+import { type QueryRunner, Repository } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -39,11 +39,33 @@ export class MigrateOpenRouterModelIdentitiesCommand extends ActiveOrSuspendedWo
     }
 
     await this.workspaceRepository.manager.transaction(async (manager) => {
-      const workspaceRepository = manager.getRepository(WorkspaceEntity);
-      const agentRepository = manager.getRepository(AgentEntity);
+      await this.migrate(
+        workspaceId,
+        manager.getRepository(WorkspaceEntity),
+        manager.getRepository(AgentEntity),
+      );
+    });
+  }
 
-      await workspaceRepository.query(
-        `UPDATE "core"."workspace"
+  override async runOnWorkspaceInUpgradeTransaction(
+    args: RunOnWorkspaceArgs,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    if (args.options.dryRun) return;
+    await this.migrate(
+      args.workspaceId,
+      queryRunner.manager.getRepository(WorkspaceEntity),
+      queryRunner.manager.getRepository(AgentEntity),
+    );
+  }
+
+  private async migrate(
+    workspaceId: string,
+    workspaceRepository: Pick<Repository<WorkspaceEntity>, 'query'>,
+    agentRepository: Pick<Repository<AgentEntity>, 'query'>,
+  ): Promise<void> {
+    await workspaceRepository.query(
+      `UPDATE "core"."workspace"
          SET "fastModel" = CASE WHEN "fastModel" LIKE $2 || '%' THEN $1 || substring("fastModel" FROM length($2) + 1) ELSE "fastModel" END,
              "smartModel" = CASE WHEN "smartModel" LIKE $2 || '%' THEN $1 || substring("smartModel" FROM length($2) + 1) ELSE "smartModel" END,
              "routerModel" = CASE WHEN "routerModel" LIKE $2 || '%' THEN $1 || substring("routerModel" FROM length($2) + 1) ELSE "routerModel" END,
@@ -52,16 +74,15 @@ export class MigrateOpenRouterModelIdentitiesCommand extends ActiveOrSuspendedWo
                FROM unnest("enabledAiModelIds") AS model_id
              )
          WHERE "id" = $3`,
-        [CUSTOM_PROVIDER_PREFIX, LEGACY_PROVIDER_PREFIX, workspaceId],
-      );
+      [CUSTOM_PROVIDER_PREFIX, LEGACY_PROVIDER_PREFIX, workspaceId],
+    );
 
-      await agentRepository.query(
-        `UPDATE "core"."agent"
+    await agentRepository.query(
+      `UPDATE "core"."agent"
          SET "modelId" = $1 || substring("modelId" FROM length($2) + 1)
          WHERE "workspaceId" = $3
            AND "modelId" LIKE $2 || '%'`,
-        [CUSTOM_PROVIDER_PREFIX, LEGACY_PROVIDER_PREFIX, workspaceId],
-      );
-    });
+      [CUSTOM_PROVIDER_PREFIX, LEGACY_PROVIDER_PREFIX, workspaceId],
+    );
   }
 }

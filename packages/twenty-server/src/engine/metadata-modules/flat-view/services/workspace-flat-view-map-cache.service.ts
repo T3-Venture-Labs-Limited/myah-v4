@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { type Repository } from 'typeorm';
+import { type EntityManager, type Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -54,6 +54,16 @@ export class WorkspaceFlatViewMapCacheService extends WorkspaceCacheProvider<Fla
   }
 
   async computeForCache(workspaceId: string): Promise<FlatViewMaps> {
+    return this.computeFromManager(
+      workspaceId,
+      this.applicationRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatViewMaps> {
     const [
       views,
       applications,
@@ -66,45 +76,45 @@ export class WorkspaceFlatViewMapCacheService extends WorkspaceCacheProvider<Fla
       viewSorts,
       viewFieldGroups,
     ] = await Promise.all([
-      this.viewRepository.find(workspaceId, {
+      this.viewRepository.withManager(manager).find(workspaceId, {
         withDeleted: true,
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.objectMetadataRepository.find({
+      manager.getRepository(ObjectMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.fieldMetadataRepository.find({
+      manager.getRepository(FieldMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.viewFieldRepository.find(workspaceId, {
+      this.viewFieldRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'viewId'],
         withDeleted: true,
       }),
-      this.viewFilterRepository.find(workspaceId, {
+      this.viewFilterRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'viewId'],
         withDeleted: true,
       }),
-      this.viewGroupRepository.find(workspaceId, {
+      this.viewGroupRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'viewId'],
         withDeleted: true,
       }),
-      this.viewFilterGroupRepository.find(workspaceId, {
+      this.viewFilterGroupRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'viewId'],
         withDeleted: true,
       }),
-      this.viewSortRepository.find(workspaceId, {
+      this.viewSortRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'viewId'],
         withDeleted: true,
       }),
-      this.viewFieldGroupRepository.find(workspaceId, {
+      this.viewFieldGroupRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'viewId'],
         withDeleted: true,
       }),

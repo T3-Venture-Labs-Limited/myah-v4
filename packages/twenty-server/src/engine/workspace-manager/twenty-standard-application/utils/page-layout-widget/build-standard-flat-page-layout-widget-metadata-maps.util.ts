@@ -23,7 +23,9 @@ import { findObjectNameByUniversalIdentifier } from 'src/engine/workspace-manage
 export type BuildStandardFlatPageLayoutWidgetMetadataMapsArgs = Omit<
   CreateStandardPageLayoutWidgetArgs,
   'context'
->;
+> & {
+  omitDashboardComposition?: boolean;
+};
 
 const RECORD_PAGE_LAYOUT_WIDGET_TYPES = [
   WidgetType.FIELDS,
@@ -421,11 +423,12 @@ const computeRecordPageWidgets = ({
   return allWidgets;
 };
 
-export const buildStandardFlatPageLayoutWidgetMetadataMaps = (
-  args: BuildStandardFlatPageLayoutWidgetMetadataMapsArgs,
-): FlatEntityMaps<FlatPageLayoutWidget> => {
+export const buildStandardFlatPageLayoutWidgetMetadataMaps = ({
+  omitDashboardComposition = false,
+  ...args
+}: BuildStandardFlatPageLayoutWidgetMetadataMapsArgs): FlatEntityMaps<FlatPageLayoutWidget> => {
   const allWidgetMetadatas: FlatPageLayoutWidget[] = [
-    ...computeMyFirstDashboardWidgets(args),
+    ...(omitDashboardComposition ? [] : computeMyFirstDashboardWidgets(args)),
     ...computeRecordPageWidgets(args),
   ];
 

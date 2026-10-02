@@ -528,6 +528,42 @@ describe('CampaignInfluencerIndex', () => {
     });
   });
 
+  it('uses an active CampaignCreator table view when the standard widget view is absent', () => {
+    mockViews = [
+      {
+        id: 'other-object-view',
+        universalIdentifier: 'other-view',
+        objectMetadataId: 'creator-object',
+        type: ViewType.TABLE,
+        isActive: true,
+      },
+      {
+        id: 'inactive-campaign-view',
+        universalIdentifier: 'inactive-view',
+        objectMetadataId: 'campaign-creator-object',
+        type: ViewType.TABLE,
+        isActive: false,
+      },
+      {
+        id: 'campaign-creator-table-view',
+        universalIdentifier: 'custom-table-view',
+        objectMetadataId: 'campaign-creator-object',
+        type: ViewType.TABLE,
+        isActive: true,
+      },
+    ];
+
+    render(<CampaignInfluencerIndex campaignId="campaign-a" viewId={null} />);
+
+    expect(screen.getByTestId('record-index-surface')).toHaveTextContent(
+      'Rows for campaign-a in campaign-creator-table-view',
+    );
+    expect(
+      mockRecordIndexSurface.mock.calls.at(-1)?.[0]
+        .initialQueryOnlyRecordFilters[0].value,
+    ).toBe('campaign-a');
+  });
+
   it('renders an unavailable state instead of mounting an index without a view ID', () => {
     render(<CampaignInfluencerIndex campaignId="campaign-a" viewId={null} />);
 

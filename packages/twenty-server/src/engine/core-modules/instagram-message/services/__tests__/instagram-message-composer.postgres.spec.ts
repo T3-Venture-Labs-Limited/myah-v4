@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER } from 'twenty-shared/application';
 import {
   DataSource,
   EntitySchema,
@@ -8,7 +9,6 @@ import {
   type EntitySchemaColumnOptions,
 } from 'typeorm';
 import { AddInstagramMessageV3SnapshotFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789633748004-add-instagram-message-v3-snapshot';
-import { INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/engine/api/common/common-args-processors/data-arg-processor/utils/assert-instagram-composer-fields-not-written.util';
 import { ActionApprovalBindingEvidenceLinkEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding-evidence-link.entity';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
@@ -625,13 +625,13 @@ describePostgres('InstagramMessageComposer isolated PostgreSQL', () => {
           instagramLinkPrimaryLinkUrl: text,
           deletedAt: date,
         }),
-        entity('myahInstagramAccount', '_myahInstagramAccount', {
+        entity('myahInstagramAccount', 'myahInstagramAccount', {
           label: text,
           status: text,
           unipileAccountId: text,
           deletedAt: date,
         }),
-        entity('myahSocialConversation', '_myahSocialConversation', {
+        entity('myahSocialConversation', 'myahSocialConversation', {
           creatorId: uuid,
           instagramAccountId: uuid,
           providerConversationId: text,
@@ -641,7 +641,7 @@ describePostgres('InstagramMessageComposer isolated PostgreSQL', () => {
           lifecycle: text,
           deletedAt: date,
         }),
-        entity('myahInstagramReplyDraft', '_myahInstagramReplyDraft', {
+        entity('myahInstagramReplyDraft', 'myahInstagramReplyDraft', {
           name: text,
           title: text,
           body: text,
@@ -679,7 +679,7 @@ describePostgres('InstagramMessageComposer isolated PostgreSQL', () => {
     await source.getRepository('applicationFixture').insert({
       id: applicationId,
       workspaceId: fixtureWorkspaceId,
-      universalIdentifier: INSTAGRAM_MESSAGING_APPLICATION_UNIVERSAL_IDENTIFIER,
+      universalIdentifier: TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
     });
     await source.getRepository('accountBinding').insert({
       id: bindingId,

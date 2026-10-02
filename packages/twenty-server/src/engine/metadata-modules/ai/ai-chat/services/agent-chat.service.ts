@@ -813,6 +813,19 @@ export class AgentChatService {
         );
       }
 
+      // A generic approval can only be approved when it carries the
+      // server-derived reviewed action; legacy cards can still be rejected.
+      if (
+        actionApprovalBindingId === undefined &&
+        decision.decision === 'approved' &&
+        !isDefined(previousResult.reviewedAction)
+      ) {
+        throw new AiException(
+          'This approval cannot be approved because its exact action is unavailable. Ask the assistant to propose it again.',
+          AiExceptionCode.INVALID_APPROVAL_DECISION,
+        );
+      }
+
       const claim = await threadRepository.update(
         workspaceId,
         { id: threadId, pendingQuestionMessageId: messageId },
@@ -865,6 +878,9 @@ export class AgentChatService {
                 message: 'User resolved the approval request.',
                 result: {
                   request: previousResult.request,
+                  ...(isDefined(previousResult.reviewedAction) && {
+                    reviewedAction: previousResult.reviewedAction,
+                  }),
                   status: 'resolved',
                   decision: decision.decision as ApprovalDecision,
                   comment: decision.comment,

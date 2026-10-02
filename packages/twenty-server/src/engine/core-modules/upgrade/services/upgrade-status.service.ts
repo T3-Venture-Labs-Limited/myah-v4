@@ -92,10 +92,28 @@ export class UpgradeStatusService {
           step.kind === 'fast-instance' || step.kind === 'slow-instance',
       );
 
-    return await this.buildCursorStatus(
+    const status = await this.buildCursorStatus(
       migration,
       lastInstanceStep?.name ?? null,
     );
+    const reconciliation =
+      await this.upgradeMigrationService.getLatestPrerequisiteReconciliationAttempt();
+
+    if (reconciliation?.status === 'failed') {
+      return {
+        ...status,
+        health: UpgradeHealthEnum.FAILED,
+        latestCommand: {
+          name: reconciliation.name,
+          status: reconciliation.status,
+          executedByVersion: reconciliation.executedByVersion,
+          errorMessage: reconciliation.errorMessage,
+          createdAt: reconciliation.createdAt,
+        },
+      };
+    }
+
+    return status;
   }
 
   async getWorkspaceStatuses(

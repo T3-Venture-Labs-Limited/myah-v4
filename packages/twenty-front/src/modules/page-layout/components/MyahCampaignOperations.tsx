@@ -6,13 +6,15 @@ import { t } from '@lingui/core/macro';
 type MyahCampaignOperationsProps = {
   campaignId: string;
   title: string;
-  fieldsWidget: PageLayoutWidget;
+  fieldsWidget?: PageLayoutWidget;
+  dedicatedPage?: boolean;
 };
 
 export const MyahCampaignOperations = ({
   campaignId,
   title,
   fieldsWidget: _fieldsWidget,
+  dedicatedPage,
 }: MyahCampaignOperationsProps) => {
   const campaignOperationsFields = [
     {
@@ -36,7 +38,10 @@ export const MyahCampaignOperations = ({
       }}
       contentBeforeFields={
         <>
-          <MyahCampaignEmailAccounts campaignId={campaignId} />
+          <MyahCampaignEmailAccounts
+            campaignId={campaignId}
+            dedicatedPage={dedicatedPage}
+          />
         </>
       }
     />

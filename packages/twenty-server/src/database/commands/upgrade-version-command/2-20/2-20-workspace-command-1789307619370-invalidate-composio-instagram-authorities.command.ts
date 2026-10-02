@@ -1,6 +1,6 @@
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Command } from 'nest-commander';
-import { DataSource } from 'typeorm';
+import { DataSource, type QueryRunner } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
@@ -23,13 +23,15 @@ export class InvalidateComposioInstagramAuthoritiesWorkspaceCommand extends Acti
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
-    if (args.options.dryRun) {
-      return;
+    if (!args.options.dryRun) {
+      await invalidateComposioInstagramAuthorities(this.coreDataSource, args.workspaceId);
     }
+  }
 
-    await invalidateComposioInstagramAuthorities(
-      this.coreDataSource,
-      args.workspaceId,
-    );
+  override async runOnWorkspaceInUpgradeTransaction(
+    args: RunOnWorkspaceArgs,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    await invalidateComposioInstagramAuthorities(queryRunner, args.workspaceId);
   }
 }

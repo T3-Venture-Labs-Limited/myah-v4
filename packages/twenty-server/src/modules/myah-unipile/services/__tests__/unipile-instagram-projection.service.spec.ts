@@ -261,11 +261,11 @@ describe('UnipileInstagramProjectionService', () => {
     const [lockSql, lockValues] = findQuery(query, 'pg_advisory_xact_lock');
     const [selectSql, selectValues] = findQuery(
       query,
-      `FROM "${schemaName}"."_myahSocialConversation"`,
+      `FROM "${schemaName}"."myahSocialConversation"`,
     );
     const [insertSql, insertValues, , insertOptions] = findQuery(
       query,
-      `INSERT INTO "${schemaName}"."_myahSocialConversation"`,
+      `INSERT INTO "${schemaName}"."myahSocialConversation"`,
     );
 
     expectSystemWorkspaceContext(subject);
@@ -337,10 +337,10 @@ describe('UnipileInstagramProjectionService', () => {
   it('records known first-persisted directions with the transaction manager and skips unknown directions', async () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     const query = jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('_myahSocialConversation')) {
+      if (sql.includes('myahSocialConversation')) {
         return Promise.resolve([{ id: conversationRecordId }]);
       }
-      if (sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage')) {
+      if (sql.includes('INSERT INTO') && sql.includes('myahSocialMessage')) {
         return Promise.resolve([
           {
             id: 'b7037d71-3486-4767-80a1-d0f1e3209985',
@@ -436,10 +436,10 @@ describe('UnipileInstagramProjectionService', () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     const insertedMessageIds: string[] = [];
     const query = jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('_myahSocialConversation')) {
+      if (sql.includes('myahSocialConversation')) {
         return Promise.resolve([{ id: conversationRecordId }]);
       }
-      if (sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage')) {
+      if (sql.includes('INSERT INTO') && sql.includes('myahSocialMessage')) {
         insertedMessageIds.push('inserted');
 
         return Promise.resolve([
@@ -486,10 +486,10 @@ describe('UnipileInstagramProjectionService', () => {
   it('locks marker, source, and conversation before inserting a receipt-eligible Instagram message', async () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     const query = jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('_myahSocialConversation')) {
+      if (sql.includes('myahSocialConversation')) {
         return Promise.resolve([{ id: conversationRecordId }]);
       }
-      if (sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage')) {
+      if (sql.includes('INSERT INTO') && sql.includes('myahSocialMessage')) {
         return Promise.resolve([
           {
             id: 'b7037d71-3486-4767-80a1-d0f1e3209985',
@@ -524,13 +524,13 @@ describe('UnipileInstagramProjectionService', () => {
     );
     const conversationRowLockIndex = query.mock.calls.findIndex(
       ([sql]) =>
-        String(sql).includes('_myahSocialConversation') &&
+        String(sql).includes('myahSocialConversation') &&
         String(sql).includes('FOR UPDATE'),
     );
     const messageInsertIndex = query.mock.calls.findIndex(
       ([sql]) =>
         String(sql).includes('INSERT INTO') &&
-        String(sql).includes('_myahSocialMessage'),
+        String(sql).includes('myahSocialMessage'),
     );
 
     expect(markerLockIndex).toBeDefined();
@@ -556,10 +556,10 @@ describe('UnipileInstagramProjectionService', () => {
       let wasPersisted = false;
       let inboxState = 'CLOSED';
       const query = jest.fn().mockImplementation((sql: string) => {
-        if (sql.includes('_myahSocialConversation')) {
+        if (sql.includes('myahSocialConversation')) {
           return Promise.resolve([{ id: conversationRecordId }]);
         }
-        if (sql.includes('_myahSocialMessage') && sql.includes('SELECT')) {
+        if (sql.includes('myahSocialMessage') && sql.includes('SELECT')) {
           return Promise.resolve(
             wasPersisted
               ? [
@@ -573,7 +573,7 @@ describe('UnipileInstagramProjectionService', () => {
               : [],
           );
         }
-        if (sql.includes('_myahSocialMessage') && sql.includes('INSERT')) {
+        if (sql.includes('myahSocialMessage') && sql.includes('INSERT')) {
           wasPersisted = true;
           return Promise.resolve([
             { id: messageRecordId, createdAt: '2026-09-04T12:31:00.000Z' },
@@ -700,7 +700,7 @@ describe('UnipileInstagramProjectionService', () => {
     const schemaName = getWorkspaceSchemaName(workspace.id);
     const [updateSql, updateValues, , updateOptions] = findQuery(
       query,
-      `UPDATE "${schemaName}"."_myahSocialConversation"`,
+      `UPDATE "${schemaName}"."myahSocialConversation"`,
     );
 
     expect(updateSql).toContain('"recipientIgsid"');
@@ -789,7 +789,7 @@ describe('UnipileInstagramProjectionService', () => {
     const schemaName = getWorkspaceSchemaName(workspace.id);
     const [restoreSql, restoreValues] = findQuery(
       query,
-      `UPDATE "${schemaName}"."_myahSocialConversation"`,
+      `UPDATE "${schemaName}"."myahSocialConversation"`,
     );
 
     expect(restoreSql).toContain('"deletedAt" = NULL');
@@ -837,7 +837,7 @@ describe('UnipileInstagramProjectionService', () => {
   it('projects a media-only attendee message without provider attachment payloads', async () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     const query = jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('_myahSocialConversation')) {
+      if (sql.includes('myahSocialConversation')) {
         return Promise.resolve([
           {
             id: conversationRecordId,
@@ -880,11 +880,11 @@ describe('UnipileInstagramProjectionService', () => {
     const [lockSql, lockValues] = findQuery(query, 'pg_advisory_xact_lock');
     const [conversationSql, conversationValues] = findQuery(
       query,
-      `FROM "${schemaName}"."_myahSocialConversation"`,
+      `FROM "${schemaName}"."myahSocialConversation"`,
     );
     const [insertSql, insertValues, , insertOptions] = findQuery(
       query,
-      `INSERT INTO "${schemaName}"."_myahSocialMessage"`,
+      `INSERT INTO "${schemaName}"."myahSocialMessage"`,
     );
 
     expectSystemWorkspaceContext(subject);
@@ -934,7 +934,7 @@ describe('UnipileInstagramProjectionService', () => {
   it('uses verified Unipile self-sender evidence for outbound messages while retaining identity fallback', async () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     const query = jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('_myahSocialConversation')) {
+      if (sql.includes('myahSocialConversation')) {
         return Promise.resolve([
           {
             id: conversationRecordId,
@@ -944,7 +944,7 @@ describe('UnipileInstagramProjectionService', () => {
           },
         ]);
       }
-      if (sql.includes('_myahSocialMessage')) {
+      if (sql.includes('myahSocialMessage')) {
         return Promise.resolve([
           { id: 'b7037d71-3486-4767-80a1-d0f1e3209985' },
         ]);
@@ -1009,10 +1009,10 @@ describe('UnipileInstagramProjectionService', () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     const messageRecordId = 'b7037d71-3486-4767-80a1-d0f1e3209985';
     const query = jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('_myahSocialConversation')) {
+      if (sql.includes('myahSocialConversation')) {
         return Promise.resolve([{ id: conversationRecordId }]);
       }
-      if (sql.includes('_myahSocialMessage') && sql.includes('SELECT')) {
+      if (sql.includes('myahSocialMessage') && sql.includes('SELECT')) {
         return Promise.resolve([
           {
             id: messageRecordId,
@@ -1053,7 +1053,7 @@ describe('UnipileInstagramProjectionService', () => {
     expect(
       findQuery(
         query,
-        `UPDATE "${getWorkspaceSchemaName(workspace.id)}"."_myahSocialMessage"`,
+        `UPDATE "${getWorkspaceSchemaName(workspace.id)}"."myahSocialMessage"`,
       )[1],
     ).toEqual(expect.arrayContaining(['OUTBOUND', 'SENT', messageRecordId]));
     expect(
@@ -1094,7 +1094,7 @@ describe('UnipileInstagramProjectionService', () => {
     const messageRecordId = 'b7037d71-3486-4767-80a1-d0f1e3209985';
     const deliveredAt = '2026-09-04T12:35:00.000Z';
     const query = jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('_myahSocialConversation')) {
+      if (sql.includes('myahSocialConversation')) {
         return Promise.resolve([
           {
             id: conversationRecordId,
@@ -1104,7 +1104,7 @@ describe('UnipileInstagramProjectionService', () => {
           },
         ]);
       }
-      if (sql.includes('_myahSocialMessage') && sql.includes('SELECT')) {
+      if (sql.includes('myahSocialMessage') && sql.includes('SELECT')) {
         return Promise.resolve([
           {
             id: messageRecordId,
@@ -1113,7 +1113,7 @@ describe('UnipileInstagramProjectionService', () => {
           },
         ]);
       }
-      if (sql.includes('_myahSocialMessage')) {
+      if (sql.includes('myahSocialMessage')) {
         return Promise.resolve([{ id: messageRecordId }]);
       }
 
@@ -1152,7 +1152,7 @@ describe('UnipileInstagramProjectionService', () => {
     const sentAt = '2026-09-04T12:34:00.000Z';
     const readAt = '2026-09-04T12:35:00.000Z';
     const query = jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('_myahSocialConversation')) {
+      if (sql.includes('myahSocialConversation')) {
         return Promise.resolve([
           {
             id: conversationRecordId,
@@ -1162,7 +1162,7 @@ describe('UnipileInstagramProjectionService', () => {
           },
         ]);
       }
-      if (sql.includes('_myahSocialMessage') && sql.includes('SELECT')) {
+      if (sql.includes('myahSocialMessage') && sql.includes('SELECT')) {
         return Promise.resolve([
           {
             id: messageRecordId,
@@ -1171,7 +1171,7 @@ describe('UnipileInstagramProjectionService', () => {
           },
         ]);
       }
-      if (sql.includes('_myahSocialMessage')) {
+      if (sql.includes('myahSocialMessage')) {
         return Promise.resolve([{ id: messageRecordId }]);
       }
 
@@ -1249,7 +1249,7 @@ describe('UnipileInstagramProjectionService', () => {
 
     const schemaName = getWorkspaceSchemaName(workspace.id);
     const [conversationSql, conversationValues, , conversationOptions] =
-      findQuery(query, `UPDATE "${schemaName}"."_myahSocialConversation"`);
+      findQuery(query, `UPDATE "${schemaName}"."myahSocialConversation"`);
 
     expectSystemWorkspaceContext(subject);
     expect(conversationSql).toContain('"completedMessageSyncAt" = $1');
@@ -1264,7 +1264,7 @@ describe('UnipileInstagramProjectionService', () => {
     );
     expect(conversationOptions).toEqual(queryOptions);
     expect(
-      query.mock.calls.some(([sql]) => sql.includes('"_myahInstagramAccount"')),
+      query.mock.calls.some(([sql]) => sql.includes('"myahInstagramAccount"')),
     ).toBe(false);
     expect(providerFetch).not.toHaveBeenCalled();
   });
@@ -1291,7 +1291,7 @@ describe('UnipileInstagramProjectionService', () => {
     const schemaName = getWorkspaceSchemaName(workspace.id);
     const [accountSql, accountValues, , accountOptions] = findQuery(
       query,
-      `UPDATE "${schemaName}"."_myahInstagramAccount"`,
+      `UPDATE "${schemaName}"."myahInstagramAccount"`,
     );
 
     expectSystemWorkspaceContext(subject);
@@ -1308,7 +1308,7 @@ describe('UnipileInstagramProjectionService', () => {
     expect(accountOptions).toEqual(queryOptions);
     expect(
       query.mock.calls.some(([sql]) =>
-        sql.includes('"_myahSocialConversation"'),
+        sql.includes('"myahSocialConversation"'),
       ),
     ).toBe(false);
     expect(providerFetch).not.toHaveBeenCalled();
@@ -1322,7 +1322,7 @@ describe('UnipileInstagramProjectionService verified Creator ownership', () => {
       const query = jest.fn(async (sql: string) => {
         if (
           sql.includes('SELECT "id"') &&
-          sql.includes('"_myahSocialConversation"')
+          sql.includes('"myahSocialConversation"')
         ) {
           return sql.includes('"deletedAt" IS NOT NULL') === deleted
             ? [{ id: 'existing-conversation', creatorId: 'other-creator' }]

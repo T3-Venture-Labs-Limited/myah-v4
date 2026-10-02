@@ -122,8 +122,10 @@ export class CommonFindManyQueryRunnerService extends CommonBaseQueryRunnerServi
         flatObjectMetadata,
         flatFieldMetadataMaps,
         isForwardPagination,
+        flatObjectMetadataMaps,
       );
 
+      // SAFETY: The cursor filter is built from validated record metadata and matches ObjectRecordFilter at runtime.
       appliedFilters = (args.filter && Object.keys(args.filter).length > 0
         ? {
             and: [args.filter, { or: cursorArgFilter }],

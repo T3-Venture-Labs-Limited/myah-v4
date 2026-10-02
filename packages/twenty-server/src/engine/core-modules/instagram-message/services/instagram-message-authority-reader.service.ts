@@ -200,6 +200,7 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
     } else {
       const dataSource =
         await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+      // pi-lens-ignore: sql-injection -- workspace schema comes from the trusted workspace identifier.
       const localChats = await dataSource.query<
         Array<{
           id: string;
@@ -207,7 +208,7 @@ export class InstagramMessageAuthorityReaderService extends InstagramMessageLoca
           recipientIgsid: string;
         }>
       >(
-        `SELECT "id", "providerConversationId", "recipientIgsid" FROM "${getWorkspaceSchemaName(binding.workspaceId)}"."_myahSocialConversation"
+        `SELECT "id", "providerConversationId", "recipientIgsid" FROM "${getWorkspaceSchemaName(binding.workspaceId)}"."myahSocialConversation"
          WHERE "provider" = 'UNIPILE' AND "lifecycle" = 'ACTIVE' AND "deletedAt" IS NULL AND "instagramAccountId" = $1
          AND (lower("recipientUsername") = $2 OR "recipientIgsid" = $3) LIMIT 2`,
         [

@@ -1,6 +1,6 @@
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Command } from 'nest-commander';
-import { DataSource } from 'typeorm';
+import { DataSource, type QueryRunner } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -52,8 +52,16 @@ export class BackfillComposioInstagramHistoryWorkspaceCommand extends ActiveOrSu
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    await this.backfill(args, this.coreDataSource);
+  }
+
+  override async runOnWorkspaceInUpgradeTransaction(args: RunOnWorkspaceArgs, runner: QueryRunner): Promise<void> {
+    await this.backfill(args, runner);
+  }
+
+  private async backfill(args: RunOnWorkspaceArgs, executor: Pick<DataSource, 'query'>): Promise<void> {
     const schemaName = getWorkspaceSchemaName(args.workspaceId);
-    const [workspace] = (await this.coreDataSource.query(
+    const [workspace] = (await executor.query(
       `SELECT w."databaseSchema" FROM core.workspace w
        WHERE w.id = $1 AND w."deletedAt" IS NULL
          AND (w."databaseSchema" IS NULL OR EXISTS (
@@ -72,7 +80,7 @@ export class BackfillComposioInstagramHistoryWorkspaceCommand extends ActiveOrSu
       );
     }
 
-    const appSyncedColumns = (await this.coreDataSource.query(
+    const appSyncedColumns = (await executor.query(
       `SELECT
         tables.table_name AS "tableName",
         columns.column_name AS "columnName"
@@ -120,7 +128,7 @@ export class BackfillComposioInstagramHistoryWorkspaceCommand extends ActiveOrSu
       return;
     }
 
-    await this.coreDataSource.query(`
+    await executor.query(`
       WITH "legacyMessages" AS (
         UPDATE "${schemaName}"."_myahSocialMessage" AS "message"
         SET "provider" = 'COMPOSIO_HISTORY'

@@ -36,6 +36,11 @@ import { buildWorkflowStandardFlatIndexMetadatas } from 'src/engine/workspace-ma
 import { buildWorkflowVersionStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-workflow-version-standard-flat-index-metadata.util';
 import { buildWorkspaceMemberStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-workspace-member-standard-flat-index-metadata.util';
 import { type CreateStandardIndexArgs } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/create-standard-index-flat-metadata.util';
+import {
+  buildMyahInstagramAccountStandardFlatIndexMetadatas,
+  buildMyahSocialConversationStandardFlatIndexMetadatas,
+  buildMyahSocialMessageStandardFlatIndexMetadatas,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-myah-instagram-standard-flat-index-metadata.util';
 
 type StandardIndexBuilder<P extends AllStandardObjectName> = (
   args: Omit<CreateStandardIndexArgs<P>, 'context'>,
@@ -80,6 +85,9 @@ const STANDARD_FLAT_INDEX_METADATA_BUILDERS_BY_OBJECT_NAME = {
   workflowRun: buildWorkflowRunStandardFlatIndexMetadatas,
   workflowVersion: buildWorkflowVersionStandardFlatIndexMetadatas,
   workspaceMember: buildWorkspaceMemberStandardFlatIndexMetadatas,
+  myahInstagramAccount: buildMyahInstagramAccountStandardFlatIndexMetadatas,
+  myahSocialConversation: buildMyahSocialConversationStandardFlatIndexMetadatas,
+  myahSocialMessage: buildMyahSocialMessageStandardFlatIndexMetadatas,
 } satisfies {
   [P in AllStandardObjectName]?: StandardIndexBuilder<P>;
 };

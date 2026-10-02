@@ -24,7 +24,6 @@ import {
 import { type StandardRecordPageLayouts } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-config/standard-page-layout-config.type';
 
 export const STANDARD_PAGE_LAYOUTS = {
-  myFirstDashboard: STANDARD_DASHBOARD_PAGE_LAYOUT_CONFIG,
   blocklistRecordPage: STANDARD_BLOCKLIST_PAGE_LAYOUT_CONFIG,
   calendarChannelEventAssociationRecordPage:
     STANDARD_CALENDAR_CHANNEL_EVENT_ASSOCIATION_PAGE_LAYOUT_CONFIG,
@@ -33,6 +32,7 @@ export const STANDARD_PAGE_LAYOUTS = {
     STANDARD_CALENDAR_EVENT_PARTICIPANT_PAGE_LAYOUT_CONFIG,
   callRecordingRecordPage: STANDARD_CALL_RECORDING_PAGE_LAYOUT_CONFIG,
   companyRecordPage: STANDARD_COMPANY_PAGE_LAYOUT_CONFIG,
+  myFirstDashboard: STANDARD_DASHBOARD_PAGE_LAYOUT_CONFIG,
   messageCampaignRecordPage: STANDARD_MESSAGE_CAMPAIGN_PAGE_LAYOUT_CONFIG,
   messageChannelMessageAssociationRecordPage:
     STANDARD_MESSAGE_CHANNEL_MESSAGE_ASSOCIATION_PAGE_LAYOUT_CONFIG,
@@ -52,8 +52,9 @@ export const STANDARD_PAGE_LAYOUTS = {
   workflowRunRecordPage: STANDARD_WORKFLOW_RUN_PAGE_LAYOUT_CONFIG,
 } as const;
 
-const { myFirstDashboard: _myFirstDashboard, ...recordPageLayouts } =
-  STANDARD_PAGE_LAYOUTS;
-
-export const STANDARD_RECORD_PAGE_LAYOUTS =
-  recordPageLayouts satisfies StandardRecordPageLayouts;
+export const STANDARD_RECORD_PAGE_LAYOUTS = (({
+  myFirstDashboard: _myFirstDashboard,
+  ...recordPageLayouts
+}) => recordPageLayouts)(
+  STANDARD_PAGE_LAYOUTS,
+) satisfies StandardRecordPageLayouts;

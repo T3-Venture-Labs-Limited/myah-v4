@@ -6,7 +6,10 @@ import {
   MYAH_CREATOR_PAGE_LAYOUT_CONFIG,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-page-layout.config';
 import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import {
+  MYAH_STANDARD_OBJECTS,
+  STANDARD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIERS,
+} from 'twenty-shared/metadata';
 
 describe('MYAH retained page layouts', () => {
   it('keeps stable Creator, Creator List, and Campaign identifiers without Brand Brain', () => {
@@ -21,6 +24,33 @@ describe('MYAH retained page layouts', () => {
     );
     expect(ALL_STANDARD_PAGE_LAYOUTS).not.toHaveProperty(
       'brandBrainPageRecordPage',
+    );
+    expect(ALL_STANDARD_PAGE_LAYOUTS).toEqual(
+      expect.objectContaining({
+        creatorRecordPage: MYAH_CREATOR_PAGE_LAYOUT_CONFIG,
+        creatorListRecordPage: MYAH_CREATOR_LIST_PAGE_LAYOUT_CONFIG,
+        campaignRecordPage: MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
+        myFirstDashboard: expect.objectContaining({
+          universalIdentifier:
+            STANDARD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIERS.myFirstDashboard
+              .universalIdentifier,
+          type: 'DASHBOARD',
+          tabs: {
+            tab1: expect.objectContaining({
+              universalIdentifier:
+                STANDARD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIERS.myFirstDashboard.tabs
+                  .tab1.universalIdentifier,
+              widgets: expect.objectContaining({
+                welcomeRichText: expect.objectContaining({
+                  universalIdentifier:
+                    STANDARD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIERS.myFirstDashboard
+                      .tabs.tab1.widgets.welcomeRichText.universalIdentifier,
+                }),
+              }),
+            }),
+          },
+        }),
+      }),
     );
   });
 

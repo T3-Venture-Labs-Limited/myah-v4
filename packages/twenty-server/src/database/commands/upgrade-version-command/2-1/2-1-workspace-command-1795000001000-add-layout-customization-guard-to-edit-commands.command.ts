@@ -13,11 +13,27 @@ import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/wo
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 import { replaceLegacyPageEditModeIdentifier } from 'src/database/commands/upgrade-version-command/2-1/utils/replace-legacy-page-edit-mode-identifier.util';
 
+const RETIRED_DASHBOARD_COMMAND_MENU_ITEM_EXPRESSIONS = new Map<
+  string,
+  string
+>([
+  [
+    'b9b53bbc-3129-4eb9-8344-c3f9628ffa7d',
+    'pageType == "RECORD_PAGE" and not isDashboardPageLayoutInEditMode and not isLayoutCustomizationModeEnabled and noneDefined(selectedRecords, "deletedAt") and everyDefined(selectedRecords, "pageLayoutId") and objectPermissions.canUpdateObjectRecords',
+  ],
+  [
+    '18b23908-f816-42ab-bc0a-eb5fae29c695',
+    'pageType == "RECORD_PAGE" and isDashboardPageLayoutInEditMode and noneDefined(selectedRecords, "deletedAt") and everyDefined(selectedRecords, "pageLayoutId") and objectPermissions.canUpdateObjectRecords',
+  ],
+  [
+    '030ecd01-0aaf-4e6d-8400-105996548887',
+    'pageType == "RECORD_PAGE" and isDashboardPageLayoutInEditMode and noneDefined(selectedRecords, "deletedAt") and everyDefined(selectedRecords, "pageLayoutId") and objectPermissions.canUpdateObjectRecords',
+  ],
+]);
+
 const UNIVERSAL_IDENTIFIERS_TO_UPDATE = new Set<string>([
   STANDARD_COMMAND_MENU_ITEMS.editRecordPageLayout.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.editDashboardLayout.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.saveDashboardLayout.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.cancelDashboardLayout.universalIdentifier,
+  ...RETIRED_DASHBOARD_COMMAND_MENU_ITEM_EXPRESSIONS.keys(),
 ]);
 
 @RegisteredWorkspaceCommand('2.1.0', 1795000001000)
@@ -75,20 +91,24 @@ export class AddLayoutCustomizationGuardToEditCommandsCommand extends ActiveOrSu
         existingFlatCommandMenuItemMaps.byUniversalIdentifier[
           universalIdentifier
         ];
+      const conditionalAvailabilityExpression = isDefined(standardItem)
+        ? standardItem.conditionalAvailabilityExpression
+        : RETIRED_DASHBOARD_COMMAND_MENU_ITEM_EXPRESSIONS.get(
+            universalIdentifier,
+          );
 
       if (
-        !isDefined(standardItem) ||
+        !isDefined(conditionalAvailabilityExpression) ||
         !isDefined(existingItem) ||
         existingItem.conditionalAvailabilityExpression ===
-          standardItem.conditionalAvailabilityExpression
+          conditionalAvailabilityExpression
       ) {
         continue;
       }
 
       itemsToUpdateById[existingItem.id] = {
         ...existingItem,
-        conditionalAvailabilityExpression:
-          standardItem.conditionalAvailabilityExpression,
+        conditionalAvailabilityExpression,
         updatedAt,
       };
     }

@@ -186,8 +186,7 @@ export class CommonUpdateManyQueryRunnerService extends CommonBaseQueryRunnerSer
     return (
       (objectName === 'messageThread' ||
         objectName === 'myahSocialConversation' ||
-        objectName === 'socialConversation' ||
-        objectName === '_myahSocialConversation') &&
+        objectName === 'socialConversation') &&
       (Object.prototype.hasOwnProperty.call(data, 'creatorId') ||
         Object.prototype.hasOwnProperty.call(data, 'creator'))
     );

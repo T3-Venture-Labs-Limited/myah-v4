@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
@@ -14,6 +14,7 @@ import { fromFieldMetadataEntityToFlatFieldMetadata } from 'src/engine/metadata-
 import { IndexMetadataEntity } from 'src/engine/metadata-modules/index-metadata/index-metadata.entity';
 import { computeUniqueFieldMetadataIdsFromIndexEntities } from 'src/engine/metadata-modules/index-metadata/utils/compute-unique-field-metadata-ids-from-index-entities.util';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
+import { FieldPermissionEntity } from 'src/engine/metadata-modules/object-permission/field-permission/field-permission.entity';
 import { SearchFieldMetadataEntity } from 'src/engine/metadata-modules/search-field-metadata/search-field-metadata.entity';
 import { ViewFieldEntity } from 'src/engine/metadata-modules/view-field/entities/view-field.entity';
 import { ViewFilterEntity } from 'src/engine/metadata-modules/view-filter/entities/view-filter.entity';
@@ -60,8 +61,19 @@ export class WorkspaceFlatFieldMetadataMapCacheService extends WorkspaceCachePro
   async computeForCache(
     workspaceId: string,
   ): Promise<FlatEntityMaps<FlatFieldMetadata>> {
+    return this.computeFromManager(
+      workspaceId,
+      this.fieldMetadataRepository.manager,
+    );
+  }
+
+  async computeFromManager(
+    workspaceId: string,
+    manager: EntityManager,
+  ): Promise<FlatEntityMaps<FlatFieldMetadata>> {
     const [
       fieldMetadatas,
+      fieldPermissions,
       indexMetadatas,
       objectMetadatas,
       applications,
@@ -71,38 +83,43 @@ export class WorkspaceFlatFieldMetadataMapCacheService extends WorkspaceCachePro
       views,
       searchFieldMetadatas,
     ] = await Promise.all([
-      this.fieldMetadataRepository.find({
+      manager.getRepository(FieldMetadataEntity).find({
         where: { workspaceId },
         withDeleted: true,
       }),
-      this.indexMetadataRepository.find(workspaceId, {
+      manager.getRepository(FieldPermissionEntity).find({
+        where: { workspaceId },
+        select: ['id', 'universalIdentifier', 'fieldMetadataId'],
+        withDeleted: true,
+      }),
+      this.indexMetadataRepository.withManager(manager).find(workspaceId, {
         where: { isUnique: true },
         relations: ['indexFieldMetadatas'],
         withDeleted: true,
       }),
-      this.objectMetadataRepository.find({
+      manager.getRepository(ObjectMetadataEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.applicationRepository.find({
+      manager.getRepository(ApplicationEntity).find({
         where: { workspaceId },
         select: ['id', 'universalIdentifier'],
         withDeleted: true,
       }),
-      this.viewFieldRepository.find(workspaceId, {
+      this.viewFieldRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'fieldMetadataId'],
         withDeleted: true,
       }),
-      this.viewFilterRepository.find(workspaceId, {
+      this.viewFilterRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'fieldMetadataId'],
         withDeleted: true,
       }),
-      this.viewSortRepository.find(workspaceId, {
+      this.viewSortRepository.withManager(manager).find(workspaceId, {
         select: ['id', 'universalIdentifier', 'fieldMetadataId'],
         withDeleted: true,
       }),
-      this.viewRepository.find(workspaceId, {
+      this.viewRepository.withManager(manager).find(workspaceId, {
         select: [
           'id',
           'universalIdentifier',
@@ -112,12 +129,15 @@ export class WorkspaceFlatFieldMetadataMapCacheService extends WorkspaceCachePro
         ],
         withDeleted: true,
       }),
-      this.searchFieldMetadataRepository.find(workspaceId, {
-        select: ['id', 'universalIdentifier', 'fieldMetadataId'],
-      }),
+      this.searchFieldMetadataRepository
+        .withManager(manager)
+        .find(workspaceId, {
+          select: ['id', 'universalIdentifier', 'fieldMetadataId'],
+        }),
     ]);
 
     const [
+      fieldPermissionsByFieldId,
       viewFieldsByFieldId,
       viewFiltersByFieldId,
       calendarViewsByFieldId,
@@ -127,6 +147,10 @@ export class WorkspaceFlatFieldMetadataMapCacheService extends WorkspaceCachePro
       searchFieldMetadatasByFieldId,
     ] = (
       [
+        {
+          entities: fieldPermissions,
+          foreignKey: 'fieldMetadataId',
+        },
         {
           entities: viewFields,
           foreignKey: 'fieldMetadataId',
@@ -174,6 +198,8 @@ export class WorkspaceFlatFieldMetadataMapCacheService extends WorkspaceCachePro
       const flatFieldMetadata = fromFieldMetadataEntityToFlatFieldMetadata({
         entity: {
           ...fieldMetadataEntity,
+          fieldPermissions:
+            fieldPermissionsByFieldId.get(fieldMetadataEntity.id) || [],
           viewFields: viewFieldsByFieldId.get(fieldMetadataEntity.id) || [],
           viewFilters: viewFiltersByFieldId.get(fieldMetadataEntity.id) || [],
           kanbanAggregateOperationViews:

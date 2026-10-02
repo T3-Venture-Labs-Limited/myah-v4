@@ -425,7 +425,7 @@ describe('UnipileInstagramAccountService', () => {
       expect(
         query.mock.calls.every(([sql]) =>
           sql.includes(
-            `FROM "${getWorkspaceSchemaName(workspaceId)}"."_myahInstagramAccount"`,
+            `FROM "${getWorkspaceSchemaName(workspaceId)}"."myahInstagramAccount"`,
           ),
         ),
       ).toBe(true);

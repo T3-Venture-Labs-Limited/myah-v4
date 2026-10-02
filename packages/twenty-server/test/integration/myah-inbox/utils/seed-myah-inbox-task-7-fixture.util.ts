@@ -9,6 +9,7 @@ import {
 
 import { MessageChannelMetadataService } from 'src/engine/metadata-modules/message-channel/message-channel-metadata.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import {
@@ -16,7 +17,6 @@ import {
   SEED_YCOMBINATOR_WORKSPACE_ID,
 } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { CONNECTED_ACCOUNT_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/connected-account-data-seeds.constant';
-import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 
 import { ensureMyahInboxContactTriageTables } from 'test/integration/myah-inbox/utils/ensure-myah-inbox-contact-triage-tables.util';
@@ -757,6 +757,60 @@ class Task7FixtureCleanupError extends Error {
   }
 }
 
+export const task7FixtureContactKeys = [
+  `creator:${creatorId}`,
+  ...Object.values(threadIds).map((id) => `email-thread:${id}`),
+];
+
+const cleanupFixtureContacts = async () => {
+  const schema = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+  const runner = global.testDataSource.createQueryRunner();
+
+  await runner.connect();
+  try {
+    await runner.startTransaction();
+    await runner.query("SELECT set_config('search_path', $1, true)", [schema]);
+    const [tables] = await runner.query(
+      `SELECT to_regclass($1) IS NOT NULL AS identity_exists, to_regclass($2) IS NOT NULL AS triage_exists`,
+      [
+        `${schema}."myahInboxContactIdentity"`,
+        `${schema}."myahInboxContactTriage"`,
+      ],
+    );
+
+    if (tables.identity_exists !== tables.triage_exists) {
+      throw new Error('Task 7 contact fixture tables are incomplete');
+    }
+    if (tables.identity_exists) {
+      // The triage FK is non-cascading. Only fixture-owned keys are deleted.
+      await runner.query(
+        'DELETE FROM "myahInboxContactTriage" WHERE "contactIdentityKey" = ANY($1::text[])',
+        [task7FixtureContactKeys],
+      );
+      await runner.query(
+        'DELETE FROM "myahInboxContactIdentity" WHERE "contactIdentityKey" = ANY($1::text[])',
+        [task7FixtureContactKeys],
+      );
+      const [remaining] = await runner.query(
+        `SELECT (SELECT count(*)::int FROM "myahInboxContactTriage" WHERE "contactIdentityKey" = ANY($1::text[])) AS triage_count,
+                (SELECT count(*)::int FROM "myahInboxContactIdentity" WHERE "contactIdentityKey" = ANY($1::text[])) AS identity_count`,
+        [task7FixtureContactKeys],
+      );
+      if (remaining.triage_count !== 0 || remaining.identity_count !== 0) {
+        throw new Error('Task 7 contact fixture keys remain after cleanup');
+      }
+    }
+    await runner.commitTransaction();
+  } catch (error) {
+    if (runner.isTransactionActive) {
+      await runner.rollbackTransaction();
+    }
+    throw error;
+  } finally {
+    await runner.release();
+  }
+};
+
 const collectCleanupError = async (
   errors: Error[],
   label: string,
@@ -908,6 +962,13 @@ export const cleanupMyahInboxTask7Fixture = async ({
   if (foreignCreatorRemaining) {
     cleanupErrors.push(
       new Error(`Task 7 foreign Creator remains: ${foreignCreatorId}`),
+    );
+  }
+  if (cleanupErrors.length === 0) {
+    await collectCleanupError(
+      cleanupErrors,
+      'remove Task 7 contact fixture keys',
+      cleanupFixtureContacts,
     );
   }
   if (cleanupErrors.length > 0) {

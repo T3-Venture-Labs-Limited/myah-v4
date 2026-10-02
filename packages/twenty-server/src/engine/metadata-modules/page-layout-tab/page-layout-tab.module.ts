@@ -16,7 +16,6 @@ import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { WorkspaceMigrationGraphqlApiExceptionInterceptor } from 'src/engine/workspace-manager/workspace-migration/interceptors/workspace-migration-graphql-api-exception.interceptor';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
-import { DashboardSyncModule } from 'src/modules/dashboard-sync/dashboard-sync.module';
 
 @Module({
   imports: [
@@ -30,7 +29,6 @@ import { DashboardSyncModule } from 'src/modules/dashboard-sync/dashboard-sync.m
     FlatPageLayoutTabModule,
     FlatPageLayoutWidgetModule,
     ApplicationModule,
-    DashboardSyncModule,
   ],
   controllers: [PageLayoutTabController],
   providers: [

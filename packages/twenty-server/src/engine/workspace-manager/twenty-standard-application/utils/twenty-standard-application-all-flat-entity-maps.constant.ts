@@ -35,6 +35,7 @@ export type ComputeTwentyStandardApplicationAllFlatEntityMapsArgs = {
   workspaceId: string;
   twentyStandardApplicationId: string;
   removeReplacedTwentyCrmMetadata?: boolean;
+  omitDashboardComposition?: boolean;
 };
 
 export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
@@ -42,6 +43,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
   workspaceId,
   twentyStandardApplicationId,
   removeReplacedTwentyCrmMetadata = false,
+  omitDashboardComposition = false,
 }: ComputeTwentyStandardApplicationAllFlatEntityMapsArgs): {
   allFlatEntityMaps: TwentyStandardAllFlatEntityMaps;
   // TODO remove once all metadatas has fully been universal migrated
@@ -223,6 +225,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
     twentyStandardApplicationId,
     standardObjectMetadataRelatedEntityIds,
     standardPageLayoutMetadataRelatedEntityIds,
+    omitDashboardComposition,
   });
 
   const flatPageLayoutTabMaps = buildStandardFlatPageLayoutTabMetadataMaps({
@@ -230,6 +233,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
     workspaceId,
     twentyStandardApplicationId,
     standardPageLayoutMetadataRelatedEntityIds,
+    omitDashboardComposition,
   });
 
   const flatPageLayoutWidgetMaps =
@@ -239,6 +243,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
       twentyStandardApplicationId,
       standardObjectMetadataRelatedEntityIds,
       standardPageLayoutMetadataRelatedEntityIds,
+      omitDashboardComposition,
     });
 
   const flatNavigationMenuItemMaps = buildStandardFlatNavigationMenuItemMaps({
@@ -249,6 +254,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
       flatObjectMetadataMaps,
       flatViewMaps,
     },
+    omitDashboardComposition,
   });
 
   const flatCommandMenuItemMaps = buildStandardFlatCommandMenuItemMaps({
@@ -258,6 +264,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
     dependencyFlatEntityMaps: {
       flatObjectMetadataMaps,
     },
+    omitDashboardComposition,
   });
 
   const allFlatEntityMaps: TwentyStandardAllFlatEntityMaps = {

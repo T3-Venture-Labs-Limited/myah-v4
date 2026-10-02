@@ -380,7 +380,7 @@ export class InstagramMessageLocalAuthorityReaderService {
     const schemaName = getWorkspaceSchemaName(workspace.id);
     const localRows = await dataSource.query<Array<{ id: string }>>(
       `SELECT "id"
-       FROM "${schemaName}"."_myahSocialConversation"
+       FROM "${schemaName}"."myahSocialConversation"
        WHERE "provider" = 'UNIPILE'
          AND "lifecycle" = 'ACTIVE'
          AND "instagramAccountId" = $1
@@ -441,10 +441,10 @@ export class InstagramMessageLocalAuthorityReaderService {
              conversation."provider" AS "conversationProvider",
              conversation."lifecycle" AS "conversationLifecycle",
              conversation."instagramAccountId" AS "conversationInstagramAccountId"
-           FROM "${schemaName}"."_myahInstagramReplyDraft" d
+           FROM "${schemaName}"."myahInstagramReplyDraft" d
            LEFT JOIN "${schemaName}"."creator" creator
              ON creator."id" = d."creatorId" AND creator."deletedAt" IS NULL
-           LEFT JOIN "${schemaName}"."_myahSocialConversation" conversation
+           LEFT JOIN "${schemaName}"."myahSocialConversation" conversation
              ON conversation."id" = d."conversationId" AND conversation."deletedAt" IS NULL
            WHERE d."id" = $1
              AND d."deletedAt" IS NULL
