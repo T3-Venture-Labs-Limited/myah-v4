@@ -87,7 +87,7 @@ export default {
         434,
         445,
         446,
-        590
+        588
     ],
     "types": {
         "BillingProductDTO": {
@@ -8151,24 +8151,6 @@ export default {
             "getSSOIdentityProviders": [
                 246
             ],
-            "getPageLayoutWidgets": [
-                82,
-                {
-                    "pageLayoutTabId": [
-                        1,
-                        "String!"
-                    ]
-                }
-            ],
-            "getPageLayoutWidget": [
-                82,
-                {
-                    "id": [
-                        1,
-                        "String!"
-                    ]
-                }
-            ],
             "getToolIndex": [
                 345
             ],
@@ -8320,6 +8302,24 @@ export default {
                     "input": [
                         427,
                         "BarChartDataInput!"
+                    ]
+                }
+            ],
+            "getPageLayoutWidgets": [
+                82,
+                {
+                    "pageLayoutTabId": [
+                        1,
+                        "String!"
+                    ]
+                }
+            ],
+            "getPageLayoutWidget": [
+                82,
+                {
+                    "id": [
+                        1,
+                        "String!"
                     ]
                 }
             ],
@@ -10810,42 +10810,11 @@ export default {
                     ]
                 }
             ],
-            "createPageLayoutWidget": [
-                82,
-                {
-                    "input": [
-                        574,
-                        "CreatePageLayoutWidgetInput!"
-                    ]
-                }
-            ],
-            "updatePageLayoutWidget": [
-                82,
-                {
-                    "id": [
-                        1,
-                        "String!"
-                    ],
-                    "input": [
-                        575,
-                        "UpdatePageLayoutWidgetInput!"
-                    ]
-                }
-            ],
-            "destroyPageLayoutWidget": [
-                6,
-                {
-                    "id": [
-                        1,
-                        "String!"
-                    ]
-                }
-            ],
             "createWebhook": [
                 344,
                 {
                     "input": [
-                        576,
+                        574,
                         "CreateWebhookInput!"
                     ]
                 }
@@ -10854,7 +10823,7 @@ export default {
                 344,
                 {
                     "input": [
-                        577,
+                        575,
                         "UpdateWebhookInput!"
                     ]
                 }
@@ -10872,7 +10841,7 @@ export default {
                 343,
                 {
                     "input": [
-                        579,
+                        577,
                         "RunAgentInput!"
                     ]
                 }
@@ -10881,7 +10850,7 @@ export default {
                 396,
                 {
                     "input": [
-                        580,
+                        578,
                         "UpdateMessageFolderInput!"
                     ]
                 }
@@ -10890,7 +10859,7 @@ export default {
                 396,
                 {
                     "input": [
-                        582,
+                        580,
                         "UpdateMessageFoldersInput!"
                     ]
                 }
@@ -10899,7 +10868,7 @@ export default {
                 391,
                 {
                     "input": [
-                        583,
+                        581,
                         "UpdateCalendarChannelInput!"
                     ]
                 }
@@ -10929,7 +10898,7 @@ export default {
                         1
                     ],
                     "fileAttachments": [
-                        585,
+                        583,
                         "[FileAttachmentInput!]"
                     ]
                 }
@@ -10961,7 +10930,7 @@ export default {
                         "UUID!"
                     ],
                     "answers": [
-                        586,
+                        584,
                         "[AgentChatQuestionAnswerInput!]!"
                     ],
                     "modelId": [
@@ -10981,7 +10950,7 @@ export default {
                         "UUID!"
                     ],
                     "decision": [
-                        587,
+                        585,
                         "AgentChatApprovalDecisionInput!"
                     ],
                     "modelId": [
@@ -11051,7 +11020,7 @@ export default {
                 379,
                 {
                     "input": [
-                        588,
+                        586,
                         "CreateSkillInput!"
                     ]
                 }
@@ -11060,7 +11029,7 @@ export default {
                 379,
                 {
                     "input": [
-                        589,
+                        587,
                         "UpdateSkillInput!"
                     ]
                 }
@@ -11138,7 +11107,7 @@ export default {
                 375,
                 {
                     "type": [
-                        590,
+                        588,
                         "AnalyticsType!"
                     ],
                     "name": [
@@ -11158,6 +11127,37 @@ export default {
                     "id": [
                         3,
                         "UUID!"
+                    ]
+                }
+            ],
+            "createPageLayoutWidget": [
+                82,
+                {
+                    "input": [
+                        589,
+                        "CreatePageLayoutWidgetInput!"
+                    ]
+                }
+            ],
+            "updatePageLayoutWidget": [
+                82,
+                {
+                    "id": [
+                        1,
+                        "String!"
+                    ],
+                    "input": [
+                        590,
+                        "UpdatePageLayoutWidgetInput!"
+                    ]
+                }
+            ],
+            "destroyPageLayoutWidget": [
+                6,
+                {
+                    "id": [
+                        1,
+                        "String!"
                     ]
                 }
             ],
@@ -13891,64 +13891,6 @@ export default {
                 1
             ]
         },
-        "CreatePageLayoutWidgetInput": {
-            "pageLayoutTabId": [
-                3
-            ],
-            "title": [
-                1
-            ],
-            "type": [
-                83
-            ],
-            "objectMetadataId": [
-                3
-            ],
-            "gridPosition": [
-                556
-            ],
-            "position": [
-                7
-            ],
-            "configuration": [
-                7
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "UpdatePageLayoutWidgetInput": {
-            "pageLayoutTabId": [
-                3
-            ],
-            "title": [
-                1
-            ],
-            "type": [
-                83
-            ],
-            "objectMetadataId": [
-                3
-            ],
-            "gridPosition": [
-                556
-            ],
-            "position": [
-                7
-            ],
-            "configuration": [
-                7
-            ],
-            "conditionalDisplay": [
-                7
-            ],
-            "conditionalAvailabilityExpression": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
         "CreateWebhookInput": {
             "id": [
                 3
@@ -13974,7 +13916,7 @@ export default {
                 3
             ],
             "update": [
-                578
+                576
             ],
             "__typename": [
                 1
@@ -14016,7 +13958,7 @@ export default {
                 3
             ],
             "update": [
-                581
+                579
             ],
             "__typename": [
                 1
@@ -14035,7 +13977,7 @@ export default {
                 3
             ],
             "update": [
-                581
+                579
             ],
             "__typename": [
                 1
@@ -14046,7 +13988,7 @@ export default {
                 3
             ],
             "update": [
-                584
+                582
             ],
             "__typename": [
                 1
@@ -14155,6 +14097,64 @@ export default {
             ]
         },
         "AnalyticsType": {},
+        "CreatePageLayoutWidgetInput": {
+            "pageLayoutTabId": [
+                3
+            ],
+            "title": [
+                1
+            ],
+            "type": [
+                83
+            ],
+            "objectMetadataId": [
+                3
+            ],
+            "gridPosition": [
+                556
+            ],
+            "position": [
+                7
+            ],
+            "configuration": [
+                7
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "UpdatePageLayoutWidgetInput": {
+            "pageLayoutTabId": [
+                3
+            ],
+            "title": [
+                1
+            ],
+            "type": [
+                83
+            ],
+            "objectMetadataId": [
+                3
+            ],
+            "gridPosition": [
+                556
+            ],
+            "position": [
+                7
+            ],
+            "configuration": [
+                7
+            ],
+            "conditionalDisplay": [
+                7
+            ],
+            "conditionalAvailabilityExpression": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
         "ExcludeCampaignCreatorInput": {
             "campaignId": [
                 3
