@@ -15,8 +15,8 @@ concurrency:
 
 env:
   SERVER_BUILD_CACHE_KEY: server-build
-  # Pull requests run only Myah's integration suites; the full upstream suite runs after merge.
-  MYAH_INTEGRATION_TEST_PATTERN: 'test/integration/(.*(myah|campaign|creator|instagram|social-profile)|(managed-email|messaging|ai|billing|action-approval)/)'
+  # Pull requests run only Myah's integration suites (not historical upgrade suites); the full suite runs after merge.
+  MYAH_INTEGRATION_TEST_PATTERN: 'test/integration/(?!upgrade/)(.*(myah|campaign|creator|instagram|social-profile)|(managed-email|messaging|ai|billing|action-approval)/)'
 
 jobs:
   select-runner:
