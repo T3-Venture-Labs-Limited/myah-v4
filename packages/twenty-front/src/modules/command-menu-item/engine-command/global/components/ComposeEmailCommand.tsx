@@ -22,10 +22,19 @@ export const ComposeEmailCommand = () => {
   const isBulkPerson =
     objectNameSingular === CoreObjectNameSingular.Person &&
     (selectedRecords.length > 1 || targetedRecordsRule.mode === 'exclusion');
+  const creatorId =
+    objectNameSingular === 'creator' &&
+    selectedRecords.length === 1 &&
+    targetedRecordsRule.mode !== 'exclusion'
+      ? selectedRecords[0].id
+      : undefined;
   const { defaultTo, loading: recipientLoading } =
     useResolveDefaultEmailRecipient({
       objectNameSingular,
-      recordId: isBulkPerson ? null : (selectedRecords[0]?.id ?? null),
+      recordId:
+        isBulkPerson || (objectNameSingular === 'creator' && !creatorId)
+          ? null
+          : (selectedRecords[0]?.id ?? null),
       bulkPerson: isBulkPerson
         ? { filter: graphqlFilter ?? undefined }
         : undefined,
@@ -35,7 +44,11 @@ export const ComposeEmailCommand = () => {
       navigateSettings(SettingsPath.NewAccount);
       return;
     }
-    openComposeEmailInSidePanel({ connectedAccountId, defaultTo });
+    openComposeEmailInSidePanel({
+      connectedAccountId,
+      defaultTo,
+      creatorId,
+    });
   };
   return (
     <HeadlessEngineCommandWrapperEffect

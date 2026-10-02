@@ -4,12 +4,14 @@ import { MODULE_METADATA } from '@nestjs/common/constants';
 import { DatabaseCommandModule } from 'src/database/commands/database-command.module';
 import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
 import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
+import { CreateMyahComposeEmailReplyEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790767948744-create-myah-compose-email-reply-evidence';
 
 import { RunInstanceCommandsCommand } from 'src/database/commands/run-instance-commands.command';
 import { type SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
 import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784106536001-add-instagram-reply-approval-provider-binding';
 import { RepairInstagramReplyApprovalSchemaFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963055-repair-instagram-reply-approval-schema';
 import { PendingMigrationCheckFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112688976-pending-migration-check';
+import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { type InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import { type UpgradeCommandRegistryService } from 'src/engine/core-modules/upgrade/services/upgrade-command-registry.service';
 import { type UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
@@ -28,9 +30,24 @@ describe('RunInstanceCommandsCommand', () => {
     expect(names).toContain(
       'CreateMyahCampaignReplyEvidenceFastInstanceCommand',
     );
+    expect(names).toContain(
+      'CreateMyahComposeEmailReplyEvidenceFastInstanceCommand',
+    );
+    expect(
+      names.indexOf('CreateMyahComposeEmailReplyEvidenceFastInstanceCommand'),
+    ).toBeGreaterThan(
+      names.indexOf('CreateMyahCampaignReplyEvidenceFastInstanceCommand'),
+    );
     expect(names).not.toContain(
       'MyahInboxBackfillCampaignReplyEvidenceCommand',
     );
+    // Inserted before already-run 2.20 steps, so installed instances must
+    // catch it up or its tables are never created.
+    expect(
+      getRegisteredInstanceCommandMetadata(
+        CreateMyahComposeEmailReplyEvidenceFastInstanceCommand,
+      ),
+    ).toMatchObject({ type: 'fast', catchUpOnResume: true });
     const cliProviders: Function[] = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
       DatabaseCommandModule,
@@ -61,6 +78,29 @@ describe('RunInstanceCommandsCommand', () => {
     expect(statements.join('\n')).not.toMatch(
       /INSERT INTO|SELECT.*FROM core\."outboundEmailAttempt"/i,
     );
+  });
+
+  it('defines separate, forward-only Compose receipts and immutable reply evidence', async () => {
+    const query = jest.fn().mockResolvedValue(undefined);
+
+    await new CreateMyahComposeEmailReplyEvidenceFastInstanceCommand().up({
+      query,
+    } as unknown as QueryRunner);
+
+    const statements = query.mock.calls
+      .map(([sql]: [string]) => sql)
+      .join('\n');
+
+    expect(statements).toContain(
+      'UNIQUE ("workspaceId", "messageChannelId", "providerHeaderMessageId")',
+    );
+    expect(statements).toContain(
+      'PRIMARY KEY ("workspaceId", "inboundMessageId")',
+    );
+    expect(statements).toContain(
+      'BEFORE UPDATE ON core."myahComposeReplyEvidence"',
+    );
+    expect(statements).not.toMatch(/INSERT INTO|SELECT.*FROM core\."message"/i);
   });
 
   it('runs opted-in slow data migrations without active workspaces', async () => {

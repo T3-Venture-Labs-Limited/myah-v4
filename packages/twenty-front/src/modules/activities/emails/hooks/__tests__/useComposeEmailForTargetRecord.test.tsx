@@ -77,10 +77,26 @@ it.each([null, 'customObject', 'person', 'company', 'opportunity'])(
     expect(mockOpen).toHaveBeenCalledWith({
       connectedAccountId: 'account-id',
       defaultTo: '',
+      creatorId: undefined,
     });
     expect(mockQuery).not.toHaveBeenCalled();
   },
 );
+it('carries an explicit Creator target without guessing from To', async () => {
+  mockTarget.mockReturnValue({
+    id: 'creator-id',
+    targetObjectNameSingular: 'creator',
+  });
+  const { result } = mount();
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  act(() => result.current.openComposer());
+  expect(mockOpen).toHaveBeenCalledWith({
+    connectedAccountId: 'account-id',
+    defaultTo: '',
+    creatorId: 'creator-id',
+  });
+});
+
 it('retains shared account setup behavior', async () => {
   mockAccount.mockReturnValue({ connectedAccountId: null, loading: false });
   const { result } = mount();

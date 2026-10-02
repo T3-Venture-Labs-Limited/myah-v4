@@ -77,6 +77,22 @@ export const useResolveDefaultEmailRecipient = ({
         relation.relation.targetObjectMetadata.id === target.id
       );
     };
+    const isCreator = objectNameSingular === 'creator';
+    if (isCreator) {
+      return recordId &&
+        !isBulkPerson &&
+        canRead(contextMetadata) &&
+        field(contextMetadata, 'id') &&
+        field(contextMetadata, 'email')?.type === FieldMetadataType.TEXT
+        ? [
+            {
+              objectNameSingular: 'creator',
+              fields: { id: true, email: true },
+              variables: { filter: { id: { eq: recordId } }, limit: 1 },
+            },
+          ]
+        : [];
+    }
     const isPerson = objectNameSingular === CoreObjectNameSingular.Person;
     const isCompany = objectNameSingular === CoreObjectNameSingular.Company;
     const isOpportunity =
@@ -145,11 +161,17 @@ export const useResolveDefaultEmailRecipient = ({
   const metadataVersion = currentWorkspace?.metadataVersion;
   const request = useMemo(() => {
     const signature = operationSignatures[0];
-    if (!query || !contextMetadata || !personMetadata) {
+    if (
+      signature === undefined ||
+      !query ||
+      !contextMetadata ||
+      (signature.objectNameSingular !== 'creator' && !personMetadata)
+    ) {
       return null;
     }
     const isOpportunity =
       signature.objectNameSingular === CoreObjectNameSingular.Opportunity;
+    const isCreator = signature.objectNameSingular === 'creator';
     const variableSuffix = capitalize(signature.objectNameSingular);
     return {
       client,
@@ -157,9 +179,11 @@ export const useResolveDefaultEmailRecipient = ({
       workspaceId,
       metadataVersion,
       isOpportunity,
-      namePlural: isOpportunity
-        ? contextMetadata.namePlural
-        : personMetadata.namePlural,
+      isCreator,
+      namePlural:
+        isOpportunity || isCreator
+          ? contextMetadata.namePlural
+          : personMetadata!.namePlural,
       variables: {
         [`filter${variableSuffix}`]: signature.variables.filter,
         [`first${variableSuffix}`]: signature.variables.limit,
@@ -203,6 +227,11 @@ export const useResolveDefaultEmailRecipient = ({
             : [];
           const defaultTo = records
             .map((record) => {
+              if (request.isCreator) {
+                return typeof record.email === 'string' && record.email.trim()
+                  ? record.email.trim()
+                  : null;
+              }
               const recipient = request.isOpportunity
                 ? record.pointOfContact
                 : record;
