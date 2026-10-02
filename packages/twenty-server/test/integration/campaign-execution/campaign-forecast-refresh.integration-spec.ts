@@ -243,7 +243,9 @@ describe('Campaign forecast refresh with real PostgreSQL routing', () => {
     const service = getDomainService<CampaignForecastRefreshService>(
       'CampaignForecastRefreshService',
     );
-    await service.refreshStaleForecasts();
+    // Workspaces created by other suites may fail to refresh (e.g. without Myah
+    // metadata); this suite only asserts its own workspace's generation below.
+    await service.refreshStaleForecasts().catch(() => undefined);
     const [head] = await global.testDataSource.query(
       `SELECT "currentGenerationId" FROM core."campaignForecastHead"
         WHERE "workspaceId"=$1 AND "scopeKey"=$2`,

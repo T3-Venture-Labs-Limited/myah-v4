@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { type EntityManager } from 'typeorm';
 
@@ -39,6 +39,7 @@ const rows = <T>(value: unknown): T[] =>
 
 @Injectable()
 export class CampaignForecastRefreshService {
+  private readonly logger = new Logger(CampaignForecastRefreshService.name);
   private monotonicNow: () => number = () => performance.now();
   constructor(
     private readonly orm: GlobalWorkspaceOrmManager,
@@ -83,6 +84,9 @@ export class CampaignForecastRefreshService {
       );
     });
 
+    // Each workspace refreshes independently: one failing workspace must not
+    // block the others. The first failure is rethrown after all are attempted.
+    let firstError: unknown;
     for (const head of rows<StaleHead>(stale)) {
       const runner = dataSource.createQueryRunner();
       let planningTransactionActive = false;
@@ -100,11 +104,16 @@ export class CampaignForecastRefreshService {
         );
       } catch (error) {
         if (planningTransactionActive) await runner.rollbackTransaction();
-        throw error;
+        this.logger.error(
+          `Campaign forecast refresh failed for workspace ${head.workspaceId}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        firstError ??= error;
       } finally {
         await runner.release();
       }
     }
+    if (firstError !== undefined) throw firstError;
   }
 
   private async refresh(
