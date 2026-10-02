@@ -2,6 +2,9 @@ name: CI Server
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -12,6 +15,8 @@ concurrency:
 
 env:
   SERVER_BUILD_CACHE_KEY: server-build
+  # Pull requests run only Myah's integration suites; the full upstream suite runs after merge.
+  MYAH_INTEGRATION_TEST_PATTERN: 'test/integration/(.*(myah|campaign|creator|instagram|social-profile)|(managed-email|messaging|ai|billing|action-approval)/)'
 
 jobs:
   select-runner:
@@ -216,7 +221,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard: ${{ fromJSON(github.event_name == 'push' && '[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]' || '[1, 2, 3]') }}
     services:
       postgres:
         image: postgres:18
@@ -252,7 +257,7 @@ jobs:
       ANALYTICS_ENABLED: true
       CLICKHOUSE_URL: "http://default:clickhousePassword@localhost:8123/twenty"
       CLICKHOUSE_PASSWORD: clickhousePassword
-      SHARD_COUNTER: 16
+      SHARD_COUNTER: ${{ github.event_name == 'push' && 16 || 3 }}
     steps:
       - name: Fetch custom Github Actions and base branch history
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -291,7 +296,7 @@ jobs:
           tag: scope:backend
           tasks: 'test:integration'
           configuration: 'with-db-reset'
-          args: --shard=${{ matrix.shard }}/${{ env.SHARD_COUNTER }}
+          args: --shard=${{ matrix.shard }}/${{ env.SHARD_COUNTER }} ${{ github.event_name != 'push' && format('--testPathPattern={0}', env.MYAH_INTEGRATION_TEST_PATTERN) || '' }}
 
   ci-server-status-check:
     if: always() && !cancelled()
