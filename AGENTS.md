@@ -60,7 +60,7 @@ scripts/myah-dev logs api     # follow api, worker or front logs
 scripts/myah-dev down         # stop everything and delete this environment's data
 ```
 
-Login: `tim@apple.dev` / `tim@apple.dev`. Instagram, Gmail and Microsoft providers are disabled and email goes to the logger driver, so nothing is sent. Optional extra server variables (for example AI provider keys) go in `~/.config/myah-dev/env`. Local data is disposable.
+Login: `tim@apple.dev` / `tim@apple.dev`. Each process runs in its own memory-capped systemd scope (API 7G, worker 2G, front 6G; override with `MYAH_DEV_MEM_API/WORKER/FRONT`), so hitting a cap restarts nothing else. Instagram, Gmail and Microsoft providers are disabled and email goes to the logger driver, so nothing is sent. Optional extra server variables (for example AI provider keys) go in `~/.config/myah-dev/env`. Local data is disposable.
 
 ## Tests and checks
 
