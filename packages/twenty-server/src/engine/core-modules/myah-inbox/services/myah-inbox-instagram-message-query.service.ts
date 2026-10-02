@@ -22,6 +22,7 @@ import {
 } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-cursor.util';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 
@@ -77,6 +78,107 @@ export class MyahInboxInstagramMessageQueryService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
+
+  async acknowledgeReaction(
+    input: Omit<MyahInboxListInstagramMessagesInput, 'first' | 'after'> & {
+      messageId: string;
+      version: string;
+    },
+  ): Promise<boolean> {
+    if (
+      !isValidUuid(input.conversationId) ||
+      !isValidUuid(input.messageId) ||
+      !/^[a-f0-9]{64}$/.test(input.version)
+    ) {
+      throw new BadRequestException('Invalid Instagram reaction');
+    }
+
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const workspaceContext = getWorkspaceContext();
+        const rolePermissionConfig = resolveRolePermissionConfig({
+          authContext: input.authContext,
+          userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+          apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+        });
+        if (!rolePermissionConfig) {
+          throw new ForbiddenException('Inbox role permissions are required');
+        }
+        const repository = async (name: string) =>
+          // SAFETY: the workspace repository's query builder validates resolved role permissions before SQL serialization.
+          (await this.globalWorkspaceOrmManager.getRepository<
+            Record<string, unknown>
+          >(
+            input.workspace.id,
+            name,
+            rolePermissionConfig,
+          )) as unknown as PermissionAwareRepository;
+        const [conversationRepository, messageRepository] = await Promise.all([
+          repository('myahSocialConversation'),
+          repository('myahSocialMessage'),
+        ]);
+        const conversation = serializePermissionQuery(
+          conversationRepository
+            .createQueryBuilder('conversation')
+            .select('conversation.id', 'id')
+            .where('conversation."deletedAt" IS NULL'),
+        );
+        const messages = serializePermissionQuery(
+          messageRepository
+            .createQueryBuilder('message')
+            .select('message.id', 'id')
+            .addSelect('message.conversationId', 'conversationId')
+            .addSelect('message.provider', 'provider')
+            .where('message."deletedAt" IS NULL'),
+        );
+        const parameters: unknown[] = [
+          input.conversationId,
+          input.messageId,
+          input.version,
+        ];
+        const conversationSql = rebasePostgresParameters(
+          conversation.sql,
+          parameters.length,
+        );
+        parameters.push(...conversation.parameters);
+        const messagesSql = rebasePostgresParameters(
+          messages.sql,
+          parameters.length,
+        );
+        parameters.push(...messages.parameters);
+        const schemaName = getWorkspaceSchemaName(input.workspace.id);
+        const sql = `WITH readable_conversation AS (${conversationSql}), readable_messages AS (${messagesSql}),
+  authorized AS (
+    SELECT message.id AS "messageId", conversation.id AS "conversationId",
+      source."recipientIgsid" AS "actorProviderId"
+    FROM readable_messages message
+    INNER JOIN readable_conversation conversation ON conversation.id = message."conversationId"
+    INNER JOIN "${schemaName}"."myahSocialConversation" source
+      ON source.id = conversation.id AND source."deletedAt" IS NULL
+    WHERE conversation.id = $1::uuid AND message.id = $2::uuid AND message.provider = 'UNIPILE'
+  )
+UPDATE "${schemaName}"."myahInboxInstagramReaction" reaction
+SET "viewedVersion" = reaction."version"
+FROM authorized
+WHERE reaction."messageRecordId" = authorized."messageId"
+  AND reaction."conversationRecordId" = authorized."conversationId"
+  AND reaction."actorProviderId" = authorized."actorProviderId"
+  AND reaction."version" = $3
+  AND reaction."viewedVersion" IS DISTINCT FROM reaction."version"
+RETURNING reaction.id`;
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        const rows = await dataSource.query<Array<{ id: string }>>(
+          sql,
+          parameters,
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        );
+        return rows.length === 1;
+      },
+      input.authContext,
+    );
+  }
 
   async listMessages(
     input: MyahInboxListInstagramMessagesInput,
@@ -167,10 +269,15 @@ export class MyahInboxInstagramMessageQueryService {
             : null,
         );
         const limit = add(first + 1);
+        // The private table is reached only through serialized readable parent
+        // and conversation queries; schema derives from the workspace UUID.
+        const schemaName = getWorkspaceSchemaName(input.workspace.id);
         const sql = `WITH readable_conversation AS (${conversationSql}), readable_messages AS (${messagesSql})
 SELECT message.id, message.text, message.direction, message."sentVia", message.provider,
   message."deliveryState", message."providerMessageId", reply_receipt.id AS "replyReceiptId", message."providerCreatedAt", message."createdAt",
   message."hasAttachments", message."attachmentCount",
+  reaction."emoji" AS "reactionEmoji", reaction."version" AS "reactionVersion",
+  CASE WHEN reaction."id" IS NOT NULL THEN 'Instagram participant' ELSE NULL END AS "reactionActorLabel",
   COALESCE(message."providerCreatedAt", message."createdAt") AS "effectiveTimestamp",
   to_char(
     COALESCE(message."providerCreatedAt", message."createdAt") AT TIME ZONE 'UTC',
@@ -178,6 +285,12 @@ SELECT message.id, message.text, message.direction, message."sentVia", message.p
   ) AS "effectiveCursorTimestamp"
 FROM readable_messages message
 INNER JOIN readable_conversation conversation ON conversation.id = message."conversationId"
+LEFT JOIN LATERAL (
+  SELECT reaction."id", reaction."emoji", reaction."version"
+  FROM "${schemaName}"."myahInboxInstagramReaction" reaction
+  WHERE reaction."messageRecordId" = message.id AND message.provider = 'UNIPILE'
+  ORDER BY reaction."occurredAt" DESC, reaction."id" DESC LIMIT 1
+) reaction ON TRUE
 LEFT JOIN (
   SELECT DISTINCT ON (receipt."providerExternalMessageId")
     receipt.id, receipt."providerExternalMessageId"
@@ -229,6 +342,9 @@ LIMIT ${limit}`;
             createdAt: toIsoString(row.createdAt),
             hasAttachments: row.hasAttachments,
             attachmentCount: row.attachmentCount,
+            reactionEmoji: row.reactionEmoji ?? null,
+            reactionActorLabel: row.reactionActorLabel ?? null,
+            reactionVersion: row.reactionVersion ?? null,
           },
         }));
         return {

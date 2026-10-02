@@ -6,11 +6,14 @@ import { type MyahInstagramConversationMessage } from '@/myah/inbox/types/MyahIn
 const StyledMessageRow = styled.article<{
   $isOutbound: boolean;
   $isUnknown: boolean;
+  $hasReaction: boolean;
 }>`
   align-self: ${({ $isOutbound, $isUnknown }) =>
     $isUnknown ? 'center' : $isOutbound ? 'flex-end' : 'flex-start'};
   display: flex;
   gap: ${themeCssVariables.spacing[2]};
+  margin-bottom: ${({ $hasReaction }) =>
+    $hasReaction ? themeCssVariables.spacing[3] : 0};
   max-width: 82%;
 `;
 
@@ -31,6 +34,7 @@ const StyledInitial = styled.span<{ $hidden: boolean }>`
 const StyledMessage = styled.div`
   overflow-wrap: anywhere;
   padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
+  position: relative;
   white-space: pre-wrap;
 `;
 
@@ -62,6 +66,24 @@ const StyledUnknownMessage = styled(StyledMessage)`
   border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.lg};
   color: ${themeCssVariables.font.color.secondary};
+`;
+
+const StyledReaction = styled.span<{ $isOutbound: boolean }>`
+  background: ${themeCssVariables.background.quaternary};
+  border-radius: 50%;
+  bottom: calc(-1 * ${themeCssVariables.spacing[3]});
+  display: grid;
+  font-size: ${themeCssVariables.font.size.md};
+  height: ${themeCssVariables.spacing[6]};
+  left: ${({ $isOutbound }) =>
+    $isOutbound ? 'auto' : themeCssVariables.spacing[2]};
+  overflow: hidden;
+  place-items: center;
+  position: absolute;
+  right: ${({ $isOutbound }) =>
+    $isOutbound ? themeCssVariables.spacing[2] : 'auto'};
+  white-space: nowrap;
+  width: ${themeCssVariables.spacing[6]};
 `;
 
 const StyledMetadata = styled.span`
@@ -97,6 +119,9 @@ export const MyahInboxInstagramMessage = ({
 }: MyahInboxInstagramMessageProps) => {
   const isOutbound = message.direction === 'OUTBOUND';
   const isUnknown = message.direction === 'UNKNOWN';
+  const hasReaction =
+    message.provider === 'UNIPILE' &&
+    Boolean(message.reactionEmoji && message.reactionVersion);
   const direction =
     message.direction.charAt(0) + message.direction.slice(1).toLowerCase();
   const timestamp = getExactTimestamp(message);
@@ -111,6 +136,7 @@ export const MyahInboxInstagramMessage = ({
     <StyledMessageRow
       $isOutbound={isOutbound}
       $isUnknown={isUnknown}
+      $hasReaction={hasReaction}
       aria-label={`${direction} Instagram message`}
       data-instagram-message-id={message.id}
     >
@@ -121,6 +147,16 @@ export const MyahInboxInstagramMessage = ({
       ) : null}
       <MessageBubble $grouped={groupedWithPrevious}>
         <span>{message.text || 'No message text.'}</span>
+        {hasReaction ? (
+          <StyledReaction
+            $isOutbound={isOutbound}
+            role="img"
+            aria-label={`${message.reactionActorLabel ?? 'Instagram participant'} reacted ${message.reactionEmoji}`}
+            data-reaction-version={message.reactionVersion}
+          >
+            {message.reactionEmoji}
+          </StyledReaction>
+        ) : null}
         {message.hasAttachments ? (
           <StyledMetadata>
             Attachments are not supported ({message.attachmentCount}).

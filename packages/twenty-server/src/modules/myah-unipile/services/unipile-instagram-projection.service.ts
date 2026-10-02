@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { ConflictException, Injectable } from '@nestjs/common';
 import { IsNull } from 'typeorm';
@@ -85,6 +85,15 @@ export type UnipileInstagramMessageProjectionInput =
     deliveryStateUpdatedAt?: string | null;
     sourceGenerationId?: string;
     triageMode?: 'LIVE' | 'BACKFILL';
+  };
+
+export type UnipileInstagramReactionProjectionInput =
+  UnipileInstagramChatProjectionInput & {
+    message: UnipileInstagramMessage;
+    actorProviderId: string;
+    emoji: string;
+    occurredAt: Date;
+    version: string;
   };
 
 export type UnipileInstagramCompletedMessageSyncInput = {
@@ -273,7 +282,7 @@ export class UnipileInstagramProjectionService {
 
           await lockSource(conversationRecordId);
           // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
-          // pi-lens-ignore: sql-injection
+          // pi-lens-ignore: sql-injection, no-sql-in-code
           await querySource.query(
             `
             INSERT INTO "${schemaName}"."myahSocialConversation" (
@@ -312,6 +321,252 @@ export class UnipileInstagramProjectionService {
           );
 
           return initializeSourceContact(conversationRecordId);
+        });
+      }, this.systemContext(input.workspace)),
+    );
+  }
+
+  async applyVerifiedReaction(
+    input: UnipileInstagramReactionProjectionInput,
+  ): Promise<boolean> {
+    this.assertVerifiedChat(input);
+    if (
+      input.actorProviderId !== input.chat.attendeeProviderId ||
+      input.actorProviderId === input.binding.instagramUserId ||
+      input.message.accountId !== input.binding.unipileAccountId ||
+      input.message.chatId !== input.chat.chatId ||
+      !input.message.messageId ||
+      !input.message.senderId ||
+      input.message.hidden ||
+      input.message.deleted ||
+      input.message.isEvent ||
+      hasContradictoryUnipileInstagramSenderEvidence(
+        input.message,
+        input.binding.instagramUserId,
+        input.chat.attendeeProviderId,
+      ) ||
+      !input.emoji ||
+      input.emoji.length > 64 ||
+      !Number.isFinite(input.occurredAt.getTime()) ||
+      !/^[0-9a-f]{64}$/.test(input.version)
+    ) {
+      throw new ConflictException('Instagram reaction is not verified');
+    }
+
+    return this.withActiveBinding(input, () =>
+      this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        const schemaName = getWorkspaceSchemaName(input.workspace.id);
+
+        return this.inTransaction(dataSource, async (querySource) => {
+          await querySource.query(
+            'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+            [input.binding.id, input.message.messageId],
+            undefined,
+            queryOptions,
+          );
+          // Schema is derived from the verified workspace UUID, never webhook data.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          const conversations = await querySource.query<ConversationRecord[]>(
+            `SELECT "id" FROM "${schemaName}"."myahSocialConversation"
+             WHERE "instagramAccountId" = $1 AND "provider" = 'UNIPILE'
+               AND "providerConversationId" = $2 AND "recipientIgsid" = $3
+               AND "deletedAt" IS NULL LIMIT 2 FOR UPDATE`,
+            [
+              input.binding.workspaceInstagramAccountRecordId,
+              input.chat.chatId,
+              input.chat.attendeeProviderId,
+            ],
+            undefined,
+            queryOptions,
+          );
+          if (conversations.length !== 1) return false;
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          const parents = await querySource.query<Array<{ id: string }>>(
+            `SELECT "id" FROM "${schemaName}"."myahSocialMessage"
+             WHERE "conversationId" = $1 AND "provider" = 'UNIPILE'
+               AND "providerMessageId" = $2 AND "deletedAt" IS NULL
+             LIMIT 2 FOR UPDATE`,
+            [conversations[0].id, input.message.messageId],
+            undefined,
+            queryOptions,
+          );
+          if (parents.length !== 1) return false;
+
+          // Atomic version ordering retains the viewed version on a replay,
+          // and a newer event differs from the last version acknowledged.
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          const updated = await querySource.query<Array<{ id: string }>>(
+            `INSERT INTO "${schemaName}"."myahInboxInstagramReaction" (
+               "messageRecordId", "conversationRecordId", "bindingId",
+               "actorProviderId", "emoji", "occurredAt", "version"
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT ("messageRecordId", "actorProviderId") DO UPDATE SET
+               "emoji" = EXCLUDED."emoji", "occurredAt" = EXCLUDED."occurredAt",
+               "version" = EXCLUDED."version", "updatedAt" = now()
+             WHERE ("myahInboxInstagramReaction"."occurredAt", "myahInboxInstagramReaction"."version")
+               < (EXCLUDED."occurredAt", EXCLUDED."version")
+             RETURNING "id"`,
+            [
+              parents[0].id,
+              conversations[0].id,
+              input.binding.id,
+              input.actorProviderId,
+              input.emoji,
+              input.occurredAt,
+              input.version,
+            ],
+            undefined,
+            queryOptions,
+          );
+          return updated.length === 1;
+        });
+      }, this.systemContext(input.workspace)),
+    );
+  }
+
+  async reconcileVerifiedReactionSnapshot(
+    input: UnipileInstagramChatProjectionInput & {
+      message: UnipileInstagramMessage;
+      observedAt: Date;
+    },
+  ): Promise<void> {
+    if (input.message.reactions === undefined) return;
+    this.assertVerifiedChat(input);
+    if (
+      input.message.accountId !== input.binding.unipileAccountId ||
+      input.message.chatId !== input.chat.chatId ||
+      !input.message.messageId ||
+      input.message.hidden ||
+      input.message.deleted ||
+      input.message.isEvent ||
+      hasContradictoryUnipileInstagramSenderEvidence(
+        input.message,
+        input.binding.instagramUserId,
+        input.chat.attendeeProviderId,
+      )
+    ) {
+      throw new ConflictException(
+        'Instagram reaction snapshot is not verified',
+      );
+    }
+    const remoteReactions = input.message.reactions.filter(
+      (reaction) =>
+        reaction.senderId === input.chat.attendeeProviderId &&
+        !reaction.isSender,
+    );
+    if (remoteReactions.length > 1) return;
+
+    await this.withActiveBinding(input, () =>
+      this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+        const dataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        const schemaName = getWorkspaceSchemaName(input.workspace.id);
+
+        return this.inTransaction(dataSource, async (querySource) => {
+          await querySource.query(
+            'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+            [input.binding.id, input.message.messageId],
+            undefined,
+            queryOptions,
+          );
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          const conversations = await querySource.query<ConversationRecord[]>(
+            `SELECT "id" FROM "${schemaName}"."myahSocialConversation"
+             WHERE "instagramAccountId" = $1 AND "provider" = 'UNIPILE'
+               AND "providerConversationId" = $2 AND "recipientIgsid" = $3
+               AND "deletedAt" IS NULL LIMIT 2 FOR UPDATE`,
+            [
+              input.binding.workspaceInstagramAccountRecordId,
+              input.chat.chatId,
+              input.chat.attendeeProviderId,
+            ],
+            undefined,
+            queryOptions,
+          );
+          if (conversations.length !== 1) return;
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          const parents = await querySource.query<Array<{ id: string }>>(
+            `SELECT "id" FROM "${schemaName}"."myahSocialMessage"
+             WHERE "conversationId" = $1 AND "provider" = 'UNIPILE'
+               AND "providerMessageId" = $2 AND "deletedAt" IS NULL
+             LIMIT 2 FOR UPDATE`,
+            [conversations[0].id, input.message.messageId],
+            undefined,
+            queryOptions,
+          );
+          if (parents.length !== 1) return;
+          // pi-lens-ignore: sql-injection, no-sql-in-code
+          const existing = await querySource.query<
+            Array<{
+              id: string;
+              emoji: string;
+              version: string;
+              occurredAt: Date | string;
+            }>
+          >(
+            `SELECT "id", "emoji", "version", "occurredAt"
+             FROM "${schemaName}"."myahInboxInstagramReaction"
+             WHERE "messageRecordId" = $1 AND "conversationRecordId" = $2
+               AND "bindingId" = $3 AND "actorProviderId" = $4
+             LIMIT 2 FOR UPDATE`,
+            [
+              parents[0].id,
+              conversations[0].id,
+              input.binding.id,
+              input.chat.attendeeProviderId,
+            ],
+            undefined,
+            queryOptions,
+          );
+          if (existing.length !== 1) return;
+          const reaction = existing[0];
+          // An immediate provider reread can lag the webhook. Only a later
+          // explicitly supplied snapshot can supersede event evidence.
+          if (
+            input.observedAt.getTime() -
+              new Date(reaction.occurredAt).getTime() <
+            60_000
+          )
+            return;
+          const current = remoteReactions[0];
+          if (!current) {
+            // pi-lens-ignore: sql-injection, no-sql-in-code
+            await querySource.query(
+              `DELETE FROM "${schemaName}"."myahInboxInstagramReaction"
+               WHERE "id" = $1 AND "version" = $2 RETURNING "id"`,
+              [reaction.id, reaction.version],
+              undefined,
+              queryOptions,
+            );
+          } else if (current.value !== reaction.emoji) {
+            const version = createHash('sha256')
+              .update(
+                JSON.stringify([
+                  parents[0].id,
+                  current.senderId,
+                  current.value,
+                  input.observedAt.toISOString(),
+                ]),
+              )
+              .digest('hex');
+            // pi-lens-ignore: sql-injection, no-sql-in-code
+            await querySource.query(
+              `UPDATE "${schemaName}"."myahInboxInstagramReaction"
+               SET "emoji" = $1, "occurredAt" = $2, "version" = $3, "updatedAt" = now()
+               WHERE "id" = $4 AND "version" = $5`,
+              [
+                current.value,
+                input.observedAt,
+                version,
+                reaction.id,
+                reaction.version,
+              ],
+              undefined,
+              queryOptions,
+            );
+          }
         });
       }, this.systemContext(input.workspace)),
     );
@@ -577,7 +832,7 @@ export class UnipileInstagramProjectionService {
         const schemaName = getWorkspaceSchemaName(input.workspace.id);
 
         // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
-        // pi-lens-ignore: sql-injection
+        // pi-lens-ignore: sql-injection, no-sql-in-code
         await dataSource.query(
           `
             UPDATE "${schemaName}"."myahSocialConversation"
@@ -617,7 +872,7 @@ export class UnipileInstagramProjectionService {
         const schemaName = getWorkspaceSchemaName(input.workspace.id);
 
         // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
-        // pi-lens-ignore: sql-injection
+        // pi-lens-ignore: sql-injection, no-sql-in-code
         await dataSource.query(
           `
             UPDATE "${schemaName}"."myahInstagramAccount"
@@ -808,7 +1063,7 @@ export class UnipileInstagramProjectionService {
     const displayName = input.chat.name ?? input.chat.attendeeProviderId;
 
     // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
-    // pi-lens-ignore: sql-injection
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     await dataSource.query(
       `
         UPDATE "${schemaName}"."myahSocialConversation"
@@ -853,7 +1108,7 @@ export class UnipileInstagramProjectionService {
     const displayName = input.chat.name ?? input.chat.attendeeProviderId;
 
     // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
-    // pi-lens-ignore: sql-injection
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     await dataSource.query(
       `
         UPDATE "${schemaName}"."myahSocialConversation"
@@ -900,7 +1155,7 @@ export class UnipileInstagramProjectionService {
     deliveryStateUpdatedAt: Date | string | null,
   ): Promise<void> {
     // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
-    // pi-lens-ignore: sql-injection
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     await dataSource.query(
       `
         UPDATE "${schemaName}"."myahSocialMessage"
@@ -950,7 +1205,7 @@ export class UnipileInstagramProjectionService {
     deliveryStateUpdatedAt: Date | string | null,
   ): Promise<void> {
     // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
-    // pi-lens-ignore: sql-injection
+    // pi-lens-ignore: sql-injection, no-sql-in-code
     await dataSource.query(
       `
         UPDATE "${schemaName}"."myahSocialMessage"

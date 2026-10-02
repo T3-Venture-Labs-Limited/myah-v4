@@ -191,11 +191,14 @@ const buildHarness = (
   const query = jest.fn().mockResolvedValue(rows);
   // The service probes the private triage schema before its page query; routing
   // that probe to its own mock keeps main-query assertions about the page query.
-  const preflightQuery = jest
-    .fn()
-    .mockResolvedValue([
-      { exists: true, replyEvidenceReady: true, composeEvidenceReady: true },
-    ]);
+  const preflightQuery = jest.fn().mockResolvedValue([
+    {
+      exists: true,
+      reactionReady: true,
+      replyEvidenceReady: true,
+      composeEvidenceReady: true,
+    },
+  ]);
   const dataSourceQuery = jest.fn(async (sql: string, ...rest: unknown[]) =>
     sql.startsWith('SELECT to_regclass')
       ? preflightQuery(sql, ...rest)
@@ -320,6 +323,183 @@ const request = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('MyahInboxContactQueryService', () => {
+  it('exposes reaction attention separately without changing canonical New message state', async () => {
+    const harness = buildHarness([
+      {
+        ...rawRows[0],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+        triageIsAvailable: true,
+        triageInboxState: 'WAITING_ON_CREATOR',
+      },
+    ]);
+    const result = await harness.service.listContacts(request());
+
+    expect(result).toMatchObject({
+      edges: [
+        {
+          node: {
+            needsAttention: true,
+            triage: { inboxState: 'WAITING_ON_CREATOR' },
+            instagram: { needsAttention: false, reactionNeedsAttention: true },
+          },
+        },
+      ],
+    });
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'unseen_reactions_by_conversation AS',
+    );
+    expect(harness.query.mock.calls[0][0]).toContain(
+      'FROM readable_social_messages message',
+    );
+    const sql = harness.query.mock.calls[0][0] as string;
+    expect(sql).toContain('"viewedVersion"');
+    expect(sql).toContain("message.provider = 'UNIPILE'");
+    expect(sql).toContain('reaction."conversationRecordId" = conversation.id');
+    expect(sql).toContain(
+      'reaction."actorProviderId" = source."recipientIgsid"',
+    );
+    expect(sql).toContain(
+      'INNER JOIN readable_social_conversations conversation',
+    );
+  });
+
+  it('omits physical Instagram reaction relations for Email-only workspaces', async () => {
+    for (const reactionReady of [false, true]) {
+      const harness = buildHarness([rawRows[1]]);
+
+      if (reactionReady) {
+        const getRepository = harness.globalWorkspaceOrmManager.getRepository;
+        const originalRepository = getRepository.getMockImplementation()!;
+
+        getRepository.mockImplementation(async (id, name) => {
+          if (
+            name === 'myahSocialConversation' ||
+            name === 'myahSocialMessage'
+          ) {
+            const error = new Error('Optional Instagram metadata is absent');
+
+            error.name = 'EntityMetadataNotFoundError';
+            throw error;
+          }
+
+          return originalRepository(id, name);
+        });
+      }
+      harness.preflightQuery.mockResolvedValueOnce([
+        {
+          exists: true,
+          replyEvidenceReady: true,
+          composeEvidenceReady: true,
+          reactionReady,
+        },
+      ]);
+
+      const page = await harness.service.listContacts(request());
+      const [sql] = harness.query.mock.calls[0];
+
+      expect(page).toMatchObject({
+        edges: [{ node: { identityKind: 'EMAIL_THREAD' } }],
+      });
+      expect(sql).toContain('unseen_reactions_by_conversation AS (');
+      expect(sql).not.toContain('"myahInboxInstagramReaction"');
+      expect(sql).not.toContain('"myahSocialConversation"');
+    }
+  });
+
+  it('keeps reaction-only attention on linked Creator groups and unlinked conversations without changing the message reason', async () => {
+    const linked = buildHarness([
+      {
+        ...rawRows[0],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+      },
+    ]);
+    const linkedPage = await linked.service.listContacts(request());
+    expect(linkedPage).toMatchObject({
+      edges: [
+        {
+          node: {
+            creator: { id: creatorId },
+            needsAttention: true,
+            instagram: {
+              needsAttention: false,
+              reactionNeedsAttention: true,
+              conversations: [{ id: instagramAId }, { id: instagramBId }],
+            },
+          },
+        },
+      ],
+    });
+    const unlinked = buildHarness([
+      {
+        ...rawRows[2],
+        instagramNeedsAttention: false,
+        reactionNeedsAttention: true,
+      },
+    ]);
+    const unlinkedPage = await unlinked.service.listContacts(request());
+    expect(unlinkedPage).toMatchObject({
+      edges: [
+        {
+          node: {
+            creator: null,
+            needsAttention: true,
+            instagram: { needsAttention: false, reactionNeedsAttention: true },
+          },
+        },
+      ],
+    });
+  });
+
+  it('clears only reaction attention while retaining independent New message or manual-triage attention', async () => {
+    for (const [row, needsAttention] of [
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: false,
+          triageIsAvailable: true,
+          triageInboxState: 'WAITING_ON_CREATOR',
+        },
+        false,
+      ],
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: false,
+          triageIsAvailable: true,
+          triageInboxState: 'NEEDS_REPLY',
+        },
+        true,
+      ],
+      [
+        {
+          ...rawRows[0],
+          reactionNeedsAttention: false,
+          instagramNeedsAttention: true,
+          triageIsAvailable: false,
+        },
+        true,
+      ],
+    ] as const) {
+      const page = await buildHarness([row]).service.listContacts(request());
+      expect(
+        (
+          page.edges as Array<{
+            node: {
+              needsAttention: boolean;
+              instagram: { reactionNeedsAttention: boolean };
+            };
+          }>
+        )[0].node,
+      ).toMatchObject({
+        needsAttention,
+        instagram: { reactionNeedsAttention: false },
+      });
+    }
+  });
   it('emits exact SQL cursor text separately from the Date display timestamp', async () => {
     const exactTimestamp = '2026-09-05T12:30:00.000900Z';
     const harness = buildHarness([
@@ -1104,6 +1284,16 @@ describeContactPostgres(
 
     const list = async (focus = true) => {
       const harness = buildHarness([], true, false, true, focus, true);
+
+      // The Email-only fixture has no physical Instagram reaction relation.
+      harness.preflightQuery.mockResolvedValueOnce([
+        {
+          exists: true,
+          reactionReady: false,
+          replyEvidenceReady: true,
+          composeEvidenceReady: true,
+        },
+      ]);
       harness.query.mockImplementation(
         async (sql: string, parameters: unknown[]) => {
           const fixtureSql = sql

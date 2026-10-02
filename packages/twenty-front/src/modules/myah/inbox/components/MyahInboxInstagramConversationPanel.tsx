@@ -17,6 +17,8 @@ import {
   type PendingInstagramMessage,
 } from '@/myah/inbox/hooks/useMyahInboxInstagramSend';
 import { useMyahInstagramConversation } from '@/myah/inbox/hooks/useMyahInstagramConversation';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+import { AcknowledgeMyahInboxInstagramReactionDocument } from '~/generated/graphql';
 import {
   type MyahInboxContact,
   type MyahInboxContactInstagramConversation,
@@ -334,12 +336,16 @@ export type MyahInboxInstagramConversationPanelProps = {
   workspaceId: string;
   contact: MyahInboxContact;
   onActivity: () => void | Promise<void>;
+  onReactionViewed?: () => void | Promise<void>;
+  arrivalEpoch?: number;
 };
 
 export const MyahInboxInstagramConversationPanel = ({
   workspaceId,
   contact,
   onActivity,
+  onReactionViewed,
+  arrivalEpoch,
 }: MyahInboxInstagramConversationPanelProps) => {
   if (contact.instagram.state === 'AMBIGUOUS') {
     return (
@@ -378,6 +384,8 @@ export const MyahInboxInstagramConversationPanel = ({
       workspaceId={workspaceId}
       contact={contact}
       onActivity={onActivity}
+      onReactionViewed={onReactionViewed}
+      arrivalEpoch={arrivalEpoch}
       activeConversation={activeConversation}
     />
   );
@@ -387,6 +395,8 @@ const MyahInboxInstagramReplyPanel = ({
   workspaceId,
   contact,
   onActivity,
+  onReactionViewed,
+  arrivalEpoch,
   activeConversation,
 }: MyahInboxInstagramConversationPanelProps & {
   activeConversation: MyahInboxContactInstagramConversation;
@@ -394,6 +404,7 @@ const MyahInboxInstagramReplyPanel = ({
   const instagram = useMyahInstagramConversation(
     activeConversation?.id ?? null,
   );
+  const apolloCoreClient = useApolloCoreClient();
   const draft = useMyahInboxInstagramDraft({
     workspaceId,
     contactId: contact.id,
@@ -478,10 +489,151 @@ const MyahInboxInstagramReplyPanel = ({
   // oxlint-disable-next-line twenty/no-state-useref
   const previousLoadingMoreRef = useRef(false);
   // oxlint-disable-next-line twenty/no-state-useref
-  const previousLastMessageIdRef = useRef<string | null>(null);
+  const previousLastMessageRef = useRef<MyahInstagramConversationMessage>(null);
   // oxlint-disable-next-line twenty/no-state-useref
   const wasAtBottomRef = useRef(true);
   const [hasNewerMessages, setHasNewerMessages] = useState(false);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const lastArrivalEpochRef = useRef(arrivalEpoch);
+  const refetch = instagram.refetch;
+  const reactionScope = `${workspaceId}:${contact.id}:${activeConversation.id}`;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const reactionScopeRef = useRef<string | null>(reactionScope);
+  reactionScopeRef.current = reactionScope;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const readableReactionRef = useRef(false);
+  readableReactionRef.current = !instagram.loading && !instagram.error;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const onReactionViewedRef = useRef(onReactionViewed);
+  onReactionViewedRef.current = onReactionViewed;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const attemptedReactionsRef = useRef(new Set<string>());
+  // oxlint-disable-next-line twenty/no-state-useref
+  const pendingReactionsRef = useRef(new Set<string>());
+  useEffect(
+    () => () => {
+      reactionScopeRef.current = null;
+    },
+    [],
+  );
+  useEffect(() => {
+    const messages = messagesRef.current;
+    if (
+      !messages ||
+      instagram.loading ||
+      instagram.error ||
+      contact.instagram.reactionNeedsAttention === false ||
+      typeof IntersectionObserver === 'undefined'
+    )
+      return;
+    const reactionElements = Array.from(
+      messages.querySelectorAll<HTMLElement>('[data-reaction-version]'),
+    );
+    let active = true;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          !active ||
+          document.visibilityState !== 'visible' ||
+          !readableReactionRef.current ||
+          reactionScopeRef.current !== reactionScope
+        )
+          return;
+        for (const entry of entries) {
+          if (
+            !entry.isIntersecting ||
+            entry.intersectionRatio < 1 ||
+            !(entry.target instanceof HTMLElement)
+          )
+            continue;
+          const element = entry.target;
+          const version = element.dataset.reactionVersion;
+          const messageId = element.closest<HTMLElement>(
+            '[data-instagram-message-id]',
+          )?.dataset.instagramMessageId;
+          if (
+            !messageId ||
+            !version ||
+            !instagram.messages.some(
+              (message) =>
+                message.id === messageId &&
+                message.reactionVersion === version &&
+                message.provider === 'UNIPILE',
+            )
+          )
+            continue;
+          const key = `${messageId}:${version}`;
+          if (
+            attemptedReactionsRef.current.has(key) ||
+            pendingReactionsRef.current.has(key)
+          )
+            continue;
+          pendingReactionsRef.current.add(key);
+          void apolloCoreClient
+            .mutate({
+              mutation: AcknowledgeMyahInboxInstagramReactionDocument,
+              variables: {
+                input: {
+                  expectedWorkspaceId: workspaceId,
+                  conversationId: activeConversation.id,
+                  messageId,
+                  version,
+                },
+              },
+            })
+            .then(({ data }) => {
+              attemptedReactionsRef.current.add(key);
+              if (
+                data?.acknowledgeMyahInboxInstagramReaction &&
+                reactionScopeRef.current === reactionScope
+              ) {
+                void Promise.resolve(onReactionViewedRef.current?.()).catch(
+                  () => undefined,
+                );
+              }
+            })
+            .catch(() => undefined)
+            .finally(() => {
+              pendingReactionsRef.current.delete(key);
+            });
+        }
+      },
+      { root: messages, threshold: 1 },
+    );
+    reactionElements.forEach((element) => observer.observe(element));
+    const retryVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      reactionElements.forEach((element) => {
+        observer.unobserve(element);
+        observer.observe(element);
+      });
+    };
+    document.addEventListener('visibilitychange', retryVisible);
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', retryVisible);
+      observer.disconnect();
+    };
+  }, [
+    activeConversation.id,
+    apolloCoreClient,
+    contact.id,
+    contact.instagram.reactionNeedsAttention,
+    instagram.error,
+    instagram.loading,
+    instagram.messages,
+    reactionScope,
+    workspaceId,
+  ]);
+  useEffect(() => {
+    if (
+      arrivalEpoch === undefined ||
+      arrivalEpoch === lastArrivalEpochRef.current
+    )
+      return;
+    lastArrivalEpochRef.current = arrivalEpoch;
+    if (document.visibilityState === 'visible') void refetch(true);
+  }, [arrivalEpoch, refetch]);
 
   flushRef.current = draft.flush;
 
@@ -614,23 +766,35 @@ const MyahInboxInstagramReplyPanel = ({
     if (settledOlderPage) {
       restoreMessageAnchor(pendingPageAnchorRef.current);
       pendingPageAnchorRef.current = null;
+    } else if (!instagram.loadingMore && !wasAtBottomRef.current) {
+      restoreMessageAnchor(readingAnchorRef.current);
     }
 
-    const lastMessageId = timelineMessages.at(-1)?.id ?? null;
-    const previousLastMessageId = previousLastMessageIdRef.current;
+    const lastMessage = timelineMessages.at(-1) ?? null;
+    const previousLastMessage = previousLastMessageRef.current;
+    const lastTimestamp = lastMessage
+      ? Date.parse(lastMessage.providerCreatedAt ?? lastMessage.createdAt)
+      : 0;
+    const previousTimestamp = previousLastMessage
+      ? Date.parse(
+          previousLastMessage.providerCreatedAt ??
+            previousLastMessage.createdAt,
+        )
+      : 0;
     const didReceiveNewerMessage =
-      previousLastMessageId !== null &&
-      lastMessageId !== null &&
-      lastMessageId !== previousLastMessageId &&
-      timelineMessages.some((message) => message.id === previousLastMessageId);
+      previousLastMessage !== null &&
+      lastMessage !== null &&
+      (lastTimestamp > previousTimestamp ||
+        (lastTimestamp === previousTimestamp &&
+          lastMessage.id.localeCompare(previousLastMessage.id) > 0));
 
-    if (previousLastMessageId === null || wasAtBottomRef.current) {
+    if (previousLastMessage === null || wasAtBottomRef.current) {
       messages.scrollTop = messages.scrollHeight;
       setHasNewerMessages(false);
     } else if (didReceiveNewerMessage) {
       setHasNewerMessages(true);
     }
-    previousLastMessageIdRef.current = lastMessageId;
+    previousLastMessageRef.current = lastMessage;
     previousLoadingMoreRef.current = instagram.loadingMore;
     captureVisibleMessageAnchor();
   }, [
@@ -767,6 +931,7 @@ const MyahInboxInstagramReplyPanel = ({
               lifecycle={activeConversation.lifecycle}
               hasNextPage={instagram.hasNextPage}
               loadingMore={instagram.loadingMore}
+              refreshing={instagram.refreshing}
               onLoadMore={handleLoadMore}
             />
           )}

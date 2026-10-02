@@ -35,6 +35,9 @@ type Message = {
   timestamp: string | null;
   hasAttachments: boolean;
   attachmentCount: number;
+  hidden?: boolean;
+  deleted?: boolean;
+  isEvent?: boolean;
 };
 
 type DeliveryState = 'UNKNOWN' | 'RECEIVED' | 'SENT' | 'DELIVERED' | 'READ';
@@ -65,6 +68,25 @@ type UnipileInstagramProjectionService = {
     direction: 'INBOUND' | 'OUTBOUND' | 'UNKNOWN';
     deliveryState: DeliveryState;
   }>;
+  applyVerifiedReaction: (input: {
+    workspace: Workspace;
+    binding: Binding;
+    chat: Chat;
+    message: Message;
+    actorProviderId: string;
+    emoji: string;
+    occurredAt: Date;
+    version: string;
+  }) => Promise<boolean>;
+  reconcileVerifiedReactionSnapshot: (input: {
+    workspace: Workspace;
+    binding: Binding;
+    chat: Chat;
+    message: Message & {
+      reactions?: Array<{ value: string; senderId: string; isSender: boolean }>;
+    };
+    observedAt: Date;
+  }) => Promise<void>;
   markCompletedMessageSync: (input: {
     workspace: Workspace;
     binding: Binding;
@@ -235,6 +257,134 @@ describe('UnipileInstagramProjectionService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('attaches a reaction to an existing exact parent without projecting another message or triage', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([]) // parent advisory lock
+      .mockResolvedValueOnce([{ id: 'conversation-id' }])
+      .mockResolvedValueOnce([{ id: 'message-id' }])
+      .mockResolvedValueOnce([{ id: 'reaction-id' }]);
+    const subject = createProjectionService(query);
+
+    expect(
+      await subject!.service.applyVerifiedReaction({
+        workspace,
+        binding,
+        chat,
+        message: inboundMessage,
+        actorProviderId: chat.attendeeProviderId,
+        emoji: '👍',
+        occurredAt: new Date('2026-09-04T12:32:00.000Z'),
+        version: 'a'.repeat(64),
+      }),
+    ).toBe(true);
+
+    expect(
+      findQuery(
+        query,
+        'FROM "' +
+          getWorkspaceSchemaName(workspace.id) +
+          '"."myahSocialMessage"',
+      )[1],
+    ).toEqual(['conversation-id', inboundMessage.messageId]);
+    expect(findQuery(query, 'INSERT INTO')[0]).toContain(
+      '"myahInboxInstagramReaction"',
+    );
+    expect(query.mock.calls.map(([sql]) => sql).join('\n')).not.toContain(
+      'INSERT INTO "' +
+        getWorkspaceSchemaName(workspace.id) +
+        '"."myahSocialMessage"',
+    );
+    expect(
+      subject!.myahInboxContactTriageService.ensureSourceContactInTransaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('refuses hidden or deleted reaction parents even if an old local row exists', async () => {
+    const query = jest.fn().mockResolvedValue([{ id: 'stored-id' }]);
+    const subject = createProjectionService(query);
+
+    await expect(
+      subject!.service.applyVerifiedReaction({
+        workspace,
+        binding,
+        chat,
+        message: { ...inboundMessage, hidden: true },
+        actorProviderId: chat.attendeeProviderId,
+        emoji: '👍',
+        occurredAt: new Date(),
+        version: 'a'.repeat(64),
+      }),
+    ).rejects.toThrow();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('removes a stale reaction only after a later explicit empty provider snapshot', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'conversation-id' }])
+      .mockResolvedValueOnce([{ id: 'message-id' }])
+      .mockResolvedValueOnce([
+        {
+          id: 'reaction-id',
+          emoji: '👍',
+          version: 'a'.repeat(64),
+          occurredAt: new Date('2026-09-04T12:00:00.000Z'),
+        },
+      ])
+      .mockResolvedValueOnce([{ id: 'reaction-id' }]);
+    const subject = createProjectionService(query);
+    await subject!.service.reconcileVerifiedReactionSnapshot({
+      workspace,
+      binding,
+      chat,
+      message: { ...inboundMessage, reactions: [] },
+      observedAt: new Date('2026-09-04T12:05:00.000Z'),
+    });
+
+    expect(findQuery(query, 'DELETE FROM')[0]).toContain(
+      '"myahInboxInstagramReaction"',
+    );
+    expect(findQuery(query, 'DELETE FROM')[1]).toContain('a'.repeat(64));
+  });
+
+  it('does not infer removal from a missing list or a lagging immediate snapshot', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'conversation-id' }])
+      .mockResolvedValueOnce([{ id: 'message-id' }])
+      .mockResolvedValueOnce([
+        {
+          id: 'reaction-id',
+          emoji: '👍',
+          version: 'a'.repeat(64),
+          occurredAt: new Date('2026-09-04T12:00:00.000Z'),
+        },
+      ]);
+    const subject = createProjectionService(query);
+    const base = {
+      workspace,
+      binding,
+      chat,
+      observedAt: new Date('2026-09-04T12:00:30.000Z'),
+    };
+
+    await subject!.service.reconcileVerifiedReactionSnapshot({
+      ...base,
+      message: inboundMessage,
+    });
+    expect(query).not.toHaveBeenCalled();
+    await subject!.service.reconcileVerifiedReactionSnapshot({
+      ...base,
+      message: { ...inboundMessage, reactions: [] },
+    });
+    expect(
+      query.mock.calls.some(([sql]) => String(sql).includes('DELETE FROM')),
+    ).toBe(false);
   });
 
   it('inserts a verified one-to-one Instagram chat under an account-scoped advisory lock', async () => {

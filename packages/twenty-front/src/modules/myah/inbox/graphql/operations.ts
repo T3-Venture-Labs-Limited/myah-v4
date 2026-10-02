@@ -166,6 +166,7 @@ const MYAH_INBOX_CONTACT_FIELDS = gql`
       isAvailable
       state
       needsAttention
+      reactionNeedsAttention
       conversations {
         id
         providerConversationId
@@ -266,6 +267,9 @@ export const GET_MYAH_INBOX_INSTAGRAM_MESSAGES = gql`
           createdAt
           hasAttachments
           attachmentCount
+          reactionEmoji
+          reactionActorLabel
+          reactionVersion
         }
       }
       pageInfo {
@@ -273,6 +277,14 @@ export const GET_MYAH_INBOX_INSTAGRAM_MESSAGES = gql`
         endCursor
       }
     }
+  }
+`;
+
+export const ACKNOWLEDGE_MYAH_INBOX_INSTAGRAM_REACTION = gql`
+  mutation AcknowledgeMyahInboxInstagramReaction(
+    $input: AcknowledgeMyahInboxInstagramReactionInput!
+  ) {
+    acknowledgeMyahInboxInstagramReaction(input: $input)
   }
 `;
 

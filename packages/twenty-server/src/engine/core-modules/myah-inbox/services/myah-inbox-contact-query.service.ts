@@ -107,6 +107,7 @@ type ContactRaw = {
   latestEmailThreadId: string | null;
   emailNeedsAttention: boolean;
   instagramNeedsAttention: boolean;
+  reactionNeedsAttention: boolean;
   triageIsAvailable: boolean;
   triageCapabilityAvailable?: boolean;
   triageInboxOwnerId: string | null;
@@ -393,13 +394,14 @@ export class MyahInboxContactQueryService {
                 .addSelect('social_message."conversationId"', 'conversationId')
                 .addSelect('social_message.text', 'text')
                 .addSelect('social_message.direction', 'direction')
+                .addSelect('social_message.provider', 'provider')
                 .addSelect(
                   'social_message."providerCreatedAt"',
                   'providerCreatedAt',
                 )
                 .addSelect('social_message."createdAt"', 'createdAt')
                 .where('social_message."deletedAt" IS NULL'),
-            `SELECT NULL::uuid AS id, NULL::uuid AS "conversationId", NULL::text AS text, NULL::text AS direction, NULL::timestamptz AS "providerCreatedAt", NULL::timestamptz AS "createdAt" WHERE FALSE`,
+            `SELECT NULL::uuid AS id, NULL::uuid AS "conversationId", NULL::text AS text, NULL::text AS direction, NULL::text AS provider, NULL::timestamptz AS "providerCreatedAt", NULL::timestamptz AS "createdAt" WHERE FALSE`,
           ),
         ];
         const parameters: unknown[] = [
@@ -532,13 +534,18 @@ export class MyahInboxContactQueryService {
         // They keep Instagram and exact Email lookups, never guessed responses.
         const [triageRelations] = (await dataSource.query(
           `SELECT to_regclass($1) IS NOT NULL AS "exists",
+            to_regclass($2) IS NOT NULL AS "reactionReady",
             to_regclass('core."myahCampaignReplyEvidence"') IS NOT NULL AS "replyEvidenceReady",
             to_regclass('core."myahComposeReplyEvidence"') IS NOT NULL AS "composeEvidenceReady"`,
-          [`${workspaceSchemaName}."myahInboxTriageMigration"`],
+          [
+            `${workspaceSchemaName}."myahInboxTriageMigration"`,
+            `${workspaceSchemaName}."myahInboxInstagramReaction"`,
+          ],
           undefined,
           { shouldBypassPermissionChecks: true },
         )) as Array<{
           exists: boolean;
+          reactionReady: boolean;
           replyEvidenceReady: boolean;
           composeEvidenceReady: boolean;
         }>;
@@ -585,6 +592,23 @@ export class MyahInboxContactQueryService {
           !this.twentyConfigService.get('MYAH_INBOX_RESPONSE_FOCUS_ENABLED')
             ? 'visible_email_messages'
             : 'response_email_messages';
+        const unseenReactionsSql =
+          triageRelations.reactionReady &&
+          socialConversationRepository &&
+          socialMessageRepository
+            ? `SELECT DISTINCT message."conversationId"
+  FROM readable_social_messages message
+  INNER JOIN readable_social_conversations conversation
+    ON conversation.id = message."conversationId" AND conversation.provider = 'UNIPILE'
+  INNER JOIN "${workspaceSchemaName}"."myahSocialConversation" source
+    ON source.id = conversation.id AND source."deletedAt" IS NULL
+  INNER JOIN "${workspaceSchemaName}"."myahInboxInstagramReaction" reaction
+    ON reaction."messageRecordId" = message.id
+   AND reaction."conversationRecordId" = conversation.id
+   AND reaction."actorProviderId" = source."recipientIgsid"
+  WHERE message.provider = 'UNIPILE'
+    AND reaction."viewedVersion" IS DISTINCT FROM reaction."version"`
+            : 'SELECT NULL::uuid AS "conversationId" WHERE FALSE';
         const sql = `WITH request_scope AS (
   SELECT $1::uuid AS "workspaceId", $2::uuid AS "userWorkspaceId"
 ),
@@ -685,6 +709,9 @@ latest_inbound_instagram_by_conversation AS (
   WHERE message.direction = 'INBOUND'
   ORDER BY message."conversationId", COALESCE(message."providerCreatedAt", message."createdAt") DESC, message.id DESC
 ),
+unseen_reactions_by_conversation AS (
+  ${unseenReactionsSql}
+),
 email_source_rows AS (
   SELECT
     CASE WHEN creator.id IS NULL THEN 'email-thread' ELSE 'creator' END AS "identityKind",
@@ -710,6 +737,7 @@ email_source_rows AS (
     NULL::text AS "recipientUsername",
     NULL::text AS "recipientDisplayName",
     NULL::text AS "instagramDirection",
+    FALSE AS "reactionNeedsAttention",
     CONCAT_WS(' ', creator.name, latest."searchSubject", latest."searchBody", latest.sender) AS "searchText"
   FROM readable_threads thread
   INNER JOIN latest_email_by_thread latest
@@ -743,12 +771,15 @@ instagram_source_rows AS (
     conversation."recipientUsername",
     conversation."recipientDisplayName",
     latest.direction::text AS "instagramDirection",
+    (unseen."conversationId" IS NOT NULL) AS "reactionNeedsAttention",
     CONCAT_WS(' ', creator.name, conversation."recipientUsername", conversation."recipientDisplayName", latest.preview) AS "searchText"
   FROM readable_social_conversations conversation
   LEFT JOIN latest_instagram_by_conversation latest
     ON latest."conversationId" = conversation.id
   LEFT JOIN latest_inbound_instagram_by_conversation inbound
     ON inbound."conversationId" = conversation.id
+  LEFT JOIN unseen_reactions_by_conversation unseen
+    ON unseen."conversationId" = conversation.id
   LEFT JOIN readable_creators creator ON creator.id = conversation."creatorId"
 ),
 all_source_rows AS (
@@ -896,7 +927,9 @@ instagram_aggregation AS (
     ) ORDER BY source."activityAt" DESC, source."sourceOrderingKey" DESC)
       FILTER (WHERE source."instagramConversationId" IS NOT NULL) AS "instagramConversations",
     BOOL_OR(source."instagramDirection" = 'INBOUND')
-      FILTER (WHERE source."instagramConversationId" IS NOT NULL) AS "instagramNeedsAttention"
+      FILTER (WHERE source."instagramConversationId" IS NOT NULL) AS "instagramNeedsAttention",
+    BOOL_OR(source."reactionNeedsAttention")
+      FILTER (WHERE source."instagramConversationId" IS NOT NULL) AS "reactionNeedsAttention"
   FROM effective_source_rows source
   GROUP BY source."identityKind", source."identityRecordId"
 ),
@@ -943,6 +976,7 @@ contact AS (
     email."latestEmailThreadId",
     COALESCE(email."emailNeedsAttention", FALSE) AS "emailNeedsAttention",
     COALESCE(instagram."instagramNeedsAttention", FALSE) AS "instagramNeedsAttention",
+    COALESCE(instagram."reactionNeedsAttention", FALSE) AS "reactionNeedsAttention",
     COALESCE(instagram."instagramConversations", '[]'::jsonb) AS "instagramConversations"
   FROM latest_source latest
   LEFT JOIN latest_inbound_source inbound
@@ -1036,6 +1070,7 @@ ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderi
     const emailThreadIds = row.emailThreadIds ?? [];
     const emailNeedsAttention = Boolean(row.emailNeedsAttention);
     const instagramNeedsAttention = Boolean(row.instagramNeedsAttention);
+    const reactionNeedsAttention = Boolean(row.reactionNeedsAttention);
     const node: MyahInboxContactSummary = {
       id: encodeMyahInboxContactId({
         workspaceId,
@@ -1059,9 +1094,11 @@ ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderi
       },
       preview: row.preview,
       sender: row.sender,
-      needsAttention: row.triageIsAvailable
-        ? row.triageInboxState === MyahInboxState.NEEDS_REPLY
-        : emailNeedsAttention || instagramNeedsAttention,
+      needsAttention:
+        reactionNeedsAttention ||
+        (row.triageIsAvailable
+          ? row.triageInboxState === MyahInboxState.NEEDS_REPLY
+          : emailNeedsAttention || instagramNeedsAttention),
       triage: {
         isAvailable: Boolean(row.triageIsAvailable),
         inboxOwnerId: row.triageInboxOwnerId ?? null,
@@ -1089,6 +1126,7 @@ ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderi
               ? MyahInboxInstagramChannelState.READY
               : MyahInboxInstagramChannelState.AMBIGUOUS,
         needsAttention: instagramNeedsAttention,
+        reactionNeedsAttention,
         conversations,
       },
     };

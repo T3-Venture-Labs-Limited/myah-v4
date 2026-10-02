@@ -99,6 +99,7 @@ type UnipileInstagramMessage = {
   isEvent: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
+  reactions?: Array<{ value: string; senderId: string; isSender: boolean }>;
 };
 
 type UnipileListMessagesInput = {
@@ -1480,6 +1481,9 @@ describe('UnipileV1ClientService', () => {
             sender_id: 'instagram-user-456',
             is_sender: 1,
             text: null,
+            reactions: [
+              { value: '👍', sender_id: 'creator-id', is_sender: false },
+            ],
             attachments: [
               {
                 id: 'unipile-attachment-123',
@@ -1529,6 +1533,7 @@ describe('UnipileV1ClientService', () => {
       isEvent: false,
       hasAttachments: true,
       attachmentCount: 1,
+      reactions: [{ value: '👍', senderId: 'creator-id', isSender: false }],
     });
     expect(JSON.stringify(message)).not.toContain(providerAttachmentUrl);
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -1550,6 +1555,83 @@ describe('UnipileV1ClientService', () => {
       'fetch',
     ]);
   });
+
+  it.each([
+    ['list', 'malformed'],
+    ['list', 'oversized'],
+    ['get', 'malformed'],
+    ['get', 'oversized'],
+  ] as const)(
+    'continues %s message sync when optional reaction evidence is %s',
+    async (operation, evidence) => {
+      const clientServiceModule = loadClientServiceModule();
+
+      expect(clientServiceModule).toBeDefined();
+      if (!clientServiceModule) return;
+
+      const providerMessage = {
+        object: 'Message',
+        id: 'unipile-message-123',
+        account_id: 'unipile-account-123',
+        chat_id: 'unipile-chat-123',
+        sender_id: 'instagram-user-456',
+        text: 'Still sync this message',
+        attachments: [],
+        timestamp: '2026-09-03T12:15:00.000Z',
+        reactions: Array.from(
+          { length: evidence === 'oversized' ? 51 : 1 },
+          () => ({
+            value: '👍',
+            sender_id: 'creator-id',
+            is_sender: evidence === 'malformed' ? 'not-a-boolean' : false,
+          }),
+        ),
+      };
+      const fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve(
+            operation === 'get'
+              ? providerMessage
+              : {
+                  object: 'MessageList',
+                  items: [providerMessage],
+                  cursor: null,
+                },
+          ),
+      });
+      const service = new clientServiceModule.UnipileV1ClientService(
+        {
+          assertEnabled: jest.fn(),
+          config: { apiBaseUrl: 'https://api49.unipile.com:17981/api/v1/' },
+        },
+        { get: jest.fn(() => 'synthetic-unipile-api-key') },
+        fetch,
+      );
+      const message =
+        operation === 'get'
+          ? await service.getMessage?.({
+              accountId: 'unipile-account-123',
+              chatId: 'unipile-chat-123',
+              messageId: 'unipile-message-123',
+            })
+          : (
+              await service.listMessages({
+                accountId: 'unipile-account-123',
+                chatId: 'unipile-chat-123',
+                cursor: null,
+                after: '2026-09-03T12:15:00.000Z',
+                limit: 25,
+              })
+            ).messages[0];
+
+      expect(message).toMatchObject({
+        messageId: 'unipile-message-123',
+        text: 'Still sync this message',
+      });
+      expect(message).not.toHaveProperty('reactions');
+    },
+  );
 
   it.each([
     [
