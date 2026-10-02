@@ -1,16 +1,16 @@
 import { ToolRegistryService } from 'src/engine/core-modules/tool-provider/services/tool-registry.service';
 
-const BRAND_BRAIN_TOOL_NAME = 'app_brand_brain_get_context';
+const NATIVE_TOOL_NAME = 'get_myah_inbox_thread_context';
 
-const descriptor = (category: 'BRAND_BRAIN' | 'LOGIC_FUNCTION') => ({
-  name: BRAND_BRAIN_TOOL_NAME,
-  label: 'Get Brand Brain Context',
-  description: 'Read Brand Brain context.',
+const descriptor = (category: 'MYAH_INBOX' | 'LOGIC_FUNCTION') => ({
+  name: NATIVE_TOOL_NAME,
+  label: 'Get Inbox context',
+  description: 'Read selected Inbox context.',
   inputSchema: { type: 'object', properties: {} },
   category,
   executionRef:
-    category === 'BRAND_BRAIN'
-      ? ({ kind: 'static', toolId: BRAND_BRAIN_TOOL_NAME } as const)
+    category === 'MYAH_INBOX'
+      ? ({ kind: 'static', toolId: NATIVE_TOOL_NAME } as const)
       : ({
           kind: 'logic_function',
           logicFunctionUniversalIdentifier: 'legacy-function-id',
@@ -21,7 +21,7 @@ const provider = ({
   category,
   available = true,
 }: {
-  category: 'BRAND_BRAIN' | 'LOGIC_FUNCTION';
+  category: 'MYAH_INBOX' | 'LOGIC_FUNCTION';
   available?: boolean;
 }) => ({
   category,
@@ -37,8 +37,8 @@ describe('ToolRegistryService', () => {
     rolePermissionConfig: { shouldBypassPermissionChecks: true as const },
   };
 
-  it('keeps the native Brand Brain descriptor when a legacy logic function has the same name', async () => {
-    const nativeProvider = provider({ category: 'BRAND_BRAIN' });
+  it('keeps the native descriptor when a legacy logic function has the same name', async () => {
+    const nativeProvider = provider({ category: 'MYAH_INBOX' });
     const legacyProvider = provider({ category: 'LOGIC_FUNCTION' });
     const registry = new ToolRegistryService(
       [nativeProvider, legacyProvider] as never,
@@ -47,7 +47,7 @@ describe('ToolRegistryService', () => {
     );
 
     await expect(registry.getCatalog(context)).resolves.toEqual([
-      descriptor('BRAND_BRAIN'),
+      descriptor('MYAH_INBOX'),
     ]);
   });
 
@@ -95,11 +95,11 @@ describe('ToolRegistryService', () => {
   });
 
   it('hydrates the native implementation when eager loading colliding tools', async () => {
-    const nativeProvider = provider({ category: 'BRAND_BRAIN' });
+    const nativeProvider = provider({ category: 'MYAH_INBOX' });
     const legacyProvider = provider({ category: 'LOGIC_FUNCTION' });
     const dispatch = jest.fn().mockResolvedValue({
       success: true,
-      message: 'Brand Brain context loaded',
+      message: 'Inbox context loaded',
     });
     const registry = new ToolRegistryService(
       [nativeProvider, legacyProvider] as never,
@@ -109,20 +109,20 @@ describe('ToolRegistryService', () => {
 
     const tools = await registry.getToolsByCategories(context);
 
-    await tools[BRAND_BRAIN_TOOL_NAME]?.execute?.(
+    await tools[NATIVE_TOOL_NAME]?.execute?.(
       {},
       { toolCallId: 'tool-call-id', messages: [] },
     );
     expect(dispatch).toHaveBeenCalledWith(
-      descriptor('BRAND_BRAIN'),
+      descriptor('MYAH_INBOX'),
       {},
       context,
     );
   });
 
-  it('retains a legacy Brand Brain logic function when the native provider is unavailable', async () => {
+  it('retains a legacy logic function when the native provider is unavailable', async () => {
     const nativeProvider = provider({
-      category: 'BRAND_BRAIN',
+      category: 'MYAH_INBOX',
       available: false,
     });
     const legacyProvider = provider({ category: 'LOGIC_FUNCTION' });

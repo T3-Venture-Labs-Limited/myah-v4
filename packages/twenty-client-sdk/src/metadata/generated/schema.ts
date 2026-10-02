@@ -1808,12 +1808,6 @@ export interface ApprovedAccessDomain {
     __typename: 'ApprovedAccessDomain'
 }
 
-export interface InviteSuggestion {
-    email: Scalars['String']
-    displayName?: Scalars['String']
-    __typename: 'InviteSuggestion'
-}
-
 export interface OnboardingStepSuccess {
     /** Boolean that confirms query was dispatched */
     success: Scalars['Boolean']
@@ -3339,7 +3333,6 @@ export interface Query {
     apiKeys: ApiKey[]
     apiKey?: ApiKey
     currentUser: User
-    getInviteSuggestions: InviteSuggestion[]
     findWorkspaceInvitations: WorkspaceInvitation[]
     getApprovedAccessDomains: ApprovedAccessDomain[]
     myConnectedAccounts: ConnectedAccountPublicDTO[]
@@ -5572,13 +5565,6 @@ export interface ApprovedAccessDomainGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface InviteSuggestionGenqlSelection{
-    email?: boolean | number
-    displayName?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface OnboardingStepSuccessGenqlSelection{
     /** Boolean that confirms query was dispatched */
     success?: boolean | number
@@ -7250,7 +7236,6 @@ export interface QueryGenqlSelection{
     apiKeys?: ApiKeyGenqlSelection
     apiKey?: (ApiKeyGenqlSelection & { __args: {input: GetApiKeyInput} })
     currentUser?: UserGenqlSelection
-    getInviteSuggestions?: InviteSuggestionGenqlSelection
     findWorkspaceInvitations?: WorkspaceInvitationGenqlSelection
     getApprovedAccessDomains?: ApprovedAccessDomainGenqlSelection
     myConnectedAccounts?: ConnectedAccountPublicDTOGenqlSelection
@@ -9306,14 +9291,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isApprovedAccessDomain = (obj?: { __typename?: any } | null): obj is ApprovedAccessDomain => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isApprovedAccessDomain"')
       return ApprovedAccessDomain_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const InviteSuggestion_possibleTypes: string[] = ['InviteSuggestion']
-    export const isInviteSuggestion = (obj?: { __typename?: any } | null): obj is InviteSuggestion => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isInviteSuggestion"')
-      return InviteSuggestion_possibleTypes.includes(obj.__typename)
     }
 
 

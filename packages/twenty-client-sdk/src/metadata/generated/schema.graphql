@@ -2186,11 +2186,6 @@ type ApprovedAccessDomain {
   createdAt: DateTime!
 }
 
-type InviteSuggestion {
-  email: String!
-  displayName: String
-}
-
 type OnboardingStepSuccess {
   """Boolean that confirms query was dispatched"""
   success: Boolean!
@@ -3689,7 +3684,6 @@ type Query {
   apiKeys: [ApiKey!]!
   apiKey(input: GetApiKeyInput!): ApiKey
   currentUser: User!
-  getInviteSuggestions: [InviteSuggestion!]!
   findWorkspaceInvitations: [WorkspaceInvitation!]!
   getApprovedAccessDomains: [ApprovedAccessDomain!]!
   myConnectedAccounts: [ConnectedAccountPublicDTO!]!

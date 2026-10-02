@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Native TypeScript language server (tsgo) for editors and agents (pi-lens uses it via .pi-lens.json).
+# Runs in its own memory-capped cgroup when systemd is available, so a runaway server is
+# killed on its own instead of pushing the whole machine into OOM. Override the cap with
+# TSGO_LSP_MEMORY_MAX (default 4500M; one server for twenty-server peaks around 3.5G).
+set -euo pipefail
+BIN="$(git rev-parse --show-toplevel)/node_modules/.bin/tsgo"
+if [ -n "${XDG_RUNTIME_DIR:-}" ] && command -v systemd-run >/dev/null; then
+  exec systemd-run --user --scope --quiet --collect \
+    -p MemoryMax="${TSGO_LSP_MEMORY_MAX:-4500M}" -p MemorySwapMax=0 \
+    "$BIN" --lsp --stdio
+fi
+exec "$BIN" --lsp --stdio

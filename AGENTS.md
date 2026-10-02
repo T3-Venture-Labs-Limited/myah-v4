@@ -50,15 +50,17 @@ Paths are repository-relative.
 
 Run commands from the repository root with the Node version in `.nvmrc` and the Yarn version in `package.json`.
 
+`scripts/myah-dev` runs a complete, isolated environment for the current worktree (its own Postgres and Redis containers, API, worker and frontend on worktree-specific ports):
+
 ```bash
-yarn install
-yarn nx database:reset twenty-server   # create schema and seed a dev workspace (destroys local data)
-yarn start                             # API, frontend and worker together
+scripts/myah-dev up           # start; the first run creates the schema and seeds a demo workspace
+scripts/myah-dev up --reset   # recreate the database and reseed
+scripts/myah-dev status       # URLs, login and process state
+scripts/myah-dev logs api     # follow api, worker or front logs
+scripts/myah-dev down         # stop everything and delete this environment's data
 ```
 
-To run them separately: `yarn nx start twenty-server`, `yarn nx start twenty-front`, `yarn nx worker twenty-server`.
-
-Services (PostgreSQL, Redis) and environment variables: `packages/twenty-docker/docker-compose.dev.yml`, `packages/twenty-server/.env.example`, `packages/twenty-front/.env.example`.
+Login: `tim@apple.dev` / `tim@apple.dev`. Instagram, Gmail and Microsoft providers are disabled and email goes to the logger driver, so nothing is sent. Optional extra server variables (for example AI provider keys) go in `~/.config/myah-dev/env`. Local data is disposable.
 
 ## Tests and checks
 
@@ -69,3 +71,5 @@ yarn workspace twenty-shared exec tsgo --noEmit -p ../../packages/twenty-server/
 ```
 
 Use the same commands with `twenty-front` or `twenty-shared` for those packages. Lint includes formatting. `lint:diff-with-main` only checks committed changes.
+
+For fast type feedback while editing, the language server `scripts/tsgo-lsp` (native `tsgo --lsp`, memory-capped; used by pi-lens through `.pi-lens.json`) checks an open file in seconds. Server and front code import `twenty-shared` from its build output, so if type errors mention missing `twenty-shared` exports, run `yarn nx build twenty-shared` (`scripts/myah-dev up` does this).
