@@ -5,11 +5,7 @@ import { SettingsCard } from '@/settings/components/SettingsCard';
 import { useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import {
-  IconBrandInstagram,
-  IconCalendarEvent,
-  IconMailCog,
-} from 'twenty-ui/icon';
+import { IconBrandInstagram, IconMailCog } from 'twenty-ui/icon';
 import { H2Title } from 'twenty-ui/typography';
 import { Section } from 'twenty-ui/layout';
 import { UndecoratedLink } from 'twenty-ui/navigation';
@@ -41,7 +37,7 @@ export const SettingsAccountsSettingsSection = () => {
     <Section>
       <H2Title
         title={t`Settings`}
-        description={t`Configure your emails and calendar settings.`}
+        description={t`Configure your email and Instagram settings.`}
       />
       <StyledCardsContainer>
         <StyledCardLinkSlot>
@@ -55,20 +51,6 @@ export const SettingsAccountsSettingsSection = () => {
               }
               title={t`Emails`}
               description={t`Set email visibility, manage your blocklist and more.`}
-            />
-          </UndecoratedLink>
-        </StyledCardLinkSlot>
-        <StyledCardLinkSlot>
-          <UndecoratedLink to={getSettingsPath(SettingsPath.AccountsCalendars)}>
-            <SettingsCard
-              Icon={
-                <IconCalendarEvent
-                  size={theme.icon.size.lg}
-                  stroke={theme.icon.stroke.sm}
-                />
-              }
-              title={t`Calendar`}
-              description={t`Configure and customize your calendar preferences.`}
             />
           </UndecoratedLink>
         </StyledCardLinkSlot>

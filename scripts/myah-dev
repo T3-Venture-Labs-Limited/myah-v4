@@ -40,11 +40,27 @@ port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
 running() { [ -f "$STATE/$1.pid" ] && kill -0 "$(cat "$STATE/$1.pid")" 2>/dev/null; }
 
+# Per-process memory caps (override with MYAH_DEV_MEM_API/WORKER/FRONT). Each process runs
+# in its own systemd scope so hitting a cap kills only that process, never the terminal or
+# agent session that started it.
+mem_cap() {
+  case $1 in
+    api) echo "${MYAH_DEV_MEM_API:-7G}" ;;
+    worker) echo "${MYAH_DEV_MEM_WORKER:-2G}" ;;
+    front) echo "${MYAH_DEV_MEM_FRONT:-6G}" ;;
+  esac
+}
+
 start_bg() { # name, command...
   local name=$1; shift
   running "$name" && return 0
   cd "$ROOT"
-  setsid nohup "$@" >"$STATE/$name.log" 2>&1 </dev/null &
+  local scope=()
+  if [ -n "${XDG_RUNTIME_DIR:-}" ] && command -v systemd-run >/dev/null; then
+    scope=(systemd-run --user --scope --quiet --collect --unit="myah-dev-$NAME-$name-$$"
+      -p MemoryMax="$(mem_cap "$name")" -p MemorySwapMax=0)
+  fi
+  "${scope[@]}" setsid nohup "$@" >"$STATE/$name.log" 2>&1 </dev/null &
   echo $! >"$STATE/$name.pid"
 }
 

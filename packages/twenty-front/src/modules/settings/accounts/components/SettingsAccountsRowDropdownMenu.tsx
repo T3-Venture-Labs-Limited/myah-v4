@@ -17,7 +17,6 @@ import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   IconAt,
-  IconCalendarEvent,
   IconDotsVertical,
   IconMail,
   IconPlayerPlay,
@@ -110,14 +109,6 @@ export const SettingsAccountsRowDropdownMenu = ({
                 text={t`Emails settings`}
                 onClick={() => {
                   navigate(SettingsPath.AccountsEmails);
-                  closeDropdown(dropdownId);
-                }}
-              />
-              <MenuItem
-                LeftIcon={IconCalendarEvent}
-                text={t`Calendar settings`}
-                onClick={() => {
-                  navigate(SettingsPath.AccountsCalendars);
                   closeDropdown(dropdownId);
                 }}
               />
