@@ -46,9 +46,6 @@ export type MyahInboxCampaignReplyContext = {
   icpGoal: string | null;
   agent: {
     campaignBrief: string | null;
-    communicationGuidelines: string | null;
-    replyRules: string | null;
-    escalationBoundaries: string | null;
     additionalNotes: string | null;
   };
 };
@@ -103,9 +100,6 @@ type MyahInboxReplyBriefingCampaignRecord = ObjectLiteral & {
   objective: string | null;
   icpGoal: string | null;
   campaignBrief: MyahInboxReplyBriefingRichText;
-  communicationGuidelines: MyahInboxReplyBriefingRichText;
-  replyRules: MyahInboxReplyBriefingRichText;
-  escalationBoundaries: MyahInboxReplyBriefingRichText;
   additionalNotes: MyahInboxReplyBriefingRichText;
   emailSignature: MyahInboxReplyBriefingRichText;
 };
@@ -160,9 +154,6 @@ const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_FIELDS = [
   'objective',
   'icpGoal',
   'campaignBrief',
-  'communicationGuidelines',
-  'replyRules',
-  'escalationBoundaries',
   'additionalNotes',
   'emailSignature',
 ] as const satisfies readonly (keyof MyahInboxReplyBriefingCampaignRecord)[];
@@ -170,9 +161,6 @@ const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_MARKDOWN_COLUMN_BY_FIELD: Partial<
   Record<keyof MyahInboxReplyBriefingCampaignRecord, string>
 > = {
   campaignBrief: 'campaignBriefMarkdown',
-  communicationGuidelines: 'communicationGuidelinesMarkdown',
-  replyRules: 'replyRulesMarkdown',
-  escalationBoundaries: 'escalationBoundariesMarkdown',
   additionalNotes: 'additionalNotesMarkdown',
   emailSignature: 'emailSignatureMarkdown',
 };
@@ -589,18 +577,6 @@ export class MyahInboxReplyBriefingService {
                 agent: {
                   campaignBrief: truncateReplyBriefingValue(
                     campaignRecord.campaignBrief?.markdown ?? null,
-                    MYAH_INBOX_REPLY_BRIEFING_MAX_AGENT_RICH_TEXT_LENGTH,
-                  ),
-                  communicationGuidelines: truncateReplyBriefingValue(
-                    campaignRecord.communicationGuidelines?.markdown ?? null,
-                    MYAH_INBOX_REPLY_BRIEFING_MAX_AGENT_RICH_TEXT_LENGTH,
-                  ),
-                  replyRules: truncateReplyBriefingValue(
-                    campaignRecord.replyRules?.markdown ?? null,
-                    MYAH_INBOX_REPLY_BRIEFING_MAX_AGENT_RICH_TEXT_LENGTH,
-                  ),
-                  escalationBoundaries: truncateReplyBriefingValue(
-                    campaignRecord.escalationBoundaries?.markdown ?? null,
                     MYAH_INBOX_REPLY_BRIEFING_MAX_AGENT_RICH_TEXT_LENGTH,
                   ),
                   additionalNotes: truncateReplyBriefingValue(

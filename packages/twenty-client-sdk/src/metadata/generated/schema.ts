@@ -2778,6 +2778,39 @@ export interface PlaceDetailsResult {
     __typename: 'PlaceDetailsResult'
 }
 
+export interface MyahAgent {
+    tone?: Scalars['String']
+    responseLength?: Scalars['String']
+    language?: Scalars['String']
+    brandInformation?: Scalars['String']
+    replyRules?: Scalars['String']
+    escalationBoundaries?: Scalars['String']
+    sendingMode: MyahAgentSendingMode
+    sendingModeEnabledByName?: Scalars['String']
+    sendingModeEnabledAt?: Scalars['DateTime']
+    __typename: 'MyahAgent'
+}
+
+export type MyahAgentSendingMode = 'DRAFT_FOR_APPROVAL' | 'SEND_AUTOMATICALLY'
+
+export interface MyahCampaignInstagramAccountOption {
+    id: Scalars['UUID']
+    username?: Scalars['String']
+    status?: Scalars['String']
+    __typename: 'MyahCampaignInstagramAccountOption'
+}
+
+export interface MyahCampaignAgentSetting {
+    campaignId: Scalars['UUID']
+    preferredChannel: MyahCampaignPreferredChannel
+    requireReplyApproval: Scalars['Boolean']
+    instagramAccountId?: Scalars['UUID']
+    instagramAccountOptions: MyahCampaignInstagramAccountOption[]
+    __typename: 'MyahCampaignAgentSetting'
+}
+
+export type MyahCampaignPreferredChannel = 'INSTAGRAM' | 'EMAIL' | 'NO_PREFERENCE'
+
 export interface AgentMessagePart {
     id: Scalars['UUID']
     messageId: Scalars['UUID']
@@ -3403,6 +3436,8 @@ export interface Query {
     getToolInputSchema?: Scalars['JSON']
     webhooks: Webhook[]
     webhook?: Webhook
+    myahAgent: MyahAgent
+    myahCampaignAgentSetting: MyahCampaignAgentSetting
     getActionApprovalProposal: ActionApprovalProposal
     getActionExecutionReceipt?: ActionExecutionReceipt
     myMessageFolders: MessageFolder[]
@@ -3663,6 +3698,8 @@ export interface Mutation {
     updateWebhook: Webhook
     deleteWebhook: Webhook
     runAgent: RunAgentResult
+    updateMyahAgent: MyahAgent
+    updateMyahCampaignAgentSetting: MyahCampaignAgentSetting
     updateMessageFolder: MessageFolder
     updateMessageFolders: MessageFolder[]
     updateCalendarChannel: CalendarChannel
@@ -6658,6 +6695,38 @@ export interface PlaceDetailsResultGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface MyahAgentGenqlSelection{
+    tone?: boolean | number
+    responseLength?: boolean | number
+    language?: boolean | number
+    brandInformation?: boolean | number
+    replyRules?: boolean | number
+    escalationBoundaries?: boolean | number
+    sendingMode?: boolean | number
+    sendingModeEnabledByName?: boolean | number
+    sendingModeEnabledAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahCampaignInstagramAccountOptionGenqlSelection{
+    id?: boolean | number
+    username?: boolean | number
+    status?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahCampaignAgentSettingGenqlSelection{
+    campaignId?: boolean | number
+    preferredChannel?: boolean | number
+    requireReplyApproval?: boolean | number
+    instagramAccountId?: boolean | number
+    instagramAccountOptions?: MyahCampaignInstagramAccountOptionGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface AgentMessagePartGenqlSelection{
     id?: boolean | number
     messageId?: boolean | number
@@ -7337,6 +7406,8 @@ export interface QueryGenqlSelection{
     getToolInputSchema?: { __args: {toolName: Scalars['String']} }
     webhooks?: WebhookGenqlSelection
     webhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
+    myahAgent?: MyahAgentGenqlSelection
+    myahCampaignAgentSetting?: (MyahCampaignAgentSettingGenqlSelection & { __args: {input: MyahCampaignAgentSettingInput} })
     getActionApprovalProposal?: (ActionApprovalProposalGenqlSelection & { __args: {bindingId: Scalars['UUID']} })
     getActionExecutionReceipt?: (ActionExecutionReceiptGenqlSelection & { __args: {bindingId: Scalars['UUID']} })
     myMessageFolders?: (MessageFolderGenqlSelection & { __args?: {messageChannelId?: (Scalars['UUID'] | null)} })
@@ -7406,6 +7477,8 @@ id: Scalars['ID']}
 export interface AgentIdInput {
 /** The id of the agent. */
 id: Scalars['UUID']}
+
+export interface MyahCampaignAgentSettingInput {campaignId: Scalars['UUID']}
 
 export interface EventLogQueryInput {table: EventLogTable,filters?: (EventLogFiltersInput | null),first?: (Scalars['Int'] | null),after?: (Scalars['String'] | null)}
 
@@ -7648,6 +7721,8 @@ export interface MutationGenqlSelection{
     updateWebhook?: (WebhookGenqlSelection & { __args: {input: UpdateWebhookInput} })
     deleteWebhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
     runAgent?: (RunAgentResultGenqlSelection & { __args: {input: RunAgentInput} })
+    updateMyahAgent?: (MyahAgentGenqlSelection & { __args: {input: UpdateMyahAgentInput} })
+    updateMyahCampaignAgentSetting?: (MyahCampaignAgentSettingGenqlSelection & { __args: {input: UpdateMyahCampaignAgentSettingInput} })
     updateMessageFolder?: (MessageFolderGenqlSelection & { __args: {input: UpdateMessageFolderInput} })
     updateMessageFolders?: (MessageFolderGenqlSelection & { __args: {input: UpdateMessageFoldersInput} })
     updateCalendarChannel?: (CalendarChannelGenqlSelection & { __args: {input: UpdateCalendarChannelInput} })
@@ -8096,6 +8171,10 @@ update: UpdateWebhookInputUpdates}
 export interface UpdateWebhookInputUpdates {targetUrl?: (Scalars['String'] | null),operations?: (Scalars['String'][] | null),description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
 
 export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId?: (Scalars['String'] | null)}
+
+export interface UpdateMyahAgentInput {tone?: (Scalars['String'] | null),responseLength?: (Scalars['String'] | null),language?: (Scalars['String'] | null),brandInformation?: (Scalars['String'] | null),replyRules?: (Scalars['String'] | null),escalationBoundaries?: (Scalars['String'] | null),sendingMode?: (MyahAgentSendingMode | null)}
+
+export interface UpdateMyahCampaignAgentSettingInput {campaignId: Scalars['UUID'],preferredChannel?: (MyahCampaignPreferredChannel | null),requireReplyApproval?: (Scalars['Boolean'] | null),instagramAccountId?: (Scalars['UUID'] | null)}
 
 export interface UpdateMessageFolderInput {id: Scalars['UUID'],update: UpdateMessageFolderInputUpdates}
 
@@ -10265,6 +10344,30 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
 
 
 
+    const MyahAgent_possibleTypes: string[] = ['MyahAgent']
+    export const isMyahAgent = (obj?: { __typename?: any } | null): obj is MyahAgent => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahAgent"')
+      return MyahAgent_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MyahCampaignInstagramAccountOption_possibleTypes: string[] = ['MyahCampaignInstagramAccountOption']
+    export const isMyahCampaignInstagramAccountOption = (obj?: { __typename?: any } | null): obj is MyahCampaignInstagramAccountOption => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahCampaignInstagramAccountOption"')
+      return MyahCampaignInstagramAccountOption_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MyahCampaignAgentSetting_possibleTypes: string[] = ['MyahCampaignAgentSetting']
+    export const isMyahCampaignAgentSetting = (obj?: { __typename?: any } | null): obj is MyahCampaignAgentSetting => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahCampaignAgentSetting"')
+      return MyahCampaignAgentSetting_possibleTypes.includes(obj.__typename)
+    }
+
+
+
     const AgentMessagePart_possibleTypes: string[] = ['AgentMessagePart']
     export const isAgentMessagePart = (obj?: { __typename?: any } | null): obj is AgentMessagePart => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgentMessagePart"')
@@ -11300,6 +11403,17 @@ export const enumSupportDriver = {
 export const enumCaptchaDriverType = {
    GOOGLE_RECAPTCHA: 'GOOGLE_RECAPTCHA' as const,
    TURNSTILE: 'TURNSTILE' as const
+}
+
+export const enumMyahAgentSendingMode = {
+   DRAFT_FOR_APPROVAL: 'DRAFT_FOR_APPROVAL' as const,
+   SEND_AUTOMATICALLY: 'SEND_AUTOMATICALLY' as const
+}
+
+export const enumMyahCampaignPreferredChannel = {
+   INSTAGRAM: 'INSTAGRAM' as const,
+   EMAIL: 'EMAIL' as const,
+   NO_PREFERENCE: 'NO_PREFERENCE' as const
 }
 
 export const enumCampaignOutreachAudienceExclusionReason = {

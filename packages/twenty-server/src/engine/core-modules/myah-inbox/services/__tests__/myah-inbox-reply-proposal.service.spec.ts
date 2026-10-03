@@ -142,9 +142,6 @@ const briefing: MyahInboxReplyBriefing = {
     icpGoal: 'Reach dry-skin shoppers',
     agent: {
       campaignBrief: 'Invite creators to the new hydration launch.',
-      communicationGuidelines: 'Be concise, warm, and specific.',
-      replyRules: 'Never promise unapproved compensation.',
-      escalationBoundaries: 'Escalate legal or contract questions.',
       additionalNotes: 'Confirm product shade before shipping.',
     },
   },
@@ -245,13 +242,6 @@ const createService = (
         icpGoal: briefing.campaign?.icpGoal,
         campaignBrief: {
           markdown: briefing.campaign?.agent.campaignBrief,
-        },
-        communicationGuidelines: {
-          markdown: briefing.campaign?.agent.communicationGuidelines,
-        },
-        replyRules: { markdown: briefing.campaign?.agent.replyRules },
-        escalationBoundaries: {
-          markdown: briefing.campaign?.agent.escalationBoundaries,
         },
         additionalNotes: { markdown: briefing.campaign?.agent.additionalNotes },
         emailSignature:
@@ -371,6 +361,18 @@ const createService = (
     executeInboxReplyTargetLocked: jest.fn(async (_input, run) => run()),
     getInboxReplyTargetExecutionState: jest.fn(async () => null),
   };
+  const myahAgentService = {
+    getAgentRecord: jest.fn(async () => ({
+      tone: 'Warm and friendly',
+      responseLength: 'Concise',
+      language: null,
+      brandInformation: null,
+      replyRules: 'Never promise unapproved compensation.',
+      escalationBoundaries: 'Escalate legal or contract questions.',
+      sendingMode: 'DRAFT_FOR_APPROVAL',
+      sendingModeEnabledByUserWorkspaceId: null,
+    })),
+  };
   const service = new MyahInboxReplyProposalService(
     replyBriefingService,
     actorContextService as never,
@@ -380,6 +382,7 @@ const createService = (
     managedOpenRouterModelService as never,
     replyContexts as never,
     approvals as never,
+    myahAgentService as never,
   );
 
   return {
@@ -477,6 +480,7 @@ describe('MyahInboxReplyProposalService', () => {
       'Do not claim to save, apply, or send it.',
       'Operator request',
       'Reference data — Thread history',
+      'Reference data — Brand agent guidance',
       'Reference data — Campaign guidance',
       'Reference data — Campaign relationship',
       'Reference data — Creator profile',
@@ -496,7 +500,10 @@ describe('MyahInboxReplyProposalService', () => {
     );
     expect(modelRequest).toContain('ICP goal: Reach dry-skin shoppers');
     expect(modelRequest).toContain(
-      'Reply rules and approved answers: Never promise unapproved compensation.',
+      'Reply rules: Never promise unapproved compensation.',
+    );
+    expect(modelRequest).toContain(
+      'Hand off to a human when: Escalate legal or contract questions.',
     );
     expect(modelRequest).toContain('Do not use placeholders');
     expect(modelRequest).toContain(
@@ -523,9 +530,6 @@ describe('MyahInboxReplyProposalService', () => {
 
     const campaignAgentFieldOrder = [
       'Campaign brief: Invite creators to the new hydration launch.',
-      'Communication guidelines: Be concise, warm, and specific.',
-      'Reply rules and approved answers: Never promise unapproved compensation.',
-      'Escalation boundaries: Escalate legal or contract questions.',
       'Additional notes: Confirm product shade before shipping.',
     ];
     for (const [index, field] of campaignAgentFieldOrder.entries()) {

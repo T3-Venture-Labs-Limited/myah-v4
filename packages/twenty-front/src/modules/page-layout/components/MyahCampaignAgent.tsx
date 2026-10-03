@@ -1,9 +1,8 @@
-import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import { MyahCampaignRichTextSettings } from '@/page-layout/components/MyahCampaignRichTextSettings';
+import { MyahCampaignAgentSettings } from '@/myah/agent/components/MyahCampaignAgentSettings';
 
 type MyahCampaignAgentProps = {
   campaignId: string;
@@ -13,6 +12,7 @@ type MyahCampaignAgentProps = {
 const StyledGuidanceRegion = styled.section`
   height: 100%;
   min-height: 0;
+  overflow-y: auto;
 `;
 
 const getGuidanceFocusCampaignId = (state: unknown) => {
@@ -37,47 +37,13 @@ export const MyahCampaignAgent = ({
       guidanceRegionRef.current?.focus();
   }, [campaignId, guidanceFocusCampaignId]);
 
-  const campaignAgentFields = [
-    {
-      fieldName: 'communicationGuidelines',
-      placeholder: t`Enter instructions`,
-      showFormattingControls: false,
-    },
-    {
-      fieldName: 'replyRules',
-      placeholder: t`Enter instructions`,
-      showFormattingControls: false,
-    },
-    {
-      fieldName: 'escalationBoundaries',
-      placeholder: t`Enter instructions`,
-      showFormattingControls: false,
-    },
-  ] as const;
-
   return (
     <StyledGuidanceRegion
-      aria-label="Campaign AI guidance"
+      aria-label={title}
       ref={guidanceRegionRef}
       tabIndex={-1}
     >
-      <MyahCampaignRichTextSettings
-        campaignId={campaignId}
-        description={t`Communication guidance for this Campaign. Facts and Creator Notes stay in their own scopes.`}
-        copy={{
-          saveSuccess: t`Campaign Agent settings saved.`,
-          saveError: t`Campaign Agent settings could not be saved.`,
-          unsavedChangesSubtitle: t`Your Campaign Agent changes have not been saved.`,
-        }}
-        fields={campaignAgentFields}
-        sidebar={
-          <p>
-            {t`Campaign brief and additional notes remain under Campaign, not global Creator Notes. Communication guidelines, reply rules and escalation boundaries guide drafting. Guidance does not send replies or approve commercial terms.`}
-          </p>
-        }
-        modalIdPrefix="campaign-agent-unsaved-changes"
-        title={title}
-      />
+      <MyahCampaignAgentSettings campaignId={campaignId} />
     </StyledGuidanceRegion>
   );
 };

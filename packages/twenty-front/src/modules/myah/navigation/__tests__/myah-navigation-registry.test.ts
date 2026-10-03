@@ -78,6 +78,7 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
       },
       { id: 'tasks', group: 'outreach', availability: 'available' },
       { id: 'approvals', group: 'outreach', availability: 'deferred' },
+      { id: 'agent', group: 'brand-workspace', availability: 'available' },
       {
         id: 'connected-channels',
         group: 'brand-workspace',

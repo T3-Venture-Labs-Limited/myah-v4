@@ -1,3 +1,4 @@
+import { MyahCampaignInstagramAccount } from '@/myah/agent/components/MyahCampaignInstagramAccount';
 import { MyahCampaignEmailAccounts } from '@/page-layout/components/MyahCampaignEmailAccounts';
 import { MyahCampaignExecutionControls } from '@/page-layout/components/MyahCampaignExecutionControls';
 import { MyahCampaignRichTextSettings } from '@/page-layout/components/MyahCampaignRichTextSettings';
@@ -26,7 +27,7 @@ export const MyahCampaignOperations = ({
   return (
     <MyahCampaignRichTextSettings
       campaignId={campaignId}
-      description={t`Review linked accounts, the drafting default, sender readiness, and the saved email signature.`}
+      description={t`Review linked email accounts, the Instagram account, sender readiness, and the saved email signature.`}
       title={title}
       fields={campaignOperationsFields}
       modalIdPrefix="campaign-operations-unsaved-changes"
@@ -37,12 +38,15 @@ export const MyahCampaignOperations = ({
         unsavedChangesSubtitle: t`Your Email signature changes have not been saved.`,
       }}
       contentBeforeFields={
-        <MyahCampaignEmailAccounts campaignId={campaignId} />
+        <>
+          <MyahCampaignEmailAccounts campaignId={campaignId} />
+          <MyahCampaignInstagramAccount campaignId={campaignId} />
+        </>
       }
       sidebar={
         <>
           <p>
-            {t`Email delivery settings. Instagram messages can be authored but Campaign Start sends email only. Shared mailbox policy remains authoritative.`}
+            {t`Email and Instagram delivery settings. Reply drafting, the preferred channel and approval live in the Agent tab. Shared account limits remain authoritative.`}
           </p>
           <MyahCampaignExecutionControls
             campaignId={campaignId}

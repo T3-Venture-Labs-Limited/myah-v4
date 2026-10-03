@@ -356,6 +356,7 @@ it('captures the selected context fingerprint and releases the target lock befor
     {} as never,
     contexts as never,
     approvals as never,
+    {} as never,
   );
   const generate = jest
     .spyOn(service, 'generateReplyProposal')

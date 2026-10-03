@@ -54,6 +54,7 @@ import { MessagingWebhooksModule } from 'src/modules/messaging-webhooks/messagin
 import { ConnectedAccountSyncWebhooksModule } from 'src/modules/connected-account-sync-webhooks/connected-account-sync-webhooks.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { MyahAgentModule } from 'src/engine/core-modules/myah-agent/myah-agent.module';
 import { MyahInboxModule } from 'src/engine/core-modules/myah-inbox/myah-inbox.module';
 import { MyahE2eFixtureModule } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture.module';
 import { isE2eTestFixturesEnabled } from 'src/engine/core-modules/twenty-config/utils/is-e2e-test-fixtures-enabled.util';
@@ -148,6 +149,7 @@ import { FileModule } from './file/file.module';
       inject: [TwentyConfigService],
     }),
     MetricsModule,
+    MyahAgentModule,
     MyahInboxModule,
     MyahModule,
     CampaignExecutionOrchestrationModule,
