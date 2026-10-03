@@ -573,8 +573,9 @@ export class CampaignMessageOverviewReaderService {
               AND ($6::text[] IS NULL OR (CASE
                     WHEN o.state IN ('CANCELLED','SKIPPED') THEN 'CANCELLED'
                     WHEN step.channel='INSTAGRAM' THEN (CASE
+                      WHEN receipt.state IS DISTINCT FROM 'SENT' AND receipt.state IS DISTINCT FROM 'PROVIDER_ACCEPTED'
+                        AND (o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED') OR receipt.state IS NOT NULL) THEN 'NEEDS_ATTENTION'
                       WHEN receipt.state IN ('SENT','PROVIDER_ACCEPTED') THEN 'SENT'
-                      WHEN o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED') OR receipt.state IS NOT NULL THEN 'NEEDS_ATTENTION'
                       ELSE 'SCHEDULED' END)
                     WHEN o.state IN ('HELD','UNKNOWN','IN_FLIGHT')
                       OR (o.state='SUCCEEDED'
