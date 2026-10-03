@@ -3081,6 +3081,43 @@ type PlaceDetailsResult {
   location: Location
 }
 
+type MyahAgent {
+  tone: String
+  responseLength: String
+  language: String
+  brandInformation: String
+  replyRules: String
+  escalationBoundaries: String
+  sendingMode: MyahAgentSendingMode!
+  sendingModeEnabledByName: String
+  sendingModeEnabledAt: DateTime
+}
+
+enum MyahAgentSendingMode {
+  DRAFT_FOR_APPROVAL
+  SEND_AUTOMATICALLY
+}
+
+type MyahCampaignInstagramAccountOption {
+  id: UUID!
+  username: String
+  status: String
+}
+
+type MyahCampaignAgentSetting {
+  campaignId: UUID!
+  preferredChannel: MyahCampaignPreferredChannel!
+  requireReplyApproval: Boolean!
+  instagramAccountId: UUID
+  instagramAccountOptions: [MyahCampaignInstagramAccountOption!]!
+}
+
+enum MyahCampaignPreferredChannel {
+  INSTAGRAM
+  EMAIL
+  NO_PREFERENCE
+}
+
 type AgentMessagePart {
   id: UUID!
   messageId: UUID!
@@ -3752,6 +3789,8 @@ type Query {
   getToolInputSchema(toolName: String!): JSON
   webhooks: [Webhook!]!
   webhook(id: UUID!): Webhook
+  myahAgent: MyahAgent!
+  myahCampaignAgentSetting(input: MyahCampaignAgentSettingInput!): MyahCampaignAgentSetting!
   getActionApprovalProposal(bindingId: UUID!): ActionApprovalProposal!
   getActionExecutionReceipt(bindingId: UUID!): ActionExecutionReceipt
   myMessageFolders(messageChannelId: UUID): [MessageFolder!]!
@@ -3863,6 +3902,10 @@ input LogicFunctionIdInput {
 input AgentIdInput {
   """The id of the agent."""
   id: UUID!
+}
+
+input MyahCampaignAgentSettingInput {
+  campaignId: UUID!
 }
 
 input EventLogQueryInput {
@@ -4179,6 +4222,8 @@ type Mutation {
   updateWebhook(input: UpdateWebhookInput!): Webhook!
   deleteWebhook(id: UUID!): Webhook!
   runAgent(input: RunAgentInput!): RunAgentResult!
+  updateMyahAgent(input: UpdateMyahAgentInput!): MyahAgent!
+  updateMyahCampaignAgentSetting(input: UpdateMyahCampaignAgentSettingInput!): MyahCampaignAgentSetting!
   updateMessageFolder(input: UpdateMessageFolderInput!): MessageFolder!
   updateMessageFolders(input: UpdateMessageFoldersInput!): [MessageFolder!]!
   updateCalendarChannel(input: UpdateCalendarChannelInput!): CalendarChannel!
@@ -5429,6 +5474,23 @@ input RunAgentInput {
   agentUniversalIdentifier: String!
   prompt: String!
   operationId: String
+}
+
+input UpdateMyahAgentInput {
+  tone: String
+  responseLength: String
+  language: String
+  brandInformation: String
+  replyRules: String
+  escalationBoundaries: String
+  sendingMode: MyahAgentSendingMode
+}
+
+input UpdateMyahCampaignAgentSettingInput {
+  campaignId: UUID!
+  preferredChannel: MyahCampaignPreferredChannel
+  requireReplyApproval: Boolean
+  instagramAccountId: UUID
 }
 
 input UpdateMessageFolderInput {

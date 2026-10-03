@@ -3485,6 +3485,8 @@ export type Mutation = {
   updateMessageChannel: MessageChannel;
   updateMessageFolder: MessageFolder;
   updateMessageFolders: Array<MessageFolder>;
+  updateMyahAgent: MyahAgent;
+  updateMyahCampaignAgentSetting: MyahCampaignAgentSetting;
   updateNavigationMenuItem: NavigationMenuItem;
   updateOneAgent: Agent;
   updateOneApplicationVariable: Scalars['Boolean']['output'];
@@ -4603,6 +4605,16 @@ export type MutationUpdateMessageFoldersArgs = {
 };
 
 
+export type MutationUpdateMyahAgentArgs = {
+  input: UpdateMyahAgentInput;
+};
+
+
+export type MutationUpdateMyahCampaignAgentSettingArgs = {
+  input: UpdateMyahCampaignAgentSettingInput;
+};
+
+
 export type MutationUpdateNavigationMenuItemArgs = {
   input: UpdateOneNavigationMenuItemInput;
 };
@@ -4870,6 +4882,50 @@ export type MutationVerifyEmailingDomainArgs = {
 export type MutationVerifyTwoFactorAuthenticationMethodForAuthenticatedUserArgs = {
   otp: Scalars['String']['input'];
 };
+
+export type MyahAgent = {
+  __typename?: 'MyahAgent';
+  brandInformation?: Maybe<Scalars['String']['output']>;
+  escalationBoundaries?: Maybe<Scalars['String']['output']>;
+  language?: Maybe<Scalars['String']['output']>;
+  replyRules?: Maybe<Scalars['String']['output']>;
+  responseLength?: Maybe<Scalars['String']['output']>;
+  sendingMode: MyahAgentSendingMode;
+  sendingModeEnabledAt?: Maybe<Scalars['DateTime']['output']>;
+  sendingModeEnabledByName?: Maybe<Scalars['String']['output']>;
+  tone?: Maybe<Scalars['String']['output']>;
+};
+
+export enum MyahAgentSendingMode {
+  DRAFT_FOR_APPROVAL = 'DRAFT_FOR_APPROVAL',
+  SEND_AUTOMATICALLY = 'SEND_AUTOMATICALLY'
+}
+
+export type MyahCampaignAgentSetting = {
+  __typename?: 'MyahCampaignAgentSetting';
+  campaignId: Scalars['UUID']['output'];
+  instagramAccountId?: Maybe<Scalars['UUID']['output']>;
+  instagramAccountOptions: Array<MyahCampaignInstagramAccountOption>;
+  preferredChannel: MyahCampaignPreferredChannel;
+  requireReplyApproval: Scalars['Boolean']['output'];
+};
+
+export type MyahCampaignAgentSettingInput = {
+  campaignId: Scalars['UUID']['input'];
+};
+
+export type MyahCampaignInstagramAccountOption = {
+  __typename?: 'MyahCampaignInstagramAccountOption';
+  id: Scalars['UUID']['output'];
+  status?: Maybe<Scalars['String']['output']>;
+  username?: Maybe<Scalars['String']['output']>;
+};
+
+export enum MyahCampaignPreferredChannel {
+  EMAIL = 'EMAIL',
+  INSTAGRAM = 'INSTAGRAM',
+  NO_PREFERENCE = 'NO_PREFERENCE'
+}
 
 export type NativeModelCapabilities = {
   __typename?: 'NativeModelCapabilities';
@@ -5470,6 +5526,8 @@ export type Query = {
   myConnectedAccounts: Array<ConnectedAccountPublicDto>;
   myMessageChannels: Array<MessageChannel>;
   myMessageFolders: Array<MessageFolder>;
+  myahAgent: MyahAgent;
+  myahCampaignAgentSetting: MyahCampaignAgentSetting;
   navigationMenuItem?: Maybe<NavigationMenuItem>;
   navigationMenuItems: Array<NavigationMenuItem>;
   object: Object;
@@ -5930,6 +5988,11 @@ export type QueryMyMessageChannelsArgs = {
 
 export type QueryMyMessageFoldersArgs = {
   messageChannelId?: InputMaybe<Scalars['UUID']['input']>;
+};
+
+
+export type QueryMyahCampaignAgentSettingArgs = {
+  input: MyahCampaignAgentSettingInput;
 };
 
 
@@ -6680,6 +6743,23 @@ export type UpdateMessageFolderInputUpdates = {
 export type UpdateMessageFoldersInput = {
   ids: Array<Scalars['UUID']['input']>;
   update: UpdateMessageFolderInputUpdates;
+};
+
+export type UpdateMyahAgentInput = {
+  brandInformation?: InputMaybe<Scalars['String']['input']>;
+  escalationBoundaries?: InputMaybe<Scalars['String']['input']>;
+  language?: InputMaybe<Scalars['String']['input']>;
+  replyRules?: InputMaybe<Scalars['String']['input']>;
+  responseLength?: InputMaybe<Scalars['String']['input']>;
+  sendingMode?: InputMaybe<MyahAgentSendingMode>;
+  tone?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type UpdateMyahCampaignAgentSettingInput = {
+  campaignId: Scalars['UUID']['input'];
+  instagramAccountId?: InputMaybe<Scalars['UUID']['input']>;
+  preferredChannel?: InputMaybe<MyahCampaignPreferredChannel>;
+  requireReplyApproval?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 export type UpdateNavigationMenuItemInput = {

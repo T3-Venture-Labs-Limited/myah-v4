@@ -1,3 +1,4 @@
+import { MyahAgentService } from 'src/engine/core-modules/myah-agent/services/myah-agent.service';
 import { Test } from '@nestjs/testing';
 
 import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
@@ -42,6 +43,7 @@ describe('MyahInboxToolProvider dependency graph', () => {
           inject: [MyahInboxToolProvider],
           useFactory: (provider: MyahInboxToolProvider) => [provider],
         },
+        { provide: MyahAgentService, useValue: {} },
         ...[
           MyahInboxQueryService,
           MyahInboxReplyContextService,

@@ -64,18 +64,6 @@ const allowedCampaign = {
   objective: 'Recruit trusted skincare reviewers',
   icpGoal: 'Reach dry-skin shoppers',
   campaignBrief: { markdown: 'Introduce the winter launch.', blocknote: null },
-  communicationGuidelines: {
-    markdown: 'Warm and evidence-led.',
-    blocknote: null,
-  },
-  replyRules: {
-    markdown: 'Never promise a paid deal before approval.',
-    blocknote: null,
-  },
-  escalationBoundaries: {
-    markdown: 'Escalate exclusivity requests.',
-    blocknote: null,
-  },
   additionalNotes: {
     markdown: 'Use the approved product name.',
     blocknote: null,
@@ -95,15 +83,6 @@ const SELECTED_CAMPAIGN_ENTRY_BY_COLUMN: Record<
   objective: ['objective', allowedCampaign.objective],
   icpGoal: ['icpGoal', allowedCampaign.icpGoal],
   campaignBriefMarkdown: ['campaignBrief', allowedCampaign.campaignBrief],
-  communicationGuidelinesMarkdown: [
-    'communicationGuidelines',
-    allowedCampaign.communicationGuidelines,
-  ],
-  replyRulesMarkdown: ['replyRules', allowedCampaign.replyRules],
-  escalationBoundariesMarkdown: [
-    'escalationBoundaries',
-    allowedCampaign.escalationBoundaries,
-  ],
   additionalNotesMarkdown: ['additionalNotes', allowedCampaign.additionalNotes],
   emailSignatureMarkdown: ['emailSignature', allowedCampaign.emailSignature],
 };
@@ -349,9 +328,6 @@ describe('MyahInboxReplyBriefingService', () => {
         icpGoal: 'Reach dry-skin shoppers',
         agent: {
           campaignBrief: 'Introduce the winter launch.',
-          communicationGuidelines: 'Warm and evidence-led.',
-          replyRules: 'Never promise a paid deal before approval.',
-          escalationBoundaries: 'Escalate exclusivity requests.',
           additionalNotes: 'Use the approved product name.',
         },
       },
@@ -447,9 +423,6 @@ describe('MyahInboxReplyBriefingService', () => {
         objective: true,
         icpGoal: true,
         campaignBriefMarkdown: true,
-        communicationGuidelinesMarkdown: true,
-        replyRulesMarkdown: true,
-        escalationBoundariesMarkdown: true,
         additionalNotesMarkdown: true,
         emailSignatureMarkdown: true,
       },
@@ -485,13 +458,7 @@ describe('MyahInboxReplyBriefingService', () => {
       ({ select }: { select: Record<string, unknown> }) => {
         const fields = Object.keys(select);
         const hasInstructionsField = fields.some((field) =>
-          [
-            'campaignBriefMarkdown',
-            'communicationGuidelinesMarkdown',
-            'replyRulesMarkdown',
-            'escalationBoundariesMarkdown',
-            'additionalNotesMarkdown',
-          ].includes(field),
+          ['campaignBriefMarkdown', 'additionalNotesMarkdown'].includes(field),
         );
 
         if (hasInstructionsField) {
@@ -510,9 +477,6 @@ describe('MyahInboxReplyBriefingService', () => {
         icpGoal: allowedCampaign.icpGoal,
         agent: {
           campaignBrief: null,
-          communicationGuidelines: null,
-          replyRules: null,
-          escalationBoundaries: null,
           additionalNotes: null,
         },
       },
@@ -559,10 +523,6 @@ describe('MyahInboxReplyBriefingService', () => {
           icpGoal: allowedCampaign.icpGoal,
           agent: {
             campaignBrief: allowedCampaign.campaignBrief.markdown,
-            communicationGuidelines:
-              allowedCampaign.communicationGuidelines.markdown,
-            replyRules: allowedCampaign.replyRules.markdown,
-            escalationBoundaries: allowedCampaign.escalationBoundaries.markdown,
             additionalNotes: allowedCampaign.additionalNotes.markdown,
           },
         },
