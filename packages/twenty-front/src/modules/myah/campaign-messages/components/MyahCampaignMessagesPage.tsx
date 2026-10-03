@@ -791,14 +791,16 @@ export const MyahCampaignMessagesPage = () => {
             {rows.map((row) => {
               const estimated = row.estimatedSendAt
                 ? displayTime(row.estimatedSendAt)
-                : row.eligibleAfter &&
-                    pageInfo?.horizonEndsAt &&
-                    pageInfo.forecastComplete &&
-                    row.eligibleAfter >= pageInfo.horizonEndsAt
-                  ? 'Outside 48-hour forecast'
-                  : pageInfo?.forecastComplete
-                    ? 'No estimate available'
-                    : 'Forecast pending or incomplete';
+                : row.platform === 'Instagram' && row.eligibleAfter
+                  ? 'Paced by Instagram limits'
+                  : row.eligibleAfter &&
+                      pageInfo?.horizonEndsAt &&
+                      pageInfo.forecastComplete &&
+                      row.eligibleAfter >= pageInfo.horizonEndsAt
+                    ? 'Outside 48-hour forecast'
+                    : pageInfo?.forecastComplete
+                      ? 'No estimate available'
+                      : 'Forecast pending or incomplete';
               return (
                 <tr key={row.occurrenceId}>
                   <td>
@@ -826,7 +828,10 @@ export const MyahCampaignMessagesPage = () => {
                   <td>{row.platform}</td>
                   <td>
                     <StyledCellText>
-                      {row.subject ?? 'Message unavailable'}
+                      {row.subject ??
+                        (row.platform === 'Instagram'
+                          ? 'Instagram message'
+                          : 'Message unavailable')}
                     </StyledCellText>
                     <StyledSubText>
                       {row.preview ?? 'Preview unavailable'}
@@ -834,7 +839,7 @@ export const MyahCampaignMessagesPage = () => {
                   </td>
                   <td>
                     <StyledCellText>{row.campaignName}</StyledCellText>
-                    <StyledSubText>{`Step ${row.sequenceStep} · Email`}</StyledSubText>
+                    <StyledSubText>{`Step ${row.sequenceStep} · ${row.platform}`}</StyledSubText>
                   </td>
                   <td>
                     <StyledBadge data-status={row.status}>

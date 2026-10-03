@@ -99,6 +99,36 @@ describe('MyahCampaignMessagesPage', () => {
     });
   });
 
+  it('shows an Instagram step with its handle, text, account and pacing', () => {
+    const result = queryResult();
+    result.data.campaignMessageOverview.nodes = [
+      {
+        ...result.data.campaignMessageOverview.nodes[0],
+        occurrenceId: 'instagram-occurrence',
+        recipient: '@ada.glow',
+        subject: null as unknown as string,
+        preview: 'Hey Ada! Open to a collab?',
+        sequenceStep: 2,
+        platform: 'Instagram',
+        connectedAccountLabel: '@glowco.studio' as unknown as null,
+      },
+    ];
+    mockUseQuery.mockReturnValue(result);
+
+    render(
+      <MemoryRouter initialEntries={['/myah/messages']}>
+        <MyahCampaignMessagesPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('@ada.glow')).toBeVisible();
+    expect(screen.getByText('Instagram message')).toBeVisible();
+    expect(screen.getByText('Hey Ada! Open to a collab?')).toBeVisible();
+    expect(screen.getByText('Step 2 · Instagram')).toBeVisible();
+    expect(screen.getByText('@glowco.studio')).toBeVisible();
+    expect(screen.getByText('Paced by Instagram limits')).toBeVisible();
+  });
+
   it('keeps an existing explicit date range as a custom filter', () => {
     const start = new Date(2026, 8, 21);
     const end = new Date(2026, 8, 22);

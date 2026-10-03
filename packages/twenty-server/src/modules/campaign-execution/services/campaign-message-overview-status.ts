@@ -9,6 +9,8 @@ type StatusInput = {
   occurrenceState: string;
   projectedMessageThreadId: string | null;
   providerAcceptedAt: Date | string | null;
+  stepChannel?: string | null;
+  receiptState?: string | null;
 };
 
 export const deriveCampaignMessageOverviewStatus = (
@@ -19,6 +21,19 @@ export const deriveCampaignMessageOverviewStatus = (
     input.occurrenceState === 'SKIPPED'
   )
     return 'CANCELLED';
+  // Instagram steps settle from their send receipt (MYAH-445).
+  if (input.stepChannel === 'INSTAGRAM') {
+    if (
+      input.receiptState === 'SENT' ||
+      input.receiptState === 'PROVIDER_ACCEPTED'
+    )
+      return 'SENT';
+    return ['HELD', 'UNKNOWN', 'IN_FLIGHT', 'SUCCEEDED'].includes(
+      input.occurrenceState,
+    ) || input.receiptState != null
+      ? 'NEEDS_ATTENTION'
+      : 'SCHEDULED';
+  }
   if (
     input.occurrenceState === 'HELD' ||
     input.occurrenceState === 'UNKNOWN' ||
