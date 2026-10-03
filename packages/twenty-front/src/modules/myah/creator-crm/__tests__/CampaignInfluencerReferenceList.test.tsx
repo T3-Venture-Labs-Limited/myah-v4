@@ -4,6 +4,11 @@ import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 
+const mockAgentReviewQuery = jest.fn(() => ({ data: undefined }));
+jest.mock('@apollo/client/react', () => ({
+  ...jest.requireActual('@apollo/client/react'),
+  useQuery: (...args: unknown[]) => mockAgentReviewQuery(...(args as [])),
+}));
 jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
   useFindManyRecords: jest.fn(),
 }));
@@ -110,6 +115,55 @@ beforeEach(() => {
   });
 });
 
+it('shows the agent next action and filters to influencers that need review', () => {
+  mockAgentReviewQuery.mockReturnValue({
+    data: {
+      myahReplyAgentReview: {
+        needReviewCount: 1,
+        nodes: [
+          {
+            campaignCreatorId: 'membership-1',
+            creatorId: 'creator-1',
+            nextAction: 'REVIEW_DRAFT',
+            reason: null,
+            channel: 'INSTAGRAM',
+            conversationRecordId: 'conversation-1',
+            inboxContactId: 'contact-1',
+          },
+          {
+            campaignCreatorId: 'membership-2',
+            creatorId: 'creator-2',
+            nextAction: 'SKIPPED',
+            reason: 'Skipped: active in Summer SPF drop',
+            channel: null,
+            conversationRecordId: null,
+            inboxContactId: null,
+          },
+        ],
+      },
+    },
+  } as never);
+  setup({
+    records: [
+      ...records,
+      {
+        id: 'membership-2',
+        campaignId: 'campaign-1',
+        creatorId: 'creator-2',
+        stage: 'READY',
+        creator: { id: 'creator-2', name: 'Luca Romano' },
+      },
+    ],
+  });
+
+  expect(screen.getByText('Review draft')).toBeVisible();
+  expect(screen.getByText('Skipped: active in Summer SPF drop')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Need review 1' }));
+  expect(screen.getByRole('button', { name: /Ava Rivera/ })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /Luca Romano/ })).toBeNull();
+  mockAgentReviewQuery.mockReturnValue({ data: undefined });
+});
+
 it('renders only permission-scoped Campaign rows with recorded metadata stage, search, and load more', () => {
   setup();
   expect(useFindManyRecords).toHaveBeenCalledWith(
@@ -120,7 +174,7 @@ it('renders only permission-scoped Campaign rows with recorded metadata stage, s
   );
   expect(screen.getByText('Partnership stage')).toBeVisible();
   expect(screen.getByText('Outreach progress')).toBeVisible();
-  expect(screen.getByText('Latest activity')).toBeVisible();
+  expect(screen.getByText('Next action')).toBeVisible();
   const row = screen.getByRole('button', { name: /Ava Rivera/ });
   expect(row).toHaveTextContent('@ava.studio');
   expect(

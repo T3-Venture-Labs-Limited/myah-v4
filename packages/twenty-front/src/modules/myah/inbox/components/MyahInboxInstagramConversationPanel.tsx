@@ -1,3 +1,4 @@
+import { MyahReplyAgentDraftLabel } from '@/myah/agent/components/MyahReplyAgentDraftLabel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -955,44 +956,50 @@ const MyahInboxInstagramReplyPanel = ({
             copy.
           </StyledStatus>
         ) : (
-          <MyahInboxInstagramCampaignComposer
-            workspaceId={workspaceId}
-            contactId={contact.id}
-            conversationId={activeConversation.id}
-            creatorId={contact.creator?.id ?? null}
-            flush={draft.flush}
-            isStillCurrentConversation={() =>
-              activeConversationIdRef.current === activeConversation.id
-            }
-            composerProps={{
-              username: username ?? contact.displayName,
-              body: bodyHidden || inFlightReply ? '' : draft.body,
-              channelState: 'READY',
-              provider,
-              editorVersion: draft.editorVersion + editorVersionOffset,
-              previewScope: activeConversation.id,
-              error: composerError,
-              conflict: draft.conflict,
-              onReloadConflict: draft.reloadConflict,
-              disabled:
-                bodyHidden ||
-                inFlightReply ||
-                isUnlinkedReply ||
-                send.isBlocked ||
-                send.lockedUnknown ||
-                draft.status === 'conflict' ||
-                draft.status === 'loading' ||
-                draft.error === 'Could not load the saved Instagram draft.',
-              sending: send.sending || draft.status === 'saving',
-              onBodyChange: (body) => {
-                if (!send.lockedUnknown && !send.isBlocked) {
-                  setSendFeedback(null);
-                }
-                draft.setBody(body);
-              },
-              onSend: () => void handleSend(),
-            }}
-          />
+          <>
+            <MyahReplyAgentDraftLabel
+              channel="INSTAGRAM"
+              conversationRecordId={activeConversation.id}
+            />
+            <MyahInboxInstagramCampaignComposer
+              workspaceId={workspaceId}
+              contactId={contact.id}
+              conversationId={activeConversation.id}
+              creatorId={contact.creator?.id ?? null}
+              flush={draft.flush}
+              isStillCurrentConversation={() =>
+                activeConversationIdRef.current === activeConversation.id
+              }
+              composerProps={{
+                username: username ?? contact.displayName,
+                body: bodyHidden || inFlightReply ? '' : draft.body,
+                channelState: 'READY',
+                provider,
+                editorVersion: draft.editorVersion + editorVersionOffset,
+                previewScope: activeConversation.id,
+                error: composerError,
+                conflict: draft.conflict,
+                onReloadConflict: draft.reloadConflict,
+                disabled:
+                  bodyHidden ||
+                  inFlightReply ||
+                  isUnlinkedReply ||
+                  send.isBlocked ||
+                  send.lockedUnknown ||
+                  draft.status === 'conflict' ||
+                  draft.status === 'loading' ||
+                  draft.error === 'Could not load the saved Instagram draft.',
+                sending: send.sending || draft.status === 'saving',
+                onBodyChange: (body) => {
+                  if (!send.lockedUnknown && !send.isBlocked) {
+                    setSendFeedback(null);
+                  }
+                  draft.setBody(body);
+                },
+                onSend: () => void handleSend(),
+              }}
+            />
+          </>
         )}
         {send.isBlocked ? (
           <StyledStatus role="alert">

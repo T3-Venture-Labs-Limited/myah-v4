@@ -56,6 +56,7 @@ import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { MyahAgentModule } from 'src/engine/core-modules/myah-agent/myah-agent.module';
 import { MyahInboxModule } from 'src/engine/core-modules/myah-inbox/myah-inbox.module';
+import { MyahReplyAgentModule } from 'src/modules/myah-reply-agent/myah-reply-agent.module';
 import { MyahE2eFixtureModule } from 'src/engine/core-modules/myah/e2e-fixtures/myah-e2e-fixture.module';
 import { isE2eTestFixturesEnabled } from 'src/engine/core-modules/twenty-config/utils/is-e2e-test-fixtures-enabled.util';
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
@@ -153,6 +154,7 @@ import { FileModule } from './file/file.module';
     MyahInboxModule,
     MyahModule,
     CampaignExecutionOrchestrationModule,
+    MyahReplyAgentModule,
     ...(isE2eTestFixturesEnabled() ? [MyahE2eFixtureModule] : []),
     MessageQueueModule.registerAsync({
       useFactory: messageQueueModuleFactory,

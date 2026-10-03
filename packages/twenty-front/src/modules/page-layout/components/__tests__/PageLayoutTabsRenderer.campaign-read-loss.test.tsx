@@ -12,6 +12,14 @@ import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceSta
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { PageLayoutTabsRenderer } from '@/page-layout/components/PageLayoutTabsRenderer';
 
+jest.mock('@/myah/agent/components/MyahCampaignCreatorAgentDraft', () => ({
+  MyahCampaignCreatorAgentDraft: () => null,
+}));
+const mockAgentReviewQuery = jest.fn(() => ({ data: undefined }));
+jest.mock('@apollo/client/react', () => ({
+  ...jest.requireActual('@apollo/client/react'),
+  useQuery: (...args: unknown[]) => mockAgentReviewQuery(...(args as [])),
+}));
 jest.mock('@/page-layout/hooks/useCurrentPageLayoutOrThrow', () => ({
   useCurrentPageLayoutOrThrow: () => ({
     currentPageLayout: {

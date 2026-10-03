@@ -1,3 +1,4 @@
+import { MyahReplyAgentDraftLabel } from '@/myah/agent/components/MyahReplyAgentDraftLabel';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { Button } from 'twenty-ui/input';
@@ -497,6 +498,10 @@ export const MyahInboxReplyWorkspace = ({
           </StyledStatus>
         </StyledComposerHeader>
       )}
+      <MyahReplyAgentDraftLabel
+        channel="EMAIL"
+        conversationRecordId={thread.id}
+      />
       {currentWorkspace ? (
         <MyahInboxReplyWorkspaceContent
           key={`${currentWorkspace.id}:${thread.id}`}

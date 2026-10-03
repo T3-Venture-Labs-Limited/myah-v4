@@ -23,6 +23,8 @@ export const useOpenMyahInboxConversation = () => {
       workspaceId: string;
       contactId: string;
       threadId: string;
+      // INSTAGRAM: threadId is the Instagram conversation (MYAH-445).
+      channel?: 'EMAIL' | 'INSTAGRAM';
       returnTarget?: CampaignMessageOverviewReturnTarget;
       creatorReturnTarget?: CampaignCreatorInboxReturnTarget;
     }) => {
@@ -40,9 +42,10 @@ export const useOpenMyahInboxConversation = () => {
       store.set(myahInboxContactSelectionState.atom, {
         workspaceId: target.workspaceId,
         contactId: target.contactId,
-        channel: 'EMAIL',
-        emailThreadId: target.threadId,
-        instagramConversationId: null,
+        channel: target.channel ?? 'EMAIL',
+        emailThreadId: target.channel === 'INSTAGRAM' ? null : target.threadId,
+        instagramConversationId:
+          target.channel === 'INSTAGRAM' ? target.threadId : null,
       });
       store.set(myahInboxPreserveSelectionOnUnmountState.atom, true);
       navigate('/myah/inbox', {

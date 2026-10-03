@@ -3328,6 +3328,27 @@ type CampaignMessageOverviewConnectionDTO {
   filterOptions: CampaignMessageOverviewFilterOptionsDTO!
 }
 
+type MyahReplyAgentReviewNode {
+  campaignCreatorId: UUID!
+  creatorId: UUID!
+  nextAction: String
+  reason: String
+  channel: String
+  conversationRecordId: UUID
+  inboxContactId: String
+}
+
+type MyahReplyAgentReview {
+  nodes: [MyahReplyAgentReviewNode!]!
+  needReviewCount: Int!
+}
+
+type MyahReplyAgentDraftLabel {
+  kind: String!
+  reason: String
+  campaignName: String
+}
+
 type ChannelSyncSuccess {
   success: Boolean!
 }
@@ -3813,6 +3834,8 @@ type Query {
   barChartData(input: BarChartDataInput!): BarChartData!
   getPageLayoutWidgets(pageLayoutTabId: String!): [PageLayoutWidget!]!
   getPageLayoutWidget(id: String!): PageLayoutWidget!
+  myahReplyAgentReview(input: MyahReplyAgentReviewInput!): MyahReplyAgentReview!
+  myahReplyAgentDraftLabel(input: MyahReplyAgentDraftLabelInput!): MyahReplyAgentDraftLabel
   campaignActivity(input: CampaignActivityInput!): CampaignActivityConnectionDTO!
   campaignMessageOverview(input: CampaignMessageOverviewInput!): CampaignMessageOverviewConnectionDTO!
   campaignMessageOverviewDetail(input: CampaignMessageOverviewDetailInput!): CampaignMessageOverviewRowDTO
@@ -3951,6 +3974,15 @@ input LineChartDataInput {
 input BarChartDataInput {
   objectMetadataId: UUID!
   configuration: JSON!
+}
+
+input MyahReplyAgentReviewInput {
+  campaignId: UUID!
+}
+
+input MyahReplyAgentDraftLabelInput {
+  channel: String!
+  conversationRecordId: UUID!
 }
 
 input CampaignActivityInput {
@@ -4254,6 +4286,7 @@ type Mutation {
   updatePageLayoutWidget(id: String!, input: UpdatePageLayoutWidgetInput!): PageLayoutWidget!
   destroyPageLayoutWidget(id: String!): Boolean!
   impersonate(userId: UUID!, workspaceId: UUID!): Impersonate!
+  regenerateMyahReplyAgentDraft(input: RegenerateMyahReplyAgentDraftInput!): MyahReplyAgentReviewNode!
   excludeCampaignCreator(input: ExcludeCampaignCreatorInput!): ExcludeCampaignCreatorResultDTO!
   startCampaignExecution(input: StartCampaignExecutionInput!): CampaignExecutionMutationResultDTO!
   updateCampaignSendingWindow(input: UpdateCampaignSendingWindowInput!): CampaignSendingWindowMutationResultDTO!
@@ -5581,6 +5614,10 @@ input UpdatePageLayoutWidgetInput {
   configuration: JSON
   conditionalDisplay: JSON
   conditionalAvailabilityExpression: String
+}
+
+input RegenerateMyahReplyAgentDraftInput {
+  campaignCreatorId: UUID!
 }
 
 input ExcludeCampaignCreatorInput {

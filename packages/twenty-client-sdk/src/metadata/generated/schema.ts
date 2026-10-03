@@ -3028,6 +3028,30 @@ export interface CampaignMessageOverviewConnectionDTO {
     __typename: 'CampaignMessageOverviewConnectionDTO'
 }
 
+export interface MyahReplyAgentReviewNode {
+    campaignCreatorId: Scalars['UUID']
+    creatorId: Scalars['UUID']
+    nextAction?: Scalars['String']
+    reason?: Scalars['String']
+    channel?: Scalars['String']
+    conversationRecordId?: Scalars['UUID']
+    inboxContactId?: Scalars['String']
+    __typename: 'MyahReplyAgentReviewNode'
+}
+
+export interface MyahReplyAgentReview {
+    nodes: MyahReplyAgentReviewNode[]
+    needReviewCount: Scalars['Int']
+    __typename: 'MyahReplyAgentReview'
+}
+
+export interface MyahReplyAgentDraftLabel {
+    kind: Scalars['String']
+    reason?: Scalars['String']
+    campaignName?: Scalars['String']
+    __typename: 'MyahReplyAgentDraftLabel'
+}
+
 export interface ChannelSyncSuccess {
     success: Scalars['Boolean']
     __typename: 'ChannelSyncSuccess'
@@ -3459,6 +3483,8 @@ export interface Query {
     barChartData: BarChartData
     getPageLayoutWidgets: PageLayoutWidget[]
     getPageLayoutWidget: PageLayoutWidget
+    myahReplyAgentReview: MyahReplyAgentReview
+    myahReplyAgentDraftLabel?: MyahReplyAgentDraftLabel
     campaignActivity: CampaignActivityConnectionDTO
     campaignMessageOverview: CampaignMessageOverviewConnectionDTO
     campaignMessageOverviewDetail?: CampaignMessageOverviewRowDTO
@@ -3729,6 +3755,7 @@ export interface Mutation {
     updatePageLayoutWidget: PageLayoutWidget
     destroyPageLayoutWidget: Scalars['Boolean']
     impersonate: Impersonate
+    regenerateMyahReplyAgentDraft: MyahReplyAgentReviewNode
     excludeCampaignCreator: ExcludeCampaignCreatorResultDTO
     startCampaignExecution: CampaignExecutionMutationResultDTO
     updateCampaignSendingWindow: CampaignSendingWindowMutationResultDTO
@@ -6961,6 +6988,33 @@ export interface CampaignMessageOverviewConnectionDTOGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface MyahReplyAgentReviewNodeGenqlSelection{
+    campaignCreatorId?: boolean | number
+    creatorId?: boolean | number
+    nextAction?: boolean | number
+    reason?: boolean | number
+    channel?: boolean | number
+    conversationRecordId?: boolean | number
+    inboxContactId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahReplyAgentReviewGenqlSelection{
+    nodes?: MyahReplyAgentReviewNodeGenqlSelection
+    needReviewCount?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahReplyAgentDraftLabelGenqlSelection{
+    kind?: boolean | number
+    reason?: boolean | number
+    campaignName?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface ChannelSyncSuccessGenqlSelection{
     success?: boolean | number
     __typename?: boolean | number
@@ -7430,6 +7484,8 @@ export interface QueryGenqlSelection{
     barChartData?: (BarChartDataGenqlSelection & { __args: {input: BarChartDataInput} })
     getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
     getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
+    myahReplyAgentReview?: (MyahReplyAgentReviewGenqlSelection & { __args: {input: MyahReplyAgentReviewInput} })
+    myahReplyAgentDraftLabel?: (MyahReplyAgentDraftLabelGenqlSelection & { __args: {input: MyahReplyAgentDraftLabelInput} })
     campaignActivity?: (CampaignActivityConnectionDTOGenqlSelection & { __args: {input: CampaignActivityInput} })
     campaignMessageOverview?: (CampaignMessageOverviewConnectionDTOGenqlSelection & { __args: {input: CampaignMessageOverviewInput} })
     campaignMessageOverviewDetail?: (CampaignMessageOverviewRowDTOGenqlSelection & { __args: {input: CampaignMessageOverviewDetailInput} })
@@ -7493,6 +7549,10 @@ export interface PieChartDataInput {objectMetadataId: Scalars['UUID'],configurat
 export interface LineChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
 
 export interface BarChartDataInput {objectMetadataId: Scalars['UUID'],configuration: Scalars['JSON']}
+
+export interface MyahReplyAgentReviewInput {campaignId: Scalars['UUID']}
+
+export interface MyahReplyAgentDraftLabelInput {channel: Scalars['String'],conversationRecordId: Scalars['UUID']}
 
 export interface CampaignActivityInput {campaignId: Scalars['ID'],first: Scalars['Int'],after?: (Scalars['String'] | null)}
 
@@ -7753,6 +7813,7 @@ export interface MutationGenqlSelection{
     updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
     destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
     impersonate?: (ImpersonateGenqlSelection & { __args: {userId: Scalars['UUID'], workspaceId: Scalars['UUID']} })
+    regenerateMyahReplyAgentDraft?: (MyahReplyAgentReviewNodeGenqlSelection & { __args: {input: RegenerateMyahReplyAgentDraftInput} })
     excludeCampaignCreator?: (ExcludeCampaignCreatorResultDTOGenqlSelection & { __args: {input: ExcludeCampaignCreatorInput} })
     startCampaignExecution?: (CampaignExecutionMutationResultDTOGenqlSelection & { __args: {input: StartCampaignExecutionInput} })
     updateCampaignSendingWindow?: (CampaignSendingWindowMutationResultDTOGenqlSelection & { __args: {input: UpdateCampaignSendingWindowInput} })
@@ -8201,6 +8262,8 @@ export interface UpdateSkillInput {id: Scalars['UUID'],name?: (Scalars['String']
 export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
 
 export interface UpdatePageLayoutWidgetInput {pageLayoutTabId?: (Scalars['UUID'] | null),title?: (Scalars['String'] | null),type?: (WidgetType | null),objectMetadataId?: (Scalars['UUID'] | null),gridPosition?: (GridPositionInput | null),position?: (Scalars['JSON'] | null),configuration?: (Scalars['JSON'] | null),conditionalDisplay?: (Scalars['JSON'] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null)}
+
+export interface RegenerateMyahReplyAgentDraftInput {campaignCreatorId: Scalars['UUID']}
 
 export interface ExcludeCampaignCreatorInput {campaignId: Scalars['UUID'],campaignCreatorId: Scalars['UUID'],reason: Scalars['String']}
 
@@ -10526,6 +10589,30 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isCampaignMessageOverviewConnectionDTO = (obj?: { __typename?: any } | null): obj is CampaignMessageOverviewConnectionDTO => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignMessageOverviewConnectionDTO"')
       return CampaignMessageOverviewConnectionDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MyahReplyAgentReviewNode_possibleTypes: string[] = ['MyahReplyAgentReviewNode']
+    export const isMyahReplyAgentReviewNode = (obj?: { __typename?: any } | null): obj is MyahReplyAgentReviewNode => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahReplyAgentReviewNode"')
+      return MyahReplyAgentReviewNode_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MyahReplyAgentReview_possibleTypes: string[] = ['MyahReplyAgentReview']
+    export const isMyahReplyAgentReview = (obj?: { __typename?: any } | null): obj is MyahReplyAgentReview => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahReplyAgentReview"')
+      return MyahReplyAgentReview_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MyahReplyAgentDraftLabel_possibleTypes: string[] = ['MyahReplyAgentDraftLabel']
+    export const isMyahReplyAgentDraftLabel = (obj?: { __typename?: any } | null): obj is MyahReplyAgentDraftLabel => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahReplyAgentDraftLabel"')
+      return MyahReplyAgentDraftLabel_possibleTypes.includes(obj.__typename)
     }
 
 
