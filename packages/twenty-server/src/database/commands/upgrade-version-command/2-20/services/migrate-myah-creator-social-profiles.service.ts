@@ -9,12 +9,21 @@ import {
 } from 'src/database/commands/upgrade-version-command/2-20/services/plan-myah-creator-social-profile-migration.util';
 import { type GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import {
+  MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+  MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
 import { CreatorDataOperationService } from 'src/modules/myah-creator-social-profile/services/creator-data-operation.service';
 import { CreatorDataOperationWriterService } from 'src/modules/myah-creator-social-profile/services/creator-data-operation-writer.service';
 
 const MIGRATION_ATTEMPT_KEY = 'MYAH-409-legacy-creator-v1';
+// Second pass for values the first pass skipped only because of a field
+// restriction our standard role has since dropped. Kept separate so existing
+// first-pass receipts still replay with their original digest.
+const RELEASED_RESTRICTIONS_ATTEMPT_KEY =
+  'MYAH-409-legacy-creator-v1-released-restrictions';
 
-type RestrictedFieldRow = { name: string };
+type RestrictedFieldRow = { name: string; retired: boolean };
 type CreatorJsonRow = { data: LegacyCreatorRow };
 type CountRow = { count: string };
 
@@ -53,23 +62,49 @@ export class MigrateMyahCreatorSocialProfilesService {
     dryRun: boolean;
   }): Promise<CreatorSocialProfileMigrationReport> {
     const rows = await this.getCreatorRows(workspaceDataSource, workspaceId);
-    const restrictedFields = await this.getRestrictedFields(workspaceId);
+    const { allRestricted, currentRestricted } =
+      await this.getRestrictedFields(workspaceId);
     const plans = rows.map((row) =>
-      planMyahCreatorSocialProfileMigration({ row, restrictedFields }),
+      planMyahCreatorSocialProfileMigration({
+        row,
+        restrictedFields: allRestricted,
+      }),
     );
+    // Only the fields released from a retired restriction, nothing else.
+    const releasedPlans =
+      allRestricted.size === currentRestricted.size
+        ? []
+        : rows.map((row) =>
+            planMyahCreatorSocialProfileMigration({
+              row,
+              restrictedFields: new Set(
+                LEGACY_CREATOR_MIGRATION_FIELDS.filter(
+                  (field) =>
+                    !allRestricted.has(field) || currentRestricted.has(field),
+                ),
+              ),
+            }),
+          );
+    const allPlans = [...plans, ...releasedPlans];
     const report: CreatorSocialProfileMigrationReport = {
       scanned: plans.length,
-      plannedProfiles: plans.reduce(
+      plannedProfiles: allPlans.reduce(
         (count, plan) => count + plan.profiles.length,
         0,
       ),
-      plannedNotes: plans.filter((plan) => plan.noteMarkdown !== null).length,
+      plannedNotes: allPlans.filter((plan) => plan.noteMarkdown !== null)
+        .length,
       committedRows: 0,
       replayedRows: 0,
-      conflicts: plans.filter((plan) => plan.conflicts.length > 0).length,
+      conflicts: allPlans.filter((plan) => plan.conflicts.length > 0).length,
       failures: 0,
-      skippedRestrictedValues: plans.reduce(
-        (count, plan) => count + plan.skippedRestrictedFields.length,
+      skippedRestrictedValues: rows.reduce(
+        (count, row) =>
+          count +
+          planMyahCreatorSocialProfileMigration({
+            row,
+            restrictedFields: currentRestricted,
+          }).skippedRestrictedFields.length,
         0,
       ),
       reconciliationMismatches: 0,
@@ -82,7 +117,12 @@ export class MigrateMyahCreatorSocialProfilesService {
       return report;
     }
 
-    for (const plan of plans) {
+    for (const [attemptKey, plan] of [
+      ...plans.map((plan) => [MIGRATION_ATTEMPT_KEY, plan] as const),
+      ...releasedPlans.map(
+        (plan) => [RELEASED_RESTRICTIONS_ATTEMPT_KEY, plan] as const,
+      ),
+    ]) {
       if (
         plan.conflicts.length > 0 ||
         (plan.profiles.length === 0 && plan.noteMarkdown === null)
@@ -95,7 +135,7 @@ export class MigrateMyahCreatorSocialProfilesService {
           workspaceId,
           kind: 'LEGACY_MIGRATION',
           actorWorkspaceMemberId: null,
-          attemptKey: MIGRATION_ATTEMPT_KEY,
+          attemptKey,
           operationKey: plan.creatorId,
           sourceDigest: plan.sourceDigest,
           write: async (manager, schemaName) => {
@@ -180,11 +220,20 @@ export class MigrateMyahCreatorSocialProfilesService {
     return rows.map(({ data }) => data);
   }
 
+  // allRestricted: every current restriction (the first pass's original view).
+  // currentRestricted: excludes restrictions our standard role no longer
+  // declares, which this same upgrade removes.
   private async getRestrictedFields(
     workspaceId: string,
-  ): Promise<Set<string>> {
+  ): Promise<{ allRestricted: Set<string>; currentRestricted: Set<string> }> {
     const rows = await this.dataSource.query<RestrictedFieldRow[]>(
-      `SELECT DISTINCT field."name"
+      `SELECT DISTINCT field."name",
+         EXISTS (
+           SELECT 1 FROM core."role" standard_role
+           WHERE standard_role."id" = permission."roleId"
+             AND standard_role."universalIdentifier" = $2
+             AND permission."universalIdentifier" <> ALL($3::uuid[])
+         ) AS "retired"
        FROM core."fieldMetadata" field
        INNER JOIN core."objectMetadata" object
          ON object."id" = field."objectMetadataId"
@@ -196,7 +245,7 @@ export class MigrateMyahCreatorSocialProfilesService {
          AND field."isActive" IS TRUE
          AND permission."canReadFieldValue" IS FALSE
        UNION
-       SELECT '*' AS "name"
+       SELECT '*' AS "name", FALSE AS "retired"
        WHERE EXISTS (
          SELECT 1
          FROM core."role" role
@@ -231,23 +280,21 @@ export class MigrateMyahCreatorSocialProfilesService {
                ) IS TRUE
            )
        )`,
-      [workspaceId],
+      [
+        workspaceId,
+        MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+        MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS.map(
+          ({ universalIdentifier }) => universalIdentifier,
+        ),
+      ],
     );
-    const restricted = new Set(rows.map(({ name }) => name));
 
-    if (restricted.delete('*')) {
-      LEGACY_CREATOR_MIGRATION_FIELDS.forEach((field) =>
-        restricted.add(field),
-      );
-    }
-
-    for (const platform of ['instagram', 'tiktok', 'youtube', 'twitter']) {
-      if (restricted.has(`${platform}Link`)) {
-        restricted.add(`${platform}LinkPrimaryLinkUrl`);
-      }
-    }
-
-    return restricted;
+    return {
+      allRestricted: expandRestrictedFields(rows.map(({ name }) => name)),
+      currentRestricted: expandRestrictedFields(
+        rows.filter(({ retired }) => !retired).map(({ name }) => name),
+      ),
+    };
   }
 
   private async countReconciliationMismatches(
@@ -261,7 +308,7 @@ export class MigrateMyahCreatorSocialProfilesService {
        FROM core."creatorDataOperationReceipt" receipt
        WHERE receipt."workspaceId" = $1
          AND receipt."kind" = 'LEGACY_MIGRATION'
-         AND receipt."attemptKey" = $2
+         AND receipt."attemptKey" = ANY($2::text[])
          AND (
            NOT EXISTS (
              SELECT 1 FROM ${escapedSchemaName}."creator" creator
@@ -293,9 +340,25 @@ export class MigrateMyahCreatorSocialProfilesService {
              )
            )
          )`,
-      [workspaceId, MIGRATION_ATTEMPT_KEY],
+      [workspaceId, [MIGRATION_ATTEMPT_KEY, RELEASED_RESTRICTIONS_ATTEMPT_KEY]],
     );
 
     return Number(row?.count ?? 0);
   }
 }
+
+const expandRestrictedFields = (names: string[]): Set<string> => {
+  const restricted = new Set(names);
+
+  if (restricted.delete('*')) {
+    LEGACY_CREATOR_MIGRATION_FIELDS.forEach((field) => restricted.add(field));
+  }
+
+  for (const platform of ['instagram', 'tiktok', 'youtube', 'twitter']) {
+    if (restricted.has(`${platform}Link`)) {
+      restricted.add(`${platform}LinkPrimaryLinkUrl`);
+    }
+  }
+
+  return restricted;
+};
