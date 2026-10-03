@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { MyahReplyAgentModule } from 'src/modules/myah-reply-agent/myah-reply-agent.module';
 import { CoreEngineModule } from 'src/engine/core-modules/core-engine.module';
 import { JobsModule } from 'src/engine/core-modules/message-queue/jobs.module';
 import { MessageQueueModule } from 'src/engine/core-modules/message-queue/message-queue.module';
@@ -12,6 +13,7 @@ import { CampaignExecutionOrchestrationModule } from 'src/modules/campaign-execu
   imports: [
     CoreEngineModule,
     CampaignExecutionOrchestrationModule,
+    MyahReplyAgentModule,
     MessageQueueModule.registerExplorer(),
     WorkspaceEventEmitterModule,
     JobsModule,

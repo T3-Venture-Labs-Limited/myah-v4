@@ -127,6 +127,8 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
     MyahInboxContactLinkService,
     MyahInboxContactQueryService,
     MyahInboxMutationService,
+    MyahInboxReplySendService,
+    MYAH_INBOX_REPLY_CONTEXT_DRAFT_READER,
     MYAH_INBOX_TOOL_SERVICE_TOKEN,
     MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN,
   ],

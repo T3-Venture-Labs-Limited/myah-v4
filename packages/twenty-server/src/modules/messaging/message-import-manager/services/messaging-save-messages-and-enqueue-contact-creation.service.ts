@@ -41,6 +41,8 @@ import { type MessageWithParticipants } from 'src/modules/messaging/message-impo
 import { MessagingMessageParticipantService } from 'src/modules/messaging/message-participant-manager/services/messaging-message-participant.service';
 import { CAMPAIGN_REPLY_EVIDENCE_PORT } from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
+import { MyahCreatorMessageTriggerService } from 'src/modules/myah-reply-agent/services/myah-creator-message-trigger.service';
+import { MYAH_REPLY_AGENT_MAX_MESSAGE_AGE_MS } from 'src/modules/myah-reply-agent/constants/myah-reply-agent.constants';
 import { isWorkEmail } from 'src/utils/is-work-email';
 
 type ReplyEvidencePort = {
@@ -534,6 +536,14 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
       return undefined;
     }
 
+    if (suppliedTransactionManager === undefined && source?.mode === 'LIVE') {
+      await this.notifyCreatorMessages(
+        workspaceId,
+        messagesToSave,
+        savedMessagesResult,
+      );
+    }
+
     return {
       messageExternalIdsAndIdsMap:
         savedMessagesResult.messageExternalIdsAndIdsMap,
@@ -543,6 +553,54 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
         savedMessagesResult.messageExternalIdToPersistenceInfoMap,
       contactsToCreate: savedMessagesResult.contactsToCreate,
     };
+  }
+
+  // Live inbound mail wakes the reply agent after commit (MYAH-445). Old mail
+  // re-imported as "live" (a reconnected mailbox) is history, not a new reply.
+  private async notifyCreatorMessages(
+    workspaceId: string,
+    messages: MessageWithParticipants[],
+    saved: {
+      messageExternalIdsAndIdsMap: Map<string, string>;
+      messageExternalIdToPersistenceInfoMap: Map<
+        string,
+        { direction: string; wasInserted: boolean; messageThreadId: string }
+      >;
+    },
+  ): Promise<void> {
+    let trigger: MyahCreatorMessageTriggerService | undefined;
+    try {
+      trigger = this.moduleRef?.get(MyahCreatorMessageTriggerService, {
+        strict: false,
+      });
+    } catch {
+      return;
+    }
+    if (!trigger) return;
+    const latestByThread = new Map<string, string>();
+    for (const message of messages) {
+      const persistence = saved.messageExternalIdToPersistenceInfoMap.get(
+        message.externalId,
+      );
+      const messageId = saved.messageExternalIdsAndIdsMap.get(
+        message.externalId,
+      );
+      const receivedAt = new Date(message.receivedAt ?? 0).getTime();
+      if (
+        persistence?.wasInserted === true &&
+        persistence.direction === MessageDirection.INCOMING &&
+        messageId &&
+        Date.now() - receivedAt < MYAH_REPLY_AGENT_MAX_MESSAGE_AGE_MS
+      )
+        latestByThread.set(persistence.messageThreadId, messageId);
+    }
+    for (const [conversationRecordId, messageRecordId] of latestByThread)
+      await trigger.notifyInbound({
+        workspaceId,
+        channel: 'EMAIL',
+        conversationRecordId,
+        messageRecordId,
+      });
   }
 
   async enqueueContactCreation({

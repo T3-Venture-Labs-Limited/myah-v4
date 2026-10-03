@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { CampaignSequenceAuthorityModule } from 'src/engine/core-modules/campaign-sequence-authority/campaign-sequence-authority.module';
 import { WorkspaceCampaignCapacityTimeZoneModule } from 'src/engine/core-modules/myah/workspace-campaign-capacity-time-zone.module';
+import { CampaignInstagramReplyService } from 'src/modules/campaign-execution/services/campaign-instagram-reply.service';
 import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { WorkspaceCampaignCapacityTimeZoneService } from 'src/engine/core-modules/myah/services/workspace-campaign-capacity-time-zone.service';
 import { ConnectedAccountMetadataModule } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.module';
@@ -90,6 +91,7 @@ import { MyahAgentModule } from 'src/engine/core-modules/myah-agent/myah-agent.m
     MyahAgentModule,
   ],
   providers: [
+    CampaignInstagramReplyService,
     CampaignInstagramStepService,
     CampaignLifecycleActorPermissionResolverAdapter,
     CampaignLifecycleWriteAuthorizationAdapter,
@@ -256,6 +258,7 @@ import { MyahAgentModule } from 'src/engine/core-modules/myah-agent/myah-agent.m
     CampaignEmailRuntimeCronCommand,
     CampaignReplyService,
     CAMPAIGN_REPLY_EVIDENCE_PORT,
+    CampaignInstagramReplyService,
   ],
 })
 export class CampaignExecutionOrchestrationModule {}

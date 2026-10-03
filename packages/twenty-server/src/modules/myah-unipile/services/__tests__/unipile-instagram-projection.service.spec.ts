@@ -116,6 +116,7 @@ type UnipileInstagramProjectionServiceModule = {
     myahInboxContactTriageReceiptService: {
       recordInTransaction: jest.Mock;
     },
+    moduleRef?: never,
   ) => UnipileInstagramProjectionService;
 };
 
@@ -195,6 +196,10 @@ const createProjectionService = (
       .mockResolvedValue(true),
     recordInTransaction: jest.fn().mockResolvedValue(undefined),
   };
+  const creatorMessageTrigger = {
+    notifyInbound: jest.fn().mockResolvedValue(undefined),
+  };
+  const moduleRef = { get: jest.fn().mockReturnValue(creatorMessageTrigger) };
   const projectionServiceModule = loadProjectionServiceModule();
 
   expect(projectionServiceModule).toBeDefined();
@@ -212,7 +217,9 @@ const createProjectionService = (
       { withLock },
       myahInboxContactTriageService,
       myahInboxContactTriageReceiptService,
+      moduleRef as never,
     ),
+    creatorMessageTrigger,
     bindingRepository,
     manager,
     myahInboxContactTriageService,
@@ -580,6 +587,66 @@ describe('UnipileInstagramProjectionService', () => {
       subject.myahInboxContactTriageService.ensureSourceContactInTransaction
         .mock.invocationCallOrder[0],
     );
+  });
+
+  it('wakes the reply agent for newly inserted live inbound messages only', async () => {
+    const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+    let inserted = 0;
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('myahSocialConversation')) {
+        return Promise.resolve([{ id: conversationRecordId }]);
+      }
+      if (sql.includes('INSERT INTO') && sql.includes('myahSocialMessage')) {
+        inserted += 1;
+        return Promise.resolve([
+          {
+            id: `b7037d71-3486-4767-80a1-d0f1e320998${inserted}`,
+            createdAt: '2026-09-04T12:31:00.000Z',
+          },
+        ]);
+      }
+
+      return Promise.resolve([]);
+    });
+    const subject = createProjectionService(query);
+
+    if (!subject) {
+      return;
+    }
+    const project = (
+      message: typeof inboundMessage,
+      triageMode: 'LIVE' | 'BACKFILL',
+    ) =>
+      subject.service.upsertVerifiedMessage({
+        workspace,
+        binding,
+        chat,
+        conversationRecordId,
+        message,
+        sourceGenerationId: 'webhook:1',
+        triageMode,
+      });
+
+    await project(inboundMessage, 'LIVE');
+    await project(
+      {
+        ...inboundMessage,
+        messageId: 'outbound-message-id',
+        senderId: binding.instagramUserId,
+      },
+      'LIVE',
+    );
+    await project({ ...inboundMessage, messageId: 'history-id' }, 'BACKFILL');
+
+    expect(subject.creatorMessageTrigger.notifyInbound).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(subject.creatorMessageTrigger.notifyInbound).toHaveBeenCalledWith({
+      workspaceId: workspace.id,
+      channel: 'INSTAGRAM',
+      conversationRecordId,
+      messageRecordId: 'b7037d71-3486-4767-80a1-d0f1e3209981',
+    });
   });
 
   it('persists Instagram rows without triage when the private schema is absent', async () => {

@@ -5,4 +5,5 @@ export type ManagedOpenRouterExecutionSurface =
   | 'title'
   | 'evaluator-grader'
   | 'myah-inbox-reply-proposal'
+  | 'myah-reply-agent'
   | 'workflow-background';

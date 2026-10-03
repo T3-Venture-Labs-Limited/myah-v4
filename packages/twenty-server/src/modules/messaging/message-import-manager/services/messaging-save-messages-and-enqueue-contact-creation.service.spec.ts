@@ -22,6 +22,7 @@ import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspac
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { CreateCompanyAndContactJob } from 'src/modules/contact-creation-manager/jobs/create-company-and-contact.job';
 import { CAMPAIGN_REPLY_EVIDENCE_PORT } from 'src/modules/campaign-execution/constants/campaign-execution-di-tokens';
+import { MyahCreatorMessageTriggerService } from 'src/modules/myah-reply-agent/services/myah-creator-message-trigger.service';
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
 import { MessagingMessageFolderAssociationService } from 'src/modules/messaging/message-import-manager/services/messaging-message-folder-association.service';
 import { MessagingMessageService } from 'src/modules/messaging/message-import-manager/services/messaging-message.service';
@@ -508,6 +509,98 @@ describe('MessagingSaveMessagesAndEnqueueContactCreationService', () => {
     expect(
       composeReplyEvidencePort.reconcileInboundMessageInTransaction,
     ).not.toHaveBeenCalled();
+  });
+
+  it('wakes the reply agent after commit for new live inbound mail only', async () => {
+    transactionManager = {
+      queryRunner: { query: jest.fn().mockResolvedValue([]) },
+    } as never;
+    const trigger = { notifyInbound: jest.fn().mockResolvedValue(undefined) };
+    const ref = (
+      service as unknown as {
+        moduleRef: { get: (token: unknown, options?: unknown) => unknown };
+      }
+    ).moduleRef;
+    const originalGet = ref.get.bind(ref);
+    jest
+      .spyOn(ref, 'get')
+      .mockImplementation((token, options) =>
+        token === MyahCreatorMessageTriggerService
+          ? trigger
+          : originalGet(token, options),
+      );
+    const persisted = (overrides: { receivedAt?: Date } = {}) => {
+      (
+        messageService.saveMessagesWithinTransaction as jest.Mock
+      ).mockResolvedValueOnce({
+        messageExternalIdsAndIdsMap: new Map([
+          ['message-1', 'db-message-id-1'],
+          ['message-2', 'db-message-id-2'],
+        ]),
+        messageExternalIdToMessageChannelMessageAssociationIdMap: new Map(),
+        messageExternalIdToMessageThreadIdMap: new Map([
+          ['message-1', 'db-thread-id-1'],
+          ['message-2', 'db-thread-id-2'],
+        ]),
+        messageExternalIdToPersistenceInfoMap: new Map([
+          [
+            'message-1',
+            {
+              createdAt: '2026-09-15T10:00:00.000Z',
+              direction: MessageDirection.INCOMING,
+              wasInserted: true,
+              messageThreadId: 'db-thread-id-1',
+            },
+          ],
+          [
+            'message-2',
+            {
+              createdAt: '2026-09-15T10:00:01.000Z',
+              direction: MessageDirection.INCOMING,
+              wasInserted: false,
+              messageThreadId: 'db-thread-id-2',
+            },
+          ],
+        ]),
+        createdMessages: [],
+      });
+
+      return mockMessages.map((message) => ({
+        ...message,
+        receivedAt: overrides.receivedAt ?? new Date(),
+      }));
+    };
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      persisted(),
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'BACKFILL', generationId: 'generation' },
+    );
+    await service.saveMessagesAndEnqueueContactCreation(
+      persisted({ receivedAt: new Date('2020-01-01T00:00:00.000Z') }),
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'generation' },
+    );
+    expect(trigger.notifyInbound).not.toHaveBeenCalled();
+
+    await service.saveMessagesAndEnqueueContactCreation(
+      persisted(),
+      mockMessageChannel,
+      mockConnectedAccount,
+      workspaceId,
+      { mode: 'LIVE', generationId: 'generation' },
+    );
+    expect(trigger.notifyInbound).toHaveBeenCalledTimes(1);
+    expect(trigger.notifyInbound).toHaveBeenCalledWith({
+      workspaceId,
+      channel: 'EMAIL',
+      conversationRecordId: 'db-thread-id-1',
+      messageRecordId: 'db-message-id-1',
+    });
   });
 
   it('rolls back rather than acquiring an unanticipated Creator C after source locking', async () => {
