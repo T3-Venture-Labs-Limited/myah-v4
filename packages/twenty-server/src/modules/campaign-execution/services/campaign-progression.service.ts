@@ -975,6 +975,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         { workspaceId, creatorIds: [creatorId] },
       );
       const [creator] = rows(
+        // pi-lens-ignore: sql-injection, no-sql-in-code — UUID-derived schema identifier; values are bind parameters.
         await runner.query(
           `SELECT email FROM "${getWorkspaceSchemaName(workspaceId)}".creator WHERE id=$1`,
           [creatorId],
