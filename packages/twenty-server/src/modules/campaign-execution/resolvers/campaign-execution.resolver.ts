@@ -130,6 +130,7 @@ export class CampaignExecutionResolver {
       excludedCount: review.excluded.length,
       excludedCreators: review.excluded.map((creator) => ({
         ...creator,
+        activeCampaignName: creator.activeCampaignName ?? null,
         reasons: creator.reasons.map(
           (reason) => reason as CampaignOutreachAudienceExclusionReasonDTO,
         ),

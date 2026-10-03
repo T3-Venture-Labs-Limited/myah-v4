@@ -570,7 +570,9 @@ describe('validateCampaignSequence', () => {
     });
 
     expectIssue(issues, 'CONTENT_REQUIRED', 'messages.0.text');
-    expectIssue(issues, 'INSTAGRAM_UNAVAILABLE', 'messages.0.channel');
+    expect(
+      issues.some(({ code }) => (code as string) === 'INSTAGRAM_UNAVAILABLE'),
+    ).toBe(false);
   });
 
   test('preserves ordinary and combined emoji without Unicode issues', () => {

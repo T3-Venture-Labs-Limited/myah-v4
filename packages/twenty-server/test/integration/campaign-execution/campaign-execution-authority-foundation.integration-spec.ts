@@ -6,6 +6,7 @@ import { DataSource, type QueryRunner } from 'typeorm';
 import { CreateCampaignExecutionAuthorityFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789065794327-create-campaign-execution-authority-foundation';
 import { AddCampaignDispatchEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789066100000-add-campaign-dispatch-evidence';
 import { AddCampaignOperatorExclusionReasonFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789313971536-add-campaign-operator-exclusion-reason';
+import { AddInstagramCampaignStepColumnsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1791038783992-add-instagram-campaign-step-columns';
 import { CreateMyahCampaignReplyEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1790141137300-create-myah-campaign-reply-evidence';
 import { setPgDateTypeParser } from 'src/database/pg/set-pg-date-type-parser';
 import { CampaignTestPreparationProofService } from 'src/engine/core-modules/campaign-test-authority/services/campaign-test-preparation-proof.service';
@@ -2383,6 +2384,10 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
       // Later dependent: reply evidence references outboundEmailAttempt.
       const replyEvidenceCommand =
         new CreateMyahCampaignReplyEvidenceFastInstanceCommand();
+      // Later dependent: Instagram steps add a receipt link to occurrences.
+      const instagramStepCommand =
+        new AddInstagramCampaignStepColumnsFastInstanceCommand();
+      await instagramStepCommand.down(runner);
       await replyEvidenceCommand.down(runner);
       await operatorExclusionCommand.down(runner);
       await dispatchEvidenceCommand.down(runner);
@@ -2417,6 +2422,7 @@ describe('campaign execution authority physical contract (PostgreSQL)', () => {
       await dispatchEvidenceCommand.up(runner);
       await operatorExclusionCommand.up(runner);
       await replyEvidenceCommand.up(runner);
+      await instagramStepCommand.up(runner);
       expect(
         await runner.query(
           `SELECT jsonb_agg(jsonb_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull)

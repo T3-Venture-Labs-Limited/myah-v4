@@ -65,6 +65,14 @@ const makeService = (messages: Record<string, unknown>[]) => {
       sequence as never,
       sender as never,
       fixedMaterial as never,
+      {
+        getCampaignSettingRecord: jest.fn(async () => ({
+          instagramAccountId: null,
+          preferredChannel: 'NO_PREFERENCE',
+          requireReplyApproval: false,
+        })),
+        listInstagramAccounts: jest.fn(async () => []),
+      } as never,
     ),
     execution,
     sequence,
@@ -91,7 +99,7 @@ describe('CampaignExecutionApplicationService', () => {
     expect(harness.execution.startCampaign).not.toHaveBeenCalled();
   });
 
-  it('fails closed for any used Instagram node before transaction/provider work', async () => {
+  it('blocks an Instagram step when the Campaign has no connected Instagram account', async () => {
     const harness = makeService([
       {
         id: '90000000-0000-4000-8000-000000000009',
@@ -104,12 +112,11 @@ describe('CampaignExecutionApplicationService', () => {
     ).resolves.toEqual({
       status: 'BLOCKED',
       lifecycleStatus: null,
-      reason: 'EMAIL_ONLY',
+      reason: 'INSTAGRAM_ACCOUNT_REQUIRED',
       replayed: false,
       changed: false,
       inFlightCount: null,
     });
-    expect(harness.sender.getCampaignEmailSenderPool).not.toHaveBeenCalled();
     expect(harness.execution.startCampaign).not.toHaveBeenCalled();
   });
 

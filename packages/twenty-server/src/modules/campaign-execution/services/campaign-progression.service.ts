@@ -7,6 +7,8 @@ import { type CampaignOutreachAudienceExclusionReason } from 'src/modules/campai
 import { type ReadyCampaignSenderReadiness } from 'src/modules/myah-campaign/types/campaign-sender-pool.type';
 import { type CampaignMessageBlockerCode } from 'src/modules/myah-outreach/types/campaign-message-render.type';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { findCreatorInstagramHandles } from 'src/modules/campaign-execution/utils/campaign-active-participation.util';
+import { normalizeCampaignCreatorEmail } from 'src/modules/myah-outreach/utils/normalize-campaign-creator-email.util';
 import { campaignMailboxAdvisoryKeys } from 'src/engine/core-modules/campaign-execution/services/campaign-mailbox-deletion-fence.service';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS } from 'src/modules/messaging/message-outbound-manager/constants/outbound-email-attempt.constants';
@@ -487,6 +489,66 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         ? { status: 'DEFERRED', nextDueAt }
         : { status: 'TERMINAL' };
     }
+    const claimedNode = plan.nodes[Number(occurrence.authoredMessageIndex)];
+    if (claimedNode.channel === 'INSTAGRAM') {
+      // Instagram steps leave the email reservation path: the Instagram send
+      // stack owns budget, receipts and unknown outcomes (MYAH-445).
+      if (creator.instagramHandle === null) {
+        await this.holdOccurrenceAndEnrollment(
+          input.occurrenceId,
+          String(enrollment[0].id),
+          'MATERIAL_STALE',
+          runner,
+        );
+        return { status: 'HELD', reason: 'MATERIAL_STALE' };
+      }
+      // Hold (without churn) until the Campaign's Instagram account is connected.
+      const [sender] = rows(
+        await runner.query(
+          `SELECT EXISTS (
+             SELECT 1 FROM core."unipileInstagramAccountBinding" b
+              WHERE b."workspaceId"=$1 AND b."deactivatedAt" IS NULL AND b.status='ACTIVE'
+                AND b."workspaceInstagramAccountRecordId" = COALESCE(
+                  (SELECT s."instagramAccountId" FROM core."myahCampaignAgentSetting" s
+                    WHERE s."workspaceId"=$1 AND s."campaignId"=$2),
+                  b."workspaceInstagramAccountRecordId")
+           ) AS "ready"`,
+          [input.workspaceId, input.campaignId],
+        ),
+      );
+      if (sender?.ready !== true) {
+        await this.holdOccurrenceAndEnrollment(
+          input.occurrenceId,
+          String(enrollment[0].id),
+          'SENDER_NOT_READY',
+          runner,
+        );
+        return { status: 'HELD', reason: 'SENDER_NOT_READY' };
+      }
+      const inFlight = rows(
+        await runner.query(
+          `UPDATE core."campaignOccurrence" SET state='IN_FLIGHT', "holdReason"=NULL,
+            "updatedAt"=clock_timestamp() WHERE id=$1 AND state IN ('PENDING','HELD') RETURNING id`,
+          [input.occurrenceId],
+        ),
+      );
+      if (inFlight.length !== 1) return { status: 'TERMINAL' };
+      await runner.query(
+        `UPDATE core."campaignEnrollment" SET "holdReason"=NULL,"updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state='ACTIVE' AND "holdReason" IS NOT NULL`,
+        [enrollment[0].id],
+      );
+      return { status: 'INSTAGRAM_CLAIMED' };
+    }
+    if (creator.normalizedEmail === null) {
+      await this.holdOccurrenceAndEnrollment(
+        input.occurrenceId,
+        String(enrollment[0].id),
+        'MATERIAL_STALE',
+        runner,
+      );
+      return { status: 'HELD', reason: 'MATERIAL_STALE' };
+    }
     const senderPool =
       await this.senderService.getCampaignEmailSenderPoolInTransaction(
         { workspaceId: input.workspaceId, campaignId: input.campaignId },
@@ -882,6 +944,276 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     return { status: 'RESERVED', attemptId };
   }
 
+  // Next step after `fromIndex` on a channel this creator can be reached on,
+  // with the summed authored delays of any skipped steps. Null when none.
+  private async nextUsableStepInTransaction(
+    runner: QueryRunner,
+    workspaceId: string,
+    creatorId: string,
+    plan: Extract<
+      Awaited<
+        ReturnType<CampaignSequenceService['loadExecutionPlanInTransaction']>
+      >,
+      { kind: 'READY' }
+    >,
+    fromIndex: number,
+  ): Promise<
+    | null
+    | 'INVALID'
+    | { index: number; messageId: string; delaySeconds: number }
+  > {
+    // Email-only sequences keep the original rule: the next step is next;
+    // the claim checks the address. Channels matter only in mixed sequences.
+    const mixed = plan.nodes
+      .slice(fromIndex + 1)
+      .some((node) => node.channel !== 'EMAIL');
+    let hasEmail = true;
+    let hasInstagram = false;
+    if (mixed) {
+      const handles = await findCreatorInstagramHandles(
+        (sql: string, parameters: unknown[]) => runner.query(sql, parameters),
+        { workspaceId, creatorIds: [creatorId] },
+      );
+      const [creator] = rows(
+        await runner.query(
+          `SELECT email FROM "${getWorkspaceSchemaName(workspaceId)}".creator WHERE id=$1`,
+          [creatorId],
+        ),
+      );
+      hasEmail = normalizeCampaignCreatorEmail(creator?.email) !== null;
+      hasInstagram = handles.has(creatorId);
+    }
+    let delaySeconds = 0;
+    for (let index = fromIndex + 1; index < plan.nodes.length; index += 1) {
+      const delay = plan.delaysSeconds[index - 1];
+      if (
+        typeof delay !== 'number' ||
+        !Number.isSafeInteger(delay) ||
+        delay < 0
+      )
+        return 'INVALID';
+      delaySeconds += delay;
+      const node = plan.nodes[index];
+      if (node.channel === 'EMAIL' ? hasEmail : hasInstagram)
+        return { index, messageId: node.messageId, delaySeconds };
+    }
+    return null;
+  }
+
+  // Settles an Instagram sequence step from its send outcome (MYAH-445). An
+  // accepted send succeeds the occurrence and schedules the creator's next
+  // usable step; a limit block waits; anything uncertain is never re-sent.
+  async reconcileInstagramOccurrenceInTransaction(
+    input: {
+      workspaceId: string;
+      campaignId: string;
+      occurrenceId: string;
+      receiptId: string | null;
+      outcome: 'ACCEPTED' | 'UNKNOWN' | 'FAILED' | 'LIMITED' | 'HOLD';
+      acceptedAt?: Date;
+      nextEligibleAt?: Date | null;
+      holdReason?: CampaignOccurrenceHoldReason;
+    },
+    manager: WorkspaceEntityManager,
+  ): Promise<'CHANGED' | 'NOOP'> {
+    const runner = runnerOf(manager);
+    await runner.query(
+      `SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
+      [input.workspaceId, input.campaignId],
+    );
+    const [occurrence] = rows(
+      await runner.query(
+        `SELECT o.*, e.state AS "enrollmentState", e."creatorId", e."campaignCreatorId",
+                e."nextAuthoredMessageIndex", e."campaignExecutionId"
+           FROM core."campaignOccurrence" o
+           JOIN core."campaignEnrollment" e ON e.id=o."enrollmentId"
+          WHERE o.id=$1 AND o."workspaceId"=$2 AND o."campaignId"=$3
+          FOR UPDATE OF o, e`,
+        [input.occurrenceId, input.workspaceId, input.campaignId],
+      ),
+    );
+    if (
+      !occurrence ||
+      !['IN_FLIGHT', 'UNKNOWN'].includes(String(occurrence.state))
+    )
+      return 'NOOP';
+    if (input.receiptId !== null)
+      await runner.query(
+        `UPDATE core."campaignOccurrence" SET "actionExecutionReceiptId"=$2 WHERE id=$1`,
+        [input.occurrenceId, input.receiptId],
+      );
+    const creatorId = String(occurrence.creatorId);
+    if (input.outcome === 'UNKNOWN') {
+      if (occurrence.state === 'UNKNOWN') return 'NOOP';
+      await runner.query(
+        `UPDATE core."campaignOccurrence" SET state='UNKNOWN',"updatedAt"=clock_timestamp() WHERE id=$1`,
+        [input.occurrenceId],
+      );
+      await this.invalidateForecast(input.workspaceId, manager);
+      return 'CHANGED';
+    }
+    if (input.outcome === 'LIMITED') {
+      const nextDueAt =
+        input.nextEligibleAt ?? new Date(Date.now() + 15 * 60_000);
+      await runner.query(
+        `UPDATE core."campaignOccurrence" SET state='PENDING',"dueAt"=$2,"updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state='IN_FLIGHT'`,
+        [input.occurrenceId, nextDueAt],
+      );
+      await this.invalidateForecast(input.workspaceId, manager);
+      return 'CHANGED';
+    }
+    if (input.outcome === 'FAILED' || input.outcome === 'HOLD') {
+      await this.holdOccurrenceAndEnrollment(
+        input.occurrenceId,
+        String(occurrence.enrollmentId),
+        input.holdReason ??
+          (input.outcome === 'FAILED'
+            ? 'DEFINITELY_UNACCEPTED_REVIEW'
+            : 'MATERIAL_STALE'),
+        runner,
+      );
+      return 'CHANGED';
+    }
+    const acceptedAt = input.acceptedAt ?? new Date();
+    const wasUnknown = occurrence.state === 'UNKNOWN';
+    await runner.query(
+      `UPDATE core."campaignOccurrence" SET state='SUCCEEDED',"holdReason"=NULL,
+        "terminalReason"='PROVIDER_ACCEPTED',"terminalAt"=$2,"updatedAt"=clock_timestamp() WHERE id=$1`,
+      [input.occurrenceId, acceptedAt],
+    );
+    const schemaName = getWorkspaceSchemaName(input.workspaceId);
+    await runner.query(
+      `UPDATE "${schemaName}"."campaignCreator" SET stage='CONTACTED',"updatedAt"=clock_timestamp()
+        WHERE id=$1 AND "campaignId"=$2 AND stage='READY' AND "deletedAt" IS NULL`,
+      [occurrence.campaignCreatorId, input.campaignId],
+    );
+    const eventContext = {
+      manager,
+      workspaceId: input.workspaceId,
+      campaignId: input.campaignId,
+    };
+    const event = {
+      happenedAt: acceptedAt.toISOString(),
+      sourceId: input.occurrenceId,
+      sourceType: 'OCCURRENCE' as const,
+      creatorId,
+    };
+    await this.timelineEventWriter?.writeInTransaction(eventContext, {
+      ...event,
+      businessEventKey: `occurrence:${input.occurrenceId}:MESSAGE_ACCEPTED`,
+      eventKind: 'MESSAGE_ACCEPTED',
+    });
+    if (wasUnknown)
+      await this.timelineEventWriter?.writeInTransaction(eventContext, {
+        ...event,
+        businessEventKey: `occurrence:${input.occurrenceId}:UNKNOWN_RECOVERED_ACCEPTED`,
+        eventKind: 'UNKNOWN_RECOVERED_ACCEPTED',
+      });
+    const acceptedIndex = Number(occurrence.authoredMessageIndex);
+    if (
+      occurrence.enrollmentState !== 'ACTIVE' ||
+      Number(occurrence.nextAuthoredMessageIndex) !== acceptedIndex
+    ) {
+      await this.invalidateForecast(input.workspaceId, manager);
+      return 'CHANGED';
+    }
+    const [campaign] = rows(
+      await runner.query(
+        `SELECT "lifecycleStatus" FROM "${schemaName}".campaign WHERE id=$1`,
+        [input.campaignId],
+      ),
+    );
+    const plan =
+      campaign?.lifecycleStatus === 'ACTIVE' && this.sequenceService
+        ? await this.sequenceService.loadExecutionPlanInTransaction(
+            {
+              workspaceId: input.workspaceId,
+              campaignId: input.campaignId,
+              workflowVersionId: String(occurrence.workflowVersionId),
+            },
+            manager,
+          )
+        : null;
+    const next =
+      plan?.kind === 'READY'
+        ? await this.nextUsableStepInTransaction(
+            runner,
+            input.workspaceId,
+            creatorId,
+            plan,
+            acceptedIndex,
+          )
+        : null;
+    if (next === null || next === 'INVALID') {
+      const finished = rows(
+        await runner.query(
+          `UPDATE core."campaignEnrollment" SET state='FINISHED', "nextAuthoredMessageIndex"="authoredMessageCount",
+                  "holdReason"=NULL, "terminalReason"='SEQUENCE_COMPLETED', "terminalAt"=$2,
+                  "updatedAt"=clock_timestamp()
+            WHERE id=$1 AND state='ACTIVE' AND "nextAuthoredMessageIndex"=$3 RETURNING "terminalAt"`,
+          [occurrence.enrollmentId, acceptedAt, acceptedIndex],
+        ),
+      );
+      if (finished.length === 1)
+        await this.writeTerminalTimelineEvent(manager, {
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+          creatorId,
+          sourceId: String(occurrence.enrollmentId),
+          sourceType: 'ENROLLMENT',
+          terminalAt: finished[0].terminalAt,
+          reason: 'SEQUENCE_COMPLETED',
+        });
+    } else {
+      const dueAt = await this.nextDueInWindow(
+        String(occurrence.campaignExecutionId),
+        input.workspaceId,
+        input.campaignId,
+        new Date(acceptedAt.getTime() + next.delaySeconds * 1000),
+        runner,
+      );
+      const occurrenceId = computeCampaignOccurrenceId(
+        String(occurrence.enrollmentId),
+        next.index,
+        next.messageId,
+      );
+      await runner.query(
+        `UPDATE core."campaignEnrollment" SET "nextAuthoredMessageIndex"=$2,"updatedAt"=clock_timestamp()
+          WHERE id=$1 AND state='ACTIVE' AND "nextAuthoredMessageIndex"=$3`,
+        [occurrence.enrollmentId, next.index, acceptedIndex],
+      );
+      const inserted = rows(
+        await runner.query(
+          `INSERT INTO core."campaignOccurrence" (id,"workspaceId","campaignId","enrollmentId","workflowVersionId","messageId","authoredMessageIndex",state,"dueAt","holdReason","terminalReason","terminalAt","createdAt","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'PENDING',$8,NULL,NULL,NULL,clock_timestamp(),clock_timestamp())
+           ON CONFLICT ("enrollmentId","authoredMessageIndex") DO NOTHING RETURNING id`,
+          [
+            occurrenceId,
+            input.workspaceId,
+            input.campaignId,
+            occurrence.enrollmentId,
+            occurrence.workflowVersionId,
+            next.messageId,
+            next.index,
+            dueAt,
+          ],
+        ),
+      );
+      if (inserted.length === 1)
+        await this.timelineEventWriter?.writeInTransaction(eventContext, {
+          businessEventKey: `occurrence:${occurrenceId}:SCHEDULED`,
+          eventKind: 'SCHEDULED',
+          happenedAt: acceptedAt.toISOString(),
+          sourceId: occurrenceId,
+          sourceType: 'OCCURRENCE',
+          creatorId,
+        });
+    }
+    await this.invalidateForecast(input.workspaceId, manager);
+    return 'CHANGED';
+  }
+
   private async invalidateForecast(
     workspaceId: string,
     manager: EntityManager,
@@ -989,12 +1321,13 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     | 'OPERATOR_EXCLUDED'
   > {
     if (reasons.includes('OPERATOR_EXCLUDED')) return 'OPERATOR_EXCLUDED';
+    // Existing terminal reasons keep the enrollment CHECK constraint unchanged.
+    if (reasons.includes('ACTIVE_IN_OTHER_CAMPAIGN')) return 'INVALID_STAGE';
+    if (reasons.includes('NO_USABLE_CHANNEL')) return 'INVALID_EMAIL';
     if (reasons.includes('SUPPRESSED_EMAIL')) return 'SUPPRESSED_EMAIL';
     if (reasons.includes('DUPLICATE_CREATOR_EMAIL'))
       return 'DUPLICATE_CREATOR_EMAIL';
     if (reasons.includes('INVALID_STAGE')) return 'INVALID_STAGE';
-    if (reasons.includes('NON_EMAIL_CONTACT_METHOD'))
-      return 'NON_EMAIL_CONTACT_METHOD';
     if (reasons.includes('INVALID_EMAIL')) return 'INVALID_EMAIL';
     if (reasons.includes('MISSING_CREATOR')) return 'CREATOR_MISSING';
     return 'CAMPAIGN_CREATOR_MISSING';
@@ -1103,37 +1436,35 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         },
         manager,
       );
-      const nextIndex = acceptedIndex + 1;
-      const nextNode =
-        plan.kind === 'READY' ? plan.nodes[nextIndex] : undefined;
-      const delaySeconds =
-        plan.kind === 'READY' ? plan.delaysSeconds[acceptedIndex] : undefined;
-      if (
-        nextNode === undefined ||
-        nextNode.channel !== 'EMAIL' ||
-        typeof delaySeconds !== 'number' ||
-        !Number.isSafeInteger(delaySeconds) ||
-        delaySeconds < 0
-      )
-        return { status: 'TERMINAL_SUPPRESSED' };
-      const dueAt = await this.nextDueInWindow(
-        input.campaignExecutionId,
-        input.workspaceId,
-        input.campaignId,
-        new Date(acceptedAt.getTime() + delaySeconds * 1000),
+      if (plan.kind !== 'READY') return { status: 'TERMINAL_SUPPRESSED' };
+      const next = await this.nextUsableStepInTransaction(
         runner,
+        input.workspaceId,
+        String(attempt.creatorId),
+        plan,
+        acceptedIndex,
       );
-      nextOccurrence = {
-        occurrenceId: computeCampaignOccurrenceId(
-          input.enrollmentId,
-          nextIndex,
-          nextNode.messageId,
-        ),
-        workflowVersionId: input.workflowVersionId,
-        messageId: nextNode.messageId,
-        authoredMessageIndex: nextIndex,
-        dueAt,
-      };
+      if (next === 'INVALID') return { status: 'TERMINAL_SUPPRESSED' };
+      if (next !== null) {
+        const dueAt = await this.nextDueInWindow(
+          input.campaignExecutionId,
+          input.workspaceId,
+          input.campaignId,
+          new Date(acceptedAt.getTime() + next.delaySeconds * 1000),
+          runner,
+        );
+        nextOccurrence = {
+          occurrenceId: computeCampaignOccurrenceId(
+            input.enrollmentId,
+            next.index,
+            next.messageId,
+          ),
+          workflowVersionId: input.workflowVersionId,
+          messageId: next.messageId,
+          authoredMessageIndex: next.index,
+          dueAt,
+        };
+      }
     }
     const result = await this.reconcileAcceptedWithSnapshotInTransaction(
       {
@@ -1887,13 +2218,18 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       });
       return { status: 'CHANGED' };
     }
-    if (input.nextOccurrence.authoredMessageIndex !== nextIndex)
-      throw new Error('Next Campaign occurrence index is not contiguous');
+    // Later steps for channels the creator cannot use are skipped (MYAH-445).
+    if (input.nextOccurrence.authoredMessageIndex < nextIndex)
+      throw new Error('Next Campaign occurrence index is not ahead');
     const advanced = rows(
       await runner.query(
         `UPDATE core."campaignEnrollment" SET "nextAuthoredMessageIndex"=$2, "updatedAt"=clock_timestamp()
           WHERE id=$1 AND state='ACTIVE' AND "nextAuthoredMessageIndex"=$3 RETURNING id`,
-        [input.enrollmentId, nextIndex, input.acceptedAuthoredMessageIndex],
+        [
+          input.enrollmentId,
+          input.nextOccurrence.authoredMessageIndex,
+          input.acceptedAuthoredMessageIndex,
+        ],
       ),
     );
     if (advanced.length !== 1) return { status: 'STATE_CONFLICT' };

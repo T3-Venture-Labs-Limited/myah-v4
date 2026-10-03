@@ -412,7 +412,7 @@ describe('CampaignSequenceService', () => {
         expectedVersionId: versionId,
         workspaceId,
       }),
-    ).rejects.toThrow('email-only sequence');
+    ).rejects.toThrow('without email attachments');
   });
 
   it('loads ABSENT without creating a workflow', async () => {
@@ -1563,7 +1563,11 @@ describe('CampaignSequenceService', () => {
         schemaVersion: 1 as const,
         messages: [
           sequence.messages[0],
-          { id: secondMessageId, channel: 'INSTAGRAM' as const, text: 'Hi' },
+          {
+            id: secondMessageId,
+            channel: 'INSTAGRAM' as const,
+            text: 'x'.repeat(1001),
+          },
         ],
         delaysSeconds: [null],
       };
@@ -1589,9 +1593,9 @@ describe('CampaignSequenceService', () => {
         issues: expect.arrayContaining([
           expect.objectContaining({ code: 'DELAY_REQUIRED' }),
           expect.objectContaining({
-            code: 'INSTAGRAM_UNAVAILABLE',
+            code: 'INSTAGRAM_TOO_LONG',
             messageId: secondMessageId,
-            path: 'messages.1.channel',
+            path: 'messages.1.text',
           }),
         ]),
       });

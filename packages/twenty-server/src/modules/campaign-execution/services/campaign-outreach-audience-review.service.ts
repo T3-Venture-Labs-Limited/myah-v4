@@ -14,6 +14,11 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { MessageSuppressionService } from 'src/modules/emailing/services/message-suppression.service';
 import {
+  type CampaignActiveParticipation,
+  findCampaignActiveParticipations,
+  findCreatorInstagramHandles,
+} from 'src/modules/campaign-execution/utils/campaign-active-participation.util';
+import {
   type CampaignOutreachAudienceExclusionReason,
   type CampaignOutreachAudienceReview,
 } from 'src/modules/campaign-execution/types/campaign-outreach-audience-review.type';
@@ -25,7 +30,8 @@ const REASON_ORDER: readonly CampaignOutreachAudienceExclusionReason[] = [
   'OPERATOR_EXCLUDED',
   'MISSING_CREATOR',
   'INVALID_STAGE',
-  'NON_EMAIL_CONTACT_METHOD',
+  'ACTIVE_IN_OTHER_CAMPAIGN',
+  'NO_USABLE_CHANNEL',
   'INVALID_EMAIL',
   'SUPPRESSED_EMAIL',
   'DUPLICATE_CREATOR_EMAIL',
@@ -54,6 +60,8 @@ type AudienceRows = Readonly<{
   memberships: readonly Membership[];
   audienceCreators: readonly Creator[];
   allWorkspaceCreators: readonly Creator[];
+  instagramHandles: ReadonlyMap<string, string>;
+  activeElsewhere: ReadonlyMap<string, CampaignActiveParticipation>;
 }>;
 
 @Injectable()
@@ -152,6 +160,12 @@ export class CampaignOutreachAudienceReviewService {
         workspaceId,
         candidateEmails,
       );
+      const dataSource = await this.orm.getGlobalWorkspaceDataSource();
+      // Read-only identity lookups; the audience itself is permission-scoped above.
+      const query = (sql: string, parameters: unknown[]) =>
+        dataSource.query(sql, parameters, undefined, {
+          shouldBypassPermissionChecks: true,
+        });
 
       return this.evaluate(
         campaignId,
@@ -159,6 +173,15 @@ export class CampaignOutreachAudienceReviewService {
           memberships: activeMemberships,
           audienceCreators,
           allWorkspaceCreators,
+          instagramHandles: await findCreatorInstagramHandles(query, {
+            workspaceId,
+            creatorIds,
+          }),
+          activeElsewhere: await findCampaignActiveParticipations(query, {
+            workspaceId,
+            creatorIds,
+            excludeCampaignId: campaignId,
+          }),
         },
         suppressedEmails,
       );
@@ -260,6 +283,8 @@ export class CampaignOutreachAudienceReviewService {
     const suppressedEmails = new Set(
       suppressionRows.map(({ emailAddress }) => emailAddress),
     );
+    const query = (sql: string, parameters: unknown[]) =>
+      runner.query(sql, parameters);
 
     return this.evaluate(
       campaignId,
@@ -267,6 +292,15 @@ export class CampaignOutreachAudienceReviewService {
         memberships: activeMemberships,
         audienceCreators,
         allWorkspaceCreators,
+        instagramHandles: await findCreatorInstagramHandles(query, {
+          workspaceId,
+          creatorIds,
+        }),
+        activeElsewhere: await findCampaignActiveParticipations(query, {
+          workspaceId,
+          creatorIds,
+          excludeCampaignId: campaignId,
+        }),
       },
       suppressedEmails,
     );
@@ -331,16 +365,24 @@ export class CampaignOutreachAudienceReviewService {
         )
       )
         reasons.push('INVALID_STAGE');
-      if (
-        typeof membership.selectedContactMethod !== 'string' ||
-        membership.selectedContactMethod.trim().toUpperCase() !== 'EMAIL'
-      )
-        reasons.push('NON_EMAIL_CONTACT_METHOD');
-      if (creator && email === null) reasons.push('INVALID_EMAIL');
+      const activeElsewhere =
+        creatorId === null ? undefined : rows.activeElsewhere.get(creatorId);
+      if (activeElsewhere) reasons.push('ACTIVE_IN_OTHER_CAMPAIGN');
+      // Channels decide eligibility (MYAH-445): an unusable email only skips
+      // email steps when the creator can still be reached on Instagram.
+      const emailReasons: CampaignOutreachAudienceExclusionReason[] = [];
+      if (creator && email === null) emailReasons.push('INVALID_EMAIL');
       if (email && suppressedEmails.has(email))
-        reasons.push('SUPPRESSED_EMAIL');
+        emailReasons.push('SUPPRESSED_EMAIL');
       if (email && duplicateEmails.has(email))
-        reasons.push('DUPLICATE_CREATOR_EMAIL');
+        emailReasons.push('DUPLICATE_CREATOR_EMAIL');
+      const usableEmail = emailReasons.length === 0 ? email : null;
+      const instagramHandle =
+        creatorId === null
+          ? null
+          : (rows.instagramHandles.get(creatorId) ?? null);
+      if (creator && usableEmail === null && instagramHandle === null)
+        reasons.push(...emailReasons, 'NO_USABLE_CHANNEL');
 
       const creatorName = creator
         ? this.displayName(creator.name, creatorId as string)
@@ -350,13 +392,14 @@ export class CampaignOutreachAudienceReviewService {
         campaignCreatorId !== null &&
         creatorId !== null &&
         creatorName !== null &&
-        email !== null
+        (usableEmail !== null || instagramHandle !== null)
       ) {
         eligible.push({
           campaignCreatorId,
           creatorId,
           creatorName,
-          normalizedEmail: email,
+          normalizedEmail: usableEmail,
+          instagramHandle,
         });
       } else {
         excluded.push({
@@ -364,6 +407,7 @@ export class CampaignOutreachAudienceReviewService {
           creatorId,
           creatorName,
           reasons: REASON_ORDER.filter((reason) => reasons.includes(reason)),
+          activeCampaignName: activeElsewhere?.campaignName ?? null,
         });
       }
     }

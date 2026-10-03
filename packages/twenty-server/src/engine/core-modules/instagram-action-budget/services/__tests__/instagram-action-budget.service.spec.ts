@@ -37,6 +37,7 @@ type Reservation = {
   targetFingerprint: string;
   targetLockReleasedAt: Date | null;
   workspaceId: string;
+  isCold?: boolean;
 };
 type Receipt = {
   id: string;
@@ -180,6 +181,7 @@ class BudgetTransactionHarness {
     },
   ];
   public reservations: Reservation[] = [];
+  public creatorHasWritten = false;
 
   public readonly manager = {
     create: jest.fn((_entity: unknown, value: object) => value),
@@ -215,6 +217,9 @@ class BudgetTransactionHarness {
       if (sql.includes('pg_advisory_xact_lock')) {
         return [];
       }
+      if (sql.includes('myahSocialMessage')) {
+        return [{ written: this.creatorHasWritten }];
+      }
       if (sql.includes('instagramActionReservation') && sql.includes('COUNT')) {
         const [queryWorkspaceId, queryAccountId] = parameters as [
           string,
@@ -224,7 +229,8 @@ class BudgetTransactionHarness {
           (reservation) =>
             reservation.workspaceId === queryWorkspaceId &&
             reservation.instagramAccountRecordId === queryAccountId &&
-            reservation.releasedAt === null,
+            reservation.releasedAt === null &&
+            reservation.isCold !== false,
         );
         const hourly = active.filter(
           ({ reservedAt }) =>
@@ -689,6 +695,49 @@ describe('InstagramActionBudgetService', () => {
       }
     },
   );
+
+  it('limits cold messages only: a reply where the creator has written is never blocked or counted', async () => {
+    const { harness, service } = createService();
+    for (let index = 0; index < 10; index++) harness.addReservation();
+    harness.addReservation({ isCold: false });
+
+    expectUsage(
+      await service.inspectUsage({ instagramAccountRecordId, workspaceId }),
+      { dailyUsed: 10, hourlyUsed: 10, nextEligibleAt: expect.any(Date) },
+    );
+
+    harness.creatorHasWritten = true;
+    await expect(
+      service.reserve(
+        reserveInput({
+          actionKind: 'REPLY',
+          providerMessagingId: 'creator-igsid',
+          targetFingerprint: otherTargetFingerprint,
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 'RESERVED' });
+    expect(harness.reservations[harness.reservations.length - 1]).toMatchObject(
+      { isCold: false },
+    );
+  });
+
+  it('counts a follow-up to a creator who never replied as cold', async () => {
+    const { harness, service } = createService();
+    for (let index = 0; index < 10; index++) harness.addReservation();
+
+    await expect(
+      service.reserve(
+        reserveInput({
+          actionKind: 'REPLY',
+          providerMessagingId: 'creator-igsid',
+          targetFingerprint: otherTargetFingerprint,
+        }),
+      ),
+    ).resolves.toMatchObject({
+      blockedWindows: ['HOURLY'],
+      status: 'BLOCKED',
+    });
+  });
 
   it('records every exhausted window and chooses the later eligible instant', async () => {
     const { harness, service } = createService();

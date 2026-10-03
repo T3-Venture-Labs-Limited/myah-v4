@@ -1,3 +1,4 @@
+import { getUtf8ByteLength } from 'twenty-shared/utils';
 import { useEffect, useRef, useState } from 'react';
 import { styled } from '@linaria/react';
 import {
@@ -112,9 +113,9 @@ export const CampaignSequenceMessageEditor = ({
     return (
       <StyledEditor aria-label={`Edit Instagram message ${messageIndex + 1}`}>
         <StyledHeading>Step {messageIndex + 1} · Instagram</StyledHeading>
-        <strong>Instagram delivery unavailable</strong>
         <StyledHint>
-          Instagram is text-only. Delivery cannot be enabled in this phase.
+          Plain text, up to 1,000 bytes. Sent from the Campaign&apos;s Instagram
+          account. Use {'{{creator.name}}'} to personalize.
         </StyledHint>
         <label>
           Instagram message
@@ -127,6 +128,9 @@ export const CampaignSequenceMessageEditor = ({
             value={message.text}
           />
         </label>
+        <StyledHint>
+          {getUtf8ByteLength(message.text.trim())} / 1,000 bytes
+        </StyledHint>
         {messageIssues.map((issue) => (
           <StyledWarning key={`${issue.code}-${issue.path}`}>
             {issue.message}

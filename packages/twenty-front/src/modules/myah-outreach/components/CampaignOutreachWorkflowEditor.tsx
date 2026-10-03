@@ -224,7 +224,8 @@ export const CampaignOutreachWorkflowEditor = ({
                   draft.messages.length > 0 &&
                   draft.messages.every(
                     (message) =>
-                      message.channel === 'EMAIL' && message.files.length === 0,
+                      message.channel === 'INSTAGRAM' ||
+                      message.files.length === 0,
                   )
                 }
                 publishing={publishing}
@@ -249,9 +250,12 @@ export const CampaignOutreachWorkflowEditor = ({
             </p>
           </StyledIntro>
           <StyledPanel aria-label="Ordered steps">
-            <StyledNotice>
-              Instagram steps can be authored, but Campaign Start currently
-              sends email only.
+            <StyledNotice role="note">
+              {(draft?.messages ?? []).filter(
+                (message) => message.channel === 'INSTAGRAM',
+              ).length > 1
+                ? 'Instagram works best with one cold DM. Creators who get several unanswered DMs often ignore or restrict the account. Follow up by email instead.'
+                : 'Recommended: one Instagram DM, on its own or alongside an email sequence.'}
             </StyledNotice>
             {error ? (
               <StyledError role="alert">

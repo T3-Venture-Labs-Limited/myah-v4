@@ -472,6 +472,8 @@ describe('CampaignProgressionService', () => {
       let inserted: unknown[] = [];
       let candidate: Date | undefined;
       const query = jest.fn(async (sql: string, parameters: unknown[] = []) => {
+        if (sql.includes('SELECT email FROM'))
+          return [{ email: 'creator@example.com' }];
         if (sql.includes('core.workspace')) return [{ id: ids.workspaceId }];
         if (sql.includes('.campaign WHERE'))
           return [{ lifecycleStatus: 'ACTIVE' }];
@@ -2415,4 +2417,147 @@ describe('CampaignProgressionService', () => {
       ).not.toContain('SET "lifecycleStatus"=\'COMPLETED\'');
     },
   );
+});
+
+describe('CampaignProgressionService Instagram steps (MYAH-445)', () => {
+  const plan = {
+    kind: 'READY',
+    delaysSeconds: [60, 120],
+    nodes: [
+      {
+        messageId: '30000000-0000-4000-8000-000000000001',
+        channel: 'INSTAGRAM',
+      },
+      {
+        messageId: '30000000-0000-4000-8000-000000000002',
+        channel: 'INSTAGRAM',
+      },
+      {
+        messageId: '30000000-0000-4000-8000-000000000003',
+        channel: 'EMAIL',
+        replyToThread: false,
+      },
+    ],
+  };
+  const setup = (options: { handle: boolean; email: boolean }) => {
+    const calls: Array<{ sql: string; parameters: unknown[] }> = [];
+    const query = jest.fn(async (sql: string, parameters: unknown[] = []) => {
+      calls.push({ sql, parameters });
+      if (sql.includes('FROM core."campaignOccurrence" o'))
+        return [
+          {
+            id: ids.occurrenceId,
+            state: 'IN_FLIGHT',
+            enrollmentId: ids.enrollmentId,
+            workflowVersionId: ids.workflowVersionId,
+            authoredMessageIndex: 0,
+            enrollmentState: 'ACTIVE',
+            creatorId: ids.creatorId,
+            campaignCreatorId: ids.creatorId,
+            nextAuthoredMessageIndex: 0,
+            campaignExecutionId: ids.activationId,
+          },
+        ];
+      if (sql.includes('"lifecycleStatus" FROM'))
+        return [{ lifecycleStatus: 'ACTIVE' }];
+      if (sql.includes('to_regclass')) return [{ ok: true }];
+      if (sql.includes('socialProfile'))
+        return options.handle
+          ? [{ creatorId: ids.creatorId, handle: 'ava' }]
+          : [];
+      if (sql.includes('SELECT email FROM'))
+        return [{ email: options.email ? 'ava@example.com' : null }];
+      if (sql.includes('AS "dueAt"')) return [{ dueAt: parameters[3] }];
+      if (sql.includes('INSERT INTO core."campaignOccurrence"'))
+        return [{ id: parameters[0] }];
+      return [];
+    });
+    const service = new CampaignProgressionService(undefined, undefined, {
+      loadExecutionPlanInTransaction: async () => plan,
+    } as never);
+    return { service, query, calls };
+  };
+
+  it('succeeds an accepted Instagram step and schedules the next step', async () => {
+    const { service, query, calls } = setup({ handle: true, email: true });
+    const acceptedAt = new Date('2026-10-03T10:00:00.000Z');
+    await expect(
+      service.reconcileInstagramOccurrenceInTransaction(
+        {
+          workspaceId: ids.workspaceId,
+          campaignId: ids.campaignId,
+          occurrenceId: ids.occurrenceId,
+          receiptId: 'receipt-1',
+          outcome: 'ACCEPTED',
+          acceptedAt,
+        },
+        managerWith(query) as never,
+      ),
+    ).resolves.toBe('CHANGED');
+    expect(calls.some(({ sql }) => sql.includes("state='SUCCEEDED'"))).toBe(
+      true,
+    );
+    const insert = calls.find(({ sql }) =>
+      sql.includes('INSERT INTO core."campaignOccurrence"'),
+    );
+    expect(insert?.parameters[6]).toBe(1);
+    expect(insert?.parameters[7]).toEqual(new Date('2026-10-03T10:01:00.000Z'));
+  });
+
+  it('skips later Instagram steps for a creator without a handle and keeps the authored delays', async () => {
+    const { service, query, calls } = setup({ handle: false, email: true });
+    await service.reconcileInstagramOccurrenceInTransaction(
+      {
+        workspaceId: ids.workspaceId,
+        campaignId: ids.campaignId,
+        occurrenceId: ids.occurrenceId,
+        receiptId: null,
+        outcome: 'ACCEPTED',
+        acceptedAt: new Date('2026-10-03T10:00:00.000Z'),
+      },
+      managerWith(query) as never,
+    );
+    const insert = calls.find(({ sql }) =>
+      sql.includes('INSERT INTO core."campaignOccurrence"'),
+    );
+    expect(insert?.parameters[6]).toBe(2);
+    expect(insert?.parameters[7]).toEqual(new Date('2026-10-03T10:03:00.000Z'));
+  });
+
+  it('finishes the enrollment when no later step can reach the creator', async () => {
+    const { service, query, calls } = setup({ handle: false, email: false });
+    await service.reconcileInstagramOccurrenceInTransaction(
+      {
+        workspaceId: ids.workspaceId,
+        campaignId: ids.campaignId,
+        occurrenceId: ids.occurrenceId,
+        receiptId: null,
+        outcome: 'ACCEPTED',
+      },
+      managerWith(query) as never,
+    );
+    expect(calls.some(({ sql }) => sql.includes("state='FINISHED'"))).toBe(
+      true,
+    );
+  });
+
+  it('marks an unknown send UNKNOWN without scheduling anything', async () => {
+    const { service, query, calls } = setup({ handle: true, email: true });
+    await service.reconcileInstagramOccurrenceInTransaction(
+      {
+        workspaceId: ids.workspaceId,
+        campaignId: ids.campaignId,
+        occurrenceId: ids.occurrenceId,
+        receiptId: 'receipt-2',
+        outcome: 'UNKNOWN',
+      },
+      managerWith(query) as never,
+    );
+    expect(calls.some(({ sql }) => sql.includes("state='UNKNOWN'"))).toBe(true);
+    expect(
+      calls.some(({ sql }) =>
+        sql.includes('INSERT INTO core."campaignOccurrence"'),
+      ),
+    ).toBe(false);
+  });
 });

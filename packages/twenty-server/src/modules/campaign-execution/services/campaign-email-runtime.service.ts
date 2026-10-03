@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -7,6 +7,7 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import { CampaignProgressionService } from 'src/modules/campaign-execution/services/campaign-progression.service';
 import { CampaignSentProjectionService } from 'src/modules/campaign-execution/services/campaign-sent-projection.service';
 import { CampaignReplyService } from 'src/modules/campaign-execution/services/campaign-reply.service';
+import { CampaignInstagramStepService } from 'src/modules/campaign-execution/services/campaign-instagram-step.service';
 import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 import { buildCampaignFinalEvidenceDigest } from 'src/modules/campaign-execution/utils/campaign-launch-proof.util';
 import { computeCampaignProjectedMessageId } from 'src/modules/campaign-execution/utils/campaign-execution-identity.util';
@@ -62,6 +63,8 @@ export class CampaignEmailRuntimeService {
     private readonly dispatch: OutboundEmailDispatchService,
     private readonly projection: CampaignSentProjectionService,
     private readonly replyService: CampaignReplyService,
+    @Optional()
+    private readonly instagramSteps?: CampaignInstagramStepService,
   ) {}
 
   async runDueOccurrences(): Promise<void> {
@@ -103,7 +106,14 @@ export class CampaignEmailRuntimeService {
              FROM core."outboundEmailAttempt" a JOIN core."campaignOccurrence" o ON o.id=a."occurrenceId"
             WHERE a.source='CAMPAIGN_SEQUENCE' AND a."attemptState"='BLOCKED' AND o.state='IN_FLIGHT'
             ORDER BY a."updatedAt",a."attemptId" LIMIT 100
-         ) SELECT * FROM pending UNION ALL SELECT * FROM reserved UNION ALL SELECT * FROM processing UNION ALL SELECT * FROM accepted UNION ALL SELECT * FROM definitelyUnaccepted UNION ALL SELECT * FROM unknown UNION ALL SELECT * FROM blocked`,
+         ), instagram AS (
+           -- Instagram steps in flight longer than a minute: settle from their receipt.
+           SELECT 'INSTAGRAM' AS kind,o."workspaceId",o."campaignId",o.id,NULL::uuid AS "attemptId"
+             FROM core."campaignOccurrence" o
+            WHERE o.state IN ('IN_FLIGHT','UNKNOWN') AND o."updatedAt" <= clock_timestamp() - interval '1 minute'
+              AND NOT EXISTS (SELECT 1 FROM core."outboundEmailAttempt" a WHERE a."occurrenceId"=o.id)
+            ORDER BY o."updatedAt",o.id LIMIT 100
+         ) SELECT * FROM instagram UNION ALL SELECT * FROM pending UNION ALL SELECT * FROM reserved UNION ALL SELECT * FROM processing UNION ALL SELECT * FROM accepted UNION ALL SELECT * FROM definitelyUnaccepted UNION ALL SELECT * FROM unknown UNION ALL SELECT * FROM blocked`,
     );
     // Inbox acceptance repair must not be gated by occurrence success or sent
     // projection: those can complete before an inbound import inserts pending.
@@ -145,6 +155,14 @@ export class CampaignEmailRuntimeService {
                 { workspaceId, inboundEvidenceId: String(item.id) },
                 manager as never,
               ),
+            );
+            return;
+          }
+          if (item.kind === 'INSTAGRAM') {
+            await this.instagramSteps?.recover(
+              workspaceId,
+              String(item.campaignId),
+              String(item.id),
             );
             return;
           }
@@ -204,6 +222,14 @@ export class CampaignEmailRuntimeService {
               manager as never,
             ),
           );
+          if (result.status === 'INSTAGRAM_CLAIMED') {
+            await this.instagramSteps?.dispatch(
+              workspaceId,
+              String(item.campaignId),
+              String(item.id),
+            );
+            return;
+          }
           if (
             result.status === 'RESERVED' ||
             result.status === 'DISPATCHABLE_REPLAY'

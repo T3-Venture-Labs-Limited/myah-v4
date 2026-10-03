@@ -252,8 +252,8 @@ export class CampaignSequenceFixedMaterialService {
       !isCanonicalUuid(input.workspaceId) ||
       !isCanonicalUuid(input.campaignId) ||
       !isCanonicalUuid(input.workflowVersionId) ||
+      // An Instagram-only sequence has no email material (MYAH-445).
       !Array.isArray(input.orderedMessageIds) ||
-      input.orderedMessageIds.length === 0 ||
       input.orderedMessageIds.some(
         (messageId) => !isCanonicalUuid(messageId),
       ) ||

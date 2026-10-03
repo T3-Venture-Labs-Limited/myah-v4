@@ -71,6 +71,7 @@ const CAMPAIGN_OUTREACH_AUDIENCE_REVIEW = gql`
         creatorId
         creatorName
         reasons
+        activeCampaignName
       }
     }
   }
@@ -135,7 +136,8 @@ type CampaignOutreachAudienceReason =
   | 'OPERATOR_EXCLUDED'
   | 'MISSING_CREATOR'
   | 'INVALID_STAGE'
-  | 'NON_EMAIL_CONTACT_METHOD'
+  | 'ACTIVE_IN_OTHER_CAMPAIGN'
+  | 'NO_USABLE_CHANNEL'
   | 'INVALID_EMAIL'
   | 'SUPPRESSED_EMAIL'
   | 'DUPLICATE_CREATOR_EMAIL';
@@ -157,6 +159,7 @@ type CampaignOutreachAudienceReviewData = {
       creatorId: string | null;
       creatorName: string | null;
       reasons: CampaignOutreachAudienceReason[];
+      activeCampaignName: string | null;
     }>;
   };
 };
@@ -166,7 +169,9 @@ const audienceReasonLabels: Record<CampaignOutreachAudienceReason, string> = {
   OPERATOR_EXCLUDED: 'Excluded by operator',
   MISSING_CREATOR: 'Creator is missing or deleted',
   INVALID_STAGE: 'Stage must be Not contacted or Contacted',
-  NON_EMAIL_CONTACT_METHOD: 'Contact method must be Email',
+  ACTIVE_IN_OTHER_CAMPAIGN:
+    'Active in another Campaign. A creator can be in one active Campaign at a time',
+  NO_USABLE_CHANNEL: 'No Instagram handle or usable email for this sequence',
   INVALID_EMAIL: 'Creator needs a valid email address',
   SUPPRESSED_EMAIL: 'Email address is suppressed',
   DUPLICATE_CREATOR_EMAIL: 'Email conflicts with another Creator',
@@ -483,8 +488,14 @@ export const MyahCampaignExecutionControls = ({
     Array.isArray(snapshot?.sequence?.messages) &&
     snapshot.sequence.messages.length > 0 &&
     snapshot.sequence.messages.every(
-      (message: { channel?: string }) => message.channel === 'EMAIL',
+      (message: { channel?: string }) =>
+        message.channel === 'EMAIL' || message.channel === 'INSTAGRAM',
     );
+  // A ready mailbox is needed only when the sequence has email steps.
+  const needsMailbox =
+    snapshot?.sequence?.messages?.some(
+      (message: { channel?: string }) => message.channel === 'EMAIL',
+    ) ?? true;
   const hasOutstandingStart = startAttemptKeyRef.current !== null;
   const canStart =
     canRead &&
@@ -496,7 +507,7 @@ export const MyahCampaignExecutionControls = ({
     (hasOutstandingStart || lifecycle === 'DRAFT' || lifecycle === 'PAUSED') &&
     snapshot?.versionStatus === 'ACTIVE' &&
     sequenceReady &&
-    hasReadyMailbox &&
+    (hasReadyMailbox || !needsMailbox) &&
     audienceIsCurrent &&
     audience.eligibleCount > 0 &&
     !campaignQuery.loading &&
@@ -655,7 +666,10 @@ export const MyahCampaignExecutionControls = ({
       if (!isCurrent(origin)) return;
       const result = response.data?.startCampaignExecution;
       if (result?.status === 'BLOCKED' && result.lifecycleStatus === null) {
-        const message = result.reason ?? 'Campaign Start blocked.';
+        const message =
+          result.reason === 'INSTAGRAM_ACCOUNT_REQUIRED'
+            ? 'Connect and select an Instagram account in Settings before starting a sequence with Instagram steps.'
+            : (result.reason ?? 'Campaign Start blocked.');
         setOperationNotice({ scope: origin, message });
         enqueueErrorSnackBar({ message });
         return;
@@ -779,8 +793,10 @@ export const MyahCampaignExecutionControls = ({
                         lifecycle !== 'ACTIVE'
                       ? 'Publish the current sequence before Start.'
                       : !sequenceReady && lifecycle !== 'ACTIVE'
-                        ? 'Add a valid email-only sequence before Start.'
-                        : !hasReadyMailbox && lifecycle !== 'ACTIVE'
+                        ? 'Add a valid sequence before Start.'
+                        : needsMailbox &&
+                            !hasReadyMailbox &&
+                            lifecycle !== 'ACTIVE'
                           ? 'Select at least one ready email mailbox before Start.'
                           : null;
 
@@ -886,8 +902,8 @@ export const MyahCampaignExecutionControls = ({
                   {snapshot?.versionStatus !== 'ACTIVE'
                     ? 'Publish the current sequence before Start.'
                     : sequenceReady
-                      ? 'Published email sequence ready.'
-                      : 'A valid email-only sequence is required before Start.'}
+                      ? 'Published sequence ready.'
+                      : 'A valid sequence is required before Start.'}
                 </p>
                 <p>
                   {
@@ -931,7 +947,12 @@ export const MyahCampaignExecutionControls = ({
                     {audience.excludedCreators.map((creator) => (
                       <li key={creator.campaignCreatorId}>
                         {`${creator.creatorName ?? 'Creator unavailable'} — ${creator.reasons
-                          .map((reason) => audienceReasonLabels[reason])
+                          .map((reason) =>
+                            reason === 'ACTIVE_IN_OTHER_CAMPAIGN' &&
+                            creator.activeCampaignName
+                              ? `Active in ${creator.activeCampaignName}. Mark them Posted or Dropped there, then start again to include them`
+                              : audienceReasonLabels[reason],
+                          )
                           .join('; ')}`}
                       </li>
                     ))}

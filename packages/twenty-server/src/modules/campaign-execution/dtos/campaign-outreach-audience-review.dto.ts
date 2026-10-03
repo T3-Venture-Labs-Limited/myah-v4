@@ -12,7 +12,8 @@ export enum CampaignOutreachAudienceExclusionReasonDTO {
   OPERATOR_EXCLUDED = 'OPERATOR_EXCLUDED',
   MISSING_CREATOR = 'MISSING_CREATOR',
   INVALID_STAGE = 'INVALID_STAGE',
-  NON_EMAIL_CONTACT_METHOD = 'NON_EMAIL_CONTACT_METHOD',
+  ACTIVE_IN_OTHER_CAMPAIGN = 'ACTIVE_IN_OTHER_CAMPAIGN',
+  NO_USABLE_CHANNEL = 'NO_USABLE_CHANNEL',
   INVALID_EMAIL = 'INVALID_EMAIL',
   SUPPRESSED_EMAIL = 'SUPPRESSED_EMAIL',
   DUPLICATE_CREATOR_EMAIL = 'DUPLICATE_CREATOR_EMAIL',
@@ -50,6 +51,9 @@ export class CampaignOutreachAudienceExcludedCreatorDTO {
 
   @Field(() => [CampaignOutreachAudienceExclusionReasonDTO])
   reasons: CampaignOutreachAudienceExclusionReasonDTO[];
+
+  @Field(() => String, { nullable: true })
+  activeCampaignName: string | null;
 }
 
 @ObjectType('CampaignOutreachAudienceReview')

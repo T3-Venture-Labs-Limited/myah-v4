@@ -397,7 +397,11 @@ const snapshotWorkspaceAuthContext = (value: unknown): WorkspaceAuthContext => {
           'user',
           'workspaceMemberId',
           'workspaceMember',
+          // Set on interactive requests since MYAH-427.
+          'isInteractiveUserRequest',
         ]) ||
+        (snapshot.isInteractiveUserRequest !== undefined &&
+          typeof snapshot.isInteractiveUserRequest !== 'boolean') ||
         typeof snapshot.userWorkspaceId !== 'string' ||
         !snapshot.user ||
         typeof snapshot.user !== 'object' ||
