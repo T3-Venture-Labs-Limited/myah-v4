@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { IsNull } from 'typeorm';
 import { FieldActorSource } from 'twenty-shared/types';
 
+import { MyahCreatorMessageTriggerService } from 'src/modules/myah-reply-agent/services/myah-creator-message-trigger.service';
 import { type RawAuthContext } from 'src/engine/core-modules/auth/types/raw-auth-context.type';
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
@@ -126,7 +128,20 @@ export class UnipileInstagramProjectionService {
     private readonly accountFinalizationLock: UnipileInstagramAccountFinalizationLockService,
     private readonly myahInboxContactTriageService: MyahInboxContactTriageService,
     private readonly myahInboxContactTriageReceiptService: MyahInboxContactTriageReceiptService,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
+
+  private creatorMessageTrigger(): MyahCreatorMessageTriggerService | null {
+    try {
+      return (
+        this.moduleRef?.get(MyahCreatorMessageTriggerService, {
+          strict: false,
+        }) ?? null
+      );
+    } catch {
+      return null;
+    }
+  }
 
   async upsertVerifiedChat(
     input: UnipileInstagramChatProjectionInput,
@@ -589,7 +604,7 @@ export class UnipileInstagramProjectionService {
     const requestedDeliveryStateUpdatedAt =
       input.deliveryStateUpdatedAt ?? input.message.timestamp;
 
-    return this.withActiveBinding(input, () =>
+    const result = await this.withActiveBinding(input, () =>
       this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
@@ -820,6 +835,23 @@ export class UnipileInstagramProjectionService {
         });
       }, this.systemContext(input.workspace)),
     );
+
+    // Live creator messages wake the Campaign reply handling and the reply
+    // agent after commit (MYAH-445).
+    if (
+      result.wasInserted &&
+      result.direction === 'INBOUND' &&
+      input.triageMode === 'LIVE'
+    ) {
+      await this.creatorMessageTrigger()?.notifyInbound({
+        workspaceId: input.workspace.id,
+        channel: 'INSTAGRAM',
+        conversationRecordId: result.conversationRecordId,
+        messageRecordId: result.messageRecordId,
+      });
+    }
+
+    return result;
   }
 
   async markCompletedMessageSync(
