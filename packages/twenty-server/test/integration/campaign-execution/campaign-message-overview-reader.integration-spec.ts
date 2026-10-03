@@ -894,6 +894,173 @@ describe('Campaign message overview PostgreSQL reader', () => {
     );
   });
 
+  it('reads Instagram steps beside email rows with handle, text, account and receipt outcome', async () => {
+    const schema = 'workspace_1wgvd1injqtife6y4rvfbu3h5';
+    const ig = {
+      queued: randomUUID(),
+      sent: randomUUID(),
+      held: randomUUID(),
+      unknown: randomUUID(),
+    };
+    const messageIds = Object.fromEntries(
+      Object.keys(ig).map((key) => [key, randomUUID()]),
+    ) as Record<keyof typeof ig, string>;
+    const bindingIds = [randomUUID(), randomUUID()];
+    const receipts = { sent: randomUUID(), unknown: randomUUID() };
+    const profileId = randomUUID();
+    const [{ campaignSequence }] = await global.testDataSource.query(
+      `SELECT "campaignSequence" FROM "${schema}"."workflowVersion" WHERE id=$1`,
+      [workflowVersionId],
+    );
+    try {
+      await global.testDataSource.query(
+        `UPDATE "${schema}"."workflowVersion" SET "campaignSequence"=$2::jsonb WHERE id=$1`,
+        [
+          workflowVersionId,
+          JSON.stringify({
+            ...campaignSequence,
+            messages: [
+              ...campaignSequence.messages,
+              ...Object.entries(messageIds).map(([key, id]) => ({
+                id,
+                channel: 'INSTAGRAM',
+                text: `Instagram ${key} hello`,
+              })),
+            ],
+          }),
+        ],
+      );
+      await global.testDataSource.query(
+        `INSERT INTO "${schema}"."socialProfile" (id,"creatorId",platform,handle)
+         VALUES ($1,$2,'INSTAGRAM','ava.glow')`,
+        [profileId, creatorId],
+      );
+      await global.testDataSource.query(
+        `INSERT INTO core."actionApprovalBinding" ("workspaceId",id,"initiatorUserWorkspaceId","threadId","actionName","draftId","contentDigest",state,"expiresAt","actionVersion")
+         VALUES ($1,$2,$4,$5,'overview_fixture',$6,'x','CONSUMED',now()+interval '1 day',1),
+                ($1,$3,$4,$7,'overview_fixture',$8,'x','CONSUMED',now()+interval '1 day',1)`,
+        [
+          workspaceId,
+          bindingIds[0],
+          bindingIds[1],
+          adminAuthContext.userWorkspaceId,
+          randomUUID(),
+          randomUUID(),
+          randomUUID(),
+          randomUUID(),
+        ],
+      );
+      await global.testDataSource.query(
+        `INSERT INTO core."actionExecutionReceipt" (id,"actionApprovalBindingId",state,"workspaceId","idempotencyKey","updatedAt")
+         VALUES ($1,$3,'PROVIDER_ACCEPTED',$4,$5,'2026-11-07T10:00:00Z'),
+                ($2,$7,'UNKNOWN',$4,$6,'2026-11-07T11:00:00Z')`,
+        [
+          receipts.sent,
+          receipts.unknown,
+          bindingIds[0],
+          workspaceId,
+          `overview-${receipts.sent}`,
+          `overview-${receipts.unknown}`,
+          bindingIds[1],
+        ],
+      );
+      await global.testDataSource.query(
+        `INSERT INTO core."campaignOccurrence"
+          (id,"workspaceId","campaignId","enrollmentId","workflowVersionId","messageId","authoredMessageIndex",state,"dueAt","holdReason","actionExecutionReceiptId","terminalReason","terminalAt")
+         VALUES ($1,$5,$6,$7,$8,$9,10,'PENDING','2026-11-08T12:00:00Z',NULL,NULL,NULL,NULL),
+                ($2,$5,$6,$7,$8,$10,11,'SUCCEEDED','2026-11-07T09:00:00Z',NULL,$13,'PROVIDER_ACCEPTED','2026-11-07T10:00:00Z'),
+                ($3,$5,$6,$7,$8,$11,12,'HELD','2026-11-07T08:00:00Z','SENDER_NOT_READY',NULL,NULL,NULL),
+                ($4,$5,$6,$7,$8,$12,13,'UNKNOWN','2026-11-07T07:00:00Z',NULL,$14,NULL,NULL)`,
+        [
+          ig.queued,
+          ig.sent,
+          ig.held,
+          ig.unknown,
+          workspaceId,
+          campaignId,
+          enrollmentId,
+          workflowVersionId,
+          messageIds.queued,
+          messageIds.sent,
+          messageIds.held,
+          messageIds.unknown,
+          receipts.sent,
+          receipts.unknown,
+        ],
+      );
+
+      const result = await readOverview(adminAuthContext, { first: 50 });
+      const byId = new Map(
+        result.nodes.map((node) => [node.occurrenceId, node]),
+      );
+
+      expect(byId.get(ig.queued)).toEqual(
+        expect.objectContaining({
+          platform: 'Instagram',
+          status: 'SCHEDULED',
+          recipient: '@ava.glow',
+          subject: null,
+          preview: 'Instagram queued hello',
+          eligibleAfter: '2026-11-08T12:00:00.000Z',
+          sentAt: null,
+        }),
+      );
+      expect(byId.get(ig.sent)).toEqual(
+        expect.objectContaining({
+          platform: 'Instagram',
+          status: 'SENT',
+          sentAt: '2026-11-07T10:00:00.000Z',
+          needsAttention: false,
+        }),
+      );
+      expect(byId.get(ig.held)).toEqual(
+        expect.objectContaining({
+          status: 'NEEDS_ATTENTION',
+          needsAttention: true,
+          reason: 'SENDER_NOT_READY',
+        }),
+      );
+      expect(byId.get(ig.unknown)).toEqual(
+        expect.objectContaining({
+          status: 'NEEDS_ATTENTION',
+          reason: 'OUTCOME_UNKNOWN',
+        }),
+      );
+      expect(byId.get(occurrenceIds.sent)?.platform).toBe('Email');
+
+      const sent = await readOverview(adminAuthContext, {
+        view: CampaignMessageOverviewView.SENT,
+      });
+      expect(sent.nodes.map(({ occurrenceId }) => occurrenceId)).toContain(
+        ig.sent,
+      );
+      expect(sent.nodes.map(({ occurrenceId }) => occurrenceId)).not.toContain(
+        ig.unknown,
+      );
+    } finally {
+      await global.testDataSource.query(
+        `DELETE FROM core."campaignOccurrence" WHERE id=ANY($1::uuid[])`,
+        [Object.values(ig)],
+      );
+      await global.testDataSource.query(
+        `DELETE FROM core."actionExecutionReceipt" WHERE id=ANY($1::uuid[])`,
+        [Object.values(receipts)],
+      );
+      await global.testDataSource.query(
+        `DELETE FROM core."actionApprovalBinding" WHERE id=ANY($1::uuid[])`,
+        [bindingIds],
+      );
+      await global.testDataSource.query(
+        `DELETE FROM "${schema}"."socialProfile" WHERE id=$1`,
+        [profileId],
+      );
+      await global.testDataSource.query(
+        `UPDATE "${schema}"."workflowVersion" SET "campaignSequence"=$2::jsonb WHERE id=$1`,
+        [workflowVersionId, JSON.stringify(campaignSequence)],
+      );
+    }
+  });
+
   it('filters accepted evidence with incomplete progression into Needs attention, not Sent', async () => {
     const attention = await readOverview(adminAuthContext, {
       view: CampaignMessageOverviewView.NEEDS_ATTENTION,

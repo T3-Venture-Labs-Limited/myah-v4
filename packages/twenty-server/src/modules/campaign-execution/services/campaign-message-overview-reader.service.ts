@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, In } from 'typeorm';
+import { DataSource, type EntityManager, In } from 'typeorm';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import {
@@ -16,6 +16,7 @@ import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
 import { deriveCampaignMessageOverviewStatus } from 'src/modules/campaign-execution/services/campaign-message-overview-status';
+import { findCreatorInstagramHandles } from 'src/modules/campaign-execution/utils/campaign-active-participation.util';
 import {
   CampaignMessageOverviewDateBasis,
   type CampaignMessageOverviewConnectionDTO,
@@ -67,6 +68,11 @@ type OverviewFact = {
   safeOutcomeReason: string | null;
   sortAt: Date | string;
   workflowVersionId: string;
+  // Instagram steps (MYAH-445): authored text and the linked send receipt.
+  stepChannel: string | null;
+  stepText: string | null;
+  receiptState: string | null;
+  receiptAt: Date | string | null;
 };
 // ponytail: bounded permission hydration truncates oversized scopes; replace with permission-aware keyset joins when real workspaces reach these ceilings.
 const MAX_PERMISSION_CAMPAIGNS = 1_000;
@@ -428,9 +434,29 @@ export class CampaignMessageOverviewReaderService {
                   enrollment."campaignCreatorId",enrollment."creatorId",entry."estimatedSendAt",
                   attempt."attemptState",attempt."providerAcceptedAt",COALESCE(attempt."connectedAccountId",entry."connectedAccountId") AS "connectedAccountId",
                   attempt."projectedMessageId",attempt."projectedMessageThreadId",attempt."safeOutcomeReason",
-                  attempt.recipient,attempt."renderSubject",attempt."renderText",visibility.rank AS "visibilityRank",o."dueAt" AS "sortAt"
+                  attempt.recipient,attempt."renderSubject",attempt."renderText",visibility.rank AS "visibilityRank",o."dueAt" AS "sortAt",
+                  step.channel AS "stepChannel",CASE WHEN $15::boolean THEN step.text END AS "stepText",
+                  receipt.state AS "receiptState",receipt."updatedAt" AS "receiptAt"
              FROM core."campaignOccurrence" o
              JOIN core."campaignEnrollment" enrollment ON enrollment.id=o."enrollmentId" AND enrollment."workspaceId"=o."workspaceId"
+             LEFT JOIN LATERAL (
+               SELECT message->>'channel' AS channel,message->>'text' AS text
+                 FROM "workflow" workflow
+                 JOIN "workflowVersion" version
+                   ON version."workflowId"=workflow.id AND version.id=o."workflowVersionId"
+                 CROSS JOIN LATERAL jsonb_array_elements(
+                   CASE WHEN jsonb_typeof(version."campaignSequence"->'messages')='array'
+                     THEN version."campaignSequence"->'messages' ELSE '[]'::jsonb END
+                 ) message
+                WHERE workflow."outreachCampaignId"=o."campaignId"
+                  AND message->>'id'=o."messageId"::text AND message->>'channel'='INSTAGRAM'
+                LIMIT 1
+             ) step ON TRUE
+             LEFT JOIN LATERAL (
+               SELECT r.state::text AS state,r."updatedAt"
+                 FROM core."actionExecutionReceipt" r
+                WHERE step.channel='INSTAGRAM' AND r.id=o."actionExecutionReceiptId" AND r."workspaceId"=o."workspaceId"
+             ) receipt ON TRUE
              LEFT JOIN core."campaignForecastEntry" entry ON entry."generationId"=$4 AND entry."occurrenceId"=o.id
              LEFT JOIN LATERAL (
                SELECT a."attemptState",a."providerAcceptedAt",a."connectedAccountId",a."messageChannelId",a."projectedMessageId",a."projectedMessageThreadId",a."safeOutcomeReason",
@@ -473,7 +499,9 @@ export class CampaignMessageOverviewReaderService {
                   AND attempt."attemptState" IS DISTINCT FROM 'ACCEPTED'
              ) assignedVisibility ON TRUE
              CROSS JOIN LATERAL (
-               SELECT CASE WHEN attempt."projectedMessageId" IS NOT NULL
+               -- Instagram steps have no mailbox; Campaign access governs them.
+               SELECT CASE WHEN step.channel='INSTAGRAM' THEN 3
+                           WHEN attempt."projectedMessageId" IS NOT NULL
                              THEN COALESCE(projectedVisibility.rank,0)
                            WHEN attempt."attemptState"='ACCEPTED' THEN 0
                            WHEN attempt."connectedAccountId" IS NULL THEN 1
@@ -544,6 +572,11 @@ export class CampaignMessageOverviewReaderService {
               AND ($5::uuid[] IS NULL OR COALESCE(attempt."connectedAccountId",entry."connectedAccountId")=ANY($5::uuid[]))
               AND ($6::text[] IS NULL OR (CASE
                     WHEN o.state IN ('CANCELLED','SKIPPED') THEN 'CANCELLED'
+                    WHEN step.channel='INSTAGRAM' THEN (CASE
+                      WHEN receipt.state IS DISTINCT FROM 'SENT' AND receipt.state IS DISTINCT FROM 'PROVIDER_ACCEPTED'
+                        AND (o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED') OR receipt.state IS NOT NULL) THEN 'NEEDS_ATTENTION'
+                      WHEN receipt.state IN ('SENT','PROVIDER_ACCEPTED') THEN 'SENT'
+                      ELSE 'SCHEDULED' END)
                     WHEN o.state IN ('HELD','UNKNOWN','IN_FLIGHT')
                       OR (o.state='SUCCEEDED'
                           AND (attempt."providerAcceptedAt" IS NULL OR attempt."projectedMessageThreadId" IS NULL))
@@ -553,9 +586,9 @@ export class CampaignMessageOverviewReaderService {
                     WHEN attempt."attemptState"='ACCEPTED' AND attempt."providerAcceptedAt" IS NOT NULL THEN 'SENT'
                     ELSE 'SCHEDULED' END)=ANY($6::text[]))
               AND ($7::timestamptz IS NULL OR
-                (CASE WHEN $12::text='SENT_AT' THEN attempt."providerAcceptedAt" ELSE entry."estimatedSendAt" END) >= $7)
+                (CASE WHEN $12::text='SENT_AT' THEN COALESCE(attempt."providerAcceptedAt",CASE WHEN receipt.state IN ('SENT','PROVIDER_ACCEPTED') THEN receipt."updatedAt" END) ELSE entry."estimatedSendAt" END) >= $7)
               AND ($8::timestamptz IS NULL OR
-                (CASE WHEN $12::text='SENT_AT' THEN attempt."providerAcceptedAt" ELSE entry."estimatedSendAt" END) < $8)
+                (CASE WHEN $12::text='SENT_AT' THEN COALESCE(attempt."providerAcceptedAt",CASE WHEN receipt.state IN ('SENT','PROVIDER_ACCEPTED') THEN receipt."updatedAt" END) ELSE entry."estimatedSendAt" END) < $8)
               AND ($9::timestamptz IS NULL OR (o."dueAt",o.id) < ($9::timestamptz,$10::uuid))
               AND ($17::uuid IS NULL OR o.id=$17::uuid)
             ORDER BY o."dueAt" DESC,o.id DESC LIMIT $11`);
@@ -604,6 +637,11 @@ export class CampaignMessageOverviewReaderService {
           ]),
         );
         const page = facts.slice(0, input.filters.first);
+        const instagram = await this.instagramDetails(
+          manager,
+          workspaceId,
+          page.filter((fact) => fact.stepChannel === 'INSTAGRAM'),
+        );
         const projectedThreadIds = page
           .filter(
             (fact) =>
@@ -686,6 +724,41 @@ export class CampaignMessageOverviewReaderService {
           });
           const needsAttention = status === 'NEEDS_ATTENTION';
           const authored = authoredContent.get(fact.occurrenceId);
+          if (fact.stepChannel === 'INSTAGRAM') {
+            const handle = instagram.handles.get(fact.creatorId);
+            return {
+              occurrenceId: fact.occurrenceId,
+              campaignId: fact.campaignId,
+              campaignName:
+                campaignById.get(fact.campaignId)?.name ?? 'Campaign',
+              creatorId: fact.creatorId,
+              creatorName: creatorById.get(fact.creatorId)?.name ?? null,
+              recipient: canReadRenderedContent && handle ? `@${handle}` : null,
+              subject: null,
+              preview: canReadRenderedContent
+                ? fact.stepText?.trim().slice(0, 240) || null
+                : null,
+              sequenceStep: fact.authoredMessageIndex + 1,
+              platform: 'Instagram',
+              status,
+              estimatedSendAt: null,
+              sentAt: status === 'SENT' ? iso(fact.receiptAt) : null,
+              eligibleAfter:
+                status === 'SENT' || status === 'CANCELLED'
+                  ? null
+                  : iso(fact.dueAt),
+              connectedAccountId: null,
+              connectedAccountLabel:
+                instagram.accounts.get(fact.campaignId) ?? null,
+              senderIsEstimated: false,
+              needsAttention,
+              reason:
+                fact.holdReason ??
+                (fact.receiptState === 'UNKNOWN' ? 'OUTCOME_UNKNOWN' : null),
+              inboxContactId: null,
+              inboxThreadId: null,
+            };
+          }
           return {
             occurrenceId: fact.occurrenceId,
             campaignId: fact.campaignId,
@@ -797,6 +870,48 @@ export class CampaignMessageOverviewReaderService {
         };
       });
     }, input.authContext);
+  }
+
+  // Creator handles and each Campaign's Instagram account for Instagram rows.
+  private async instagramDetails(
+    manager: EntityManager,
+    workspaceId: string,
+    facts: OverviewFact[],
+  ): Promise<{ handles: Map<string, string>; accounts: Map<string, string> }> {
+    if (facts.length === 0) return { handles: new Map(), accounts: new Map() };
+    const query = (sql: string, parameters: unknown[]) =>
+      manager.query(sql, parameters);
+    const handles = await findCreatorInstagramHandles(query, {
+      workspaceId,
+      creatorIds: [...new Set(facts.map(({ creatorId }) => creatorId))],
+    });
+    const accounts = new Map<string, string>();
+    const [table] = rows<{ ok: boolean }>(
+      await query('SELECT to_regclass($1) IS NOT NULL AS "ok"', [
+        `"${getWorkspaceSchemaName(workspaceId)}"."myahInstagramAccount"`,
+      ]),
+    );
+    if (table?.ok !== true) return { handles, accounts };
+    const campaignIds = [...new Set(facts.map(({ campaignId }) => campaignId))];
+    // Same choice as the Campaign settings picker: the selected account,
+    // or the only connected one.
+    const labels = rows<{ campaignId: string; username: string | null }>(
+      await query(
+        `SELECT campaign.id AS "campaignId",account.username
+           FROM unnest($2::uuid[]) campaign(id)
+           LEFT JOIN core."myahCampaignAgentSetting" setting
+             ON setting."workspaceId"=$1 AND setting."campaignId"=campaign.id
+           JOIN "myahInstagramAccount" account ON account."deletedAt" IS NULL
+            AND account."unipileAccountId" IS NOT NULL
+            AND (account.id=setting."instagramAccountId" OR (setting."instagramAccountId" IS NULL
+                 AND (SELECT count(*) FROM "myahInstagramAccount" a
+                       WHERE a."deletedAt" IS NULL AND a."unipileAccountId" IS NOT NULL)=1))`,
+        [workspaceId, campaignIds],
+      ),
+    );
+    for (const { campaignId, username } of labels)
+      if (username) accounts.set(campaignId, `@${username}`);
+    return { handles, accounts };
   }
 
   private async readableAccountIds(
