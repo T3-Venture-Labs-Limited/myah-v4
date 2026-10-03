@@ -2460,6 +2460,7 @@ describe('CampaignProgressionService Instagram steps (MYAH-445)', () => {
         ];
       if (sql.includes('"lifecycleStatus" FROM'))
         return [{ lifecycleStatus: 'ACTIVE' }];
+      if (sql.includes('to_regclass')) return [{ ok: true }];
       if (sql.includes('socialProfile'))
         return options.handle
           ? [{ creatorId: ids.creatorId, handle: 'ava' }]
