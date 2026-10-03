@@ -389,8 +389,12 @@ const assertPreparedProof = (value: unknown): void => {
     orderedMessageIds.length === 0 ||
     orderedMessageIds.some((messageId) => !isCanonicalUuid(messageId)) ||
     new Set(orderedMessageIds).size !== orderedMessageIds.length ||
-    usedChannels?.length !== 1 ||
-    usedChannels[0] !== 'EMAIL' ||
+    usedChannels === null ||
+    usedChannels.length === 0 ||
+    usedChannels.some(
+      (channel) => channel !== 'EMAIL' && channel !== 'INSTAGRAM',
+    ) ||
+    new Set(usedChannels).size !== usedChannels.length ||
     fixedMaterialProofs === null ||
     typeof proof.sequenceDigest !== 'string' ||
     proof.sequenceDigest.length === 0 ||

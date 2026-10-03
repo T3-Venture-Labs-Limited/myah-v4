@@ -12,7 +12,7 @@ export type CampaignSequenceAuthorizationPreparedProof = Readonly<{
   initiatingUserId: string;
   initiatingWorkspaceMemberId: string;
   orderedMessageIds: readonly string[];
-  usedChannels: readonly ['EMAIL'];
+  usedChannels: readonly ('EMAIL' | 'INSTAGRAM')[];
   sequenceDigest: string;
   fixedMaterialDigest: string;
   senderAuthorityDigest: string;

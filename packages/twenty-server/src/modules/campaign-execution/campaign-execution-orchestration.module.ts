@@ -64,6 +64,9 @@ import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/serv
 import { CampaignEmailRuntimeCronJob } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.job';
 import { CampaignEmailRuntimeCronCommand } from 'src/modules/campaign-execution/services/campaign-email-runtime.cron.command';
 import { CampaignReplyService } from 'src/modules/campaign-execution/services/campaign-reply.service';
+import { CampaignInstagramStepService } from 'src/modules/campaign-execution/services/campaign-instagram-step.service';
+import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
+import { MyahAgentModule } from 'src/engine/core-modules/myah-agent/myah-agent.module';
 
 /**
  * W15 composition root. Deliberately not imported by a runtime parent until
@@ -83,8 +86,11 @@ import { CampaignReplyService } from 'src/modules/campaign-execution/services/ca
     MessagingQueryHookModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
     ConnectedAccountMetadataModule,
+    InstagramMessageModule,
+    MyahAgentModule,
   ],
   providers: [
+    CampaignInstagramStepService,
     CampaignLifecycleActorPermissionResolverAdapter,
     CampaignLifecycleWriteAuthorizationAdapter,
     CampaignNewActivationReviewAdapter,

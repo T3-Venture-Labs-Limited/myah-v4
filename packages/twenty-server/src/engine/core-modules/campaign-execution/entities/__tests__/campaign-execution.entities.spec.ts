@@ -93,6 +93,7 @@ describe('campaign execution core entity metadata', () => {
           'holdReason',
           'terminalReason',
           'terminalAt',
+          'actionExecutionReceiptId',
           'createdAt',
           'updatedAt',
         ],

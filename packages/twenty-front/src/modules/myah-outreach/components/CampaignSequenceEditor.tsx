@@ -265,7 +265,11 @@ export const CampaignSequenceEditor = ({
                 <StyledSummary>{getMessageSummary(message)}</StyledSummary>
                 <StyledMeta>
                   {message.channel === 'INSTAGRAM'
-                    ? 'Delivery unavailable'
+                    ? sequence.messages
+                        .slice(0, index)
+                        .some(({ channel }) => channel === 'INSTAGRAM')
+                      ? '⚠ Second Instagram DM'
+                      : 'Instagram DM'
                     : message.replyToThread
                       ? 'Reply to earlier email'
                       : 'New conversation'}

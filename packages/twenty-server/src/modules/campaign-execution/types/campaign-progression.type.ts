@@ -18,6 +18,8 @@ export type CampaignOccurrenceClaimResult =
   | { status: 'DISPATCHABLE_REPLAY'; attemptId: string }
   | { status: 'NOT_DUE'; nextDueAt: Date }
   | { status: 'ALREADY_CLAIMED' | 'TERMINAL' }
+  // The occurrence is an Instagram step now IN_FLIGHT; dispatch outside this transaction.
+  | { status: 'INSTAGRAM_CLAIMED' }
   | {
       status: 'CANCELLED';
       reason: Extract<

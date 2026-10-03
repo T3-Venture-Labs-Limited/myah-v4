@@ -410,7 +410,7 @@ it('reviews the published email snapshot and executable mailbox separately from 
 
   expect(
     screen.getByRole('region', { name: 'Launch readiness' }),
-  ).toHaveTextContent('Published email sequence ready');
+  ).toHaveTextContent('Published sequence ready');
   expect(
     screen.getByRole('region', { name: 'Launch readiness' }),
   ).toHaveTextContent(
@@ -805,7 +805,7 @@ it('shows launch review without duplicate execution actions in the Operations va
 
   expect(
     screen.getByRole('region', { name: 'Launch readiness' }),
-  ).toHaveTextContent('Published email sequence ready');
+  ).toHaveTextContent('Published sequence ready');
   expect(
     screen.getByRole('region', { name: 'Campaign outreach audience review' }),
   ).toHaveTextContent('1 eligible · 0 excluded');

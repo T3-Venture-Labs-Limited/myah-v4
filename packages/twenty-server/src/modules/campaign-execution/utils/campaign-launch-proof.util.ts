@@ -51,11 +51,10 @@ export const buildCampaignSequenceIdentityDigest = (
     campaignId: string;
     workflowId: string;
     workflowVersionId: string;
-    nodes: readonly Readonly<{
-      messageId: string;
-      channel: 'EMAIL';
-      replyToThread: boolean;
-    }>[];
+    nodes: readonly Readonly<
+      | { messageId: string; channel: 'EMAIL'; replyToThread: boolean }
+      | { messageId: string; channel: 'INSTAGRAM' }
+    >[];
     delaysSeconds: readonly number[];
   }>,
 ): string =>

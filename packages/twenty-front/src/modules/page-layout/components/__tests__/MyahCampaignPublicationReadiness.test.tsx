@@ -244,7 +244,7 @@ it('mounts Operations review on the shared cache and refreshes readiness after p
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
   );
-  expect(operations).toHaveTextContent('Published email sequence ready');
+  expect(operations).toHaveTextContent('Published sequence ready');
   expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(1);
 
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));

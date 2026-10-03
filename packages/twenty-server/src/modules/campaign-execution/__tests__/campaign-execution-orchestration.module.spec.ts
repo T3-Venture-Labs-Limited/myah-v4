@@ -1,3 +1,8 @@
+import { MyahAgentService } from 'src/engine/core-modules/myah-agent/services/myah-agent.service';
+import { InstagramMessageModule } from 'src/engine/core-modules/instagram-message/instagram-message.module';
+import { InstagramMessageComposerService } from 'src/engine/core-modules/instagram-message/services/instagram-message-composer.service';
+import { InstagramMessageRecipientService } from 'src/engine/core-modules/instagram-message/services/instagram-message-recipient.service';
+import { MyahAgentModule } from 'src/engine/core-modules/myah-agent/myah-agent.module';
 import { Global, Module } from '@nestjs/common';
 import { MODULE_METADATA } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
@@ -138,6 +143,21 @@ class FlatEntityMapsCacheTestModule {}
 })
 class TriageTestModule {}
 
+@Module({
+  providers: [
+    { provide: InstagramMessageComposerService, useValue: {} },
+    { provide: InstagramMessageRecipientService, useValue: {} },
+  ],
+  exports: [InstagramMessageComposerService, InstagramMessageRecipientService],
+})
+class InstagramMessageTestModule {}
+
+@Module({
+  providers: [{ provide: MyahAgentService, useValue: {} }],
+  exports: [MyahAgentService],
+})
+class MyahAgentTestModule {}
+
 describe('CampaignExecutionOrchestrationModule', () => {
   it('registers with the runtime HTTP, GraphQL, and worker composition roots', () => {
     expect(
@@ -170,6 +190,8 @@ describe('CampaignExecutionOrchestrationModule', () => {
       MessagingQueryHookModule,
       WorkspaceManyOrAllFlatEntityMapsCacheModule,
       ConnectedAccountMetadataModule,
+      InstagramMessageModule,
+      MyahAgentModule,
     ]);
   });
 
@@ -182,6 +204,10 @@ describe('CampaignExecutionOrchestrationModule', () => {
     })
       .overrideModule(ConnectedAccountMetadataModule)
       .useModule(EmptyExternalInfrastructureModule)
+      .overrideModule(InstagramMessageModule)
+      .useModule(InstagramMessageTestModule)
+      .overrideModule(MyahAgentModule)
+      .useModule(MyahAgentTestModule)
       .overrideModule(MyahInboxContactTriageModule)
       .useModule(TriageTestModule)
       .overrideModule(EmailingModule)

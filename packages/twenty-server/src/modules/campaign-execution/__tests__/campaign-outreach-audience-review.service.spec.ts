@@ -45,6 +45,8 @@ const evaluate = (
   audienceCreators: Record<string, unknown>[],
   allWorkspaceCreators = audienceCreators,
   suppressedEmails: string[] = [],
+  instagramHandles = new Map<string, string>(),
+  activeElsewhere = new Map<string, unknown>(),
 ) =>
   (service as any).evaluate(
     campaignId,
@@ -52,6 +54,8 @@ const evaluate = (
       memberships,
       audienceCreators,
       allWorkspaceCreators,
+      instagramHandles,
+      activeElsewhere,
     },
     new Set(suppressedEmails),
   );
@@ -104,9 +108,11 @@ describe('CampaignOutreachAudienceReviewService', () => {
       ['creator-6@example.com'],
     );
 
+    // A selected contact method no longer gates eligibility (MYAH-445).
     expect(result.eligible.map(({ creatorName }: any) => creatorName)).toEqual([
       'Creator 1',
       'Creator 2',
+      'Creator 5',
     ]);
     expect(result.excluded).toEqual(
       expect.arrayContaining([
@@ -116,15 +122,11 @@ describe('CampaignOutreachAudienceReviewService', () => {
         }),
         expect.objectContaining({
           creatorName: 'Creator 4',
-          reasons: ['INVALID_EMAIL'],
-        }),
-        expect.objectContaining({
-          creatorName: 'Creator 5',
-          reasons: ['NON_EMAIL_CONTACT_METHOD'],
+          reasons: ['NO_USABLE_CHANNEL', 'INVALID_EMAIL'],
         }),
         expect.objectContaining({
           creatorName: 'Creator 6',
-          reasons: ['SUPPRESSED_EMAIL'],
+          reasons: ['NO_USABLE_CHANNEL', 'SUPPRESSED_EMAIL'],
         }),
         expect.objectContaining({
           creatorName: null,
@@ -132,7 +134,48 @@ describe('CampaignOutreachAudienceReviewService', () => {
         }),
       ]),
     );
-    expect(result.excluded).toHaveLength(5);
+    expect(result.excluded).toHaveLength(4);
+  });
+
+  it('reaches creators by Instagram handle and skips creators active in another Campaign', async () => {
+    const creators = [
+      creator(1, { email: null }),
+      creator(2, { email: 'invalid' }),
+      creator(3),
+    ];
+    const result = await evaluate(
+      createService(),
+      [membership(1), membership(2), membership(3)],
+      creators,
+      creators,
+      [],
+      new Map([[creatorId(1), 'ava.demo']]),
+      new Map([
+        [
+          creatorId(3),
+          { campaignId: 'other', campaignName: 'Summer SPF drop' },
+        ],
+      ]),
+    );
+
+    expect(result.eligible).toEqual([
+      expect.objectContaining({
+        creatorName: 'Creator 1',
+        normalizedEmail: null,
+        instagramHandle: 'ava.demo',
+      }),
+    ]);
+    expect(result.excluded).toEqual([
+      expect.objectContaining({
+        creatorName: 'Creator 2',
+        reasons: ['NO_USABLE_CHANNEL', 'INVALID_EMAIL'],
+      }),
+      expect.objectContaining({
+        creatorName: 'Creator 3',
+        reasons: ['ACTIVE_IN_OTHER_CAMPAIGN'],
+        activeCampaignName: 'Summer SPF drop',
+      }),
+    ]);
   });
 
   it('excludes every conflicting identity when an out-of-audience Creator shares its normalized email', async () => {
@@ -158,12 +201,12 @@ describe('CampaignOutreachAudienceReviewService', () => {
       expect.objectContaining({
         campaignCreatorId: membershipId(1),
         creatorName: 'Creator 1',
-        reasons: ['DUPLICATE_CREATOR_EMAIL'],
+        reasons: ['NO_USABLE_CHANNEL', 'DUPLICATE_CREATOR_EMAIL'],
       }),
       expect.objectContaining({
         campaignCreatorId: membershipId(2),
         creatorName: 'Creator 2',
-        reasons: ['DUPLICATE_CREATOR_EMAIL'],
+        reasons: ['NO_USABLE_CHANNEL', 'DUPLICATE_CREATOR_EMAIL'],
       }),
     ]);
   });

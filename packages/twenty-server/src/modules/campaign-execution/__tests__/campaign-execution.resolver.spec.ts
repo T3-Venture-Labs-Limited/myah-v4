@@ -110,6 +110,7 @@ describe('CampaignExecutionResolver', () => {
           campaignCreatorId: '20000000-0000-4000-8000-000000000002',
           creatorId: null,
           creatorName: null,
+          activeCampaignName: null,
           reasons: ['MISSING_CREATOR'],
         },
       ],

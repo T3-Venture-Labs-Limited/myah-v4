@@ -279,6 +279,7 @@ export class CampaignForecastRefreshService {
         };
       });
     const replyByOccurrence = new Map<string, boolean>();
+    const instagramOccurrenceIds = new Set<string>();
     const plans = new Map<
       string,
       Awaited<
@@ -311,6 +312,11 @@ export class CampaignForecastRefreshService {
         complete = false;
         break;
       }
+      if (node?.channel === 'INSTAGRAM') {
+        // Instagram steps use their own account limits, not mailbox capacity.
+        instagramOccurrenceIds.add(occurrence.occurrenceId);
+        continue;
+      }
       replyByOccurrence.set(
         occurrence.occurrenceId,
         node?.channel === 'EMAIL' && node.replyToThread === true,
@@ -318,6 +324,7 @@ export class CampaignForecastRefreshService {
     }
     let hasUnforecastableThreadReply = false;
     const forecastOccurrences = occurrences.flatMap((occurrence) => {
+      if (instagramOccurrenceIds.has(occurrence.occurrenceId)) return [];
       if (
         !pools.has(occurrence.campaignId) ||
         !replyByOccurrence.has(occurrence.occurrenceId)

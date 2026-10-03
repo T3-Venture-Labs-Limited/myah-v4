@@ -1,3 +1,4 @@
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { randomUUID } from 'crypto';
 
 import { Injectable } from '@nestjs/common';
@@ -244,9 +245,21 @@ export class InstagramActionBudgetService {
       const dbNow = await this.dbNow(manager);
       const usageSnapshot = await this.readUsage(manager, input, dbNow);
       const { usage } = usageSnapshot;
+      // MYAH-445: replies in a chat where the creator has written are not
+      // limited; only cold messages count and can be blocked.
+      const isCold =
+        input.actionKind === 'START_CHAT' ||
+        !input.providerMessagingId ||
+        !(await this.creatorHasWritten(manager, {
+          workspaceId: input.workspaceId,
+          instagramAccountRecordId: input.instagramAccountRecordId,
+          providerMessagingId: input.providerMessagingId,
+        }));
       const blockedWindows: InstagramActionBlockedWindow[] = [];
-      if (usage.hourlyUsed >= HOURLY_LIMIT) blockedWindows.push('HOURLY');
-      if (usage.dailyUsed >= DAILY_LIMIT) blockedWindows.push('DAILY');
+      if (isCold && usage.hourlyUsed >= HOURLY_LIMIT)
+        blockedWindows.push('HOURLY');
+      if (isCold && usage.dailyUsed >= DAILY_LIMIT)
+        blockedWindows.push('DAILY');
 
       if (blockedWindows.length > 0) {
         const result: InstagramActionBudgetBlockedResult = {
@@ -301,6 +314,7 @@ export class InstagramActionBudgetService {
         targetFingerprint: input.targetFingerprint,
         targetLockReleasedAt: null,
         workspaceId: input.workspaceId,
+        isCold,
       });
       await manager.save(InstagramActionReservationEntity, reservation);
 
@@ -434,7 +448,8 @@ export class InstagramActionBudgetService {
       FROM "core"."instagramActionReservation"
       WHERE "workspaceId" = $1
         AND "instagramAccountRecordId" = $2
-        AND "releasedAt" IS NULL`,
+        AND "releasedAt" IS NULL
+        AND "isCold"`,
       [input.workspaceId, input.instagramAccountRecordId, dbNow],
     );
 
@@ -459,6 +474,30 @@ export class InstagramActionBudgetService {
         ),
       },
     };
+  }
+
+  // True when the creator has sent at least one message (not a reaction) in
+  // a chat with this account.
+  private async creatorHasWritten(
+    manager: EntityManager,
+    input: {
+      workspaceId: string;
+      instagramAccountRecordId: string;
+      providerMessagingId: string;
+    },
+  ): Promise<boolean> {
+    const schema = getWorkspaceSchemaName(input.workspaceId);
+    const [row] = await manager.query<{ written: boolean }[]>(
+      `SELECT EXISTS (
+         SELECT 1 FROM "${schema}"."myahSocialConversation" c
+           JOIN "${schema}"."myahSocialMessage" m ON m."conversationId" = c.id
+          WHERE c."instagramAccountId" = $1 AND c."recipientIgsid" = $2
+            AND c."deletedAt" IS NULL AND m."deletedAt" IS NULL
+            AND m.direction::text = 'INBOUND'
+       ) AS written`,
+      [input.instagramAccountRecordId, input.providerMessagingId],
+    );
+    return row?.written === true;
   }
 
   private async dbNow(manager: EntityManager): Promise<Date> {

@@ -316,7 +316,7 @@ describe('CampaignSequenceMessageEditor', () => {
     expect(screen.queryByText('bad.txt')).not.toBeInTheDocument();
   });
 
-  it('authors Instagram as text-only without a guessed counter', () => {
+  it('authors Instagram as plain text with its byte limit', () => {
     render(
       <Harness
         initialMessage={{
@@ -330,7 +330,8 @@ describe('CampaignSequenceMessageEditor', () => {
     expect(
       screen.getByRole('heading', { name: 'Step 1 · Instagram' }),
     ).toBeVisible();
-    expect(screen.getByText('Instagram delivery unavailable')).toBeVisible();
+    expect(screen.getByText(/Plain text, up to 1,000 bytes/)).toBeVisible();
+    expect(screen.getByText('10 / 1,000 bytes')).toBeVisible();
     expect(
       screen.getByRole('textbox', { name: 'Instagram message' }),
     ).toHaveValue('Hello 👋');

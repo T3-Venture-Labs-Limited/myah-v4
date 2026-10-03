@@ -50,23 +50,29 @@ export class CampaignNewActivationReviewAdapter implements CampaignNewActivation
       execution.window.endLocalTime !== request.reviewedWindow.endLocalTime ||
       execution.campaignCapacityTimeZone !== input.campaignCapacityTimeZone ||
       request.campaignCapacityTimeZone !== input.campaignCapacityTimeZone ||
-      plan.nodes.some((node) => node.channel !== 'EMAIL')
+      plan.nodes.some(
+        (node) => node.channel !== 'EMAIL' && node.channel !== 'INSTAGRAM',
+      )
     ) {
       return blocked();
     }
 
-    const emailNodes = plan.nodes as readonly Readonly<{
-      messageId: string;
-      channel: 'EMAIL';
-      replyToThread: boolean;
-    }>[];
+    const emailNodes = plan.nodes.filter(
+      (
+        node,
+      ): node is Extract<(typeof plan.nodes)[number], { channel: 'EMAIL' }> =>
+        node.channel === 'EMAIL',
+    );
+    const instagramMessageIds = plan.nodes
+      .filter((node) => node.channel === 'INSTAGRAM')
+      .map(({ messageId }) => messageId);
     const proof = request.preparedProof;
     const sequenceDigest = buildCampaignSequenceIdentityDigest({
       workspaceId: context.workspaceId,
       campaignId: context.campaignId,
       workflowId: plan.workflowId,
       workflowVersionId: plan.workflowVersionId,
-      nodes: emailNodes,
+      nodes: plan.nodes,
       delaysSeconds: plan.delaysSeconds,
     });
     const auth = context.actorPermissionContext.authContext;
@@ -107,7 +113,6 @@ export class CampaignNewActivationReviewAdapter implements CampaignNewActivation
         JSON.stringify(proof.fixedMaterialProofs) ||
       fixedMaterial.value.messages.some(
         (message, index) =>
-          message.messageId !== proof.orderedMessageIds[index] ||
           message.messageId !== emailNodes[index]?.messageId ||
           message.replyToThread !== emailNodes[index]?.replyToThread,
       )
@@ -126,7 +131,11 @@ export class CampaignNewActivationReviewAdapter implements CampaignNewActivation
     );
 
     if (
-      readySenders.length === 0 ||
+      (emailNodes.length > 0 && readySenders.length === 0) ||
+      proof.orderedMessageIds.length !== plan.nodes.length ||
+      proof.orderedMessageIds.some(
+        (messageId, index) => messageId !== plan.nodes[index].messageId,
+      ) ||
       senderPool.senderPoolFingerprint !== proof.senderPoolFingerprint ||
       senderPool.serializationRevision !==
         proof.senderPoolSerializationRevision ||
@@ -162,16 +171,27 @@ export class CampaignNewActivationReviewAdapter implements CampaignNewActivation
     });
     if (audience.eligible.length === 0) return blocked();
 
-    const eligibleCreators = audience.eligible.map(
-      ({ campaignCreatorId, creatorId }) =>
-        Object.freeze({
-          campaignCreatorId,
-          creatorId,
-          usableMessageIds: Object.freeze(
-            emailNodes.map(({ messageId }) => messageId),
-          ),
-        }),
-    );
+    // Each creator receives only the steps for channels they can be reached on.
+    const eligibleCreators = audience.eligible
+      .map(
+        ({ campaignCreatorId, creatorId, normalizedEmail, instagramHandle }) =>
+          Object.freeze({
+            campaignCreatorId,
+            creatorId,
+            usableMessageIds: Object.freeze(
+              plan.nodes
+                .filter((node) =>
+                  node.channel === 'EMAIL'
+                    ? normalizedEmail !== null
+                    : instagramHandle !== null &&
+                      instagramMessageIds.includes(node.messageId),
+                )
+                .map(({ messageId }) => messageId),
+            ),
+          }),
+      )
+      .filter(({ usableMessageIds }) => usableMessageIds.length > 0);
+    if (eligibleCreators.length === 0) return blocked();
 
     return Object.freeze({
       status: 'READY',

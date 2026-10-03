@@ -389,6 +389,53 @@ export class CampaignSequenceService {
     });
   }
 
+  // Text of one Instagram step in a pinned (published) sequence version.
+  async loadInstagramTextByVersionInTransaction(
+    args: {
+      workspaceId: string;
+      campaignId: string;
+      workflowVersionId: string;
+      messageId: string;
+    },
+    manager: WorkspaceEntityManager,
+  ): Promise<string> {
+    const runner = manager.queryRunner;
+    if (!runner?.isTransactionActive || runner.manager !== manager)
+      throw new InternalServerErrorException(
+        'Campaign sequence material requires the supplied active transaction',
+      );
+    const workspaceId = this.canonicalUuid('workspaceId', args.workspaceId);
+    const campaignId = this.canonicalUuid('campaignId', args.campaignId);
+    const workflowVersionId = this.canonicalUuid(
+      'workflowVersionId',
+      args.workflowVersionId,
+    );
+    const messageId = this.canonicalUuid('messageId', args.messageId);
+    const schemaName = getWorkspaceSchemaName(workspaceId);
+    const rows = await runner.query(
+      `SELECT version."campaignSequence"
+         FROM ${this.workflowTable(schemaName)} workflow
+         JOIN ${this.workflowVersionTable(schemaName)} version
+           ON version.id=$2 AND version."workflowId"=workflow.id
+        WHERE workflow."outreachCampaignId"=$1
+          AND workflow."deletedAt" IS NULL AND version."deletedAt" IS NULL`,
+      [campaignId, workflowVersionId],
+    );
+    if (!Array.isArray(rows) || rows.length !== 1 || !rows[0].campaignSequence)
+      throw new NotFoundException('Campaign sequence version not found');
+    const message = this.parseStoredSequence(
+      rows[0].campaignSequence,
+    ).messages.find(
+      (candidate) =>
+        candidate.id === messageId && candidate.channel === 'INSTAGRAM',
+    );
+    if (!message || message.channel !== 'INSTAGRAM')
+      throw new ConflictException(
+        'Campaign sequence Instagram step is invalid',
+      );
+    return message.text;
+  }
+
   async loadEmailByVersionInTransaction(
     args: LoadCampaignSequenceEmailByVersionArgs,
     manager: WorkspaceEntityManager,
@@ -843,12 +890,11 @@ export class CampaignSequenceService {
           sequence.messages.length === 0 ||
           sequence.messages.some(
             (message) =>
-              message.channel !== 'EMAIL' ||
-              (message.channel === 'EMAIL' && message.files.length > 0),
+              message.channel === 'EMAIL' && message.files.length > 0,
           )
         ) {
           throw new ConflictException(
-            'Only a valid nonempty email-only sequence without attachments can be published.',
+            'Only a valid nonempty sequence without email attachments can be published.',
           );
         }
 

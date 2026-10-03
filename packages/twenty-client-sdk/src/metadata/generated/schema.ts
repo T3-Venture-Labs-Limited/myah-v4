@@ -2885,10 +2885,11 @@ export interface CampaignOutreachAudienceExcludedCreator {
     creatorId?: Scalars['UUID']
     creatorName?: Scalars['String']
     reasons: CampaignOutreachAudienceExclusionReason[]
+    activeCampaignName?: Scalars['String']
     __typename: 'CampaignOutreachAudienceExcludedCreator'
 }
 
-export type CampaignOutreachAudienceExclusionReason = 'INVALID_MEMBERSHIP' | 'OPERATOR_EXCLUDED' | 'MISSING_CREATOR' | 'INVALID_STAGE' | 'NON_EMAIL_CONTACT_METHOD' | 'INVALID_EMAIL' | 'SUPPRESSED_EMAIL' | 'DUPLICATE_CREATOR_EMAIL'
+export type CampaignOutreachAudienceExclusionReason = 'INVALID_MEMBERSHIP' | 'OPERATOR_EXCLUDED' | 'MISSING_CREATOR' | 'INVALID_STAGE' | 'ACTIVE_IN_OTHER_CAMPAIGN' | 'NO_USABLE_CHANNEL' | 'INVALID_EMAIL' | 'SUPPRESSED_EMAIL' | 'DUPLICATE_CREATOR_EMAIL'
 
 export interface CampaignOutreachAudienceReview {
     state: CampaignOutreachAudienceReviewState
@@ -6806,6 +6807,7 @@ export interface CampaignOutreachAudienceExcludedCreatorGenqlSelection{
     creatorId?: boolean | number
     creatorName?: boolean | number
     reasons?: boolean | number
+    activeCampaignName?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -11421,7 +11423,8 @@ export const enumCampaignOutreachAudienceExclusionReason = {
    OPERATOR_EXCLUDED: 'OPERATOR_EXCLUDED' as const,
    MISSING_CREATOR: 'MISSING_CREATOR' as const,
    INVALID_STAGE: 'INVALID_STAGE' as const,
-   NON_EMAIL_CONTACT_METHOD: 'NON_EMAIL_CONTACT_METHOD' as const,
+   ACTIVE_IN_OTHER_CAMPAIGN: 'ACTIVE_IN_OTHER_CAMPAIGN' as const,
+   NO_USABLE_CHANNEL: 'NO_USABLE_CHANNEL' as const,
    INVALID_EMAIL: 'INVALID_EMAIL' as const,
    SUPPRESSED_EMAIL: 'SUPPRESSED_EMAIL' as const,
    DUPLICATE_CREATOR_EMAIL: 'DUPLICATE_CREATOR_EMAIL' as const

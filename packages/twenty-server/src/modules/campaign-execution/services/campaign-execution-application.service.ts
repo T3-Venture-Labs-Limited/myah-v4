@@ -11,6 +11,7 @@ import {
 import { CampaignSenderReadinessService } from 'src/modules/myah-campaign/services/campaign-sender-readiness.service';
 import { CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
 import { CampaignSequenceFixedMaterialService } from 'src/modules/myah-outreach/services/campaign-sequence-fixed-material.service';
+import { MyahAgentService } from 'src/engine/core-modules/myah-agent/services/myah-agent.service';
 
 import { type CampaignExecutionMutationResultDTO } from '../dtos/campaign-execution.dto';
 
@@ -36,6 +37,7 @@ export class CampaignExecutionApplicationService {
     private readonly sequence: CampaignSequenceService,
     private readonly senderReadiness: CampaignSenderReadinessService,
     private readonly fixedMaterial: CampaignSequenceFixedMaterialService,
+    private readonly myahAgentService: MyahAgentService,
   ) {}
 
   async start(
@@ -76,13 +78,6 @@ export class CampaignExecutionApplicationService {
     const { snapshot } = loaded;
     if (snapshot.issues.length > 0 || snapshot.sequence.messages.length === 0)
       return blocked('SEQUENCE_UNAVAILABLE');
-    if (
-      snapshot.sequence.messages.some(
-        (message: { channel: string }) => message.channel !== 'EMAIL',
-      )
-    )
-      return blocked('EMAIL_ONLY');
-
     const emails = snapshot.sequence.messages.filter(
       (
         message,
@@ -106,24 +101,46 @@ export class CampaignExecutionApplicationService {
         mailbox.bindingStatus === 'RESOLVED_BINDING' &&
         mailbox.status === 'READY',
     );
-    if (readySenders.length === 0)
+    if (emails.length > 0 && readySenders.length === 0)
       return blocked('AT_LEAST_ONE_READY_EMAIL_MAILBOX_REQUIRED');
+    const hasInstagram = snapshot.sequence.messages.some(
+      (message: { channel: string }) => message.channel === 'INSTAGRAM',
+    );
+    if (hasInstagram) {
+      const setting = await this.myahAgentService.getCampaignSettingRecord(
+        authContext.workspace.id,
+        campaignId,
+      );
+      const account = setting.instagramAccountId
+        ? (
+            await this.myahAgentService.listInstagramAccounts(
+              authContext.workspace.id,
+            )
+          ).find(({ id }) => id === setting.instagramAccountId)
+        : undefined;
+      if (account?.status !== 'ACTIVE')
+        return blocked('INSTAGRAM_ACCOUNT_REQUIRED');
+    }
 
-    const nodes: Array<{
-      messageId: string;
-      channel: 'EMAIL';
-      replyToThread: boolean;
-    }> = emails.map((message) => ({
-      messageId: message.id,
-      channel: 'EMAIL' as const,
-      replyToThread: message.replyToThread,
-    }));
+    const nodes = snapshot.sequence.messages.map((message) =>
+      message.channel === 'EMAIL'
+        ? {
+            messageId: message.id,
+            channel: 'EMAIL' as const,
+            replyToThread: message.replyToThread,
+          }
+        : { messageId: message.id, channel: 'INSTAGRAM' as const },
+    );
     const orderedMessageIds = nodes.map(({ messageId }) => messageId);
+    const emailMessageIds = emails.map(({ id }) => id);
+    const usedChannels = (['EMAIL', 'INSTAGRAM'] as const).filter((channel) =>
+      nodes.some((node) => node.channel === channel),
+    );
     const fixedMaterial = await this.fixedMaterial.loadSequenceFixedMaterial({
       workspaceId: authContext.workspace.id,
       campaignId,
       workflowVersionId: snapshot.versionId,
-      orderedMessageIds,
+      orderedMessageIds: emailMessageIds,
       authContext,
     });
     if (fixedMaterial.kind === 'BLOCKED') {
@@ -137,7 +154,7 @@ export class CampaignExecutionApplicationService {
     if (
       fixedMaterial.value.messages.some(
         (message, index) =>
-          message.messageId !== orderedMessageIds[index] ||
+          message.messageId !== emailMessageIds[index] ||
           message.replyToThread !== emails[index].replyToThread,
       )
     )
@@ -195,7 +212,7 @@ export class CampaignExecutionApplicationService {
           initiatingUserId: authContext.user.id,
           initiatingWorkspaceMemberId: authContext.workspaceMemberId,
           orderedMessageIds,
-          usedChannels: ['EMAIL'],
+          usedChannels: [...usedChannels],
           sequenceDigest,
           fixedMaterialDigest,
           senderAuthorityDigest,

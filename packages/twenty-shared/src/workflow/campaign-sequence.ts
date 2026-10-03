@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { getUtf8ByteLength } from '../utils/getUtf8ByteLength';
+
 import { workflowFileSchema } from './schemas/workflow-file-action-schema';
 
 const messageIdSchema = z
@@ -66,7 +68,7 @@ export type CampaignSequenceIssue = {
     | 'CONTENT_REQUIRED'
     | 'REPLY_WITHOUT_PRIOR_EMAIL'
     | 'INVALID_UNICODE'
-    | 'INSTAGRAM_UNAVAILABLE'
+    | 'INSTAGRAM_TOO_LONG'
     | 'DURATION_OVERFLOW'
     | 'INVALID_EMAIL_BODY';
   path: string;
@@ -546,14 +548,17 @@ export const validateCampaignSequence = (
         );
       }
 
-      issues.push(
-        issue(
-          'INSTAGRAM_UNAVAILABLE',
-          `${messagePath}.channel`,
-          'Instagram delivery is not available',
-          message.id,
-        ),
-      );
+      // Instagram DMs are plain text of at most 1,000 UTF-8 bytes.
+      if (getUtf8ByteLength(message.text.trim()) > 1000) {
+        issues.push(
+          issue(
+            'INSTAGRAM_TOO_LONG',
+            `${messagePath}.text`,
+            'Instagram messages are limited to 1,000 bytes',
+            message.id,
+          ),
+        );
+      }
       return;
     }
 

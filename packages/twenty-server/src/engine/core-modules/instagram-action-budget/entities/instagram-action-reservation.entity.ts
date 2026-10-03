@@ -72,6 +72,11 @@ export class InstagramActionReservationEntity {
   @Column({ type: 'timestamptz', nullable: true })
   targetLockReleasedAt: Date | null;
 
+  // Only cold messages (no creator message in the chat yet) count toward the
+  // hourly/daily limits (MYAH-445).
+  @Column({ type: 'boolean', default: true })
+  isCold: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

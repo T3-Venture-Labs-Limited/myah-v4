@@ -218,7 +218,6 @@ describe('CampaignSequenceFixedMaterialService', () => {
   });
 
   it.each([
-    ['empty messages', []],
     ['duplicate messages', [firstMessageId, firstMessageId]],
     ['blank message', ['']],
     ['noncanonical message', ['AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA']],
@@ -232,6 +231,13 @@ describe('CampaignSequenceFixedMaterialService', () => {
     expect(loadEmailByVersion).not.toHaveBeenCalled();
     expect(signaturePort.load).not.toHaveBeenCalled();
     expect(attachmentPort.load).not.toHaveBeenCalled();
+  });
+
+  it('accepts an Instagram-only sequence with no email material', async () => {
+    const { service, loadEmailByVersion } = makeHarness();
+
+    expect(await blockerCodes(service, { orderedMessageIds: [] })).toEqual([]);
+    expect(loadEmailByVersion).not.toHaveBeenCalled();
   });
 
   it('blocks mismatched real-user workspace auth before material reads', async () => {

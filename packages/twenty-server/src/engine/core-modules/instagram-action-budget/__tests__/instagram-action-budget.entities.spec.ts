@@ -155,6 +155,7 @@ describe('Instagram action budget entities', () => {
       'releasedAt',
       'releaseReason',
       'targetLockReleasedAt',
+      'isCold',
       'createdAt',
       'updatedAt',
     ]);

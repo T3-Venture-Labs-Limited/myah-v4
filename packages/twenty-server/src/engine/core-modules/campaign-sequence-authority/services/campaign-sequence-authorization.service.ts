@@ -245,15 +245,19 @@ const parseRequest = (value: unknown): CampaignSequenceAuthorizationRequest => {
     !proof.orderedMessageIds.every(isCanonicalUuid) ||
     new Set(proof.orderedMessageIds).size !== proof.orderedMessageIds.length ||
     !Array.isArray(proof.usedChannels) ||
-    proof.usedChannels.length !== 1 ||
-    proof.usedChannels[0] !== 'EMAIL' ||
+    proof.usedChannels.length === 0 ||
+    proof.usedChannels.some(
+      (channel: unknown) => channel !== 'EMAIL' && channel !== 'INSTAGRAM',
+    ) ||
+    new Set(proof.usedChannels).size !== proof.usedChannels.length ||
     !isDigest(proof.sequenceDigest) ||
     !isDigest(proof.fixedMaterialDigest) ||
     !isDigest(proof.senderAuthorityDigest) ||
     !isDigest(proof.preparedFingerprint) ||
     !(proof.signatureDigest === null || isDigest(proof.signatureDigest)) ||
     !Array.isArray(proof.fixedMaterialProofs) ||
-    proof.fixedMaterialProofs.length !== proof.orderedMessageIds.length ||
+    // Fixed material covers the email steps only (MYAH-445).
+    proof.fixedMaterialProofs.length > proof.orderedMessageIds.length ||
     !isDigest(proof.senderPoolFingerprint) ||
     !isNonEmptyString(proof.senderPoolSerializationRevision) ||
     !isNonEmptyString(proof.senderPoolRotationPolicyId)
@@ -262,25 +266,28 @@ const parseRequest = (value: unknown): CampaignSequenceAuthorizationRequest => {
   }
 
   const orderedMessageIds = proof.orderedMessageIds as string[];
-  const fixedMaterialProofs = proof.fixedMaterialProofs.map(
-    (fixedProof, index) => {
-      if (
-        !isRecord(fixedProof) ||
-        !exactKeys(fixedProof, ['messageId', 'orderedAttachmentProofs']) ||
-        !isCanonicalUuid(fixedProof.messageId) ||
-        fixedProof.messageId !== orderedMessageIds[index] ||
-        !Array.isArray(fixedProof.orderedAttachmentProofs)
-      ) {
-        throw new Error('Invalid Campaign sequence authorization request');
-      }
+  let previousProofIndex = -1;
+  const fixedMaterialProofs = proof.fixedMaterialProofs.map((fixedProof) => {
+    const proofIndex = isRecord(fixedProof)
+      ? orderedMessageIds.indexOf(String(fixedProof.messageId))
+      : -1;
+    if (
+      !isRecord(fixedProof) ||
+      !exactKeys(fixedProof, ['messageId', 'orderedAttachmentProofs']) ||
+      !isCanonicalUuid(fixedProof.messageId) ||
+      proofIndex <= previousProofIndex ||
+      !Array.isArray(fixedProof.orderedAttachmentProofs)
+    ) {
+      throw new Error('Invalid Campaign sequence authorization request');
+    }
+    previousProofIndex = proofIndex;
 
-      return {
-        messageId: fixedProof.messageId,
-        orderedAttachmentProofs:
-          fixedProof.orderedAttachmentProofs.map(parseAttachmentProof),
-      };
-    },
-  );
+    return {
+      messageId: fixedProof.messageId,
+      orderedAttachmentProofs:
+        fixedProof.orderedAttachmentProofs.map(parseAttachmentProof),
+    };
+  });
 
   const window = value.reviewedWindow;
 
@@ -307,7 +314,7 @@ const parseRequest = (value: unknown): CampaignSequenceAuthorizationRequest => {
       initiatingUserId: proof.initiatingUserId,
       initiatingWorkspaceMemberId: proof.initiatingWorkspaceMemberId,
       orderedMessageIds: [...orderedMessageIds],
-      usedChannels: ['EMAIL'],
+      usedChannels: [...proof.usedChannels] as Array<'EMAIL' | 'INSTAGRAM'>,
       sequenceDigest: proof.sequenceDigest,
       fixedMaterialDigest: proof.fixedMaterialDigest,
       senderAuthorityDigest: proof.senderAuthorityDigest,

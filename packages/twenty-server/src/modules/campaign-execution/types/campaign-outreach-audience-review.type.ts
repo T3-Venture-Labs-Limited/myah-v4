@@ -3,7 +3,8 @@ export type CampaignOutreachAudienceExclusionReason =
   | 'OPERATOR_EXCLUDED'
   | 'MISSING_CREATOR'
   | 'INVALID_STAGE'
-  | 'NON_EMAIL_CONTACT_METHOD'
+  | 'ACTIVE_IN_OTHER_CAMPAIGN'
+  | 'NO_USABLE_CHANNEL'
   | 'INVALID_EMAIL'
   | 'SUPPRESSED_EMAIL'
   | 'DUPLICATE_CREATOR_EMAIL';
@@ -18,13 +19,18 @@ export type EligibleCampaignOutreachAudienceIdentity = Readonly<{
   campaignCreatorId: string;
   creatorId: string;
   creatorName: string;
-  normalizedEmail: string;
+  // Null when the creator has no usable email; their email steps are skipped.
+  normalizedEmail: string | null;
+  // Null when the creator has no Instagram handle; Instagram steps are skipped.
+  instagramHandle: string | null;
 }>;
 
 export type CampaignOutreachAudienceExclusion =
   CampaignOutreachAudienceIdentity &
     Readonly<{
       reasons: readonly CampaignOutreachAudienceExclusionReason[];
+      // Set with ACTIVE_IN_OTHER_CAMPAIGN.
+      activeCampaignName?: string | null;
     }>;
 
 export type CampaignOutreachAudienceReview = Readonly<{

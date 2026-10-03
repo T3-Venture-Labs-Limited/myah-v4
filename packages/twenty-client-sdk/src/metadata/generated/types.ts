@@ -6541,6 +6541,9 @@ export default {
             "reasons": [
                 354
             ],
+            "activeCampaignName": [
+                1
+            ],
             "__typename": [
                 1
             ]

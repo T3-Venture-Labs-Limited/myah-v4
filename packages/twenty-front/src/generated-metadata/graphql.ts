@@ -1124,6 +1124,7 @@ export type CampaignOutreachAudienceCreator = {
 
 export type CampaignOutreachAudienceExcludedCreator = {
   __typename?: 'CampaignOutreachAudienceExcludedCreator';
+  activeCampaignName?: Maybe<Scalars['String']['output']>;
   campaignCreatorId: Scalars['UUID']['output'];
   creatorId?: Maybe<Scalars['UUID']['output']>;
   creatorName?: Maybe<Scalars['String']['output']>;
@@ -1131,12 +1132,13 @@ export type CampaignOutreachAudienceExcludedCreator = {
 };
 
 export enum CampaignOutreachAudienceExclusionReason {
+  ACTIVE_IN_OTHER_CAMPAIGN = 'ACTIVE_IN_OTHER_CAMPAIGN',
   DUPLICATE_CREATOR_EMAIL = 'DUPLICATE_CREATOR_EMAIL',
   INVALID_EMAIL = 'INVALID_EMAIL',
   INVALID_MEMBERSHIP = 'INVALID_MEMBERSHIP',
   INVALID_STAGE = 'INVALID_STAGE',
   MISSING_CREATOR = 'MISSING_CREATOR',
-  NON_EMAIL_CONTACT_METHOD = 'NON_EMAIL_CONTACT_METHOD',
+  NO_USABLE_CHANNEL = 'NO_USABLE_CHANNEL',
   OPERATOR_EXCLUDED = 'OPERATOR_EXCLUDED',
   SUPPRESSED_EMAIL = 'SUPPRESSED_EMAIL'
 }

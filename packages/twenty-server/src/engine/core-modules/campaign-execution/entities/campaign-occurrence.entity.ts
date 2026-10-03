@@ -119,6 +119,11 @@ export class CampaignOccurrenceEntity {
   @Column({ type: 'timestamptz', nullable: true })
   terminalAt: Date | null;
 
+  // Instagram steps: the generic send receipt (MYAH-445). Email steps use
+  // outboundEmailAttempt instead.
+  @Column({ type: 'uuid', nullable: true })
+  actionExecutionReceiptId: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
