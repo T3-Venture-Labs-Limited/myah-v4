@@ -1,4 +1,5 @@
 import { NotesCard } from '@/activities/notes/components/NotesCard';
+import { MyahCampaignCreatorAgentDraft } from '@/myah/agent/components/MyahCampaignCreatorAgentDraft';
 import { MyahCampaignCreatorMessages } from '@/page-layout/components/MyahCampaignCreatorMessages';
 import { type CampaignCreatorInboxReturnTarget } from '@/myah/inbox/types/CampaignCreatorInboxReturnTarget';
 import { TimelineCard } from '@/activities/timeline-activities/components/TimelineCard';
@@ -391,7 +392,9 @@ export const MyahCampaignCreatorContextPanel = ({
                   aria-selected={tab === section}
                   onClick={() => setTab(section)}
                 >
-                  {section[0].toUpperCase() + section.slice(1)}
+                  {section === 'messages'
+                    ? 'Conversation'
+                    : section[0].toUpperCase() + section.slice(1)}
                 </button>
               ),
             )}
@@ -413,11 +416,18 @@ export const MyahCampaignCreatorContextPanel = ({
                 </p>
               </>
             ) : tab === 'messages' ? (
-              <MyahCampaignCreatorMessages
-                campaignId={campaignId}
-                membershipId={membershipId}
-                returnTarget={returnTarget}
-              />
+              <>
+                <MyahCampaignCreatorAgentDraft
+                  campaignId={campaignId}
+                  membershipId={membershipId}
+                  returnTarget={returnTarget}
+                />
+                <MyahCampaignCreatorMessages
+                  campaignId={campaignId}
+                  membershipId={membershipId}
+                  returnTarget={returnTarget}
+                />
+              </>
             ) : (
               <SidePanelProvider value={{ isInSidePanel: true }}>
                 <LayoutRenderingProvider

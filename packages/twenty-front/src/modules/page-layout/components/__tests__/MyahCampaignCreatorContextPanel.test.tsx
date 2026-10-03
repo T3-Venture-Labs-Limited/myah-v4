@@ -13,6 +13,9 @@ jest.mock('react-router-dom', () => ({
     <a href={to}>{children}</a>
   ),
 }));
+jest.mock('@/myah/agent/components/MyahCampaignCreatorAgentDraft', () => ({
+  MyahCampaignCreatorAgentDraft: () => null,
+}));
 jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
   useFindOneRecord: jest.fn(),
 }));
@@ -346,7 +349,7 @@ describe('MyahCampaignCreatorContextPanel', () => {
     expect(screen.queryByText('Ava Rivera')).not.toBeInTheDocument();
     expect(screen.queryByText('ava@example.invalid')).not.toBeInTheDocument();
     expect(screen.getByText('Email unavailable')).toBeVisible();
-    expect(screen.getByRole('tab', { name: 'Messages' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Conversation' })).toBeVisible();
   });
 
   it('keeps Creator context when membership stage is denied without leaking cached stage', () => {
@@ -392,7 +395,7 @@ describe('MyahCampaignCreatorContextPanel', () => {
 
   it('opens ordinary inspection on read-only campaign messages, with the profile route still available', () => {
     showPanel();
-    expect(screen.getByRole('tab', { name: 'Messages' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Conversation' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -407,7 +410,7 @@ describe('MyahCampaignCreatorContextPanel', () => {
 
   it('opens the read-only Messages tab when returning from exact Inbox', () => {
     showPanel('campaign-a', 'membership-a', 'messages');
-    expect(screen.getByRole('tab', { name: 'Messages' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Conversation' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -440,7 +443,7 @@ describe('MyahCampaignCreatorContextPanel', () => {
     ).toHaveTextContent('AR');
     fireEvent.click(screen.getByRole('tab', { name: 'Notes' }));
     expect(screen.getByText('Native Creator notes')).toBeVisible();
-    fireEvent.click(screen.getByRole('tab', { name: 'Messages' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Conversation' }));
     expect(
       screen.getByText('Read-only messages for campaign-a/membership-a'),
     ).toBeVisible();

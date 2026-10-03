@@ -14,6 +14,8 @@ import { MyahReplyAgentJob } from 'src/modules/myah-reply-agent/jobs/myah-reply-
 import { MyahCreatorMessageTriggerService } from 'src/modules/myah-reply-agent/services/myah-creator-message-trigger.service';
 import { MyahReplyAgentContextService } from 'src/modules/myah-reply-agent/services/myah-reply-agent-context.service';
 import { MyahReplyAgentService } from 'src/modules/myah-reply-agent/services/myah-reply-agent.service';
+import { MyahReplyAgentReviewResolver } from 'src/modules/myah-reply-agent/resolvers/myah-reply-agent-review.resolver';
+import { MyahReplyAgentReviewService } from 'src/modules/myah-reply-agent/services/myah-reply-agent-review.service';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { MyahReplyAgentService } from 'src/modules/myah-reply-agent/services/mya
     MyahReplyAgentContextService,
     MyahReplyAgentService,
     MyahReplyAgentJob,
+    MyahReplyAgentReviewService,
+    MyahReplyAgentReviewResolver,
   ],
   exports: [MyahCreatorMessageTriggerService, MyahReplyAgentService],
 })

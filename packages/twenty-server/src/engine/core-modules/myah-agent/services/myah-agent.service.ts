@@ -317,7 +317,7 @@ export class MyahAgentService {
     };
   }
 
-  private async assertCampaign(
+  async assertCampaign(
     campaignId: string,
     authContext: WorkspaceAuthContext,
     access: 'read' | 'update',

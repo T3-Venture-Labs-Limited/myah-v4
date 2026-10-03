@@ -3417,6 +3417,7 @@ export type Mutation = {
   prepareManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod;
   reconnectWorkspaceMailbox: WorkspaceMailboxConnectionResult;
   refreshEnterpriseValidityToken: Scalars['Boolean']['output'];
+  regenerateMyahReplyAgentDraft: MyahReplyAgentReviewNode;
   removeCampaignEmailAccount: Array<CampaignEmailAccountDto>;
   removeCreatorListMemberIntent: Scalars['Boolean']['output'];
   removeQueryFromEventStream: Scalars['Boolean']['output'];
@@ -4245,6 +4246,11 @@ export type MutationReconnectWorkspaceMailboxArgs = {
 };
 
 
+export type MutationRegenerateMyahReplyAgentDraftArgs = {
+  input: RegenerateMyahReplyAgentDraftInput;
+};
+
+
 export type MutationRemoveCampaignEmailAccountArgs = {
   input: CampaignEmailAccountLinkInput;
 };
@@ -4929,6 +4935,39 @@ export enum MyahCampaignPreferredChannel {
   NO_PREFERENCE = 'NO_PREFERENCE'
 }
 
+export type MyahReplyAgentDraftLabel = {
+  __typename?: 'MyahReplyAgentDraftLabel';
+  campaignName?: Maybe<Scalars['String']['output']>;
+  kind: Scalars['String']['output'];
+  reason?: Maybe<Scalars['String']['output']>;
+};
+
+export type MyahReplyAgentDraftLabelInput = {
+  channel: Scalars['String']['input'];
+  conversationRecordId: Scalars['UUID']['input'];
+};
+
+export type MyahReplyAgentReview = {
+  __typename?: 'MyahReplyAgentReview';
+  needReviewCount: Scalars['Int']['output'];
+  nodes: Array<MyahReplyAgentReviewNode>;
+};
+
+export type MyahReplyAgentReviewInput = {
+  campaignId: Scalars['UUID']['input'];
+};
+
+export type MyahReplyAgentReviewNode = {
+  __typename?: 'MyahReplyAgentReviewNode';
+  campaignCreatorId: Scalars['UUID']['output'];
+  channel?: Maybe<Scalars['String']['output']>;
+  conversationRecordId?: Maybe<Scalars['UUID']['output']>;
+  creatorId: Scalars['UUID']['output'];
+  inboxContactId?: Maybe<Scalars['String']['output']>;
+  nextAction?: Maybe<Scalars['String']['output']>;
+  reason?: Maybe<Scalars['String']['output']>;
+};
+
 export type NativeModelCapabilities = {
   __typename?: 'NativeModelCapabilities';
   twitterSearch?: Maybe<Scalars['Boolean']['output']>;
@@ -5530,6 +5569,8 @@ export type Query = {
   myMessageFolders: Array<MessageFolder>;
   myahAgent: MyahAgent;
   myahCampaignAgentSetting: MyahCampaignAgentSetting;
+  myahReplyAgentDraftLabel?: Maybe<MyahReplyAgentDraftLabel>;
+  myahReplyAgentReview: MyahReplyAgentReview;
   navigationMenuItem?: Maybe<NavigationMenuItem>;
   navigationMenuItems: Array<NavigationMenuItem>;
   object: Object;
@@ -5998,6 +6039,16 @@ export type QueryMyahCampaignAgentSettingArgs = {
 };
 
 
+export type QueryMyahReplyAgentDraftLabelArgs = {
+  input: MyahReplyAgentDraftLabelInput;
+};
+
+
+export type QueryMyahReplyAgentReviewArgs = {
+  input: MyahReplyAgentReviewInput;
+};
+
+
 export type QueryNavigationMenuItemArgs = {
   id: Scalars['UUID']['input'];
 };
@@ -6056,6 +6107,10 @@ export type RecordTableConfiguration = {
   configurationType: WidgetConfigurationType;
   recordLimit?: Maybe<Scalars['Int']['output']>;
   viewId?: Maybe<Scalars['String']['output']>;
+};
+
+export type RegenerateMyahReplyAgentDraftInput = {
+  campaignCreatorId: Scalars['UUID']['input'];
 };
 
 export type Relation = {

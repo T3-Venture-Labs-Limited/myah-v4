@@ -1,3 +1,9 @@
+import { useQuery } from '@apollo/client/react';
+import {
+  GET_MYAH_REPLY_AGENT_REVIEW,
+  type MyahReplyAgentReviewData,
+  type MyahReplyAgentReviewNode,
+} from '@/myah/agent/graphql/myahReplyAgentOperations';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
@@ -142,10 +148,44 @@ const StyledUnavailable = styled.span`
   color: ${themeCssVariables.font.color.secondary};
   font-size: ${themeCssVariables.font.size.sm};
 `;
+const StyledWarning = styled.span`
+  color: ${themeCssVariables.color.orange};
+  font-size: ${themeCssVariables.font.size.sm};
+`;
+const StyledActionBadge = styled.span`
+  align-self: center;
+  background: ${themeCssVariables.background.transparent.lighter};
+  border: 1px solid ${themeCssVariables.border.color.medium};
+  border-radius: ${themeCssVariables.border.radius.sm};
+  color: ${themeCssVariables.color.pink};
+  font-size: ${themeCssVariables.font.size.sm};
+  justify-self: start;
+  padding: 2px ${themeCssVariables.spacing[2]};
+`;
 const StyledFeedback = styled.div`
   color: ${themeCssVariables.font.color.secondary};
   padding: ${themeCssVariables.spacing[3]};
 `;
+
+const NEED_REVIEW_ACTIONS = ['REVIEW_DRAFT', 'NEEDS_YOU', 'SEND_UNKNOWN'];
+const NEXT_ACTION_LABELS: Record<string, string> = {
+  REVIEW_DRAFT: 'Review draft',
+  NEEDS_YOU: 'Needs you',
+  SEND_UNKNOWN: 'Check send',
+  SENT_AUTOMATICALLY: 'Replied by agent',
+};
+
+// The agent's outcome or the reason a creator was not contacted (MYAH-445).
+const NextAction = ({ node }: { node?: MyahReplyAgentReviewNode }) => {
+  if (!node?.nextAction) return <StyledUnavailable>—</StyledUnavailable>;
+  if (node.nextAction === 'SKIPPED' || node.nextAction === 'NOT_CONTACTABLE')
+    return <StyledWarning>{node.reason}</StyledWarning>;
+  return (
+    <StyledActionBadge title={node.reason ?? undefined}>
+      {NEXT_ACTION_LABELS[node.nextAction] ?? node.nextAction}
+    </StyledActionBadge>
+  );
+};
 
 export const CampaignInfluencerReferenceList = ({
   campaignId,
@@ -171,6 +211,19 @@ export const CampaignInfluencerReferenceList = ({
   onOpenCreatorContext?: (request: RecordIndexOpenRequest) => void;
 }) => {
   const [search, setSearch] = useState('');
+  const [needReviewOnly, setNeedReviewOnly] = useState(false);
+  const agentReview = useQuery<MyahReplyAgentReviewData>(
+    GET_MYAH_REPLY_AGENT_REVIEW,
+    { variables: { input: { campaignId } }, fetchPolicy: 'cache-and-network' },
+  );
+  const reviewByMembership = new Map(
+    (agentReview.data?.myahReplyAgentReview.nodes ?? []).map((node) => [
+      node.campaignCreatorId,
+      node,
+    ]),
+  );
+  const needReviewCount =
+    agentReview.data?.myahReplyAgentReview.needReviewCount ?? 0;
   const [selectedMembershipId, setSelectedMembershipId] = useState<string>();
   const { objectMetadataItems } = useObjectMetadataItems();
   const stageFieldId = objectMetadataItems
@@ -306,15 +359,19 @@ export const CampaignInfluencerReferenceList = ({
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const shownRecords = safeRecords.filter(
     (record) =>
-      !normalizedSearch ||
-      (canReadCreator &&
-        ((canReadCreatorName &&
-          record.creator?.name
-            ?.toLocaleLowerCase()
-            .includes(normalizedSearch)) ||
-          instagramProfiles(record).some((profile) =>
-            profile.handle?.toLocaleLowerCase().includes(normalizedSearch),
-          ))),
+      (!needReviewOnly ||
+        NEED_REVIEW_ACTIONS.includes(
+          reviewByMembership.get(record.id)?.nextAction ?? '',
+        )) &&
+      (!normalizedSearch ||
+        (canReadCreator &&
+          ((canReadCreatorName &&
+            record.creator?.name
+              ?.toLocaleLowerCase()
+              .includes(normalizedSearch)) ||
+            instagramProfiles(record).some((profile) =>
+              profile.handle?.toLocaleLowerCase().includes(normalizedSearch),
+            )))),
   );
 
   if (!hasReadPermission) {
@@ -334,6 +391,13 @@ export const CampaignInfluencerReferenceList = ({
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
+        <button
+          type="button"
+          aria-pressed={needReviewOnly}
+          onClick={() => setNeedReviewOnly((value) => !value)}
+        >
+          {`Need review ${needReviewCount}`}
+        </button>
         <span>
           {typeof totalCount === 'number'
             ? `${safeRecords.length} loaded of ${totalCount}`
@@ -360,7 +424,7 @@ export const CampaignInfluencerReferenceList = ({
         <StyledColumnHeaders aria-hidden="true">
           <span>Influencer</span>
           <span>Outreach progress</span>
-          <span>Latest activity</span>
+          <span>Next action</span>
           <span>Partnership stage</span>
         </StyledColumnHeaders>
       )}
@@ -434,9 +498,7 @@ export const CampaignInfluencerReferenceList = ({
                 <StyledUnavailable>
                   Outreach: Not available yet
                 </StyledUnavailable>
-                <StyledUnavailable>
-                  Activity: Not available yet
-                </StyledUnavailable>
+                <NextAction node={reviewByMembership.get(record.id)} />
                 <StyledStage>Recorded stage: {stage}</StyledStage>
               </StyledRow>
             );
