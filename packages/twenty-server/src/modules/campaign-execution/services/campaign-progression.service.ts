@@ -962,20 +962,27 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     | 'INVALID'
     | { index: number; messageId: string; delaySeconds: number }
   > {
-    const query = (sql: string, parameters: unknown[]) =>
-      runner.query(sql, parameters);
-    const handles = await findCreatorInstagramHandles(query, {
-      workspaceId,
-      creatorIds: [creatorId],
-    });
-    const [creator] = rows(
-      await runner.query(
-        `SELECT email FROM "${getWorkspaceSchemaName(workspaceId)}".creator WHERE id=$1`,
-        [creatorId],
-      ),
-    );
-    const hasEmail = normalizeCampaignCreatorEmail(creator?.email) !== null;
-    const hasInstagram = handles.has(creatorId);
+    // Email-only sequences keep the original rule: the next step is next;
+    // the claim checks the address. Channels matter only in mixed sequences.
+    const mixed = plan.nodes
+      .slice(fromIndex + 1)
+      .some((node) => node.channel !== 'EMAIL');
+    let hasEmail = true;
+    let hasInstagram = false;
+    if (mixed) {
+      const handles = await findCreatorInstagramHandles(
+        (sql: string, parameters: unknown[]) => runner.query(sql, parameters),
+        { workspaceId, creatorIds: [creatorId] },
+      );
+      const [creator] = rows(
+        await runner.query(
+          `SELECT email FROM "${getWorkspaceSchemaName(workspaceId)}".creator WHERE id=$1`,
+          [creatorId],
+        ),
+      );
+      hasEmail = normalizeCampaignCreatorEmail(creator?.email) !== null;
+      hasInstagram = handles.has(creatorId);
+    }
     let delaySeconds = 0;
     for (let index = fromIndex + 1; index < plan.nodes.length; index += 1) {
       const delay = plan.delaysSeconds[index - 1];

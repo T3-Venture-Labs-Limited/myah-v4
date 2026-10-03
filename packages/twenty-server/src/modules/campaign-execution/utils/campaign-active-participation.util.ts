@@ -31,6 +31,14 @@ const rows = (value: unknown): Record<string, unknown>[] =>
 
 // A creator is active in a Campaign while its outreach runs or its stage is
 // Contacted..Waiting for post. Posted, Dropped and not-started Ready are not.
+// Minimal workspace schemas (no Creator CRM objects) have nothing to find.
+const hasTable = async (query: Query, schema: string, table: string) =>
+  rows(
+    await query('SELECT to_regclass($1) IS NOT NULL AS "ok"', [
+      `"${schema}"."${table}"`,
+    ]),
+  )[0]?.ok === true;
+
 export const findCampaignActiveParticipations = async (
   query: Query,
   input: {
@@ -43,6 +51,7 @@ export const findCampaignActiveParticipations = async (
   if (creatorIds.length === 0 || !isValidUuid(input.workspaceId))
     return new Map();
   const schema = getWorkspaceSchemaName(input.workspaceId);
+  if (!(await hasTable(query, schema, 'campaignCreator'))) return new Map();
   const found = rows(
     // Workspace schema identifiers are UUID-derived and cannot be bind parameters.
     await query(
@@ -89,6 +98,7 @@ export const findCreatorInstagramHandles = async (
   if (creatorIds.length === 0 || !isValidUuid(input.workspaceId))
     return new Map();
   const schema = getWorkspaceSchemaName(input.workspaceId);
+  if (!(await hasTable(query, schema, 'socialProfile'))) return new Map();
   const found = rows(
     await query(
       `SELECT DISTINCT ON (sp."creatorId") sp."creatorId", sp.handle
