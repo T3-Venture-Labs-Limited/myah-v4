@@ -3,10 +3,12 @@ import { MigrateMyahCreatorSocialProfilesService } from 'src/database/commands/u
 const createService = ({
   creators,
   restrictedFields = [],
+  retiredRestrictedFields = [],
   reconciliationMismatches = 0,
 }: {
   creators: Array<Record<string, unknown>>;
   restrictedFields?: string[];
+  retiredRestrictedFields?: string[];
   reconciliationMismatches?: number;
 }) => {
   const workspaceDataSource = {
@@ -17,7 +19,10 @@ const createService = ({
     driver: { escape: (value: string) => `"${value}"` },
     query: jest
       .fn()
-      .mockResolvedValueOnce(restrictedFields.map((name) => ({ name })))
+      .mockResolvedValueOnce([
+        ...restrictedFields.map((name) => ({ name, retired: false })),
+        ...retiredRestrictedFields.map((name) => ({ name, retired: true })),
+      ])
       .mockResolvedValueOnce([{ count: String(reconciliationMismatches) }]),
   };
   const writer = {
@@ -161,5 +166,58 @@ describe('MigrateMyahCreatorSocialProfilesService', () => {
     );
     expect(writer.preserveSocialProfile).toHaveBeenCalledTimes(1);
     expect(writer.createSupplementaryNote).toHaveBeenCalledTimes(1);
+  });
+
+  // Production T3labs (2026-10-02): the first pass ran while our standard
+  // Creator Ops role still hid social fields, so it committed notes only.
+  // The restriction is retired by this upgrade; the values must now be
+  // preserved without changing the first pass's replayed receipts.
+  it('preserves values hidden only by a retired standard restriction in a second pass', async () => {
+    const { service, workspaceDataSource, operationService, writer } =
+      createService({
+        creators: [
+          {
+            id: 'creator-1',
+            instagramUsername: 'ada',
+            instagramBio: 'released bio',
+            notes: 'already preserved',
+            email: 'hidden@example.com',
+          },
+        ],
+        restrictedFields: ['email'],
+        retiredRestrictedFields: ['instagramUsername', 'instagramBio'],
+      });
+
+    await expect(
+      service.migrate({
+        workspaceId: '11111111-1111-4111-8111-111111111111',
+        workspaceDataSource: workspaceDataSource as never,
+        dryRun: false,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        committedRows: 2,
+        skippedRestrictedValues: 0,
+        failures: 0,
+      }),
+    );
+    const [firstPass, releasedPass] = operationService.execute.mock.calls.map(
+      ([input]) => input,
+    );
+    expect(firstPass).toMatchObject({
+      attemptKey: 'MYAH-409-legacy-creator-v1',
+      operationKey: 'creator-1',
+    });
+    expect(releasedPass).toMatchObject({
+      attemptKey: 'MYAH-409-legacy-creator-v1-released-restrictions',
+      operationKey: 'creator-1',
+    });
+    expect(writer.preserveSocialProfile).toHaveBeenCalledTimes(1);
+    const [firstNote, releasedNote] =
+      writer.createSupplementaryNote.mock.calls.map((call) => call[4]);
+    expect(firstNote).toContain('already preserved');
+    expect(firstNote).not.toContain('released bio');
+    expect(releasedNote).toContain('released bio');
+    expect(releasedNote).not.toContain('already preserved');
   });
 });
